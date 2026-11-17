@@ -6,7 +6,7 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound, Search } from "lucide-react";
+import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Employee {
   id: number;
@@ -309,17 +310,13 @@ export default function FactoryEmployeeBonusesTab() {
                 <Label htmlFor="bonus-search" className="mb-1.5 block text-xs text-muted-foreground">
                   Name or notes
                 </Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="bonus-search"
-                    className="pl-9"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search bonuses..."
-                    data-testid="input-bonus-search"
-                  />
-                </div>
+                <SearchField
+                  id="bonus-search"
+                  value={search}
+                  onValueChange={setSearch}
+                  placeholder="Search bonuses..."
+                  data-testid="input-bonus-search"
+                />
               </div>
               <div>
                 <Label htmlFor="bonus-start-date" className="mb-1.5 block text-xs text-muted-foreground">

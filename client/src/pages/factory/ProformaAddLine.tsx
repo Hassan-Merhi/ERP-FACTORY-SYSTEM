@@ -15,6 +15,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
+import { SearchField } from "@/components/ui/search-field";
 
 const AUTOSAVE_KEY = "proforma-autosave-enabled";
 const AUTOSAVE_DELAY_MS = 1500;
@@ -290,26 +291,14 @@ export default function ProformaAddLine() {
 
         {/* Search + Group filters */}
         <div className="border-b px-4 py-2 space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search by name or article code..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              autoFocus
-              data-testid="input-search"
-            />
-            {search && (
-              <button
-                className="absolute right-3 top-2.5"
-                onClick={() => setSearch("")}
-                data-testid="button-clear-search"
-              >
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            placeholder="Search by name or article code..."
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+            data-testid="input-search"
+            clearTestId="button-clear-search"
+          />
 
           {groups.length > 1 && (
             <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">

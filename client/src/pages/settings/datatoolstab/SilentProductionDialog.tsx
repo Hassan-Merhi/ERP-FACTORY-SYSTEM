@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
-import { Check, FileDown, FileSpreadsheet, Loader2, Search, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
+import { Check, FileDown, FileSpreadsheet, Loader2, TrendingDown, TrendingUp, Upload, X } from "lucide-react";
 import type { useDataToolsModel } from "./useDataToolsModel";
 
 type Props = {
@@ -144,16 +145,12 @@ export function SilentProductionDialog({ model }: Props) {
                   <Label>Items</Label>
                   {silentProdLocId && (
                     <div className="border rounded-md p-3 bg-muted/30 space-y-2">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Type item name or code to search…"
-                          value={silentProdSearchTerm}
-                          onChange={(event) => setSilentProdSearchTerm(event.target.value)}
-                          className="pl-8"
-                          data-testid="input-silent-prod-search"
-                        />
-                      </div>
+                      <SearchField
+                        placeholder="Type item name or code to search…"
+                        value={silentProdSearchTerm}
+                        onValueChange={setSilentProdSearchTerm}
+                        data-testid="input-silent-prod-search"
+                      />
                       <div className="max-h-48 overflow-y-auto space-y-1">
                         {(() => {
                           const term = silentProdSearchTerm.toLowerCase();

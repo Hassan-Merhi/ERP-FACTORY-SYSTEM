@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4582,
+    "scannedFiles": 4585,
     "perRoot": {
-      "server": 2372,
+      "server": 2373,
       "shared": 161,
       "scripts": 280,
       "migrations": 98,
-      "tests": 1668
+      "tests": 1670
     },
     "totalSites": 1276,
     "byCategory": {
@@ -21788,18 +21788,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-linked-physical-delete-postgres.test.ts:26, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_delete_probe_\" + process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-linked-physical-delete-postgres.test.ts:26 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :26 is a code constant concatenated with the process pid (:25), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1026",
@@ -21812,18 +21812,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-linked-physical-delete-postgres.test.ts:27, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_delete_probe_\" + process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-linked-physical-delete-postgres.test.ts:27 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :27 is a code constant concatenated with the process pid (:25), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1027",
@@ -21854,18 +21854,18 @@
       "dynamicInputs": [
         {
           "expression": "migration",
-          "source": "In tests/intercompany-linked-physical-delete-postgres.test.ts:47, migration comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation migration is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Elements of `migrations` (:6-13): readFileSync of six hard-coded file names under <cwd>/migrations (20261105_001..005_intercompany_*.sql and 20261113_001_intercompany_pristine_physical_delete.sql), iterated at :47 in tests/intercompany-linked-physical-delete-postgres.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation migration is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-linked-physical-delete-postgres.test.ts:47 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Query text at :47 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1029",
@@ -22058,23 +22058,23 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "In tests/intercompany-linked-physical-delete-postgres.test.ts:145, table comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation table is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First element of each pair in the inline array literal at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144.",
+          "validation": "One of six hard-coded table names (intercompany_trades, purchase_orders, vouchers, voucher_entries, accounting_posting_requests, containers)."
         },
         {
           "expression": "where",
-          "source": "In tests/intercompany-linked-physical-delete-postgres.test.ts:145, where comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation where is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Second element of each pair in the same inline array literal at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144.",
+          "validation": "One of six hard-coded predicates over integer literals, e.g. \"id=1\" or \"voucher_id IN (51,52,53,54)\"."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation table is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction. / Review of the immediate test call chain: the interpolation where is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "One of six hard-coded table names (intercompany_trades, purchase_orders, vouchers, voucher_entries, accounting_posting_requests, containers). / One of six hard-coded predicates over integer literals, e.g. \"id=1\" or \"voucher_id IN (51,52,53,54)\".",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-linked-physical-delete-postgres.test.ts:145 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Count query at :145 loops over an inline array of literal [table, predicate] pairs (:137-144) to assert the fixture rows were deleted; both parts are string literals in the test source. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1040",
@@ -22087,18 +22087,18 @@
       "dynamicInputs": [
         {
           "expression": "name",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:41, name comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation name is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Second element of each pair in the `expected` array literal at tests/intercompany-phase1-foundation.test.ts:28-38.",
+          "validation": "One of nine hard-coded intercompany_* table-name string literals (as const)."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation name is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "One of nine hard-coded intercompany_* table-name string literals (as const).",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:41 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "The string built at :41 is never sent to a database: it is only the needle for expect(MIGRATION).toContain(...), checking the migration text declares each of nine literal table names. No HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1041",
@@ -22111,18 +22111,18 @@
       "dynamicInputs": [
         {
           "expression": "probe",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:63, probe comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation probe is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation probe is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:63 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :63 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1042",
@@ -22135,18 +22135,18 @@
       "dynamicInputs": [
         {
           "expression": "probe",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:64, probe comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation probe is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation probe is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:64 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :64 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1043",
@@ -22177,18 +22177,18 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:89, savepoint comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:89 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :89 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1045",
@@ -22201,18 +22201,18 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:92, statement comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation statement is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase1-foundation.test.ts:87); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "validation": "Every one of the 19 call sites passes string literals, one of which (:155-159) concatenates `hash` = \"a\".repeat(64) from :149."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation statement is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Every one of the 19 call sites passes string literals, one of which (:155-159) concatenates `hash` = \"a\".repeat(64) from :149.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:92 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Statement executed at :92 is whatever the test's own rejects helper (:87) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1046",
@@ -22225,18 +22225,18 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:97, savepoint comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:97 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :97 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1047",
@@ -22249,18 +22249,18 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:98, savepoint comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation savepoint is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:98 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :98 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1048",
@@ -22273,18 +22273,18 @@
       "dynamicInputs": [
         {
           "expression": "hash",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:155, hash comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation hash is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const hash = \"a\".repeat(64) at tests/intercompany-phase1-foundation.test.ts:149.",
+          "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation hash is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:155 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Duplicate-batch INSERT text assembled at :155-159 (passed to rejects) embeds only the constant fake SHA-256 `hash` from :149 inside quotes; the rest is string literals. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1049",
@@ -22315,18 +22315,18 @@
       "dynamicInputs": [
         {
           "expression": "\"b\".repeat(64)",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:212, \\\"b\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:214 on a string literal.",
+          "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:212 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Fixture INSERT at :212-216 embeds a constant fake fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1051",
@@ -22339,18 +22339,18 @@
       "dynamicInputs": [
         {
           "expression": "\"c\".repeat(64)",
-          "source": "In tests/intercompany-phase1-foundation.test.ts:217, \\\"c\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation \\\"c\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:219 on a string literal.",
+          "validation": "Fixed 64-character string of the letter c: always /^c{64}$/, no quote characters."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation \\\"c\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed 64-character string of the letter c: always /^c{64}$/, no quote characters.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase1-foundation.test.ts:217 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Fixture INSERT at :217-221 embeds a constant fake evidence fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1052",
@@ -22363,18 +22363,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:20, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:20 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :20 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1053",
@@ -22387,18 +22387,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:21, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:21 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :21 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1054",
@@ -22429,18 +22429,18 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:54, marker comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:54 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :54 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1056",
@@ -22453,18 +22453,18 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:57, statement comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation statement is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase2-database-guards.test.ts:52); the helper is a closure inside the test and all 20 call sites are in this file.",
+          "validation": "Every one of the 20 call sites passes plain string literals with no interpolation or concatenated variables."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation statement is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Every one of the 20 call sites passes plain string literals with no interpolation or concatenated variables.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:57 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Statement executed at :57 is whatever the test's own rejects helper (:52) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1057",
@@ -22477,18 +22477,18 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:61, marker comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:61 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :61 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1058",
@@ -22501,18 +22501,18 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "In tests/intercompany-phase2-database-guards.test.ts:62, marker comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation marker is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase2-database-guards.test.ts:62 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :62 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1059",
@@ -22579,18 +22579,18 @@
       "dynamicInputs": [
         {
           "expression": "name",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:30, name comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation name is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Second element of each pair in the inline array literal at tests/intercompany-phase3-database-guards.test.ts:22-28.",
+          "validation": "One of five hard-coded intercompany_* table-name string literals (as const)."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation name is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "One of five hard-coded intercompany_* table-name string literals (as const).",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:30 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "The string built at :30 is never sent to a database: it is only the needle for expect(scripts[2]).toContain(...), checking the phase 3 migration text declares each of five literal table names. No HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1063",
@@ -22603,18 +22603,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:48, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:48 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1064",
@@ -22627,18 +22627,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:49, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:49 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :49 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1065",
@@ -22669,18 +22669,18 @@
       "dynamicInputs": [
         {
           "expression": "script",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:64, script comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation script is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Elements of `scripts` (:14-18): readFileSync of three hard-coded names (\"20261105_\" + literal + \".sql\") under <cwd>/migrations, iterated at :64 in tests/intercompany-phase3-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation script is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:64 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Query text at :64 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1067",
@@ -22693,18 +22693,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:99, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:99 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :99 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1068",
@@ -22717,18 +22717,18 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:102, query comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase3-database-guards.test.ts:97); the helper is a closure inside the test and all 10 call sites are in this file.",
+          "validation": "Every one of the 10 call sites passes plain string literals with no interpolation or concatenated variables."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Every one of the 10 call sites passes plain string literals with no interpolation or concatenated variables.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:102 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Statement executed at :102 is whatever the test's own rejects helper (:97) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1069",
@@ -22741,18 +22741,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:107, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:107 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :107 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1070",
@@ -22765,18 +22765,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase3-database-guards.test.ts:108, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase3-database-guards.test.ts:108 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :108 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1071",
@@ -22789,18 +22789,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:39, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:39 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :39 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1072",
@@ -22813,18 +22813,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:40, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:40 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :40 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1073",
@@ -22855,18 +22855,18 @@
       "dynamicInputs": [
         {
           "expression": "script",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:56, script comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation script is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Elements of `scripts` (:8-16): readFileSync of four hard-coded 20261105_00N_intercompany_*.sql names under <cwd>/migrations, iterated at :56 in tests/intercompany-phase4-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation script is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:56 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Query text at :56 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1075",
@@ -22879,23 +22879,23 @@
       "dynamicInputs": [
         {
           "expression": "\"a\".repeat(64)",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:91, \\\"a\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation \\\"a\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:93 on a string literal.",
+          "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
         },
         {
           "expression": "\"b\".repeat(64)",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:91, \\\"b\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:95 on a string literal.",
+          "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation \\\"a\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction. / Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters. / Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:91 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Fixture INSERT at :91-97 embeds two constant fake hashes produced by repeating literal letters; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1076",
@@ -22908,18 +22908,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:104, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:104 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :104 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1077",
@@ -22932,18 +22932,18 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:107, query comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase4-database-guards.test.ts:102); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "validation": "Every one of the 19 call sites passes string literals, some concatenated with the string-literal constants paymentColumns (:118-119) and goodValues (:120-121)."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Every one of the 19 call sites passes string literals, some concatenated with the string-literal constants paymentColumns (:118-119) and goodValues (:120-121).",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:107 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Statement executed at :107 is whatever the test's own rejects helper (:102) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1078",
@@ -22956,18 +22956,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:112, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:112 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :112 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1079",
@@ -22980,18 +22980,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:113, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:113 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1080",
@@ -23112,23 +23112,23 @@
       "dynamicInputs": [
         {
           "expression": "paymentColumns.slice(1)",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:170, paymentColumns.slice(1) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation paymentColumns.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const paymentColumns string literal at tests/intercompany-phase4-database-guards.test.ts:118-119, minus its leading parenthesis.",
+          "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
         },
         {
           "expression": "goodValues.slice(1)",
-          "source": "In tests/intercompany-phase4-database-guards.test.ts:170, goodValues.slice(1) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation goodValues.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const goodValues string literal at tests/intercompany-phase4-database-guards.test.ts:120-121, minus its leading parenthesis.",
+          "validation": "Fixed VALUES tuple of literals written in the test source; a single string literal with no interpolation."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation paymentColumns.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction. / Review of the immediate test call chain: the interpolation goodValues.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed column list written in the test source; a single string literal with no interpolation. / Fixed VALUES tuple of literals written in the test source; a single string literal with no interpolation.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase4-database-guards.test.ts:170 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Fixture INSERT at :170-175 splices an explicit id into two string-literal constants (column list :118-119, values tuple :120-121) via slice(1); nothing but test-source literals forms the text. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1087",
@@ -23159,18 +23159,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:47, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:47 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :47 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1089",
@@ -23183,18 +23183,18 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:48, schema comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation schema is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:48 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1090",
@@ -23225,18 +23225,18 @@
       "dynamicInputs": [
         {
           "expression": "ddl",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:67, ddl comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation ddl is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "Elements of `migrations` (:19): readFileSync of the five hard-coded names in migrationNames (:12-18) under <cwd>/migrations, iterated at :67 in tests/intercompany-phase5-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation ddl is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:67 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Query text at :67 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1092",
@@ -23249,18 +23249,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:113, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:113 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1093",
@@ -23273,18 +23273,18 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:116, query comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase5-database-guards.test.ts:111); the helper is a closure inside the test and all 18 call sites are in this file.",
+          "validation": "Every one of the 18 call sites passes string literals, some concatenated with the string-literal constants cancelColumns (:151-152) and receiveColumns (:230-231)."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation query is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Every one of the 18 call sites passes string literals, some concatenated with the string-literal constants cancelColumns (:151-152) and receiveColumns (:230-231).",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:116 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Statement executed at :116 is whatever the test's own rejects helper (:111) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1094",
@@ -23297,18 +23297,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:121, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:121 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :121 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1095",
@@ -23321,18 +23321,18 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:122, save comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation save is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:122 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Savepoint name at :122 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1096",
@@ -23453,18 +23453,18 @@
       "dynamicInputs": [
         {
           "expression": "receiveColumns.slice(1)",
-          "source": "In tests/intercompany-phase5-database-guards.test.ts:248, receiveColumns.slice(1) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
-          "validation": "Review of the immediate test call chain: the interpolation receiveColumns.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
+          "source": "const receiveColumns string literal at tests/intercompany-phase5-database-guards.test.ts:230-231, minus its leading parenthesis.",
+          "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
         }
       ],
       "userControlled": "no",
-      "validation": "Review of the immediate test call chain: the interpolation receiveColumns.slice(1) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction.",
+      "validation": "Fixed column list written in the test source; a single string literal with no interpolation.",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:test-fixture",
-      "reason": "The dynamic SQL at tests/intercompany-phase5-database-guards.test.ts:248 is exercised only by a PostgreSQL integration fixture inside a transaction that is explicitly rolled back. Its SQL tokens originate from code-owned identifiers, literal test values and committed migration files, not end-user input."
+      "reason": "Fixture INSERT at :248-252 splices an explicit id column into the string-literal column list constant from :230-231 via slice(1); the VALUES tuple is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
       "findingId": "RSQL-1103",

@@ -625,6 +625,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
       const searchPart = search.trim() ? ` search ${search.trim()}` : "";
+      const dateStr = new Date().toLocaleDateString("en-CA");
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       const headers = [

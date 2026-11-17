@@ -3,8 +3,8 @@
  * vouchers: searchable list of eligible cash, bank and loan accounts.
  * Extracted from PaymentReceiptTab.tsx; selection is reported to the parent.
  */
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import {} from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/components/AccountSidebar";
@@ -39,17 +39,14 @@ export function PayFromAccountSheet({
       <SheetContent side="bottom" className="flex flex-col p-0" style={{ height: "auto", maxHeight: "88vh" }}>
         <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
           <SheetTitle className="text-base">{accountLabel}</SheetTitle>
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              autoFocus
-              placeholder={`Search ${accountLabel.toLowerCase()}...`}
-              value={payFromSearch}
-              onChange={(e) => setPayFromSearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-pay-from-mobile-search"
-            />
-          </div>
+          <SearchField
+            autoFocus
+            value={payFromSearch}
+            onValueChange={setPayFromSearch}
+            placeholder={`Search ${accountLabel.toLowerCase()}...`}
+            wrapperClassName="mt-2"
+            data-testid="input-pay-from-mobile-search"
+          />
         </SheetHeader>
         <div className="flex-1 overflow-y-auto min-h-0">
           {(() => {

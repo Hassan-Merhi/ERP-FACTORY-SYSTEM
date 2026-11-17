@@ -1,11 +1,11 @@
+import { SearchField } from "@/components/ui/search-field";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2, Upload, Trash2, ImagePlus, Search, Images, ChevronLeft } from "lucide-react";
+import { Loader2, Upload, Trash2, ImagePlus, Images, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { FactoryBaleProductImage } from "@shared/schema";
 import { PageHeader } from "@/components/PageHeader";
@@ -120,16 +120,12 @@ export default function BaleProductImages() {
           <h2 className="mb-3 text-lg font-semibold" data-testid="text-product-list-title">
             Bale Products
           </h2>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-products"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search products..."
+            data-testid="input-search-products"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto">

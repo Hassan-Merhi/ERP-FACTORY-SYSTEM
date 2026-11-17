@@ -12,7 +12,6 @@ import {
   Loader2,
   Package,
   ScanLine,
-  Search,
   ShieldCheck,
   Trash2,
   Weight,
@@ -37,6 +36,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { SearchField } from "@/components/ui/search-field";
 
 type DispatchStatus = "OPEN" | "CLOSED" | "CANCELLED";
 
@@ -174,8 +174,7 @@ export default function FactoryLoadingDispatchScanner({
     () => active.map((scan) => String(scan.id)).filter((id) => selectedIds.has(id)),
     [active, selectedIds]
   );
-  const allFilteredSelected = filtered.length > 0 &&
-    filtered.every((scan) => selectedIds.has(String(scan.id)));
+  const allFilteredSelected = filtered.length > 0 && filtered.every((scan) => selectedIds.has(String(scan.id)));
   const toggleSelection = (id: string, checked: boolean) =>
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -323,7 +322,11 @@ export default function FactoryLoadingDispatchScanner({
       await apiRequest("POST", scansUrl + "/" + correction.id + "/remove", { reason });
       setCorrection(null);
       setCorrectionReason("");
-      setSelectedIds((previous) => { const next = new Set(previous); next.delete(String(correction.id)); return next; });
+      setSelectedIds((previous) => {
+        const next = new Set(previous);
+        next.delete(String(correction.id));
+        return next;
+      });
       void queryClient.invalidateQueries({ queryKey: scanKey });
       void queryClient.invalidateQueries({ queryKey: loadingListKey });
       onChanged();
@@ -453,19 +456,17 @@ export default function FactoryLoadingDispatchScanner({
               </Button>
             </div>
           </div>
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-9 pl-9"
-              placeholder="Search reference, article, operator"
-              value={filterText}
-              onChange={(event) => {
-                setFilterText(event.target.value);
-                setVisibleCount(PAGE_CHUNK);
-              }}
-              data-testid="input-search-dispatch-scans"
-            />
-          </div>
+          <SearchField
+            wrapperClassName="max-w-sm"
+            className="h-9"
+            placeholder="Search reference, article, operator"
+            value={filterText}
+            onValueChange={(v) => {
+              setFilterText(v);
+              setVisibleCount(PAGE_CHUNK);
+            }}
+            data-testid="input-search-dispatch-scans"
+          />
           {canCorrect && (
             <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
               <Button
@@ -487,7 +488,10 @@ export default function FactoryLoadingDispatchScanner({
                 size="sm"
                 variant="destructive"
                 disabled={activeSelection.length === 0 || correcting || bulkBusy || pendingCount > 0}
-                onClick={() => { setBulkReason(""); setBulkMode("selected"); }}
+                onClick={() => {
+                  setBulkReason("");
+                  setBulkMode("selected");
+                }}
                 data-testid="button-delete-selected-dispatch-scans"
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete selected ({activeSelection.length})
@@ -497,7 +501,10 @@ export default function FactoryLoadingDispatchScanner({
                 variant="outline"
                 className="border-red-300 text-red-700 hover:bg-red-50 dark:text-red-300"
                 disabled={active.length === 0 || correcting || bulkBusy || pendingCount > 0}
-                onClick={() => { setBulkReason(""); setBulkMode("all"); }}
+                onClick={() => {
+                  setBulkReason("");
+                  setBulkMode("all");
+                }}
                 data-testid="button-delete-all-dispatch-scans"
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete all ({active.length})
@@ -654,16 +661,23 @@ export default function FactoryLoadingDispatchScanner({
 
       <Dialog
         open={bulkMode !== null}
-        onOpenChange={(open) => { if (!open && !bulkBusy) setBulkMode(null); }}
+        onOpenChange={(open) => {
+          if (!open && !bulkBusy) setBulkMode(null);
+        }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{bulkMode === "all" ? "Delete all verified scans?" : "Delete selected verified scans?"}</DialogTitle>
+            <DialogTitle>
+              {bulkMode === "all" ? "Delete all verified scans?" : "Delete selected verified scans?"}
+            </DialogTitle>
             <DialogDescription>
               {bulkMode === "all"
-                ? "This removes all " + active.length + " active scans from this dispatch, including scans not currently visible or filtered."
-                : "This removes " + activeSelection.length + " selected active scans from this dispatch."}
-              {" "}The operation is atomic and keeps permanent correction history. It does not remove bales from the main loading.
+                ? "This removes all " +
+                  active.length +
+                  " active scans from this dispatch, including scans not currently visible or filtered."
+                : "This removes " + activeSelection.length + " selected active scans from this dispatch."}{" "}
+              The operation is atomic and keeps permanent correction history. It does not remove bales from the main
+              loading.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -675,7 +689,9 @@ export default function FactoryLoadingDispatchScanner({
             data-testid="input-bulk-dispatch-removal-reason"
           />
           <DialogFooter>
-            <Button variant="outline" disabled={bulkBusy} onClick={() => setBulkMode(null)}>Cancel</Button>
+            <Button variant="outline" disabled={bulkBusy} onClick={() => setBulkMode(null)}>
+              Cancel
+            </Button>
             <Button
               variant="destructive"
               disabled={bulkBusy || bulkReason.trim().length < 3 || pendingCount > 0}

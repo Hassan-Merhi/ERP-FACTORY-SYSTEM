@@ -7,21 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { readFromBuffer } from "@/lib/excelHelper";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Upload,
-  Download,
-  Trash2,
-  Eye,
-  Pencil,
-  ArrowRightLeft,
-  Search,
-  Loader2,
-  Database,
-  ChevronRight,
-} from "lucide-react";
+import { Upload, Download, Trash2, Eye, Pencil, ArrowRightLeft, Loader2, Database, ChevronRight } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface FileFolder {
@@ -340,16 +329,14 @@ export function FileStorageTab() {
               {currentFolderName}
               <span className="text-muted-foreground font-normal text-xs">({folderFiles.length} files)</span>
             </div>
-            <div className="relative max-sm:min-w-0 max-sm:flex-1 max-sm:basis-full">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search files..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 w-full sm:w-44 h-8 text-sm"
-                data-testid="input-file-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search files..."
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="max-sm:flex-1 max-sm:basis-full sm:w-44"
+              className="h-8 text-sm"
+              data-testid="input-file-search"
+            />
             <Button
               size="sm"
               onClick={() => fileInputRef.current?.click()}

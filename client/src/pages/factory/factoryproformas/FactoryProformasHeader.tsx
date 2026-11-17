@@ -1,10 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Boxes, FileText, Plus, Search, Upload, Users, Weight, Wallet, X } from "lucide-react";
+import { Boxes, FileText, Plus, Upload, Users, Weight, Wallet } from "lucide-react";
 import type { Customer, Proforma } from "./types";
+import { SearchField } from "@/components/ui/search-field";
 
 interface FactoryProformasHeaderProps {
   /** False for Create Only: proforma create/import controls are hidden. */
@@ -180,25 +180,15 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
             )}
           </div>
           {customerId && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={proformaSearch}
-                onChange={(e) => setProformaSearch(e.target.value)}
-                placeholder="Search proformas…"
-                className="h-10 w-52 rounded-xl border-border/70 bg-background/70 pl-8 text-sm sm:w-64"
-                data-testid="input-proforma-search"
-              />
-              {proformaSearch && (
-                <button
-                  onClick={() => setProformaSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded-sm"
-                  data-testid="button-clear-proforma-search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              value={proformaSearch}
+              onValueChange={setProformaSearch}
+              placeholder="Search proformas…"
+              wrapperClassName="w-52 sm:w-64"
+              className="h-10 rounded-xl border-border/70 bg-background/70 text-sm"
+              data-testid="input-proforma-search"
+              clearTestId="button-clear-proforma-search"
+            />
           )}
         </div>
       </div>

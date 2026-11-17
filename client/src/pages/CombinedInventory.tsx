@@ -1,16 +1,16 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Search, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
+import { Layers, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
@@ -560,16 +560,13 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
 
       {/* Filter row */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={isDrillMode ? "Search items in this group..." : "Search stock items..."}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-combined"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder={isDrillMode ? "Search items in this group..." : "Search stock items..."}
+          wrapperClassName="flex-1 min-w-[200px]"
+          data-testid="input-search-combined"
+        />
         {!isDrillMode && (
           <div className="flex gap-1">
             <Button

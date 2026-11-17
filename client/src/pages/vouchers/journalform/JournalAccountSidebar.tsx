@@ -1,7 +1,7 @@
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { cn } from "@/lib/utils";
 import type { useJournalFormModel } from "./useJournalFormModel";
 
@@ -53,43 +53,39 @@ export function JournalAccountSidebar({ model }: { model: Model }) {
             </button>
           </div>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or code..."
-            value={journalAccountSearchTerm}
-            onChange={(event) => {
-              setJournalAccountSearchTerm(event.target.value);
-              setJournalAccountHighlightedIndex(0);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                if (filteredJournalAccounts.length > 0) {
-                  setJournalAccountHighlightedIndex((previous) =>
-                    Math.min(previous + 1, filteredJournalAccounts.length - 1)
-                  );
-                }
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                if (filteredJournalAccounts.length > 0) {
-                  setJournalAccountHighlightedIndex((previous) => Math.max(previous - 1, 0));
-                }
-              } else if (event.key === "Enter") {
-                if (
-                  filteredJournalAccounts.length > 0 &&
-                  journalAccountHighlightedIndex >= 0 &&
-                  journalAccountHighlightedIndex < filteredJournalAccounts.length
-                ) {
-                  event.preventDefault();
-                  handleJournalAccountSelect(filteredJournalAccounts[journalAccountHighlightedIndex]);
-                }
+        <SearchField
+          placeholder="Search by name or code..."
+          value={journalAccountSearchTerm}
+          onValueChange={(value) => {
+            setJournalAccountSearchTerm(value);
+            setJournalAccountHighlightedIndex(0);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              if (filteredJournalAccounts.length > 0) {
+                setJournalAccountHighlightedIndex((previous) =>
+                  Math.min(previous + 1, filteredJournalAccounts.length - 1)
+                );
               }
-            }}
-            className="pl-9"
-            data-testid="input-journal-sidebar-search"
-          />
-        </div>
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              if (filteredJournalAccounts.length > 0) {
+                setJournalAccountHighlightedIndex((previous) => Math.max(previous - 1, 0));
+              }
+            } else if (event.key === "Enter") {
+              if (
+                filteredJournalAccounts.length > 0 &&
+                journalAccountHighlightedIndex >= 0 &&
+                journalAccountHighlightedIndex < filteredJournalAccounts.length
+              ) {
+                event.preventDefault();
+                handleJournalAccountSelect(filteredJournalAccounts[journalAccountHighlightedIndex]);
+              }
+            }
+          }}
+          data-testid="input-journal-sidebar-search"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto p-2" ref={journalSidebarRef}>

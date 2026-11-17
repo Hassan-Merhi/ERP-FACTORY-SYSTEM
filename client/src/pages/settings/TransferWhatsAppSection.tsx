@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -25,7 +25,6 @@ import {
   XCircle,
   Loader2,
   MapPin,
-  Search,
   RefreshCw,
   Check,
   X,
@@ -354,16 +353,13 @@ export function TransferWhatsAppSection() {
           </DialogHeader>
 
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Search groups…"
-                value={chatSearch}
-                onChange={(e) => setChatSearch(e.target.value)}
-                className="pl-8"
-                data-testid="input-loc-transfer-chat-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search groups…"
+              value={chatSearch}
+              onValueChange={setChatSearch}
+              wrapperClassName="flex-1"
+              data-testid="input-loc-transfer-chat-search"
+            />
             <Button
               size="icon"
               variant="ghost"

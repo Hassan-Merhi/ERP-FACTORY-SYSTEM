@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, FileText, Printer, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, FileText, Printer, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { getJson } from "./retailInventoryTypes";
 import {
   buildRetailSupplierReceiptLabelItems,
@@ -134,19 +134,16 @@ export function RetailSupplierImportHistory({
           <DialogTitle>Supplier stock import history</DialogTitle>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[240px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={query}
-              placeholder="Find supplier invoice / reference"
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setOffset(0);
-                setSelectedId(null);
-              }}
-            />
-          </div>
+          <SearchField
+            wrapperClassName="min-w-[240px] flex-1"
+            value={query}
+            placeholder="Find supplier invoice / reference"
+            onValueChange={(value) => {
+              setQuery(value);
+              setOffset(0);
+              setSelectedId(null);
+            }}
+          />
           <Button type="button" variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
