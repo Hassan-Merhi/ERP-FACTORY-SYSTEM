@@ -427,6 +427,17 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Default texts of the shared loading and error states (components/ui/page-state).
+  {
+    en: "Please wait while the latest information is loaded.",
+    ar: "يرجى الانتظار أثناء تحميل أحدث المعلومات.",
+    fr: "Veuillez patienter pendant le chargement des dernières informations.",
+  },
+  {
+    en: "The information could not be loaded. Please try again.",
+    ar: "تعذر تحميل المعلومات. يرجى المحاولة مرة أخرى.",
+    fr: "Les informations n’ont pas pu être chargées. Veuillez réessayer.",
+  },
   // Labels of the shared search and dropdown controls (UI unification phase 7).
   { en: "Statut de traduction", ar: "حالة الترجمة", fr: "Statut de traduction" },
   { en: "— Select group —", ar: "— اختر مجموعة —", fr: "— Sélectionner un groupe —" },
