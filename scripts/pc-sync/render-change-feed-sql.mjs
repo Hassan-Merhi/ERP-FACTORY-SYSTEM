@@ -6,7 +6,7 @@
 import { writeFileSync } from "node:fs";
 import pg from "pg";
 import { loadPcSyncPolicy, readPublicSchema, resolvePcSyncPolicy } from "../../server/offline/pcSync/tablePolicy.mjs";
-import { readPrimaryKeys, renderChangeFeedInstallSql } from "../../server/offline/pcSync/changeFeedSql.mjs";
+import { readPrimaryKeys, renderChangeFeedInstallSql } from "./changeFeedSql.mjs";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

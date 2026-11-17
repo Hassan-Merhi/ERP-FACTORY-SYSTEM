@@ -12,7 +12,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { requireSpCompany } from "../sp/spHelpers";
 import { resultRows, firstRow } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
-import { ensureSpGitTracking, SP_GIT_STATUSES } from "../../lib/spGitTracking";
+import { SP_GIT_STATUSES } from "../../lib/spGitTracking";
 import { gitUpload, importUndoStore, pruneImportUndoStore } from "./_helpers";
 import { updateContainerTrackingSchema } from "@shared/schema";
 
@@ -96,7 +96,6 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
       if (!companyId) return;
       if (!req.file) return res.status(400).json({ message: "No Excel file uploaded" });
       try {
-        await ensureSpGitTracking();
         const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
         const sheet =
           workbook.Sheets[workbook.SheetNames.find((s) => s.toLowerCase() === "containers") || workbook.SheetNames[0]];

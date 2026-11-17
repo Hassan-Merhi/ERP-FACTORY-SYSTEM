@@ -39,7 +39,7 @@ function slash(value) {
 }
 
 const packageJson = JSON.parse(await fs.readFile(path.join(ROOT, "package.json"), "utf8"));
-const bridgePath = path.join(SERVER_ROOT, "exportBufferBridge.mjs");
+const bridgePath = path.join(SERVER_ROOT, "runtime", "exportBuffer.mjs");
 let bridgeSource = "";
 try {
   bridgeSource = await fs.readFile(bridgePath, "utf8");
@@ -51,7 +51,7 @@ const devCommand = String(packageJson.scripts?.dev || "");
 const startCommand = String(packageJson.scripts?.start || "");
 // Bridges are preloaded through the ordered manifest (server/startupPreload.mjs).
 const startupPreloadSource = await fs.readFile(path.join(SERVER_ROOT, "startupPreload.mjs"), "utf8").catch(() => "");
-const manifestLoadsExportBridge = startupPreloadSource.includes('await import("./exportBufferBridge.mjs");');
+const manifestLoadsExportBridge = startupPreloadSource.includes('await import("./runtime/exportBuffer.mjs");');
 const bridgePreloadedInDev = devCommand.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge;
 const bridgePreloadedInProduction = startCommand.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge;
 const bridgeImplementsWorkbookStreaming = bridgeSource.includes("exportAwareWriteBuffer");
@@ -63,7 +63,7 @@ const bridgeReady =
   bridgeImplementsChunkStreaming;
 
 function protectionFor(file, pattern) {
-  if (file === "server/exportBufferBridge.mjs") return "bridge-infrastructure";
+  if (file === "server/runtime/exportBuffer.mjs") return "bridge-infrastructure";
   if (/whatsapp|scheduler|mailer|email/i.test(file)) return "attachment-buffer-required";
   if (!bridgeReady) return "unprotected";
   if (pattern === "excel-write-buffer" || pattern === "response-buffer-end") {

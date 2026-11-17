@@ -16,16 +16,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import {
-  CURRENCY_NORMALIZATION_FUNCTION_DDL,
+  CURRENCY_NORMALIZATION_FUNCTION,
   CURRENCY_NORMALIZATION_GUARD_VERSION,
-  CURRENCY_NORMALIZATION_MIGRATION,
   CURRENCY_NORMALIZATION_TRIGGER,
-  CURRENCY_NORMALIZATION_TRIGGER_DDL,
-  ensureCurrencyNormalizationGuard,
   installedCurrencyNormalizationVersion,
 } from "../server/services/accounting/currencyNormalizationGuard";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
@@ -36,6 +33,7 @@ import {
 } from "../server/services/factory/factoryFxLegacyRepair";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { functionDefinition, triggerDefinition } from "./helpers/schemaManifest";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -68,7 +66,6 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   // A factory company, so the factory rate routes (/api/factory/fx-rates) resolve it too.
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
@@ -77,7 +74,6 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
-  // The trigger stays installed: it is what every boot (CI included) installs.
   await withFixtureTransaction(async (client) => {
     await client.query(`SET LOCAL app.ledger_integrity_bypass = 'on'`);
     await client.query(`DELETE FROM exchange_rates WHERE company_id = $1`, [ctx.companyId]);
@@ -94,61 +90,31 @@ afterAll(async () => {
   await closeTestServer();
 }, 120000);
 
-describe("currency normalization installer (decision 4)", () => {
-  it("installs the migration's exact definition, idempotently and versioned", async () => {
-    // Wave 17 (D): the current definition is v2 (CURRENCY_NORMALIZATION_MIGRATION);
-    // v1 stays in migrations/20260720_005.
-    const migration = fs.readFileSync(path.join(process.cwd(), CURRENCY_NORMALIZATION_MIGRATION), "utf8");
-    expect(squash(migration)).toContain(squash(CURRENCY_NORMALIZATION_FUNCTION_DDL));
-    expect(squash(migration)).toContain(`${squash(CURRENCY_NORMALIZATION_TRIGGER_DDL)};`);
+// The definition of record before the schema migrations: v2 (wave 17 D);
+// v1 stays in migrations/archive/legacy/20260720_005.
+const CURRENCY_NORMALIZATION_LEGACY_MIGRATION =
+  "migrations/archive/legacy/20261009_001_voucher_entry_currency_normalization_v2.sql";
 
-    expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
-    expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
+describe("currency normalization trigger (decision 4)", () => {
+  it("is defined by the schema migrations with the reviewed v2 definition, versioned", async () => {
+    const definition = functionDefinition(CURRENCY_NORMALIZATION_FUNCTION);
+    expect(definition).toBeDefined();
+    const body = /AS \$function\$([\s\S]*)\$function\$/.exec(definition!)?.[1];
+    expect(body).toBeDefined();
+    const migration = fs.readFileSync(path.join(process.cwd(), CURRENCY_NORMALIZATION_LEGACY_MIGRATION), "utf8");
+    expect(squash(migration)).toContain(squash(body!));
+    expect(triggerDefinition("voucher_entries", CURRENCY_NORMALIZATION_TRIGGER)).toBe(
+      "CREATE TRIGGER voucher_entries_normalize_currency_before_write BEFORE INSERT OR UPDATE OF voucher_id, " +
+        "debit_amount, credit_amount, transaction_currency, transaction_debit_amount, transaction_credit_amount, " +
+        "base_debit_amount, base_credit_amount, historical_exchange_rate, rate_convention ON public.voucher_entries " +
+        "FOR EACH ROW EXECUTE FUNCTION normalize_voucher_entry_currency_amounts()"
+    );
+
     expect(await installedCurrencyNormalizationVersion(pool)).toBe(CURRENCY_NORMALIZATION_GUARD_VERSION);
     const triggers = await pool.query(
       `SELECT tgname FROM pg_trigger WHERE tgrelid = 'voucher_entries'::regclass AND tgname LIKE 'voucher_entries_normalize_currency%'`
     );
     expect(triggers.rows.map((row) => row.tgname)).toEqual([CURRENCY_NORMALIZATION_TRIGGER]);
-  });
-
-  it("is fatal on failure, rolling back and releasing the connection", async () => {
-    const release = vi.fn();
-    const query = vi.fn(async (text: string) => {
-      if (text.includes("information_schema.columns")) {
-        return {
-          rows: [
-            ...["id", "currency", "exchange_rate"].map((c) => ({ name: `vouchers.${c}` })),
-            ...[
-              "voucher_id",
-              "debit_amount",
-              "credit_amount",
-              "transaction_currency",
-              "transaction_debit_amount",
-              "transaction_credit_amount",
-              "base_debit_amount",
-              "base_credit_amount",
-              "historical_exchange_rate",
-              "rate_convention",
-            ].map((c) => ({ name: `voucher_entries.${c}` })),
-          ],
-        };
-      }
-      if (/CREATE|DROP|COMMENT/.test(text)) throw new Error("lock timeout");
-      return { rows: [] };
-    });
-    const fakePool = { connect: async () => ({ query, release }) } as never;
-    await expect(ensureCurrencyNormalizationGuard(fakePool)).rejects.toThrow(/lock timeout/);
-    expect(query).toHaveBeenCalledWith("ROLLBACK");
-    expect(release).toHaveBeenCalledTimes(1);
-  });
-
-  it("skips with a warning, without a transaction, when a required column is missing", async () => {
-    const release = vi.fn();
-    const query = vi.fn(async () => ({ rows: [] }));
-    const fakePool = { connect: async () => ({ query, release }) } as never;
-    expect(await ensureCurrencyNormalizationGuard(fakePool)).toBe(false);
-    expect(query).not.toHaveBeenCalledWith("BEGIN");
-    expect(release).toHaveBeenCalledTimes(1);
   });
 
   it("is listed by the diagnostic's database_guards_installed", async () => {
@@ -160,15 +126,16 @@ describe("currency normalization installer (decision 4)", () => {
         .filter((name) => name.includes("normalize"));
     };
     expect(await currencyMissing()).toEqual([]);
-    // An out-of-date version is reported (a comment only: the trigger keeps working)
-    // and the installer brings it back.
+    // An out-of-date version is reported (a comment only: the trigger keeps working).
     await pool.query(`COMMENT ON FUNCTION normalize_voucher_entry_currency_amounts() IS 'outdated'`);
     try {
       expect(await currencyMissing()).toEqual([
         `normalize_voucher_entry_currency_amounts ${CURRENCY_NORMALIZATION_GUARD_VERSION}`,
       ]);
     } finally {
-      expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
+      await pool.query(
+        `COMMENT ON FUNCTION normalize_voucher_entry_currency_amounts() IS '${CURRENCY_NORMALIZATION_GUARD_VERSION}'`
+      );
     }
     expect(await currencyMissing()).toEqual([]);
   });

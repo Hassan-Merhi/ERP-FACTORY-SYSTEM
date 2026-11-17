@@ -66,7 +66,9 @@ export function buildSessionMiddleware(): RequestHandler {
         connectionTimeoutMillis: 8000,
         idleTimeoutMillis: 30000,
       },
-      createTableIfMissing: true,
+      // The session table is part of migrations/0001_baseline_schema.sql; the
+      // store must never run DDL at runtime.
+      createTableIfMissing: false,
     });
 
     logger.info(`✓ PostgreSQL session store configured (SSL: ${requiresSSL ? "enabled" : "disabled"})`);

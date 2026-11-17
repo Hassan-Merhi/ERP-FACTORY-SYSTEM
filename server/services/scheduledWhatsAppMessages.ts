@@ -1,63 +1,13 @@
 /**
- * Editable, company-scoped recurring WhatsApp text messages.
- * Table creation is idempotent and deliberately separate from the hash-pinned
- * legacy startupMigrations array. All send claims are persisted before a POST
- * to Green API, avoiding duplicate sends on overlapping Render workers.
+ * Editable, company-scoped recurring WhatsApp text messages. The tables are
+ * defined by the schema migrations (migrations/). All send claims are persisted
+ * before a POST to Green API, avoiding duplicate sends on overlapping Render
+ * workers.
  */
 import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { getWaSettings, sendWhatsAppTextToChatId } from "./whatsappService";
-
-const schemaStatements = [
-  `CREATE TABLE IF NOT EXISTS whatsapp_message_schedules (
-    id bigserial PRIMARY KEY,
-    company_id integer NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    title varchar(120) NOT NULL,
-    message text NOT NULL,
-    timezone text NOT NULL DEFAULT 'Asia/Beirut',
-    weekly_times jsonb NOT NULL DEFAULT '{}'::jsonb,
-    start_date date,
-    end_date date,
-    enabled boolean NOT NULL DEFAULT false,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT whatsapp_message_schedules_message_nonempty CHECK (char_length(trim(message)) > 0)
-  )`,
-  "CREATE INDEX IF NOT EXISTS whatsapp_message_schedules_company_idx ON whatsapp_message_schedules (company_id, enabled)",
-  `CREATE TABLE IF NOT EXISTS whatsapp_message_schedule_recipients (
-    schedule_id bigint NOT NULL REFERENCES whatsapp_message_schedules(id) ON DELETE CASCADE,
-    recipient_id integer NOT NULL REFERENCES whatsapp_recipients(id) ON DELETE CASCADE,
-    PRIMARY KEY (schedule_id, recipient_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS whatsapp_message_schedule_deliveries (
-    id bigserial PRIMARY KEY,
-    schedule_id bigint NOT NULL REFERENCES whatsapp_message_schedules(id) ON DELETE CASCADE,
-    recipient_id integer REFERENCES whatsapp_recipients(id) ON DELETE SET NULL,
-    recipient_name text NOT NULL,
-    local_date date NOT NULL,
-    message_snapshot text NOT NULL,
-    status text NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','failed')),
-    error text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    sent_at timestamptz,
-    UNIQUE (schedule_id, recipient_id, local_date)
-  )`,
-  "CREATE INDEX IF NOT EXISTS whatsapp_message_schedule_deliveries_company_idx ON whatsapp_message_schedule_deliveries (schedule_id, created_at DESC)",
-];
-
-let ensuring: Promise<void> | null = null;
-export function ensureScheduledWhatsAppMessageSchema(): Promise<void> {
-  if (!ensuring) {
-    ensuring = (async () => {
-      for (const sql of schemaStatements) await pool.query(sql);
-    })().catch((error) => {
-      ensuring = null; // allow recovery if database was temporarily unavailable
-      throw error;
-    });
-  }
-  return ensuring;
-}
 
 export type WeeklyTimes = Record<string, string | null>;
 
@@ -133,7 +83,6 @@ export function shouldSendScheduledMessage(row: ScheduledMessageRow, now: Date) 
 }
 
 export async function runScheduledWhatsAppMessages(now: Date = new Date()): Promise<void> {
-  await ensureScheduledWhatsAppMessageSchema();
   // A process may stop after its provider POST. Never auto-retry that uncertain
   // delivery; mark the claim for investigation without risking a duplicate.
   await pool.query(

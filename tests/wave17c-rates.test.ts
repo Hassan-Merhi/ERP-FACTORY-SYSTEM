@@ -18,7 +18,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { pool } from "../server/db";
 import { getOrFetchFxRateToUsd } from "../server/routes/factory/_helpers";
 import { getLatestCfaPerUsd } from "../server/services/accounting/latestCfaPerUsd";
-import { ensureCurrencyNormalizationGuard } from "../server/services/accounting/currencyNormalizationGuard";
 import {
   FactoryFxRepairPlanHashRequiredError,
   applyFactoryFxLegacyRepair,
@@ -94,7 +93,6 @@ async function insertRate(currency: string, rate: string, date: string, source: 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
@@ -292,10 +290,13 @@ describe("individual factory FX settings rate removal", () => {
         [ctx.companyId, `${PREFIX}-hkd-row-delete`]
       );
     });
-    const before = (await pool.query(
-      `SELECT id, effective_date::text AS date FROM factory_fx_rates
-        WHERE company_id = $1 AND currency_code = 'HKD' ORDER BY effective_date`, [ctx.companyId]
-    )).rows;
+    const before = (
+      await pool.query(
+        `SELECT id, effective_date::text AS date FROM factory_fx_rates
+        WHERE company_id = $1 AND currency_code = 'HKD' ORDER BY effective_date`,
+        [ctx.companyId]
+      )
+    ).rows;
     expect(before).toHaveLength(2);
     const [usedRate, unusedRate] = before;
 
@@ -322,8 +323,9 @@ describe("individual factory FX settings rate removal", () => {
     expect(visible.body.some((rate: { currencyCode: string }) => rate.currencyCode === "HKD")).toBe(false);
     failExternalRate();
     expect((await agent.get("/api/factory/fx-rates/HKD/2026-08-20")).status).toBe(404);
-    const audit = (await auditRows("factory_fx_rates"))
-      .filter((row) => String(row.record_identifier).startsWith("HKD "));
+    const audit = (await auditRows("factory_fx_rates")).filter((row) =>
+      String(row.record_identifier).startsWith("HKD ")
+    );
     expect(audit.map((row) => row.action)).toEqual(["delete", "update"]);
   });
 });

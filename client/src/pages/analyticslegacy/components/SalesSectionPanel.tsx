@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -481,23 +481,14 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                 <h3 className="text-lg font-medium">Sales by Location</h3>
                 <div className="flex flex-wrap items-center gap-2">
                   {selectedPeriod === "range" && (
-                    <>
-                      <Input
-                        type="date"
-                        className="w-auto"
-                        value={rangeStart}
-                        onChange={(e) => setRangeStart(e.target.value)}
-                        data-testid="input-range-start"
-                      />
-                      <span className="text-muted-foreground text-sm">to</span>
-                      <Input
-                        type="date"
-                        className="w-auto"
-                        value={rangeEnd}
-                        onChange={(e) => setRangeEnd(e.target.value)}
-                        data-testid="input-range-end"
-                      />
-                    </>
+                    <PeriodFilter
+                      value={{ fromDate: rangeStart, toDate: rangeEnd, preset: "custom" }}
+                      onChange={(v) => {
+                        setRangeStart(v.fromDate);
+                        setRangeEnd(v.toDate);
+                      }}
+                      data-testid="sales-location-range-filter"
+                    />
                   )}
                   <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                     <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-sales-period">

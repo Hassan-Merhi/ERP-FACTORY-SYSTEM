@@ -38,60 +38,6 @@ export function validatePhase8OperatorApproval(input) {
   return input;
 }
 
-export async function ensurePhase8ApplySchema(queryable) {
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_apply_cursor (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL DEFAULT 0 CHECK(last_sequence >= 0)
-    )
-  `);
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_applied_vouchers (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL,
-      local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      cloud_voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE RESTRICT CHECK(cloud_voucher_id > 0),
-      payload_sha256 CHAR(64) NOT NULL,
-      business_date DATE NOT NULL,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, sequence),
-      UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, company_id, local_voucher_id),
-      UNIQUE (company_id, cloud_voucher_id)
-    )
-  `);
-  // Never let an app implicitly grant an actor permission to replay money.
-  // A DBA can provision approved rows in a reviewed, separately fenced
-  // maintenance transaction. No wildcard site/company/user support.
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_apply_approvals (
-      site_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL,
-      baseline_sha256 CHAR(64) NOT NULL,
-      approved_until TIMESTAMPTZ NOT NULL,
-      approved_by TEXT NOT NULL,
-      PRIMARY KEY (site_id, company_id, actor_user_id)
-    )
-  `);
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_applied_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE8_APPLIED_RECEIPT_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query("DROP TRIGGER IF EXISTS factory_edge_applied_no_modify ON factory_edge_applied_vouchers");
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_applied_no_modify
-    BEFORE UPDATE OR DELETE ON factory_edge_applied_vouchers
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_applied_immutable()
-  `);
-}
-
 /**
  * Read-only proof that THIS connection is the restricted cloud runtime role,
  * under the exact DBA-installed cloud-primary epoch and baseline, with every

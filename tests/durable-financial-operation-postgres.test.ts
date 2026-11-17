@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensureFinancialOperationRequests } from "../server/services/accounting/ensureFinancialOperationRequests";
 import {
   financialOperationFingerprint,
   reserveFinancialOperationTx,
@@ -26,13 +25,15 @@ async function cleanup(): Promise<void> {
   await db.execute(sql`
     DELETE FROM financial_operation_requests
     WHERE company_id = ${companyId}
-      AND idempotency_key IN (${sql.join(keys.map((key) => sql`${key}`), sql`, `)})
+      AND idempotency_key IN (${sql.join(
+        keys.map((key) => sql`${key}`),
+        sql`, `
+      )})
   `);
 }
 
 describePostgres("durable financial operation PostgreSQL boundary", () => {
   beforeAll(async () => {
-    await ensureFinancialOperationRequests(pool);
     const result = await db.execute(sql`SELECT id FROM companies ORDER BY id LIMIT 1`);
     companyId = Number((result.rows[0] as { id?: number } | undefined)?.id);
     if (!Number.isInteger(companyId) || companyId <= 0) {
@@ -132,8 +133,8 @@ describePostgres("durable financial operation PostgreSQL boundary", () => {
         (${companyId}, ${input.operationName}, ${key}, ${input.requestFingerprint}, 'processing')
     `);
 
-    await expect(
-      db.transaction(async (tx) => reserveFinancialOperationTx(tx, input))
-    ).resolves.toMatchObject({ kind: "uncertain" });
+    await expect(db.transaction(async (tx) => reserveFinancialOperationTx(tx, input))).resolves.toMatchObject({
+      kind: "uncertain",
+    });
   });
 });

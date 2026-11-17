@@ -33,14 +33,6 @@ const scope = includeDev ? "all dependencies" : "production dependencies";
  * An entry is NOT a way to silence a finding you have not investigated. If
  * an upstream fix appears, this script tells you to drop the exception.
  */
-// One advisory, one dependency path: tailwindcss -> chokidar / fast-glob / micromatch -> braces.
-const BRACES_BUILD_ONLY = {
-  advisories: ["GHSA-vfj7-8cjw-p6xm"],
-  reason:
-    "braces has no patched release (GHSA-vfj7-8cjw-p6xm affects every version). It is reached only through tailwindcss 3, which runs at build time to scan this repository's own content globs; build tools are kept in dependencies because Render installs with NODE_ENV=production. No request input ever becomes a glob pattern, and the server bundle does not load tailwindcss, chokidar, fast-glob, micromatch or braces (scripts/verify-runtime-dependencies.mjs). npm's only remedy is the tailwindcss 4 major upgrade, tracked separately.",
-  reviewOn: "2026-11-03",
-};
-
 // One advisory, one dependency path: vite -> tinyglobby -> picomatch.
 const PICOMATCH_BUILD_ONLY = {
   advisories: ["GHSA-fc5q-39xc-vjpf"],
@@ -50,11 +42,6 @@ const PICOMATCH_BUILD_ONLY = {
 };
 
 const ACCEPTED = {
-  braces: BRACES_BUILD_ONLY,
-  chokidar: BRACES_BUILD_ONLY,
-  "fast-glob": BRACES_BUILD_ONLY,
-  micromatch: BRACES_BUILD_ONLY,
-  tailwindcss: BRACES_BUILD_ONLY,
   picomatch: PICOMATCH_BUILD_ONLY,
   tinyglobby: PICOMATCH_BUILD_ONLY,
   vite: PICOMATCH_BUILD_ONLY,
@@ -138,8 +125,14 @@ for (const { vulnerability, exception } of accepted) {
   }
 
   // fixAvailable turns truthy once upstream ships a patch — at which point
-  // the exception is obsolete and should be deleted rather than carried.
-  if (vulnerability.fixAvailable) {
+  // the exception is obsolete and should be deleted rather than carried. npm
+  // also reports a "fix" that is only a breaking major change (for example a
+  // downgrade of the parent package); that is the reason the exception exists,
+  // so it is reported as information, not as an available fix.
+  const fix = vulnerability.fixAvailable;
+  if (fix && typeof fix === "object" && fix.isSemVerMajor) {
+    console.log(`    Only a breaking change would remove it: ${fix.name}@${fix.version} (semver-major).`);
+  } else if (fix) {
     console.log(
       `::warning::A fix is now available for "${vulnerability.name}". Apply it and remove the exception from scripts/verify-dependency-audit.mjs.`
     );

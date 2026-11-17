@@ -18,12 +18,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { normalizedLineFields } from "./helpers/normalizedVoucherLine";
-import {
-  ensureVoucherBalanceGuard,
-  VOUCHER_BALANCE_GUARD_TRIGGERS,
-} from "../server/services/accounting/voucherBalanceGuard";
-import { ensureLedgerIntegrityGuard } from "../server/services/accounting/ledgerIntegrityGuard";
-import { ensureInventoryCutoverSchema } from "../server/services/accounting/perpetualInventory/cutover";
+import { hasTrigger, schemaManifest } from "./helpers/schemaManifest";
+import { ENGINE_ROUNDING_NARRATION, ROUNDING_ACCOUNT_CODE } from "../server/services/accounting/engineRounding";
+import { VOUCHER_BALANCE_GUARD_TRIGGERS } from "../server/services/accounting/voucherBalanceGuard";
 
 const PREFIX = `vbg${Date.now().toString(36)}`;
 let companyId: number;
@@ -109,9 +106,6 @@ async function voucher(
 }
 
 beforeAll(async () => {
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  expect(await ensureInventoryCutoverSchema(pool)).toBe(true);
-  expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
   await transaction(async (q) => {
     companyId = (
       await q(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [PREFIX.toUpperCase()])
@@ -181,12 +175,21 @@ afterAll(async () => {
       await q(`DELETE FROM companies WHERE id = $1`, [company]);
     }
   });
-  // The rest of the suite writes fixtures freely: leave the database as it was
-  // (the history marker column stays; with no trigger it is inert).
-  for (const [table, trigger] of VOUCHER_BALANCE_GUARD_TRIGGERS) {
-    await pool.query(`DROP TRIGGER IF EXISTS ${trigger} ON ${table}`);
-  }
 }, 60000);
+
+describe("voucher balance guard schema (defined by the schema migrations)", () => {
+  it("has every guard trigger and recognises the engine's rounding line", () => {
+    for (const [table, trigger] of VOUCHER_BALANCE_GUARD_TRIGGERS) {
+      expect(hasTrigger(table, trigger), `${table}.${trigger}`).toBe(true);
+    }
+    const check = schemaManifest()
+      .filter((entry) => entry.kind === "function" && entry.identity.startsWith("public.erp_voucher_balance_check("))
+      .map((entry) => String(entry.def.def))
+      .join("\n");
+    expect(check).toContain(`ve.narration = '${ENGINE_ROUNDING_NARRATION}'`);
+    expect(check).toContain(`la.code = '${ROUNDING_ACCOUNT_CODE}'`);
+  });
+});
 
 describe("voucher balance guard", () => {
   it("accepts a voucher whose lines balance at commit, written one by one", async () => {

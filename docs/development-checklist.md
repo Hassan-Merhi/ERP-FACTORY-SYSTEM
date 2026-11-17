@@ -105,10 +105,10 @@ After starting the dev server (`npm run dev`), manually verify:
 
 ## Schema / Migration Check (if you changed `shared/schema/`)
 
-- [ ] Added an idempotent migration in `server/startup-schema/` and registered it in `server/startup-schema/index.ts`
+- [ ] Added a new numbered migration in `migrations/` (never edited an applied one) and regenerated `migrations/manifest/*.tsv` with `npm run db:manifest` on an empty disposable database
 - [ ] Ran `npm run verify:migrations`
 - [ ] Server starts and logs `✓ Database tables and columns verified/migrated` without errors
-- [ ] Did **not** run `drizzle-kit push` against a persistent database
+- [ ] No runtime code creates or alters schema (`npm run audit:runtime-ddl` passes)
 
 ---
 

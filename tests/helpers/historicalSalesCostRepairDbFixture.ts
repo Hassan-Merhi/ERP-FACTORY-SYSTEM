@@ -6,7 +6,6 @@
 import type { PoolClient } from "pg";
 
 import { pool } from "../../server/db";
-import { ensureHistoricalSalesCostRepairSchema } from "../../server/services/inventory/ensureHistoricalSalesCostRepairSchema";
 import { dryRunCompany } from "../../server/services/inventory/historicalSalesCostRepairDryRun";
 import { routePoolToClient } from "./routedPoolClient";
 
@@ -19,7 +18,6 @@ export class HscrFixture {
   ) {}
 
   static async open(): Promise<HscrFixture> {
-    await ensureHistoricalSalesCostRepairSchema(pool);
     const client = await pool.connect();
     await client.query("BEGIN");
     const code = `HSCR${process.pid}${++sequence}`;

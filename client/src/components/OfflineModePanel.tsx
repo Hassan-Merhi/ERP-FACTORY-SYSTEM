@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Pause, Play, RefreshCw, Trash2, WifiOff, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StatusBadge, type StatusKind } from "@/components/StatusBadge";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { applicationEnglishTranslations, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
@@ -69,12 +70,21 @@ const STATUS_KEY: Record<BrowserOperationStatus, ApplicationTranslationKey> = {
   discarded: "offlineMode.discarded",
 };
 
+// Tints for the summary count tiles (not status pills; the record pill uses StatusBadge).
 const STATUS_STYLE: Record<BrowserOperationStatus, string> = {
   "saved-locally": "bg-sky-500/10 text-sky-700 dark:text-sky-300",
   "pending-sync": "bg-amber-500/10 text-amber-700 dark:text-amber-300",
   synced: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   failed: "bg-red-500/10 text-red-700 dark:text-red-300",
   discarded: "bg-muted text-muted-foreground",
+};
+
+const STATUS_KIND: Record<BrowserOperationStatus, StatusKind> = {
+  "saved-locally": "info",
+  "pending-sync": "pending",
+  synced: "success",
+  failed: "failed",
+  discarded: "cancelled",
 };
 
 function formatBytes(bytes: number): string {
@@ -258,12 +268,13 @@ export function OfflineModePanel() {
                         {kindTitle(record.kind)}
                         <span className="text-muted-foreground font-normal"> · {record.label}</span>
                       </span>
-                      <span
-                        className={`text-[11px] rounded px-1.5 py-0.5 whitespace-nowrap ${STATUS_STYLE[status]}`}
+                      <StatusBadge
+                        status={STATUS_KIND[status]}
+                        label={t(STATUS_KEY[status])}
+                        showIcon={false}
+                        className="whitespace-nowrap"
                         data-testid="offline-mode-record-status"
-                      >
-                        {t(STATUS_KEY[status])}
-                      </span>
+                      />
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono">
                       {new Date(record.capturedAt).toLocaleString()} · {record.id.slice(0, 8)}

@@ -23,7 +23,6 @@ import { getCompanyBusinessDate } from "../server/lib/dateUtils";
 import { perpetualReadinessReport } from "../server/services/accounting/perpetualInventory/readiness";
 import { noMixCataloguePricedBales } from "../server/services/accounting/perpetualInventory/factoryCutoverBlockers";
 import { stockEntryCutoverTx } from "../server/services/factory/stockImportPolicy";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import { serveAccountListForCompany } from "../server/routes/accounts/all";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
@@ -178,7 +177,6 @@ async function excelRows(query: string) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureFactoryCostBasisSchema(pool);
   // The factory import routes need a factory company.
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   agent = request.agent(ctx.app);

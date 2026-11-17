@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -127,24 +127,14 @@ export default function FactorySupplierReport() {
             )}
 
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">From</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
+              <Label className="text-xs text-muted-foreground">Period</Label>
+              <PeriodFilter
+                value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+                onChange={(v) => {
+                  setStartDate(v.fromDate);
+                  setEndDate(v.toDate);
+                }}
                 data-testid="input-start-date"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">To</Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
-                data-testid="input-end-date"
               />
             </div>
 

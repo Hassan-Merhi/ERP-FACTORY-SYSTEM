@@ -43,8 +43,4 @@ export function registerAdminOrphanedBaleRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
-
-  // ── Emergency: force-apply missing voucher column migrations ─────────────
-  // Runs ALTER TABLE with no lock timeout so it waits as long as needed.
-  // Safe to call multiple times — all statements use IF NOT EXISTS.
 }

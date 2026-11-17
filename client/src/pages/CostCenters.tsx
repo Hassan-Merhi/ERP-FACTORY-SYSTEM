@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -296,30 +297,19 @@ export default function CostCenters() {
                 {loadingBalance && <p className="text-xs text-muted-foreground">Loading totals…</p>}
                 {loadingActivity && <p className="text-xs text-muted-foreground">Loading activity…</p>}
                 <div className="flex flex-wrap gap-2 items-center">
-                  <div className="space-y-1 flex-1 min-w-[125px]">
-                    <Label htmlFor="cost-center-from-date">From</Label>
-                    <Input
-                      id="cost-center-from-date"
-                      type="date"
-                      value={activityFrom}
-                      onChange={(e) => {
-                        setActivityFrom(e.target.value);
-                        setActivityOffset(0);
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1 flex-1 min-w-[125px]">
-                    <Label htmlFor="cost-center-to-date">To</Label>
-                    <Input
-                      id="cost-center-to-date"
-                      type="date"
-                      value={activityTo}
-                      onChange={(e) => {
-                        setActivityTo(e.target.value);
-                        setActivityOffset(0);
-                      }}
-                    />
-                  </div>
+                  <PeriodFilter
+                    value={{
+                      fromDate: activityFrom,
+                      toDate: activityTo,
+                      preset: activityFrom || activityTo ? "custom" : "all_time",
+                    }}
+                    onChange={(v) => {
+                      setActivityFrom(v.fromDate);
+                      setActivityTo(v.toDate);
+                      setActivityOffset(0);
+                    }}
+                    data-testid="cost-center-activity-period"
+                  />
                 </div>
                 <div className="space-y-1">
                   {(activity?.activity || []).map((row) => (

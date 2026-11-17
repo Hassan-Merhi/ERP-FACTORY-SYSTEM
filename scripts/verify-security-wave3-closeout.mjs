@@ -56,7 +56,10 @@ requireMarkers("server/middleware/privilegedMaintenanceScope.ts", [
   "privileged_maintenance_denied",
 ]);
 
-const rls = requireMarkers("migrations/0016_company_scope_rls_readiness.sql", [
+// Tenant isolation lives in the schema migrations (migrations/0001_baseline_schema.sql),
+// and migrations/manifest/schema.tsv records the resulting catalog that CI proves
+// a fresh database reaches and that startup verifies.
+requireMarkers("migrations/0001_baseline_schema.sql", [
   "ENABLE ROW LEVEL SECURITY",
   "FORCE ROW LEVEL SECURITY",
   "erp_current_company_id()",
@@ -66,8 +69,14 @@ const rls = requireMarkers("migrations/0016_company_scope_rls_readiness.sql", [
   "voucher_entries_company_idx",
   "voucher_entries_sync_company_id",
   "vouchers_sync_entry_company_id",
-  "USING (erp_company_scope_matches(company_id))",
+  "erp_company_scope_matches(company_id)",
 ]);
+
+const manifestEntries = new Map();
+for (const line of (read("migrations/manifest/schema.tsv") ?? "").split("\n")) {
+  const [kind, identity, definition] = line.split("\t");
+  if (kind && definition) manifestEntries.set(`${kind}\t${identity}`, JSON.parse(definition));
+}
 
 for (const table of [
   "vouchers",
@@ -78,9 +87,15 @@ for (const table of [
   "stock_groups",
   "stock_items",
   "inventory",
+  "voucher_entries",
 ]) {
-  if (!rls.includes("'" + table + "'")) {
-    failures.push("RLS migration no longer protects required tenant table: " + table);
+  const definition = manifestEntries.get(`table\tpublic.${table}`);
+  if (!definition?.rls || !definition?.forceRls) {
+    failures.push("Schema no longer enables and forces row-level security on tenant table: " + table);
+  }
+  const policy = manifestEntries.get(`policy\tpublic.${table}.${table}_company_scope_policy`);
+  if (!policy || !String(policy.using ?? "").includes("erp_company_scope_matches(company_id)")) {
+    failures.push("Schema no longer scopes tenant table by company: " + table);
   }
 }
 

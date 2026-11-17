@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -212,19 +212,13 @@ export default function OptionalVouchers() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="w-40"
-              data-testid="input-start-date"
-            />
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-              className="w-40"
-              data-testid="input-end-date"
+            <PeriodFilter
+              value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+              onChange={(v) => {
+                setStartDate(v.fromDate);
+                setEndDate(v.toDate);
+              }}
+              data-testid="optional-voucher-period"
             />
           </>
         }

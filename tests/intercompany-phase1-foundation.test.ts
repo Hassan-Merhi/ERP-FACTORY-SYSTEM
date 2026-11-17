@@ -20,7 +20,7 @@ import {
   intercompanyRepairRequests,
 } from "../shared/schema";
 
-const SQL_FILE = join(process.cwd(), "migrations", "20261105_001_intercompany_phase1_foundation.sql");
+const SQL_FILE = join(process.cwd(), "migrations/archive/legacy", "20261105_001_intercompany_phase1_foundation.sql");
 const MIGRATION = readFileSync(SQL_FILE, "utf8");
 
 describe("intercompany phase 1 foundation", () => {
@@ -43,7 +43,9 @@ describe("intercompany phase 1 foundation", () => {
   });
 
   it("registers the additive migration in the ordered migration journal", () => {
-    const journal = JSON.parse(readFileSync(join(process.cwd(), "migrations/meta/_journal.json"), "utf8"));
+    const journal = JSON.parse(
+      readFileSync(join(process.cwd(), "migrations/archive/legacy/meta/_journal.json"), "utf8")
+    );
     const tags = journal.entries.map((item: { tag: string }) => item.tag);
     expect(tags.filter((tag: string) => tag === "20261105_001_intercompany_phase1_foundation")).toHaveLength(1);
     expect(journal.entries.every((item: { idx: number }, i: number) => item.idx === i)).toBe(true);

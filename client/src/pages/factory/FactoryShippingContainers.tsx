@@ -44,6 +44,7 @@ import {
 } from "./factoryshippingcontainers/components/ShippingStatusChips";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
@@ -602,7 +603,7 @@ export default function FactoryShippingContainers() {
                     {colVis.containerCost && (
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {r.grandTotal ? (
-                          <span className="shipping-cost">${Number(r.grandTotal).toLocaleString()}</span>
+                          <span className="shipping-cost">{formatUsd(Number(r.grandTotal), 0, 3)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

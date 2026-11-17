@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { firstRow } from "../../lib/queryResult";
 import { resolveGitCompanyScope } from "../../lib/gitHelpers";
-import { ensureSpGitTracking, SP_GIT_STATUSES, SP_GIT_FIELDS } from "../../lib/spGitTracking";
+import { SP_GIT_STATUSES, SP_GIT_FIELDS } from "../../lib/spGitTracking";
 import { updateContainerTrackingSchema } from "@shared/schema";
 
 const names: Record<(typeof SP_GIT_FIELDS)[number], string> = {
@@ -61,7 +61,6 @@ export function registerSpGitTrackingRoutes(app: Express): void {
           .status(400)
           .json({ message: "Only active logistics statuses may be set here; use Offload to receive stock" });
       }
-      await ensureSpGitTracking();
       const existing = firstRow<{ company_id: number; status: string }>(
         await db.execute(sql`
         SELECT company_id, status FROM sp_containers WHERE id = ${id} LIMIT 1
