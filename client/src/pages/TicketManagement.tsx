@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +52,6 @@ const categories = [
   "Invoice / Loading Error",
   "Other",
 ];
-const inputStyle = "w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm";
 function TicketForm({
   onCreated,
   onCancel,
@@ -142,48 +142,73 @@ function TicketForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block space-y-1 text-sm font-medium">
               Issue type
-              <select className={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {categories.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="w-full min-w-0 text-sm" aria-label="Issue type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label className="block space-y-1 text-sm font-medium">
               Priority
-              <select
-                className={inputStyle}
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as typeof priority)}
-              >
-                {priorities.map((p) => (
-                  <option key={p} value={p}>
-                    {p[0].toUpperCase() + p.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <Select value={priority} onValueChange={(value) => setPriority(value as typeof priority)}>
+                <SelectTrigger className="w-full min-w-0 text-sm" aria-label="Priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {priorities.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p[0].toUpperCase() + p.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <label className="block space-y-1 text-sm font-medium">
             Assign to employee
-            <select className={inputStyle} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} required>
-              <option value="">Select employee...</option>
-              {users.data?.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.username}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={assignedTo || "__none__"}
+              onValueChange={(value) => setAssignedTo(value === "__none__" ? "" : value)}
+              required
+            >
+              <SelectTrigger className="w-full min-w-0 text-sm" aria-label="Assign to employee">
+                <SelectValue placeholder="Select employee..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Select employee...</SelectItem>
+                {users.data?.users.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="block space-y-1 text-sm font-medium">
             Employee associated with reported error (optional)
-            <select className={inputStyle} value={reportedUserId} onChange={(e) => setReportedUserId(e.target.value)}>
-              <option value="">Not specified / system issue</option>
-              {users.data?.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.username}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={reportedUserId || "__none__"}
+              onValueChange={(value) => setReportedUserId(value === "__none__" ? "" : value)}
+            >
+              <SelectTrigger className="w-full min-w-0 text-sm" aria-label="Employee associated with reported error">
+                <SelectValue placeholder="Not specified / system issue" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Not specified / system issue</SelectItem>
+                {users.data?.users.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           {users.isError && (
             <p role="alert" className="text-sm text-destructive">
@@ -465,22 +490,25 @@ export default function TicketManagement({ sourceMode = "erp" }: { sourceMode?: 
                 setPage(1);
               }}
             />
-            <select
-              aria-label="Filter status"
-              className={inputStyle}
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
+            <Select
+              value={status || "__all__"}
+              onValueChange={(value) => {
+                setStatus(value === "__all__" ? "" : value);
                 setPage(1);
               }}
             >
-              <option value="">All statuses</option>
-              {Object.entries(statusLabels).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Filter status" className="w-full min-w-0 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All statuses</SelectItem>
+                {Object.entries(statusLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {listing.isLoading && <p role="status">Loading tickets...</p>}
           {listing.isError && (

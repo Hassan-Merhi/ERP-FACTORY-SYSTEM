@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { getJson, type Location } from "./retailInventoryTypes";
@@ -484,46 +485,52 @@ export function RetailSupplierImportDialog({
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="retail-import-supplier">Supplier *</Label>
-              <select
-                id="retail-import-supplier"
-                value={supplierId}
-                onChange={(event) => {
-                  setSupplierId(event.target.value);
+              <Select
+                value={supplierId || "__none__"}
+                onValueChange={(v) => {
+                  setSupplierId(v === "__none__" ? "" : v);
                   setPurchaseResult(null);
                   setImportKey(`retail-supplier-${crypto.randomUUID()}`);
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="">Select an existing supplier</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={String(supplier.id)}>
-                    {supplier.legalName || supplier.name || supplier.code || `Supplier #${supplier.id}`}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="retail-import-supplier" className="h-10 w-full text-sm">
+                  <SelectValue placeholder="Select an existing supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Select an existing supplier</SelectItem>
+                  {suppliers.map((supplier) => (
+                    <SelectItem key={supplier.id} value={String(supplier.id)}>
+                      {supplier.legalName || supplier.name || supplier.code || `Supplier #${supplier.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {suppliersFailed && <p className="text-xs text-destructive">Suppliers could not be loaded.</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="retail-import-location">Receiving location *</Label>
-              <select
-                id="retail-import-location"
-                value={locationId}
-                onChange={(event) => {
-                  setLocationId(event.target.value);
+              <Select
+                value={locationId || "__none__"}
+                onValueChange={(v) => {
+                  setLocationId(v === "__none__" ? "" : v);
                   setPurchaseResult(null);
                   setImportKey(`retail-supplier-${crypto.randomUUID()}`);
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="">Select a stock location</option>
-                {locations
-                  .filter((location) => location.active !== false)
-                  .map((location) => (
-                    <option key={location.id} value={String(location.id)}>
-                      {location.name} ({location.code})
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger id="retail-import-location" className="h-10 w-full text-sm">
+                  <SelectValue placeholder="Select a stock location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Select a stock location</SelectItem>
+                  {locations
+                    .filter((location) => location.active !== false)
+                    .map((location) => (
+                      <SelectItem key={location.id} value={String(location.id)}>
+                        {location.name} ({location.code})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               {locationsFailed && <p className="text-xs text-destructive">Locations could not be loaded.</p>}
             </div>
             <div className="space-y-1.5">
@@ -556,22 +563,25 @@ export function RetailSupplierImportDialog({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="retail-import-currency">Invoice currency</Label>
-                <select
-                  id="retail-import-currency"
+                <Select
                   value={currency}
-                  onChange={(event) => {
-                    setCurrency(event.target.value);
+                  onValueChange={(v) => {
+                    setCurrency(v);
                     setPurchaseResult(null);
                     setImportKey(`retail-supplier-${crypto.randomUUID()}`);
                   }}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  {["USD", "EUR", "CDF", "CFA", "GBP", "AUD"].map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="retail-import-currency" className="h-10 w-full text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["USD", "EUR", "CDF", "CFA", "GBP", "AUD"].map((code) => (
+                      <SelectItem key={code} value={code}>
+                        {code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2 md:col-span-2">

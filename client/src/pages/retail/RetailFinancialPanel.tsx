@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -145,63 +146,70 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
           <CardContent className="space-y-3">
             <div>
               <Label>Scope</Label>
-              <select
-                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-                value={locationId}
-                onChange={(event) => setLocationId(event.target.value)}
-              >
-                <option value="">Company default</option>
-                {locations
-                  .filter((location) => location.id > 0)
-                  .map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-              </select>
+              <Select value={locationId || "__all__"} onValueChange={(v) => setLocationId(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="mt-1 h-10 w-full text-sm" aria-label="Scope">
+                  <SelectValue placeholder="Company default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Company default</SelectItem>
+                  {locations
+                    .filter((location) => location.id > 0)
+                    .map((location) => (
+                      <SelectItem key={location.id} value={String(location.id)}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
             {draft && accounts ? (
               <div className="grid gap-2 md:grid-cols-2">
                 {LABELS.map(([key, label]) => (
                   <div key={key}>
                     <Label className="text-xs">{label}</Label>
-                    <select
-                      className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    <Select
                       value={String(draft[key] ?? "")}
                       disabled={!recordChanges.allowed}
-                      onChange={(event) =>
-                        setDraft((current) => (current ? { ...current, [key]: Number(event.target.value) } : current))
+                      onValueChange={(v) =>
+                        setDraft((current) => (current ? { ...current, [key]: Number(v) } : current))
                       }
                     >
-                      {accounts.ledgers.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.code} · {account.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="mt-1 h-9 w-full px-2 text-sm" aria-label={label}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.ledgers.map((account) => (
+                          <SelectItem key={account.id} value={String(account.id)}>
+                            {account.code} · {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 ))}
                 <div>
                   <Label className="text-xs">Bank account (optional)</Label>
-                  <select
-                    className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    value={draft.bankAccountId ?? ""}
+                  <Select
+                    value={draft.bankAccountId != null ? String(draft.bankAccountId) : "__none__"}
                     disabled={!recordChanges.allowed}
-                    onChange={(event) =>
+                    onValueChange={(v) =>
                       setDraft((current) =>
-                        current
-                          ? { ...current, bankAccountId: event.target.value ? Number(event.target.value) : null }
-                          : current
+                        current ? { ...current, bankAccountId: v !== "__none__" ? Number(v) : null } : current
                       )
                     }
                   >
-                    <option value="">Use bank clearing ledger</option>
-                    {accounts.banks.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.code} · {account.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="mt-1 h-9 w-full px-2 text-sm" aria-label="Bank account (optional)">
+                      <SelectValue placeholder="Use bank clearing ledger" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Use bank clearing ledger</SelectItem>
+                      {accounts.banks.map((account) => (
+                        <SelectItem key={account.id} value={String(account.id)}>
+                          {account.code} · {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             ) : (

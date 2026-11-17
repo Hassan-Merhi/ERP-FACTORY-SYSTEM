@@ -24,6 +24,7 @@ import {
 import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface WasteEntry {
   id: number;
@@ -229,18 +230,20 @@ export default function FactoryWaste() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="waste-type">Waste Type</Label>
-                  <select
-                    id="waste-type"
-                    value={formWasteType}
-                    onChange={(e) => setFormWasteType(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                    data-testid="select-waste-type"
+                  <Select
+                    value={formWasteType || "__none__"}
+                    onValueChange={(v) => setFormWasteType(v === "__none__" ? "" : v)}
                   >
-                    <option value="">— None —</option>
-                    <option value="GARBAGE">Garbage</option>
-                    <option value="WIPERS">Wipers</option>
-                    <option value="OTHER">Other</option>
-                  </select>
+                    <SelectTrigger id="waste-type" className="w-full" data-testid="select-waste-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      <SelectItem value="GARBAGE">Garbage</SelectItem>
+                      <SelectItem value="WIPERS">Wipers</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="waste-kg">KG Waste *</Label>

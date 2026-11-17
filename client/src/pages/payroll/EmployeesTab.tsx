@@ -1,6 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -10,7 +9,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search,
   Plus,
   ChevronDown,
   ArrowDownCircle,
@@ -30,6 +28,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Employee } from "@shared/schema";
 import type { EmployeeGroup } from "./payrollTypes";
 import { getEmpAvatarColor, getEmpInitials } from "./payrollSchemas";
+import { SearchField } from "@/components/ui/search-field";
 
 interface EmployeesTabProps {
   empSearch: string;
@@ -145,16 +144,14 @@ export function EmployeesTab({
 
       <div className="rounded-xl border bg-card shadow-xs">
         <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative min-w-0 flex-1 lg:max-w-xl">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by employee name, code, or department..."
-              value={empSearch}
-              onChange={(e) => setEmpSearch(e.target.value)}
-              className="h-10 bg-background pl-9"
-              data-testid="input-employee-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search by employee name, code, or department..."
+            value={empSearch}
+            onValueChange={setEmpSearch}
+            wrapperClassName="min-w-0 flex-1 lg:max-w-xl"
+            className="h-10 bg-background"
+            data-testid="input-employee-search"
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-lg border bg-muted/40 p-1">

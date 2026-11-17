@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -263,26 +264,28 @@ export default function FactoryProductionAccounting() {
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <Label>Source</Label>
-                  <select
-                    className="block h-9 rounded-md border bg-background px-2 text-sm"
-                    value={section}
-                    onChange={(e) => setSection(e.target.value as "invoices" | "containers")}
-                  >
-                    <option value="invoices">Customer order invoices</option>
-                    <option value="containers">Supplier containers and receipts</option>
-                  </select>
+                  <Select value={section} onValueChange={(value) => setSection(value as "invoices" | "containers")}>
+                    <SelectTrigger className="h-9 w-auto text-sm" aria-label="Source">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="invoices">Customer order invoices</SelectItem>
+                      <SelectItem value="containers">Supplier containers and receipts</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Review status</Label>
-                  <select
-                    className="block h-9 rounded-md border bg-background px-2 text-sm"
-                    value={show}
-                    onChange={(e) => setShow(e.target.value as "all" | "critical" | "review")}
-                  >
-                    <option value="all">All</option>
-                    <option value="critical">Critical review</option>
-                    <option value="review">Needs review</option>
-                  </select>
+                  <Select value={show} onValueChange={(value) => setShow(value as "all" | "critical" | "review")}>
+                    <SelectTrigger className="h-9 w-auto text-sm" aria-label="Review status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="critical">Critical review</SelectItem>
+                      <SelectItem value="review">Needs review</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               {section === "invoices" ? (

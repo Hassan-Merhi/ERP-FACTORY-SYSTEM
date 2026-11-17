@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -179,21 +180,24 @@ export default function AccountingOpenItems() {
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-4">
           <div className="space-y-1">
             <Label htmlFor="open-item-domain">Area</Label>
-            <select
-              id="open-item-domain"
-              className="h-10 w-full rounded-md border bg-background px-2"
+            <Select
               value={domain}
-              onChange={(e) => {
-                setDomain(e.target.value as Domain);
+              onValueChange={(value) => {
+                setDomain(value as Domain);
                 setPartyId("");
               }}
             >
-              {options.map((v) => (
-                <option key={v} value={v}>
-                  {optionsLabel[v]}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="open-item-domain" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {optionsLabel[v]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label htmlFor="open-item-party"> {domain === "rentals" ? "Rental contract ID" : "Party ID"} </Label>

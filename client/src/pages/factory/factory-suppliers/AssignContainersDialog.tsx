@@ -2,9 +2,9 @@ import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Package } from "lucide-react";
+import { Package } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
 
 export interface DirectContainer {
   id: number;
@@ -111,15 +111,13 @@ export function AssignContainersDialog({
           <>
             {/* Search + select-all */}
             <div className="flex items-center gap-2 py-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search containers..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                />
-              </div>
+              <SearchField
+                placeholder="Search containers..."
+                value={search}
+                onValueChange={setSearch}
+                wrapperClassName="flex-1"
+                className="h-8 text-sm"
+              />
               <Button variant="ghost" size="sm" onClick={toggleAll} className="text-xs shrink-0">
                 {selected.size === filtered.length && filtered.length > 0 ? "Deselect All" : "Select All"}
               </Button>
