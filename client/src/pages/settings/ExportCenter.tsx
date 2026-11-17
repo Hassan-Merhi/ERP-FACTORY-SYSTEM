@@ -3,6 +3,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Zap, Download, MessageCircle, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -27,11 +28,19 @@ import { TransferWhatsAppSection } from "./TransferWhatsAppSection";
 import { StockTransferExportWhatsAppSection } from "./StockTransferExportWhatsAppSection";
 import { AgentDutyWhatsAppSection } from "./AgentDutyWhatsAppSection";
 
+const EXPORT_CENTER_TABS = ["daily", "stock-containers", "wa-groups"] as const;
+type ExportCenterTab = (typeof EXPORT_CENTER_TABS)[number];
+
 export function ExportCenter() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
   // Shared UI state
+  const [tab, setTab] = useHubQueryState<ExportCenterTab>({
+    key: "tab",
+    allowedValues: EXPORT_CENTER_TABS,
+    defaultValue: "daily",
+  });
   const [progressOpen, setProgressOpen] = useState(false);
   const [activeJobId, setActiveJobId] = useState("");
   const [activeMode, setActiveMode] = useState<"download" | "email">("download");
@@ -125,7 +134,7 @@ export function ExportCenter() {
       setGmailPassword("");
       toast({ title: "Settings saved" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: getErrorDetails(e).message });
+      toast({ variant: "destructive", title: "Save failed", description: getErrorDetails(e).message });
     } finally {
       setSavingGmail(false);
     }
@@ -140,7 +149,7 @@ export function ExportCenter() {
         <p className="text-muted-foreground">Manage automatic backups, scheduled reports, and WhatsApp delivery.</p>
       </div>
 
-      <Tabs defaultValue="daily" className="w-full">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as ExportCenterTab)} className="w-full">
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Export sections">
             <TabsTrigger value="daily">

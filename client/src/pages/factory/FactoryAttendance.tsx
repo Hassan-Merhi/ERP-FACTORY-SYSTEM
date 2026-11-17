@@ -47,6 +47,7 @@ import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageCho
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
   type AttendanceAdminCredentials,
 } from "./factoryattendance/attendanceEditPolicy";
@@ -63,6 +64,7 @@ export default function FactoryAttendance() {
   const { selectedCompany } = useCompany();
   // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
+  const canEditPastWithoutPassword = (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates);
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -115,7 +117,7 @@ export default function FactoryAttendance() {
     const newMap: Record<number, AttendanceStatus> = {};
     const newNotes: Record<number, string> = {};
     for (const w of data.workers) {
-      newMap[w.id] = "Present";
+      newMap[w.id] = w.active === false ? "Absent" : "Present";
     }
     for (const a of data.attendance) {
       newMap[a.workerId] = a.status as AttendanceStatus;
@@ -183,22 +185,24 @@ export default function FactoryAttendance() {
 
   const handleSave = useCallback(() => {
     if (!data?.workers.length) return;
-    const records = data.workers.map((w) => ({
-      workerId: w.id,
-      attendanceDate: selectedDate,
-      shift: shift || undefined,
-      status: attendanceMap[w.id] ?? "Present",
-      notes: notesMap[w.id] || undefined,
-    }));
+    const records = data.workers
+      .filter((w) => w.active !== false)
+      .map((w) => ({
+        workerId: w.id,
+        attendanceDate: selectedDate,
+        shift: shift || undefined,
+        status: attendanceMap[w.id] ?? "Present",
+        notes: notesMap[w.id] || undefined,
+      }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword(priorDates)) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
+  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, canEditPastWithoutPassword]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -207,14 +211,14 @@ export default function FactoryAttendance() {
   const markAll = (status: AttendanceStatus) => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = status;
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = status;
     setAttendanceMap(next);
   };
 
   const reset = () => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = "Present";
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = "Present";
     setAttendanceMap(next);
     setNotesMap({});
   };
@@ -360,7 +364,7 @@ export default function FactoryAttendance() {
           <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
             {formatDate(selectedDate)}
           </Badge>
-          {selectedDate < attendanceToday() && (
+          {selectedDate < attendanceToday() && !canEditPastWithoutPassword([selectedDate]) && (
             <Badge variant="secondary" className="rounded-full">
               Earlier date — Admin approval required to save
             </Badge>

@@ -432,7 +432,7 @@ export function PaymentReceiptEditForm({
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending || total === 0} data-testid="button-save-changes">
-                {isPending ? "Saving..." : "Save Changes"}
+                {isPending ? "Updating…" : "Update"}
               </Button>
             </div>
           </form>

@@ -106,7 +106,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -130,7 +130,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -164,7 +164,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -194,7 +194,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Undo failed", description: err.message, variant: "destructive" });
     },
   });
 

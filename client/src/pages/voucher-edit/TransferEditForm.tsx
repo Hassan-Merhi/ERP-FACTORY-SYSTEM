@@ -427,7 +427,7 @@ export function TransferEditForm({
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending || grandTotal === 0} data-testid="button-save-changes">
-                {isPending ? "Saving..." : "Save Changes"}
+                {isPending ? "Updating…" : "Update"}
               </Button>
             </div>
           </form>

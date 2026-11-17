@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, MapPin, Monitor, Calendar, PackageMinus, ShieldCheck, Users } from "lucide-react";
+import { Pencil, Trash2, MapPin, Monitor, Calendar, PackageMinus, ShieldCheck, Users } from "lucide-react";
 import { AdvancedRestrictionsPanel } from "@/components/AdvancedRestrictionsPanel";
 import type { UserCompanyRole } from "@shared/schema";
 
@@ -134,7 +134,7 @@ export function RoleSummaryRow({ role, companyName, locationNames, isEditing, on
             </Button>
           )}
           <Button variant="ghost" size="icon" onClick={onEdit} data-testid={`button-edit-role-${role.id}`}>
-            <Edit className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"

@@ -180,7 +180,11 @@ export default function Login() {
     e.preventDefault();
     if (loginMutation.isPending || biometryPending) return;
     if (!username || !password) {
-      toast({ title: "Error", description: "Please enter both username and password", variant: "destructive" });
+      toast({
+        title: "Missing information",
+        description: "Please enter both username and password",
+        variant: "destructive",
+      });
       return;
     }
     loginMutation.mutate({ username, password });

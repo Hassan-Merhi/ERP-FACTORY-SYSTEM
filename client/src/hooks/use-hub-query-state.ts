@@ -22,7 +22,7 @@ function fallbackValue<T extends string>(allowedValues: readonly T[], defaultVal
 function readLegacyHash<T extends string>(
   url: URL,
   key: "section" | "tab" | "mode",
-  knownValues: readonly T[],
+  knownValues: readonly T[]
 ): T | null {
   if (!url.hash) return null;
 
@@ -54,8 +54,7 @@ export function canonicalizeHubLocation<T extends string>(options: HubQueryState
   const legacyHashValue = readLegacyHash(url, options.key, knownValues);
   const requestedValue = rawQueryValue ?? legacyHashValue;
 
-  const requestedAllowed =
-    requestedValue !== null && options.allowedValues.includes(requestedValue as T);
+  const requestedAllowed = requestedValue !== null && options.allowedValues.includes(requestedValue as T);
   const nextValue = requestedAllowed ? (requestedValue as T) : fallback;
   let changed = false;
 
@@ -103,7 +102,7 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
   const clearKeysKey = clearKeys.join("\u0000");
 
   const [value, setValue] = useState<T>(() =>
-    canonicalizeHubLocation({ key, allowedValues, knownValues, defaultValue, clearKeys, omitDefault }),
+    canonicalizeHubLocation({ key, allowedValues, knownValues, defaultValue, clearKeys, omitDefault })
   );
 
   useEffect(() => {
@@ -119,15 +118,33 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
           defaultValue,
           clearKeys: effectClearKeys,
           omitDefault,
-        }),
+        })
       );
 
     syncFromLocation();
-    window.addEventListener("popstate", syncFromLocation);
-    window.addEventListener("hashchange", syncFromLocation);
+
+    // wouter dispatches "pushState" for in-app navigation, so a sidebar or
+    // command-palette link to another tab of the mounted hub switches it.
+    // Navigation events also reach a hub that is about to unmount (another
+    // page, or a sibling section of a parent hub). Syncing is deferred until
+    // React has committed the new route, and skipped once this hub is gone or
+    // the path is no longer its own, so it never rewrites another hub's URL.
+    const ownPathname = window.location.pathname;
+    let mounted = true;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const onNavigate = () => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (mounted && window.location.pathname === ownPathname) syncFromLocation();
+      }, 0);
+      timers.add(timer);
+    };
+    const events = ["popstate", "hashchange", "pushState"] as const;
+    for (const event of events) window.addEventListener(event, onNavigate);
     return () => {
-      window.removeEventListener("popstate", syncFromLocation);
-      window.removeEventListener("hashchange", syncFromLocation);
+      mounted = false;
+      for (const timer of timers) clearTimeout(timer);
+      for (const event of events) window.removeEventListener(event, onNavigate);
     };
   }, [key, defaultValue, allowedValuesKey, knownValuesKey, clearKeysKey, omitDefault]);
 
@@ -164,7 +181,7 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
 
       replaceBrowserUrl(url);
     },
-    [key, allowedValuesKey, knownValuesKey, defaultValue, clearKeysKey, omitDefault],
+    [key, allowedValuesKey, knownValuesKey, defaultValue, clearKeysKey, omitDefault]
   );
 
   return [value, updateValue] as const;

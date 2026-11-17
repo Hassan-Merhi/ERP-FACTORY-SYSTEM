@@ -6,6 +6,8 @@ import ProductionSummary from "@/pages/factory/ProductionSummary";
 import FactoryWaste from "@/pages/factory/FactoryWaste";
 import FactoryMixOptimizer from "@/pages/factory/FactoryMixOptimizer";
 import FactoryContainerTracking from "@/pages/factory/FactoryContainerTracking";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -35,20 +37,20 @@ export default function FactoryProductionIntelHub() {
   const defaultSection: Section = sections[0] ?? "production-summary";
   const allowedSections: readonly Section[] = sections;
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [section, setSection] = useHubQueryState<Section>({
     key: "section",
-    allowedValues: allowedSections,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? allowedSections : SECTIONS,
     knownValues: SECTIONS,
     defaultValue: defaultSection,
     clearKeys: ["tab"],
   });
 
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
+
   if (sections.length === 0) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        No Production Intelligence tabs are available for this user.
-      </div>
-    );
+    return <RestrictedTabsState />;
   }
 
   return (

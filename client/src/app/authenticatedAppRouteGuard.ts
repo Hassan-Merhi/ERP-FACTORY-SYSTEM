@@ -105,7 +105,10 @@ export function resolveAuthenticatedAppRoute({
   ) {
     // Unused retail workspaces are retired; old bookmarks return to inventory.
     decision = { kind: "redirect", to: "/retail/inventory" };
-  } else if (isRetailCompany && (currentLocation === "/" || currentLocation === "/retail/dashboard")) {
+  } else if (
+    isRetailCompany &&
+    (currentLocation === "/" || currentLocation === "/retail/dashboard" || currentLocation === "/tracking")
+  ) {
     // Retail is still a normal ERP company. Its landing page is the standard ERP dashboard.
     decision = { kind: "redirect", to: "/financial-overview" };
   } else if (

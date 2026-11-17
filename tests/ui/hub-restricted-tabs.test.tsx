@@ -145,7 +145,7 @@ describe("useHubQueryState URL canonicalization", () => {
     expect(result.current[0]).toBe("alpha");
   });
 
-  it("follows browser history navigation", () => {
+  it("follows browser history navigation", async () => {
     const { result } = renderHook(() =>
       useHubQueryState<Tab>({ key: "tab", allowedValues: known, defaultValue: "alpha" })
     );
@@ -154,6 +154,68 @@ describe("useHubQueryState URL canonicalization", () => {
       window.history.replaceState({}, "", "/hub?tab=gamma");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
+    await waitFor(() => expect(result.current[0]).toBe("gamma"));
+  });
+
+  it("follows in-app navigation to another tab of the mounted hub", async () => {
+    const { result } = renderHook(() =>
+      useHubQueryState<Tab>({ key: "tab", allowedValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      // wouter's navigate() calls pushState and then dispatches a "pushState" event.
+      window.history.pushState({}, "", "/hub?tab=beta");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    await waitFor(() => expect(result.current[0]).toBe("beta"));
+  });
+
+  it("never rewrites the URL of the page being navigated to", async () => {
+    window.history.replaceState({}, "", "/hub-a?section=alpha");
+    const outgoing = renderHook(() =>
+      useHubQueryState<Tab>({ key: "section", allowedValues: ["alpha"], knownValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/hub-b?section=gamma");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    outgoing.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(window.location.search).toBe("?section=gamma");
+  });
+
+  it("leaves a sibling section's tab alone when the parent hub switches section", async () => {
+    window.history.replaceState({}, "", "/hub?section=alpha&tab=alpha");
+    const child = renderHook(() =>
+      useHubQueryState<Tab>({ key: "tab", allowedValues: ["alpha"], knownValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/hub?section=beta&tab=gamma");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    child.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(window.location.search).toBe("?section=beta&tab=gamma");
+  });
+
+  it("keeps a deep-linked tab while the permitted set is still loading", () => {
+    window.history.replaceState({}, "", "/hub?section=gamma");
+    const { result, rerender } = renderHook(
+      ({ ready }: { ready: boolean }) =>
+        useHubQueryState<Tab>({
+          key: "section",
+          allowedValues: ready ? ["alpha", "gamma"] : known,
+          knownValues: known,
+          defaultValue: "alpha",
+        }),
+      { initialProps: { ready: false } }
+    );
+    expect(window.location.search).toBe("?section=gamma");
+
+    rerender({ ready: true });
     expect(result.current[0]).toBe("gamma");
+    expect(window.location.search).toBe("?section=gamma");
   });
 });

@@ -8,6 +8,8 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePriorityScanText } from "@/i18n/priorityScanTranslations";
@@ -50,12 +52,16 @@ export default function FactoryLoadingsHub() {
     ...(showPending ? (["pending"] as const) : []),
     ...(showPriority ? (["priority"] as const) : []),
   ];
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [effectiveActiveTab, setActiveTab] = useHubQueryState<LoadingsTab>({
     key: "tab",
-    allowedValues: visibleTabs,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleTabs : ALL_LOADING_TABS,
     knownValues: ALL_LOADING_TABS,
     defaultValue: visibleTabs[0] ?? "loadings",
   });
+
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
 
   function handleTabChange(value: LoadingsTab) {
     setActiveTab(value);
@@ -108,9 +114,7 @@ export default function FactoryLoadingsHub() {
       </div>
 
       <div className="flex-1 overflow-auto min-h-0">
-        {!effectiveActiveTab && (
-          <div className="p-6 text-sm text-muted-foreground">No Loadings tabs are available for this user.</div>
-        )}
+        {!effectiveActiveTab && <RestrictedTabsState />}
         {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan embedded />}
         {effectiveActiveTab === "pending" && showPending && <FactoryPendingLoadings />}
         {effectiveActiveTab === "priority" && showPriority && <FactoryPriorityScan />}

@@ -83,7 +83,7 @@ function EntityFormWrapper({
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || "Failed to create record",
         variant: "destructive",
       });

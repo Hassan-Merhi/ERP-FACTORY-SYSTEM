@@ -10,6 +10,8 @@ import CustomerLoading from "./CustomerLoading";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import "./balesExplorerModern.css";
 
@@ -51,15 +53,19 @@ export default function FactoryBalesHub() {
     !hiddenTabs.includes("hide_tab_bales_customer_loading") ? "customer-loading" : null,
   ].filter((tab): tab is BalesTab => tab !== null);
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [activeTab, setActiveTab] = useHubQueryState<BalesTab>({
     key: "tab",
-    allowedValues: visibleTabs,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleTabs : ALL_BALES_TABS,
     knownValues: ALL_BALES_TABS,
     defaultValue: visibleTabs[0] ?? "history",
   });
 
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
+
   if (visibleTabs.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">No Bale Explorer tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   const show = (tab: BalesTab) => visibleTabs.includes(tab);

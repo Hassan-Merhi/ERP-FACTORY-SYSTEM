@@ -92,11 +92,11 @@ export function RetailCatalogList({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {groups.map((group) => (
-        <section key={group.brand} className="space-y-3" data-testid="brand-group">
+        <section key={group.brand} className="space-y-4" data-testid="brand-group">
           {showBrandHeadings && (
-            <h2 className="border-b pb-1 text-lg font-bold uppercase tracking-wide" data-no-translate>
+            <h2 className="border-b border-border/60 pb-3 text-lg font-bold uppercase tracking-wide" data-no-translate>
               {group.brand}
             </h2>
           )}
@@ -106,22 +106,22 @@ export function RetailCatalogList({
             const allSelected = rowIds.length > 0 && rowIds.every((id) => selected.has(id));
             const styleQuantity = rows.reduce((sum, variant) => sum + variantQuantity(variant, filters.locationId), 0);
             return (
-              <Card key={product.id} className={cn(!product.active && "opacity-70")} data-testid="style-card">
-                <CardContent className="space-y-3 p-3 sm:p-4">
-                  <div className="flex items-start gap-3">
+              <Card key={product.id} className={cn("overflow-hidden rounded-2xl border-border/70 bg-card/70 shadow-sm transition-colors hover:border-primary/35", !product.active && "opacity-70")} data-testid="style-card">
+                <CardContent className="space-y-4 p-3 sm:p-5">
+                  <div className="flex items-start gap-3 rounded-xl border border-border/50 bg-muted/20 p-3 sm:p-4">
                     <div className="min-w-0 flex-1">
                       <button
                         type="button"
-                        className="block max-w-full truncate text-left text-base font-semibold hover:underline"
+                        className="block max-w-full truncate text-left text-lg font-semibold tracking-tight hover:text-primary hover:underline"
                         onClick={() => onOpenProduct(product)}
                         data-no-translate
                       >
                         {product.name}
                       </button>
-                      <div className="text-xs text-muted-foreground" data-no-translate>
+                      <div className="mt-0.5 text-sm text-muted-foreground" data-no-translate>
                         {[product.category, product.availableColors.join(", ")].filter(Boolean).join(" · ")}
                       </div>
-                      <div className="mt-1 text-sm">
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                         <span className="text-muted-foreground" data-i18n-ui>
                           In stock
                         </span>{" "}
@@ -133,7 +133,7 @@ export function RetailCatalogList({
                         )}
                       </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 gap-1 rounded-lg border border-border/60 bg-background/50 p-1">
                       <Button
                         size="icon"
                         variant="ghost"
@@ -158,8 +158,8 @@ export function RetailCatalogList({
                   </div>
 
                   {rows.length > 0 && (
-                    <div className="divide-y rounded-md border">
-                      <label className="flex items-center gap-2 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                         <Checkbox
                           checked={allSelected}
                           onCheckedChange={(value) => onToggleProduct(rowIds, value === true)}
@@ -175,7 +175,7 @@ export function RetailCatalogList({
                           <div
                             key={variant.id}
                             className={cn(
-                              "flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2",
+                              "flex flex-wrap items-center gap-4 rounded-xl border border-border/70 bg-background/40 p-3 transition-colors hover:border-primary/30 sm:p-4",
                               !variant.active && "bg-muted/40 opacity-70"
                             )}
                             data-testid="variant-row"
@@ -188,15 +188,18 @@ export function RetailCatalogList({
                             <RetailPhotoGallery
                               images={images}
                               title={`${product.name} · ${variant.color} / ${variant.size}`}
-                              imageClassName="h-12 w-12 rounded-md border"
+                              imageClassName="h-28 w-28 rounded-xl border border-border/70 object-cover shadow-sm sm:h-36 sm:w-36 lg:h-40 lg:w-40"
                             />
-                            <div className="min-w-28 flex-1" data-no-translate>
-                              <div className="font-semibold">
+                            <div className="min-w-[150px] flex-1 space-y-2" data-no-translate>
+                              <div className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-semibold text-foreground">
                                 {variant.color} / {variant.size}
                                 {!variant.active && <span className="ml-1 text-xs font-normal">(archived)</span>}
                               </div>
-                              <div className="font-mono text-[11px] text-muted-foreground">
-                                {variant.barcode} · {money(variant.sellingPrice)}
+                              <div className="break-all font-mono text-xs text-muted-foreground">
+                                Barcode: {variant.barcode}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Price: <span className="font-semibold text-foreground">{money(variant.sellingPrice)}</span>
                               </div>
                             </div>
                             <StockBadge quantity={quantity} lowThreshold={variant.lowStockThreshold} />
@@ -210,7 +213,7 @@ export function RetailCatalogList({
                                 .map((stock) => `${stock.locationName}: ${stock.quantity}`)
                                 .join(" · ") || "—"}
                             </div>
-                            <div className="ml-auto flex gap-0.5">
+                            <div className="ml-auto flex gap-1 rounded-lg border border-border/50 bg-muted/20 p-1">
                               <Button
                                 size="icon"
                                 variant="ghost"

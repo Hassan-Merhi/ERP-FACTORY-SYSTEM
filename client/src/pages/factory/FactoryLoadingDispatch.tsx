@@ -473,7 +473,7 @@ export default function FactoryLoadingDispatch() {
               }}
               data-testid="button-new-dispatch"
             >
-              <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
+              <Plus className="mr-1.5 h-4 w-4" /> Add Dispatch
             </Button>
           )}
         </PageHeader>
