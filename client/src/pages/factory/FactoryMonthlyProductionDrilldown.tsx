@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, useSearch } from "wouter";
-import { ArrowLeft, ChevronLeft, ChevronRight, Package, Users } from "lucide-react";
+import { ArrowLeft, Package, Users } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
@@ -389,7 +390,7 @@ export function FactoryMonthlyProductionBales() {
     Number.isSafeInteger(workerId) &&
     workerId >= 0 &&
     validMonths(months);
-  const { data, error, isLoading, isFetching, refetch } = useQuery<BaleResponse>({
+  const { data, error, isLoading, refetch } = useQuery<BaleResponse>({
     queryKey: companyQueryKey(
       "/api/factory/monthly-production-matrix/bales",
       selectedCompany?.id,
@@ -609,34 +610,14 @@ export function FactoryMonthlyProductionBales() {
                 </p>
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                Showing {data.totalRows ? (data.page - 1) * data.limit + 1 : 0}–
-                {Math.min(data.page * data.limit, data.totalRows)} of {format(data.totalRows)}{" "}
-                {view === "condensed" ? "production dates" : "bales"}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1 || isFetching}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-                </Button>
-                <span className="text-sm tabular-nums">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages || isFetching}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={page}
+              totalPages={totalPages}
+              total={data.totalRows}
+              pageSize={data.limit}
+              onPageChange={setPage}
+              noun={view === "condensed" ? "dates" : "bales"}
+            />
           </>
         )
       )}

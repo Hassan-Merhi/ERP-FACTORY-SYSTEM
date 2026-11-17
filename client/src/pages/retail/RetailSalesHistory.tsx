@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -259,22 +260,16 @@ export default function RetailSalesHistory() {
                 onChange={(event) => setFilters((current) => ({ ...current, barcode: event.target.value }))}
               />
             </div>
-            <div>
-              <Label htmlFor="retail-history-from">From</Label>
-              <Input
-                id="retail-history-from"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="retail-history-to">To</Label>
-              <Input
-                id="retail-history-to"
-                type="date"
-                value={filters.dateTo}
-                onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
+            <div className="lg:col-span-2">
+              <Label>Period</Label>
+              <PeriodFilter
+                value={{
+                  fromDate: filters.dateFrom,
+                  toDate: filters.dateTo,
+                  preset: filters.dateFrom || filters.dateTo ? "custom" : "all_time",
+                }}
+                onChange={(v) => setFilters((current) => ({ ...current, dateFrom: v.fromDate, dateTo: v.toDate }))}
+                data-testid="retail-history-period"
               />
             </div>
             <div>
