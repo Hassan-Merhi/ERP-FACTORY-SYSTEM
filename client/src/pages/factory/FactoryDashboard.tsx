@@ -24,6 +24,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { FactoryKpiCard } from "@/components/FactoryKpiCard";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface DashboardData {
   waste: { totalKg: number; breakdown: Array<{ wasteType: string; kg: number }> };
@@ -99,7 +100,7 @@ export default function FactoryDashboard() {
   const [date, setDate] = useState(today);
   const [showBalesPane, setShowBalesPane] = useState(false);
 
-  const { data, isLoading } = useQuery<DashboardData>({
+  const { data, isLoading, isError, refetch } = useQuery<DashboardData>({
     queryKey: companyQueryKey("/api/factory/dashboard", selectedCompany?.id, date),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -144,6 +145,8 @@ export default function FactoryDashboard() {
 
       {isLoading ? (
         <LoadingSkeleton variant="kpi-grid" rows={4} />
+      ) : isError && !data ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : (
         <div className="space-y-6">
           {/* KPI grid — unified factory grammar */}
@@ -189,9 +192,7 @@ export default function FactoryDashboard() {
             data-testid="section-container-otw"
           >
             {containersOtw.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                No containers currently in transit or pending
-              </p>
+              <EmptyState title="No containers currently in transit or pending" />
             ) : (
               <div className="overflow-x-auto">
                 <Table mobileLayout="cards" data-testid="dashboard-containers-otw-table">
@@ -247,7 +248,7 @@ export default function FactoryDashboard() {
             </div>
             <CollapsiblePane open={showBalesPane}>
               {!kpis?.balesDetail || kpis.balesDetail.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No bales pressed today</p>
+                <EmptyState title="No bales pressed today" />
               ) : (
                 <div className="max-h-64 overflow-y-auto">
                   <Table mobileLayout="cards" data-testid="dashboard-recent-production-table">

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState } from "@/components/ui/page-state";
 import { TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -78,13 +79,12 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
               ))}
             </div>
           ) : !documents?.length ? (
-            <Card>
-              <CardContent className="py-16 text-center text-muted-foreground">
-                <FileText className="mx-auto h-8 w-8 mb-3 opacity-30" />
-                <p className="font-medium">No documents uploaded yet</p>
-                <p className="text-sm mt-1">Upload contracts, IDs, permits, or any other files</p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={FileText}
+              title="No documents uploaded yet"
+              description="Upload contracts, IDs, permits, or any other files"
+              className="py-16"
+            />
           ) : (
             <Card>
               <CardContent className="p-0">
@@ -255,11 +255,12 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="font-medium">No bales found</p>
-                  <p className="text-sm mt-1">No bale records{startDate || endDate ? " in selected range" : ""}</p>
-                </div>
+                <EmptyState
+                  icon={Package}
+                  title="No bales found"
+                  description={`No bale records${startDate || endDate ? " in selected range" : ""}`}
+                  className="rounded-none border-0 bg-transparent py-10"
+                />
               )}
             </CardContent>
           </Card>

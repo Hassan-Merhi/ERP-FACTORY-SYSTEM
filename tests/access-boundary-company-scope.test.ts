@@ -1,3 +1,11 @@
+/**
+ * Company scope of the access boundary: which company a signed-in request is
+ * bound to, when a caller-supplied company ID is refused, and which reviewed
+ * cross-company allowances a route's declaration opens. These cases ran
+ * against the former tenant isolation middleware and now run against the
+ * boundary with the committed manifest; named policies are stubbed so only the
+ * scope stage and permission keys decide.
+ */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
@@ -6,6 +14,7 @@ const harness = vi.hoisted(() => ({
     getUserCompaniesWithRoles: vi.fn(),
     getUser: vi.fn(),
     getAllCompanies: vi.fn(),
+    getRoleFeaturePermissions: vi.fn(),
   },
   logger: {
     error: vi.fn(),
@@ -28,11 +37,15 @@ vi.mock("../server/services/security/activeCompanyPermissionContext", async (imp
   };
 });
 
+import routeAccessManifestJson from "../config/route-access-manifest.json";
+import { createManifestAccessBoundary } from "../server/security/access/manifestAccessBoundary";
+import type { AccessPolicy } from "../server/security/access/accessPolicies";
 import {
-  isCrossCompanyReferenceRead,
-  tenantCompanyParamBoundary,
-  tenantIsolationBoundary,
-} from "../server/middleware/tenantIsolationBoundary";
+  ACCESS_POLICY_NAMES,
+  RouteAccessResolver,
+  type AccessPolicyName,
+  type RouteAccessManifest,
+} from "../server/security/access/routeAccessManifest";
 import {
   ActiveCompanyPermissionContextError,
   type ActiveCompanyPermissionContext,
@@ -87,53 +100,78 @@ function request(
 
 function responseDouble() {
   const res: any = { statusCode: 200, body: undefined };
-  res.status = vi.fn((statusCode: number) => {
-    res.statusCode = statusCode;
-    return res;
-  });
-  res.json = vi.fn((body: unknown) => {
-    res.body = body;
-    return res;
+  res.ended = new Promise<void>((resolve) => {
+    res.status = vi.fn((statusCode: number) => {
+      res.statusCode = statusCode;
+      return res;
+    });
+    res.json = vi.fn((body: unknown) => {
+      res.body = body;
+      resolve();
+      return res;
+    });
   });
   return res;
 }
+
+const manifest = routeAccessManifestJson as unknown as RouteAccessManifest;
+const resolver = new RouteAccessResolver(manifest);
+const allowEveryPolicy = Object.fromEntries(
+  ACCESS_POLICY_NAMES.map((name) => [name, (async () => true) as AccessPolicy])
+) as Record<AccessPolicyName, AccessPolicy>;
+const boundary = createManifestAccessBoundary({ manifest, policies: allowEveryPolicy });
 
 async function runBoundary(req: any) {
   const res = responseDouble();
   let requestContext: unknown;
   let databaseContext: unknown;
+  let continued!: () => void;
+  const nextCalled = new Promise<void>((resolve) => {
+    continued = resolve;
+  });
   const next = vi.fn((error?: unknown) => {
     if (!error) {
       requestContext = getCompanyRequestRuntimeContext();
       databaseContext = getDatabaseScopeRuntimeContext();
     }
+    continued();
   });
-  await tenantIsolationBoundary(req, res, next);
+  boundary(req, res, next);
+  await Promise.race([nextCalled, res.ended]);
   return { res, next, requestContext, databaseContext };
 }
 
-describe("Phase 33E cross-company reference policy", () => {
+describe("cross-company reference declarations", () => {
   it("allows only the two explicit GET reference surfaces", () => {
-    expect(isCrossCompanyReferenceRead("GET", "/api/locations")).toBe(true);
-    expect(isCrossCompanyReferenceRead("get", "/api/ledger-accounts")).toBe(true);
-    expect(isCrossCompanyReferenceRead("POST", "/api/locations")).toBe(false);
-    expect(isCrossCompanyReferenceRead("GET", "/api/vouchers")).toBe(false);
+    const referenceRead = (method: string, path: string) =>
+      resolver.resolve(method, path)?.crossCompany.has("reference-read") ?? false;
+    expect(referenceRead("GET", "/api/locations")).toBe(true);
+    expect(referenceRead("get", "/api/ledger-accounts")).toBe(true);
+    expect(referenceRead("POST", "/api/locations")).toBe(false);
+    expect(referenceRead("GET", "/api/vouchers")).toBe(false);
+    const declared = manifest.routes
+      .filter((rule) => rule.crossCompany?.includes("reference-read"))
+      .map((rule) => rule.id);
+    expect(declared.sort()).toEqual(
+      ["GET /api/ledger-accounts#1", "GET /api/ledger-accounts#2", "GET /api/locations#1"].sort()
+    );
   });
 });
 
-describe("Phase 33E global tenant isolation boundary", () => {
+describe("access boundary company scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext());
     harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Manager" }]);
     harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Manager" });
     harness.storage.getAllCompanies.mockResolvedValue([]);
+    harness.storage.getRoleFeaturePermissions.mockResolvedValue([]);
   });
 
   it("ignores non-API, anonymous, and context-optional requests", async () => {
     const nonApi = await runBoundary(request({ path: "/assets/app.js" }));
     const anonymous = await runBoundary(request({ path: "/api/vouchers", userId: null }));
-    const optional = await runBoundary(request({ path: "/api/csrf-token" }));
+    const optional = await runBoundary(request({ path: "/api/auth/session-company" }));
 
     expect(nonApi.next).toHaveBeenCalledOnce();
     expect(anonymous.next).toHaveBeenCalledOnce();
@@ -407,16 +445,21 @@ describe("Phase 33E global tenant isolation boundary", () => {
   });
 });
 
-describe("Phase 33E :companyId path boundary", () => {
+describe("access boundary :companyId path parameter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext());
+    harness.storage.getRoleFeaturePermissions.mockResolvedValue([]);
   });
 
+  // The :companyId URL parameter is authorized by the boundary from the
+  // matched route, so each case names a registered route that declares one.
   async function runParam(req: any, raw: string) {
-    const res = responseDouble();
-    const next = vi.fn();
-    await tenantCompanyParamBoundary(req, res, next, raw);
+    if (req.path === "/api/vouchers") {
+      req.path = `/api/company-accounts/${raw}`;
+      req.originalUrl = req.path;
+    }
+    const { res, next } = await runBoundary(req);
     return { res, next };
   }
 
@@ -462,7 +505,7 @@ describe("Phase 33E :companyId path boundary", () => {
     expect(allowed.next).toHaveBeenCalledOnce();
 
     const denied = await runParam(
-      request({ path: "/api/companies/20/member-ids", method: "GET", currentRole: "Developer" }),
+      request({ path: "/api/company-accounts/20", method: "GET", currentRole: "Developer" }),
       "20"
     );
     expect(denied.res.statusCode).toBe(403);
@@ -505,7 +548,9 @@ describe("Phase 33E :companyId path boundary", () => {
 
     harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
     const unrelated = await runParam(
-      request({ path: "/api/companies/20/accounts", method: "GET", currentRole: "Admin" }),
+      // Mounted on a lazily loaded router in production, where an Express
+      // param hook never ran; the boundary covers it from the manifest.
+      request({ path: "/api/git/agent-notes-bulk/20", method: "GET", currentRole: "Admin" }),
       "20"
     );
     expect(unrelated.res.statusCode).toBe(403);

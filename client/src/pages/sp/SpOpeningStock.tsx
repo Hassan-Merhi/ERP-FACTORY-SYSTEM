@@ -6,13 +6,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { DecimalInput, MoneyInput } from "@/components/ui/decimal-input";
 import { FormGrid } from "@/components/ui/form";
 import { FormActionBar } from "@/components/ui/workspace-layout";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
-import { Loader2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
@@ -61,7 +62,12 @@ export default function SpOpeningStock() {
     if (b > 0 || l > 0) setFinalUC(String((b + l).toFixed(6)));
   }, [baseUC, landedUC]);
 
-  const { data: past = [], isLoading: pastLoading } = useQuery<OpeningStockRow[]>({
+  const {
+    data: past = [],
+    isLoading: pastLoading,
+    isError: pastError,
+    refetch: refetchPast,
+  } = useQuery<OpeningStockRow[]>({
     queryKey: ["/api/sp/opening-stock"],
   });
 
@@ -267,11 +273,11 @@ export default function SpOpeningStock() {
           Past Opening Stock Entries
         </h2>
         {pastLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-          </div>
+          <LoadingState />
+        ) : pastError && past.length === 0 ? (
+          <ErrorState onAction={() => void refetchPast()} actionLabel="Try again" />
         ) : past.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No opening stock entries yet.</p>
+          <EmptyState title="No opening stock entries yet." />
         ) : (
           <Card>
             <CardContent className="py-3">

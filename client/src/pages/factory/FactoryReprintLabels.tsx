@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { ErrorState } from "@/components/ui/page-state";
 import { getErrorDetails } from "@shared/errorUtils";
 import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState, useMemo } from "react";
@@ -88,7 +89,12 @@ export default function FactoryReprintLabels() {
     queryKey: ["/api/locations"],
   });
 
-  const { data: balesData = [], isLoading: balesLoading } = useQuery<BaleRow[]>({
+  const {
+    data: balesData = [],
+    isLoading: balesLoading,
+    isError: balesError,
+    refetch: refetchBales,
+  } = useQuery<BaleRow[]>({
     queryKey: ["/api/factory/bales", selectedLocationId],
     queryFn: async () => {
       if (!selectedLocationId) return [];
@@ -456,6 +462,8 @@ export default function FactoryReprintLabels() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : balesError && balesData.length === 0 ? (
+            <ErrorState onAction={() => void refetchBales()} actionLabel="Try again" />
           ) : filteredBales.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground">
               <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />

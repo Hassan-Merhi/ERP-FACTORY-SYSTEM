@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Plus, Trash2, Package } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { effectivePricePerBale } from "./utils";
 import type { ProformaLine } from "./types";
 
@@ -85,16 +86,20 @@ export function ProformaLinesTable({
 
   if (lines.length === 0) {
     return (
-      <div className="flex flex-col items-center py-10 text-center" data-testid={`text-no-lines-${proformaId}`}>
-        <Package className="h-8 w-8 text-muted-foreground/40 mb-2" />
-        <p className="text-sm text-muted-foreground">No price lines yet</p>
-        {canEdit && (
-          <Button size="sm" variant="outline" className="mt-3" onClick={onAddFirstLine}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add first item
-          </Button>
-        )}
-      </div>
+      <EmptyState
+        icon={Package}
+        title="No price lines yet"
+        className="rounded-none border-0 py-10"
+        data-testid={`text-no-lines-${proformaId}`}
+        action={
+          canEdit ? (
+            <Button size="sm" variant="outline" className="mt-1" onClick={onAddFirstLine}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add first item
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 

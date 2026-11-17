@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import type { RecordedCostSummary } from "@/lib/recordedMixBatchCost";
 import type { FactoryMixBatch } from "@shared/schema";
 import type { StoredMixBatchSource } from "./editMixBatchSources";
@@ -67,7 +68,7 @@ export function MixBatchRecordedDetailsDialog({
                 <Skeleton className="h-24 w-full" />
               </div>
             ) : !currentSources?.length ? (
-              <p className="py-4 text-sm text-muted-foreground">No recorded source materials found for this batch.</p>
+              <EmptyState title="No recorded source materials found for this batch." className="py-4" />
             ) : (
               <div className="overflow-x-auto rounded-md border">
                 <Table>
