@@ -148,9 +148,7 @@ export async function receiveLinkedTrade(input: ReceiveIntercompanyTradeInput, a
   return withTradeScope(actor, [trade.sourceCompanyId, trade.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       await tx.execute(
-        sql.raw(
-          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + trade.sourceCompanyId + ")"
-        )
+        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE},${trade.sourceCompanyId})`
       );
       const [record] = await tx
         .select()
