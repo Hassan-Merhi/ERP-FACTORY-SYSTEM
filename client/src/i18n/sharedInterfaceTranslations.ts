@@ -427,6 +427,30 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  { en: "On the Way", ar: "في الطريق", fr: "En route" },
+  // Shared period filter: open-ended custom ranges.
+  { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },
+  { en: "End date only", ar: "تاريخ النهاية فقط", fr: "Date de fin uniquement" },
+  {
+    en: "No intercompany links configured yet.",
+    ar: "لا توجد روابط بين الشركات مهيأة بعد.",
+    fr: "Aucun lien intersociétés configuré pour le moment.",
+  },
+  { en: "Loading spreadsheet…", ar: "جارٍ تحميل جدول البيانات…", fr: "Chargement de la feuille de calcul…" },
+  { en: "Loading recurring journals…", ar: "جارٍ تحميل القيود المتكررة…", fr: "Chargement des journaux récurrents…" },
+  { en: "Loading settings…", ar: "جارٍ تحميل الإعدادات…", fr: "Chargement des paramètres…" },
+  { en: "Loading locations…", ar: "جارٍ تحميل المواقع…", fr: "Chargement des emplacements…" },
+  // Default texts of the shared loading and error states (components/ui/page-state).
+  {
+    en: "Please wait while the latest information is loaded.",
+    ar: "يرجى الانتظار أثناء تحميل أحدث المعلومات.",
+    fr: "Veuillez patienter pendant le chargement des dernières informations.",
+  },
+  {
+    en: "The information could not be loaded. Please try again.",
+    ar: "تعذر تحميل المعلومات. يرجى المحاولة مرة أخرى.",
+    fr: "Les informations n’ont pas pu être chargées. Veuillez réessayer.",
+  },
   // Labels of the shared search and dropdown controls (UI unification phase 7).
   { en: "Statut de traduction", ar: "حالة الترجمة", fr: "Statut de traduction" },
   { en: "— Select group —", ar: "— اختر مجموعة —", fr: "— Sélectionner un groupe —" },

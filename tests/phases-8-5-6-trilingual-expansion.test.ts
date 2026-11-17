@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { hasColumn } from "./helpers/schemaManifest";
 import { describe, expect, it } from "vitest";
 import {
   FACTORY_CATALOG_LANGUAGES,
@@ -50,11 +51,11 @@ describe("translation phases 8, 5 and 6", () => {
   });
 
   it("provides French schema fields, routes, editor and Excel workflow", () => {
-    const migration = read("migrations/20260802_001_factory_french_catalog_snapshots.sql");
     const routes = read("server/routes/factory/factoryFrenchTranslationRoutes.ts");
     const manager = read("client/src/components/FactoryFrenchCatalogManager.tsx");
-    expect(migration).toContain("name_fr");
-    expect(migration).toContain("description_fr");
+    expect(hasColumn("factory_categories", "name_fr")).toBe(true);
+    expect(hasColumn("factory_bale_products", "name_fr")).toBe(true);
+    expect(hasColumn("factory_bale_products", "description_fr")).toBe(true);
     expect(routes).toContain("french-catalog/import/preview");
     expect(routes).toContain("french-catalog/import/apply");
     expect(routes).toContain("new ExcelJS.Workbook");

@@ -1,25 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { Client } from "pg";
+import { describe, expect, it } from "vitest";
 
+import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
+import { runTenantIsolationProbes } from "../server/schema/verifyDatabaseSchema.mjs";
+
+/**
+ * Company-scope RLS used to be applied at boot by server/companyScopeRlsBridge.mjs.
+ * It is now part of the migrations, and startup only verifies it: the read-only
+ * schema gate runs these tenant-isolation probes before anything else touches
+ * data (preload order: tests/startup-preload-manifest.test.ts). Boot no longer
+ * replays 0016 or takes its table locks.
+ */
 describe("company-scope RLS startup wiring", () => {
-  it("applies and verifies the company-scope RLS readiness migration against PostgreSQL", async () => {
-    const { ensureCompanyScopeRlsReadiness } = await import("../server/companyScopeRlsBridge.mjs");
-
-    await expect(ensureCompanyScopeRlsReadiness()).resolves.toBeUndefined();
-  });
-
-  it("does not replay the migration's table locks once the database already matches it", async () => {
-    // Replaying 0016 on every boot took ACCESS EXCLUSIVE locks on vouchers and
-    // voucher_entries and deadlocked against the instance still serving traffic.
-    const { ensureCompanyScopeRlsReadiness } = await import("../server/companyScopeRlsBridge.mjs");
-    const logged = vi.spyOn(console, "log");
+  it("verifies company-scope RLS fails closed against PostgreSQL", async () => {
+    const connectionString = process.env.DATABASE_URL!;
+    const client = new Client({ connectionString, ssl: resolveDatabaseSsl(connectionString) });
+    await client.connect();
     try {
-      await ensureCompanyScopeRlsReadiness();
-      const verified = logged.mock.calls
-        .map(([line]) => String(line))
-        .find((line) => line.includes("Company-scope RLS fail-closed readiness verified"));
-      expect(JSON.parse(verified!)).toMatchObject({ migrationApplied: false });
+      await expect(runTenantIsolationProbes(client)).resolves.toEqual([]);
     } finally {
-      logged.mockRestore();
+      await client.end();
     }
   });
 });

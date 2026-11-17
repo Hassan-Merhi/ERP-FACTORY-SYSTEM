@@ -32,7 +32,6 @@ export interface Phase8AppliedReceipt {
   replayed: boolean;
 }
 export function validatePhase8OperatorApproval(input: Phase8Approval): Phase8Approval;
-export function ensurePhase8ApplySchema(queryable: Pick<PoolClient, "query">): Promise<void>;
 export function applyStagedVoucherOnce(
   queryable: Pick<PoolClient, "query">,
   input: Phase8Approval,

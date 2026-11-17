@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface OrderLike {
   status: string;
@@ -170,7 +171,7 @@ export function InvoiceSummaryBar({
         </span>
         {!hideTotalsUsd && (
           <span>
-            <span className="font-medium text-foreground">${fmt(totalAmount)}</span>
+            <span className="font-medium text-foreground">{formatUsd(totalAmount, 0, 2)}</span>
           </span>
         )}
       </div>
@@ -201,7 +202,7 @@ export function InvoiceSummaryBar({
                   </span>
                   {!hideTotalsUsd && (
                     <span>
-                      <span className="font-medium text-foreground">${fmt(amount)}</span>
+                      <span className="font-medium text-foreground">{formatUsd(amount, 0, 2)}</span>
                     </span>
                   )}
                 </div>
@@ -235,7 +236,10 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.remainingPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatUsd(loadingStats.remainingPrice, 0, 2)}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -260,7 +264,10 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.overloadedPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatUsd(loadingStats.overloadedPrice, 0, 2)}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -285,7 +292,9 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span>
-                        <span className="font-medium text-foreground">${fmt(loadingStats.underLoadedPrice)}</span>
+                        <span className="font-medium text-foreground">
+                          {formatUsd(loadingStats.underLoadedPrice, 0, 2)}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -312,7 +321,10 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.notRequestedPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatUsd(loadingStats.notRequestedPrice, 0, 2)}
+                        </span>
                       </span>
                     )}
                   </div>

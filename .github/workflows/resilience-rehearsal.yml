@@ -85,10 +85,10 @@ jobs:
           node scripts/verify-phase11-12-observability-disaster-recovery.mjs
 
       - name: Prepare source database schema
-        run: node node_modules/drizzle-kit/bin.cjs push --force
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
 
       - name: Verify source database schema
-        run: node scripts/verify-ci-disposable-schema.mjs
+        run: node scripts/db/migrate.mjs verify
 
       - name: Add rehearsal sentinel
         run: |
@@ -160,7 +160,7 @@ jobs:
         run: |
           export DATABASE_URL="$RESTORE_DATABASE_URL"
           test "$(psql "$DATABASE_URL" -Atqc "SELECT marker FROM resilience_rehearsal_sentinel WHERE id = 1")" = "backup-restore-rehearsal"
-          node scripts/verify-ci-disposable-schema.mjs
+          node scripts/db/migrate.mjs verify
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -F $'\t' <<'SQL' > "$RUNNER_TEMP/restore-critical-counts.tsv"
           SELECT 'companies', COUNT(*)::bigint FROM companies
           UNION ALL SELECT 'inventory', COUNT(*)::bigint FROM inventory

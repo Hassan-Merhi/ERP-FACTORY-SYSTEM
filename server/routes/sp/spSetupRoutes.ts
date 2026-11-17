@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { ledgerAccounts, locations, bankAccounts } from "@shared/schema";
 import { requireSpCompany, getSpAccount, SP_ACCOUNTS } from "./spHelpers";
-import { ensureSpSupplierVoucherSyncTrigger, getSpSupplierVoucherLinkGapCount } from "./spSupplierVoucherSync";
+import { getSpSupplierVoucherLinkGapCount } from "./spSupplierVoucherSync";
 import { loadGoldenCoastAccounts, loadGoldenCoastSettings, loadCompanyAccountNames } from "./spGoldenCoastSetupRoutes";
 import { summarizeGoldenCoastAccountSetup } from "../../services/accounting/goldenCoastPhase2Accounts";
 
@@ -77,10 +77,10 @@ export function registerSpSetupRoutes(app: Express) {
         created.push("Default location: Main Warehouse");
       }
 
-      // Wave 16 (A): setup installs the link trigger and reports supplier links
-      // that differ; it no longer rewrites posted vouchers. They are repaired
-      // through the Owner preview/apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
-      await ensureSpSupplierVoucherSyncTrigger();
+      // Wave 16 (A): setup reports supplier links that differ; it no longer
+      // rewrites posted vouchers. They are repaired through the Owner
+      // preview/apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
+      // The link trigger itself is part of the migrated schema.
       const supplierVoucherLinkGapCount = await getSpSupplierVoucherLinkGapCount(companyId);
 
       res.json({

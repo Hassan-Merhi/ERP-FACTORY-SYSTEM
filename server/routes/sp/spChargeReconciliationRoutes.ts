@@ -5,7 +5,6 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { firstRow } from "../../lib/queryResult";
 import { requireSpCompany } from "./spHelpers";
-import { ensureSpOffloadReversalStorage } from "./spOffloadLifecycleRoutes";
 
 function first(result: unknown): Record<string, unknown> {
   return (firstRow(result) ?? {}) as Record<string, unknown>;
@@ -14,7 +13,6 @@ function first(result: unknown): Record<string, unknown> {
 export function registerSpChargeReconciliationRoutes(app: Express): void {
   app.get("/api/sp/reconciliation/charges", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
     try {
-      await ensureSpOffloadReversalStorage();
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
 

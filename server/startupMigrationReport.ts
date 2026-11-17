@@ -46,7 +46,7 @@ export function recordStartupMigrationFailures(failures: StartupMigrationFailure
   report.failureCount = report.failures.length;
 }
 
-/** Marks the migration pass finished. `skipped` covers RUN_STARTUP_MIGRATIONS=false. */
+/** Marks the boot-time data operations finished (the schema was verified before boot). */
 export function markStartupMigrationsComplete(options: { skipped?: boolean } = {}): void {
   report.completed = true;
   if (options.skipped) report.skipped = true;

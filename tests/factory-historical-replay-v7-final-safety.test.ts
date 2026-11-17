@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { hasTrigger } from "./helpers/schemaManifest";
+import { FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL } from "../server/services/factory/historicalReplayV7MigrationSql";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -69,10 +71,11 @@ describe("Historical Replay V7 final safety wiring", () => {
   });
 
   it("keeps the migration cost-only and reversible replay separate", () => {
-    const migration = read("migrations/20260721_001_factory_mix_batch_sources_inventory_supplier.sql");
-    expect(migration).toContain("Schema only");
-    expect(migration).not.toMatch(/UPDATE\s+factory_mix_batches\s+SET\s+cost/i);
-    expect(migration).not.toMatch(/UPDATE\s+factory_suppliers\s+SET\s+current_raw_material/i);
-    expect(migration).toContain("factory_mix_source_inventory_supplier_trg");
+    // The schema is defined by the migrations; the startup backfill never touches costs.
+    expect(hasTrigger("factory_mix_batch_sources", "factory_mix_source_inventory_supplier_trg")).toBe(true);
+    expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).not.toMatch(/UPDATE\s+factory_mix_batches\s+SET\s+cost/i);
+    expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).not.toMatch(
+      /UPDATE\s+factory_suppliers\s+SET\s+current_raw_material/i
+    );
   });
 });

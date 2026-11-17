@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNum } from "./utils";
 import { FactoryPosPrintTemplate } from "./FactoryPosPrintTemplate";
@@ -36,9 +37,9 @@ export function FactoryPosHistory({ model }: { model: FactoryPosModel }) {
       </CardHeader>
       <CardContent className="p-0">
         {salesLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading...</div>
+          <LoadingState className="rounded-none border-0 p-6" />
         ) : !sales || sales.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground">No sales yet</div>
+          <EmptyState title="No sales yet" className="rounded-none border-0 p-6" />
         ) : (
           <Table>
             <TableHeader>

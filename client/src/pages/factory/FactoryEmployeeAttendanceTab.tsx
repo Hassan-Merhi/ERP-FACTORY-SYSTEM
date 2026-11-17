@@ -35,6 +35,7 @@ import {
   ChevronsUpDown,
   Check,
 } from "lucide-react";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "Leave";
 type ViewMode = "daily" | "perEmployee";
@@ -170,7 +171,7 @@ export default function FactoryEmployeeAttendanceTab() {
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
 
-  const { data, isLoading } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
     queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -429,11 +430,10 @@ export default function FactoryEmployeeAttendanceTab() {
                     <Skeleton key={i} className="h-10 w-full rounded-md" />
                   ))}
                 </div>
+              ) : isError && !data ? (
+                <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
               ) : emps.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12 text-sm">
-                  <User className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                  No active employees found.
-                </div>
+                <EmptyState icon={User} title="No active employees found." />
               ) : (
                 <>
                   <div className="hidden overflow-x-auto rounded-xl border border-slate-200 sm:block dark:border-slate-600/70">

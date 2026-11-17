@@ -6,7 +6,6 @@ import request from "supertest";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "autoprt5";
@@ -40,7 +39,6 @@ const batchInput = (bale: { id: number; referenceNumber: string }) => ({
 });
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({

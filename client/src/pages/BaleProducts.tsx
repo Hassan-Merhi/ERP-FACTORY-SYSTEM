@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { CreateBaleProductDialog } from "../components/CreateBaleProductDialog";
 import { AdminAuthDialog } from "@/components/AdminAuthDialog";
@@ -33,6 +34,7 @@ import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { BaleProductsDialog1 } from "./baleproducts/components/BaleProductsDialog1";
 import { BaleProductsDialog2 } from "./baleproducts/components/BaleProductsDialog2";
 import { BaleProductsView1 } from "./baleproducts/components/BaleProductsView1";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 /** Standalone route entry. Route components receive router props, so the hub uses `BaleProductsContent` directly. */
 export default function BaleProducts() {
@@ -387,7 +389,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                                     {!hideAvgRate && (
                                       <td className="px-4 py-1.5 text-right tabular-nums text-xs">
                                         {parseFloat(p.productionPrice || "0") > 0 ? (
-                                          `$${parseFloat(p.productionPrice!).toFixed(2)}`
+                                          formatUsd(parseFloat(p.productionPrice!), 2)
                                         ) : (
                                           <span className="text-muted-foreground">—</span>
                                         )}
@@ -396,7 +398,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                                     {!hideSellingPriceBP && (
                                       <td className="px-4 py-1.5 text-right tabular-nums text-xs">
                                         {parseFloat(p.sellingPrice || "0") > 0 ? (
-                                          `$${parseFloat(p.sellingPrice!).toFixed(2)}`
+                                          formatUsd(parseFloat(p.sellingPrice!), 2)
                                         ) : (
                                           <span className="text-muted-foreground">—</span>
                                         )}
@@ -417,7 +419,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                 })}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No categories yet. Create one above.</p>
+              <EmptyState title="No categories yet. Create one above." />
             )}
           </div>
         </div>

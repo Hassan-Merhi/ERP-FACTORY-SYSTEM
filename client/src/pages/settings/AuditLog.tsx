@@ -1,8 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import { CalendarDays, RefreshCw, X } from "lucide-react";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -418,10 +420,11 @@ export function AuditLog({
           </div>
         )
       ) : auditLogs.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground border rounded-md bg-muted/20">
-          <p className="text-sm font-medium">No activity found for {selectedCompany?.name || "this company"}</p>
-          <p className="text-xs mt-1">Try adjusting the filters or date range.</p>
-        </div>
+        <EmptyState
+          title={`No activity found for ${selectedCompany?.name || "this company"}`}
+          description="Try adjusting the filters or date range."
+          className="py-12"
+        />
       ) : erpPhone ? (
         <div className="space-y-3" data-testid="activity-cards">
           {groupedDays.map(({ dateKey, dateLabel, logs }) => (
@@ -524,28 +527,15 @@ export function AuditLog({
         </div>
       )}
 
-      {!activityLoading && !error && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page === 1 || isFetching}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-          </Button>
-          <span className="text-sm font-medium px-4">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            disabled={page === totalPages || isFetching}
-          >
-            Next <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+      {!activityLoading && !error && (
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          total={total ?? 0}
+          pageSize={50}
+          onPageChange={setPage}
+          noun="items"
+        />
       )}
 
       {selectedLog && <AuditLogDialog log={selectedLogDetail || selectedLog} onClose={() => setSelectedLog(null)} />}

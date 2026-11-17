@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -18,6 +19,7 @@ import {
   Layers,
   Truck,
 } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface BaleDetail {
   ref: string;
@@ -61,9 +63,9 @@ function fmtMoney(n: number): string {
   if (n === 0) return "$0";
   const rounded = Math.round(n * 100) / 100;
   if (rounded % 1 === 0) {
-    return "$" + new Intl.NumberFormat("en-US").format(rounded);
+    return formatUsd(rounded, 0);
   }
-  return "$" + new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rounded);
+  return formatUsd(rounded, 2);
 }
 
 function fmtKg(n: number) {
@@ -388,7 +390,7 @@ function SectionTable({
 }
 
 export default function BaleLedger() {
-  const { data, isLoading, refetch, isFetching } = useQuery<LedgerData>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<LedgerData>({
     queryKey: ["/api/factory/bale-ledger"],
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -430,6 +432,8 @@ export default function BaleLedger() {
               </Card>
             ))}
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : (
           <>
             <SectionTable

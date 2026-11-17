@@ -4,10 +4,8 @@
  * EUR settlements to a USD ledger beneficiary, idempotent replay, the
  * book-vs-wallet reconciliation and the generic voucher edit/reversal/retirement lock.
  *
- * The wallet tables come from a manual SQL migration, so the test applies it.
+ * The wallet tables are part of the migrated schema the test database is built from.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -61,13 +59,6 @@ async function walletSnapshot() {
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  await pool.query(readFileSync(path.join(__dirname, "../migrations/20261019_factory_fx_agent_wallets.sql"), "utf8"));
-  await pool.query(
-    readFileSync(path.join(__dirname, "../migrations/20261020_factory_fx_agent_conversion_reversals.sql"), "utf8")
-  );
-  await pool.query(
-    readFileSync(path.join(__dirname, "../migrations/20261020_fx_agent_eur_supplier_payment.sql"), "utf8")
-  );
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
     .post("/api/auth/login")

@@ -10,7 +10,7 @@ const routes = read("server/routes/factory/customer-orders/loadingDispatchOrderO
 const workbook = read("server/routes/factory/customer-orders/loadingDispatchOrderOverviewWorkbook.ts");
 const ui = read("client/src/pages/factory/FactoryDispatchOrderDashboard.tsx");
 const parent = read("client/src/pages/factory/FactoryLoadingDispatch.tsx");
-const perms = read("server/services/security/operationalPermissionRoutePolicy.ts");
+const accessManifest = read("config/route-access-manifest.json");
 const schema = read("shared/schema/factory/dispatch-financials.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as { routes: string[]; routeCount: number };
 
@@ -59,7 +59,12 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(workbook).toContain("NO — Factory cannot confirm");
     expect(workbook).toContain("1,000 newest events");
     expect(routes).toContain("writeWorkbookToResponse");
-    expect(perms).toContain("GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/report.xlsx");
+    const reportRule = accessManifest
+      .split("\n")
+      .find((line) =>
+        line.includes('"id":"GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/report.xlsx#1"')
+      );
+    expect(reportRule).toContain('"exp_excel"');
   });
   it("is registered before dynamic trip routes and displays financials only to Admin/Owner/Developer", () => {
     expect(parent).toContain("canViewFinancialDashboard");

@@ -22,7 +22,7 @@ import { eq } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
-import { ensureClosedPeriodGuard, CLOSED_PERIOD_ERROR_CODE } from "../server/services/accounting/closedPeriodGuard";
+import { CLOSED_PERIOD_ERROR_CODE } from "../server/services/accounting/closedPeriodGuard";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
 const TEST_PREFIX = "closedperiod";
@@ -81,7 +81,6 @@ async function expectClosedPeriodRejection(promise: Promise<unknown>) {
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
-  await ensureClosedPeriodGuard(pool);
 
   agent = request.agent(ctx.app);
   const login = await agent

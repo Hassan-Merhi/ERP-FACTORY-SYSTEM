@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExternalLink, Ship } from "lucide-react";
-import { formatNumber } from "@/lib/formatNumber";
 import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface InvoiceContainerRow {
   id: number;
@@ -50,9 +51,15 @@ function InvoiceStatus({ status }: { status: string }) {
 export default function FactoryContainerTracking() {
   const [search, setSearch] = useState("");
 
-  const { data: allRows = [], isLoading } = useQuery<InvoiceContainerRow[]>({
+  const {
+    data: allRowsData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<InvoiceContainerRow[]>({
     queryKey: [LIST_KEY],
   });
+  const allRows = allRowsData ?? [];
 
   const filtered = search.trim()
     ? allRows.filter((r) => {
@@ -81,15 +88,17 @@ export default function FactoryContainerTracking() {
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
+      ) : isError && !allRowsData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-          <Ship className="h-10 w-10 opacity-30" />
-          <p className="text-sm">
-            {allRows.length === 0
+        <EmptyState
+          icon={Ship}
+          title={
+            allRows.length === 0
               ? "No verified or finalized invoices with a container number yet"
-              : "No containers match your search"}
-          </p>
-        </div>
+              : "No containers match your search"
+          }
+        />
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
@@ -129,7 +138,7 @@ export default function FactoryContainerTracking() {
                     data-testid={`text-cost-${row.id}`}
                   >
                     {row.grandTotal ? (
-                      `$${formatNumber(parseFloat(row.grandTotal))}`
+                      formatUsd(parseFloat(row.grandTotal), 0, 2)
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

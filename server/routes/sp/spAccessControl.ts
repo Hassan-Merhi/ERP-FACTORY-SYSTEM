@@ -43,66 +43,6 @@ const ROLE_DEFAULTS: Record<string, readonly SpPermission[]> = {
   "Create Only": ["sp_view", "sp_reports"],
 };
 
-let storageReady: Promise<void> | null = null;
-export function ensureSpAccessControlStorage(): Promise<void> {
-  if (!storageReady) {
-    storageReady = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS sp_permission_grants (
-          id bigserial PRIMARY KEY,
-          company_id integer NOT NULL,
-          user_id text NOT NULL,
-          permission varchar(64) NOT NULL,
-          enabled boolean NOT NULL DEFAULT true,
-          granted_by text,
-          granted_at timestamptz NOT NULL DEFAULT now(),
-          UNIQUE (company_id, user_id, permission)
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS sp_audit_events (
-          id bigserial PRIMARY KEY,
-          company_id integer NOT NULL,
-          user_id text,
-          username text,
-          role varchar(64),
-          permission varchar(64) NOT NULL,
-          action varchar(120) NOT NULL,
-          method varchar(12) NOT NULL,
-          path text NOT NULL,
-          entity_id text,
-          reason text,
-          confirmation text,
-          idempotency_key text,
-          status_code integer,
-          request_body jsonb,
-          created_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS sp_idempotency_keys (
-          id bigserial PRIMARY KEY,
-          company_id integer NOT NULL,
-          user_id text NOT NULL,
-          permission varchar(64) NOT NULL,
-          idempotency_key varchar(200) NOT NULL,
-          method varchar(12) NOT NULL,
-          path text NOT NULL,
-          created_at timestamptz NOT NULL DEFAULT now(),
-          UNIQUE (company_id, user_id, permission, idempotency_key)
-        )
-      `);
-      await db.execute(
-        sql`CREATE INDEX IF NOT EXISTS sp_audit_events_company_created_idx ON sp_audit_events(company_id, created_at DESC)`
-      );
-    })().catch((error) => {
-      storageReady = null;
-      throw error;
-    });
-  }
-  return storageReady;
-}
-
 /**
  * Exported so the classification can be asserted behaviourally. Ordering here
  * is load-bearing — several Golden Coast paths would be claimed by the generic
@@ -196,7 +136,6 @@ async function enforceSpAccess(req: Request, res: Response, next: NextFunction):
   try {
     const companyId = await requireSpCompany(req, res);
     if (!companyId) return;
-    await ensureSpAccessControlStorage();
 
     const permission = classifyPermission(req);
     const userId = String(req.user?.id ?? req.session.userId ?? "");

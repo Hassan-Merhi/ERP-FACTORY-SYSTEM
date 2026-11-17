@@ -49,6 +49,8 @@ interface PeriodFilterProps {
   defaultPreset?: PeriodPreset;
   className?: string;
   hideCustomInputs?: boolean;
+  /** For reports that need both dates: hides "All Time" and the open-range (one-date) choices. */
+  requireBoundedRange?: boolean;
   "data-testid"?: string;
 }
 
@@ -141,6 +143,7 @@ export function PeriodFilter({
   onChange,
   className,
   hideCustomInputs = false,
+  requireBoundedRange = false,
   "data-testid": testId,
 }: PeriodFilterProps) {
   const { formatDisplayDate } = useDateFormat();
@@ -187,6 +190,14 @@ export function PeriodFilter({
     setCalendarOpen(false);
   };
 
+  const applyOpenRange = (side: "from" | "to") => {
+    if (!draftFromDate) return;
+    const day = format(draftFromDate, "yyyy-MM-dd");
+    onChange({ fromDate: side === "from" ? day : "", toDate: side === "to" ? day : "", preset: "custom" });
+    setDraftFromDate(undefined);
+    setCalendarOpen(false);
+  };
+
   function buildLabel(): string {
     if (value.preset === "all_time") return "All Time";
     if (value.preset === "today") return "Today";
@@ -200,7 +211,9 @@ export function PeriodFilter({
       if (from === to) return from;
       return `${from} – ${to}`;
     }
-    if (fromDateObj) return formatDisplayDate(fromDateObj);
+    // Open ranges: "from a date onward" or "up to a date".
+    if (fromDateObj) return `${formatDisplayDate(fromDateObj)} –`;
+    if (toDateObj) return `– ${formatDisplayDate(toDateObj)}`;
     if (value.preset === "custom") return "Custom Range";
     return "Select period";
   }
@@ -223,10 +236,14 @@ export function PeriodFilter({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align={isMobile ? "start" : "end"} className="w-56 max-w-[calc(100vw-1rem)]">
-          <DropdownMenuItem onClick={() => handlePresetChange("all_time")} data-testid="period-preset-all-time">
-            All Time
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {!requireBoundedRange && (
+            <>
+              <DropdownMenuItem onClick={() => handlePresetChange("all_time")} data-testid="period-preset-all-time">
+                All Time
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onClick={() => handlePresetChange("today")} data-testid="period-preset-today">
             Today
           </DropdownMenuItem>
@@ -282,7 +299,31 @@ export function PeriodFilter({
               />
             </DialogBody>
             {draftFromDate && (
-              <div className="px-4 text-center text-xs text-muted-foreground">Now click an end date</div>
+              <div className="space-y-2 px-4 text-center text-xs text-muted-foreground">
+                <div>Now click an end date</div>
+                {!requireBoundedRange && (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => applyOpenRange("from")}
+                      data-testid="period-open-range-from"
+                    >
+                      Start date only
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => applyOpenRange("to")}
+                      data-testid="period-open-range-to"
+                    >
+                      End date only
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
             <div className="flex justify-end px-4 pb-4">
               <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setCalendarOpen(false)}>

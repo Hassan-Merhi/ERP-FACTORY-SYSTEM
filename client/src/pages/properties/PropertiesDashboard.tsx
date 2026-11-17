@@ -2,6 +2,7 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { KPICard } from "@/components/KPICard";
 import { Card } from "@/components/ui/card";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -325,9 +326,7 @@ export default function PropertiesDashboard() {
           <h3 className="text-lg font-medium">Net Position Breakdown</h3>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center h-[200px]">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+          <LoadingState className="h-[200px]" />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {/* What We Have (Assets) */}
@@ -569,7 +568,7 @@ export default function PropertiesDashboard() {
                 Error loading accounts: {cashAccountsError?.message || "Unknown error"}
               </p>
             ) : displayedCashAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+              <EmptyState title="No accounts added yet" className="min-h-0 py-4" />
             ) : (
               <div className="space-y-1">
                 {displayedCashAccounts.map((dca) => {
@@ -716,7 +715,7 @@ export default function PropertiesDashboard() {
                 Error loading accounts: {payableAccountsError?.message || "Unknown error"}
               </p>
             ) : dashboardPayableAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+              <EmptyState title="No accounts added yet" className="min-h-0 py-4" />
             ) : (
               <div className="space-y-1">
                 {dashboardPayableAccounts.map((account) => (

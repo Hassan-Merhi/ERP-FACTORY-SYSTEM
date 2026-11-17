@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorState } from "@/components/ui/page-state";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { formatNumber } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
 import { currencySymbol, formatTxType, getFactoryTxTypeBadge, mergeBaleEntries } from "./daybookUtils";
@@ -60,7 +60,12 @@ function BaleSummaryRow({
     </Button>
   );
   return (
-    <div className={cn("flex w-full flex-wrap items-center border-t border-border/50 bg-muted/25 dark:bg-slate-900/35 sm:grid", colsClass)}>
+    <div
+      className={cn(
+        "flex w-full flex-wrap items-center border-t border-border/50 bg-muted/25 dark:bg-slate-900/35 sm:grid",
+        colsClass
+      )}
+    >
       <div className="min-w-0 flex-1 py-2 pl-8 pr-2 sm:pl-14">
         <span className="text-sm text-foreground">
           {row.count} bale{row.count !== 1 ? "s" : ""}
@@ -171,7 +176,12 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
         return (
           <div key={date} className="w-full">
             {/* Date separator row */}
-            <div className={cn("grid w-full items-center gap-x-2 border-b border-blue-200/60 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10 sm:gap-x-0 sm:px-4", colsClass)}>
+            <div
+              className={cn(
+                "grid w-full items-center gap-x-2 border-b border-blue-200/60 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10 sm:gap-x-0 sm:px-4",
+                colsClass
+              )}
+            >
               <span className="flex min-w-0 items-center gap-2 wrap-break-word text-sm font-bold text-slate-800 dark:text-slate-100">
                 <CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-sky-400" aria-hidden="true" />
                 {formatDisplayDate(date + "T00:00:00")}
@@ -232,22 +242,24 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
             data-testid="factory-daybook-error"
           />
         ) : filteredEntries.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            {hasActiveFilters ? (
-              <div>
-                <p className="mb-2">No transactions found matching your filters.</p>
+          hasActiveFilters ? (
+            <EmptyState
+              title="No transactions found matching your filters."
+              className="rounded-none border-0"
+              action={
                 <Button variant="outline" onClick={model.clearFilters} data-testid="button-clear-filters-empty">
                   Clear Filters
                 </Button>
-              </div>
-            ) : (
-              <>
-                <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-semibold">No transactions found</h3>
-                <p className="mt-2">Factory transactions will appear here as you perform operations</p>
-              </>
-            )}
-          </div>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={BookOpen}
+              title="No transactions found"
+              description="Factory transactions will appear here as you perform operations"
+              className="rounded-none border-0"
+            />
+          )
         ) : (
           /* ── CONDENSED VIEW — matches ERP Daybook: Date/Type | Count | Total ── */
           <div className="w-full">

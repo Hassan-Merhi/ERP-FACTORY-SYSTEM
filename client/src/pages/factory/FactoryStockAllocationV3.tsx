@@ -1,4 +1,5 @@
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import type { ClientErrorLike } from "@/lib/clientError";
 // LEGACY — Stock Allocation V3. Superseded by FactoryStockAllocationV5. Kept as fallback only. Route: /factory/stock-allocation-v3 (not in sidebar).
 import { useState } from "react";
@@ -40,7 +41,12 @@ export default function FactoryStockAllocationV3() {
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
 
   // Queries
-  const { data: stockRows = [], isLoading: stockLoading } = useQuery<StockRow[]>({
+  const {
+    data: stockRows = [],
+    isLoading: stockLoading,
+    isError: stockError,
+    refetch: refetchStock,
+  } = useQuery<StockRow[]>({
     queryKey: companyQueryKey("/api/factory/v3/stock-overview", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -195,8 +201,11 @@ export default function FactoryStockAllocationV3() {
             <p className="text-sm text-muted-foreground mb-3">
               Per-article breakdown. FTP = Stock in Hand − Expected to Load − Loading.
             </p>
-            {stockLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-            {!stockLoading && stockRows.length === 0 && (
+            {stockLoading && <LoadingState />}
+            {!stockLoading && stockError && stockRows.length === 0 && (
+              <ErrorState onAction={() => void refetchStock()} actionLabel="Try again" />
+            )}
+            {!stockLoading && !stockError && stockRows.length === 0 && (
               <p className="text-sm text-muted-foreground">No stock data available.</p>
             )}
             {stockRows.length > 0 && (
@@ -368,12 +377,7 @@ export default function FactoryStockAllocationV3() {
         {/* ── Finalized ── */}
         {activeTab === "finalized" && (
           <div>
-            {finalizedLoads.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No finalized loads yet.</p>
-              </div>
-            )}
+            {finalizedLoads.length === 0 && <EmptyState icon={CheckCircle} title="No finalized loads yet." />}
             {finalizedLoads.length > 0 && (
               <div className="rounded-md border table-responsive">
                 <Table>
@@ -416,12 +420,7 @@ export default function FactoryStockAllocationV3() {
             <p className="text-sm text-muted-foreground mb-3">
               Active proformas. Click "Send to Expected to Load" to create a loading job.
             </p>
-            {proformas.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No active proformas found.</p>
-              </div>
-            )}
+            {proformas.length === 0 && <EmptyState icon={Package} title="No active proformas found." />}
             {proformas.length > 0 && (
               <div className="rounded-md border table-responsive">
                 <Table>

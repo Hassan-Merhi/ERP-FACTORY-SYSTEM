@@ -1,4 +1,5 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { ErrorState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
@@ -25,7 +26,7 @@ export function FactoryBaleProductHistory() {
 
   const backPath = "/factory/production";
 
-  const { data, isLoading } = useQuery<BaleProductHistoryResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<BaleProductHistoryResponse>({
     queryKey: ["/api/factory/bale-product-history", productId, locationId, year],
     queryFn: async () => {
       const response = await fetch(`/api/factory/bale-product-history/${productId}/${locationId}/${year}`, {
@@ -42,6 +43,14 @@ export function FactoryBaleProductHistory() {
       <div className="container mx-auto p-3 sm:p-6 space-y-6">
         <Skeleton className="h-8 w-64" data-testid="skeleton-title" />
         <Skeleton className="h-[400px] w-full" data-testid="skeleton-table" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-3 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }
