@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 /**
  * Removes a test's own audit_log rows.
  *
- * audit_log is append-only (wave 12, server/services/audit/auditLogAppendOnlyGuard.ts):
+ * audit_log is append-only (wave 12, erp_audit_log_append_only in the schema migrations):
  * its trigger refuses DELETE outside the retention job. Test teardown runs as
  * the database superuser, which may switch triggers off for one transaction
  * with `SET LOCAL session_replication_role = replica` — the same power that

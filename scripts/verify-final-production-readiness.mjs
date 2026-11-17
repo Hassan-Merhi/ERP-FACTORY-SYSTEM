@@ -52,7 +52,7 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "verify-database-backup.mjs",
   "Restore into fresh disposable database",
   "pg_restore",
-  "verify-ci-disposable-schema.mjs",
+  "scripts/db/migrate.mjs verify",
   "ENABLE_SCHEDULERS: \"false\"",
   "scheduler-tick-guard.test.ts",
   "schedule:",
@@ -140,7 +140,7 @@ requireMarkers("docs/archive/program-3c-database-tenant-guards.md", [
   "explicit owner approval",
 ]);
 
-requireMarkers("migrations/0013_tenant_control_integrity_guards.sql", [
+requireMarkers("migrations/archive/legacy/0013_tenant_control_integrity_guards.sql", [
   "Foreign keys are NOT VALID",
   "No historical repair, DELETE, UPDATE, or backfill",
   "tenant-control-integrity-audit.mjs",
@@ -152,11 +152,16 @@ requireMarkers("scripts/tenant-control-integrity-audit.mjs", [
   "summary.ok = summary.errorCount === 0",
 ]);
 
-requireMarkers("scripts/run-versioned-migrations.mjs", [
-  'const APPLY_FLAG = "--apply"',
-  'const REQUIRED_CONFIRMATION = "APPLY_VERSIONED_MIGRATIONS"',
+// The single schema authority: explicit, confirmed, locked, checksummed.
+requireMarkers("scripts/db/migrate.mjs", [
+  'const APPLY_CONFIRMATION = "APPLY_SCHEMA_MIGRATIONS"',
+  'const ADOPT_CONFIRMATION = "ADOPT_EXISTING_DATABASE"',
   "pg_try_advisory_lock",
-  "Another versioned migration process already holds the migration lock",
+  "never rebuilt",
+]);
+requireMarkers("server/schema/startupSchemaGate.mjs", [
+  "never creates, alters or repairs anything",
+  "DatabaseSchemaMismatchError",
 ]);
 
 requireMarkers("docs/archive/sp-migration-phase-4-runbook.md", [
@@ -186,7 +191,7 @@ for (const forbidden of ["HISTORICAL_REPLAY_APPLY_MODE", "HISTORICAL_REPLAY_RELE
   }
 }
 
-const journalSource = read("migrations/meta/_journal.json");
+const journalSource = read("migrations/archive/legacy/meta/_journal.json");
 if (journalSource) {
   try {
     const journal = JSON.parse(journalSource);
@@ -245,8 +250,8 @@ if (packageSource) {
     if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-wave5-production-certification.mjs") {
       failures.push("package.json is missing the exact certify:performance-wave5 script");
     }
-    if (String(packageJson.scripts?.start ?? "").includes("run-versioned-migrations")) {
-      failures.push("npm start must not invoke the versioned migration runner");
+    if (/migrate\.mjs|db:migrate|drizzle-kit/.test(String(packageJson.scripts?.start ?? ""))) {
+      failures.push("npm start must not invoke the migration runner or drizzle-kit");
     }
     if (String(packageJson.scripts?.start ?? "").includes("historical-replay")) {
       failures.push("npm start must not invoke Historical Replay");

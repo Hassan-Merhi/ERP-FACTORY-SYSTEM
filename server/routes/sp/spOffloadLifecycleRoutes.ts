@@ -4,7 +4,6 @@ import { spContainers, spOffloadCharges, spStockMovements, voucherEntries } from
 import { requireAuth, requireRole } from "../../auth";
 import { db, type RawQueryRow } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { logger } from "../../lib/logger";
 import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../../services/sp/spInventoryIntegrity";
 import {
   appendSpLifecycleNote,
@@ -70,29 +69,6 @@ function lifecycleDate(value: unknown): string {
   return normalized;
 }
 
-export async function ensureSpOffloadReversalStorage(): Promise<void> {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS sp_offload_reversals (
-      id serial PRIMARY KEY,
-      company_id integer NOT NULL,
-      container_id integer NOT NULL,
-      offload_id integer NOT NULL,
-      reversal_date date NOT NULL,
-      reason text NOT NULL,
-      reversed_by text,
-      voucher_ids_original jsonb NOT NULL DEFAULT '[]'::jsonb,
-      voucher_ids_reversal jsonb NOT NULL DEFAULT '[]'::jsonb,
-      snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-      created_at timestamp NOT NULL DEFAULT now(),
-      CONSTRAINT sp_offload_reversals_offload_unique UNIQUE (offload_id)
-    )
-  `);
-  await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS sp_offload_reversals_company_container_idx
-      ON sp_offload_reversals(company_id, container_id)
-  `);
-}
-
 async function createExactVoucherReversal(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   input: {
@@ -155,15 +131,8 @@ async function createExactVoucherReversal(
 }
 
 export function registerSpOffloadLifecycleRoutes(app: Express): void {
-  void ensureSpOffloadReversalStorage().catch((error) => {
-    logger.warn("[SP] Offload reversal storage initialization deferred", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
-
   app.post("/api/sp/offloads/:id/reverse", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
     try {
-      await ensureSpOffloadReversalStorage();
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
 
@@ -397,7 +366,6 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
 
   app.get("/api/sp/reconciliation/offloads", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
     try {
-      await ensureSpOffloadReversalStorage();
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
 

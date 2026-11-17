@@ -22,7 +22,8 @@ describe("factory LAN deployment contract", () => {
     expect(config).toContain("FACTORY_EDGE_WRITE_MODE: ${EDGE_WRITE_MODE:-read-only}");
     expect(config).toContain('CSRF_ENFORCE: "1"');
     expect(config).toContain('ENABLE_SCHEDULERS: "false"');
-    expect(config).toContain('RUN_STARTUP_MIGRATIONS: "true"');
+    // The schema is applied explicitly with scripts/db/migrate.mjs, never at boot.
+    expect(config).not.toContain("RUN_STARTUP_MIGRATIONS");
     expect(config).not.toContain("DATABASE_URL:");
     expect(config).toContain("PGHOST: postgres");
   });

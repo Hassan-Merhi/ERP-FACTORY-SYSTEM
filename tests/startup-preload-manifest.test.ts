@@ -4,11 +4,11 @@
  *
  *   - Production and development start through it; production adds the
  *     runtime guards as a second, later --import.
- *   - Every entry is awaited, so bridges with top-level await never overlap.
- *   - Bridges do not import other bridges for side effects; that hidden
- *     chaining is what made the old order impossible to read. The
- *     row-level-security bridge's ordered repair chain is the documented
- *     exception.
+ *   - The read-only schema gate runs first after configuration checks: a
+ *     database that does not match this release's migrations stops startup
+ *     before anything else touches it.
+ *   - Nothing in the chain changes the schema. Schema "bridges"
+ *     (server/*Bridge.mjs) no longer exist; migrations/ owns the schema.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -17,8 +17,9 @@ import { describe, it, expect } from "vitest";
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
 
+/** Every `await import("./x")`, whether bare or destructured, in order. */
 function awaitedImports(file: string): string[] {
-  return [...read(file).matchAll(/^await import\("\.\/([^"]+)"\);$/gm)].map((match) => match[1]);
+  return [...read(file).matchAll(/await import\("\.\/([^"]+)"\)/g)].map((match) => match[1]);
 }
 
 describe("startup preload manifest", () => {
@@ -31,48 +32,31 @@ describe("startup preload manifest", () => {
     expect(read(".github/workflows/ui-quality.yml")).toContain("--import ./server/startupPreload.mjs");
   });
 
-  it("awaits every bridge in the production order", () => {
+  it("verifies the schema read-only before any other database work, then runs data operations and runtime patches", () => {
     expect(awaitedImports("server/startupPreload.mjs")).toEqual([
       "deploymentPreflight.mjs",
-      "customerOrderBaleScanAuditBridge.mjs",
-      "wave3SalesHotpathIndexBridge.mjs",
-      "fxFetchTimeoutBridge.mjs",
-      "factoryContainerSchemaBridge.mjs",
-      "schemaPreload.mjs",
-      "exportBufferBridge.mjs",
-      "scheduledAttachmentBridge.mjs",
-      "apiPaginationBridge.mjs",
-      "criticalSecuritySchemaBridge.mjs",
+      "schema/startupSchemaGate.mjs",
+      "startup/startupDataOperations.mjs",
+      "runtime/fxFetchTimeout.mjs",
+      "runtime/exportBuffer.mjs",
+      "runtime/scheduledAttachment.mjs",
+      "runtime/apiPagination.mjs",
     ]);
-    expect(awaitedImports("server/schemaPreload.mjs")).toEqual([
-      "factoryBilingualSchemaBridge.mjs",
-      "factoryTrilingualSchemaBridge.mjs",
-      "companyScopeRlsBridge.mjs",
-      "supplierCompanyScopeBridge.mjs",
-      "fixedProductionPlannerSchemaBridge.mjs",
-    ]);
-    expect(read("server/startupPreload.mjs")).not.toMatch(/^import\s+["']/m);
-    expect(read("server/schemaPreload.mjs")).not.toMatch(/^import\s+["']/m);
+    const source = read("server/startupPreload.mjs");
+    expect(source).toContain("await runStartupSchemaGateOnce();");
+    expect(source.indexOf("runStartupSchemaGateOnce()")).toBeLessThan(source.indexOf("runStartupDataOperations()"));
+    expect(source).not.toMatch(/^import\s+["']/m);
   });
 
-  it("keeps bridges from loading other bridges as side effects", () => {
-    const allowed = new Map([
-      // Phase 19 (A): the worker-bonus and CHARGE-PRE boot repairs are retired;
-      // the RLS bridge now loads the env-gated wave 6 inventory bridge directly.
-      ["companyScopeRlsBridge.mjs", ["inventoryValuationWave6RepairBridge.mjs"]],
-    ]);
-    const offenders: string[] = [];
-    for (const file of fs.readdirSync(path.join(root, "server"))) {
-      if (!file.endsWith("Bridge.mjs")) continue;
-      const source = read(`server/${file}`);
-      const loaded = [
-        ...source.matchAll(/^\s*import\s+["']\.\/([^"']+Bridge\.mjs)["']/gm),
-        ...source.matchAll(/import\(\s*["']\.\/([^"']+Bridge\.mjs)["']\s*\)/g),
-      ].map((match) => match[1]);
-      for (const target of loaded) {
-        if (!(allowed.get(file) ?? []).includes(target)) offenders.push(`${file} -> ${target}`);
-      }
-    }
-    expect(offenders, "List the bridge in server/startupPreload.mjs instead").toEqual([]);
+  it("has no schema bridges and no schema preload left", () => {
+    const leftovers = fs
+      .readdirSync(path.join(root, "server"))
+      .filter((file) => /Bridge\.mjs$|^schemaPreload\.mjs$/.test(file));
+    expect(leftovers).toEqual([]);
+    expect(fs.existsSync(path.join(root, "server/startup-schema"))).toBe(false);
+  });
+
+  it("the server pool module does not import any startup side effects", () => {
+    expect(read("server/db.ts")).not.toMatch(/^import\s+["']\.\/[^"']+["'];$/m);
   });
 });

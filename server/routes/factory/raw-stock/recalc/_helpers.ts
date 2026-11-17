@@ -5,21 +5,10 @@
  */
 import {} from "../../../../services/factory/raw-stock-recalc";
 import { pool } from "../../../../db";
-import { historicalReplaySafetySchema } from "../../../../startup-schema/032-historical-replay-safety";
 
 export const ADMIN_ROLES = ["Admin", "Developer"] as const;
 
 // ─── Undo log + consumed-token helpers ─────────────────────────────────────────
-
-/**
- * Ensure the undo log and consumed-token tables exist in their replay-safe
- * shape. Called once at route registration, so it runs in every migration mode.
- */
-export async function ensureUndoLogTable(): Promise<void> {
-  for (const statement of historicalReplaySafetySchema) {
-    await pool.query(statement);
-  }
-}
 
 /** Capture a point-in-time snapshot of every row that applyRawStockRecalc will touch. */
 export async function captureRecalcSnapshot(companyId: number, containerIds: number[]) {

@@ -7,7 +7,6 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import {
   advanceSatisfiedPriorityScanConfigs,
   PRIORITY_SCAN_LOCK_NAMESPACE,
@@ -111,7 +110,6 @@ async function reverse(baleId: number, deferQueueRecovery = false) {
 }
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent

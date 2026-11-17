@@ -4,7 +4,6 @@ import type { PoolClient } from "pg";
 
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
-import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
   historicalInventoryKey,
@@ -169,7 +168,6 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   createdBy: string;
   companyIds?: number[];
 }): Promise<HistoricalSalesCostDryRunResult> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   let runId = 0;
   try {
@@ -398,7 +396,6 @@ export async function diagnoseHistoricalSalesCostKey(input: {
 }
 
 export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Record<string, unknown> | null> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const run = await pool.query(
     `SELECT id,algorithm_version,status,source_cutoff_at,requested_company_ids,created_by,created_at,
             completed_at,applied_by,applied_at,audit_hash,total_sales_rows,changed_rows,blocked_rows,
@@ -508,7 +505,6 @@ export async function applyHistoricalSalesCostRepair(input: {
   auditHash: string;
   appliedBy: string;
 }): Promise<{ runId: number; appliedRows: number; auditHash: string }> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");

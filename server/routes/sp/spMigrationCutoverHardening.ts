@@ -1,37 +1,8 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { sql } from "drizzle-orm";
-import { db } from "../../db";
 import { logger } from "../../lib/logger";
-import { ensureCutoverSchema, getCompanyCutoverLock } from "./spMigrationCutoverState";
+import { getCompanyCutoverLock } from "./spMigrationCutoverState";
 
 const installedApps = new WeakSet<object>();
-let hardeningPromise: Promise<void> | null = null;
-
-export function ensureCutoverHardening(): Promise<void> {
-  if (!hardeningPromise) {
-    hardeningPromise = (async () => {
-      await ensureCutoverSchema();
-      await db.execute(
-        sql.raw(`
-        CREATE UNIQUE INDEX IF NOT EXISTS sp_migration_cutovers_one_live_source
-        ON sp_migration_cutovers(source_company_id)
-        WHERE status IN ('prepared', 'active')
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE UNIQUE INDEX IF NOT EXISTS sp_migration_cutovers_one_live_target
-        ON sp_migration_cutovers(target_company_id)
-        WHERE status IN ('prepared', 'active')
-      `)
-      );
-    })().catch((error) => {
-      hardeningPromise = null;
-      throw error;
-    });
-  }
-  return hardeningPromise;
-}
 
 function collectExplicitCompanyIds(req: Request): number[] {
   const values = [

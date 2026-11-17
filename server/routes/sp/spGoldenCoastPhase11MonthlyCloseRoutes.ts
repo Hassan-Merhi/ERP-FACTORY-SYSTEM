@@ -2,7 +2,11 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, ledgerAccounts, spProfitSplits, vouchers } from "@shared/schema";
-import { getLatestSpProfitCorrection, ensureSpProfitManualCorrectionStorage, isDeveloperForProfitCorrection, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE } from "./spProfitManualCorrections";
+import {
+  getLatestSpProfitCorrection,
+  isDeveloperForProfitCorrection,
+  GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE,
+} from "./spProfitManualCorrections";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
@@ -380,9 +384,8 @@ async function readiness(req: Request, res: Response): Promise<void> {
             )
             .limit(1)
         : [];
-      const voucher = journal?.voucherType === "Journal"
-        ? { id: journal.id, voucherNumber: journal.voucherNumber }
-        : null;
+      const voucher =
+        journal?.voucherType === "Journal" ? { id: journal.id, voucherNumber: journal.voucherNumber } : null;
       res.json({ ready: false, alreadyClosed: true, split: existing[0], voucher, journalVerified: Boolean(voucher) });
       return;
     }
@@ -391,10 +394,12 @@ async function readiness(req: Request, res: Response): Promise<void> {
     res.json({
       ready: pending.isZero(),
       alreadyClosed: false,
-      plan: isDeveloperForProfitCorrection(req) ? plan : (() => {
-        const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = plan;
-        return publicPlan;
-      })(),
+      plan: isDeveloperForProfitCorrection(req)
+        ? plan
+        : (() => {
+            const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = plan;
+            return publicPlan;
+          })(),
       splitPct: GOLDEN_COAST_PHASE11_SPLIT_PCT,
       profitPendingDistributionBalanceUsd: pending.toFixed(2),
     });
@@ -490,7 +495,6 @@ async function closeMonth(req: Request, res: Response): Promise<void> {
   }
 }
 
-
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const TARGET_RE = /^-?\d{1,10}(?:\.\d{1,2})?$/;
 
@@ -518,12 +522,14 @@ async function readProfitCorrection(req: Request, res: Response): Promise<void> 
     }
     const { plan } = await buildPlan(db, companyId, { periodMonth, clientRequestId: "developer-preview" }, false);
     const latest = await getLatestSpProfitCorrection(db, companyId, periodMonth);
-    const history = resultRows(await db.execute(sql`
+    const history = resultRows(
+      await db.execute(sql`
       SELECT id, target_net_profit, original_net_profit, reason, actor_name, created_at
       FROM sp_profit_manual_corrections
       WHERE company_id = ${companyId} AND period_month = ${periodMonth}
       ORDER BY id DESC LIMIT 25
-    `)).map((item) => ({
+    `)
+    ).map((item) => ({
       id: Number(item.id),
       targetNetProfit: String(item.target_net_profit),
       originalNetProfit: String(item.original_net_profit),
@@ -531,7 +537,8 @@ async function readProfitCorrection(req: Request, res: Response): Promise<void> 
       actorName: item.actor_name == null ? null : String(item.actor_name),
       createdAt: String(item.created_at),
     }));
-    const [closed] = await db.select({ id: spProfitSplits.id })
+    const [closed] = await db
+      .select({ id: spProfitSplits.id })
       .from(spProfitSplits)
       .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, periodMonth)))
       .limit(1);
@@ -572,7 +579,6 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
       });
       return;
     }
-    await ensureSpProfitManualCorrectionStorage();
     const target = new Decimal(rawTarget).toFixed(2);
     const actorId = String(req.user?.id ?? req.session.userId ?? "");
     if (!actorId) {
@@ -582,12 +588,17 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
     const saved = await db.transaction(async (tx) => {
       // Same company lock as the actual Phase 11 close prevents corrections racing splits.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(73111, ${companyId})`);
-      const [closed] = await tx.select({ id: spProfitSplits.id })
+      const [closed] = await tx
+        .select({ id: spProfitSplits.id })
         .from(spProfitSplits)
         .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, periodMonth)))
         .limit(1);
       if (closed) {
-        throw new Phase11RouteError("This month is finalized and cannot be manually edited", "GC_PROFIT_PERIOD_CLOSED", 409);
+        throw new Phase11RouteError(
+          "This month is finalized and cannot be manually edited",
+          "GC_PROFIT_PERIOD_CLOSED",
+          409
+        );
       }
       const { plan } = await buildPlan(tx, companyId, { periodMonth, clientRequestId: "developer-override" }, false);
       const sourceNet = new Decimal(plan.netProfitLossUsd);
@@ -595,14 +606,17 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
       // A signed profit difference needs a real counterparty in its closing Journal.
       // This suspense account remains reconcilable as an asset / contra-asset.
       if (!difference.isZero()) {
-        const existing = await tx.select({ id: ledgerAccounts.id })
+        const existing = await tx
+          .select({ id: ledgerAccounts.id })
           .from(ledgerAccounts)
-          .where(and(
-            eq(ledgerAccounts.companyId, companyId),
-            eq(ledgerAccounts.subType, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE),
-            eq(ledgerAccounts.active, true),
-            isNull(ledgerAccounts.deletedAt)
-          ))
+          .where(
+            and(
+              eq(ledgerAccounts.companyId, companyId),
+              eq(ledgerAccounts.subType, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE),
+              eq(ledgerAccounts.active, true),
+              isNull(ledgerAccounts.deletedAt)
+            )
+          )
           .limit(2);
         if (existing.length > 1) {
           throw new Phase11RouteError("Ambiguous SP profit correction account", "GC_PROFIT_ACCOUNT_AMBIGUOUS", 409);
@@ -621,7 +635,8 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
           });
         }
       }
-      const row = resultRows(await tx.execute(sql`
+      const row = resultRows(
+        await tx.execute(sql`
         INSERT INTO sp_profit_manual_corrections (
           company_id, period_month, target_net_profit, original_net_profit,
           reason, actor_id, actor_name
@@ -630,8 +645,14 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
           ${reason}, ${actorId}, ${String(req.session.username ?? req.user?.username ?? "")}
         )
         RETURNING id
-      `))[0];
-      return { correctionId: Number(row?.id), sourceNetProfit: sourceNet.toFixed(2), effectiveNetProfit: target, difference: difference.toFixed(2) };
+      `)
+      )[0];
+      return {
+        correctionId: Number(row?.id),
+        sourceNetProfit: sourceNet.toFixed(2),
+        effectiveNetProfit: target,
+        difference: difference.toFixed(2),
+      };
     });
     res.setHeader("Cache-Control", "private, no-store");
     res.json(saved);
