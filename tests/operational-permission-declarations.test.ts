@@ -87,15 +87,6 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Admin/Developer-only save of the workbook appearance settings (the route's own requireRole guard and effective-role check); it produces no export.",
   "GET /api/pos/shifts/current":
     "Registered before GET /api/pos/shifts/:id; any POS user reads their own open shift, so it must not inherit the shift-summary permission.",
-  "POST /api/pos/send-stock-pdf-backend":
-    "Fast POS WhatsApp sender. It was registered ahead of the former operational-permission middleware, so exp_stock_report was listed for it but never enforced. Kept as it behaved; the owner should confirm whether POS stock PDFs should require the export permission.",
-  "POST /api/pos/send-stock-pdf": "Same fast POS stock PDF sender under its second path; see above.",
-  "POST /api/pos/send-invoice-pdf-backend":
-    "Fast POS invoice sender; exp_pdf was listed but never enforced for the same registration-order reason. Kept as it behaved.",
-  "POST /api/pos/send-whatsapp-pdf-upload":
-    "Fast POS uploaded-PDF sender; exp_whatsapp_send was listed but never enforced for the same registration-order reason. Kept as it behaved.",
-  "POST /api/pos/send-invoice-whatsapp":
-    "Fast POS invoice sender under its second path; no export permission was ever listed for it.",
 };
 
 const MUTATION = new Set(["POST", "PUT", "PATCH", "DELETE"]);

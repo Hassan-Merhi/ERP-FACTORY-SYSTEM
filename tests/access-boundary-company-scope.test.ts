@@ -141,19 +141,25 @@ async function runBoundary(req: any) {
   return { res, next, requestContext, databaseContext };
 }
 
-describe("cross-company reference declarations", () => {
-  it("allows only the two explicit GET reference surfaces", () => {
-    const referenceRead = (method: string, path: string) =>
-      resolver.resolve(method, path)?.crossCompany.has("reference-read") ?? false;
-    expect(referenceRead("GET", "/api/locations")).toBe(true);
-    expect(referenceRead("get", "/api/ledger-accounts")).toBe(true);
-    expect(referenceRead("POST", "/api/locations")).toBe(false);
-    expect(referenceRead("GET", "/api/vouchers")).toBe(false);
-    const declared = manifest.routes
-      .filter((rule) => rule.crossCompany?.includes("reference-read"))
-      .map((rule) => rule.id);
-    expect(declared.sort()).toEqual(
-      ["GET /api/ledger-accounts#1", "GET /api/ledger-accounts#2", "GET /api/locations#1"].sort()
+describe("cross-company allowances", () => {
+  it("lets no reference read reach another company", () => {
+    // Locations and ledger accounts once declared a cross-company reference-read
+    // allowance that requireAuth refused anyway; it was removed, so these reads
+    // are bound to the active company like every ordinary route.
+    for (const [method, path] of [
+      ["GET", "/api/locations"],
+      ["GET", "/api/ledger-accounts"],
+    ]) {
+      expect([...(resolver.resolve(method, path)?.crossCompany ?? [])]).toEqual([]);
+    }
+    const allowances = new Set(manifest.routes.flatMap((rule) => rule.crossCompany ?? []));
+    expect([...allowances].sort()).toEqual(
+      [
+        "account-migration-source",
+        "authorized-companies",
+        "developer-role-administration",
+        "developer-user-location",
+      ].sort()
     );
   });
 });
@@ -317,51 +323,23 @@ describe("access boundary company scope", () => {
     });
   });
 
-  it("requires a privileged role for the narrow cross-company reference reads", async () => {
-    const { res, next } = await runBoundary(
-      request({ path: "/api/locations", query: { companyId: 20 }, currentRole: "Manager" })
-    );
-
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toEqual({
-      message: "Cross-company reference access requires Admin, Owner, or Developer",
-      code: "CROSS_COMPANY_REFERENCE_FORBIDDEN",
-    });
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it("still requires canonical membership for an Admin cross-company reference read", async () => {
-    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
-    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Admin" }]);
-    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Admin" });
-
-    const { res } = await runBoundary(
-      request({ path: "/api/ledger-accounts", query: { companyId: 20 }, currentRole: "Admin" })
-    );
-
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({ code: "COMPANY_ACCESS_DENIED" });
-  });
-
-  it("allows an assigned Admin reference read and narrows the database scope to that company", async () => {
-    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
-    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
-      { companyId: 10, role: "Admin" },
-      { companyId: 20, role: "Owner" },
-    ]);
-    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Admin" });
-
-    const result = await runBoundary(
-      request({ path: "/api/locations", query: { companyId: 20 }, currentRole: "Admin" })
-    );
-
-    expect(result.next).toHaveBeenCalledOnce();
-    expect(result.databaseContext).toEqual({
-      kind: "tenant",
-      companyId: 10,
-      authorizedCompanyIds: [20],
-      scopeMode: "authorized-companies",
-    });
+  it("refuses another company's reference data to every role, member or not", async () => {
+    for (const role of ["Manager", "Admin", "Owner", "Developer"]) {
+      harness.getActiveCompanyPermissionContext.mockResolvedValue(
+        canonicalContext({ role, developerBypass: role === "Developer" })
+      );
+      harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
+        { companyId: 10, role },
+        { companyId: 20, role },
+      ]);
+      harness.storage.getUser.mockResolvedValue({ id: "user-1", role });
+      for (const path of ["/api/locations", "/api/ledger-accounts"]) {
+        const { res, next } = await runBoundary(request({ path, query: { companyId: 20 }, currentRole: role }));
+        expect(res.statusCode, `${role} ${path}`).toBe(403);
+        expect(res.body, `${role} ${path}`).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
+        expect(next).not.toHaveBeenCalled();
+      }
+    }
   });
 
   it("rejects malformed secondary intercompany company fields", async () => {
