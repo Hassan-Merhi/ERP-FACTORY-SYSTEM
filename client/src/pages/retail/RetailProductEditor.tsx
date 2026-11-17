@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { confirmAction } from "@/components/ConfirmHost";
@@ -332,20 +333,24 @@ export function ProductEditor({
                 </Button>
               )}
             </div>
-            <select
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              value={draft.brandId}
-              onChange={(e) => setDraft({ ...draft, brandId: e.target.value ? Number(e.target.value) : "" })}
+            <Select
+              value={draft.brandId === "" ? "__none__" : String(draft.brandId)}
+              onValueChange={(v) => setDraft({ ...draft, brandId: v !== "__none__" ? Number(v) : "" })}
             >
-              <option value="">{NO_BRAND}</option>
-              {brands
-                .filter((brand) => !brand.isNoBrand)
-                .map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-            </select>
+              <SelectTrigger className="h-10 w-full text-sm" aria-label="Brand">
+                <SelectValue placeholder={NO_BRAND} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{NO_BRAND}</SelectItem>
+                {brands
+                  .filter((brand) => !brand.isNoBrand)
+                  .map((brand) => (
+                    <SelectItem key={brand.id} value={String(brand.id)}>
+                      {brand.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
             {addingBrand && (
               <div className="flex gap-2">
                 <Input
@@ -636,27 +641,31 @@ export function ProductEditor({
                     </div>
                     {variant.stocks.map((stock, stockIndex) => (
                       <div key={`${variantIndex}-${stockIndex}`} className="flex gap-2">
-                        <select
-                          className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
-                          value={stock.locationId}
-                          onChange={(e) => {
+                        <Select
+                          value={stock.locationId === "" ? "__none__" : String(stock.locationId)}
+                          onValueChange={(v) => {
                             const stocks = variant.stocks.map((item, i) =>
                               i === stockIndex
-                                ? { ...item, locationId: e.target.value ? Number(e.target.value) : ("" as const) }
+                                ? { ...item, locationId: v !== "__none__" ? Number(v) : ("" as const) }
                                 : item
                             );
                             updateVariant(variantIndex, { stocks });
                           }}
                         >
-                          <option value="">Select location</option>
-                          {locations
-                            .filter((location) => location.active !== false)
-                            .map((location) => (
-                              <option key={location.id} value={location.id}>
-                                {location.name}
-                              </option>
-                            ))}
-                        </select>
+                          <SelectTrigger className="h-10 flex-1 text-sm" aria-label="Stock location">
+                            <SelectValue placeholder="Select location" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select location</SelectItem>
+                            {locations
+                              .filter((location) => location.active !== false)
+                              .map((location) => (
+                                <SelectItem key={location.id} value={String(location.id)}>
+                                  {location.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                         <Input
                           className="w-36"
                           type="number"

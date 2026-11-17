@@ -7,9 +7,10 @@
  * under ./accountslegacy. The account table, statement view and the existing
  * AccountDialogs bundle are unchanged.
  */
+import { SearchField } from "@/components/ui/search-field";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, FileSearch, Layers, Plus, Search, Wallet, X } from "lucide-react";
+import { ChevronDown, FileSearch, Layers, Plus, Wallet } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/PageHeader";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -360,27 +360,14 @@ export default function Accounts() {
                 <div className="space-y-4">
                   <ZambiaCashCurrencyTransfer />
                   {/* Search — command-palette style */}
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search accounts by name or code…"
-                      value={model.searchTerm}
-                      onChange={(e) => model.setSearchTerm(e.target.value)}
-                      className="h-12 rounded-2xl border-slate-200 bg-white/90 pl-11 pr-10 text-sm shadow-sm transition-colors focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-slate-700/80 dark:bg-[#111e31] dark:focus-visible:border-blue-500"
-                      data-testid="input-accounts-search"
-                    />
-                    {model.searchTerm && (
-                      <button
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-slate-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:bg-slate-800"
-                        type="button"
-                        aria-label="Clear account search"
-                        onClick={() => model.setSearchTerm("")}
-                        data-testid="button-accounts-search-clear"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                  <SearchField
+                    value={model.searchTerm}
+                    onValueChange={model.setSearchTerm}
+                    placeholder="Search accounts by name or code…"
+                    className="h-12 rounded-2xl border-slate-200 bg-white/90 text-sm shadow-sm transition-colors focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-slate-700/80 dark:bg-[#111e31] dark:focus-visible:border-blue-500"
+                    data-testid="input-accounts-search"
+                    clearTestId="button-accounts-search-clear"
+                  />
 
                   {model.accountsLoading ? (
                     <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">

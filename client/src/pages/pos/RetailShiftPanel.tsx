@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { makeKey, money } from "./retailPosTypes";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface RetailShift {
   id: number;
@@ -99,15 +100,16 @@ export function RetailShiftPanel({
   const shift = currentQuery.data ?? null;
   // When a shift is open its drawer account is fixed; otherwise the selected
   // POS Cash account (or configured location default) determines the balance.
-  const drawerAccountId = shift ? shift.cashAccountId : cashAccountId ?? null;
+  const drawerAccountId = shift ? shift.cashAccountId : (cashAccountId ?? null);
   const ledgerBalanceQuery = useQuery<DrawerLedgerBalance>({
     queryKey: ["retail-shift-ledger-balance", locationId, drawerAccountId],
-    queryFn: async () => json<DrawerLedgerBalance>(
-      await fetch(
-        `/api/pos/retail/shift-ledger-balance?locationId=${locationId}${drawerAccountId ? `&cashAccountId=${drawerAccountId}` : ""}`,
-        { credentials: "include" }
-      )
-    ),
+    queryFn: async () =>
+      json<DrawerLedgerBalance>(
+        await fetch(
+          `/api/pos/retail/shift-ledger-balance?locationId=${locationId}${drawerAccountId ? `&cashAccountId=${drawerAccountId}` : ""}`,
+          { credentials: "include" }
+        )
+      ),
     enabled: Boolean(locationId),
     staleTime: 5_000,
   });
@@ -223,9 +225,7 @@ export function RetailShiftPanel({
               ) : ledgerBalanceQuery.data ? (
                 <>
                   <strong>{money(Number(ledgerBalanceQuery.data.balance))}</strong>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {ledgerBalanceQuery.data.accountName}
-                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">{ledgerBalanceQuery.data.accountName}</span>
                 </>
               ) : (
                 <span className="text-muted-foreground">Loading ledger balance...</span>
@@ -260,9 +260,12 @@ export function RetailShiftPanel({
             </div>
 
             <div className="text-xs text-muted-foreground" data-testid="retail-shift-current-ledger-balance">
-              Current cash ledger balance: {ledgerBalanceQuery.data
+              Current cash ledger balance:{" "}
+              {ledgerBalanceQuery.data
                 ? money(Number(ledgerBalanceQuery.data.balance))
-                : ledgerBalanceQuery.isError ? "Unavailable" : "Loading..."}
+                : ledgerBalanceQuery.isError
+                  ? "Unavailable"
+                  : "Loading..."}
               {ledgerBalanceQuery.data ? ` · ${ledgerBalanceQuery.data.accountName}` : ""}
             </div>
 
@@ -285,20 +288,23 @@ export function RetailShiftPanel({
                 placeholder="Amount"
                 onChange={(event) => setMovementAmount(Number(event.target.value))}
               />
-              <select
-                aria-label="Cash movement reason"
-                className="h-10 rounded-md border bg-background px-2 text-sm"
-                value={movementReasonCode}
-                onChange={(event) => setMovementReasonCode(event.target.value)}
+              <Select
+                value={movementReasonCode || "__none__"}
+                onValueChange={(v) => setMovementReasonCode(v === "__none__" ? "" : v)}
               >
-                <option value="">Reason…</option>
-                {(reasonsQuery.data?.reasons ?? []).map((reason) => (
-                  <option key={reason.reasonCode} value={reason.reasonCode} disabled={reason.source === "none"}>
-                    {reason.label ?? reason.reasonCode}
-                    {reason.source === "none" ? " (no account mapped)" : ""}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Cash movement reason" className="h-10 text-sm">
+                  <SelectValue placeholder="Reason…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Reason…</SelectItem>
+                  {(reasonsQuery.data?.reasons ?? []).map((reason) => (
+                    <SelectItem key={reason.reasonCode} value={reason.reasonCode} disabled={reason.source === "none"}>
+                      {reason.label ?? reason.reasonCode}
+                      {reason.source === "none" ? " (no account mapped)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 value={movementReason}
                 placeholder="Cash in/out reason"

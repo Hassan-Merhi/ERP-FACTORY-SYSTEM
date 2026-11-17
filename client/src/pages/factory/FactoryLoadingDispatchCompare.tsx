@@ -19,7 +19,6 @@ import {
   Package,
   RefreshCw,
   Printer,
-  Search,
   ShieldCheck,
   Truck,
 } from "lucide-react";
@@ -38,7 +37,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,6 +58,7 @@ import {
   Findings,
   getComparison,
 } from "./FactoryLoadingDispatchCompareParts";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function FactoryLoadingDispatchCompare() {
   const { orderId: orderIdText, dispatchId: dispatchIdText } = useParams<{ orderId: string; dispatchId?: string }>();
@@ -509,19 +508,17 @@ export default function FactoryLoadingDispatchCompare() {
                   <Badge variant="secondary">{printNumber(rows.length)} articles</Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      className="h-9 pl-9"
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setVisibleCount(PAGE_SIZE);
-                      }}
-                      placeholder="Search article or name"
-                      data-testid="input-compare-article-search"
-                    />
-                  </div>
+                  <SearchField
+                    wrapperClassName="min-w-[180px] flex-1 sm:max-w-xs"
+                    className="h-9"
+                    value={search}
+                    onValueChange={(v) => {
+                      setSearch(v);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
+                    placeholder="Search article or name"
+                    data-testid="input-compare-article-search"
+                  />
                   <div className="max-w-full overflow-x-auto">
                     <TabsList className="w-max" aria-label="Filter article comparison status">
                       {(

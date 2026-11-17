@@ -1,4 +1,5 @@
-import { Trash2, Search, CheckCircle2, Loader2, Send } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
+import { Trash2, CheckCircle2, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,15 +87,7 @@ export function AccountDialogs({
 
             <div className="space-y-2">
               <Label>WhatsApp Chat</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search chats..."
-                  className="pl-8"
-                  value={waChatSearch}
-                  onChange={(e) => setWaChatSearch(e.target.value)}
-                />
-              </div>
+              <SearchField value={waChatSearch} onValueChange={setWaChatSearch} placeholder="Search chats..." />
               <div className="border rounded-md max-h-48 overflow-y-auto mt-2">
                 {waChatsLoading ? (
                   <div className="p-4 text-center text-sm text-muted-foreground">Loading chats...</div>

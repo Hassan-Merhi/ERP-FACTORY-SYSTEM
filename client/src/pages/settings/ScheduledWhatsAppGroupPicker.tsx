@@ -5,9 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, RefreshCw, Search, Users } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Users } from "lucide-react";
 import type { ClientErrorLike } from "@/lib/clientError";
 
 export interface ScheduledGroup {
@@ -125,17 +126,15 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
     <div className="space-y-4" data-testid="scheduled-whatsapp-group-picker">
       <div>
         <Label htmlFor="scheduled-wa-search">Search WhatsApp groups</Label>
-        <div className="relative mt-2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="scheduled-wa-search"
-            className="pl-9"
-            placeholder="Search group name or chat ID..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            data-testid="input-scheduled-wa-group-search"
-          />
-        </div>
+        <SearchField
+          id="scheduled-wa-search"
+          wrapperClassName="mt-2"
+          placeholder="Search group name or chat ID..."
+          aria-label="Search WhatsApp groups"
+          value={search}
+          onValueChange={setSearch}
+          data-testid="input-scheduled-wa-group-search"
+        />
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">

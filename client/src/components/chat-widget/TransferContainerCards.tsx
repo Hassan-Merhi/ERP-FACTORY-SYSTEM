@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { ArrowLeftRight, XCircle, Loader2, FileCheck, X, Download, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -164,11 +165,10 @@ export function StockTransferConfirmCard({
                 >
                   <div className="grid grid-cols-[1fr_50px_60px_auto] gap-1 items-center">
                     {hasChoice ? (
-                      <select
-                        className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
-                        value={item.selectedId}
-                        onChange={(e) => {
-                          const id = Number(e.target.value);
+                      <Select
+                        value={String(item.selectedId)}
+                        onValueChange={(value) => {
+                          const id = Number(value);
                           const c = candidates.find((c) => c.id === id);
                           if (c)
                             setEditItems((prev) =>
@@ -178,13 +178,21 @@ export function StockTransferConfirmCard({
                             );
                         }}
                       >
-                        {candidates.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                            {c.code ? ` (${c.code})` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          className="h-7 w-full px-1.5 text-xs font-medium text-foreground"
+                          aria-label="Item"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {candidates.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.name}
+                              {c.code ? ` (${c.code})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <span className="truncate text-foreground font-medium">
                         {item.selectedName}

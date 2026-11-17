@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmAction } from "@/components/ConfirmHost";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Choice = { id: number; name: string; code?: string; accountType?: string };
 type Wallet = {
@@ -184,18 +185,22 @@ export function FactoryFxAgentWalletCard({
                     onChange={(e) => setAccountSearch(e.target.value)}
                   />
                 )}
-                <select
-                  className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-                  value={scopeAccountId == null ? accountId : String(scopeAccountId)}
-                  onChange={(e) => setAccountId(e.target.value)}
+                <Select
+                  value={(scopeAccountId == null ? accountId : String(scopeAccountId)) || "__none__"}
+                  onValueChange={(v) => setAccountId(v === "__none__" ? "" : v)}
                 >
-                  <option value="">Choose a ledger account</option>
-                  {choices.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.code})
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full h-10 text-sm" aria-label="Ledger account">
+                    <SelectValue placeholder="Choose a ledger account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Choose a ledger account</SelectItem>
+                    {choices.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name} ({a.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   disabled={write.isPending || !(scopeAccountId || Number(accountId))}
                   variant="secondary"
@@ -225,17 +230,18 @@ export function FactoryFxAgentWalletCard({
               <section className="space-y-2">
                 {scopeAccountId == null && <h4 className="text-sm font-semibold">Choose agent</h4>}
                 {scopeAccountId == null && (
-                  <select
-                    className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-                    value={active?.wallet.id || ""}
-                    onChange={(e) => setWalletId(e.target.value)}
-                  >
-                    {visibleWallets.map((w) => (
-                      <option key={w.wallet.id} value={w.wallet.id}>
-                        {w.wallet.accountName}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={String(active?.wallet.id || "")} onValueChange={setWalletId}>
+                    <SelectTrigger className="w-full h-10 text-sm" aria-label="Choose agent">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleWallets.map((w) => (
+                        <SelectItem key={w.wallet.id} value={String(w.wallet.id)}>
+                          {w.wallet.accountName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 {!!active && (
                   <p className="text-xs text-muted-foreground">
@@ -392,31 +398,36 @@ export function FactoryFxAgentWalletCard({
                       ? "Supplier receives USD " + fmt(Number(eurAmount) * Number(settleRate))
                       : "Enter the payment details"}
                   </p>
-                  <select
-                    className="w-full h-10 border rounded-md bg-background px-2 text-sm"
+                  <Select
                     value={targetKind}
-                    onChange={(e) => {
-                      setTargetKind(e.target.value as "factorySupplier" | "ledger");
+                    onValueChange={(v) => {
+                      setTargetKind(v as "factorySupplier" | "ledger");
                       setTargetId("");
                     }}
                   >
-                    <option value="factorySupplier">Factory supplier</option>
-                    <option value="ledger">Ledger account</option>
-                  </select>
-                  <select
-                    className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-                    value={targetId}
-                    onChange={(e) => setTargetId(e.target.value)}
-                  >
-                    <option value="">Choose USD recipient</option>
-                    {(targetKind === "factorySupplier" ? data?.factorySuppliers || [] : data?.candidates || [])
-                      .filter((a) => targetKind !== "ledger" || a.id !== active.wallet.ledgerAccountId)
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                  </select>
+                    <SelectTrigger className="w-full h-10 text-sm" aria-label="USD recipient type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="factorySupplier">Factory supplier</SelectItem>
+                      <SelectItem value="ledger">Ledger account</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={targetId || "__none__"} onValueChange={(v) => setTargetId(v === "__none__" ? "" : v)}>
+                    <SelectTrigger className="w-full h-10 text-sm" aria-label="USD recipient">
+                      <SelectValue placeholder="Choose USD recipient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Choose USD recipient</SelectItem>
+                      {(targetKind === "factorySupplier" ? data?.factorySuppliers || [] : data?.candidates || [])
+                        .filter((a) => targetKind !== "ledger" || a.id !== active.wallet.ledgerAccountId)
+                        .map((a) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     size="sm"
                     disabled={

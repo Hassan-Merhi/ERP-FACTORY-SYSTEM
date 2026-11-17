@@ -7,15 +7,15 @@
  * editing actions and the fact that toggling "Unpriced" resets the group
  * filter and unhides every group.
  */
-import { Download, Eye, EyeOff, FileSpreadsheet, Layers, MapPin, Search, Tag, Upload } from "lucide-react";
+import { Download, Eye, EyeOff, FileSpreadsheet, Layers, MapPin, Tag, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import type { PosPriceListModel } from "./usePosPriceListModel";
+import { SearchField } from "@/components/ui/search-field";
 
 export function PriceListTitleBar({ model }: { model: PosPriceListModel }) {
   const { isAllMode, selectedLocation, selectedLocationId, canEdit, masters } = model;
@@ -159,16 +159,14 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
   if (!selectedLocationId) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b shrink-0">
-      <div className="relative flex-1 min-w-[180px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          data-testid="input-price-search"
-          className="pl-9 h-9"
-          placeholder="Search by name or code…"
-          value={model.search}
-          onChange={(e) => model.setSearch(e.target.value)}
-        />
-      </div>
+      <SearchField
+        data-testid="input-price-search"
+        wrapperClassName="flex-1 min-w-[180px]"
+        className="h-9"
+        placeholder="Search by name or code…"
+        value={model.search}
+        onValueChange={model.setSearch}
+      />
       {!model.isAllMode && (
         <div className="flex shrink-0 items-center gap-2" aria-label="Sales history date range">
           <span className="hidden lg:inline text-xs text-muted-foreground">Sales period</span>

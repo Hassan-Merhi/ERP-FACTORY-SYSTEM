@@ -1,6 +1,7 @@
+import { SearchField } from "@/components/ui/search-field";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Loader2, MessageCircle, Search, Send } from "lucide-react";
+import { CalendarClock, Check, Loader2, MessageCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -222,15 +223,7 @@ export function PropertiesWhatsAppStatement({
                   </Button>
                 ))}
               </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  placeholder="Search connected WhatsApp chats"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
+              <SearchField value={search} onValueChange={setSearch} placeholder="Search connected WhatsApp chats" />
               <div className="max-h-36 overflow-y-auto rounded-md border">
                 {chatsLoading && <p className="p-3 text-xs text-muted-foreground">Loading connected chats…</p>}
                 {!chatsLoading && displayedChats.length === 0 && (

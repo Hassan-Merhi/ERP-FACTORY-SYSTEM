@@ -37,6 +37,7 @@ import type { useFactoryLocationInventory } from "./FactoryLocationInventoryMode
 import { createFactoryLocationProductRenderers } from "./FactoryLocationInventoryProductRenderers";
 import { createFactoryLocationProductMetrics } from "./factorylocationinventory/productMetrics";
 import { FactoryLocationInventoryProductFooterDialogs } from "./factorylocationinventory/ProductFooterDialogs";
+import { SearchField } from "@/components/ui/search-field";
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
@@ -374,16 +375,13 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       <div className="inventory-table-shell rounded-xl border overflow-hidden w-full" ref={printRef}>
         {/* Toolbar strip */}
         <div className="inventory-toolbar flex flex-col gap-2 px-4 py-3 border-b bg-muted/20">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search product or article code..."
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-              className="inventory-search-input pl-9"
-              data-testid="input-search-products"
-            />
-          </div>
+          <SearchField
+            placeholder="Search product or article code..."
+            value={productSearch}
+            onValueChange={setProductSearch}
+            className="inventory-search-input"
+            data-testid="input-search-products"
+          />
           <div className="flex items-center gap-2 flex-wrap">
             <Popover
               onOpenChange={(open) => {

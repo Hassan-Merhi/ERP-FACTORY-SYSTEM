@@ -154,11 +154,29 @@ const entries: Entry[] = [
     fr: "Migration du compte depuis {0} : {1}",
   },
   // POS optional sale / stock-aware reactivation
-  { en: "Could not make this POS sale optional", ar: "تعذر جعل عملية بيع نقطة البيع اختيارية", fr: "Impossible de rendre cette vente PDV facultative" },
+  {
+    en: "Could not make this POS sale optional",
+    ar: "تعذر جعل عملية بيع نقطة البيع اختيارية",
+    fr: "Impossible de rendre cette vente PDV facultative",
+  },
   { en: "POS sale made optional", ar: "أصبحت عملية بيع نقطة البيع اختيارية", fr: "Vente PDV rendue facultative" },
-  { en: "POS optional change failed", ar: "فشل تغيير حالة بيع نقطة البيع", fr: "Échec de la modification du statut de la vente PDV" },
+  {
+    en: "POS optional change failed",
+    ar: "فشل تغيير حالة بيع نقطة البيع",
+    fr: "Échec de la modification du statut de la vente PDV",
+  },
   { en: "Make Optional", ar: "جعل العملية اختيارية", fr: "Rendre facultatif" },
   { en: "Make POS Optional", ar: "جعل بيع نقطة البيع اختياريًا", fr: "Rendre la vente PDV facultative" },
+  {
+    en: "Failed to fetch agent ledger accounts",
+    ar: "فشل في جلب حسابات دفتر الوكلاء",
+    fr: "Impossible de récupérer les comptes du grand livre des agents",
+  },
+  {
+    en: "balanceBasis must be book or current",
+    ar: "يجب أن يكون أساس الرصيد دفتريًا أو حاليًا",
+    fr: "La base du solde doit être comptable ou actuelle",
+  },
   {
     en: "This suspends the sale from ERP accounting and POS totals and restores its sold items to the original stock location at their recorded cost. Only make a posted sale optional when it is genuinely canceled or being corrected. You can reactivate it from Optional Vouchers, subject to stock and accounting-period checks.",
     ar: "يوقف هذا البيع عن حسابات النظام وإجماليات نقطة البيع ويعيد الأصناف إلى موقع المخزون الأصلي بتكلفتها المسجلة. استخدم هذا الخيار فقط لإلغاء بيع فعليًا أو تصحيحه. يمكن إعادة تنشيطه من السندات الاختيارية بعد التحقق من المخزون والفترة المحاسبية.",
@@ -170,7 +188,7 @@ const entries: Entry[] = [
     fr: "La vente {0} est maintenant facultative. Son stock a été rétabli ; vous pourrez réactiver la vente depuis les pièces facultatives.",
   },
   {
-    en: "Make POS ${optionalVoucher?.voucherNumber ?? \"\"} optional?",
+    en: 'Make POS ${optionalVoucher?.voucherNumber ?? ""} optional?',
     ar: "هل تريد جعل عملية البيع {0} اختيارية؟",
     fr: "Rendre la vente PDV {0} facultative ?",
   },
