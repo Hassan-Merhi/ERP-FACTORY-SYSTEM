@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Package, XCircle, Loader2, Check, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StockAdjustmentDraft, VoucherSearchResult, StockItemDraft, PriceUpdateDraft } from "./chatWidgetTypes";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // ── Stock Adjustment Confirmation Card ───────────────────────────────
 export function StockAdjustmentConfirmCard({
@@ -262,10 +263,7 @@ export function VoucherSearchResultsCard({
       <div className="divide-y">
         {results.map((v) => {
           const tab = VOUCHER_TYPE_TAB[v.voucherType] ?? "payment";
-          const amount = parseFloat(v.totalAmount).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
+          const amount = formatUsd(parseFloat(v.totalAmount), 2);
           return (
             <div key={v.id} className="px-3 py-2 flex items-start justify-between gap-2 hover-elevate">
               <div className="min-w-0 flex-1">
@@ -283,7 +281,7 @@ export function VoucherSearchResultsCard({
                 <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{v.description || "—"}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] text-muted-foreground">{v.voucherDate}</span>
-                  <span className="text-[11px] font-medium text-foreground">${amount}</span>
+                  <span className="text-[11px] font-medium text-foreground">{amount}</span>
                 </div>
               </div>
               <Button

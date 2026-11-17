@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import { formatUsd } from "@/lib/moneyDisplay";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { useState } from "react";
@@ -67,10 +68,7 @@ interface SpSale {
 
 function money(value: unknown): string {
   const amount = Number(value ?? 0);
-  return `$${(Number.isFinite(amount) ? amount : 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatUsd(Number.isFinite(amount) ? amount : 0, 2);
 }
 
 export default function SpOverview() {
