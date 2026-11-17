@@ -23,7 +23,6 @@ import { checkFactoryWorkerContractAccess, getFactoryCompanyId, writeDaybookEntr
 import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 import { sumMoney } from "../../lib/money";
 
-
 /**
  * Persist absence for the closed inactive interval. Use calendar dates (not local
  * Date increments) and upsert so a previously defaulted Present cannot survive
@@ -50,10 +49,13 @@ async function recordInactiveDays(
       notes: "Auto-absent (inactive)",
     });
     if (batch.length === 500 || day + 86_400_000 >= end) {
-      await db.insert(factoryAttendance).values(batch).onConflictDoUpdate({
-        target: [factoryAttendance.workerId, factoryAttendance.attendanceDate],
-        set: { status: "Absent", notes: "Auto-absent (inactive)", updatedAt: new Date() },
-      });
+      await db
+        .insert(factoryAttendance)
+        .values(batch)
+        .onConflictDoUpdate({
+          target: [factoryAttendance.workerId, factoryAttendance.attendanceDate],
+          set: { status: "Absent", notes: "Auto-absent (inactive)", updatedAt: new Date() },
+        });
       batch.length = 0;
     }
   }
@@ -219,7 +221,9 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const [previousWorker] = await db.select().from(factoryWorkers)
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
         .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
       if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
       const todayForStatus = getClientDate(req);
@@ -269,7 +273,8 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
         await recordInactiveDays(db, companyId, updated.id, todayForStatus, tomorrow);
       }
       if (becomingActive) {
-        const inactiveStart = previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || todayForStatus;
+        const inactiveStart =
+          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || todayForStatus;
         await recordInactiveDays(db, companyId, updated.id, inactiveStart, todayForStatus);
       }
       if (!updated.active) {
@@ -306,7 +311,9 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const today = getClientDate(req);
 
-      const [previousWorker] = await db.select().from(factoryWorkers)
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
         .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
       if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
       const [updated] = await db
@@ -351,7 +358,9 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const today = getClientDate(req);
 
-      const [previousWorker] = await db.select().from(factoryWorkers)
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
         .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
       if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
       const [updated] = await db
@@ -363,7 +372,8 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
       if (!updated) return res.status(404).json({ message: "Worker not found" });
 
       if (!previousWorker.active) {
-        const inactiveStart = previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || today;
+        const inactiveStart =
+          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || today;
         await recordInactiveDays(db, companyId, updated.id, inactiveStart, today);
       }
 

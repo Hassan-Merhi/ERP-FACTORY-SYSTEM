@@ -217,7 +217,7 @@ export function useStockItemDetailsDialog({
       setNewLocationPrice("");
       setEditingLocationPriceId(null);
       toast({
-        title: "Success",
+        title: "Saved",
         description: "Location price saved successfully",
       });
     },

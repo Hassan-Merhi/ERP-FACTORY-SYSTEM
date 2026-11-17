@@ -10,6 +10,8 @@ import {
 const DETECTOR_VERSION = 9;
 const compatibilityTranslationFiles = [
   "client/src/i18n/applicationTranslations.ts",
+  "client/src/i18n/intercompanyContainerTradingTranslations.ts",
+  "client/src/i18n/intercompanyContainerTradingTranslations.backend.ts",
   "client/src/i18n/sharedInterfaceTranslations.ts",
   "client/src/i18n/accountingDocumentTranslations.ts",
   "client/src/i18n/sharedUiTranslations.part1.ts",
@@ -108,6 +110,11 @@ const compatibilityTranslationFiles = [
 ];
 
 const reviewedTechnicalValues = new Set([
+  // Raw SQL audit: internal refusal codes for invalid ids / map keys before SQL is built.
+  // Thrown to callers and logs, never rendered as interface text.
+  "EXPORT_COMPANY_INVALID",
+  "FACTORY_BILINGUAL_ID_INVALID",
+  "HISTORICAL_REPAIR_KIND_INVALID",
   // Database migration modernization (#3130): operator-only boot diagnostics written to
   // the deployment log when an opt-in verify-only cutover refuses to start. They are never
   // rendered in the application interface, so they are not translatable display text.

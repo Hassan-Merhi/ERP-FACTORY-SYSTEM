@@ -38,7 +38,11 @@ export default function POSSettings() {
       setConfirmPassword("");
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message || "Failed to change password", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: err.message || "Failed to change password",
+        variant: "destructive",
+      });
     },
   });
 

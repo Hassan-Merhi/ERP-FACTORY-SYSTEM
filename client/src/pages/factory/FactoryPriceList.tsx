@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -118,7 +119,7 @@ export default function FactoryPriceList() {
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -132,7 +133,7 @@ export default function FactoryPriceList() {
     if (!editingCell || updatePriceMutation.isPending) return;
     const val = Number(editingCell.value.trim());
     if (!Number.isFinite(val) || val < 0) {
-      toast({ title: "Error", description: "Please enter a valid price.", variant: "destructive" });
+      toast({ title: "Update failed", description: "Please enter a valid price.", variant: "destructive" });
       return;
     }
 
@@ -215,6 +216,9 @@ export default function FactoryPriceList() {
 
     ws.views = [{ state: "frozen", ySplit: 1 }];
 
+    // Import contract stays unchanged: headers remain at row 1 and editable
+    // price cells retain their visual cues.
+    styleFactoryOperationalWorkbook(wb, [{ name: "Price List", headerRow: 1 }]);
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer as ArrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

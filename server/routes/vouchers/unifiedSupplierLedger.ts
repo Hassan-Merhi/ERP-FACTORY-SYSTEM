@@ -56,6 +56,8 @@ export interface SupplierStatementRow extends SupplierStatementTransaction {
   balance: number;
   containerNumber?: string;
   containerId?: number | null;
+  destinationCompanyId?: number | null;
+  destinationCompanyName?: string | null;
 }
 
 const SUPPLIER_OWNED_LINE = higherPriorityTargetsAbsent("ve", "supplier_id");

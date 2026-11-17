@@ -118,7 +118,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
       setSingleForm({ employeeId: "", amount: "", date: today(), cashAccountId: "", notes: "" });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const bulkMutation = useMutation({
@@ -155,7 +155,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
       setBulkForm({ date: today(), cashAccountId: "", notes: "" });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const bulkTotal = useMemo(

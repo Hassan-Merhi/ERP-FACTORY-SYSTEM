@@ -1,6 +1,7 @@
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { ownKey } from "../lib/sqlTextGuards";
 
 /** Maps camelCase field names to their snake_case DB column names. */
 const FIELD_MAP: Record<string, string> = {
@@ -43,9 +44,23 @@ export async function createExportRun(
  * Update arbitrary fields on a run row.
  * Keys must be camelCase names from FIELD_MAP above; unknown keys are silently ignored.
  */
-export async function updateExportRun(id: number, data: { finishedAt: Date; } | ({ companiesCount: number; companyFilesCount: number; zipSizeBytes: number; skippedCompanies: string | null; }) | { emailAttempted: boolean; } | { whatsappAttempted: boolean; } | ({ companiesCount: number; companyFilesCount: number; zipSizeBytes: number; skippedCompanies: string | null; whatsappAttempted: boolean; })): Promise<void> {
+export async function updateExportRun(
+  id: number,
+  data:
+    | { finishedAt: Date }
+    | { companiesCount: number; companyFilesCount: number; zipSizeBytes: number; skippedCompanies: string | null }
+    | { emailAttempted: boolean }
+    | { whatsappAttempted: boolean }
+    | {
+        companiesCount: number;
+        companyFilesCount: number;
+        zipSizeBytes: number;
+        skippedCompanies: string | null;
+        whatsappAttempted: boolean;
+      }
+): Promise<void> {
   if (!id) return;
-  const entries = Object.entries(data).filter(([k]) => FIELD_MAP[k] !== undefined);
+  const entries = Object.entries(data).filter(([k]) => ownKey(FIELD_MAP, k));
   if (!entries.length) return;
   const setClauses = entries.map(([k], i) => `${FIELD_MAP[k]} = $${i + 1}`);
   const values = [...entries.map(([, v]) => v), id];

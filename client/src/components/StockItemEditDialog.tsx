@@ -289,7 +289,7 @@ export function StockItemEditDialog({ open, onOpenChange, stockItemId }: StockIt
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={updateMutation.isPending} data-testid="button-save">
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              {updateMutation.isPending ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

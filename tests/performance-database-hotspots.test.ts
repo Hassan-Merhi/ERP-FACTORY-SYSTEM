@@ -87,6 +87,6 @@ describe("Performance Wave 4 database hotspot guards", () => {
     // Non-scan order writes retain the original order-scoped behavior.
     expect(snapshotService).toContain('item.table === "customer_order_bales"');
     expect(snapshotService).toContain('item.table === "customer_order_lines"');
-    expect(snapshotService).toContain("return `t.order_id=${orderId}`");
+    expect(snapshotService).toContain("return sql`t.order_id=${orderId}`");
   });
 });

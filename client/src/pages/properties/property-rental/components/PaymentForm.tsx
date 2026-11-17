@@ -88,7 +88,7 @@ export function PaymentForm({
       queryClient.invalidateQueries({ queryKey: [apiBase + "/payments/scheduled"] });
       setForm((f) => ({ ...f, amount: "", notes: "" }));
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const allocations = useMemo(() => {

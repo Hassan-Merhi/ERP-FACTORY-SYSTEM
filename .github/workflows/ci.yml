@@ -212,6 +212,9 @@ jobs:
       - name: Script inventory
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:scripts
+      - name: Raw SQL review gate
+        if: always() && steps.install.outcome == 'success'
+        run: npm run check:raw-sql
       - name: Readable logging contracts
         if: always() && steps.install.outcome == 'success'
         run: node scripts/verify-readable-logging.mjs

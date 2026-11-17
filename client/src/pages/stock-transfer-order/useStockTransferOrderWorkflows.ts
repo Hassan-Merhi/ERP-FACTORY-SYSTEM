@@ -169,7 +169,7 @@ export function useStockTransferOrderWorkflows({
       const worksheet = workbook.getWorksheet(1);
       if (!worksheet) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "Could not read worksheet",
           variant: "destructive",
         });
@@ -426,7 +426,7 @@ export function useStockTransferOrderWorkflows({
       navigate("/daybook");
     } catch (error) {
       const description = error instanceof Error ? error.message : "Failed to save revision";
-      toast({ title: "Error", description, variant: "destructive" });
+      toast({ title: "Save failed", description, variant: "destructive" });
     } finally {
       setIsSavingRevision(false);
     }

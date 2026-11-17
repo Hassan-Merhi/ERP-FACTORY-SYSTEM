@@ -87,7 +87,7 @@ export default function InventoryRepair() {
       });
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Repair failed",
         description: getErrorDetails(error).message || "Failed to run inventory rebuild",
         variant: "destructive",
       });
@@ -116,7 +116,7 @@ export default function InventoryRepair() {
       });
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Preview failed",
         description: getErrorDetails(error).message || "Failed to preview value repair",
         variant: "destructive",
       });
@@ -137,7 +137,7 @@ export default function InventoryRepair() {
       setValueRepairState("idle");
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Repair failed",
         description: getErrorDetails(error).message || "Failed to finalize value repair",
         variant: "destructive",
       });

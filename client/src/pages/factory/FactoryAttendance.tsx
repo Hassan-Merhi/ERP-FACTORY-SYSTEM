@@ -47,6 +47,7 @@ import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageCho
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
   type AttendanceAdminCredentials,
 } from "./factoryattendance/attendanceEditPolicy";
@@ -63,7 +64,11 @@ export default function FactoryAttendance() {
   const { selectedCompany } = useCompany();
   // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
-  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
+  const companyRole = selectedCompany?.role;
+  const canEditPastWithoutPassword = useCallback(
+    (dates: string[]) => canSkipAttendanceApproval(companyRole, dates),
+    [companyRole]
+  );
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -184,15 +189,17 @@ export default function FactoryAttendance() {
 
   const handleSave = useCallback(() => {
     if (!data?.workers.length) return;
-    const records = data.workers.filter((w) => w.active !== false).map((w) => ({
-      workerId: w.id,
-      attendanceDate: selectedDate,
-      shift: shift || undefined,
-      status: attendanceMap[w.id] ?? "Present",
-      notes: notesMap[w.id] || undefined,
-    }));
+    const records = data.workers
+      .filter((w) => w.active !== false)
+      .map((w) => ({
+        workerId: w.id,
+        attendanceDate: selectedDate,
+        shift: shift || undefined,
+        status: attendanceMap[w.id] ?? "Present",
+        notes: notesMap[w.id] || undefined,
+      }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !canEditPastWithoutPassword) {
+    if (priorDates.length && !canEditPastWithoutPassword(priorDates)) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -361,7 +368,7 @@ export default function FactoryAttendance() {
           <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
             {formatDate(selectedDate)}
           </Badge>
-          {selectedDate < attendanceToday() && !canEditPastWithoutPassword && (
+          {selectedDate < attendanceToday() && !canEditPastWithoutPassword([selectedDate]) && (
             <Badge variant="secondary" className="rounded-full">
               Earlier date — Admin approval required to save
             </Badge>

@@ -94,7 +94,7 @@ export function FactoryStockAllocationV5Dialog2({ model }: { model: Model }) {
                 Saving…
               </>
             ) : (
-              "Save Changes"
+              "Save"
             )}
           </Button>
         </DialogFooter>

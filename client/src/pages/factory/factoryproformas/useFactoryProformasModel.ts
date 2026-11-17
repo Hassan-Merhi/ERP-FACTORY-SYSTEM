@@ -79,7 +79,9 @@ export function useFactoryProformasModel() {
   });
   // Cost visibility is fail-closed until the chosen-company access response arrives.
   const accessReady = Boolean(myAccess && myAccess.companyId === selectedCompany?.id && myAccess.hasFactoryAccess);
-  const hideProformaPrice = !accessReady || myAccess?.hideAllCosts === true ||
+  const hideProformaPrice =
+    !accessReady ||
+    myAccess?.hideAllCosts === true ||
     myAccess?.hiddenCostFields?.includes("hide_proforma_price") === true;
 
   const { data: currentUser } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
@@ -94,7 +96,11 @@ export function useFactoryProformasModel() {
   // Phase 3: list cards use a genuinely compact summary contract. Individual
   // line arrays are fetched only for cards the user explicitly expands.
   const { data: proformas = [], isLoading: proformasLoading } = useQuery<Proforma[]>({
-    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, selectedCompany?.id, customerId),
+    queryKey: companyQueryKey(
+      `/api/factory/customer-proformas?customerId=${customerId}&profile=summary`,
+      selectedCompany?.id,
+      customerId
+    ),
     queryFn: async () => {
       if (!customerId) return [];
       const response = await modeApiRequest(
@@ -203,7 +209,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -212,7 +218,7 @@ export function useFactoryProformasModel() {
       return await modeApiRequest("POST", "/api/factory/customer-proformas", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma created successfully" });
+      toast({ title: "Created", description: "Proforma created successfully" });
       invalidateCustomerProformas();
       setIsCreateOpen(false);
       setNewProformaName("");
@@ -220,7 +226,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -251,12 +257,12 @@ export function useFactoryProformasModel() {
       return await modeApiRequest("DELETE", `/api/factory/customer-proformas/${id}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma deleted" });
+      toast({ title: "Deleted", description: "Proforma deleted" });
       invalidateCustomerProformas();
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -289,14 +295,14 @@ export function useFactoryProformasModel() {
       return await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { name });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma renamed successfully" });
+      toast({ title: "Renamed", description: "Proforma renamed successfully" });
       invalidateCustomerProformas();
       setRenamingProforma(null);
       setRenameValue("");
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -333,7 +339,7 @@ export function useFactoryProformasModel() {
       return await modeApiRequest("POST", "/api/factory/customer-proforma-lines", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line added" });
+      toast({ title: "Added", description: "Line added" });
       invalidateCustomerProformas();
       queryClient.invalidateQueries({ queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId] });
       setIsAddLineOpen(false);
@@ -344,7 +350,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -364,14 +370,14 @@ export function useFactoryProformasModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line updated" });
+      toast({ title: "Updated", description: "Line updated" });
       invalidateCustomerProformas();
       queryClient.invalidateQueries({ queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId] });
       setEditingLine(null);
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -380,12 +386,12 @@ export function useFactoryProformasModel() {
       return await modeApiRequest("DELETE", `/api/factory/customer-proforma-lines/${id}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line deleted" });
+      toast({ title: "Deleted", description: "Line deleted" });
       invalidateCustomerProformas();
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -403,7 +409,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
       setInlineQtyLineId(null);
     },
   });
@@ -577,17 +583,13 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
   const applyAgreedPricesMutation = useMutation({
     mutationFn: async (proformaId: number) => {
-      const res = await modeApiRequest(
-        "POST",
-        `/api/factory/customer-proformas/${proformaId}/apply-agreed-prices`,
-        {}
-      );
+      const res = await modeApiRequest("POST", `/api/factory/customer-proformas/${proformaId}/apply-agreed-prices`, {});
       return res.json() as Promise<{
         updated: number;
         skipped: number;
@@ -600,15 +602,18 @@ export function useFactoryProformasModel() {
       invalidateCustomerProformas();
       const matched = result.updated + result.unchanged;
       toast({
-        title: result.updated > 0
-          ? "Saved Agreed Prices Applied"
-          : matched > 0 ? "Saved Agreed Prices Already Current" : "No Matching Saved Agreed Prices",
+        title:
+          result.updated > 0
+            ? "Saved Agreed Prices Applied"
+            : matched > 0
+              ? "Saved Agreed Prices Already Current"
+              : "No Matching Saved Agreed Prices",
         description: `${matched} matched for ${result.destination}. ${result.updated} updated, ${result.unchanged} already current, ${result.skipped} without saved prices, ${result.fixed} locked.`,
       });
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -631,7 +636,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -654,7 +659,7 @@ export function useFactoryProformasModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 

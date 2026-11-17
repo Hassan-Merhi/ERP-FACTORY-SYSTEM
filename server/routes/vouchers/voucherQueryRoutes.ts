@@ -11,6 +11,7 @@ import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
 import { loadVoucherRelatedData } from "./voucherDetailBatching";
 import { buildUnifiedSupplierLedger } from "./unifiedSupplierLedger";
+import { resolveSupplierDestinations } from "../../services/intercompany/supplierDestinationRead";
 
 import {
   assertActiveCompanyAccess,
@@ -23,7 +24,10 @@ import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
 import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
-import { isInternalFactoryAdvanceReconciliation, isInternalHistoricalSupplierCatchup } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
+import {
+  isInternalFactoryAdvanceReconciliation,
+  isInternalHistoricalSupplierCatchup,
+} from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -57,23 +61,24 @@ export function registerVoucherQueryRoutes(app: Express) {
         vouchers = await storage.getVouchersByDateRange(access.activeCompanyId, fmt(start), fmt(end));
       }
 
-      vouchers = (await withStockTransferNarrations(access.activeCompanyId, vouchers)).filter((voucher) =>
-        keepRoutineVoucher(voucher, req.session.currentRole) &&
-        !isInternalHistoricalSupplierCatchup({
-          companyId: access.activeCompanyId,
-          voucherNumber: voucher.voucherNumber,
-          description: voucher.description,
-          createdAt: voucher.createdAt,
-        }) &&
-        // Internal, already-posted historical GL backfills are not routine
-        // operator journals. Keep all official accounting and audit effects.
-        !isInternalFactoryAdvanceReconciliation({
-          companyId: access.activeCompanyId,
-          id: voucher.id,
-          voucherNumber: voucher.voucherNumber,
-          voucherDate: voucher.voucherDate,
-          description: voucher.description,
-        })
+      vouchers = (await withStockTransferNarrations(access.activeCompanyId, vouchers)).filter(
+        (voucher) =>
+          keepRoutineVoucher(voucher, req.session.currentRole) &&
+          !isInternalHistoricalSupplierCatchup({
+            companyId: access.activeCompanyId,
+            voucherNumber: voucher.voucherNumber,
+            description: voucher.description,
+            createdAt: voucher.createdAt,
+          }) &&
+          // Internal, already-posted historical GL backfills are not routine
+          // operator journals. Keep all official accounting and audit effects.
+          !isInternalFactoryAdvanceReconciliation({
+            companyId: access.activeCompanyId,
+            id: voucher.id,
+            voucherNumber: voucher.voucherNumber,
+            voucherDate: voucher.voucherDate,
+            description: voucher.description,
+          })
       );
 
       // Preserve historical GL descriptions; enrich only the read model.
@@ -184,6 +189,20 @@ export function registerVoucherQueryRoutes(app: Express) {
             t.containerId = containerIdMap.get(matches[0]) ?? null;
           }
         }
+      }
+
+      // Attribute supplier transactions using actual intercompany PO links.
+      // Unallocated payments and unrelated journals have no guessed destination.
+      const destinations = await resolveSupplierDestinations({
+        accessibleCompanyIds: companyIds,
+        voucherIds: result.flatMap((row) => (row.voucherId == null ? [] : [row.voucherId])),
+      });
+      for (const row of result) {
+        if (row.type !== "voucher") continue;
+        const destination = row.voucherId == null ? undefined : destinations.byVoucherId.get(row.voucherId);
+        const ordinaryPurchase = !destination && row.voucherType === "Purchase";
+        row.destinationCompanyId = destination?.destinationCompanyId ?? (ordinaryPurchase ? row.companyId : null);
+        row.destinationCompanyName = destination?.destinationCompanyName ?? (ordinaryPurchase ? row.companyName : null);
       }
 
       res.json(result); // Already in chronological order

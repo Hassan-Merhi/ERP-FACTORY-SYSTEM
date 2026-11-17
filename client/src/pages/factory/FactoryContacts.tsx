@@ -229,7 +229,7 @@ export default function FactoryContacts() {
       setDialogOpen(false);
     },
     onError: (e: Error) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -245,7 +245,7 @@ export default function FactoryContacts() {
       setDeleteTarget(null);
     },
     onError: () => {
-      toast({ title: "Error", description: "Could not delete contact", variant: "destructive" });
+      toast({ title: "Delete failed", description: "Could not delete contact", variant: "destructive" });
     },
   });
 

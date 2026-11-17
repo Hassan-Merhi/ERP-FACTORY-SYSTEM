@@ -97,7 +97,7 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/loads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
     },
-    onError: (err) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err) => toast({ title: "Remove failed", description: err.message, variant: "destructive" }),
   });
 
   const finalizeMutation = useMutation({
@@ -116,14 +116,17 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
       onClose();
     },
-    onError: (err) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err) => toast({ title: "Finalize failed", description: err.message, variant: "destructive" }),
   });
 
-  const handleScan = useCallback((value = scanCode) => {
-    const code = value.trim();
-    if (!code) return;
-    scanMutation.mutate({ code });
-  }, [scanCode, scanMutation]);
+  const handleScan = useCallback(
+    (value = scanCode) => {
+      const code = value.trim();
+      if (!code) return;
+      scanMutation.mutate({ code });
+    },
+    [scanCode, scanMutation]
+  );
 
   const handleBypass = () => {
     if (!pendingBypass) return;
