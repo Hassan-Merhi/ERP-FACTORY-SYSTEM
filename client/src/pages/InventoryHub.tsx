@@ -22,8 +22,14 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
   const showStockShortcut =
     selectedCompany?.companyType !== "retail" &&
-    (canAccessErpFeature(access, "stock_items") || canAccessErpFeature(access, "stock_query"));
-  const stockHref = canAccessErpFeature(access, "stock_items") ? "/stock?tab=items" : "/stock?tab=query";
+    (canAccessErpFeature(access, "stock_items") ||
+      canAccessErpFeature(access, "stock_query") ||
+      canAccessErpFeature(access, "stock_otw"));
+  const stockHref = canAccessErpFeature(access, "stock_items")
+    ? "/stock?tab=items"
+    : canAccessErpFeature(access, "stock_query")
+      ? "/stock?tab=query"
+      : "/stock?tab=otw";
   const visibleValues = visibleTabs.map((tab) => tab.value);
 
   const [activeTab, setTab] = useHubQueryState({
@@ -56,7 +62,7 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
             className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
             data-testid="link-inventory-stock-hub"
           >
-            Stock items &amp; search <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            Open Stock workspace <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </nav>
       )}

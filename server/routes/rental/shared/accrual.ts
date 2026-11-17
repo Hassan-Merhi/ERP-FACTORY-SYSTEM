@@ -28,14 +28,17 @@ export async function ensureMonthlyForCompany(companyId: number, module: RentalM
 
   // Landlord-owned periods are the source for HADI's linked-company leases.
   if (companyId === 1 && module === "ERP" && (asOfDate ?? getUtcTodayString()) >= "2026-12-01") {
-    const shared = await db.select({ id: propertyContracts.id })
+    const shared = await db
+      .select({ id: propertyContracts.id })
       .from(propertyContracts)
-      .where(and(
-        eq(propertyContracts.companyId, 13),
-        eq(propertyContracts.linkedCompanyId, 1),
-        eq(propertyContracts.module, "PROPERTIES"),
-        eq(propertyContracts.status, "ACTIVE")
-      ));
+      .where(
+        and(
+          eq(propertyContracts.companyId, 13),
+          eq(propertyContracts.linkedCompanyId, 1),
+          eq(propertyContracts.module, "PROPERTIES"),
+          eq(propertyContracts.status, "ACTIVE")
+        )
+      );
     for (const contract of shared) await ensureMonthlyLedgerRows(contract.id, asOfDate);
   }
 }
@@ -160,12 +163,9 @@ export async function postRentAccrualForCompany(
       : []
   );
   const isFutureLinked = (row: { contractId: number; year: number; month: number }) =>
-    isFutureHadiLinkedRentMonth(
-      companyId, moduleParam, hadiLinkedContractIds.has(row.contractId), row.year, row.month
-    );
+    isFutureHadiLinkedRentMonth(companyId, moduleParam, hadiLinkedContractIds.has(row.contractId), row.year, row.month);
   const isHistoricalHadiLinked = (row: { contractId: number; year: number; month: number }) =>
-    hadiLinkedContractIds.has(row.contractId) &&
-    isHadiProtectedRentMonth(companyId, moduleParam, row.year, row.month);
+    hadiLinkedContractIds.has(row.contractId) && isHadiProtectedRentMonth(companyId, moduleParam, row.year, row.month);
 
   // Unit name (display label) keyed by unitId
   const unitNameById = new Map(allContracts.map((c) => [c.unitId, c.unitNumber]));
@@ -252,8 +252,11 @@ export async function postRentAccrualForCompany(
 
     // A reviewed historical month with a deleted accrual link must never re-accrue
     // just because a later month on the same contract becomes unpaid.
-    const pendingRows = allUnaccrued.filter((r) =>
-      !isHistoricalHadiLinked(r) && isRentMonthReadyToRecognize(r.notes, isDue(r)) && contractsWithPositiveOutstanding.has(r.contractId)
+    const pendingRows = allUnaccrued.filter(
+      (r) =>
+        !isHistoricalHadiLinked(r) &&
+        isRentMonthReadyToRecognize(r.notes, isDue(r)) &&
+        contractsWithPositiveOutstanding.has(r.contractId)
     );
 
     logger.info(
@@ -277,21 +280,22 @@ export async function postRentAccrualForCompany(
       try {
         await db.transaction(async (tx) => {
           // Lock ALL pending rows in one shot — SKIP LOCKED guards against races.
-          // Use IN (...) with a literal id list (all values are trusted integers from
-          // the DB) rather than ANY($n::int[]) — Drizzle does not serialize a JS
-          // array through the sql`` tag in a way pg accepts with ::int[] casting.
+          // Bind each ID through Drizzle SQL fragments rather than interpolating
+          // a comma-separated string; preserve row locks and skip-locked behavior.
           const pendingIds = pendingRows.map((r) => r.id);
-          const idListSql = pendingIds.join(","); // safe: all are DB integers
+          const idListSql = sql.join(
+            pendingIds.map((id) => sql`${id}`),
+            sql`, `
+          );
           const lockResult = await tx.execute(
-            sql.raw(
-              `SELECT id, company_id, module, contract_id, expected_amount, paid_amount, unit_id, month, year
+            sql`
+              SELECT id, company_id, module, contract_id, expected_amount, paid_amount, unit_id, month, year
          FROM property_monthly_ledger
          WHERE id IN (${idListSql})
            AND accrual_voucher_id IS NULL
            AND expected_amount::numeric > 0
            AND used_advance_account = false
          FOR UPDATE SKIP LOCKED`
-            )
           );
 
           if (!lockResult.rows || lockResult.rows.length === 0) return;
@@ -311,16 +315,18 @@ export async function postRentAccrualForCompany(
 
           // FIX #4: query actual POSTED payments (payment_date <= effectiveAsOf) per locked row
           //          instead of the potentially-stale paid_amount cache column.
-          const lockedIdList = lockedRows.map((r) => Number(r.id)).join(",");
+          const lockedIdList = sql.join(
+            lockedRows.map((r) => sql`${r.id}`),
+            sql`, `
+          );
           const paidQueryResult = await tx.execute(
-            sql.raw(
-              `SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
+            sql`
+              SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
                FROM property_payments
                WHERE ledger_row_id IN (${lockedIdList})
                  AND posting_status = 'POSTED'
-                 AND payment_date <= '${effectiveAsOf}'
+                 AND payment_date <= ${effectiveAsOf}
                GROUP BY ledger_row_id`
-            )
           );
           const actualPaidByRowId = new Map(
             paidQueryResult.rows.map((r) => [Number(r.ledger_row_id), toMoney(r.total_paid as string)])
@@ -336,7 +342,9 @@ export async function postRentAccrualForCompany(
               contractId: Number(locked.contract_id),
               year: Number(locked.year),
               month: Number(locked.month),
-            }) ? expected : expected.minus(paid).toDecimalPlaces(2);
+            })
+              ? expected
+              : expected.minus(paid).toDecimalPlaces(2);
             if (!amount.gt(0)) continue;
             entries.push({
               id: Number(locked.id),
@@ -427,16 +435,18 @@ export async function postRentAccrualForCompany(
       if (dueAdvanceRows.length > 0) {
         await db.transaction(async (tx) => {
           const pendingIds15 = dueAdvanceRows.map((r) => r.id);
-          const idListSql15 = pendingIds15.join(",");
+          const idListSql15 = sql.join(
+            pendingIds15.map((id) => sql`${id}`),
+            sql`, `
+          );
           const lock15 = await tx.execute(
-            sql.raw(
-              `SELECT id, expected_amount, paid_amount, unit_id, month, year
+            sql`
+              SELECT id, expected_amount, paid_amount, unit_id, month, year
              FROM property_monthly_ledger
              WHERE id IN (${idListSql15})
                AND accrual_voucher_id IS NULL
                AND used_advance_account = true
              FOR UPDATE SKIP LOCKED`
-            )
           );
           if (!lock15.rows || lock15.rows.length === 0) return;
           type LR15 = {
@@ -556,25 +566,33 @@ export async function postRentAccrualForCompany(
           if (prepaidIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
             throw new Error("RENTAL_PREPAID_INVALID_MONTH_ID");
           }
-          const lockedPrepaid = (await tx.execute(sql`
+          const lockedPrepaid = (
+            await tx.execute(sql`
             SELECT ml.id, ml.paid_amount, ml.expected_amount, ml.notes,
               ml.accrual_voucher_id, ml.used_prepaid_account
             FROM property_monthly_ledger ml
-            WHERE ml.id IN (${sql.raw(prepaidIds.join(","))})
+            WHERE ml.id IN (${sql.join(
+              prepaidIds.map((id) => sql`${id}`),
+              sql`, `
+            )})
               AND ml.accrual_voucher_id IS NULL
               AND ml.used_prepaid_account=TRUE
             ORDER BY ml.id FOR UPDATE OF ml
-          `)).rows as Array<{
-            id: number; paid_amount: string; expected_amount: string;
-            notes: string | null; accrual_voucher_id: number | null;
+          `)
+          ).rows as Array<{
+            id: number;
+            paid_amount: string;
+            expected_amount: string;
+            notes: string | null;
+            accrual_voucher_id: number | null;
             used_prepaid_account: boolean;
           }>;
-          if (lockedPrepaid.length !== prepaidIds.length ||
-              lockedPrepaid.some((r) => isRentRecognitionHeld(r.notes))) {
+          if (lockedPrepaid.length !== prepaidIds.length || lockedPrepaid.some((r) => isRentRecognitionHeld(r.notes))) {
             throw new Error("RENTAL_PREPAID_MONTH_CHANGED_OR_HELD");
           }
 
-          const postedPrepaid = (await tx.execute(sql`
+          const postedPrepaid = (
+            await tx.execute(sql`
             SELECT p.ledger_row_id,
               COALESCE(SUM(p.amount::numeric),0) AS paid
             FROM property_payments p
@@ -582,7 +600,10 @@ export async function postRentAccrualForCompany(
             JOIN property_contracts pc ON pc.id=ml.contract_id
             JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
               AND v.deleted_at IS NULL AND v.optional=FALSE
-            WHERE p.ledger_row_id IN (${sql.raw(prepaidIds.join(","))})
+            WHERE p.ledger_row_id IN (${sql.join(
+              prepaidIds.map((id) => sql`${id}`),
+              sql`, `
+            )})
               AND p.posting_status='POSTED'
               AND p.payment_date<=${effectiveAsOf}::date
               AND p.payment_date < MAKE_DATE(
@@ -593,7 +614,8 @@ export async function postRentAccrualForCompany(
                     + INTERVAL '1 MONTH' - INTERVAL '1 DAY')::int)
               )
             GROUP BY p.ledger_row_id
-          `)).rows as Array<{ ledger_row_id: number; paid: string }>;
+          `)
+          ).rows as Array<{ ledger_row_id: number; paid: string }>;
           const postedPrepaidMap = new Map(
             postedPrepaid.map((r) => [Number(r.ledger_row_id), toMoney(r.paid).toDecimalPlaces(2)])
           );
@@ -601,8 +623,10 @@ export async function postRentAccrualForCompany(
           // or stale cache. Fail closed; keep all cash/prepaid balances intact.
           for (const row of lockedPrepaid) {
             const actual = postedPrepaidMap.get(Number(row.id)) ?? new MoneyDecimal(0);
-            if (!actual.eq(toMoney(row.paid_amount).toDecimalPlaces(2)) ||
-                actual.gt(toMoney(row.expected_amount).toDecimalPlaces(2))) {
+            if (
+              !actual.eq(toMoney(row.paid_amount).toDecimalPlaces(2)) ||
+              actual.gt(toMoney(row.expected_amount).toDecimalPlaces(2))
+            ) {
               throw new Error("RENTAL_PREPAID_POSTED_PAYMENTS_DO_NOT_MATCH_MONTH");
             }
           }
@@ -630,7 +654,8 @@ export async function postRentAccrualForCompany(
           const expectedOf = (r: (typeof duePrepaid)[number]) => toMoney(r.expectedAmount).toDecimalPlaces(2);
           const totalExpected = duePrepaid.reduce((s, r) => s.plus(expectedOf(r)), new MoneyDecimal(0));
           const totalPaid = duePrepaid.reduce(
-            (s, r) => s.plus(MoneyDecimal.min(postedPrepaidMap.get(Number(r.id)) ?? new MoneyDecimal(0), expectedOf(r))),
+            (s, r) =>
+              s.plus(MoneyDecimal.min(postedPrepaidMap.get(Number(r.id)) ?? new MoneyDecimal(0), expectedOf(r))),
             new MoneyDecimal(0)
           );
           const totalUnpaid = MoneyDecimal.max(0, totalExpected.minus(totalPaid));

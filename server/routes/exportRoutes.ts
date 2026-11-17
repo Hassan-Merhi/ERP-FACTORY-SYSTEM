@@ -15,6 +15,7 @@ import {
   releaseJobArchive,
 } from "../services/exportJobManager";
 import { createTemporaryExportArchive, streamTemporaryExportArchive } from "../helpers/temporaryExportArchive";
+import { invalidExportDateRange } from "../services/export-excel/workbook";
 import { createScheduledExportArtifact } from "../helpers/scheduledExportArtifact";
 import { retryAsync, isEmailConfigError } from "../helpers/retryAsync";
 import { createExportRun, updateExportRun, finishExportRun } from "../helpers/exportRunTracker";
@@ -144,6 +145,8 @@ export function registerExportRoutes(app: Express) {
     if (mode !== "download" && mode !== "email") {
       return res.status(400).json({ message: "mode must be 'download' or 'email'" });
     }
+    const invalidDate = invalidExportDateRange(fromDate, toDate);
+    if (invalidDate) return res.status(400).json({ message: invalidDate });
 
     const _t = Date.now();
     logger.info("Export start requested", { module: "export", action: "start", status: mode });

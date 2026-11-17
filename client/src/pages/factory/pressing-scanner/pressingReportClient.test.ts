@@ -10,6 +10,7 @@ import {
   type PressingCondensedRow,
 } from "./pressingReportClient";
 import * as XLSX from "@/lib/excelHelper";
+import { DEFAULT_EXCEL_APPEARANCE_SETTINGS } from "@shared/universal-excel/appearanceSettings";
 
 vi.mock("@/lib/excelHelper", () => {
   const sheet = {
@@ -169,19 +170,23 @@ describe("pressing history client", () => {
   it("exports a true workbook with the selected filtered records", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(async (url: string) => ({
         ok: true,
-        json: async () => ({
-          rows: [detailed],
-          total: 1,
-          summary: { totalBales: 1, totalKg: "45.125", voidedBales: 0 },
-          page: 1,
-          limit: 250,
-          mode: "detailed",
-          asOf: "2026-10-27T09:00:00.000Z",
-        }),
+        json: async () =>
+          String(url) === "/api/excel-export/appearance"
+            ? { appearance: DEFAULT_EXCEL_APPEARANCE_SETTINGS, companyName: "Factory" }
+            : {
+                rows: [detailed],
+                total: 1,
+                summary: { totalBales: 1, totalKg: "45.125", voidedBales: 0 },
+                page: 1,
+                limit: 250,
+                mode: "detailed",
+                asOf: "2026-10-27T09:00:00.000Z",
+              },
       }))
     );
+
     await exportPressingReport(
       {
         from: "2026-10-27",
@@ -193,7 +198,10 @@ describe("pressing history client", () => {
       },
       ["referenceNumber", "weightKg", "confirmedAt"]
     );
-    expect(XLSX.writeFile).toHaveBeenCalledWith(expect.anything(), "pressing-machines-detailed_2026-10-27.xlsx");
+    expect(XLSX.writeFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "pressing-machines-detailed-2026-10-27_2026-10-27.xlsx"
+    );
   });
 
   it("never silently truncates exports exceeding the safe workbook ceiling", async () => {

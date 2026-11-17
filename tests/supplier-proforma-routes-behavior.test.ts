@@ -248,6 +248,8 @@ describe("supplier proforma route behavior", () => {
   it("creates a proforma with canonical alias codes, sanitized decimals, and one atomic line transaction", async () => {
     // Supplier 2 exists in company 4; the route now resolves it before the
     // insert so an unknown supplier is a 404 rather than a foreign-key 500.
+    // The destination-company check runs before the supplier scope check.
+    harness.executeResults.push([{ allowed: 1 }]);
     harness.executeResults.push([{ id: 2 }]);
     harness.insertResults.push([{ id: 10, companyId: 4, supplierId: 2, reference: "PF-NEW", notes: null }]);
     harness.selectResults.push([
@@ -303,6 +305,8 @@ describe("supplier proforma route behavior", () => {
   it("allows a child company to create a proforma for a supplier owned by its linked parent", async () => {
     // Zambia-style child-company flow: the supplier master belongs to the
     // explicitly linked parent, while the proforma itself belongs to the child.
+    // The destination-company check runs before the supplier scope check.
+    harness.executeResults.push([{ allowed: 1 }]);
     harness.executeResults.push([{ id: 23 }]);
     harness.insertResults.push([{ id: 11, companyId: 19, supplierId: 23, reference: "RV", notes: null }]);
     harness.selectResults.push([]);
@@ -325,7 +329,7 @@ describe("supplier proforma route behavior", () => {
       })
     );
 
-    const supplierLookup = harness.db.execute.mock.calls[0]?.[0] as {
+    const supplierLookup = harness.db.execute.mock.calls[1]?.[0] as {
       strings?: string[];
       values?: unknown[];
     };
@@ -337,6 +341,7 @@ describe("supplier proforma route behavior", () => {
   it("answers 404 when the supplier is outside the active company and linked parent scope", async () => {
     // No supplier row queued, so neither the active company nor its explicit
     // parent owns the supplier. The insert must not run.
+    harness.executeResults.push([{ allowed: 1 }]);
     const res = resHarness();
     await routes.get("POST /api/suppliers/:supplierId/proformas")!(
       req({ params: { supplierId: "2" }, body: { reference: "PF-NEW" } }),

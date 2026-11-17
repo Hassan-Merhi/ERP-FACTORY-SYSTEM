@@ -169,10 +169,10 @@ export function registerExchangeRateRoutes(app: Express) {
     }
   });
 
-  // Atomic audited save. Admin/Owner/Developer may save any date and replace a
-  // rate. Every other writing role (POS, Manager, ...) may set TODAY's rate
-  // once: the first user to set it sets it for the whole company, so nobody
-  // else is prompted again that day. View Only / Create Only and view-only POS users never save.
+  // Atomic audited save. Admin/Owner/Developer may save any date. Every other
+  // writing role (POS, Manager, ...) may set or change TODAY's rate; whoever
+  // saves it last sets it for the whole company. View Only / Create Only and
+  // view-only POS users never save.
   // The server chooses the active company; the caller cannot inject a rate
   // into a different company or an unconfigured pair.
   app.post("/api/exchange-rates", requireAuth, async (req, res) => {
@@ -220,8 +220,8 @@ export function registerExchangeRateRoutes(app: Express) {
           today: businessDate,
         });
       }
-      // A non-editor only ever sets today's rate; past/future dates and
-      // corrections stay with Admin/Owner/Developer.
+      // A non-editor only ever sets or changes today's rate; past and future
+      // dates stay with Admin/Owner/Developer.
       if (!isRateEditor && parsed.data.effectiveDate !== businessDate) {
         return res.status(403).json({ message: "Forbidden" });
       }
@@ -236,8 +236,7 @@ export function registerExchangeRateRoutes(app: Express) {
 
       const rate = await saveCompanyExchangeRate(
         { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
-        { fromCurrency, toCurrency, rate: parsed.data.rate, effectiveDate: parsed.data.effectiveDate },
-        { createOnly: !isRateEditor }
+        { fromCurrency, toCurrency, rate: parsed.data.rate, effectiveDate: parsed.data.effectiveDate }
       );
       // This runs AFTER the audited rate transaction commits: no invalidation
       // on validation failures or rolled-back writes. All consumers (Settings,

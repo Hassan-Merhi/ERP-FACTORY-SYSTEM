@@ -227,6 +227,7 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
 
   it("a POS user's rate for today applies to the whole company: the Admin is not asked again", async () => {
     await cleanupExchangeRates([ctx.companyId]);
+    const auditStart = Number((await pool.query(`SELECT COALESCE(MAX(id), 0) AS id FROM audit_log`)).rows[0].id);
     // The session caches the role: re-select the company after changing it.
     const roleOfB = async (role: string) => {
       await db.update(schema.userCompanyRoles).set({ role }).where(eq(schema.userCompanyRoles.userId, userBId));
@@ -257,17 +258,33 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
       expect(admin.body.hasRate).toBe(true);
       expect(parseFloat(admin.body.latestRate.rate)).toBeCloseTo(595, 4);
 
-      // The first rate of the day stands; a POS user cannot replace it, an Admin can.
-      const replaced = await rate("700", today);
-      expect(replaced.status).toBe(409);
-      expect(replaced.body.code).toBe("EXCHANGE_RATE_ALREADY_SET");
-      expect((await rate("595", today)).status).toBe(200);
+      // Any writing user may change today's rate; the latest save is the company rate.
+      expect((await rate("600", today)).status).toBe(200);
+      const changed = await agentA.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`);
+      expect(parseFloat(changed.body.latestRate.rate)).toBeCloseTo(600, 4);
       const corrected = await agentA
         .post("/api/exchange-rates")
         .send({ fromCurrency: "USD", toCurrency: "CFA", rate: "596", effectiveDate: today });
       expect(corrected.status).toBe(200);
+      // Returning to an earlier rate on the same day saves it again (never a
+      // replay of the earlier request's response).
+      expect((await rate("600", today)).status).toBe(200);
+      expect((await rate("596", today)).status).toBe(200);
       const rows = await pool.query(`SELECT rate::text FROM exchange_rates WHERE company_id = $1`, [ctx.companyId]);
       expect(rows.rows).toEqual([{ rate: "596.000000" }]);
+      // Every revision is audited with the old and the new rate.
+      const audit = await pool.query(
+        `SELECT changes->'rate' AS rate FROM audit_log
+          WHERE table_name = 'exchange_rates' AND company_id = $1 AND id > $2 ORDER BY id`,
+        [ctx.companyId, auditStart]
+      );
+      expect(audit.rows.map((row) => row.rate.new)).toEqual([
+        "595.000000",
+        "600.000000",
+        "596.000000",
+        "600.000000",
+        "596.000000",
+      ]);
     } finally {
       await db
         .update(schema.userCompanyRoles)
