@@ -1111,7 +1111,7 @@
     {"id":"POST /api/companies#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin"]}},"permission":"none"},
     {"id":"GET /api/companies/:id#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"PATCH /api/companies/:id#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin"]}},"permission":"none"},
-    {"id":"DELETE /api/companies/:id#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Owner"]}},"permission":"none"},
+    {"id":"DELETE /api/companies/:id#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin"]}},"permission":"none"},
     {"id":"GET /api/auth/session-company#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"context-optional","roles":"any","permission":"none"},
     {"id":"POST /api/auth/set-company#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"context-optional","roles":"any","permission":"none"},
     {"id":"GET /api/user-presence#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
