@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  canSendAllCompanyExportToWhatsApp,
   currentYearDateRange,
   fmt12h,
   fmtBytes,
@@ -12,6 +13,23 @@ import {
 } from "../../client/src/pages/settings/ExportCenterHelpers";
 
 describe("ExportCenterHelpers behavioral formatting", () => {
+  it("shows the all-company WhatsApp export only to roles the server admits", () => {
+    for (const role of ["Admin", "Owner", "Developer"]) expect(canSendAllCompanyExportToWhatsApp(role)).toBe(true);
+    for (const role of [
+      "Manager",
+      "Accountant",
+      "View Only",
+      "Create Only",
+      "ERP Tester",
+      "admin",
+      "",
+      null,
+      undefined,
+    ]) {
+      expect(canSendAllCompanyExportToWhatsApp(role)).toBe(false);
+    }
+  });
+
   it("formats export sizes across empty, KB, and MB states", () => {
     expect(fmtBytes()).toBe("—");
     expect(fmtBytes(0)).toBe("—");

@@ -4,6 +4,7 @@ import { pool } from "../db";
 import { requireAuth, requireNonPOS } from "../auth";
 import { normalizeOpeningBalanceCurrency } from "../services/accounting/openingBalanceCurrency";
 import { storage } from "../storage";
+import { ownKey } from "../lib/sqlTextGuards";
 
 const ALLOWED_ROLES = new Set(["Admin", "Owner", "Developer"]);
 
@@ -107,6 +108,7 @@ function supplierScopeSql(alias = "target"): string {
 }
 
 async function entityExists(entityType: EntityType, entityId: number, companyId: number): Promise<boolean> {
+  if (!ownKey(CONFIG, entityType)) return false;
   const config = CONFIG[entityType];
   const clauses = ["target.id = $1"];
   if (config.companyColumn) clauses.push(`target.${config.companyColumn} = $2`);
@@ -190,8 +192,8 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
       }
 
       const entityType = req.params.entityType as EntityType;
+      if (!ownKey(CONFIG, entityType)) return res.status(400).json({ message: "Unsupported entity type" });
       const config = CONFIG[entityType];
-      if (!config) return res.status(400).json({ message: "Unsupported entity type" });
       const entityId = Number.parseInt(req.params.id, 10);
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

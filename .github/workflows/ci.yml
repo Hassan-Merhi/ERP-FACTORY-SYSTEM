@@ -220,6 +220,9 @@ jobs:
         env:
           DATABASE_URL: ""
         run: npm run verify:route-access-coverage
+      - name: Raw SQL review gate
+        if: always() && steps.install.outcome == 'success'
+        run: npm run check:raw-sql
       - name: Readable logging contracts
         if: always() && steps.install.outcome == 'success'
         run: node scripts/verify-readable-logging-phase-10.mjs

@@ -2124,7 +2124,7 @@
     "PUT /api/whatsapp/stock-settings [requireAuth > <anonymous>]",
     "GET /api/whatsapp/np-settings [requireAuth > <anonymous>]",
     "PUT /api/whatsapp/np-settings [requireAuth > <anonymous>]",
-    "POST /api/daily-export/trigger-whatsapp [requireAuth > <anonymous>]",
+    "POST /api/daily-export/trigger-whatsapp [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/whatsapp/send-np-all-now [requireAuth > <anonymous>]",
     "POST /api/whatsapp/send-stock-report [requireAuth > <anonymous>]",
     "GET /api/stock-transfer-order/whatsapp-groups [requireAuth > <anonymous> > <anonymous>]",
