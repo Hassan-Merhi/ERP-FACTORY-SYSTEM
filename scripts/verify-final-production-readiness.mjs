@@ -69,12 +69,12 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
 requireMarkers(".github/workflows/main-certification.yml", [
   "name: Main Certification",
   "Verify exact merged main SHA",
-  // test:backend:verify is --complete, which is the plain pass AND the coverage
-  // pass. The frontend pair below still needs both names because those are two
-  // separate commands; requiring test:backend:verify:coverage here as well only
-  // pinned a redundant third backend pass into the certification job.
-  "test:backend:verify",
-  "test:frontend",
+  // The backend suite runs once, under coverage, as parallel isolated-database
+  // shards; the merge step enforces the coverage floors on the combined map.
+  // A separate plain pass only repeated the same tests, and so does a separate
+  // plain frontend pass next to the frontend coverage run.
+  "test:backend:coverage",
+  "run-backend-verification.mjs --merge-only",
   "test:frontend:coverage",
   "test:smoke-sweep",
   "verify:server-bundle",
