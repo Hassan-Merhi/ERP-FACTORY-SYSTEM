@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Save, Star, Trash2, X } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -13,6 +14,12 @@ import {
 
 export function useSupplierProformasState() {
   const {
+    createDestinationId,
+    destinations,
+    filterDestinationId,
+    ownerCompanyId,
+    setCreateDestinationId,
+    setFilterDestinationId,
     addLineMutation,
     addingLine,
     commitRename,
@@ -64,6 +71,12 @@ export function useSupplierProformasState() {
     toast,
   });
   return {
+    createDestinationId,
+    destinations,
+    filterDestinationId,
+    ownerCompanyId,
+    setCreateDestinationId,
+    setFilterDestinationId,
     addLineMutation,
     addingLine,
     commitRename,
@@ -178,6 +191,9 @@ export function SupplierProformasTableRowSection({
 }
 
 export function SupplierProformasSection({
+  destinations,
+  filterDestinationId,
+  setFilterDestinationId,
   commitRename,
   deleteMutation,
   proformas,
@@ -194,6 +210,9 @@ export function SupplierProformasSection({
   startRename,
 }: Pick<
   ReturnType<typeof useSupplierProformasState>,
+  | "destinations"
+  | "filterDestinationId"
+  | "setFilterDestinationId"
   | "commitRename"
   | "deleteMutation"
   | "proformas"
@@ -219,7 +238,16 @@ export function SupplierProformasSection({
           {(!proformas || proformas.length === 0) && (
             <p className="text-sm text-muted-foreground">No proformas yet. Create one to get started.</p>
           )}
-          {proformas?.map((p) => (
+          <div className="mb-3">
+            <Select value={filterDestinationId} onValueChange={setFilterDestinationId}>
+              <SelectTrigger data-testid="filter-proforma-company"><SelectValue placeholder="Destination company" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All destinations</SelectItem>
+                {destinations.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {proformas?.filter(p => filterDestinationId === "all" || (p.destinationCompanyId ?? p.companyId) === Number(filterDestinationId)).map((p) => (
             <div
               key={p.id}
               className={`flex items-center justify-between gap-2 p-2 rounded-md cursor-pointer ${selectedProformaId === p.id ? "bg-accent" : "hover-elevate"}`}
@@ -277,7 +305,7 @@ export function SupplierProformasSection({
                     starMutation.mutate(p.id);
                   }}
                   data-testid={`button-star-proforma-${p.id}`}
-                  title={p.isStarred ? "Unstar (remove as default)" : "Star (use for auto-comparison)"}
+                  title={p.isStarred ? "Remove default for this destination" : "Use as default for this destination"}
                 >
                   <Star
                     className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}

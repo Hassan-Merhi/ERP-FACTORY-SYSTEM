@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 // Extracted from ./workbook.ts to keep that module under the source-size cap.
 import ExcelJS from "exceljs";
 import type { CompanyExportData } from "../export-data";
@@ -211,6 +212,8 @@ export async function buildCompanyWorkbook(
   addSheet(wb, "Employee Txn Detail", data.employeeTxnDetail);
   addSheet(wb, "Location Stock Detail", data.locationStockDetail);
 
+  // Preserve full-company archive row-1 headers; style SUMMARY print metadata only.
+  styleSpecializedWorkbook(wb, { sheets: [{ name: "SUMMARY", purpose: "report" }] });
   const buf1 = Buffer.from(await wb.xlsx.writeBuffer());
   outputStream.write(buf1);
 }

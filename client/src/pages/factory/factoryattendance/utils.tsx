@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * Pure helpers and lookup tables for the FactoryAttendance page.
  *
@@ -240,6 +241,10 @@ export async function exportRangeExcel(
   XLSX.utils.book_append_sheet(wb, activeSheet, lang === "ar" ? "نشط" : "Active Workers");
   XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
 
+  styleFactoryOperationalWorkbook(wb, [
+    { name: lang === "ar" ? "نشط" : "Active Workers", titleRow: 1, headerRow: 3 },
+    { name: lang === "ar" ? "غير نشط" : "Inactive Workers", titleRow: 1, headerRow: 3 },
+  ]);
   await XLSX.writeFile(wb, exportFileName("attendance range", "xlsx", { from: startDate, to: endDate }));
 }
 

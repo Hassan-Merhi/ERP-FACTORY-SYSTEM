@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 import { Express } from "express";
 import type { Request, Response, RequestHandler } from "express";
 import { db } from "../db";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { supplierProformas, supplierProformaLines, suppliers } from "@shared/schema";
 import { toMoney } from "../lib/money";
@@ -266,8 +266,7 @@ function registerSupplierProformaRoutesPart2(app: Express, requireAuth: RequestH
 
   // ── Star / unstar a proforma ──────────────────────────────────────────────
   // PATCH /api/suppliers/:supplierId/proformas/:proformaId/star
-  // Toggles the starred state. Only one proforma per supplier+company can be
-  // starred at a time — starring a new one automatically unstarches the old one.
+  // Toggles the default proforma per supplier and destination company.
   app.patch(
     "/api/suppliers/:supplierId/proformas/:proformaId/star",
     requireAuth,
@@ -280,15 +279,21 @@ function registerSupplierProformaRoutesPart2(app: Express, requireAuth: RequestH
         if (supplierId === null || proformaId === null) return res.status(400).json({ message: "Invalid id" });
 
         const [current] = await db
-          .select({ id: supplierProformas.id, isStarred: supplierProformas.isStarred })
+          .select({
+            id: supplierProformas.id,
+            isStarred: supplierProformas.isStarred,
+            destinationCompanyId: supplierProformas.destinationCompanyId,
+            supplierId: supplierProformas.supplierId,
+          })
           .from(supplierProformas)
           .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
-        if (!current) return res.status(404).json({ message: "Proforma not found" });
+        if (!current || current.supplierId !== supplierId)
+          return res.status(404).json({ message: "Proforma not found" });
 
         const newStarred = !current.isStarred;
 
         if (newStarred) {
-          // Unstar all other proformas for this supplier+company first
+          // Only unstar defaults within the same destination. Legacy NULL means owner company.
           await db
             .update(supplierProformas)
             .set({ isStarred: false })
@@ -296,6 +301,9 @@ function registerSupplierProformaRoutesPart2(app: Express, requireAuth: RequestH
               and(
                 eq(supplierProformas.companyId, companyId),
                 eq(supplierProformas.supplierId, supplierId),
+                current.destinationCompanyId == null || current.destinationCompanyId === companyId
+                  ? sql`(${supplierProformas.destinationCompanyId} IS NULL OR ${supplierProformas.destinationCompanyId} = ${companyId})`
+                  : eq(supplierProformas.destinationCompanyId, current.destinationCompanyId),
                 ne(supplierProformas.id, proformaId)
               )
             );

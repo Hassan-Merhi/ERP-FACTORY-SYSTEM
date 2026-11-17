@@ -8,6 +8,7 @@ import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import * as XLSX from "@/lib/excelHelper";
@@ -29,6 +30,7 @@ interface Proforma {
   reference: string;
   notes: string | null;
   isStarred: boolean;
+  destinationCompanyId: number | null;
   createdAt: string;
   updatedAt: string;
   lines?: ProformaLine[];
@@ -51,13 +53,19 @@ export function useSupplierProformasStatePart1() {
   const searchString = useSearch();
   const requestedProformaId = new URLSearchParams(searchString).get("proformaId");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  useEscapeToParent("/suppliers");
+  const { selectedCompany } = useCompany();
+  useEscapeToParent(selectedCompany?.companyType === "properties" ? "/properties/suppliers" : "/suppliers");
 
   const [selectedProformaId, setSelectedProformaId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const [createRef, setCreateRef] = useState("");
   const [createNotes, setCreateNotes] = useState("");
+  const [createDestinationId, setCreateDestinationId] = useState("");
+  const [filterDestinationId, setFilterDestinationId] = useState("all");
+  const { data: companies = [] } = useQuery<{ id: number; name: string; parentCompanyId?: number | null }[]>({ queryKey: ["/api/companies"] });
+  const ownerCompanyId = selectedCompany?.id;
+  const destinations = companies.filter((company) => company.id === ownerCompanyId || company.parentCompanyId === ownerCompanyId);
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({
     barcode: "",
@@ -111,7 +119,7 @@ export function useSupplierProformasStatePart1() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { reference: string; notes: string }) => {
+    mutationFn: async (data: { reference: string; notes: string; destinationCompanyId: number }) => {
       const res = await apiRequest("POST", `/api/suppliers/${supplierId}/proformas`, data);
       return res.json();
     },
@@ -120,6 +128,7 @@ export function useSupplierProformasStatePart1() {
       setShowCreateDialog(false);
       setCreateRef("");
       setCreateNotes("");
+      setCreateDestinationId("");
       setSelectedProformaId(p.id);
       toast({ title: "Proforma created" });
     },
@@ -244,6 +253,12 @@ export function useSupplierProformasStatePart1() {
     },
   });
   return {
+    createDestinationId,
+    destinations,
+    filterDestinationId,
+    ownerCompanyId,
+    setCreateDestinationId,
+    setFilterDestinationId,
     addLineMutation,
     addingLine,
     commitRename,

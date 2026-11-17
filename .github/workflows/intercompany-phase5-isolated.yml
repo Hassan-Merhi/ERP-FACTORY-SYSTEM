@@ -1,0 +1,194 @@
+name: Intercompany Phase 5 Isolated Validation
+
+on:
+  push:
+    branches:
+      - feature/intercompany-container-trading
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: intercompany-phase5-isolated-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  phase5-isolated:
+    if: github.event_name == 'push' || github.head_ref == 'feature/intercompany-container-trading'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ic_phase5_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ic_phase5_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ic_phase5_test
+      PGSSLMODE: disable
+      NODE_ENV: test
+      SESSION_SECRET: local-phase5-validation-only
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Read exact branch commit through the scoped read-only GitHub token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            | tar --extract --gzip --strip-components=1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+
+      - name: Install pinned dependencies
+        id: install
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Compile TypeScript
+        if: always() && steps.install.outcome == 'success'
+        run: npm run check
+
+      - name: Check formatting of Phase 1–7 normal voucher auto-mirror source files
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --check \
+            server/services/intercompany/phase5Receipt.ts \
+            server/services/intercompany/phase5Cancel.ts \
+            server/services/intercompany/phase5LinkedLineGuard.ts \
+            server/services/intercompany/tradeSync.ts \
+            server/services/intercompany/sharedChargeSync.ts \
+            server/routes/import/intercompany-phase5.ts \
+            server/routes/import/index.ts \
+            shared/schema/intercompanyTrading.ts \
+            client/src/pages/intercompany/IntercompanyLifecycle.tsx \
+            client/src/routes/ErpRoutes.tsx \
+            client/src/app/PropertiesRoutes.tsx \
+            client/src/components/PropertiesSidebar.tsx \
+            client/src/pages/containers/ContainerToolbar.tsx \
+            server/services/intercompany/destinationStockMapping.ts \
+            server/services/intercompany/stockMatchingMessages.ts \
+            server/services/intercompany/destinationStockPreview.ts \
+            server/services/intercompany/containerTradingImport.ts \
+            server/routes/import/intercompany-container-trading.ts \
+            client/src/pages/poimport/PropertiesIntercompanyPOImport.tsx \
+            client/src/i18n/propertiesPoImportTranslations.ts \
+            tests/intercompany-phase4-auto-stock.test.ts \
+            server/services/intercompany/phase5ReceivingAccess.ts \
+            client/src/pages/intercompany/LinkedTradesEditor.tsx \
+            client/src/pages/containerdetail/components/ContainerDetailErpView.tsx \
+            client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx \
+            client/src/i18n/propertiesContainerIntercompanyTranslations.ts \
+            server/routes/import/intercompany-phase3.ts \
+            tests/intercompany-phase5-properties-container-integration.test.ts \
+            server/services/intercompany/pairedPaymentAuthorization.ts \
+            server/services/intercompany/paymentSync.ts \
+            server/services/intercompany/paymentQueries.ts \
+            client/src/pages/vouchers/intercompanyTransferPolicy.ts \
+            client/src/i18n/intercompanyVoucherTranslations.ts \
+            client/src/pages/vouchers/voucherSidebarGroups.ts \
+            client/src/pages/Vouchers.tsx \
+            client/src/pages/intercompany/IntercompanyPayments.tsx \
+            client/src/pages/StockHub.tsx \
+            client/src/app/PropertiesShell.tsx \
+            client/src/pages/properties/PropertiesRentalsHub.tsx \
+            tests/properties-lazy-loading-performance.test.ts \
+            client/src/components/PropertiesSidebar.tsx \
+            client/src/properties/config/propertiesNavigation.ts \
+            client/src/pages/StockQuery.tsx \
+            client/src/pages/StockItemDetail.tsx \
+            client/src/components/CombinedImportDialog.tsx \
+            tests/properties-stock-workspace.test.ts \
+            client/src/pages/InventoryHub.tsx \
+            shared/erpRouteAccess.ts \
+            tests/ui/hub-restricted-tabs.test.tsx \
+            tests/ui/route-guards-render.test.tsx \
+            client/src/pages/intercompany/intercompanyLegacyNavigation.ts \
+            client/src/properties/config/propertiesNavigation.ts \
+            client/src/components/PropertiesSidebar.tsx \
+            client/src/app/PropertiesRoutes.tsx \
+            client/src/routes/ErpRoutes.tsx \
+            server/services/intercompany/normalVoucherMatching.ts \
+            server/lib/migratedVoucherGuard.ts \
+            server/services/accounting/voucherCorrection.ts \
+            server/services/accounting/voucherReversal.ts \
+            server/routes/vouchers/normalIntercompanyVoucherRoutes.ts \
+            server/routes/voucherRoutes.ts \
+            client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx \
+            client/src/pages/vouchers/IntercompanyVoucherHistory.tsx \
+            client/src/pages/vouchers/useVoucherSaveMutation.ts \
+            client/src/pages/Vouchers.tsx \
+            tests/intercompany-normal-voucher-auto-mirror.test.ts \
+            tests/intercompany-paired-voucher-protection.test.ts \
+            tests/stock-workspace-integration.test.ts \
+            tests/intercompany-phase7-navigation.test.ts \
+            tests/intercompany-phase6-voucher-payments.test.ts \
+            tests/intercompany-phase5-database-guards.test.ts \
+            tests/intercompany-linked-delete-contract.test.ts \
+            tests/intercompany-linked-physical-delete-postgres.test.ts \
+            tests/intercompany-accounts-simplification.test.ts \
+            tests/intercompany-phase5-lifecycle-math.test.ts \
+            tests/intercompany-phase5-mirrored-lines.test.ts
+
+      - name: Build client and server bundles for Phase 7 navigation
+        if: always() && steps.install.outcome == 'success'
+        run: npm run build
+
+      - name: Test Stock, OTW and Inventory tabs and ERP access guards
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts --maxWorkers=2 \
+            tests/ui/hub-restricted-tabs.test.tsx \
+            tests/ui/route-guards-render.test.tsx
+
+      - name: Initialize the disposable PostgreSQL reference application schema
+        id: schema
+        if: always() && steps.install.outcome == 'success'
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+
+      - name: Execute normal Payment/Receipt auto-mirror regressions against disposable PostgreSQL
+        if: always() && steps.schema.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node node_modules/vitest/vitest.mjs run --maxWorkers=2 \
+            tests/intercompany-phase1-foundation.test.ts \
+            tests/intercompany-phase2-container-pricing.test.ts \
+            tests/intercompany-phase2-database-guards.test.ts \
+            tests/intercompany-phase2-destination-supplier.test.ts \
+            tests/intercompany-phase3-database-guards.test.ts \
+            tests/intercompany-phase3-pricing.test.ts \
+            tests/intercompany-phase4-auto-stock.test.ts \
+            tests/intercompany-phase4-database-guards.test.ts \
+            tests/intercompany-phase4-payment-money.test.ts \
+            tests/intercompany-phase5-properties-container-integration.test.ts \
+            tests/intercompany-normal-voucher-auto-mirror.test.ts \
+            tests/intercompany-paired-voucher-protection.test.ts \
+            tests/stock-workspace-integration.test.ts \
+            tests/properties-stock-workspace.test.ts \
+            tests/properties-lazy-loading-performance.test.ts \
+            tests/intercompany-phase7-navigation.test.ts \
+            tests/intercompany-phase6-voucher-payments.test.ts \
+            tests/intercompany-phase5-database-guards.test.ts \
+            tests/intercompany-phase5-lifecycle-math.test.ts \
+            tests/intercompany-phase5-mirrored-lines.test.ts

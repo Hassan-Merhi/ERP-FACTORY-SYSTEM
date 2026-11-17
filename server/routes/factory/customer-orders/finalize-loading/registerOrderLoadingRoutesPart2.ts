@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { plusMoney, toMoney } from "../../../../lib/money";
+import { hasAnyPhysicalDispatchTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 
 export function registerOrderLoadingRoutesPart2(app: Express) {
   app.post("/api/factory/customer-orders/:id/finalize-loading", requireAuth, async (req: Request, res: Response) => {
@@ -88,6 +89,7 @@ export function registerOrderLoadingRoutesPart2(app: Express) {
           .for("update");
         if (!order) throw new Error("Order not found");
         if (order.status !== "LOADING") throw new Error("Only LOADING orders can be finalized for loading");
+        if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) throw new Error("DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Close and financially post every trip, then open Dispatch Comparison to reconcile and finalize the one combined invoice with its net dispatch charges.");
 
         if (order.proformaIdUsed && order.proformaIdUsed !== orderProformaLink?.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
@@ -488,8 +490,10 @@ export function registerOrderLoadingRoutesPart2(app: Express) {
         ...(finalized.nextLoading ? { nextLoading: finalized.nextLoading } : {}),
       });
     } catch (error: unknown) {
-      logger.error("Error finalizing loading:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message.startsWith("DISPATCH_CONSOLIDATION_REQUIRED:")) return res.status(409).json({ code: "DISPATCH_CONSOLIDATION_REQUIRED", message });
+      logger.error("Error finalizing loading:", { error });
+      res.status(400).json({ message });
     }
   });
 }

@@ -1,7 +1,7 @@
 // Extracted from ./reports.ts to keep that module under the source-size cap.
 import type { Express, Request, RequestHandler, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { parseId, parseOptionalId } from "../../lib/parseId";
 import { buildAliasMap, resolveBarcode } from "../helpers/proformaBarcodeHelpers";
@@ -36,7 +36,12 @@ export function registerContainerLoadedItemReportRoutesPart1(app: Express, requi
         const [proforma] = await db
           .select()
           .from(supplierProformas)
-          .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+          .where(
+            and(
+              eq(supplierProformas.id, proformaId),
+              sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`
+            )
+          );
         if (!proforma) return res.status(404).json({ message: "Proforma not found" });
 
         const proformaLines = await db

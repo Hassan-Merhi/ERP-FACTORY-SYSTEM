@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import type { MixBatchRow } from "./MixBatchList";
 import { exportFileName } from "@/lib/exportFile";
 import {
@@ -348,6 +349,11 @@ async function exportMixBatchCostAnalysisStep3({
   dashboard.views = [{ state: "frozen", ySplit: 11 }];
 
   // High/low amounts remain visible with readable fixed USD and KG formats.
+  styleFactoryOperationalWorkbook(workbook, [
+    { name: "Daily Supplier Costs", headerRow: 4, titleRow: 1 },
+    { name: "Daily Totals", headerRow: 4, titleRow: 1 },
+    { name: "Monthly Average", headerRow: 4, titleRow: 1 },
+  ]);
   await writeFile(workbook, exportFileName(`raw materials cost analysis ${allTime ? "all time" : month}`, "xlsx"));
   return {};
 }

@@ -6,7 +6,7 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { containers } from "../../../shared/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 
 export function registerGitImportRoutesPart1(app: Express) {
   // ─── ETA-only template — 2 columns: Container # + New ETA ───────────────
@@ -28,7 +28,16 @@ export function registerGitImportRoutesPart1(app: Express) {
           .from(containers)
           .where(
             and(
-              eq(containers.companyId, companyId),
+              or(
+                eq(containers.companyId, companyId),
+                sql`EXISTS (
+                  SELECT 1 FROM intercompany_trades trade
+                  WHERE trade.physical_container_id = ${containers.id}
+                    AND trade.source_company_id = ${containers.companyId}
+                    AND trade.destination_company_id = ${companyId}
+                    AND trade.state = 'active'
+                )`
+              ),
               sql`LOWER(${containers.status}) NOT IN ('offloaded','closed','completed')`
             )
           )

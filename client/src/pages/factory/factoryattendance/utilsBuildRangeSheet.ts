@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 // Extracted from ./utils.tsx to keep that module under the source-size cap.
 import * as XLSX from "@/lib/excelHelper";
 import type { AttendanceStatus, PrintLang, ViewMode, WeekDay, WorkerRow } from "./types";
@@ -251,6 +252,10 @@ export async function exportWeeklyExcel(
   );
   XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
 
+  styleFactoryOperationalWorkbook(wb, [
+    { name: lang === "ar" ? "نشط" : "Active Workers", titleRow: 1, headerRow: 3 },
+    { name: lang === "ar" ? "غير نشط" : "Inactive Workers", titleRow: 1, headerRow: 3 },
+  ]);
   await XLSX.writeFile(
     wb,
     exportFileName(`attendance ${type}`, "xlsx", {

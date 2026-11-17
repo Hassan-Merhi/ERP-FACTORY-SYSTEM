@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import type { Request, Response } from "express";
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -51,6 +52,7 @@ async function handleGetStatsNetPositionExcelStep2(
 
   // ── Send file ─────────────────────────────────────────────────────────
   const dateTag = getClientDate(req);
+  styleUniversalFinancialWorkbook(wb, wb.worksheets?.map((ws) => ({ name: ws.name })) ?? []);
   const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());
   // Non-fatal: audit write must not block the Excel download
   try {

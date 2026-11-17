@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 // Extracted from ./FactoryPriceList.tsx to keep that module under the source-size cap.
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import type { ClientErrorLike } from "@/lib/clientError";
@@ -205,6 +206,9 @@ export function useFactoryPriceListState() {
     }
 
     ws.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Import headers remain on row 1 and the editable price fields retain their cues.
+    styleFactoryOperationalWorkbook(wb, [{ name: "Price List", headerRow: 1 }]);
 
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer as ArrayBuffer], {

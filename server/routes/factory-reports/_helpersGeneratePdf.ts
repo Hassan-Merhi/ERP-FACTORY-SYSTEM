@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 // Extracted from ./_helpers.ts to keep that module under the source-size cap.
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import PDFDocument from "pdfkit";
@@ -70,6 +71,7 @@ export async function generateEmptyExcel(
   sheet.addRow([]);
   sheet.addRow(["No data found for the selected period and filters."]);
 
+  styleUniversalFinancialWorkbook(workbook, [{ name: "Summary" }]);
   const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="supplier_usage_report_${startDate}_${endDate}.xlsx"`);

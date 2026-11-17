@@ -23,6 +23,7 @@ export function DaybookTable({
   setHiddenRowIds,
   showHidden,
   expandedVoucherId,
+  linkedVoucherIds,
   setExpandedVoucherId,
   expandedCondensedGroups,
   setExpandedCondensedGroups,
@@ -536,7 +537,7 @@ export function DaybookTable({
                     <EyeOff className="w-4 h-4 text-muted-foreground" />
                   )}
                 </Button>
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -797,7 +798,7 @@ export function DaybookTable({
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
                 ) : null}
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"

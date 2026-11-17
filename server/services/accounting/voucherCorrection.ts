@@ -29,6 +29,7 @@ import type { Response } from "express";
 import { vouchers, type Voucher } from "@shared/schema";
 import type { DbTransaction } from "../../db";
 import { HttpError } from "../../lib/httpError";
+import { isIntercompanyPairedVoucher, INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE } from "../../lib/migratedVoucherGuard";
 import { resultRows } from "../../lib/queryResult";
 import {
   readVoucherAuditState,
@@ -195,10 +196,18 @@ export async function assertVoucherEditableTx(
   options: VoucherEditCheckOptions = {}
 ): Promise<VoucherEditContext> {
   const voucher = await lockVoucherTx(tx, voucherId, options.companyId);
+  if (isIntercompanyPairedVoucher(voucher)) {
+    throw new VoucherCorrectionError(409, "IC_VOUCHER_IMMUTABLE", INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE, {
+      voucherId,
+    });
+  }
   if (await isDispatchFinancialVoucherTx(tx, voucher.companyId, voucherId)) {
-    throw new VoucherCorrectionError(409, "DISPATCH_TRIP_VOUCHER_LOCKED",
+    throw new VoucherCorrectionError(
+      409,
+      "DISPATCH_TRIP_VOUCHER_LOCKED",
       "This voucher belongs to a finalized Factory truck. Correct it through the Dispatch Management financial reversal workflow.",
-      { voucherId });
+      { voucherId }
+    );
   }
   if (await isFxAgentSettlementVoucherTx(tx, voucher.companyId, [voucherId])) {
     throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, { voucherId });
@@ -336,12 +345,20 @@ export async function reverseVoucherTx(
     );
   }
   const original = await lockVoucherTx(tx, input.voucherId, input.companyId);
+  if (isIntercompanyPairedVoucher(original)) {
+    throw new VoucherCorrectionError(409, "IC_VOUCHER_IMMUTABLE", INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE, {
+      voucherId: original.id,
+    });
+  }
   const companyId = original.companyId;
   await assertTransactionCompanyScope(tx, companyId);
   if (await isDispatchFinancialVoucherTx(tx, companyId, original.id)) {
-    throw new VoucherCorrectionError(409, "DISPATCH_TRIP_VOUCHER_LOCKED",
+    throw new VoucherCorrectionError(
+      409,
+      "DISPATCH_TRIP_VOUCHER_LOCKED",
       "Trip-owned vouchers cannot be individually reversed. Use Dispatch Management financial reversal.",
-      { voucherId: original.id });
+      { voucherId: original.id }
+    );
   }
   if (await isFxAgentSettlementVoucherTx(tx, companyId, [original.id])) {
     throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, {

@@ -2,7 +2,7 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "../../db";
 import { parseId, parseOptionalId } from "../../lib/parseId";
@@ -39,7 +39,12 @@ export function registerContainerLoadedItemReportRoutesPart2(app: Express, requi
         const [proforma] = await db
           .select()
           .from(supplierProformas)
-          .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+          .where(
+            and(
+              eq(supplierProformas.id, proformaId),
+              sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`
+            )
+          );
         if (!proforma) return res.status(404).json({ message: "Proforma not found" });
 
         const [container] = await db.select().from(containers).where(eq(containers.id, containerId));

@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 // Extracted from ./locationInventoryRoutes.ts to keep that module under the source-size cap.
 import ExcelJS from "exceljs";
 import type { Express, Request, Response } from "express";
@@ -426,6 +427,12 @@ export function registerFactoryLocationInventoryRoutesPart2(app: Express) {
 
         const dateStr = getClientDate(req);
         // Build buffer BEFORE setting headers so ExcelJS errors can still return a clean JSON 500.
+        styleFactoryOperationalWorkbook(workbook, [
+          { name: "Stock Summary", headerRow: 1 },
+          { name: "Wipers & Garbage", headerRow: 1 },
+          { name: "Bale Details", headerRow: 1 },
+          { name: "Garbage & Wiper Details", headerRow: 1 },
+        ]);
         const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="inventory_location_${locationId}_${dateStr}.xlsx"`);

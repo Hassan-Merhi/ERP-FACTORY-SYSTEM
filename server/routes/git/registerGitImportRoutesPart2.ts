@@ -7,7 +7,7 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { containers } from "../../../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { gitUpload, importUndoStore, pruneImportUndoStore } from "./_helpers";
 import { parseMoneyInput } from "../../lib/money";
 
@@ -203,12 +203,28 @@ export function registerGitImportRoutesPart2(app: Express) {
         const VALID_FREIGHT = new Set(["Yes", "No", "Pending"]);
 
         // Fetch all containers accessible to this session company
+        // A destination edits the physical tracking row only with an active linked trade.
+        const selectedCompanyId = req.session.currentCompanyId!;
         const allContainers = await db
           .select({ id: containers.id, containerNumber: containers.containerNumber, companyId: containers.companyId })
           .from(containers)
-          .where(eq(containers.companyId, req.session.currentCompanyId));
-
-        const byNumber = new Map(allContainers.map((c) => [c.containerNumber.trim().toUpperCase(), c]));
+          .where(
+            or(
+              eq(containers.companyId, selectedCompanyId),
+              sql`EXISTS (
+                SELECT 1 FROM intercompany_trades trade
+                WHERE trade.physical_container_id = ${containers.id}
+                  AND trade.source_company_id = ${containers.companyId}
+                  AND trade.destination_company_id = ${selectedCompanyId}
+                  AND trade.state = 'active'
+              )`
+            )
+          );
+        const byNumber = new Map<string, typeof allContainers>();
+        for (const candidate of allContainers) {
+          const key = candidate.containerNumber.trim().toUpperCase();
+          byNumber.set(key, [...(byNumber.get(key) ?? []), candidate]);
+        }
 
         let updated = 0;
         let skipped = 0;
@@ -263,7 +279,15 @@ export function registerGitImportRoutesPart2(app: Express) {
             continue;
           }
 
-          const match = byNumber.get(ctrNum);
+          const candidates = byNumber.get(ctrNum) ?? [];
+          const owned = candidates.filter((candidate) => candidate.companyId === selectedCompanyId);
+          const matches = owned.length ? owned : candidates;
+          if (matches.length > 1) {
+            errors.push(`Row ${rowNum}: "${ctrNum}" matches multiple containers; use a unique container number`);
+            skipped++;
+            continue;
+          }
+          const match = matches[0];
           if (!match) {
             notFound++;
             errors.push(`Row ${rowNum}: "${ctrNum}" not found in system`);

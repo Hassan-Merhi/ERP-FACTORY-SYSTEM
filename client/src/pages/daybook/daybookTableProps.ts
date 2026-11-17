@@ -12,6 +12,7 @@ export interface DaybookTableProps {
   setHiddenRowIds: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
   showHidden: boolean;
   expandedVoucherId: number | null;
+  linkedVoucherIds: ReadonlySet<number>;
   setExpandedVoucherId: (id: number | null) => void;
   expandedCondensedGroups: Set<string>;
   setExpandedCondensedGroups: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;

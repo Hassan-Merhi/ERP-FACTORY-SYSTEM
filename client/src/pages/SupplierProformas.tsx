@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -19,6 +20,12 @@ import {
 
 export default function SupplierProformas() {
   const {
+    createDestinationId,
+    destinations,
+    filterDestinationId,
+    ownerCompanyId,
+    setCreateDestinationId,
+    setFilterDestinationId,
     addLineMutation,
     addingLine,
     commitRename,
@@ -100,6 +107,9 @@ export default function SupplierProformas() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <SupplierProformasSection
+          destinations={destinations}
+          filterDestinationId={filterDestinationId}
+          setFilterDestinationId={setFilterDestinationId}
           commitRename={commitRename}
           deleteMutation={deleteMutation}
           proformas={proformas}
@@ -342,13 +352,22 @@ export default function SupplierProformas() {
                 data-testid="input-proforma-notes"
               />
             </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Destination company *</label>
+              <Select value={createDestinationId || String(ownerCompanyId ?? "")} onValueChange={setCreateDestinationId}>
+                <SelectTrigger data-testid="select-proforma-destination"><SelectValue placeholder="Select destination" /></SelectTrigger>
+                <SelectContent>
+                  {destinations.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                 Cancel
               </Button>
               <Button
-                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes })}
-                disabled={!createRef.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes, destinationCompanyId: Number(createDestinationId || ownerCompanyId) })}
+                disabled={!createRef.trim() || !Number(createDestinationId || ownerCompanyId) || createMutation.isPending}
                 data-testid="button-confirm-create"
               >
                 Create
