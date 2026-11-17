@@ -236,7 +236,7 @@ async function main() {
             }
           } catch (e: unknown) {
             await client.query("ROLLBACK").catch(() => {});
-            console.error(`  ✗ Failed to rebuild voucher #${r.voucher_id}:`, e instanceof Error ? e.message : String(e));
+            console.error("  ✗ Failed to rebuild voucher #%s:", r.voucher_id, e instanceof Error ? e.message : String(e));
           } finally {
             client.release();
           }
@@ -427,7 +427,7 @@ async function main() {
             posted++;
           } catch (e: unknown) {
             await client.query("ROLLBACK");
-            console.error(`  ✗ Failed group ${groupId}:`, e instanceof Error ? e.message : String(e));
+            console.error("  ✗ Failed group %s:", groupId, e instanceof Error ? e.message : String(e));
           } finally {
             client.release();
           }
