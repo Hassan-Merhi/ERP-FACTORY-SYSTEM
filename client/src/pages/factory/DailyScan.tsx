@@ -14,8 +14,6 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { ExportButton } from "@/components/export/ReportExportMenu";
-import { exportFileName } from "@/lib/exportFile";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Badge } from "@/components/ui/badge";
@@ -286,7 +284,7 @@ export default function DailyScan() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: exportFileName("daily scan", "xlsx", { date: selectedDate }),
+        fileName: "daily-scan-" + selectedDate + ".xlsx",
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },
@@ -381,12 +379,16 @@ export default function DailyScan() {
               {scanned.length}/{totalBales} verified · {formatNumber(scannedKg)}/{formatNumber(totalKg)} kg
             </span>
           )}
-          <ExportButton
+          <Button
             className="daily-scan-export"
+            variant="outline"
             size="sm"
             onClick={handleExport}
             data-testid="button-daily-scan-export"
-          />
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Export
+          </Button>
         </div>
       </div>
 
