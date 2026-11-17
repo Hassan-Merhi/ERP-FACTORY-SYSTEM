@@ -1,0 +1,110 @@
+{
+  "description": "Full offline mode (Phase A): which rows of each table a PC may hold. A table with a company_id column belongs to that company unless it is excluded. Every other table needs an explicit rule here. scripts/pc-sync/audit-table-policy.mjs checks this file against the live schema; the change-feed installer reads it.",
+  "version": 1,
+  "excludedPrefixes": {
+    "_orphan_archive_": "Archived orphan rows kept for audit, not used by the app.",
+    "factory_edge_": "Factory server sync bookkeeping (cursors, outboxes, receipts); cloud-side state only.",
+    "sp_migration_": "One-off supplier/payables migration runs.",
+    "historical_sales_cost_repair_": "One-off repair runs."
+  },
+  "excluded": {
+    "session": "Login sessions.",
+    "migrations_log": "Schema bookkeeping.",
+    "one_time_migrations": "Schema bookkeeping.",
+    "passkey_credentials": "Sign-in credentials.",
+    "user_credential_versions": "Sign-in credential versions.",
+    "factory_replay_consumed_tokens": "Consumed one-time tokens.",
+    "support_ticket_outbox": "Cloud delivery queue.",
+    "user_presence": "Live online status.",
+    "user_activity_log": "Per-request telemetry.",
+    "direct_messages": "Private messages between users.",
+    "export_settings": "Holds the export mailbox password.",
+    "export_recipients": "Email export configuration, cloud only.",
+    "daily_export_runs": "Email export runs, cloud only.",
+    "net_position_export_settings": "Email export configuration, cloud only.",
+    "whatsapp_settings": "Holds the WhatsApp API token.",
+    "system_settings": "May hold service credentials; to be reviewed key by key before any is shared.",
+    "factory_row_history_baselines": "Internal history baselines."
+  },
+  "self": {
+    "companies": "id"
+  },
+  "members": {
+    "users": { "table": "user_company_roles", "column": "user_id" }
+  },
+  "companyColumns": {
+    "intercompany_account_links": ["source_company_id", "dest_company_id"],
+    "intercompany_pos_configs": ["source_company_id", "dest_company_id"],
+    "intercompany_payment_requests": ["from_company_id"]
+  },
+  "parents": {
+    "ai_import_rows": [{ "column": "job_id", "table": "ai_import_jobs" }],
+    "bale_recode_items": [{ "column": "session_id", "table": "bale_recode_sessions" }],
+    "bale_transfer_items": [{ "column": "transfer_id", "table": "bale_transfers" }],
+    "container_charges": [{ "column": "container_id", "table": "containers" }],
+    "container_offloads": [{ "column": "container_id", "table": "containers" }],
+    "container_offload_items": [{ "column": "offload_id", "table": "container_offloads" }],
+    "container_tracking_checks": [{ "column": "container_id", "table": "containers" }],
+    "container_tracking_events": [{ "column": "container_id", "table": "containers" }],
+    "credit_note_items": [{ "column": "voucher_id", "table": "vouchers" }],
+    "customer_order_bale_removals": [{ "column": "order_id", "table": "customer_orders" }],
+    "customer_order_bales": [{ "column": "order_id", "table": "customer_orders" }],
+    "customer_order_bales_history": [{ "column": "order_id", "table": "customer_orders" }],
+    "customer_order_charges": [{ "column": "order_id", "table": "customer_orders" }],
+    "customer_order_lines": [{ "column": "order_id", "table": "customer_orders" }],
+    "customer_proforma_lines": [{ "column": "proforma_id", "table": "customer_proformas" }],
+    "draft_pos_sales": [{ "column": "location_id", "table": "locations" }],
+    "draft_pos_sale_items": [{ "column": "draft_id", "table": "draft_pos_sales" }],
+    "employee_group_members": [{ "column": "employee_id", "table": "employees" }],
+    "erp_payroll_run_items": [{ "column": "employee_id", "table": "employees" }],
+    "factory_container_tracking_checks": [{ "column": "container_id", "table": "factory_containers" }],
+    "factory_container_tracking_events": [{ "column": "container_id", "table": "factory_containers" }],
+    "factory_daybook_entry_edits": [{ "column": "daybook_entry_id", "table": "factory_daybook_entries" }],
+    "factory_mix_batch_sources": [{ "column": "container_id", "table": "factory_containers" }],
+    "factory_production_plan_entries": [{ "column": "plan_id", "table": "factory_production_plans" }],
+    "factory_target_bonus_category_allocations": [
+      { "column": "allocation_set_id", "table": "factory_target_bonus_category_allocation_sets" }
+    ],
+    "factory_v3_load_bales": [{ "column": "bale_id", "table": "factory_bales" }],
+    "import_logs": [{ "column": "container_id", "table": "containers" }],
+    "inter_company_transfers": [
+      { "column": "from_voucher_id", "table": "vouchers" },
+      { "column": "to_voucher_id", "table": "vouchers" }
+    ],
+    "intercompany_link_recipients": [{ "column": "link_id", "table": "intercompany_account_links" }],
+    "intercompany_payment_requests": [{ "column": "link_id", "table": "intercompany_account_links" }],
+    "mix_batch_sources": [{ "column": "container_id", "table": "containers" }],
+    "notification_rules": [{ "column": "recipient_user_id", "table": "users" }],
+    "po_line_items": [{ "column": "po_id", "table": "purchase_orders" }],
+    "salary_advance_deductions": [{ "column": "salary_advance_id", "table": "salary_advances" }],
+    "sales_items": [{ "column": "voucher_id", "table": "vouchers" }],
+    "scheduled_whatsapp_attachments": [{ "column": "occurrence_id", "table": "scheduled_whatsapp_occurrences" }],
+    "status_metrics": [{ "column": "template_id", "table": "status_report_templates" }],
+    "status_metric_values": [{ "column": "run_id", "table": "status_report_runs" }],
+    "stock_adjustment_vouchers": [{ "column": "voucher_id", "table": "vouchers" }],
+    "stock_adjustment_items": [{ "column": "adjustment_id", "table": "stock_adjustment_vouchers" }],
+    "stock_group_location_archive_items": [{ "column": "stock_item_id", "table": "stock_items" }],
+    "stock_item_location_prices": [{ "column": "stock_item_id", "table": "stock_items" }],
+    "stock_transfer_vouchers": [{ "column": "voucher_id", "table": "vouchers" }],
+    "stock_transfer_items": [{ "column": "transfer_id", "table": "stock_transfer_vouchers" }],
+    "stock_transfer_revisions": [{ "column": "transfer_id", "table": "stock_transfer_vouchers" }],
+    "stock_transfer_revision_items": [{ "column": "revision_id", "table": "stock_transfer_revisions" }],
+    "supplier_container_loaded_items": [{ "column": "container_id", "table": "containers" }],
+    "supplier_profit_po_overrides": [{ "column": "stock_item_id", "table": "stock_items" }],
+    "supplier_proforma_lines": [{ "column": "proforma_id", "table": "supplier_proformas" }],
+    "user_language_preferences": [{ "column": "user_id", "table": "users" }],
+    "user_notes": [{ "column": "user_id", "table": "users" }],
+    "user_preferences": [{ "column": "user_id", "table": "users" }],
+    "waste_dispatch_items": [{ "column": "stock_item_id", "table": "stock_items" }],
+    "whatsapp_message_schedule_deliveries": [{ "column": "schedule_id", "table": "whatsapp_message_schedules" }],
+    "whatsapp_message_schedule_recipients": [{ "column": "schedule_id", "table": "whatsapp_message_schedules" }]
+  },
+  "shared": {
+    "label_design_colors": "Label colour palette used by every company."
+  },
+  "redact": {
+    "users": ["password"],
+    "scheduled_whatsapp_occurrences": ["claim_token"],
+    "stock_transfer_order_approval_deliveries": ["claim_token"]
+  }
+}

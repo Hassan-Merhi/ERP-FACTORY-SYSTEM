@@ -10077,6 +10077,38 @@
         }
       ],
       "reason": "Fixture INSERT at :248-252 splices an explicit id column into the string-literal column list constant from :230-231 via slice(1); the VALUES tuple is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "70fc3d5738a848ff8e2a",
+      "path": "server/offline/pcSync/changeFeedSql.mjs",
+      "kind": "assembled-sql-text",
+      "context": "renderChangeFeedInstallSql",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "literal( JSON.stringify(policyRows) )",
+          "source": "policyRows built from config/pc-sync-table-policy.json resolved against the DBA's own catalog (table names, column names, primary keys); written to a file by scripts/pc-sync/render-change-feed-sql.mjs",
+          "validation": "literal() doubles every single quote, so the JSON is one SQL string constant; PostgreSQL parses it with jsonb_populate_recordset and the DO block quotes each table name with format('%I')"
+        }
+      ],
+      "reason": "Generates a DBA-reviewed install file and never runs against a request: the only dynamic part is a quoted JSON constant of repository policy and catalog names, unpacked by PostgreSQL and turned into identifiers only through format('%I')."
+    },
+    {
+      "id": "ec612f40c603fc7d9ba5",
+      "path": "server/offline/pcSync/changeFeedSql.mjs",
+      "kind": "assembled-sql-text",
+      "context": "renderChangeFeedInstallSql",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "literal(grantTo)",
+          "source": "--grant-to=<role> command-line option of scripts/pc-sync/render-change-feed-sql.mjs, typed by the DBA generating the install file",
+          "validation": "renderChangeFeedInstallSql refuses any value outside ^[a-z_][a-z0-9_]*$ before rendering; the role then reaches GRANT only through format('%I')"
+        }
+      ],
+      "reason": "The application role name comes from the DBA's command line, is pattern-checked, sits in a quoted constant and becomes an identifier only through format('%I') inside the generated DO block; no application user can supply it."
     }
   ]
 }
