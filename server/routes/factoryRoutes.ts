@@ -195,6 +195,11 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
       if (match) {
         const suffix = match[2] || "";
         const dispatchOperation = suffix === "loading-dispatches" || suffix.startsWith("loading-dispatches/");
+        // Changing the Priority Scan queue edits only its own configuration rows.
+        // It cannot mutate posted truck bales, charges, or ledger vouchers.
+        // Keep the route's own company/role checks and transaction locks active.
+        const priorityQueueOnly =
+          ["PUT", "DELETE"].includes(req.method) && suffix === "loading-list/priority-scan-config";
         const readOnlyMetadata = ["loading-note", "hidden"].includes(suffix);
         const statusTransition = req.method === "POST" && ["verify", "finalize-loading"].includes(suffix);
         // A posted earlier truck must not prevent new physical bales being scanned
@@ -209,6 +214,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
           req.method === "DELETE" && /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
         if (
           !dispatchOperation &&
+          !priorityQueueOnly &&
           !readOnlyMetadata &&
           !statusTransition &&
           !continuingLoadingScan &&
