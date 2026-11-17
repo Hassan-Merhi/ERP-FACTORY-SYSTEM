@@ -108,8 +108,16 @@ function makeIdAllocator(path) {
 }
 
 const NUMERIC_CALLS = new Set(["Number", "parseInt", "parseFloat", "Number.parseInt", "Number.parseFloat", "Date.now", "Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.max", "Math.min", "Math.abs", "Math.random"]);
-const NUMERIC_METHODS = new Set(["push", "getTime", "valueOf", "indexOf", "lastIndexOf", "findIndex", "charCodeAt", "getFullYear", "getMonth", "getDate", "getUTCFullYear", "getUTCMonth", "getUTCDate", "getHours"]);
+// Members that are numeric ONLY on a receiver of the right built-in type. The
+// receiver must be proven (see knownCollection / knownDate): a request value or
+// parsed JSON can carry `{ length: "1 OR 1=1" }`, and String#valueOf returns the
+// string itself, so the member name alone proves nothing.
+const COLLECTION_NUMERIC_METHODS = new Set(["push", "unshift", "indexOf", "lastIndexOf", "findIndex", "findLastIndex", "charCodeAt", "codePointAt", "localeCompare"]);
+const DATE_NUMERIC_METHODS = new Set(["getTime", "getFullYear", "getMonth", "getDate", "getDay", "getHours", "getMinutes", "getSeconds", "getMilliseconds", "getUTCFullYear", "getUTCMonth", "getUTCDate", "getUTCDay", "getUTCHours", "getTimezoneOffset"]);
 const NUMERIC_PROPS = new Set(["length", "size"]);
+// Calls that always return a real Array or string, whatever their input.
+const COLLECTION_FACTORIES = new Set(["Object.keys", "Object.values", "Object.entries", "Array.from", "Array.of", "String", "JSON.stringify"]);
+const COLLECTION_RETURNING_METHODS = new Set(["filter", "map", "flatMap", "flat", "slice", "concat", "split", "keys", "values", "entries", "toSorted", "toReversed", "join", "trim", "toUpperCase", "toLowerCase", "padStart", "padEnd", "toString", "toFixed", "toISOString", "repeat", "replace", "replaceAll", "substring"]);
 const ARITH = new Set([
   ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken,
   ts.SyntaxKind.PercentToken, ts.SyntaxKind.AsteriskAsteriskToken, ts.SyntaxKind.BarToken,
@@ -240,13 +248,14 @@ export function createProver(ast, facts) {
       if ([ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)) return isNumeric(node.left) && isNumeric(node.right);
     }
     if (ts.isConditionalExpression(node)) return isNumeric(node.whenTrue) && isNumeric(node.whenFalse);
-    if (ts.isPropertyAccessExpression(node) && NUMERIC_PROPS.has(node.name.text)) return true;
+    if (ts.isPropertyAccessExpression(node) && NUMERIC_PROPS.has(node.name.text)) return knownCollection(node.expression);
     if (ts.isCallExpression(node)) {
       const callee = unwrap(node.expression);
       const name = text(callee);
       if (NUMERIC_CALLS.has(name) || /^Math\.\w+$/.test(name)) return true;
-      if (ts.isPropertyAccessExpression(callee) && NUMERIC_METHODS.has(callee.name.text)) return true;
-      if (ts.isPropertyAccessExpression(callee) && callee.name.text === "toFixed") return true;
+      if (ts.isPropertyAccessExpression(callee) && COLLECTION_NUMERIC_METHODS.has(callee.name.text)) return knownCollection(callee.expression);
+      if (ts.isPropertyAccessExpression(callee) && DATE_NUMERIC_METHODS.has(callee.name.text)) return knownDate(callee.expression);
+      if (ts.isPropertyAccessExpression(callee) && callee.name.text === "toFixed") return isNumeric(callee.expression);
       if (name === "String" && node.arguments.length === 1) return isNumeric(node.arguments[0]);
     }
     if (ts.isIdentifier(node)) {
@@ -256,6 +265,46 @@ export function createProver(ast, facts) {
         resolving.add(node.text);
         try { return inits.every(isNumeric); } finally { resolving.delete(node.text); }
       }
+    }
+    return false;
+  }
+
+  /** Receiver is certainly a real Array / string / Map / Set built by this code. */
+  function knownCollection(node, depth = 0) {
+    node = unwrap(node);
+    if (!node || depth > 8) return false;
+    if (ts.isArrayLiteralExpression(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) return true;
+    if (ts.isNewExpression(node) && ["Map", "Set", "Array"].includes(text(node.expression))) return true;
+    if (ts.isCallExpression(node)) {
+      const callee = unwrap(node.expression);
+      if (COLLECTION_FACTORIES.has(text(callee))) return true;
+      if (ts.isPropertyAccessExpression(callee) && COLLECTION_RETURNING_METHODS.has(callee.name.text)) {
+        // e.g. xs.filter(...), s.split(","): only when the receiver is itself known.
+        return knownCollection(callee.expression, depth + 1);
+      }
+      return false;
+    }
+    if (ts.isIdentifier(node)) {
+      if (facts.forOf.has(node.text) || resolving.has("col:" + node.text)) return false;
+      const inits = constInitializers(node.text);
+      if (!inits) return false;
+      resolving.add("col:" + node.text);
+      try { return inits.every((i) => knownCollection(i, depth + 1)); } finally { resolving.delete("col:" + node.text); }
+    }
+    return false;
+  }
+
+  /** Receiver is certainly a Date built by this code. */
+  function knownDate(node, depth = 0) {
+    node = unwrap(node);
+    if (!node || depth > 8) return false;
+    if (ts.isNewExpression(node) && text(node.expression) === "Date") return true;
+    if (ts.isIdentifier(node)) {
+      if (resolving.has("date:" + node.text)) return false;
+      const inits = constInitializers(node.text);
+      if (!inits) return false;
+      resolving.add("date:" + node.text);
+      try { return inits.every((i) => knownDate(i, depth + 1)); } finally { resolving.delete("date:" + node.text); }
     }
     return false;
   }

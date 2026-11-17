@@ -1,27 +1,27 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4484,
+    "scannedFiles": 4486,
     "perRoot": {
       "server": 2333,
       "shared": 151,
       "scripts": 280,
       "migrations": 92,
-      "tests": 1625
+      "tests": 1627
     },
-    "totalSites": 1187,
+    "totalSites": 1188,
     "byCategory": {
       "plpgsql-execute": 14,
       "indirect-query-text": 131,
       "query-text": 557,
-      "assembled-sql-text": 386,
+      "assembled-sql-text": 387,
       "sql.raw": 70,
       "dynamic-identifier": 22,
       "sql-array-join": 7
     },
     "byDisposition": {
-      "auto-verified": 689,
-      "reviewed": 498
+      "auto-verified": 678,
+      "reviewed": 510
     },
     "userControlledValidated": 1,
     "unresolved": 0
@@ -371,15 +371,26 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "main",
-      "dynamicInputs": [],
+      "dynamicInputs": [
+        {
+          "expression": "m.planningTimeMs?.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:277)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "m.executionTimeMs?.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:277)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
       "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:not-sql-text",
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "findingId": "RSQL-0020",
@@ -394,10 +405,20 @@
           "expression": "m.actualRows",
           "source": "m.actualRows = EXPLAIN JSON plan['Actual Rows'] (scripts/collect-program6d-query-plans.mjs:86)",
           "validation": "Not used as SQL: only console.log at :276-279"
+        },
+        {
+          "expression": "m.seqScans.length",
+          "source": "length of an in-memory array/Buffer built in main (scripts/collect-program6d-query-plans.mjs:278)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "m.indexScans.length",
+          "source": "length of an in-memory array/Buffer built in main (scripts/collect-program6d-query-plans.mjs:278)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
         }
       ],
       "userControlled": "no",
-      "validation": "Not used as SQL: only console.log at :276-279",
+      "validation": "Not used as SQL: only console.log at :276-279 / Array/Buffer length is an integer; the text is a log/console line, never executed as SQL / Array/Buffer length is an integer; the text is a log/console line, never executed as SQL",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -415,13 +436,18 @@
       "context": "main",
       "dynamicInputs": [
         {
+          "expression": "candidateTotal.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:303)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "candidateRows",
           "source": "candidateRows = sum of plan actualRows numbers (scripts/collect-program6d-query-plans.mjs:300)",
           "validation": "Not used as SQL: only console.log at :301-304"
         }
       ],
       "userControlled": "no",
-      "validation": "Not used as SQL: only console.log at :301-304",
+      "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Not used as SQL: only console.log at :301-304",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -772,15 +798,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "run",
-      "dynamicInputs": [],
+      "dynamicInputs": [
+        {
+          "expression": "pending.length",
+          "source": "length of an in-memory array/Buffer built in run (scripts/reconcile-factory-invoices-20261014.ts:102)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        }
+      ],
       "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:not-sql-text",
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "findingId": "RSQL-0038",
@@ -790,15 +822,31 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "run",
-      "dynamicInputs": [],
+      "dynamicInputs": [
+        {
+          "expression": "gross.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "posted.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "expected.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
       "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:not-sql-text",
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "findingId": "RSQL-0039",
@@ -918,6 +966,11 @@
       "context": "run",
       "dynamicInputs": [
         {
+          "expression": "snapshot.length",
+          "source": "length of an in-memory array/Buffer built in run (scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts:127)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "blocked",
           "source": "blocked = integer counter (scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts:112-117)",
           "validation": "Not SQL: console.log only (:127)"
@@ -929,7 +982,7 @@
         }
       ],
       "userControlled": "no",
-      "validation": "Not SQL: console.log only (:127) / Not SQL: console.log only (:127)",
+      "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL / Not SQL: console.log only (:127) / Not SQL: console.log only (:127)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2182,6 +2235,11 @@
       "context": "settleNegativeLayers",
       "dynamicInputs": [
         {
+          "expression": "consume.toFixed(QTY_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in settleNegativeLayers (server/inventoryHelper.ts:246)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "layer.provisional_rate",
           "source": "layer.provisional_rate from inventory_negative_layers row (server/inventoryHelper.ts:233)",
           "validation": "Not SQL: logger.info message only (:244-247)"
@@ -2190,10 +2248,15 @@
           "expression": "incomingRate.toString()",
           "source": "incomingRate.toString() Decimal (server/inventoryHelper.ts settleNegativeLayers args)",
           "validation": "Not SQL: logger.info message only"
+        },
+        {
+          "expression": "variance.toFixed(VALUE_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in settleNegativeLayers (server/inventoryHelper.ts:246)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
         }
       ],
       "userControlled": "no",
-      "validation": "Not SQL: logger.info message only (:244-247) / Not SQL: logger.info message only",
+      "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Not SQL: logger.info message only (:244-247) / Not SQL: logger.info message only / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2209,15 +2272,26 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adjustInventory",
-      "dynamicInputs": [],
+      "dynamicInputs": [
+        {
+          "expression": "delta.toFixed(QTY_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in adjustInventory (server/inventoryHelper.ts:456)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "receiptValue.toFixed(VALUE_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in adjustInventory (server/inventoryHelper.ts:456)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
       "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:not-sql-text",
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "findingId": "RSQL-0105",
@@ -2330,6 +2404,11 @@
           "validation": "Not SQL: logger.info only (:690-694)"
         },
         {
+          "expression": "best.events.length",
+          "source": "length of an in-memory array/Buffer built in scrapeMaerskDirect (server/lib/maerskDirectScraper.ts:692)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "best.eta ?? \"none\"",
           "source": "best.eta from scraped data (:692)",
           "validation": "Not SQL: logger.info only"
@@ -2341,7 +2420,7 @@
         }
       ],
       "userControlled": "no",
-      "validation": "Not SQL: logger.info only (:690-694) / Not SQL: logger.info only / Not SQL: logger.info only",
+      "validation": "Not SQL: logger.info only (:690-694) / Array/Buffer length is an integer; the text is a log/console line, never executed as SQL / Not SQL: logger.info only / Not SQL: logger.info only",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2359,13 +2438,18 @@
       "context": "scrapeMaerskDirect",
       "dynamicInputs": [
         {
+          "expression": "events.length",
+          "source": "length of an in-memory array/Buffer built in scrapeMaerskDirect (server/lib/maerskDirectScraper.ts:732)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "eta ?? \"none\"",
           "source": "eta from __NEXT_DATA__ scraped JSON (server/lib/maerskDirectScraper.ts:728)",
           "validation": "Not SQL: logger.info only (:730-734)"
         }
       ],
       "userControlled": "no",
-      "validation": "Not SQL: logger.info only (:730-734)",
+      "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL / Not SQL: logger.info only (:730-734)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2649,15 +2733,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "genericFilteredCte",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "bind(companyId)",
+          "source": "request filter value pushed into the bound-parameter array by bind in genericFilteredCte (server/routes/account-transaction-pagination/voucherEntryStatement.ts:54)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0124",
@@ -2767,15 +2857,26 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "runVoucherEntryStatement",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "dateParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:217)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "idParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:217)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0129",
@@ -2785,15 +2886,31 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "runVoucherEntryStatement",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "dateParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "idParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "entryParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0130",
@@ -2818,10 +2935,15 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:233)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "userControlled": "no",
-      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Cursor sortDate/sortId/sortEntryId bound in chunkValues; token scope-checked by decodeContinuousCursor + isVoucherEntryCursor (:203-205) / Two fixed literals selected by kind",
+      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Cursor sortDate/sortId/sortEntryId bound in chunkValues; token scope-checked by decodeContinuousCursor + isVoucherEntryCursor (:203-205) / Two fixed literals selected by kind / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2852,10 +2974,15 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:237)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "userControlled": "no",
-      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Cursor sortDate/sortId/sortEntryId bound in chunkValues; token scope-checked by decodeContinuousCursor + isVoucherEntryCursor (:203-205) / Two fixed literals selected by kind",
+      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Cursor sortDate/sortId/sortEntryId bound in chunkValues; token scope-checked by decodeContinuousCursor + isVoucherEntryCursor (:203-205) / Two fixed literals selected by kind / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2905,10 +3032,15 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "baseCount",
+          "source": "values.length of the CTE's bound-parameter array (voucherEntryStatement.ts genericFilteredCte)",
+          "validation": "integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound"
         }
       ],
       "userControlled": "no",
-      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Two fixed literals selected by kind",
+      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Two fixed literals selected by kind / integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -2934,10 +3066,15 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "baseCount",
+          "source": "values.length of the CTE's bound-parameter array (voucherEntryStatement.ts genericFilteredCte)",
+          "validation": "integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound"
         }
       ],
       "userControlled": "no",
-      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Two fixed literals selected by kind",
+      "validation": "baseFrom made of literal map column names and $n placeholders; kind literal at all callers (index.ts:81-221) / Two fixed literals selected by kind / integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -5146,15 +5283,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "conditions",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "ref",
+          "source": "ref = \"$\" + args.length after args.push(search pattern) in conditions() (factoryPressingReportRoutes.ts)",
+          "validation": "placeholder text only; the escaped ILIKE pattern is a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "placeholder text only; the escaped ILIKE pattern is a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0243",
@@ -5391,10 +5534,15 @@
           "expression": "selectSql",
           "source": "server/routes/factory/factoryPressingReportRoutes.ts:209-216 selectSql = \"SELECT \" + detail|condensed + from (+ group) + literal ORDER BY; sqlPage appends \" LIMIT $\"+(args.length+1)+\" OFFSET $\"+(args.length+2) (:221)",
           "validation": "detail/condensed/group literal+constant; from = literal predicates with $n (conditions(), :90-140); limit/page bound via pageArgs (:220)"
+        },
+        {
+          "expression": "args.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/factory/factoryPressingReportRoutes.ts:253)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
         }
       ],
       "userControlled": "indirect-validated",
-      "validation": "detail/condensed/group literal+constant; from = literal predicates with $n (conditions(), :90-140); limit/page bound via pageArgs (:220)",
+      "validation": "detail/condensed/group literal+constant; from = literal predicates with $n (conditions(), :90-140); limit/page bound via pageArgs (:220) / only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -7579,10 +7727,20 @@
           "expression": "where.text",
           "source": "where.text from buildCatalogWhere at retailCatalogRoutes.ts:469 (LIMIT/OFFSET are $n built at :483-484)",
           "validation": "every request value goes through add() (:111-114) which pushes to params and returns only \"$n\"; other clauses are literals; stockStatus comparator is a literal ternary (:189)"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in registerRetailCatalogRoutes (server/routes/retailCatalogRoutes.ts:486)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "offsetParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in registerRetailCatalogRoutes (server/routes/retailCatalogRoutes.ts:486)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "userControlled": "no",
-      "validation": "every request value goes through add() (:111-114) which pushes to params and returns only \"$n\"; other clauses are literals; stockStatus comparator is a literal ternary (:189)",
+      "validation": "every request value goes through add() (:111-114) which pushes to params and returns only \"$n\"; other clauses are literals; stockStatus comparator is a literal ternary (:189) / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9060,13 +9218,18 @@
       "context": "registerTicketReportingRoutes",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:37)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
         }
       ],
       "userControlled": "no",
-      "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
+      "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres / clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9084,13 +9247,18 @@
       "context": "registerTicketReportingRoutes",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:49)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
         }
       ],
       "userControlled": "no",
-      "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
+      "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres / clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9108,13 +9276,18 @@
       "context": "registerTicketReportingRoutes",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:52)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
         }
       ],
       "userControlled": "no",
-      "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
+      "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres / clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9132,13 +9305,18 @@
       "context": "registerTicketReportingRoutes",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:55)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
         }
       ],
       "userControlled": "no",
-      "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
+      "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres / clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9180,13 +9358,18 @@
       "context": "registerTicketReportingRoutes",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:67)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
         }
       ],
       "userControlled": "no",
-      "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
+      "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres / clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -9294,11 +9477,16 @@
       "findingId": "RSQL-0447",
       "id": "fb4090aa07fa275f88d8",
       "path": "server/routes/whatsappRoutes.ts",
-      "line": 706,
+      "line": 707,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "registerWhatsAppRoutes",
       "dynamicInputs": [
+        {
+          "expression": "pdfBuf.length",
+          "source": "length of an in-memory array/Buffer built in registerWhatsAppRoutes (server/routes/whatsappRoutes.ts:707)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
         {
           "expression": "pageCount",
           "source": "pageCount from generateStockPdf(), server/routes/whatsappRoutes.ts:681",
@@ -9316,7 +9504,7 @@
         }
       ],
       "userControlled": "no",
-      "validation": "numeric; logger.error sink at :703-706 / numeric; logger.error sink / logger.error / res.status(502).json sink only, no query",
+      "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL / numeric; logger.error sink at :703-706 / numeric; logger.error sink / logger.error / res.status(502).json sink only, no query",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -11862,7 +12050,7 @@
       "findingId": "RSQL-0553",
       "id": "0f0eb65d18fbdb799e65",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 313,
+      "line": 318,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11880,7 +12068,7 @@
       "findingId": "RSQL-0554",
       "id": "65ae928d64589f3a6946",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 314,
+      "line": 319,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11898,7 +12086,7 @@
       "findingId": "RSQL-0555",
       "id": "e495104e6c99f7155aff",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 315,
+      "line": 320,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11916,7 +12104,7 @@
       "findingId": "RSQL-0556",
       "id": "7d8d4563c0e8367cda6e",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 320,
+      "line": 325,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11934,7 +12122,7 @@
       "findingId": "RSQL-0557",
       "id": "a1677e24dde112132ee5",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 324,
+      "line": 329,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11952,7 +12140,7 @@
       "findingId": "RSQL-0558",
       "id": "97eba77e0e151e4bd3d7",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 326,
+      "line": 331,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11970,7 +12158,7 @@
       "findingId": "RSQL-0559",
       "id": "87db1c6c3389ec4bd0d6",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 329,
+      "line": 334,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -11988,7 +12176,7 @@
       "findingId": "RSQL-0560",
       "id": "5fe896fe7a466f656ca5",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 331,
+      "line": 336,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12006,7 +12194,7 @@
       "findingId": "RSQL-0561",
       "id": "e20ad8fcd279d9a2da5d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 332,
+      "line": 337,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12024,7 +12212,7 @@
       "findingId": "RSQL-0562",
       "id": "71aa3586eb37061f8e99",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 333,
+      "line": 338,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12042,7 +12230,7 @@
       "findingId": "RSQL-0563",
       "id": "aaedd297279752e1e7ec",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 338,
+      "line": 343,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12060,7 +12248,7 @@
       "findingId": "RSQL-0564",
       "id": "08cdae56bda35be5f9ab",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 342,
+      "line": 347,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12078,7 +12266,7 @@
       "findingId": "RSQL-0565",
       "id": "24ee1d978e3c21869ffc",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 348,
+      "line": 353,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12096,7 +12284,7 @@
       "findingId": "RSQL-0566",
       "id": "5a34f9653dd451c2f0fb",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 352,
+      "line": 357,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12114,7 +12302,7 @@
       "findingId": "RSQL-0567",
       "id": "a94b245635a04fbaf93d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 354,
+      "line": 359,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12132,7 +12320,7 @@
       "findingId": "RSQL-0568",
       "id": "488f2a8e1a77063ac5d3",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 357,
+      "line": 362,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12150,7 +12338,7 @@
       "findingId": "RSQL-0569",
       "id": "77e873f75a0f44cabc29",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 361,
+      "line": 366,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12168,7 +12356,7 @@
       "findingId": "RSQL-0570",
       "id": "d95929cbab8c97b70584",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 365,
+      "line": 370,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12186,7 +12374,7 @@
       "findingId": "RSQL-0571",
       "id": "babbc9c8f3e9ebcd8df5",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 371,
+      "line": 376,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12204,7 +12392,7 @@
       "findingId": "RSQL-0572",
       "id": "df5061b01d4464a13a10",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 375,
+      "line": 380,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12222,7 +12410,7 @@
       "findingId": "RSQL-0573",
       "id": "1f60703c27f1235066ef",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 377,
+      "line": 382,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12240,7 +12428,7 @@
       "findingId": "RSQL-0574",
       "id": "a621800ddbcb5198ff83",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 380,
+      "line": 385,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12258,7 +12446,7 @@
       "findingId": "RSQL-0575",
       "id": "35ecb176512d63f41ca3",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 384,
+      "line": 389,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12276,7 +12464,7 @@
       "findingId": "RSQL-0576",
       "id": "0f9b6f32cf2d2b943241",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 388,
+      "line": 393,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12294,7 +12482,7 @@
       "findingId": "RSQL-0577",
       "id": "472a27e36fa1b478705d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 392,
+      "line": 397,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12312,7 +12500,7 @@
       "findingId": "RSQL-0578",
       "id": "254a5a2c6ea1d712b745",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 394,
+      "line": 399,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12330,7 +12518,7 @@
       "findingId": "RSQL-0579",
       "id": "89530d854a56ca86dd0f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 397,
+      "line": 402,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12348,7 +12536,7 @@
       "findingId": "RSQL-0580",
       "id": "07e5b888fe7ff93c6764",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 401,
+      "line": 406,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12366,7 +12554,7 @@
       "findingId": "RSQL-0581",
       "id": "9ac72d8c86fb0d26d02f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 407,
+      "line": 412,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12384,7 +12572,7 @@
       "findingId": "RSQL-0582",
       "id": "6ae84c3772273d36b7d4",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 411,
+      "line": 416,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12402,7 +12590,7 @@
       "findingId": "RSQL-0583",
       "id": "f9d3f7163784674299f8",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 415,
+      "line": 420,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12420,7 +12608,7 @@
       "findingId": "RSQL-0584",
       "id": "97e39f893655a42bf8bc",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 417,
+      "line": 422,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12438,7 +12626,7 @@
       "findingId": "RSQL-0585",
       "id": "97c4149379e477c96cd7",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 420,
+      "line": 425,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12456,7 +12644,7 @@
       "findingId": "RSQL-0586",
       "id": "8abb4c8535e8ae41f48b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 424,
+      "line": 429,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12474,7 +12662,7 @@
       "findingId": "RSQL-0587",
       "id": "1380d6de8ebaa47480e6",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 428,
+      "line": 433,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12492,7 +12680,7 @@
       "findingId": "RSQL-0588",
       "id": "89cab9579137b8398c23",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 432,
+      "line": 437,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12510,7 +12698,7 @@
       "findingId": "RSQL-0589",
       "id": "789b1561719c0b5e0639",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 436,
+      "line": 441,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12528,7 +12716,7 @@
       "findingId": "RSQL-0590",
       "id": "d13521da328ad2fd862e",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 438,
+      "line": 443,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12546,7 +12734,7 @@
       "findingId": "RSQL-0591",
       "id": "ffb1b3be17c68982e13d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 441,
+      "line": 446,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12564,7 +12752,7 @@
       "findingId": "RSQL-0592",
       "id": "f3e756f693b889620240",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 443,
+      "line": 448,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12582,7 +12770,7 @@
       "findingId": "RSQL-0593",
       "id": "d56c3c49b3849330a814",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 446,
+      "line": 451,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12600,7 +12788,7 @@
       "findingId": "RSQL-0594",
       "id": "ff5acd84d783adfaaa78",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 448,
+      "line": 453,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12618,7 +12806,7 @@
       "findingId": "RSQL-0595",
       "id": "2ee834d1451e69140371",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 451,
+      "line": 456,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12636,7 +12824,7 @@
       "findingId": "RSQL-0596",
       "id": "079dc4af82f135e12c45",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 454,
+      "line": 459,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12654,7 +12842,7 @@
       "findingId": "RSQL-0597",
       "id": "e6ddbce81bfb65845a7d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 458,
+      "line": 463,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12672,7 +12860,7 @@
       "findingId": "RSQL-0598",
       "id": "b2bd36564087a6da9e9a",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 462,
+      "line": 467,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12690,7 +12878,7 @@
       "findingId": "RSQL-0599",
       "id": "9a5df02ff4917609ef51",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 466,
+      "line": 471,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12708,7 +12896,7 @@
       "findingId": "RSQL-0600",
       "id": "3a5fbe2f7395029b9a73",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 470,
+      "line": 475,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12726,7 +12914,7 @@
       "findingId": "RSQL-0601",
       "id": "38948f2c146bb9f98788",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 474,
+      "line": 479,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12744,7 +12932,7 @@
       "findingId": "RSQL-0602",
       "id": "bfc05bd3637945172311",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 476,
+      "line": 481,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12762,7 +12950,7 @@
       "findingId": "RSQL-0603",
       "id": "d983810b41004530eff3",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 479,
+      "line": 484,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12780,7 +12968,7 @@
       "findingId": "RSQL-0604",
       "id": "789f3e12256dd75f5435",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 480,
+      "line": 485,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12798,7 +12986,7 @@
       "findingId": "RSQL-0605",
       "id": "055ca823e2b925c145ff",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 483,
+      "line": 488,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12816,7 +13004,7 @@
       "findingId": "RSQL-0606",
       "id": "938b117a5c45725752d9",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 487,
+      "line": 492,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12834,7 +13022,7 @@
       "findingId": "RSQL-0607",
       "id": "8af1f2fb52e9f0d19a50",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 491,
+      "line": 496,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12852,7 +13040,7 @@
       "findingId": "RSQL-0608",
       "id": "3128c8069f08570249fd",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 495,
+      "line": 500,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12870,7 +13058,7 @@
       "findingId": "RSQL-0609",
       "id": "4b49fc4805a853125c2c",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 497,
+      "line": 502,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12888,7 +13076,7 @@
       "findingId": "RSQL-0610",
       "id": "9bdd7fcaa3c70f06133d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 500,
+      "line": 505,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12906,7 +13094,7 @@
       "findingId": "RSQL-0611",
       "id": "738bd37767b0239d2c19",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 504,
+      "line": 509,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12924,7 +13112,7 @@
       "findingId": "RSQL-0612",
       "id": "aa4bc00a0b1133e958a4",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 507,
+      "line": 512,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12942,7 +13130,7 @@
       "findingId": "RSQL-0613",
       "id": "6e6f0d68e5fb3a8914bf",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 511,
+      "line": 516,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12960,7 +13148,7 @@
       "findingId": "RSQL-0614",
       "id": "94175fbb1f3c9dcfc3e9",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 513,
+      "line": 518,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12978,7 +13166,7 @@
       "findingId": "RSQL-0615",
       "id": "f82119d3075013c42e70",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 514,
+      "line": 519,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -12996,7 +13184,7 @@
       "findingId": "RSQL-0616",
       "id": "8b42c782de9db1580895",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 517,
+      "line": 522,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13014,7 +13202,7 @@
       "findingId": "RSQL-0617",
       "id": "ab6dcb37fc1b9c3dab12",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 519,
+      "line": 524,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13032,7 +13220,7 @@
       "findingId": "RSQL-0618",
       "id": "7916b050973d3dbc7139",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 522,
+      "line": 527,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13050,7 +13238,7 @@
       "findingId": "RSQL-0619",
       "id": "6d0c63c936b01182e253",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 526,
+      "line": 531,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13068,7 +13256,7 @@
       "findingId": "RSQL-0620",
       "id": "665042218a6e59502ede",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 528,
+      "line": 533,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13086,7 +13274,7 @@
       "findingId": "RSQL-0621",
       "id": "c06a4dfd05b82d916590",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 531,
+      "line": 536,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13104,7 +13292,7 @@
       "findingId": "RSQL-0622",
       "id": "d016592b71a7a18e906e",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 534,
+      "line": 539,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13122,7 +13310,7 @@
       "findingId": "RSQL-0623",
       "id": "28d206ddc340cd3c450f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 536,
+      "line": 541,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13140,7 +13328,7 @@
       "findingId": "RSQL-0624",
       "id": "ad894cd0ff6b68358b14",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 539,
+      "line": 544,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13158,7 +13346,7 @@
       "findingId": "RSQL-0625",
       "id": "f4eb7d4d00139c71fea5",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 543,
+      "line": 548,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13176,7 +13364,7 @@
       "findingId": "RSQL-0626",
       "id": "2cbcc02856776030aa16",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 547,
+      "line": 552,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13194,7 +13382,7 @@
       "findingId": "RSQL-0627",
       "id": "712d1b7e79848bbe22f4",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 551,
+      "line": 556,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13212,7 +13400,7 @@
       "findingId": "RSQL-0628",
       "id": "e2883992f77cbd0454c1",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 554,
+      "line": 559,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13230,7 +13418,7 @@
       "findingId": "RSQL-0629",
       "id": "317572f695cdb62c2f1f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 558,
+      "line": 563,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13248,7 +13436,7 @@
       "findingId": "RSQL-0630",
       "id": "6998f140a8a356398d83",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 562,
+      "line": 567,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13266,7 +13454,7 @@
       "findingId": "RSQL-0631",
       "id": "70fcd23cf844e014e27a",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 566,
+      "line": 571,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13284,7 +13472,7 @@
       "findingId": "RSQL-0632",
       "id": "89d894edb8b7cbd2ce3c",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 570,
+      "line": 575,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13302,7 +13490,7 @@
       "findingId": "RSQL-0633",
       "id": "5e174161f911dfdada0b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 574,
+      "line": 579,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13320,7 +13508,7 @@
       "findingId": "RSQL-0634",
       "id": "53cd8cc9bb4a29a5807b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 578,
+      "line": 583,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13338,7 +13526,7 @@
       "findingId": "RSQL-0635",
       "id": "690463427658a235d3ee",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 582,
+      "line": 587,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13356,7 +13544,7 @@
       "findingId": "RSQL-0636",
       "id": "625a8a4966d000e6e732",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 585,
+      "line": 590,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13374,7 +13562,7 @@
       "findingId": "RSQL-0637",
       "id": "aeb0d8148c6f8d4b4002",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 589,
+      "line": 594,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13392,7 +13580,7 @@
       "findingId": "RSQL-0638",
       "id": "630fba20053feb89c614",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 593,
+      "line": 598,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13410,7 +13598,7 @@
       "findingId": "RSQL-0639",
       "id": "8af0f7fbfefe96a7d0e0",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 597,
+      "line": 602,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13428,7 +13616,7 @@
       "findingId": "RSQL-0640",
       "id": "2f6cf1182be8786915f5",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 600,
+      "line": 605,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13446,7 +13634,7 @@
       "findingId": "RSQL-0641",
       "id": "46ce58b8fef0ac4c9bd0",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 604,
+      "line": 609,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13464,7 +13652,7 @@
       "findingId": "RSQL-0642",
       "id": "62ada25ac2457c77cce9",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 608,
+      "line": 613,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13482,7 +13670,7 @@
       "findingId": "RSQL-0643",
       "id": "5ec9078b778ada15c532",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 614,
+      "line": 619,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13500,7 +13688,7 @@
       "findingId": "RSQL-0644",
       "id": "a05faa9211052a341c43",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 616,
+      "line": 621,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13518,7 +13706,7 @@
       "findingId": "RSQL-0645",
       "id": "cee1b976ee499433c04e",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 619,
+      "line": 624,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13536,7 +13724,7 @@
       "findingId": "RSQL-0646",
       "id": "4013fc9021cee24826e1",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 621,
+      "line": 626,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13554,7 +13742,7 @@
       "findingId": "RSQL-0647",
       "id": "2f8f26be120bef687700",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 624,
+      "line": 629,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13572,7 +13760,7 @@
       "findingId": "RSQL-0648",
       "id": "8bc8520b3634164cc06b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 626,
+      "line": 631,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13590,7 +13778,7 @@
       "findingId": "RSQL-0649",
       "id": "85098022f8b74be79d3b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 629,
+      "line": 634,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13608,7 +13796,7 @@
       "findingId": "RSQL-0650",
       "id": "d340d4ea57ba0fb67402",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 631,
+      "line": 636,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13626,7 +13814,7 @@
       "findingId": "RSQL-0651",
       "id": "527b30557bc8a91c083f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 634,
+      "line": 639,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13644,7 +13832,7 @@
       "findingId": "RSQL-0652",
       "id": "46b2bd209e42865e0f76",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 638,
+      "line": 643,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13662,7 +13850,7 @@
       "findingId": "RSQL-0653",
       "id": "be920fff159b117940c6",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 639,
+      "line": 644,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13680,7 +13868,7 @@
       "findingId": "RSQL-0654",
       "id": "80dca8b36c6a6a30dd1b",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 640,
+      "line": 645,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13698,7 +13886,7 @@
       "findingId": "RSQL-0655",
       "id": "d72b3a49f59cca8fb2bd",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 643,
+      "line": 648,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13716,7 +13904,7 @@
       "findingId": "RSQL-0656",
       "id": "1185a8f20be70de51666",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 647,
+      "line": 652,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13734,7 +13922,7 @@
       "findingId": "RSQL-0657",
       "id": "3bc33680d4c0fca2b5fd",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 651,
+      "line": 656,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13752,7 +13940,7 @@
       "findingId": "RSQL-0658",
       "id": "7facde45d55a89400e4f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 655,
+      "line": 660,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13770,7 +13958,7 @@
       "findingId": "RSQL-0659",
       "id": "d29ed76780ab4abea281",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 659,
+      "line": 664,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13788,7 +13976,7 @@
       "findingId": "RSQL-0660",
       "id": "1c6877ef5ffb0d032680",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 663,
+      "line": 668,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13806,7 +13994,7 @@
       "findingId": "RSQL-0661",
       "id": "ef40d917e6a42f723e49",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 667,
+      "line": 672,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13824,7 +14012,7 @@
       "findingId": "RSQL-0662",
       "id": "220cda626b8d106160a7",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 671,
+      "line": 676,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13842,7 +14030,7 @@
       "findingId": "RSQL-0663",
       "id": "2a14449c2051a401de53",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 675,
+      "line": 680,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13860,7 +14048,7 @@
       "findingId": "RSQL-0664",
       "id": "d0954c850515363f0000",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 679,
+      "line": 684,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13878,7 +14066,7 @@
       "findingId": "RSQL-0665",
       "id": "886c2a57cadb5a8d2a46",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 683,
+      "line": 688,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13896,7 +14084,7 @@
       "findingId": "RSQL-0666",
       "id": "112884ebf7369382e67f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 687,
+      "line": 692,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13914,7 +14102,7 @@
       "findingId": "RSQL-0667",
       "id": "5684089494f92b0cfdc6",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 693,
+      "line": 698,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13932,7 +14120,7 @@
       "findingId": "RSQL-0668",
       "id": "95e9f91cbf9c43852f2d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 718,
+      "line": 723,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13950,7 +14138,7 @@
       "findingId": "RSQL-0669",
       "id": "4bd2547b0b34b03e011f",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 722,
+      "line": 727,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13968,7 +14156,7 @@
       "findingId": "RSQL-0670",
       "id": "03053da053229d673c19",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 726,
+      "line": 731,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -13986,7 +14174,7 @@
       "findingId": "RSQL-0671",
       "id": "9777e25867d9ebeb8886",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 730,
+      "line": 735,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14004,7 +14192,7 @@
       "findingId": "RSQL-0672",
       "id": "953258884ca4c39e2ae9",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 732,
+      "line": 737,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14022,7 +14210,7 @@
       "findingId": "RSQL-0673",
       "id": "85492968cd196da688ad",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 735,
+      "line": 740,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14040,7 +14228,7 @@
       "findingId": "RSQL-0674",
       "id": "0ee207f436de1f52a8ca",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 737,
+      "line": 742,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14058,7 +14246,7 @@
       "findingId": "RSQL-0675",
       "id": "89d53dd07ac3d672b2f3",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 738,
+      "line": 743,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14076,7 +14264,7 @@
       "findingId": "RSQL-0676",
       "id": "f4c7a0f4754e7bfc67db",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 743,
+      "line": 748,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14094,7 +14282,7 @@
       "findingId": "RSQL-0677",
       "id": "db8dd373286dfd95a9c0",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 747,
+      "line": 752,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14112,7 +14300,7 @@
       "findingId": "RSQL-0678",
       "id": "7ddce4382d40911a1345",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 753,
+      "line": 758,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14130,7 +14318,7 @@
       "findingId": "RSQL-0679",
       "id": "86adb27a0c4f717d4b07",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 757,
+      "line": 762,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14148,7 +14336,7 @@
       "findingId": "RSQL-0680",
       "id": "8c87110941989ec97794",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 761,
+      "line": 766,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14166,7 +14354,7 @@
       "findingId": "RSQL-0681",
       "id": "e291c40b7b09e3c08037",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 764,
+      "line": 769,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14184,7 +14372,7 @@
       "findingId": "RSQL-0682",
       "id": "1c52c35b0e5948b7f651",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 770,
+      "line": 775,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14202,7 +14390,7 @@
       "findingId": "RSQL-0683",
       "id": "69a856936b761d6b71f3",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 772,
+      "line": 777,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14220,7 +14408,7 @@
       "findingId": "RSQL-0684",
       "id": "528f4a225b98e6ae4c80",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 775,
+      "line": 780,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14238,7 +14426,7 @@
       "findingId": "RSQL-0685",
       "id": "ed6377aca5f3d0442635",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 781,
+      "line": 786,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14256,7 +14444,7 @@
       "findingId": "RSQL-0686",
       "id": "e71fe5092c9ba2d6d0c4",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 785,
+      "line": 790,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14274,7 +14462,7 @@
       "findingId": "RSQL-0687",
       "id": "5d8d5e928f2caed99091",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 789,
+      "line": 794,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14292,7 +14480,7 @@
       "findingId": "RSQL-0688",
       "id": "78d1fc92b0d0bba30601",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 793,
+      "line": 798,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14310,7 +14498,7 @@
       "findingId": "RSQL-0689",
       "id": "d7472c07fb97d2514f25",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 797,
+      "line": 802,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14328,7 +14516,7 @@
       "findingId": "RSQL-0690",
       "id": "94a1408df81ccada3a6d",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 801,
+      "line": 806,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14346,7 +14534,7 @@
       "findingId": "RSQL-0691",
       "id": "0340193538e20ff02888",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 805,
+      "line": 810,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14364,7 +14552,7 @@
       "findingId": "RSQL-0692",
       "id": "de63e00aaf5751d00527",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 809,
+      "line": 814,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14382,7 +14570,7 @@
       "findingId": "RSQL-0693",
       "id": "fc6a556db6bd920dee51",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 815,
+      "line": 820,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14400,7 +14588,7 @@
       "findingId": "RSQL-0694",
       "id": "6f2d83e440cebdd63ac0",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 819,
+      "line": 824,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14418,7 +14606,7 @@
       "findingId": "RSQL-0695",
       "id": "8ee620d866b7798a60e0",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 823,
+      "line": 828,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14436,7 +14624,7 @@
       "findingId": "RSQL-0696",
       "id": "4b3dd409b2117ce6cbca",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 827,
+      "line": 832,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14454,7 +14642,7 @@
       "findingId": "RSQL-0697",
       "id": "53a4e1ee701805196aac",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 831,
+      "line": 836,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14472,7 +14660,7 @@
       "findingId": "RSQL-0698",
       "id": "95df0e2d3eeb0c851a68",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 835,
+      "line": 840,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14490,7 +14678,7 @@
       "findingId": "RSQL-0699",
       "id": "a6e866776029186ddcb9",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 839,
+      "line": 844,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14508,7 +14696,7 @@
       "findingId": "RSQL-0700",
       "id": "dd3f165edf939e3b86f7",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 843,
+      "line": 848,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14526,7 +14714,7 @@
       "findingId": "RSQL-0701",
       "id": "30e018f66b0a5c3706e7",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 847,
+      "line": 852,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14544,7 +14732,7 @@
       "findingId": "RSQL-0702",
       "id": "e4bda16b649b9e5a8642",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 851,
+      "line": 856,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14562,7 +14750,7 @@
       "findingId": "RSQL-0703",
       "id": "3999b8230667fa6145e8",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 855,
+      "line": 860,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -14580,7 +14768,7 @@
       "findingId": "RSQL-0704",
       "id": "20ee18816406e05ce885",
       "path": "server/services/export-excel/workbook.ts",
-      "line": 860,
+      "line": 865,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "streamCompanyWorkbookDirect",
@@ -15839,7 +16027,7 @@
       "findingId": "RSQL-0760",
       "id": "5403ec14b3a538a1bbed",
       "path": "server/services/factoryBilingualSnapshotService.ts",
-      "line": 379,
+      "line": 380,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "buildFactoryBilingualSnapshotPlan",
@@ -15863,7 +16051,7 @@
       "findingId": "RSQL-0761",
       "id": "eedd6b3e082a81e4faf9",
       "path": "server/services/factoryBilingualSnapshotService.ts",
-      "line": 387,
+      "line": 388,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "buildFactoryBilingualSnapshotPlan",
@@ -15887,7 +16075,7 @@
       "findingId": "RSQL-0762",
       "id": "cc32379b357e2cdf8770",
       "path": "server/services/factoryBilingualSnapshotService.ts",
-      "line": 443,
+      "line": 444,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "applyTargets",
@@ -15911,7 +16099,7 @@
       "findingId": "RSQL-0763",
       "id": "f8fd414bd2f668325766",
       "path": "server/services/factoryBilingualSnapshotService.ts",
-      "line": 449,
+      "line": 450,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "applyTargets",
@@ -15935,7 +16123,7 @@
       "findingId": "RSQL-0764",
       "id": "c5bcab9627e6ca43a728",
       "path": "server/services/factoryBilingualSnapshotService.ts",
-      "line": 450,
+      "line": 451,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "applyTargets",
@@ -16146,10 +16334,20 @@
           "expression": "movement.movementId",
           "source": "historicalSalesCostRepairRewind.ts:623 movement.movementId",
           "validation": "same: becomes bound $n value"
+        },
+        {
+          "expression": "recorded.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in rewindCheckpointToLegacySales (server/services/inventory/historicalSalesCostRepairRewind.ts:621)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "inferred.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in rewindCheckpointToLegacySales (server/services/inventory/historicalSalesCostRepairRewind.ts:621)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
         }
       ],
       "userControlled": "no",
-      "validation": "value is part of a check.detail data string, not SQL; persisted via bound param in persistChecks (historicalSalesCostRepair.ts:139 check.detail ?? null) / same: becomes bound $n value / same: becomes bound $n value",
+      "validation": "value is part of a check.detail data string, not SQL; persisted via bound param in persistChecks (historicalSalesCostRepair.ts:139 check.detail ?? null) / same: becomes bound $n value / same: becomes bound $n value / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL / Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -16697,15 +16895,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "variantWhere",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "add(filters.companyId)",
+          "source": "request filter value pushed into the bound-parameter array by add in variantWhere (server/services/retail/retailVariantReports.ts:28)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0800",
@@ -16715,15 +16919,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "variantWhere",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "add(filters.brandId)",
+          "source": "request filter value pushed into the bound-parameter array by add in variantWhere (server/services/retail/retailVariantReports.ts:30)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0801",
@@ -16733,15 +16943,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "getRetailStockReport",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "params.push(filters.locationId)",
+          "source": "request filter value pushed into the bound-parameter array by params.push in getRetailStockReport (server/services/retail/retailVariantReports.ts:49)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0802",
@@ -16753,13 +16969,23 @@
       "context": "getRetailStockReport",
       "dynamicInputs": [
         {
+          "expression": "locationJoin",
+          "source": "literal `AND ... location_id = $n` with $n from params.push(filters.locationId) in getRetailStockReport (server/services/retail/retailVariantReports.ts:66)",
+          "validation": "empty string or literal SQL plus a `$n` placeholder; the location id is bound"
+        },
+        {
           "expression": "where.join(\" AND \")",
           "source": "server/services/retail/retailVariantReports.ts:23-41 variantWhere()",
           "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals"
+        },
+        {
+          "expression": "havingClause",
+          "source": "HAVING clause joined from literal predicates selected by filters.status; slow-days value bound via params.push (retailVariantReports.ts)",
+          "validation": "status only selects among fixed literal fragments; numeric slowDays is clamped and bound"
         }
       ],
       "userControlled": "no",
-      "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals",
+      "validation": "empty string or literal SQL plus a `$n` placeholder; the location id is bound / every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals / status only selects among fixed literal fragments; numeric slowDays is clamped and bound",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -16775,15 +17001,21 @@
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "getRetailVariantSalesReport",
-      "dynamicInputs": [],
-      "userControlled": "no",
-      "validation": "All dynamic parts proven literal/const by the scanner",
-      "parameterization": "no dynamic value in SQL text",
+      "dynamicInputs": [
+        {
+          "expression": "params.push(filters.locationId)",
+          "source": "request filter value pushed into the bound-parameter array by params.push in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:131)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "userControlled": "indirect-validated",
+      "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter",
+      "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
-      "disposition": "auto-verified:static",
-      "reason": null
+      "disposition": "reviewed:placeholder-text",
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "findingId": "RSQL-0804",
@@ -16795,13 +17027,28 @@
       "context": "getRetailVariantSalesReport",
       "dynamicInputs": [
         {
+          "expression": "fromParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "toParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "locationClause",
+          "source": "literal `AND ... location_id = $n` with $n from params.push(filters.locationId) in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "empty string or literal SQL plus a `$n` placeholder; the location id is bound"
+        },
+        {
           "expression": "where.join(\" AND \")",
           "source": "server/services/retail/retailVariantReports.ts:23-41 variantWhere()",
           "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals"
         }
       ],
       "userControlled": "no",
-      "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals",
+      "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding / empty string or literal SQL plus a `$n` placeholder; the location id is bound / every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -18899,7 +19146,7 @@
       "findingId": "RSQL-0897",
       "id": "b84f85ce38aa93e5e6ba",
       "path": "server/storage/company-deletion.ts",
-      "line": 564,
+      "line": 571,
       "category": "query-text",
       "sink": "client.query",
       "context": "deleteCompany",
@@ -22827,9 +23074,27 @@
     },
     {
       "findingId": "RSQL-1086",
+      "id": "50abcbafd8713da3c15b",
+      "path": "tests/security-raw-sql-checker.test.ts",
+      "line": 166,
+      "category": "assembled-sql-text",
+      "sink": "string assembly",
+      "context": "<module>",
+      "dynamicInputs": [],
+      "userControlled": "no",
+      "validation": "All dynamic parts proven literal/const by the scanner",
+      "parameterization": "no dynamic value in SQL text",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "auto-verified:static",
+      "reason": null
+    },
+    {
+      "findingId": "RSQL-1087",
       "id": "bccc7ba94e17cfa1e349",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 196,
+      "line": 198,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -22842,30 +23107,6 @@
       ],
       "userControlled": "no",
       "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
-      "parameterization": "dynamic text reviewed (values bound separately)",
-      "risk": "low",
-      "requiredAction": "none",
-      "reviewStatus": "closed",
-      "disposition": "reviewed:test-fixture",
-      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
-    },
-    {
-      "findingId": "RSQL-1087",
-      "id": "bbbc9599681636702511",
-      "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 198,
-      "category": "query-text",
-      "sink": "pool.query",
-      "context": "<module>",
-      "dynamicInputs": [
-        {
-          "expression": "ledger",
-          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
-        }
-      ],
-      "userControlled": "no",
-      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -22875,21 +23116,21 @@
     },
     {
       "findingId": "RSQL-1088",
-      "id": "7b773b84358a4beffeb1",
+      "id": "bbbc9599681636702511",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 201,
+      "line": 200,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
       "dynamicInputs": [
         {
-          "expression": "parties",
-          "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "expression": "ledger",
+          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "userControlled": "no",
-      "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
+      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
@@ -22899,33 +23140,9 @@
     },
     {
       "findingId": "RSQL-1089",
-      "id": "211f8037d5cf60ae8968",
+      "id": "7b773b84358a4beffeb1",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 208,
-      "category": "query-text",
-      "sink": "pool.query",
-      "context": "<module>",
-      "dynamicInputs": [
-        {
-          "expression": "ledger",
-          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
-        }
-      ],
-      "userControlled": "no",
-      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
-      "parameterization": "dynamic text reviewed (values bound separately)",
-      "risk": "low",
-      "requiredAction": "none",
-      "reviewStatus": "closed",
-      "disposition": "reviewed:test-fixture",
-      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
-    },
-    {
-      "findingId": "RSQL-1090",
-      "id": "9739cb7a42976045c356",
-      "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 212,
+      "line": 203,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -22946,10 +23163,10 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1091",
-      "id": "61b943ccba402adff126",
+      "findingId": "RSQL-1090",
+      "id": "211f8037d5cf60ae8968",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 213,
+      "line": 210,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -22970,10 +23187,58 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
+      "findingId": "RSQL-1091",
+      "id": "9739cb7a42976045c356",
+      "path": "tests/security-sql-injection-regression.test.ts",
+      "line": 214,
+      "category": "query-text",
+      "sink": "pool.query",
+      "context": "<module>",
+      "dynamicInputs": [
+        {
+          "expression": "parties",
+          "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
+      "parameterization": "dynamic text reviewed (values bound separately)",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
+    },
+    {
       "findingId": "RSQL-1092",
+      "id": "61b943ccba402adff126",
+      "path": "tests/security-sql-injection-regression.test.ts",
+      "line": 215,
+      "category": "query-text",
+      "sink": "pool.query",
+      "context": "<module>",
+      "dynamicInputs": [
+        {
+          "expression": "ledger",
+          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
+      "parameterization": "dynamic text reviewed (values bound separately)",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
+    },
+    {
+      "findingId": "RSQL-1093",
       "id": "0961e19dc20e53cf3322",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 245,
+      "line": 247,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "listParties",
@@ -22994,10 +23259,10 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1093",
+      "findingId": "RSQL-1094",
       "id": "7d48bb006adc7b427c20",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 278,
+      "line": 280,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "<module>",
@@ -23023,10 +23288,10 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1094",
+      "findingId": "RSQL-1095",
       "id": "41690dda7a105d35eb1a",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 294,
+      "line": 296,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -23040,30 +23305,6 @@
       "userControlled": "no",
       "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
       "parameterization": "dynamic text reviewed (values bound separately)",
-      "risk": "low",
-      "requiredAction": "none",
-      "reviewStatus": "closed",
-      "disposition": "reviewed:test-fixture",
-      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
-    },
-    {
-      "findingId": "RSQL-1095",
-      "id": "9c74fa7abeb78a362af8",
-      "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 299,
-      "category": "dynamic-identifier",
-      "sink": "drizzle sql.identifier",
-      "context": "<module>",
-      "dynamicInputs": [
-        {
-          "expression": "parties",
-          "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
-        }
-      ],
-      "userControlled": "no",
-      "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
-      "parameterization": "identifier quoted by sql.identifier",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
@@ -23072,9 +23313,33 @@
     },
     {
       "findingId": "RSQL-1096",
+      "id": "9c74fa7abeb78a362af8",
+      "path": "tests/security-sql-injection-regression.test.ts",
+      "line": 301,
+      "category": "dynamic-identifier",
+      "sink": "drizzle sql.identifier",
+      "context": "<module>",
+      "dynamicInputs": [
+        {
+          "expression": "parties",
+          "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+",
+      "parameterization": "identifier quoted by sql.identifier",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
+    },
+    {
+      "findingId": "RSQL-1097",
       "id": "17937191c9813603ecda",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 305,
+      "line": 307,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "<module>",
@@ -23095,10 +23360,10 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1097",
+      "findingId": "RSQL-1098",
       "id": "769f9a0f739ff29cb90c",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 308,
+      "line": 310,
       "category": "dynamic-identifier",
       "sink": "drizzle sql.identifier",
       "context": "<module>",
@@ -23119,36 +23384,12 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1098",
+      "findingId": "RSQL-1099",
       "id": "e87fdb1d89f0c791a693",
       "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 311,
+      "line": 313,
       "category": "query-text",
       "sink": "pool.query",
-      "context": "<module>",
-      "dynamicInputs": [
-        {
-          "expression": "ledger",
-          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
-        }
-      ],
-      "userControlled": "no",
-      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
-      "parameterization": "dynamic text reviewed (values bound separately)",
-      "risk": "low",
-      "requiredAction": "none",
-      "reviewStatus": "closed",
-      "disposition": "reviewed:test-fixture",
-      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
-    },
-    {
-      "findingId": "RSQL-1099",
-      "id": "ae9a176cbcbf44a973dd",
-      "path": "tests/security-sql-injection-regression.test.ts",
-      "line": 328,
-      "category": "assembled-sql-text",
-      "sink": "string assembly",
       "context": "<module>",
       "dynamicInputs": [
         {
@@ -23168,6 +23409,30 @@
     },
     {
       "findingId": "RSQL-1100",
+      "id": "ae9a176cbcbf44a973dd",
+      "path": "tests/security-sql-injection-regression.test.ts",
+      "line": 330,
+      "category": "assembled-sql-text",
+      "sink": "string assembly",
+      "context": "<module>",
+      "dynamicInputs": [
+        {
+          "expression": "ledger",
+          "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "only literal text and numeric suffix — matches [a-z_0-9]+",
+      "parameterization": "dynamic text reviewed (values bound separately)",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
+    },
+    {
+      "findingId": "RSQL-1101",
       "id": "d030a42dcef593b6ffba",
       "path": "tests/setup.ts",
       "line": 178,
@@ -23201,7 +23466,7 @@
       "reason": "Identifiers come from pg_catalog of the disposable test database and from literal table names in test teardown; companyId is bound as $1. Test-only teardown code (tests/setup.ts cleanupTestData), never part of the server."
     },
     {
-      "findingId": "RSQL-1101",
+      "findingId": "RSQL-1102",
       "id": "022139a3d7b54509a9c2",
       "path": "tests/setup.ts",
       "line": 523,
@@ -23225,7 +23490,7 @@
       "reason": "Table names are read from pg_catalog of the test database and company.id is bound as $1; runs only in test teardown cleanupTestData (tests/setup.ts:523)."
     },
     {
-      "findingId": "RSQL-1102",
+      "findingId": "RSQL-1103",
       "id": "dd3f0d34515f428fd95c",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 18,
@@ -23249,7 +23514,7 @@
       "reason": "Query text is built only from literals and the code constants OLD = \"NOW() - INTERVAL '40 days'\" / RECENT (tests/soft-delete-purge-db.test.ts:14-15). Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1103",
+      "findingId": "RSQL-1104",
       "id": "89c22345d90a4ae36526",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 22,
@@ -23273,7 +23538,7 @@
       "reason": "Table identifier is always a literal written in this test file; rowId is bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1104",
+      "findingId": "RSQL-1105",
       "id": "190351d9e1eb4ca939a6",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 46,
@@ -23297,7 +23562,7 @@
       "reason": "Only hard-coded SQL timestamp expressions from file constants reach the text; code/name bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1105",
+      "findingId": "RSQL-1106",
       "id": "822ee1e3eaf2a05c9075",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 128,
@@ -23321,7 +23586,7 @@
       "reason": "Only test-authored SQL timestamp expressions are interpolated; company/batch code are bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1106",
+      "findingId": "RSQL-1107",
       "id": "9366960041e3162c959e",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 144,
@@ -23339,7 +23604,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1107",
+      "findingId": "RSQL-1108",
       "id": "24db79a7fb939ffc4e77",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 179,
@@ -23357,7 +23622,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1108",
+      "findingId": "RSQL-1109",
       "id": "9602e0eaaff7244e752e",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 196,
@@ -23375,7 +23640,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1109",
+      "findingId": "RSQL-1110",
       "id": "61df8d9213e9d5e1e995",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 201,
@@ -23393,7 +23658,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1110",
+      "findingId": "RSQL-1111",
       "id": "2289d26d9487505d760a",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 231,
@@ -23411,7 +23676,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1111",
+      "findingId": "RSQL-1112",
       "id": "1c8d8d2450d11ec97008",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 240,
@@ -23429,7 +23694,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1112",
+      "findingId": "RSQL-1113",
       "id": "5eb47e60d2ca3ea9d076",
       "path": "tests/sp-full-reconciliation-closeout.test.ts",
       "line": 86,
@@ -23453,7 +23718,7 @@
       "reason": "SQL text is always one of three literal UPDATE statements in this file; ids are bound as values. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1113",
+      "findingId": "RSQL-1114",
       "id": "beb7328ce713718e711d",
       "path": "tests/stock-in-sales-comparison-service-db.test.ts",
       "line": 47,
@@ -23477,7 +23742,7 @@
       "reason": "Query text is always a literal INSERT written in this test file. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1114",
+      "findingId": "RSQL-1115",
       "id": "a316aea4bab205add996",
       "path": "tests/stock-in-sales-detail-db.test.ts",
       "line": 23,
@@ -23501,7 +23766,7 @@
       "reason": "SQL text is literal at every call site; tags and ids are parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1115",
+      "findingId": "RSQL-1116",
       "id": "006e5c508d238a11ce15",
       "path": "tests/stock-transfer-order-wa-phase1-schema.test.ts",
       "line": 31,
@@ -23519,7 +23784,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1116",
+      "findingId": "RSQL-1117",
       "id": "7228b70df3061fe42c0a",
       "path": "tests/stock-transfer-order-wa-phase1-schema.test.ts",
       "line": 32,
@@ -23537,7 +23802,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1117",
+      "findingId": "RSQL-1118",
       "id": "5199620220fb8b98a098",
       "path": "tests/stock-transfer-order-wa-phase1-schema.test.ts",
       "line": 33,
@@ -23555,7 +23820,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1118",
+      "findingId": "RSQL-1119",
       "id": "aa26027785d777504b51",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 24,
@@ -23573,7 +23838,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1119",
+      "findingId": "RSQL-1120",
       "id": "f7eba9caed4a4365129a",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 43,
@@ -23591,7 +23856,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1120",
+      "findingId": "RSQL-1121",
       "id": "2d540bac5ff55b5f0772",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 52,
@@ -23609,7 +23874,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1121",
+      "findingId": "RSQL-1122",
       "id": "d865e0c8295ccc082060",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 58,
@@ -23627,7 +23892,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1122",
+      "findingId": "RSQL-1123",
       "id": "a63cbf253eba6a61af9f",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 67,
@@ -23645,7 +23910,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1123",
+      "findingId": "RSQL-1124",
       "id": "c7030604b138a7d7cd87",
       "path": "tests/unified-accounting-certification.test.ts",
       "line": 70,
@@ -23663,7 +23928,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1124",
+      "findingId": "RSQL-1125",
       "id": "9462459675886f74046e",
       "path": "tests/unified-rental-accounting-service-db.test.ts",
       "line": 33,
@@ -23687,7 +23952,7 @@
       "reason": "Executed object is a drizzle parameterised SQL whose text is code literals; interpolated values become bind parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1125",
+      "findingId": "RSQL-1126",
       "id": "72e5ac9ec1643604d3bc",
       "path": "tests/voucher-account-group-picker.database.test.ts",
       "line": 62,
@@ -23711,7 +23976,7 @@
       "reason": "Text is fixed code; codes/suffixes are bound parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1126",
+      "findingId": "RSQL-1127",
       "id": "93890a1f4a29ace85b40",
       "path": "tests/voucher-balance-guard.test.ts",
       "line": 41,
@@ -23735,7 +24000,7 @@
       "reason": "Every statement run through this wrapper is a literal written in this test; values bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1127",
+      "findingId": "RSQL-1128",
       "id": "2641e8a4a8a72b959abb",
       "path": "tests/voucher-balance-guard.test.ts",
       "line": 187,
@@ -23764,7 +24029,7 @@
       "reason": "Both identifiers come from a code constant array of literal tuples; nothing external. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1128",
+      "findingId": "RSQL-1129",
       "id": "e576d5ec0e237a6ccedb",
       "path": "tests/wave10-engine-consolidation.test.ts",
       "line": 151,
@@ -23788,7 +24053,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1129",
+      "findingId": "RSQL-1130",
       "id": "68ada9359efc0a429d38",
       "path": "tests/wave10-net-position-banks.test.ts",
       "line": 130,
@@ -23812,7 +24077,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1130",
+      "findingId": "RSQL-1131",
       "id": "5306ca01cf71feb8b52b",
       "path": "tests/wave10-net-position-engine.test.ts",
       "line": 121,
@@ -23836,7 +24101,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1131",
+      "findingId": "RSQL-1132",
       "id": "f6d497afb57477886d3b",
       "path": "tests/wave10-net-position-engine.test.ts",
       "line": 382,
@@ -23854,7 +24119,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1132",
+      "findingId": "RSQL-1133",
       "id": "a9fc7fdb61c90f8a593a",
       "path": "tests/wave10-party-balance-engine.test.ts",
       "line": 91,
@@ -23878,7 +24143,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1133",
+      "findingId": "RSQL-1134",
       "id": "b68ade171c2648e8dc2c",
       "path": "tests/wave10-party-reader-rules.test.ts",
       "line": 143,
@@ -23902,7 +24167,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1134",
+      "findingId": "RSQL-1135",
       "id": "de39b82b68b53f5d28f9",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 67,
@@ -23926,7 +24191,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1135",
+      "findingId": "RSQL-1136",
       "id": "b34ecff1253ab902435d",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 68,
@@ -23950,7 +24215,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1136",
+      "findingId": "RSQL-1137",
       "id": "fded8fc6fccf108bdce9",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 209,
@@ -23974,7 +24239,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1137",
+      "findingId": "RSQL-1138",
       "id": "310c61f106f47853e5b6",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 230,
@@ -23992,7 +24257,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1138",
+      "findingId": "RSQL-1139",
       "id": "7846b0d9b96381704e08",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 89,
@@ -24016,7 +24281,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1139",
+      "findingId": "RSQL-1140",
       "id": "7468d9101c570e67f25a",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 147,
@@ -24040,7 +24305,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1140",
+      "findingId": "RSQL-1141",
       "id": "41114c9856f7f3d35236",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 155,
@@ -24058,7 +24323,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1141",
+      "findingId": "RSQL-1142",
       "id": "2b43631c2304c7849e6c",
       "path": "tests/wave12-audit-trail.test.ts",
       "line": 37,
@@ -24082,7 +24347,7 @@
       "reason": "Query text is always literal; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1142",
+      "findingId": "RSQL-1143",
       "id": "4c4cae6b8f544fcab85c",
       "path": "tests/wave12-audit-trail.test.ts",
       "line": 178,
@@ -24106,7 +24371,7 @@
       "reason": "The interpolated value is the integer id of the fixture company the test itself inserted; used in a test-only trigger DDL. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1143",
+      "findingId": "RSQL-1144",
       "id": "e90bcb532da1c3a3b27a",
       "path": "tests/wave12-ledger-integrity.test.ts",
       "line": 154,
@@ -24135,7 +24400,7 @@
       "reason": "Identifiers come only from a code constant; executed in afterAll teardown. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1144",
+      "findingId": "RSQL-1145",
       "id": "d4a3ae2418e82529376e",
       "path": "tests/wave12-ledger-integrity.test.ts",
       "line": 157,
@@ -24164,7 +24429,7 @@
       "reason": "Both identifiers are derived only from a code-owned `as const` table list; executed in afterAll teardown. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1145",
+      "findingId": "RSQL-1146",
       "id": "f97c0a6ae2fdbf9fd997",
       "path": "tests/wave13-payables-group.test.ts",
       "line": 163,
@@ -24188,7 +24453,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1146",
+      "findingId": "RSQL-1147",
       "id": "326ffbc307c36f66c558",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 107,
@@ -24212,7 +24477,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1147",
+      "findingId": "RSQL-1148",
       "id": "9a0e63e4cee7dfe80835",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 108,
@@ -24236,7 +24501,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1148",
+      "findingId": "RSQL-1149",
       "id": "094db4a48ee0650762e6",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 152,
@@ -24260,7 +24525,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1149",
+      "findingId": "RSQL-1150",
       "id": "82926d29f183840397dd",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 169,
@@ -24278,7 +24543,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1150",
+      "findingId": "RSQL-1151",
       "id": "e972350291420220c3bf",
       "path": "tests/wave15-stock-paths.test.ts",
       "line": 446,
@@ -24302,7 +24567,7 @@
       "reason": "Fragment is built by application code from a constant table allowlist and a literal column reference; ids bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1151",
+      "findingId": "RSQL-1152",
       "id": "376cdef3a9b663a63e2c",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 87,
@@ -24331,7 +24596,7 @@
       "reason": "Column names are literal object keys written at each call site, and the VALUES list is only $n placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1152",
+      "findingId": "RSQL-1153",
       "id": "23012c92254ac3538b83",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 151,
@@ -24360,7 +24625,7 @@
       "reason": "Both identifiers are derived only from a code-owned `as const` table list; executed in afterAll teardown. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1153",
+      "findingId": "RSQL-1154",
       "id": "63f06cd89db597f032ee",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 428,
@@ -24384,7 +24649,7 @@
       "reason": "Table identifier is one of two literals in the loop header; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1154",
+      "findingId": "RSQL-1155",
       "id": "dfd90dccca45e69997b3",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 432,
@@ -24408,7 +24673,7 @@
       "reason": "Table identifier is one of two literals; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1155",
+      "findingId": "RSQL-1156",
       "id": "2d024d678f072d6c2a64",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 578,
@@ -24437,7 +24702,7 @@
       "reason": "Column names are literal keys at each test call site; VALUES list is placeholder text only. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1156",
+      "findingId": "RSQL-1157",
       "id": "c7f8a16445c67b919a03",
       "path": "tests/wave16-boot-repairs-hard-deletes.test.ts",
       "line": 91,
@@ -24461,7 +24726,7 @@
       "reason": "Predicate text is a literal at every call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1157",
+      "findingId": "RSQL-1158",
       "id": "5e11360880768bcfcf04",
       "path": "tests/wave17-reporting.test.ts",
       "line": 63,
@@ -24485,7 +24750,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1158",
+      "findingId": "RSQL-1159",
       "id": "3127ec0106941b6be525",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 74,
@@ -24509,7 +24774,7 @@
       "reason": "All query text is literal or uses table names iterated from in-function constant arrays. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1159",
+      "findingId": "RSQL-1160",
       "id": "bd003d249fce1a1ec82e",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 181,
@@ -24527,7 +24792,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1160",
+      "findingId": "RSQL-1161",
       "id": "b199239b0c339637bd37",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 193,
@@ -24545,7 +24810,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1161",
+      "findingId": "RSQL-1162",
       "id": "e671fdf7c79ee4040a4c",
       "path": "tests/wave17c-retail-money.test.ts",
       "line": 47,
@@ -24563,7 +24828,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1162",
+      "findingId": "RSQL-1163",
       "id": "81dca56333b09617dd3d",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 46,
@@ -24587,7 +24852,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1163",
+      "findingId": "RSQL-1164",
       "id": "ae82a28784328d0c8f89",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 53,
@@ -24611,7 +24876,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1164",
+      "findingId": "RSQL-1165",
       "id": "d59ccf9a0a5801037814",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 64,
@@ -24629,7 +24894,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1165",
+      "findingId": "RSQL-1166",
       "id": "cbfb03f0f0ca9f145464",
       "path": "tests/wave17d-retail-cash-and-stock.test.ts",
       "line": 60,
@@ -24647,7 +24912,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1166",
+      "findingId": "RSQL-1167",
       "id": "960471053d41d0092403",
       "path": "tests/wave18b-accounts-deletes.test.ts",
       "line": 77,
@@ -24676,7 +24941,7 @@
       "reason": "Column list comes from literal object keys at three test call sites and the VALUES list is placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1167",
+      "findingId": "RSQL-1168",
       "id": "02d1b7aea2b76472bb74",
       "path": "tests/wave18b-accounts-deletes.test.ts",
       "line": 111,
@@ -24700,7 +24965,7 @@
       "reason": "Identifier is always the literal \"ledger_accounts\"; id and daysAgo bound as $1/$2. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1168",
+      "findingId": "RSQL-1169",
       "id": "cbc9974df26edd189d4c",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 53,
@@ -24724,7 +24989,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1169",
+      "findingId": "RSQL-1170",
       "id": "50f5519b0dcef9696a16",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 288,
@@ -24742,7 +25007,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1170",
+      "findingId": "RSQL-1171",
       "id": "dd012a16b1fadaf37eac",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 311,
@@ -24760,7 +25025,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1171",
+      "findingId": "RSQL-1172",
       "id": "f804b39da31040acb93a",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 354,
@@ -24784,7 +25049,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1172",
+      "findingId": "RSQL-1173",
       "id": "1c10d1e8e95dae7ea4be",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 358,
@@ -24813,7 +25078,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1173",
+      "findingId": "RSQL-1174",
       "id": "1fa7e5eb29d75d31b34a",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 364,
@@ -24842,7 +25107,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1174",
+      "findingId": "RSQL-1175",
       "id": "c30657cd4045b72573f4",
       "path": "tests/wave7-leftovers-atomic-posting.test.ts",
       "line": 81,
@@ -24866,7 +25131,7 @@
       "reason": "Predicate text is a literal at each call site; ids/patterns are bound parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1175",
+      "findingId": "RSQL-1176",
       "id": "e89be12baf2cdd9cea77",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 112,
@@ -24890,7 +25155,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1176",
+      "findingId": "RSQL-1177",
       "id": "6a83cb4cc275e2eeec88",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 113,
@@ -24914,7 +25179,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1177",
+      "findingId": "RSQL-1178",
       "id": "59ba4cf2309c8c26271d",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 168,
@@ -24938,7 +25203,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1178",
+      "findingId": "RSQL-1179",
       "id": "604a6236079eec62582c",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 185,
@@ -24956,7 +25221,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1179",
+      "findingId": "RSQL-1180",
       "id": "401ff31ed8f659fda17b",
       "path": "tests/wave9-admin-history-safety.test.ts",
       "line": 65,
@@ -24980,7 +25245,7 @@
       "reason": "FROM-clause text is a literal at each test call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1180",
+      "findingId": "RSQL-1181",
       "id": "7af23dddbeb41f05bb73",
       "path": "tests/wave9-admin-history-safety.test.ts",
       "line": 70,
@@ -25004,7 +25269,7 @@
       "reason": "Extra predicate is a literal at each call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1181",
+      "findingId": "RSQL-1182",
       "id": "7f597216b2b572f579f5",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 52,
@@ -25028,7 +25293,7 @@
       "reason": "Schema identifier at :52 is a code constant with the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1182",
+      "findingId": "RSQL-1183",
       "id": "a379f1ae794bf212e488",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 53,
@@ -25052,7 +25317,7 @@
       "reason": "Schema identifier at :53 is a code constant with the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1183",
+      "findingId": "RSQL-1184",
       "id": "f794f439f2fe14b824f1",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 74,
@@ -25076,7 +25341,7 @@
       "reason": "Schema identifier at :74 is a code constant with the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1184",
+      "findingId": "RSQL-1185",
       "id": "5baeda958574850c2cc0",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 109,
@@ -25100,7 +25365,7 @@
       "reason": "Schema identifier at :109 is derived only from code constants and the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1185",
+      "findingId": "RSQL-1186",
       "id": "e1355099379bf7bbd1da",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 110,
@@ -25124,7 +25389,7 @@
       "reason": "Schema identifier at :110 is derived only from code constants and the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1186",
+      "findingId": "RSQL-1187",
       "id": "ff7c86b76745e80bc11d",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 118,
@@ -25148,7 +25413,7 @@
       "reason": "Schema identifier at :118 is a code constant with the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1187",
+      "findingId": "RSQL-1188",
       "id": "3f72ef455c03bef0a094",
       "path": "tests/zambia-runtime-schema.test.ts",
       "line": 119,

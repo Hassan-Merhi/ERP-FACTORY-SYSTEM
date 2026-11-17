@@ -45,6 +45,16 @@
           "expression": "m.actualRows",
           "source": "m.actualRows = EXPLAIN JSON plan['Actual Rows'] (scripts/collect-program6d-query-plans.mjs:86)",
           "validation": "Not used as SQL: only console.log at :276-279"
+        },
+        {
+          "expression": "m.seqScans.length",
+          "source": "length of an in-memory array/Buffer built in main (scripts/collect-program6d-query-plans.mjs:278)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "m.indexScans.length",
+          "source": "length of an in-memory array/Buffer built in main (scripts/collect-program6d-query-plans.mjs:278)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
         }
       ],
       "reason": "NOT SQL: scanner false positive (key=value text). The string is console output of plan metrics and is never passed to client.query."
@@ -58,12 +68,38 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "candidateTotal.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:303)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "candidateRows",
           "source": "candidateRows = sum of plan actualRows numbers (scripts/collect-program6d-query-plans.mjs:300)",
           "validation": "Not used as SQL: only console.log at :301-304"
         }
       ],
       "reason": "NOT SQL: scanner false positive (key=value text). Console summary line in an operator CLI script; never reaches a query."
+    },
+    {
+      "id": "20c9a6ba8ed37dafd609",
+      "path": "scripts/collect-program6d-query-plans.mjs",
+      "kind": "assembled-sql-text",
+      "context": "main",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "m.planningTimeMs?.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:277)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "m.executionTimeMs?.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in main (scripts/collect-program6d-query-plans.mjs:277)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "id": "2c3263e7e6e59a0eb1b1",
@@ -231,6 +267,48 @@
       "reason": "Identifiers come from the frozen map; the cloud response's sequences are bound as an array parameter, not text."
     },
     {
+      "id": "d47230ee95305cf3174b",
+      "path": "scripts/reconcile-factory-invoices-20261014.ts",
+      "kind": "assembled-sql-text",
+      "context": "run",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "pending.length",
+          "source": "length of an in-memory array/Buffer built in run (scripts/reconcile-factory-invoices-20261014.ts:102)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        }
+      ],
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
+    },
+    {
+      "id": "87b3411df15dceae75d1",
+      "path": "scripts/reconcile-factory-invoices-20261014.ts",
+      "kind": "assembled-sql-text",
+      "context": "run",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "gross.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "posted.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "expected.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
+    },
+    {
       "id": "1358bcaeff32798ffb77",
       "path": "scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts",
       "kind": "assembled-sql-text",
@@ -238,6 +316,11 @@
       "classification": "not-sql-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "snapshot.length",
+          "source": "length of an in-memory array/Buffer built in run (scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts:127)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
         {
           "expression": "blocked",
           "source": "blocked = integer counter (scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts:112-117)",
@@ -709,6 +792,11 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "consume.toFixed(QTY_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in settleNegativeLayers (server/inventoryHelper.ts:246)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "layer.provisional_rate",
           "source": "layer.provisional_rate from inventory_negative_layers row (server/inventoryHelper.ts:233)",
           "validation": "Not SQL: logger.info message only (:244-247)"
@@ -717,9 +805,35 @@
           "expression": "incomingRate.toString()",
           "source": "incomingRate.toString() Decimal (server/inventoryHelper.ts settleNegativeLayers args)",
           "validation": "Not SQL: logger.info message only"
+        },
+        {
+          "expression": "variance.toFixed(VALUE_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in settleNegativeLayers (server/inventoryHelper.ts:246)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
         }
       ],
       "reason": "NOT SQL: scanner false positive (key=value text). Log message; actual writes at :251-258 use drizzle sql`` with bound values."
+    },
+    {
+      "id": "09372b375a12a71464b5",
+      "path": "server/inventoryHelper.ts",
+      "kind": "assembled-sql-text",
+      "context": "adjustInventory",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "delta.toFixed(QTY_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in adjustInventory (server/inventoryHelper.ts:456)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "receiptValue.toFixed(VALUE_DP)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in adjustInventory (server/inventoryHelper.ts:456)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        }
+      ],
+      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
     },
     {
       "id": "19fb807a5d225a8838d7",
@@ -799,6 +913,11 @@
           "validation": "Not SQL: logger.info only (:690-694)"
         },
         {
+          "expression": "best.events.length",
+          "source": "length of an in-memory array/Buffer built in scrapeMaerskDirect (server/lib/maerskDirectScraper.ts:692)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
+        {
           "expression": "best.eta ?? \"none\"",
           "source": "best.eta from scraped data (:692)",
           "validation": "Not SQL: logger.info only"
@@ -819,6 +938,11 @@
       "classification": "not-sql-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "events.length",
+          "source": "length of an in-memory array/Buffer built in scrapeMaerskDirect (server/lib/maerskDirectScraper.ts:732)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
         {
           "expression": "eta ?? \"none\"",
           "source": "eta from __NEXT_DATA__ scraped JSON (server/lib/maerskDirectScraper.ts:728)",
@@ -1029,6 +1153,11 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:233)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "reason": "Chunk query is CTE + placeholder cursor condition + fixed ORDER literal; client cursor values are bound."
@@ -1055,6 +1184,11 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:237)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "reason": "Same as the cursor chunk query; values bound."
@@ -1092,6 +1226,11 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "baseCount",
+          "source": "values.length of the CTE's bound-parameter array (voucherEntryStatement.ts genericFilteredCte)",
+          "validation": "integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound"
         }
       ],
       "reason": "Preceding-net query over the CTE with a fixed ORDER literal and $n LIMIT; offset bound."
@@ -1113,6 +1252,11 @@
           "expression": "order",
           "source": "order literal 'sort_date ASC, sort_id ASC' or '..., sort_entry_id ASC' returned by genericFilteredCte (voucherEntryStatement.ts:67,111)",
           "validation": "Two fixed literals selected by kind"
+        },
+        {
+          "expression": "baseCount",
+          "source": "values.length of the CTE's bound-parameter array (voucherEntryStatement.ts genericFilteredCte)",
+          "validation": "integer used only to number LIMIT/OFFSET `$n` placeholders; limit/offset values are bound"
         }
       ],
       "reason": "Page query text uses the CTE, fixed ORDER literal and $n LIMIT/OFFSET; pagination bound."
@@ -1132,6 +1276,69 @@
         }
       ],
       "reason": "Summary query over the code-owned CTE; values bound."
+    },
+    {
+      "id": "37b1740bcf98f7ca72d9",
+      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
+      "kind": "assembled-sql-text",
+      "context": "genericFilteredCte",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "bind(companyId)",
+          "source": "request filter value pushed into the bound-parameter array by bind in genericFilteredCte (server/routes/account-transaction-pagination/voucherEntryStatement.ts:54)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
+    },
+    {
+      "id": "9653e23720a339361724",
+      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
+      "kind": "assembled-sql-text",
+      "context": "runVoucherEntryStatement",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "dateParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:217)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "idParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:217)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
+    },
+    {
+      "id": "23abc98aba9d7da363e0",
+      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
+      "kind": "assembled-sql-text",
+      "context": "runVoucherEntryStatement",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "dateParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "idParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "entryParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in runVoucherEntryStatement (server/routes/account-transaction-pagination/voucherEntryStatement.ts:220)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "id": "48fa8aec4004fc7dab53",
@@ -1924,6 +2131,11 @@
           "expression": "selectSql",
           "source": "server/routes/factory/factoryPressingReportRoutes.ts:209-216 selectSql = \"SELECT \" + detail|condensed + from (+ group) + literal ORDER BY; sqlPage appends \" LIMIT $\"+(args.length+1)+\" OFFSET $\"+(args.length+2) (:221)",
           "validation": "detail/condensed/group literal+constant; from = literal predicates with $n (conditions(), :90-140); limit/page bound via pageArgs (:220)"
+        },
+        {
+          "expression": "args.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/factory/factoryPressingReportRoutes.ts:253)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
         }
       ],
       "reason": "selectSql is composed only of code-owned text and $n placeholders; limit, offset and every filter are passed in pageArgs."
@@ -1959,6 +2171,22 @@
         }
       ],
       "reason": "The only interpolated value is the shared literal constant \"Asia/Beirut\"; request day/company values are bound ($1/$2)."
+    },
+    {
+      "id": "647fac9198b3d6e84d79",
+      "path": "server/routes/factory/factoryPressingReportRoutes.ts",
+      "kind": "assembled-sql-text",
+      "context": "conditions",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "ref",
+          "source": "ref = \"$\" + args.length after args.push(search pattern) in conditions() (factoryPressingReportRoutes.ts)",
+          "validation": "placeholder text only; the escaped ILIKE pattern is a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "id": "0243235aa7ba6f0cee44",
@@ -2410,6 +2638,16 @@
           "expression": "where.text",
           "source": "where.text from buildCatalogWhere at retailCatalogRoutes.ts:469 (LIMIT/OFFSET are $n built at :483-484)",
           "validation": "every request value goes through add() (:111-114) which pushes to params and returns only \"$n\"; other clauses are literals; stockStatus comparator is a literal ternary (:189)"
+        },
+        {
+          "expression": "limitParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in registerRetailCatalogRoutes (server/routes/retailCatalogRoutes.ts:486)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "offsetParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in registerRetailCatalogRoutes (server/routes/retailCatalogRoutes.ts:486)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
         }
       ],
       "reason": "where.text and limit/offset are placeholder text; pageSize and offset are bound in pageParams (:482)."
@@ -2635,6 +2873,11 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:37)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
@@ -2650,6 +2893,11 @@
       "classification": "placeholder-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:49)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
         {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
@@ -2667,6 +2915,11 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:52)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
+        {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
           "validation": "clauses are literal templates whose '?' is replaced by \"$\"+params.length (ticketReportingPolicy.ts:44-47); all filter values pushed to params; companyId Number.isSafeInteger-checked (:41)"
@@ -2682,6 +2935,11 @@
       "classification": "placeholder-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:55)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
         {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
@@ -2714,6 +2972,11 @@
       "classification": "placeholder-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "params.length",
+          "source": "length of the bound-parameter array assembled for this query (server/routes/ticketReportingRoutes.ts:67)",
+          "validation": "only used to number the next `$n` placeholder; every value is pushed into that array and bound by node-postgres"
+        },
         {
           "expression": "where",
           "source": "ticketReportWhere(companyId, filters), server/lib/ticketReportingPolicy.ts:40-56; filters = Zod-parsed req.query (server/routes/ticketReportingRoutes.ts:16-21)",
@@ -2794,6 +3057,11 @@
       "classification": "not-sql-text",
       "userControlled": "no",
       "dynamicInputs": [
+        {
+          "expression": "pdfBuf.length",
+          "source": "length of an in-memory array/Buffer built in registerWhatsAppRoutes (server/routes/whatsappRoutes.ts:707)",
+          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
+        },
         {
           "expression": "pageCount",
           "source": "pageCount from generateStockPdf(), server/routes/whatsappRoutes.ts:681",
@@ -5023,6 +5291,16 @@
           "expression": "movement.movementId",
           "source": "historicalSalesCostRepairRewind.ts:623 movement.movementId",
           "validation": "same: becomes bound $n value"
+        },
+        {
+          "expression": "recorded.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in rewindCheckpointToLegacySales (server/services/inventory/historicalSalesCostRepairRewind.ts:621)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
+        },
+        {
+          "expression": "inferred.toFixed(2)",
+          "source": "MoneyDecimal / Decimal.js / number computed locally in rewindCheckpointToLegacySales (server/services/inventory/historicalSalesCostRepairRewind.ts:621)",
+          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
         }
       ],
       "reason": "Scanner false positive: this template is a human-readable detail message stored in check.detail, which is passed as a bound parameter in persistChecks (historicalSalesCostRepair.ts:126-145), never as SQL text."
@@ -5238,9 +5516,19 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "locationJoin",
+          "source": "literal `AND ... location_id = $n` with $n from params.push(filters.locationId) in getRetailStockReport (server/services/retail/retailVariantReports.ts:66)",
+          "validation": "empty string or literal SQL plus a `$n` placeholder; the location id is bound"
+        },
+        {
           "expression": "where.join(\" AND \")",
           "source": "server/services/retail/retailVariantReports.ts:23-41 variantWhere()",
           "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals"
+        },
+        {
+          "expression": "havingClause",
+          "source": "HAVING clause joined from literal predicates selected by filters.status; slow-days value bound via params.push (retailVariantReports.ts)",
+          "validation": "status only selects among fixed literal fragments; numeric slowDays is clamped and bound"
         }
       ],
       "reason": "where[] holds literal predicates with $n placeholders only; user filters (search, color, size, brand) are bound parameters. limit is clamped numerically by Math.min/Math.max."
@@ -5254,12 +5542,91 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
+          "expression": "fromParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "toParam",
+          "source": "`$n` placeholder returned by the local bind()/params.push() helper in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "text is `$` followed by an array length; cursor/limit/date values are bound parameters, cursor is HMAC-scoped and decoded before binding"
+        },
+        {
+          "expression": "locationClause",
+          "source": "literal `AND ... location_id = $n` with $n from params.push(filters.locationId) in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:133)",
+          "validation": "empty string or literal SQL plus a `$n` placeholder; the location id is bound"
+        },
+        {
           "expression": "where.join(\" AND \")",
           "source": "server/services/retail/retailVariantReports.ts:23-41 variantWhere()",
           "validation": "every filter value (companyId, brandId, color, size, search) goes through add() -> params.push and returns \"$n\"; remaining fragments are literals"
         }
       ],
       "reason": "where[] holds literal predicates with $n placeholders only; user filters (search, color, size, brand) are bound parameters. limit is clamped numerically by Math.min/Math.max."
+    },
+    {
+      "id": "1bf04b9beac8172bd21a",
+      "path": "server/services/retail/retailVariantReports.ts",
+      "kind": "assembled-sql-text",
+      "context": "variantWhere",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "add(filters.companyId)",
+          "source": "request filter value pushed into the bound-parameter array by add in variantWhere (server/services/retail/retailVariantReports.ts:28)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
+    },
+    {
+      "id": "902ce67765d0c4c9158d",
+      "path": "server/services/retail/retailVariantReports.ts",
+      "kind": "assembled-sql-text",
+      "context": "variantWhere",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "add(filters.brandId)",
+          "source": "request filter value pushed into the bound-parameter array by add in variantWhere (server/services/retail/retailVariantReports.ts:30)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
+    },
+    {
+      "id": "4978baf9e26cdda06b10",
+      "path": "server/services/retail/retailVariantReports.ts",
+      "kind": "assembled-sql-text",
+      "context": "getRetailStockReport",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "params.push(filters.locationId)",
+          "source": "request filter value pushed into the bound-parameter array by params.push in getRetailStockReport (server/services/retail/retailVariantReports.ts:49)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
+    },
+    {
+      "id": "0f53928a71f25dd1689a",
+      "path": "server/services/retail/retailVariantReports.ts",
+      "kind": "assembled-sql-text",
+      "context": "getRetailVariantSalesReport",
+      "classification": "placeholder-text",
+      "userControlled": "indirect-validated",
+      "dynamicInputs": [
+        {
+          "expression": "params.push(filters.locationId)",
+          "source": "request filter value pushed into the bound-parameter array by params.push in getRetailVariantSalesReport (server/services/retail/retailVariantReports.ts:131)",
+          "validation": "the helper returns only `$${array.length}` (or the new length); the filter value itself travels as a bound parameter"
+        }
+      ],
+      "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
       "id": "2f301c3c79bccf692b2c",

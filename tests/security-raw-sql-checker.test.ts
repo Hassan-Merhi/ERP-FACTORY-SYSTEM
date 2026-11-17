@@ -152,6 +152,32 @@ describe("raw SQL scanner — mechanical proofs", () => {
     ).toHaveLength(1);
   });
 
+  it("does not trust numeric member names on unproven receivers", () => {
+    // String#valueOf returns the string; parsed JSON can carry { length: "1 OR 1=1" }.
+    for (const expr of [
+      "req.body.name.valueOf()",
+      "req.body.length",
+      "req.body.limit.size",
+      "req.body.d.getTime()",
+      "req.body.items.indexOf(1)",
+      "req.body.n.toFixed(2)",
+    ]) {
+      const found = unproven(
+        `export const f = (pool: any, req: any) => pool.query(\`SELECT * FROM users WHERE id = \${${expr}}\`);`
+      );
+      expect(found, expr).toHaveLength(1);
+      expect(found[0].dynamicParts).toEqual([expr]);
+    }
+    // ...but the same members on receivers the code itself builds stay proven.
+    expect(
+      unproven(`export function f(pool: any, ids: number[]) {
+        const params: number[] = [];
+        const now = new Date();
+        return pool.query(\`SELECT \${now.getTime()} WHERE \${Object.keys({ a: 1 }).length} = $\${params.push(ids[0])} LIMIT \${params.length}\`, params);
+      }`)
+    ).toHaveLength(0);
+  });
+
   it("proves placeholder lists built by push-only arrays", () => {
     const found = unproven(`export function f(pool: any, ids: number[]) {
         const params: number[] = [];

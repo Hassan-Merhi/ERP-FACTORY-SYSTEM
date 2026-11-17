@@ -35,8 +35,8 @@ The checker is tested in `tests/security-raw-sql-checker.test.ts`.
 
 ## Scope and method
 
-**Scanned** (measured, not estimated): 4,484 files — `server/` 2,333,
-`shared/` 151, `scripts/` 280, `migrations/` 92, `tests/` 1,625, plus
+**Scanned** (measured, not estimated): 4,486 files — `server/` 2,333,
+`shared/` 151, `scripts/` 280, `migrations/` 92, `tests/` 1,627, plus
 `build.mjs`, `drizzle.config.ts`, `vite.config.ts`. Extensions: `.ts .tsx .mts
 .cts .js .jsx .mjs .cjs .sql`. The only other files under the roots are
 `scripts/git-hooks/pre-push` (shell) and `scripts/training-narration-tts.py`;
@@ -48,13 +48,13 @@ imports) and is out of scope.
 | Category | Meaning | Sites |
 | --- | --- | ---: |
 | `query-text` | template / concatenation passed directly to `.query` / `.execute` / `.unsafe` | 557 |
-| `assembled-sql-text` | SQL-shaped template / concatenation with dynamic parts anywhere (helpers, constants, loops, quoted `'${x}'` literals) | 386 |
+| `assembled-sql-text` | SQL-shaped template / concatenation with dynamic parts anywhere (helpers, constants, loops, quoted `'${x}'` literals) | 387 |
 | `indirect-query-text` | sink receives a variable / parameter holding SQL text (wrappers) | 131 |
 | `sql.raw` | drizzle `sql.raw(...)` under any import alias | 70 |
 | `dynamic-identifier` | `sql.identifier(x)` with non-literal (or wrong-arity) argument | 22 |
 | `plpgsql-execute` | PL/pgSQL `EXECUTE` in `.sql` migrations or embedded SQL | 14 |
 | `sql-array-join` | SQL-shaped array literal with dynamic elements, joined | 7 |
-| **Total** | | **1,187** |
+| **Total** | | **1,188** |
 
 Also detected: `.replace()` on SQL text with a dynamic value (none remain).
 Tagged drizzle templates (`sql\`...${v}\``) bind values and are not counted
@@ -65,27 +65,32 @@ injection-proof: literals, `const` bindings, conditionals between proven
 values, lookups in never-written const maps/arrays, `for (const x of FIXED)`,
 push-only arrays of proven values, in-file helpers whose returns are proven
 for proven arguments, and numeric values (`Number()`, arithmetic, `.length`,
-loop counters) which render only as `[-0-9.e+]|NaN|Infinity`. PL/pgSQL
+loop counters) which render only as `[-0-9.e+]|NaN|Infinity`. Numeric
+members (`.length`, `.size`, `push`/`indexOf`, Date getters, `toFixed`) count
+only when the receiver is proven to be an array / string / Map / Set / Date /
+number built by the code itself: a request value or parsed JSON can carry
+`{ length: "1 OR 1=1" }`, and `String#valueOf` returns the string (gap found by
+automated review on PR #3246 and closed, with regression tests). PL/pgSQL
 `format()` using only `%I`/`%L` is proven quoted.
 
 ## Results
 
 | Disposition | Sites |
 | --- | ---: |
-| Auto-verified: static / numeric (scanner proof) | 680 |
+| Auto-verified: static / numeric (scanner proof) | 669 |
 | Auto-verified: PL/pgSQL `format()` with `%I`/`%L` only | 9 |
 | Reviewed: trusted-sql-fragment | 145 |
 | Reviewed: test-fixture | 147 |
 | Reviewed: allowlisted-identifier | 88 |
-| Reviewed: placeholder-text | 53 |
-| Reviewed: not-sql-text (log/error/HTTP strings flagged by shape) | 32 |
+| Reviewed: placeholder-text | 61 |
+| Reviewed: not-sql-text (log/error/HTTP strings flagged by shape) | 36 |
 | Reviewed: catalog-identifier | 16 |
 | Reviewed: validated-numeric | 12 |
 | Reviewed: developer-script | 5 |
 | **Unresolved** | **0** |
 
-Of the 498 reviewed sites: 465 have no user-controlled input reaching SQL
-text; 32 are *indirectly* influenced by a request (the request only selects a
+Of the 510 reviewed sites: 469 have no user-controlled input reaching SQL
+text; 40 are *indirectly* influenced by a request (the request only selects a
 key in a code-owned map, or a value is validated/bound) and 1 carries a
 request-derived value into text after strict validation (`partyOpenItemService`:
 ids through `Number.isSafeInteger` + `intLiteral`). Per-site provenance
