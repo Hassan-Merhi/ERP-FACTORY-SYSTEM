@@ -105,6 +105,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/bales/import",
     "POST /api/factory/workers/import-excel",
     "POST /api/containers/tracking/import",
+    // Owner/Developer role gate plus the Import Data permission (owner request, 2026-11-17).
+    "POST /api/intercompany-container-trading/import",
     "POST /api/factory/bales/import",
     "POST /api/factory/bale-products/arabic-import/preview",
     "POST /api/factory/bale-products/arabic-import/errors",

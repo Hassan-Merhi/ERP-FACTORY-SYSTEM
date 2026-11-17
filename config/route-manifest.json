@@ -1506,7 +1506,7 @@
     "POST /api/intercompany-container-trading/relationships/auto [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/intercompany-container-trading/preview [requireAuth > <anonymous> > multerMiddleware > <anonymous>]",
     "POST /api/intercompany-container-trading/stock-preview [requireAuth > <anonymous> > multerMiddleware > <anonymous>]",
-    "POST /api/intercompany-container-trading/import [requireAuth > <anonymous> > multerMiddleware > <anonymous>]",
+    "POST /api/intercompany-container-trading/import [requireAuth > <anonymous> > <anonymous> > multerMiddleware > <anonymous>]",
     "GET /api/intercompany-container-trading/trades [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/intercompany-container-trading/linked-trades [requireAuth > <anonymous>]",
     "GET /api/intercompany-container-trading/linked-trades/:tradeId [requireAuth > <anonymous>]",

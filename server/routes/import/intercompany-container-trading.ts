@@ -4,6 +4,7 @@ import { and, eq, or } from "drizzle-orm";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { requireActionAccess } from "../../lib/permissionMiddleware";
 import { containers, intercompanyTrades, intercompanyImportBatchContainers } from "@shared/schema";
 import { upload } from "../_helpers";
 import { autoProvisionTradingRelationship } from "../../services/intercompany/tradingAccountProvisioning";
@@ -185,6 +186,7 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     "/api/intercompany-container-trading/import",
     requireAuth,
     requireRole("Owner", "Developer"),
+    requireActionAccess("act_import_data"),
     upload.single("file"),
     async (req, res) => {
       try {

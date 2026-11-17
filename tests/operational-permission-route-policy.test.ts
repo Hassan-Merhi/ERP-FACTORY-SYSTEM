@@ -41,8 +41,6 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Single-bale form of the label print preparation above; same Factory page boundary. Not an invoice print.",
   "POST /api/factory/customer-orders/:id/container-extra-items/import":
     "Admin/Owner/Developer-only upload of validated workbook rows into one customer order's container extra items (same in-handler role gate as its GET/PUT/DELETE siblings); not a bulk company data import.",
-  "POST /api/intercompany-container-trading/import":
-    "Intercompany container trade posting from the reviewed workbook: Owner/Developer-only through requireRole on the route, scoped to the session company and re-checked against the user's eligible destination companies in postIntercompanyImport. It keeps its own stricter role gate rather than the general act_import_data permission.",
   "GET /api/excel-export/appearance":
     "Reads the session company's saved Excel appearance settings so client-built workbooks match; it returns settings, not exported business data, and is company-scoped by the session.",
   "PUT /api/excel-export/appearance":
