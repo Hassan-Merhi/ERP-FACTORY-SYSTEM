@@ -116,7 +116,7 @@ export async function monetaryAccountValuationTx(
       SELECT id,opening_balance::text,opening_balance_side,
        opening_balance_native_amount::text,opening_balance_currency,
        opening_balance_base_amount::text
-      FROM ${sql.raw(k.table)} WHERE id=${k.id} AND company_id=${input.companyId}
+      FROM ${sql.identifier(k.table)} WHERE id=${k.id} AND company_id=${input.companyId}
     `)
     )[0];
     if (a) accounts.push(a);

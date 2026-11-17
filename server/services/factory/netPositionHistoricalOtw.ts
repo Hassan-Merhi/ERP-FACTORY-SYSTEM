@@ -6,7 +6,7 @@
  * Old orders, container amount edits and missing scan timestamps are surfaced
  * as limitations; never infer a past transaction from a future scan or offload.
  */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { netPositionBusinessDay, type FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { db } from "../../db";
@@ -29,14 +29,14 @@ export const isBefore = (
  * `{number}~DEL{id}`, original_voucher_number kept). Two EXISTS, not one OR
  * across both columns, so the number index is used.
  */
-export const voucherKnownBy = (scope: FactoryNetPositionAsOf, number: string) => {
+export const voucherKnownBy = (scope: FactoryNetPositionAsOf, number: SQL) => {
   const known = (alias: string) =>
     sql.raw(`${alias}.company_id = o.company_id`).append(sql`
        AND ${isBefore(scope, `${alias}.created_at`)}
        AND (${sql.raw(`${alias}.deleted_at`)} IS NULL OR NOT ${isBefore(scope, `${alias}.deleted_at`)})`);
-  return sql`(EXISTS (SELECT 1 FROM vouchers nv WHERE nv.voucher_number = ${sql.raw(number)} AND ${known("nv")})
+  return sql`(EXISTS (SELECT 1 FROM vouchers nv WHERE nv.voucher_number = ${number} AND ${known("nv")})
     OR EXISTS (SELECT 1 FROM vouchers rv WHERE rv.voucher_number LIKE '%~DEL%'
-                AND rv.original_voucher_number = ${sql.raw(number)} AND ${known("rv")}))`;
+                AND rv.original_voucher_number = ${number} AND ${known("rv")}))`;
 };
 
 export type DatedPipelineOrder = {

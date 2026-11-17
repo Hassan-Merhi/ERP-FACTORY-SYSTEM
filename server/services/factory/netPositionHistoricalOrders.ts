@@ -182,7 +182,7 @@ export async function getHistoricalOrders(
            -- voucher was in the ledger then.
            (COALESCE(${isBefore(scope, "o.finalized_at")},false)
              AND (o.status NOT IN ('PENDING_VERIFICATION', 'VERIFIED', 'LOADING')
-               OR ${voucherKnownBy(scope, `'INV-GL-' || o.company_id::text || '-' || o.id::text`)})) AS finalized_before,
+               OR ${voucherKnownBy(scope, sql`'INV-GL-' || o.company_id::text || '-' || o.id::text`)})) AS finalized_before,
            -- The order row was last written before the cutoff and no scan was
            -- added or cancelled since: its stored totals ARE its value that day.
            (COALESCE(${isBefore(scope, "o.updated_at")},false)
@@ -205,7 +205,7 @@ export async function getHistoricalOrders(
                                        AND ${isBefore(scope, "cv.created_at")}
                                        AND (cv.deleted_at IS NULL OR NOT ${isBefore(scope, "cv.deleted_at")}))
                           OR (ch.voucher_id IS NULL
-                            AND ${voucherKnownBy(scope, `'CHARGE-PRE-' || o.id::text || '-' || ch.id::text`)}))), 0)::text AS known_charges,
+                            AND ${voucherKnownBy(scope, sql`'CHARGE-PRE-' || o.id::text || '-' || ch.id::text`)}))), 0)::text AS known_charges,
            (SELECT COUNT(*)::text FROM customer_order_bales cob
              WHERE cob.order_id = o.id AND cob.scanned_at IS NULL
                AND NOT ${netPositionLegacyScanKnown("cob", "o", companyId, scope)}) AS unknown_scans,

@@ -43,9 +43,10 @@ export function useFactoryWorkerAttendanceReportStatePart1() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const companyRole = selectedCompany?.role;
   const canEditPastWithoutPassword = useCallback(
-    (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates),
-    [selectedCompany?.role]
+    (dates: string[]) => canSkipAttendanceApproval(companyRole, dates),
+    [companyRole]
   );
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");

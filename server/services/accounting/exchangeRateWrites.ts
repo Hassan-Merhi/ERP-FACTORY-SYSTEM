@@ -3,7 +3,7 @@
  *
  * A rate decides the USD value of every later foreign-currency posting, so
  * changing a rate is restricted to Admin/Owner (and Developer) at the route
- * (any other writing role may only set today's company rate once), and every
+ * (any other writing role may only set or change today's company rate), and every
  * save, change or delete writes its audit row, with the old and the new value,
  * in the same transaction as the rate itself: a rate never changes without its
  * audit, and an audit never records a change that did not commit.
