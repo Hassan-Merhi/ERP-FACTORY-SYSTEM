@@ -1,4 +1,5 @@
 import { downloadBlob } from "./downloadBlob";
+import { translateApplicationText } from "@/i18n/applicationTranslations";
 
 export type ExportFileExtension = "xlsx" | "csv" | "pdf" | "json" | "zip" | "txt";
 
@@ -72,6 +73,12 @@ function fileNameFromContentDisposition(header: string | null): string | null {
   return value || null;
 }
 
+/** The page's language, for messages raised outside React. */
+function pageLanguage(): "en" | "ar" | "fr" {
+  const lang = typeof document !== "undefined" ? document.documentElement.lang.slice(0, 2) : "en";
+  return lang === "ar" || lang === "fr" ? lang : "en";
+}
+
 async function responseErrorMessage(response: Response): Promise<string> {
   try {
     const text = await response.text();
@@ -125,12 +132,12 @@ export async function downloadFromUrl(url: string, options: DownloadFromUrlOptio
   if (!response.ok) throw new Error(await responseErrorMessage(response));
   const blob = await response.blob();
   if (blob.size === 0) {
-    throw new Error("The server returned an empty export (0 bytes). Please retry or contact support.");
+    throw new Error(translateApplicationText("export.download.empty", pageLanguage()));
   }
   if (fileName.toLowerCase().endsWith(".xlsx")) {
     const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
     if (header.length < 4 || header[0] !== 0x50 || header[1] !== 0x4b || header[2] !== 0x03 || header[3] !== 0x04) {
-      throw new Error("The server returned an invalid Excel file. Please retry or contact support.");
+      throw new Error(translateApplicationText("export.download.invalidExcel", pageLanguage()));
     }
   }
   const serverName = fileNameFromContentDisposition(response.headers.get("Content-Disposition"));
