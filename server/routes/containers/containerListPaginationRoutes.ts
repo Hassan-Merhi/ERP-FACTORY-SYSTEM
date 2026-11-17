@@ -6,6 +6,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { containerSales, containers, customers } from "@shared/schema";
 import { parsePositiveInt } from "../../lib/listPagination";
 import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
+import { hasIntercompanyTradesTable } from "../../lib/intercompanyTradeAvailability";
 
 const DEFAULT_PAGE_SIZE = 250;
 const MAX_PAGE_SIZE = 250;
@@ -72,13 +73,14 @@ export function registerContainerListPaginationRoutes(app: Express): void {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
-      const condition = and(
-        or(
-          eq(containers.companyId, companyId),
-          sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.source_company_id = "containers"."company_id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
-        ),
-        ne(containers.status, "SOLD")
-      );
+      const hasTradeTable = await hasIntercompanyTradesTable();
+      const ownOrLinked = hasTradeTable
+        ? or(
+            eq(containers.companyId, companyId),
+            sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.source_company_id = "containers"."company_id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
+          )
+        : eq(containers.companyId, companyId);
+      const condition = and(ownOrLinked, ne(containers.status, "SOLD"));
       const [countRows, items] = await Promise.all([
         db
           .select({ total: sql<number>`count(*)::int` })
@@ -87,9 +89,9 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         db
           .select({
             ...getTableColumns(containers),
-            linkedParentCompanyName: sql<
-              string | null
-            >`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id="containers"."id" AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`,
+            linkedParentCompanyName: hasTradeTable
+              ? sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id="containers"."id" AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`
+              : sql<string | null>`NULL::text`,
           })
           .from(containers)
           .where(condition)
@@ -161,14 +163,17 @@ export function registerContainerListPaginationRoutes(app: Express): void {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
-      const condition = or(
-        eq(containers.companyId, companyId),
-        sql`EXISTS (SELECT 1 FROM intercompany_trades trade
-          WHERE trade.physical_container_id = "containers"."id"
-            AND trade.source_company_id = "containers"."company_id"
-            AND trade.destination_company_id = ${companyId}
-            AND trade.state = 'active')`
-      );
+      const hasTradeTable = await hasIntercompanyTradesTable();
+      const condition = hasTradeTable
+        ? or(
+            eq(containers.companyId, companyId),
+            sql`EXISTS (SELECT 1 FROM intercompany_trades trade
+              WHERE trade.physical_container_id = "containers"."id"
+                AND trade.source_company_id = "containers"."company_id"
+                AND trade.destination_company_id = ${companyId}
+                AND trade.state = 'active')`
+          )
+        : eq(containers.companyId, companyId);
       const [countRows, items] = await Promise.all([
         db
           .select({ total: sql<number>`count(*)::int` })
@@ -177,11 +182,13 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         db
           .select({
             ...getTableColumns(containers),
-            linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade
-              JOIN companies parent ON parent.id = trade.source_company_id
-              WHERE trade.physical_container_id = "containers"."id"
-                AND trade.destination_company_id = ${companyId}
-                AND trade.state = 'active' LIMIT 1)`,
+            linkedParentCompanyName: hasTradeTable
+              ? sql<string | null>`(SELECT parent.name FROM intercompany_trades trade
+                  JOIN companies parent ON parent.id = trade.source_company_id
+                  WHERE trade.physical_container_id = "containers"."id"
+                    AND trade.destination_company_id = ${companyId}
+                    AND trade.state = 'active' LIMIT 1)`
+              : sql<string | null>`NULL::text`,
           })
           .from(containers)
           .where(condition)
