@@ -146,9 +146,7 @@ export function ContainerDetailPriceImportDialog({ model }: { model: Model }) {
             </div>
           )}
 
-          {priceImportPreview && priceImportPreview.length === 0 && (
-            <EmptyState title="No rows found in the file." />
-          )}
+          {priceImportPreview && priceImportPreview.length === 0 && <EmptyState title="No rows found in the file." />}
         </div>
 
         {priceImportPreview && priceImportPreview.some((r) => r.status === "will_update") && (

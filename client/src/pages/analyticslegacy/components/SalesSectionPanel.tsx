@@ -212,9 +212,13 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                             {factoryCustomerOrderAnalytics.rows.map((customerRow, customerIndex) => {
                               const customerKey = String(customerRow.customerId ?? `unknown-${customerIndex}`);
                               const expanded = expandedOrderCustomers.has(customerKey);
-                              const destinations = Array.from(new Set(
-                                customerRow.orders.map((order) => order.destination?.trim()).filter((value): value is string => !!value)
-                              ));
+                              const destinations = Array.from(
+                                new Set(
+                                  customerRow.orders
+                                    .map((order) => order.destination?.trim())
+                                    .filter((value): value is string => !!value)
+                                )
+                              );
                               return (
                                 <Fragment key={customerKey}>
                                   <TableRow className="bg-muted/20">
@@ -242,7 +246,11 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                       </button>
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                      {destinations.length === 0 ? "—" : destinations.length === 1 ? destinations[0] : "Multiple destinations"}
+                                      {destinations.length === 0
+                                        ? "—"
+                                        : destinations.length === 1
+                                          ? destinations[0]
+                                          : "Multiple destinations"}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
                                       {customerRow.totalWeightKg.toLocaleString(undefined, {

@@ -75,7 +75,12 @@ export default function OrphanedRecordsPage() {
   const [selectedVouchers, setSelectedVouchers] = useState<number[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>("");
 
-  const { data: recordsData, isLoading, isError, refetch } = useQuery<OrphanedRecordsResponse>({
+  const {
+    data: recordsData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<OrphanedRecordsResponse>({
     queryKey: ["/api/orphaned-records"],
   });
 

@@ -75,7 +75,12 @@ export default function IntercompanyLinks() {
   const [recipientForm, setRecipientForm] = useState<string[]>([]);
 
   // Queries
-  const { data: links = [], isLoading, isError, refetch } = useQuery<ICLink[]>({
+  const {
+    data: links = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ICLink[]>({
     queryKey: ["/api/intercompany-links"],
   });
 

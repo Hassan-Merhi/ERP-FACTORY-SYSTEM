@@ -630,11 +630,7 @@ export default function AICommandCenter() {
                   </div>
                 )}
                 {tasksQuery.isError && !tasksQuery.data && (
-                  <ErrorState
-                    onAction={() => void tasksQuery.refetch()}
-                    actionLabel="Try again"
-                    className="py-16"
-                  />
+                  <ErrorState onAction={() => void tasksQuery.refetch()} actionLabel="Try again" className="py-16" />
                 )}
                 {!tasksQuery.isLoading && !(tasksQuery.isError && !tasksQuery.data) && allTasks.length === 0 && (
                   <EmptyState icon={History} title="No tasks yet" className="py-16" />

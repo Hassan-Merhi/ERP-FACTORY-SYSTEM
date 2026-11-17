@@ -35,7 +35,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className={`text-2xl font-bold font-mono tabular-nums ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                <p
+                  className={`text-2xl font-bold font-mono tabular-nums ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                >
                   {formatSignedSmartCurrency(assetTotal)}
                 </p>
               </div>
@@ -61,7 +63,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total</TableCell>
-                      <TableCell className={`text-right font-bold font-mono ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                      <TableCell
+                        className={`text-right font-bold font-mono ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                      >
                         {formatSignedSmartCurrency(assetTotal)}
                       </TableCell>
                     </TableRow>
@@ -85,7 +89,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className={`text-2xl font-bold font-mono tabular-nums ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                <p
+                  className={`text-2xl font-bold font-mono tabular-nums ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                >
                   {formatSignedSmartCurrency(liabilityTotal)}
                 </p>
               </div>
@@ -111,7 +117,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total</TableCell>
-                      <TableCell className={`text-right font-bold font-mono ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                      <TableCell
+                        className={`text-right font-bold font-mono ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                      >
                         {formatSignedSmartCurrency(liabilityTotal)}
                       </TableCell>
                     </TableRow>
@@ -135,7 +143,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Cash</p>
-                <p className={`text-2xl font-bold font-mono tabular-nums ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                <p
+                  className={`text-2xl font-bold font-mono tabular-nums ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                >
                   {formatSignedSmartCurrency(cashTotal)}
                 </p>
               </div>
@@ -161,7 +171,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total Cash</TableCell>
-                      <TableCell className={`text-right font-bold font-mono ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                      <TableCell
+                        className={`text-right font-bold font-mono ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                      >
                         {formatSignedSmartCurrency(cashTotal)}
                       </TableCell>
                     </TableRow>
@@ -185,7 +197,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Balance</p>
-                <p className={`text-2xl font-bold font-mono tabular-nums ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                <p
+                  className={`text-2xl font-bold font-mono tabular-nums ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                >
                   {formatSignedSmartCurrency(loansBanksTotal)}
                 </p>
               </div>
@@ -211,7 +225,9 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total Balance</TableCell>
-                      <TableCell className={`text-right font-bold font-mono ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                      <TableCell
+                        className={`text-right font-bold font-mono ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}
+                      >
                         {formatSignedSmartCurrency(loansBanksTotal)}
                       </TableCell>
                     </TableRow>

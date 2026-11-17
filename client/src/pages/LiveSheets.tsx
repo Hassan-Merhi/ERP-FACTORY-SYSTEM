@@ -193,7 +193,12 @@ export default function LiveSheets() {
   const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = me?.role === "Admin" || me?.role === "Owner" || me?.role === "Developer";
 
-  const { data: sheets = [], isLoading, isError, refetch } = useQuery<LiveSpreadsheet[]>({
+  const {
+    data: sheets = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<LiveSpreadsheet[]>({
     queryKey: ["/api/live-spreadsheets"],
   });
 

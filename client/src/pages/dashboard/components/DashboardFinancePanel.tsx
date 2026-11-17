@@ -545,7 +545,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       draggable={!isViewer}
                       onDragStart={() => {
                         if (isViewer) return;
-                          dragPayableRef.current = account.id;
+                        dragPayableRef.current = account.id;
                       }}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => !isViewer && handlePayableDrop(account.id)}
@@ -565,7 +565,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                         variant="ghost"
                         className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
                         onClick={() => !isViewer && removePayableAccountMutation.mutate(account.id)}
-                          disabled={isViewer}
+                        disabled={isViewer}
                         data-testid={`button-remove-payable-account-${account.id}`}
                       >
                         <X className="h-3.5 w-3.5" />

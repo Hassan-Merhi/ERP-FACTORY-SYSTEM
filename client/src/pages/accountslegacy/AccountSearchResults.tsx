@@ -15,9 +15,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
   const { filteredAccounts, hideBalances } = model;
 
   if (filteredAccounts.length === 0) {
-    return (
-      <EmptyState icon={Search} title="No accounts found" description="Try a different name or account code" />
-    );
+    return <EmptyState icon={Search} title="No accounts found" description="Try a different name or account code" />;
   }
 
   return (

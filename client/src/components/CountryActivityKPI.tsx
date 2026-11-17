@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/page-state";
 
 const WINDOW_DAYS = 1;
 
@@ -512,7 +513,7 @@ export function CountryActivityKPI() {
           ) : isError ? (
             <p className="text-sm text-destructive text-center py-8">Failed to load activity data — please refresh.</p>
           ) : !data || data.companies.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No ERP companies found.</p>
+            <EmptyState title="No ERP companies found." className="m-3 py-8" />
           ) : (
             <div className="px-2 py-1">
               {data.companies.map((c) => (

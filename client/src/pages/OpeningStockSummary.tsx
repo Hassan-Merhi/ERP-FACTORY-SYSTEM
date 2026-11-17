@@ -65,12 +65,7 @@ export default function OpeningStockSummary() {
       : 0;
 
   return (
-    <ErpPage
-      title="Opening Stock Summary"
-      subtitle={selectedCompany?.name}
-      icon={<Package className="h-5 w-5" />}
-    >
-
+    <ErpPage title="Opening Stock Summary" subtitle={selectedCompany?.name} icon={<Package className="h-5 w-5" />}>
       <Card className="overflow-hidden">
         <div className="bg-primary text-primary-foreground">
           <div className="grid grid-cols-2 p-2 text-xs font-semibold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3 sm:text-sm">
@@ -140,7 +135,9 @@ export default function OpeningStockSummary() {
           <div className="border-t-2 border-primary bg-muted/50">
             <div className="grid grid-cols-2 p-2 font-bold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3">
               <div className="text-xs sm:text-sm">Grand Total</div>
-              <div className={financialNumberClassName}>{formatErpFixedQuantity(data.grandTotal.opening.quantity)} BL</div>
+              <div className={financialNumberClassName}>
+                {formatErpFixedQuantity(data.grandTotal.opening.quantity)} BL
+              </div>
               <div className={cn(financialNumberClassName, "hidden sm:block phone-land:hidden")}>
                 {openingRate === 0 ? "" : formatAmount(openingRate)}
               </div>

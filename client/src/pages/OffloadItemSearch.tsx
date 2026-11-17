@@ -26,7 +26,12 @@ export default function OffloadItemSearch() {
   const [input, setInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: results = [], isLoading, isError, refetch } = useQuery<OffloadResult[]>({
+  const {
+    data: results = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<OffloadResult[]>({
     queryKey: ["/api/offload-item-search", searchTerm],
     queryFn: async () => {
       if (!searchTerm) return [];

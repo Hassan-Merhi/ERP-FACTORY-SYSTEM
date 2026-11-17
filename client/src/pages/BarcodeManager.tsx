@@ -36,7 +36,12 @@ export default function BarcodeManager() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [manualBarcode, setManualBarcode] = useState("");
 
-  const { data: barcodes = [], isLoading, isError, refetch } = useQuery<PendingBarcode[]>({
+  const {
+    data: barcodes = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<PendingBarcode[]>({
     queryKey: ["/api/pending-barcodes", selectedCompany?.id],
     enabled: !!selectedCompany,
   });
@@ -326,7 +331,11 @@ export default function BarcodeManager() {
         ) : isError && barcodes.length === 0 ? (
           <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
         ) : unusedBarcodes.length === 0 ? (
-          <EmptyState icon={Barcode} title="No pending barcodes. Import from Excel or add manually." className="py-12" />
+          <EmptyState
+            icon={Barcode}
+            title="No pending barcodes. Import from Excel or add manually."
+            className="py-12"
+          />
         ) : (
           <>
             <div className="hidden md:block phone-land:hidden">

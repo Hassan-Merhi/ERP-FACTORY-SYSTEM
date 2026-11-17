@@ -169,7 +169,11 @@ export default function StockItemHistory() {
         </CardHeader>
         <CardContent>
           <div className="hidden md:block phone-land:hidden">
-            <ErpListTable pageKey="stock-item-monthly-history" minimumWidth="52rem" scrollLabel="Stock item monthly summary">
+            <ErpListTable
+              pageKey="stock-item-monthly-history"
+              minimumWidth="52rem"
+              scrollLabel="Stock item monthly summary"
+            >
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead rowSpan={2} className="align-bottom border-r">

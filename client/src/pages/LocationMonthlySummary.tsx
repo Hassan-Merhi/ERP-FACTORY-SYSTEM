@@ -720,9 +720,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
                 };
 
                 if (!rows.length) {
-                  return (
-                    <EmptyState title="No transactions found for this period." className="m-4 py-12" />
-                  );
+                  return <EmptyState title="No transactions found for this period." className="m-4 py-12" />;
                 }
 
                 const totalQty = rows.reduce((s: number, r) => s + (r.qty || 0), 0);

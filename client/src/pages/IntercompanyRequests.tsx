@@ -60,7 +60,12 @@ export default function IntercompanyRequests() {
   const [approveDescription, setApproveDescription] = useState<string>("");
   const [dismissNote, setDismissNote] = useState("");
 
-  const { data: requests = [], isLoading, isError, refetch } = useQuery<ICRequest[]>({
+  const {
+    data: requests = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ICRequest[]>({
     queryKey: ["/api/intercompany-requests", statusFilter],
     queryFn: async () => {
       const r = await fetch(`/api/intercompany-requests?status=${statusFilter}`, { credentials: "include" });

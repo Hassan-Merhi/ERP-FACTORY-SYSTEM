@@ -5,6 +5,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Package, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -45,7 +46,12 @@ export default function StockQuery() {
   const initialQ = new URLSearchParams(search).get("q") || "";
   const [searchTerm, setSearchTerm] = useState(initialQ);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
-  const { page: currentPage, pageSize, onPageChange: setCurrentPage, resetPage } = useErpServerPagination({
+  const {
+    page: currentPage,
+    pageSize,
+    onPageChange: setCurrentPage,
+    resetPage,
+  } = useErpServerPagination({
     companyId: selectedCompany?.id,
     filterKey: debouncedSearch,
     pageSize: 100,
@@ -63,7 +69,12 @@ export default function StockQuery() {
     search: debouncedSearch.trim() || undefined,
   });
 
-  const { data: pagedStockItems, isLoading: erpLoading } = useQuery<PagedStockItems>({
+  const {
+    data: pagedStockItems,
+    isLoading: erpLoading,
+    isError: erpError,
+    refetch: refetchErp,
+  } = useQuery<PagedStockItems>({
     queryKey: erpCompanyDataKey(stockQueryUrl, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(stockQueryUrl, { credentials: "include" });
@@ -73,12 +84,19 @@ export default function StockQuery() {
     enabled: !isFactory && selectedCompany?.id != null,
   });
 
-  const { data: factoryProducts = [], isLoading: factoryLoading } = useQuery<FactoryBaleProduct[]>({
+  const {
+    data: factoryProducts = [],
+    isLoading: factoryLoading,
+    isError: factoryError,
+    refetch: refetchFactory,
+  } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products"],
     enabled: isFactory,
   });
 
   const isLoading = isFactory ? factoryLoading : erpLoading;
+  const isError = isFactory ? factoryError && factoryProducts.length === 0 : erpError && !pagedStockItems;
+  const refetch = isFactory ? refetchFactory : refetchErp;
 
   // Server pagination never slices the returned page locally.
   // If a filtered result set shrinks, recover the last valid page.
@@ -137,14 +155,15 @@ export default function StockQuery() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-20" />
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Search className="h-10 w-10 opacity-25" />
-          <p className="text-sm font-medium">
-            {hasSearch ? "No items match your search" : "Search for a stock item to get started"}
-          </p>
-          {hasSearch && <p className="text-xs">Try a different name or code</p>}
-        </div>
+        <EmptyState
+          icon={Search}
+          title={hasSearch ? "No items match your search" : "Search for a stock item to get started"}
+          description={hasSearch ? "Try a different name or code" : undefined}
+          className="py-20"
+        />
       ) : (
         <>
           {/* Desktop table */}
@@ -155,38 +174,41 @@ export default function StockQuery() {
             scrollLabel="Stock query results"
             wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
-              <TableHeader className="sticky top-0 z-30 bg-muted">
-                <TableRow className="h-11 bg-muted/40 border-b">
-                  <TableHead className="text-left px-4 font-medium w-32">Code</TableHead>
-                  <TableHead className="text-left px-4 font-medium">Name</TableHead>
-                  <TableHead className="text-left px-4 font-medium w-24">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => handleItemClick(item)}
-                    data-testid={`row-stock-item-${item.id}`}
+            <TableHeader className="sticky top-0 z-30 bg-muted">
+              <TableRow className="h-11 bg-muted/40 border-b">
+                <TableHead className="text-left px-4 font-medium w-32">Code</TableHead>
+                <TableHead className="text-left px-4 font-medium">Name</TableHead>
+                <TableHead className="text-left px-4 font-medium w-24">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow
+                  key={item.id}
+                  className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => handleItemClick(item)}
+                  data-testid={`row-stock-item-${item.id}`}
+                >
+                  <TableCell
+                    className="px-4 py-3 text-muted-foreground font-mono text-xs"
+                    data-testid={`code-${item.id}`}
                   >
-                    <TableCell className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`code-${item.id}`}>
-                      {item.code}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
-                      <div className="flex items-center gap-2">
-                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        {item.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-3" data-testid={`status-${item.id}`}>
-                      <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
-                        {item.active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
+                    {item.code}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
+                    <div className="flex items-center gap-2">
+                      <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {item.name}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3" data-testid={`status-${item.id}`}>
+                    <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
+                      {item.active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
           </ErpListTable>
 
           {/* Mobile list */}

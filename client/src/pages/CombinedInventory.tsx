@@ -555,7 +555,12 @@ function GroupsView({
 }) {
   if (groups.length === 0) {
     return (
-      <EmptyState icon={Layers} title="No stock groups found" description="Try adjusting your search." className="py-16" />
+      <EmptyState
+        icon={Layers}
+        title="No stock groups found"
+        description="Try adjusting your search."
+        className="py-16"
+      />
     );
   }
 
@@ -685,9 +690,7 @@ function ItemsTable({
   );
 
   if (rows.length === 0) {
-    return (
-      <EmptyState icon={Layers} title="No stock items found" description={emptyMessage} className="py-16" />
-    );
+    return <EmptyState icon={Layers} title="No stock items found" description={emptyMessage} className="py-16" />;
   }
 
   return (

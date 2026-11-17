@@ -61,7 +61,12 @@ export default function MixBatches() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
 
-  const { data: batches, isLoading, isError, refetch } = useQuery<FactoryMixBatch[]>({
+  const {
+    data: batches,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<FactoryMixBatch[]>({
     queryKey: ["/api/factory/mix-batches"],
   });
 
