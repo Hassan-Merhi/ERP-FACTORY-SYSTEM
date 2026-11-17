@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -209,7 +210,12 @@ export function PosWhatsAppSection() {
     }
   }, [posSettings, credsDirty]);
 
-  const { data: locations = [], isLoading: locLoading } = useQuery<Location[]>({
+  const {
+    data: locations = [],
+    isLoading: locLoading,
+    isError: locError,
+    refetch: refetchLocations,
+  } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
   });
 
@@ -470,12 +476,11 @@ export function PosWhatsAppSection() {
         </p>
 
         {locLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading locations…
-          </div>
+          <LoadingState title="Loading locations…" className="py-8" />
+        ) : locError && locations.length === 0 ? (
+          <ErrorState onAction={() => void refetchLocations()} actionLabel="Try again" className="py-8" />
         ) : locations.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-8">No POS locations found.</p>
+          <EmptyState title="No POS locations found." className="py-8" />
         ) : (
           <div className="space-y-2">
             {locations.map((loc) => {

@@ -656,6 +656,7 @@
     "docs/archive/fresh-db-bootstrap.md": "record",
     "docs/database-migrations.md": "reference",
     "docs/archive/database-migrations-only-cutover-2026-11-16.md": "record",
+    "docs/manifest-driven-access-consolidation.md": "reference",
     "docs/universal-excel-export/phase-1-audit.md": "reference",
     "docs/universal-excel-export/phase-2-engine.md": "reference",
     "docs/universal-excel-export/phase-3-design.md": "reference",

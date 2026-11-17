@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Plus, Trash2, Save, Search, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/formatNumber";
@@ -806,7 +807,7 @@ export default function PurchaseOrderEdit() {
               <ScrollArea className="h-[400px]">
                 <div className="p-2 space-y-1">
                   {filteredStockItems.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">No items found</div>
+                    <EmptyState title="No items found" className="py-8" />
                   ) : (
                     filteredStockItems.map((item, itemIndex) => {
                       const isHighlighted = itemIndex === highlightedIndex;

@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { ErrorState } from "@/components/ui/page-state";
 
 interface Employee {
   id: number;
@@ -116,7 +117,12 @@ export default function FactoryEmployeeAdvancesTab() {
     [selectedCompany?.id, statusFilter, empFilter]
   );
 
-  const { data: advances = [], isLoading } = useQuery<AdvanceRecord[]>({
+  const {
+    data: advancesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<AdvanceRecord[]>({
     queryKey: qKey,
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -128,6 +134,7 @@ export default function FactoryEmployeeAdvancesTab() {
       return res.json();
     },
   });
+  const advances = useMemo(() => advancesData ?? [], [advancesData]);
 
   useQuery<RepaymentRecord[]>({
     queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
@@ -312,6 +319,12 @@ export default function FactoryEmployeeAdvancesTab() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : isError && !advancesData ? (
+              <TableRow>
+                <TableCell colSpan={7}>
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
+                </TableCell>
+              </TableRow>
             ) : advances.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7}>

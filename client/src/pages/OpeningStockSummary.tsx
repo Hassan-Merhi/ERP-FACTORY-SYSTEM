@@ -7,6 +7,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { ErpPage, formatErpFixedQuantity } from "@/erp-core";
 import { erpCompanyDataKey } from "@/erp-core/erpData";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
+import { ErrorState } from "@/components/ui/page-state";
 import { financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export default function OpeningStockSummary() {
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
 
-  const { data, isLoading } = useQuery<OpeningStockData>({
+  const { data, isLoading, isError, refetch } = useQuery<OpeningStockData>({
     queryKey: erpCompanyDataKey("/api/reports/opening-stock-summary", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
@@ -64,12 +65,7 @@ export default function OpeningStockSummary() {
       : 0;
 
   return (
-    <ErpPage
-      title="Opening Stock Summary"
-      subtitle={selectedCompany?.name}
-      icon={<Package className="h-5 w-5" />}
-    >
-
+    <ErpPage title="Opening Stock Summary" subtitle={selectedCompany?.name} icon={<Package className="h-5 w-5" />}>
       <Card className="overflow-hidden">
         <div className="bg-primary text-primary-foreground">
           <div className="grid grid-cols-2 p-2 text-xs font-semibold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3 sm:text-sm">
@@ -93,6 +89,8 @@ export default function OpeningStockSummary() {
         <div className="divide-y">
           {isLoading ? (
             <LoadingRows />
+          ) : isError && !data ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4" />
           ) : data?.stockGroups?.length ? (
             data.stockGroups.map((group) => (
               <button
@@ -137,7 +135,9 @@ export default function OpeningStockSummary() {
           <div className="border-t-2 border-primary bg-muted/50">
             <div className="grid grid-cols-2 p-2 font-bold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3">
               <div className="text-xs sm:text-sm">Grand Total</div>
-              <div className={financialNumberClassName}>{formatErpFixedQuantity(data.grandTotal.opening.quantity)} BL</div>
+              <div className={financialNumberClassName}>
+                {formatErpFixedQuantity(data.grandTotal.opening.quantity)} BL
+              </div>
               <div className={cn(financialNumberClassName, "hidden sm:block phone-land:hidden")}>
                 {openingRate === 0 ? "" : formatAmount(openingRate)}
               </div>

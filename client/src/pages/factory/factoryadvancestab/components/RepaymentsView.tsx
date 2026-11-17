@@ -4,6 +4,7 @@
  * Extracted from FactoryAdvancesTab.tsx during the Phase 4 god-file split.
  */
 import { useState, useMemo } from "react";
+import { ErrorState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Banknote, RotateCcw } from "lucide-react";
@@ -30,7 +31,12 @@ export function RepaymentsView() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: repayments, isLoading } = useQuery<RepaymentRecord[]>({
+  const {
+    data: repayments,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<RepaymentRecord[]>({
     queryKey: ["/api/factory/advance-repayments", filterWorker],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -71,6 +77,10 @@ export function RepaymentsView() {
         <Skeleton className="h-64 rounded-md" />
       </div>
     );
+  }
+
+  if (isError && !repayments) {
+    return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
   }
 
   const list = Array.isArray(repayments) ? repayments : [];

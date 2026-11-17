@@ -6,6 +6,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -372,10 +373,7 @@ export function RecurringJournalsTab() {
       </div>
 
       {query.isLoading ? (
-        <div className="rounded-xl border p-6 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading recurring journals…
-        </div>
+        <LoadingState title="Loading recurring journals…" className="rounded-xl p-6" />
       ) : query.isError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex items-center justify-between gap-3">
           <p className="text-sm text-destructive">Could not load recurring journals.</p>
@@ -384,11 +382,12 @@ export function RecurringJournalsTab() {
           </Button>
         </div>
       ) : (query.data?.recurringJournals.length ?? 0) === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-2 font-medium">No recurring journals yet</p>
-          <p className="text-sm text-muted-foreground">Add one above using an existing posted Journal voucher.</p>
-        </div>
+        <EmptyState
+          icon={CalendarClock}
+          title="No recurring journals yet"
+          description="Add one above using an existing posted Journal voucher."
+          className="rounded-xl p-8"
+        />
       ) : (
         <div className="space-y-4">
           {query.data?.recurringJournals.map((recurring) => (

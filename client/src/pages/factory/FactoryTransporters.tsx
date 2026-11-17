@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useState, useRef, useEffect } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -313,7 +314,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
   // Charges and payments post to an existing transporter's ledger; read-only roles view and print only.
   const recordChanges = useExistingRecordChangeAccess();
 
-  const { data, isLoading } = useQuery<TransporterDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<TransporterDetail>({
     queryKey: companyQueryKey(API, selectedCompany?.id, transporterId),
     enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch(`${API}/${transporterId}`, { credentials: "include" }).then((r) => r.json()),
@@ -334,7 +335,8 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading statement…</div>;
+  if (isLoading) return <LoadingState title="Loading statement…" />;
+  if (isError && !data) return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
   if (!data) return <div className="p-8 text-center text-muted-foreground">Transporter not found.</div>;
 
   return (
@@ -420,9 +422,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           </div>
           <div className="table-responsive">
             {data.transactions.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                No transactions yet. Record a charge to get started.
-              </div>
+              <EmptyState title="No transactions yet. Record a charge to get started." className="border-0" />
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-30 bg-muted">
@@ -616,7 +616,12 @@ export default function FactoryTransporters() {
     setAddOpen(false);
   }, [selectedCompany?.id]);
 
-  const { data: transporters = [], isLoading } = useQuery<Transporter[]>({
+  const {
+    data: transporters = [],
+    isLoading,
+    isError: transportersError,
+    refetch: refetchTransporters,
+  } = useQuery<Transporter[]>({
     queryKey: companyQueryKey(API, selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -693,12 +698,19 @@ export default function FactoryTransporters() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : transportersError && transporters.length === 0 ? (
+            <ErrorState
+              onAction={() => void refetchTransporters()}
+              actionLabel="Try again"
+              className="rounded-none border-0"
+            />
           ) : transporters.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <TruckIcon className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium mb-1">No transporters yet</p>
-              <p className="text-xs">Add your first transporter to start tracking charges and payments.</p>
-            </div>
+            <EmptyState
+              icon={TruckIcon}
+              title="No transporters yet"
+              description="Add your first transporter to start tracking charges and payments."
+              className="rounded-none border-0"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

@@ -212,6 +212,14 @@ jobs:
       - name: Script inventory
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:scripts
+      - name: Route access declaration coverage (fail on missing, stale or drifted routes)
+        if: always() && steps.install.outcome == 'success'
+        # This job has no PostgreSQL service. The gate only registers routes and
+        # reads the manifest, so clear the workflow-level DATABASE_URL instead
+        # of letting the test bootstrap try to connect.
+        env:
+          DATABASE_URL: ""
+        run: npm run verify:route-access-coverage
       - name: Raw SQL review gate
         if: always() && steps.install.outcome == 'success'
         run: npm run check:raw-sql

@@ -5,6 +5,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface SupplierMixBatchHistoryDialogProps {
@@ -75,7 +76,12 @@ export function SupplierMixBatchHistoryDialog({
   open,
   onClose,
 }: SupplierMixBatchHistoryDialogProps) {
-  const { data: history = [], isLoading } = useQuery<RawStockHistoryRow[]>({
+  const {
+    data: history = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<RawStockHistoryRow[]>({
     queryKey: [`/api/factory/raw-stock/history/${supplierId}`],
     enabled: open && supplierId !== null,
   });
@@ -120,10 +126,17 @@ export function SupplierMixBatchHistoryDialog({
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
+          ) : isError && history.length === 0 ? (
+            <ErrorState
+              onAction={() => void refetch()}
+              actionLabel="Try again"
+              className="min-h-32 rounded-none border-0"
+            />
           ) : history.length === 0 ? (
-            <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
-              No raw material history found for this supplier.
-            </div>
+            <EmptyState
+              title="No raw material history found for this supplier."
+              className="min-h-32 rounded-none border-0"
+            />
           ) : (
             <Table>
               <TableHeader className="bg-muted sticky top-0">

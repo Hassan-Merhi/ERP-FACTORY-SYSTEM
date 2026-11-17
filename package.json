@@ -98,7 +98,8 @@
     "db:performance:audit": "node scripts/audit-database-performance.mjs --json",
     "db:restore:preflight": "node scripts/verify-restore-target.mjs",
     "db:release:preflight": "node scripts/verify-database-phase9-release.mjs",
-    "audit:database-integrity:catalog": "node scripts/audit-database-integrity-catalog.mjs --json"
+    "audit:database-integrity:catalog": "node scripts/audit-database-integrity-catalog.mjs --json",
+    "verify:route-access-coverage": "node node_modules/vitest/vitest.mjs run tests/route-access-manifest.test.ts tests/operational-permission-declarations.test.ts"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
@@ -174,6 +175,7 @@
     "nodemailer": "^10.1.4",
     "openai": "^7.28.0",
     "papaparse": "^5.7.0",
+    "path-to-regexp": "8.4.2",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.20.2",
     "pg": "^8.16.3",

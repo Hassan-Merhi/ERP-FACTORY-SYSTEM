@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -418,10 +419,11 @@ export function AuditLog({
           </div>
         )
       ) : auditLogs.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground border rounded-md bg-muted/20">
-          <p className="text-sm font-medium">No activity found for {selectedCompany?.name || "this company"}</p>
-          <p className="text-xs mt-1">Try adjusting the filters or date range.</p>
-        </div>
+        <EmptyState
+          title={`No activity found for ${selectedCompany?.name || "this company"}`}
+          description="Try adjusting the filters or date range."
+          className="py-12"
+        />
       ) : erpPhone ? (
         <div className="space-y-3" data-testid="activity-cards">
           {groupedDays.map(({ dateKey, dateLabel, logs }) => (

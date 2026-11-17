@@ -22,10 +22,22 @@ function requireMarkers(file, markers) {
   return source;
 }
 
+// Privileged maintenance is no longer mounted on its own. The access boundary
+// is mounted once and runs the check for every route whose rule in
+// config/route-access-manifest.json lists the "privileged-maintenance" policy.
 const registrar = requireMarkers("server/routes/tenantBoundaryRegistrar.ts", [
-  "enforcePrivilegedMaintenanceScope",
-  "app.use(enforcePrivilegedMaintenanceScope)",
+  "createManifestAccessBoundary",
+  "app.use(createManifestAccessBoundary())",
 ]);
+
+requireMarkers("server/security/access/accessPolicies.ts", [
+  '"privileged-maintenance": fromGuard(enforcePrivilegedMaintenanceScope)',
+]);
+
+const accessManifest = requireMarkers("config/route-access-manifest.json", ['"privileged-maintenance"']);
+if ((accessManifest.match(/"privileged-maintenance"/g) ?? []).length < 50) {
+  failures.push("config/route-access-manifest.json: privileged-maintenance is declared on unexpectedly few routes");
+}
 
 const policy = requireMarkers("server/services/security/privilegedMaintenanceRoutePolicy.ts", [
   '"administration.repair"',
