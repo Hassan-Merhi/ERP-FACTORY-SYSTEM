@@ -56,11 +56,16 @@ vi.mock("../server/lib/logger", () => ({
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
-vi.mock("../server/routes/_helpers", () => ({
-  upload: {
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },
   spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
+  generalUpload: {
     single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },

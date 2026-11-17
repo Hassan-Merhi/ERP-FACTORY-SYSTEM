@@ -12,6 +12,7 @@ export * from "./retailFashion";
 export * from "./retailStockCount";
 export * from "./erp";
 export * from "./containers";
+export * from "./intercompanyTrading";
 export * from "./supplierTrackingDefaults";
 export * from "./factory";
 export {

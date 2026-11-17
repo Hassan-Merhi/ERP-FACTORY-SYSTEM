@@ -86,6 +86,7 @@ Hub tabs must be URL-backed, validated, synchronized with `popstate`, and change
 | `/stock?tab=items` | Stock items | `/stock-items` redirects here with replace |
 | `/stock?tab=query` | Stock query | `/stock-query` redirects here with replace |
 | `/stock?tab=offload` | Offload item search | `/offload-item-search` redirects here with replace |
+| `/stock?tab=otw` | Stock on the way (shared ERP OTW view) | Alternate authorized Stock Hub entry for `/inventory?tab=on-the-way`; existing Inventory OTW route remains supported |
 
 `/location-summary` currently redirects to `/stock-query?tab=summary`, which then redirects to `/stock?tab=query`; Phase 4 must collapse this chain to the actual canonical Stock Hub destination while preserving the intended summary state.
 

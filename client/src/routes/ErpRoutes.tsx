@@ -2,6 +2,9 @@ import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import { legacyErpIntercompanyPaymentDestination } from "@/pages/intercompany/intercompanyLegacyNavigation";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const ErpHelpTraining = lazy(() =>
   import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.ErpHelpTraining }))
@@ -128,6 +131,10 @@ interface ErpRoutesProps {
 
 type RouteComponent = ComponentType;
 
+function LegacyIntercompanyPaymentRedirect() {
+  return <Redirect replace to={legacyErpIntercompanyPaymentDestination()} />;
+}
+
 export function ErpRoutes({ user }: ErpRoutesProps) {
   const { selectedCompany } = useCompany();
   const { data: erpAccess } = useQuery<ErpFeatureAccess>({
@@ -194,7 +201,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccessAny(["stock_items", "stock_query"]) ? (
+      {canAccessAny(["stock_items", "stock_query", "stock_otw"]) ? (
         <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/stock">
@@ -249,6 +256,24 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/offloads/:id", "containers", OffloadDetail)}
 
       {G("/po-import", "containers", POImport)}
+      {R(
+        "/intercompany/linked-trades",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LinkedTradesEditor
+      )}
+      {R(
+        "/intercompany/payments",
+        canAccess("vouchers") && canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LegacyIntercompanyPaymentRedirect
+      )}
+      {/* Destination ERP may still need the dedicated receipt/linked-PO route.
+          Keep these permission-gated compatibility routes until the ERP
+          container details have a matching receiving workflow. */}
+      {R(
+        "/intercompany/lifecycle",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyLifecycle
+      )}
       {R("/ai-validation", true, AiValidationPage)}
       {R("/ai-command-center", true, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}

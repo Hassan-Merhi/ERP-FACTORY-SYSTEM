@@ -22,11 +22,15 @@ vi.mock("../server/auth", () => ({
   requireNonPOS: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-vi.mock("../server/routes/_helpers", () => ({
-  upload: {
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = {
     single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   },
   spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
+  generalUpload: {
     single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },
