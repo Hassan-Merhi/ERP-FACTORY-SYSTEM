@@ -1462,7 +1462,7 @@ column	public.factory_bales.stock_entry_date	{"type":"date","notNull":false,"def
 column	public.factory_bales.total_cost	{"type":"numeric(20,7)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.updated_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.waste_dispatch_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_bales.weight_kg	{"type":"numeric(12,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_bales.weight_kg	{"type":"numeric(15,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.worker_name	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_categories.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_categories.created_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
@@ -1684,7 +1684,7 @@ column	public.factory_container_vessel_tracking.voyage_number	{"type":"character
 column	public.factory_containers.actual_received_kg	{"type":"numeric(15,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.arrival_date	{"type":"date","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.commission_account_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.commission_amount	{"type":"numeric(16,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.commission_amount	{"type":"numeric(20,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.commission_currency_code	{"type":"character varying(10)","notNull":false,"default":"'USD'::character varying","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.commission_fx_rate_confirmed	{"type":"boolean","notNull":true,"default":"false","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.commission_fx_rate_date	{"type":"date","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -1700,12 +1700,12 @@ column	public.factory_containers.deleted_at	{"type":"timestamp without time zone
 column	public.factory_containers.destination	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.difference_kg	{"type":"numeric(15,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.duty_account_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.duty_amount	{"type":"numeric(16,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.duty_amount	{"type":"numeric(20,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.duty_notes	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.duty_status	{"type":"text","notNull":false,"default":"'NONE'::text","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.final_payable_amount	{"type":"numeric(20,4)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.final_payable_amount_usd	{"type":"numeric(16,2)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.freight	{"type":"numeric(16,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.final_payable_amount_usd	{"type":"numeric(20,4)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.freight	{"type":"numeric(20,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.freight_account_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.freight_currency_code	{"type":"character varying(10)","notNull":false,"default":"'USD'::character varying","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.freight_fx_rate_confirmed	{"type":"boolean","notNull":true,"default":"false","identity":null,"generated":null,"collation":null,"comment":null}
@@ -1719,15 +1719,15 @@ column	public.factory_containers.fx_rate_date_import	{"type":"date","notNull":fa
 column	public.factory_containers.fx_rate_date_offload	{"type":"date","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.fx_rate_source	{"type":"text","notNull":false,"default":"'auto'::text","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.fx_rate_to_usd	{"type":"numeric(20,8)","notNull":false,"default":"1","identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.fx_rate_to_usd_import	{"type":"numeric(16,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.fx_rate_to_usd_offload	{"type":"numeric(16,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.fx_rate_to_usd_import	{"type":"numeric(20,8)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.fx_rate_to_usd_offload	{"type":"numeric(20,8)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.id	{"type":"integer","notNull":true,"default":"nextval('factory_containers_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.json_cargo_error	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.json_cargo_last_checked_at	{"type":"timestamp with time zone","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.json_cargo_tracking_status	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.notes	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.origin	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.other_charges	{"type":"numeric(16,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.other_charges	{"type":"numeric(20,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.other_charges_account_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.other_charges_currency_code	{"type":"character varying(10)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.other_charges_supplier_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -1750,7 +1750,7 @@ column	public.factory_containers.rate_per_kg	{"type":"numeric(20,6)","notNull":f
 column	public.factory_containers.rate_per_kg_usd	{"type":"numeric(20,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.status	{"type":"text","notNull":true,"default":"'PENDING'::text","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.supplier_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_containers.total_kg	{"type":"numeric(12,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_containers.total_kg	{"type":"numeric(15,3)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.tracking_auto_update	{"type":"boolean","notNull":true,"default":"false","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.tracking_carrier_hint	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_containers.tracking_changed_at	{"type":"timestamp with time zone","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -2425,7 +2425,7 @@ column	public.factory_mix_batch_sources.id	{"type":"integer","notNull":true,"def
 column	public.factory_mix_batch_sources.inventory_supplier_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batch_sources.mix_batch_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batch_sources.notes	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_mix_batch_sources.quantity_kg	{"type":"numeric(12,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_mix_batch_sources.quantity_kg	{"type":"numeric(15,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batch_sources.rate_per_kg	{"type":"numeric(12,4)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batch_sources.source_batch_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batch_sources.source_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -2447,7 +2447,7 @@ column	public.factory_mix_batches.notes	{"type":"text","notNull":false,"default"
 column	public.factory_mix_batches.operator_user	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batches.status	{"type":"text","notNull":true,"default":"'OPEN'::text","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batches.total_cost	{"type":"numeric(20,7)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_mix_batches.total_weight_kg	{"type":"numeric(12,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_mix_batches.total_weight_kg	{"type":"numeric(15,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batches.updated_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_mix_batches.used_kg	{"type":"numeric","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.amount	{"type":"numeric(20,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -2464,7 +2464,7 @@ column	public.factory_offload_additional_charges.description	{"type":"text","not
 column	public.factory_offload_additional_charges.full_container_value_delta_usd	{"type":"numeric(20,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.fx_rate_confirmed	{"type":"boolean","notNull":true,"default":"false","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.fx_rate_date	{"type":"date","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_offload_additional_charges.fx_rate_to_usd	{"type":"numeric(20,8)","notNull":false,"default":"1","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_offload_additional_charges.fx_rate_to_usd	{"type":"numeric(22,8)","notNull":false,"default":"1","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.id	{"type":"integer","notNull":true,"default":"nextval('factory_offload_additional_charges_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.ledger_account_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_offload_additional_charges.remaining_fraction_at_apply	{"type":"numeric(20,8)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -3076,7 +3076,7 @@ column	public.factory_suppliers.address	{"type":"text","notNull":false,"default"
 column	public.factory_suppliers.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.contact_person	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.created_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_suppliers.current_raw_material_cost_per_kg_usd	{"type":"numeric(18,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_suppliers.current_raw_material_cost_per_kg_usd	{"type":"numeric(20,8)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.email	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.id	{"type":"integer","notNull":true,"default":"nextval('factory_suppliers_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.is_active	{"type":"boolean","notNull":true,"default":"true","identity":null,"generated":null,"collation":null,"comment":null}
@@ -3084,7 +3084,7 @@ column	public.factory_suppliers.is_broker	{"type":"boolean","notNull":true,"defa
 column	public.factory_suppliers.linked_supplier_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.name	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.notes	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_suppliers.opening_balance	{"type":"numeric(15,2)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_suppliers.opening_balance	{"type":"numeric(20,4)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.parent_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.phone	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_suppliers.supplier_category_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -3891,7 +3891,7 @@ column	public.mix_batch_sources.weight_from_container_kg	{"type":"numeric(15,3)"
 column	public.mix_batch_sources.weight_kg	{"type":"numeric(15,3)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.mix_batches.batch_code	{"type":"character varying(50)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.mix_batches.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.mix_batches.cost_per_kg	{"type":"numeric(20,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.mix_batches.cost_per_kg	{"type":"numeric(22,4)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.mix_batches.created_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.mix_batches.id	{"type":"integer","notNull":true,"default":"nextval('mix_batches_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.mix_batches.name	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -4546,7 +4546,7 @@ column	public.sales_items.created_at	{"type":"timestamp without time zone","notN
 column	public.sales_items.id	{"type":"integer","notNull":true,"default":"nextval('sales_items_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.sales_items.profit	{"type":"numeric(15,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.sales_items.quantity	{"type":"numeric(15,3)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.sales_items.selling_price	{"type":"numeric(15,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.sales_items.selling_price	{"type":"numeric(19,6)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.sales_items.stock_item_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.sales_items.total_cost	{"type":"numeric(15,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.sales_items.total_sales	{"type":"numeric(15,2)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -5167,10 +5167,10 @@ column	public.supplier_container_loaded_items.container_id	{"type":"integer","no
 column	public.supplier_container_loaded_items.created_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_container_loaded_items.id	{"type":"integer","notNull":true,"default":"nextval('supplier_container_loaded_items_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_container_loaded_items.item_name	{"type":"character varying(255)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.supplier_container_loaded_items.price_per_bale	{"type":"numeric(14,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.supplier_container_loaded_items.price_per_bale	{"type":"numeric(15,2)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_container_loaded_items.qty	{"type":"numeric(14,3)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_container_loaded_items.updated_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
-column	public.supplier_container_loaded_items.weight_per_bale	{"type":"numeric(14,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.supplier_container_loaded_items.weight_per_bale	{"type":"numeric(15,3)","notNull":false,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_containers.created_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_containers.id	{"type":"integer","notNull":true,"default":"nextval('supplier_containers_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_containers.reference	{"type":"character varying(255)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -5185,11 +5185,11 @@ column	public.supplier_proforma_lines.barcode	{"type":"character varying(255)","
 column	public.supplier_proforma_lines.created_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proforma_lines.id	{"type":"integer","notNull":true,"default":"nextval('supplier_proforma_lines_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proforma_lines.item_name	{"type":"character varying(255)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.supplier_proforma_lines.price_per_bale	{"type":"numeric(14,2)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.supplier_proforma_lines.price_per_bale	{"type":"numeric(15,2)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proforma_lines.proforma_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proforma_lines.qty	{"type":"numeric(14,3)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proforma_lines.updated_at	{"type":"timestamp without time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
-column	public.supplier_proforma_lines.weight_per_bale	{"type":"numeric(14,3)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.supplier_proforma_lines.weight_per_bale	{"type":"numeric(15,3)","notNull":true,"default":"0","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proformas.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proformas.created_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.supplier_proformas.id	{"type":"integer","notNull":true,"default":"nextval('supplier_proformas_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
