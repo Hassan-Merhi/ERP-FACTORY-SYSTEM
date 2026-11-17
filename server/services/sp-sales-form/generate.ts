@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { cellFormula, cellResultText, cellText } from "../../lib/excelCellValue";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import ExcelJS from "exceljs";
@@ -736,6 +737,10 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
   }
 
   // ── 7. Output ─────────────────────────────────────────────────────────────
+  // This workbook is filled from a positional Excel template. The imported
+  // template owns all formula ranges, print settings and sheet protection.
+  // Workbook-level branding only: do not change any worksheet contract.
+  styleSpecializedWorkbook(wb);
   const rawBuf = await wb.xlsx.writeBuffer();
   const buf = Buffer.from(new Uint8Array(rawBuf));
 
