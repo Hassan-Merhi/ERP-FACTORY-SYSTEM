@@ -51,9 +51,7 @@ describe("retired /vouchers/:id/edit", () => {
     await waitFor(() => expect(factory.history.at(-1)).toBe("/factory/vouchers?edit=6&tab=payment&from=daybook"));
     cleanup();
     const properties = renderAt("/properties/vouchers/7/edit");
-    await waitFor(() =>
-      expect(properties.history.at(-1)).toBe("/properties/vouchers?edit=7&tab=receipt&from=daybook")
-    );
+    await waitFor(() => expect(properties.history.at(-1)).toBe("/properties/vouchers?edit=7&tab=receipt&from=daybook"));
   });
 
   it("opens the read-only voucher when the voucher cannot be loaded", async () => {

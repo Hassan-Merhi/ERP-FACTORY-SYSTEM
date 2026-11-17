@@ -15,9 +15,7 @@ describe("Supplier Partner route boundary", () => {
     // still awaited before any route decision is resolved, so Supplier Partner
     // routes are never rejected mid-restoration.
     expect(authenticatedApp).toContain("const { selectedCompany, isLoading: companyLoading } = useCompany()");
-    expect(authenticatedApp).toContain(
-      "if (companyLoading || !selectedCompany) return <AppLoadingState />"
-    );
+    expect(authenticatedApp).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />");
     const companyGuard = authenticatedApp.indexOf("companyLoading || !selectedCompany");
     const routeResolution = authenticatedApp.indexOf("resolveAuthenticatedAppRoute({");
     expect(companyGuard).toBeGreaterThan(-1);

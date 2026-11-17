@@ -35,7 +35,8 @@ export default function FactoryDispatchLoadings() {
     staleTime: 5 * 60000,
   });
 
-  if (!myAccess || myAccess.companyId !== selectedCompany?.id) return <LoadingSkeleton variant="page" className="p-4" />;
+  if (!myAccess || myAccess.companyId !== selectedCompany?.id)
+    return <LoadingSkeleton variant="page" className="p-4" />;
 
   const hidden = myAccess.hasFactoryAccess === true ? myAccess.hiddenCostFields : HIDE_KEYS;
   const canOpenInvoicing = myAccess.fullAccess || hasFactoryPageKey(INVOICING_PAGE, myAccess.pageKeys);

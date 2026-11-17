@@ -208,7 +208,8 @@ export function SpContainerExcelImport({ onApply }: SpContainerExcelImportProps)
             <p className="text-xs text-amber-600" data-testid="text-sp-excel-unmatched">
               {applied.unmatchedArticleCodes.length} article code(s) matched no stock item or alias:{" "}
               {applied.unmatchedArticleCodes.slice(0, 5).join(", ")}
-              {applied.unmatchedArticleCodes.length > 5 ? "…" : ""}. The lines are kept by code; correct the article codes or the stock item codes before offloading.
+              {applied.unmatchedArticleCodes.length > 5 ? "…" : ""}. The lines are kept by code; correct the article
+              codes or the stock item codes before offloading.
             </p>
           )}
         </div>
