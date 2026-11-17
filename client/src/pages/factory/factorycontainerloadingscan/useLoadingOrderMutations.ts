@@ -266,7 +266,11 @@ export function useLoadingOrderMutations({
       navigate("/factory/invoicing?tab=invoices");
     },
     onError: (error: Error) => {
-      if (orderId && error.message.includes("DISPATCH_CONSOLIDATION_REQUIRED")) {
+      if (
+        orderId &&
+        ((error as Error & { code?: string }).code === "DISPATCH_CONSOLIDATION_REQUIRED" ||
+          error.message.includes("DISPATCH_CONSOLIDATION_REQUIRED"))
+      ) {
         setShowFinalizeDialog(false);
         toast({
           title: "Continue in Dispatch Comparison",
