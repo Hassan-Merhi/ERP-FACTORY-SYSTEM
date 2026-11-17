@@ -34,7 +34,8 @@ export function useAgentLedger(
   const isFactory = useAppMode() === "factory";
   // Agent Ledger is a posted-transaction statement. Use book USD rather than
   // the current-rate FX display, which cannot reconcile with journal rows.
-  const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all?balanceBasis=book";
+  const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all";
+  const accountsQueryUrl = isFactory ? accountsUrl : `${accountsUrl}?balanceBasis=book`;
   const pinnedUrl = isFactory ? "/api/factory/agents/pinned" : "/api/agent-accounts";
   const statementPrefix = isFactory ? "/api/factory/agents" : "/api/accounts";
 
@@ -46,7 +47,14 @@ export function useAgentLedger(
     isError: accountsError,
     refetch: retryAccounts,
   } = useQuery<AccountsAllPayload<Account>, Error, Account[]>({
-    queryKey: [accountsUrl, selectedCompany?.id],
+    // Keep the base path as the cache-key prefix so voucher mutations still
+    // invalidate the ledger, but never reuse a translated-accounts cache entry.
+    queryKey: [accountsUrl, selectedCompany?.id, "book-balance"],
+    queryFn: async () => {
+      const response = await fetch(accountsQueryUrl, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch agent ledger accounts");
+      return response.json();
+    },
     select: selectAccountsArray,
     enabled: !!selectedCompany,
     staleTime: 30_000,
