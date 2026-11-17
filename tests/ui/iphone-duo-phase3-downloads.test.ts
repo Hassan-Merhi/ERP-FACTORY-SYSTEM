@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BLOB_DOWNLOAD_GRACE_MS, downloadBlob } from "@/lib/downloadBlob";
+import { downloadFromUrl } from "@/lib/exportFile";
 
 let click: ReturnType<typeof vi.spyOn>;
 let create: ReturnType<typeof vi.fn>;
@@ -27,6 +28,7 @@ afterEach(() => {
   click.mockRestore();
   vi.clearAllTimers();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   if (originalCreate) Object.defineProperty(URL, "createObjectURL", originalCreate);
   else Reflect.deleteProperty(URL, "createObjectURL");
   if (originalRevoke) Object.defineProperty(URL, "revokeObjectURL", originalRevoke);
@@ -61,5 +63,33 @@ describe("iOS Safari file-download lifecycle", () => {
     expect(document.querySelector('a[download="report.csv"]')).toBeNull();
     vi.advanceTimersByTime(BLOB_DOWNLOAD_GRACE_MS);
     expect(revoke).toHaveBeenCalledWith("blob:test-export");
+  });
+});
+
+describe("Excel export download validation", () => {
+  it("rejects an empty success response instead of saving a 0-byte XLSX", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob([]), { status: 200 })));
+    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
+      fileName: "KOLWEZI_CASH_Statement.xlsx",
+    })).rejects.toThrow("0 bytes");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a 200 HTML error page mislabeled as an XLSX download", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>error</html>", { status: 200 })));
+    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
+      fileName: "KOLWEZI_CASH_Statement.xlsx",
+    })).rejects.toThrow("invalid Excel file");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("still downloads a nonempty ZIP-signature XLSX response", async () => {
+    const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, { status: 200 })));
+    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
+      fileName: "KOLWEZI_CASH_Statement.xlsx",
+    })).resolves.toBe("KOLWEZI_CASH_Statement.xlsx");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(clickedAnchor?.download).toBe("KOLWEZI_CASH_Statement.xlsx");
   });
 });
