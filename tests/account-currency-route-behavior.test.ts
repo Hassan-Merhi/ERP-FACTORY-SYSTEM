@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
   getCashBankAccountSummary: vi.fn(),
   getCashBankRevaluation: vi.fn(),
   getCashLedgerAccountSummary: vi.fn(),
+  getPartyBalance: vi.fn(),
   schema: {
     companies: { id: "companies.id", baseCurrency: "companies.baseCurrency" },
     ledgerAccounts: {
@@ -39,6 +40,9 @@ vi.mock("../server/services/accounting/cashBankRevaluationService", () => ({
 }));
 vi.mock("../server/services/accounting/cashLedgerAccountSummaryService", () => ({
   getCashLedgerAccountSummary: harness.getCashLedgerAccountSummary,
+}));
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalance: harness.getPartyBalance,
 }));
 vi.mock("../server/lib/httpHandlers", () => ({
   getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
@@ -77,6 +81,7 @@ describe("account currency and historical opening behavior", () => {
     harness.getCashBankAccountSummary.mockReset();
     harness.getCashBankRevaluation.mockReset();
     harness.getCashLedgerAccountSummary.mockReset();
+    harness.getPartyBalance.mockReset();
     harness.normalizeOpeningBalanceCurrency.mockReset();
     registerAccountCurrencyRoutes({
       get: (path: string, ...callbacks: any[]) => harness.handlers.set(path, callbacks.at(-1)!),
@@ -250,6 +255,43 @@ describe("account currency and historical opening behavior", () => {
     );
     expect(harness.getCashLedgerAccountSummary).toHaveBeenCalledWith(4, 7);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ balance: 125, totalsProvisional: true }));
+  });
+
+  it("returns the exact posted USD balance for book-basis voucher details without discarding live FX valuation", async () => {
+    harness.getCashLedgerAccountSummary.mockResolvedValueOnce({
+      historicalBaseBalance: "20457.99",
+      currentTranslatedBaseBalance: "17937.16",
+      translationDifference: "-2520.83",
+      nativeBalancesByCurrency: { USD: "-165316.63", CFA: "100074570.78" },
+      totalsProvisional: false,
+    });
+    harness.getPartyBalance.mockResolvedValueOnce({ closing: "20458.00" });
+    const res = resHarness();
+
+    await harness.handlers.get("/api/accounts/ledger/:id/balance")!(
+      { session: { currentCompanyId: 9 }, params: { id: "380" }, query: { balanceBasis: "book" } },
+      res
+    );
+
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(expect.anything(), {
+      companyId: 9, kind: "ledger", id: 380, asOf: undefined,
+    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      balance: 20458,
+      balanceBasis: "book",
+      historicalBaseBalance: "20457.99",
+      currentTranslatedBaseBalance: "17937.16",
+    }));
+  });
+
+  it("rejects an invalid balance basis rather than silently changing the accounting view", async () => {
+    const res = resHarness();
+    await harness.handlers.get("/api/accounts/ledger/:id/balance")!(
+      { session: { currentCompanyId: 9 }, params: { id: "380" }, query: { balanceBasis: "invented" } },
+      res
+    );
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(harness.getCashLedgerAccountSummary).not.toHaveBeenCalled();
   });
 
   it("falls back to historical ledger accounting and flags unresolved legacy values as provisional", async () => {
