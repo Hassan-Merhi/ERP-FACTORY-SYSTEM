@@ -22,6 +22,7 @@ migrations/
   0005_employee_opening_side_default_credit.sql
   0006_retire_retail_catalog_cost_snapshot_trigger.sql
   0007_intercompany_container_trading.sql
+  0008_restore_defaults_the_code_relies_on.sql
   NNNN_short_description.sql           every later change
   manifest/0001_baseline_schema.tsv    catalog right after the baseline (adoption target)
   manifest/schema.tsv                  catalog after all migrations (startup + CI contract)
@@ -169,12 +170,32 @@ schema exposed them. The fixes ship as reviewed migrations:
 | 0005 | `employees.opening_balance_side` defaults to `'Cr'` for new rows. Existing rows are untouched. | The code treats employees as credit-normal and never sets the side. Production defaulted to `'Dr'`, so new employees' openings were booked on the wrong side; owner-approved repairs had to flip them. **81 of 92 production employees currently carry `'Dr'`.** Reviewing those is a separate, business-approved data task. |
 | 0006 | Drops the legacy `retail_pos_sale_items_snapshot_cost` trigger and its function. | It overwrote retail sale-line costs with the catalog cost, contradicting the value-exact retail accounting. Production has 1 retail sale line. **Requires owner sign-off before release.** |
 
-Differences deliberately **not** changed (owner decision): column defaults
-where production and the repository disagree but the code always supplies the
-value. Examples are `factory_bales.pressed_at DEFAULT now()`,
-`factory_mix_batches.status 'OPEN'` vs `'ACTIVE'`, `users.chatbot_enabled
-false` vs `true`, and `production_bales.status`. Narrowing type differences
-(`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are left untouched too.
+### Column defaults (resolved 2026-11-17)
+
+Drizzle inserts omit columns that are not given, so the database's default is
+the one that applies; a default declared only in Drizzle is never used. Every
+column default was compared between the Drizzle declarations and the migrated
+schema, ignoring cast and spelling differences. 26 disagreed:
+
+- **24, declarations corrected.** The Drizzle files now state the deployed
+  default, so nothing changes in any database. That includes
+  `users.chatbot_enabled` (false: new users start with the chatbot off, and an
+  administrator enables it in Chatbot Settings; owner decision),
+  `factory_mix_batches.status` (`'OPEN'`), `production_bales.status`
+  (`'PENDING'`), `factory_bales.pressed_at` (`now()`) and
+  `support_tickets.due_at` (`now() + 24h`). The code sets the two status
+  columns explicitly on every insert.
+- **2, databases corrected by `0008`.** The code relies on these defaults and
+  the databases never had them:
+  - `factory_bales.cost_per_kg` gets `DEFAULT 0`;
+  - `pressing_batches.id` gets its serial sequence. Without it, every insert
+    from the legacy production-bale route failed; the table has 0 rows in
+    production.
+
+`tests/drizzle-column-defaults-match-migrations.test.ts` keeps the two in step.
+A default changed on only one side fails the test. Narrowing type differences
+(`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are still left as they
+are.
 
 ## Intercompany container trading (0007)
 
