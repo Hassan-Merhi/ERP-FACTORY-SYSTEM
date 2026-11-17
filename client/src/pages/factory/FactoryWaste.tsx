@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -190,6 +191,23 @@ export default function FactoryWaste() {
               data-testid="input-date-to"
             />
           </div>
+          <RowsExportMenu
+            title="Factory Waste"
+            rows={wasteQuery.data ?? []}
+            columns={[
+              { header: "Date", value: (entry) => (entry.date ? formatDisplayDate(entry.date) : "—") },
+              { header: "Type", value: (entry) => entry.wasteType || "—" },
+              { header: "KG", value: (entry) => entry.kgWaste, type: "number" },
+              { header: "Reason", value: (entry) => entry.reason || "—" },
+              { header: "Mix Batch", value: (entry) => entry.mixBatchId ?? "—" },
+              { header: "Supplier", value: (entry) => entry.supplierId ?? "—" },
+              { header: "Container", value: (entry) => entry.containerId ?? "—" },
+            ]}
+            footer={["Total", null, totalWasteKg]}
+            period={{ from, to }}
+            resource="factory.production"
+            className="self-end"
+          />
         </div>
       </div>
 

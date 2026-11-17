@@ -4,6 +4,8 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
 import { Package, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { baleHistoryExportColumns } from "./baleHistoryExport";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -147,7 +149,16 @@ export function FactoryBaleProductAllMonths() {
             {statusFilter !== "all" ? ` of ${data?.length || 0}` : ""} bale(s)
           </span>
         }
-      />
+      >
+        <RowsExportMenu
+          title={`Bale Details ${year}`}
+          sheetName="Bale Details"
+          rows={filteredData}
+          columns={baleHistoryExportColumns({ hiddenCost, sellingPricePerBale, formatDateTime })}
+          filters={statusFilter === "all" ? undefined : [{ label: "Status", value: statusFilter }]}
+          resource="factory.bales"
+        />
+      </PageHeader>
 
       <Card>
         <CardHeader className="pb-2">

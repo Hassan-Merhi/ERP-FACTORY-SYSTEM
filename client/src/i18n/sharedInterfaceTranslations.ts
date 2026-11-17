@@ -427,6 +427,17 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Close-out (UI unification): titles of the export menus added to list and report pages.
+  { en: "Company Transfer History", ar: "سجل التحويلات بين الشركات", fr: "Historique des transferts entre sociétés" },
+  {
+    en: "Factory Stock Query Inventory in Hand",
+    ar: "استعلام مخزون المصنع - المخزون المتوفر",
+    fr: "Requête de stock de l’usine - stock disponible",
+  },
+  { en: "Pressing Hourly Targets", ar: "أهداف الكبس بالساعة", fr: "Objectifs horaires de pressage" },
+  { en: "Pressing Worker Totals", ar: "إجماليات عمال الكبس", fr: "Totaux des ouvriers de pressage" },
+  { en: "Production Overview", ar: "نظرة عامة على الإنتاج", fr: "Aperçu de la production" },
+  { en: "Sheets and Sacks Movements", ar: "حركات الأغطية والأكياس", fr: "Mouvements des bâches et sacs" },
   // Phase 9c: shared Workers / Employees people screens.
   { en: "Add Employee", ar: "إضافة موظف", fr: "Ajouter un employé" },
   { en: "Remove filter", ar: "إزالة عامل التصفية", fr: "Retirer le filtre" },

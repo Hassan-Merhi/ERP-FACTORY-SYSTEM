@@ -25,7 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { keyStartsWith } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UNDO_TIMEOUT_MS, fmtKg } from "./FactoryPendingLoadingsTypes";
+import { UNDO_TIMEOUT_MS } from "./FactoryPendingLoadingsTypes";
+import { formatKg } from "@/lib/formatNumber";
 import { useFactoryPendingLoadingsState } from "./useFactoryPendingLoadingsStatePart2";
 import {
   FactoryPendingLoadingsDialogSection,
@@ -150,7 +151,7 @@ export default function FactoryPendingLoadings() {
           },
           {
             label: "Total Weight",
-            value: fmtKg(totalKg),
+            value: formatKg(totalKg),
             icon: Weight,
             accent: "text-primary",
             surface: "bg-primary/10",

@@ -69,10 +69,6 @@ export interface Props {
   previewTotal: number;
 }
 
-export function formatQty(value: number): string {
-  return Math.round(Number(value || 0)).toLocaleString();
-}
-
 export function requestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();

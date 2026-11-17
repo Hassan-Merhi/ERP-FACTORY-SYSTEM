@@ -1,5 +1,5 @@
 import { ArrowDownCircle, ArrowUpCircle, Package } from "lucide-react";
-import { formatNumber } from "@/lib/formatNumber";
+import { formatNumber, formatQuantity } from "@/lib/formatNumber";
 
 interface KpiCardsProps {
   totalReceived: number;
@@ -22,8 +22,6 @@ export function KpiCards({
   totalFree,
   totalValue,
 }: KpiCardsProps) {
-  const fmtKg = (n: number) => formatNumber(n, 3);
-
   return (
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4" data-testid="raw-production-kpis">
       <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-blue-200/80 bg-linear-to-br from-blue-50 via-card to-slate-50 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-blue-400/20 dark:from-[hsl(var(--factory-hue)_40%_14%)] dark:via-[hsl(var(--factory-hue)_28%_12%)] dark:to-[hsl(var(--factory-hue)_49%_19%)] sm:p-5">
@@ -43,7 +41,7 @@ export function KpiCards({
               className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-foreground lg:text-2xl"
               data-testid="text-total-received"
             >
-              {fmtKg(totalReceived)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
+              {formatQuantity(totalReceived)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
             </p>
             <p
               className="mt-2 font-mono text-xs font-medium tabular-nums text-muted-foreground"
@@ -72,7 +70,7 @@ export function KpiCards({
               className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-foreground lg:text-2xl"
               data-testid="text-total-used"
             >
-              {fmtKg(totalUsed)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
+              {formatQuantity(totalUsed)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
             </p>
             <p
               className="mt-2 font-mono text-xs font-medium tabular-nums text-muted-foreground"
@@ -101,7 +99,7 @@ export function KpiCards({
               className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400 lg:text-2xl"
               data-testid="text-total-free"
             >
-              {fmtKg(totalFree)}{" "}
+              {formatQuantity(totalFree)}{" "}
               <span className="text-xs font-semibold text-emerald-600/80 dark:text-emerald-400/80">kg</span>
             </p>
             <p className="mt-2 text-xs font-medium text-muted-foreground" data-testid="text-total-value">

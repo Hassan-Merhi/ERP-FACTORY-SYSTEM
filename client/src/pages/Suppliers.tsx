@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpCanDenialMessage as canDenialMessage } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,26 @@ export default function Suppliers() {
             <Plus className="h-4 w-4 mr-2" /> {tradingCopy.addSupplier}
           </Button>
         )}
+        <RowsExportMenu
+          title="Suppliers"
+          rows={sortedSuppliers}
+          columns={[
+            { header: "Supplier", value: (supplier) => supplier.legalName },
+            { header: "Status", value: (supplier) => (supplier.active ? "Active" : "Inactive") },
+            { header: "Containers", value: (supplier) => supplier.containerCount, type: "number" },
+            {
+              header: "Balance",
+              value: (supplier) => (supplier.balance === 0 ? null : Math.abs(supplier.balance)),
+              type: "number",
+            },
+            {
+              header: "Dr/Cr",
+              value: (supplier) => (supplier.balance === 0 ? "" : supplier.balance > 0 ? "Cr" : "Dr"),
+            },
+          ]}
+          resource="erp.suppliers"
+          size="default"
+        />
       </PageHeader>
 
       {/* Stat cards */}

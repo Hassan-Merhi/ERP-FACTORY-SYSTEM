@@ -4,7 +4,6 @@
  * Extracted from TransactionJournal.tsx during the Phase 4 god-file split.
  */
 import { format } from "date-fns";
-import {} from "lucide-react";
 
 export function formatAmount(val: string | null | undefined) {
   if (!val) return "—";
