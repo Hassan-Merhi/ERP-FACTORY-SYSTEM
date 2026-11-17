@@ -137,7 +137,11 @@ vi.mock("@/lib/frontendDataArchitecture", () => ({
   frontendQueryPolicies: { reference: {}, live: {}, operational: {} },
   invalidateCompanyApiFamily: harness.invalidateCompanyApiFamily,
 }));
-vi.mock("@/lib/migratedVoucherGuard", () => ({ isReadonlyMigratedVoucher: () => false }));
+vi.mock("@/lib/migratedVoucherGuard", () => ({
+  isReadonlyMigratedVoucher: () => false,
+  isGoldenCoastProgrammeVoucher: () => false,
+  isVoucherMutationBlocked: () => false,
+}));
 vi.mock("@/lib/abortError", () => ({ isBlockingQueryError: () => false }));
 vi.mock("@/lib/excelHelper", () => ({
   utils: {
@@ -301,10 +305,22 @@ describe("Daybook page behavior", () => {
     fireEvent.click(screen.getByTestId("button-view-detailed"));
     expect(harness.saveDaybookState).toHaveBeenCalledWith({ viewMode: "detailed" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
-    expect(screen.getByTestId("delete-dialog")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(harness.apiRequest).toHaveBeenCalledWith("DELETE", "/api/vouchers/2"));
-    expect(harness.invalidateCompanyApiFamily).toHaveBeenCalled();
+    // The delete first asks the server whether the voucher is part of a linked
+    // intercompany trade; an unlinked voucher falls through to the normal delete.
+    const linkLookup = vi.fn(async () => ({ ok: true, json: async () => ({ linked: {} }) }));
+    vi.stubGlobal("fetch", linkLookup);
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
+      expect(screen.getByTestId("delete-dialog")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(harness.apiRequest).toHaveBeenCalledWith("DELETE", "/api/vouchers/2"));
+      expect(linkLookup).toHaveBeenCalledWith(
+        "/api/intercompany-container-trading/daybook-linked-vouchers?ids=2",
+        expect.objectContaining({ credentials: "include" })
+      );
+      expect(harness.invalidateCompanyApiFamily).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

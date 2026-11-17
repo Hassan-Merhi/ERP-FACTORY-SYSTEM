@@ -30,6 +30,8 @@ export const UnifiedAccountingRollout = lazy(() => import("@/pages/UnifiedAccoun
 export const CostCenters = lazy(() => import("@/pages/CostCenters"));
 export const HistoricalOpenings = lazy(() => import("@/pages/accounts/HistoricalOpenings"));
 export const Agents = lazy(() => import("@/pages/Agents"));
+// Properties suppliers workspace (client/src/app/PropertiesRoutes.tsx); ERP loads the page through PartiesHub.
+export const Suppliers = lazy(() => import("@/pages/Suppliers"));
 export const Vouchers = lazy(() => import("@/pages/Vouchers"));
 export const Daybook = lazy(() => import("@/pages/Daybook"));
 export const TransactionJournal = lazy(() => import("@/pages/TransactionJournal"));

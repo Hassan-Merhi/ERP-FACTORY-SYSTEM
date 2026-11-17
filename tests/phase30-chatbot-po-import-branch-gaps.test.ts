@@ -18,19 +18,14 @@ vi.mock("../server/auth", () => ({
   requireNonPOS: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-vi.mock("../server/routes/_helpers", () => ({
-  spreadsheetUpload: {
-    single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-    fields: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-  },
-  upload: {
-    single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-  },
-  spreadsheetUpload: {
-    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-  },
-}));
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next());
+  return {
+    spreadsheetUpload: { single: passThrough, fields: passThrough },
+    generalUpload: { single: passThrough, fields: passThrough },
+    upload: { single: passThrough, fields: passThrough },
+  };
+});
 
 vi.mock("../server/lib/aiActionPermission", () => ({
   requireAIActionPermission: harness.requireAIActionPermission,
