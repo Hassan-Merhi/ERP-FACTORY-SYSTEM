@@ -318,7 +318,7 @@ export function WorkersTab({
           </p>
           {canCreateWorker && (
             <Button className="mt-4" onClick={() => setNewWorkerDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> New Worker
+              <Plus className="mr-2 h-4 w-4" /> Add Worker
             </Button>
           )}
         </Card>

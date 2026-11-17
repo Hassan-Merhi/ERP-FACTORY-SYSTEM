@@ -38,18 +38,24 @@ export function useAgentLedger(
 
   // Preserve the server envelope in the shared cache and normalize only for
   // this screen. That keeps navigation safe for pages that share this query key.
-  const { data: allAccounts = [], isLoading: accountsLoading, isError: accountsError, refetch: retryAccounts } = useQuery<
-    AccountsAllPayload<Account>,
-    Error,
-    Account[]
-  >({
+  const {
+    data: allAccounts = [],
+    isLoading: accountsLoading,
+    isError: accountsError,
+    refetch: retryAccounts,
+  } = useQuery<AccountsAllPayload<Account>, Error, Account[]>({
     queryKey: [accountsUrl, selectedCompany?.id],
     select: selectAccountsArray,
     enabled: !!selectedCompany,
     staleTime: 30_000,
   });
 
-  const { data: agentAccountRows = [], isLoading: agentsLoading, isError: agentsError, refetch: retryAgents } = useQuery<AgentAccount[]>({
+  const {
+    data: agentAccountRows = [],
+    isLoading: agentsLoading,
+    isError: agentsError,
+    refetch: retryAgents,
+  } = useQuery<AgentAccount[]>({
     queryKey: [pinnedUrl, selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 30_000,
@@ -116,7 +122,7 @@ export function useAgentLedger(
       queryClient.invalidateQueries({ queryKey: [pinnedUrl] });
       toast({ title: "Account added to Agent Ledger" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const removeMutation = useMutation({
@@ -133,7 +139,7 @@ export function useAgentLedger(
       if (selectedAccount?.id === accountId) setSelectedAccount(null);
       toast({ title: "Account removed from Agent Ledger" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   return {

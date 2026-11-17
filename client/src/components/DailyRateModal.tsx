@@ -191,7 +191,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       // so this prompt closes instead of asking again.
       void queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", companyId] });
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

@@ -1,5 +1,5 @@
 import { ErpListTable } from "@/erp-core";
-import { ChevronDown, ChevronRight, Package, Eye, ExternalLink, Lock, Edit, EyeOff, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Package, Eye, ExternalLink, Lock, Pencil, EyeOff, Trash2 } from "lucide-react";
 import { parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -153,6 +153,8 @@ export function DaybookTable({
       });
 
     return (
+      // build/vitePhase1PaginationPlugin.ts matches this opening tag on one line.
+      // prettier-ignore
       <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
@@ -537,7 +539,7 @@ export function DaybookTable({
                     }}
                     data-testid={`button-edit-${voucher.id}`}
                   >
-                    <Edit className="w-4 h-4" />
+                    <Pencil className="w-4 h-4" />
                   </Button>
                 ) : null}
                 <Button
@@ -827,7 +829,7 @@ export function DaybookTable({
                     onClick={() => handleEdit(voucher)}
                     data-testid={`button-edit-mobile-${voucher.id}`}
                   >
-                    <Edit className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </Button>
                 ) : null}
                 {canDelete() && !voucherLocked && (
@@ -880,6 +882,8 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
+        {/* build/vitePhase1PaginationPlugin.ts matches this opening tag on one line. */}
+        {/* prettier-ignore */}
         <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>

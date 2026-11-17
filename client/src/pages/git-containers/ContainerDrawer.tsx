@@ -60,8 +60,7 @@ export function ContainerDrawer({
   })();
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      apiRequest("PATCH", gitTrackingPatchUrl(container!.id), data),
+    mutationFn: (data: Record<string, unknown>) => apiRequest("PATCH", gitTrackingPatchUrl(container!.id), data),
     onSuccess: () => {
       void invalidateApiFamily(queryClient, "/api/git/containers");
       toast({ title: "Saved", description: `${container?.containerNumber} updated.` });
@@ -129,7 +128,7 @@ export function ContainerDrawer({
             data-testid="button-save-drawer"
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {readOnly ? "View Only" : "Save Changes"}
+            {readOnly ? "View Only" : "Save"}
           </Button>
         </div>
       </SheetContent>

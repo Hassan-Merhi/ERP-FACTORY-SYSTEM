@@ -42,7 +42,7 @@ function ModifyRentForm({
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units", unitId, "detail"] });
       setNewAmount("");
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const handleEffectiveFromChange = (value: string) => {

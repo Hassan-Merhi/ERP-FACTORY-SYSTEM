@@ -48,7 +48,7 @@ export function BulkRenameTab() {
 
   const handleSearch = async () => {
     if (!findText.trim()) {
-      toast({ title: "Error", description: "Please enter text to find", variant: "destructive" });
+      toast({ title: "Search failed", description: "Please enter text to find", variant: "destructive" });
       return;
     }
     setIsSearching(true);
@@ -72,7 +72,7 @@ export function BulkRenameTab() {
         toast({ title: "No matches", description: "No stock items matched the search text" });
       }
     } catch (err) {
-      toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({ title: "Search failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setIsSearching(false);
     }
@@ -142,7 +142,7 @@ export function BulkRenameTab() {
       setFindText("");
       setReplaceWith("");
     } catch (err) {
-      toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({ title: "Rename failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setIsApplying(false);
     }

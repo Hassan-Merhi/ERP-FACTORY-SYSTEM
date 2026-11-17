@@ -319,7 +319,7 @@ export function usePosMutations({
         return;
       }
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || `Failed to ${editVoucherId ? "update" : "save"} sale`,
         variant: "destructive",
       });
@@ -386,7 +386,7 @@ export function usePosMutations({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to save draft", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to save draft", variant: "destructive" });
     },
   });
 

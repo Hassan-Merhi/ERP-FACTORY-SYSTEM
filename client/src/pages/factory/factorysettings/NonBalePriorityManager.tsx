@@ -175,7 +175,7 @@ export function NonBalePriorityManager() {
                 }
               }}
             >
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

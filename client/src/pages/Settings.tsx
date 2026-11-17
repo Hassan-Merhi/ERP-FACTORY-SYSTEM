@@ -105,12 +105,12 @@ export default function Settings() {
       return await res.json();
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "User deleted successfully" });
+      toast({ title: "Deleted", description: "User deleted successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setUserToDelete(null);
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to delete user", variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message || "Failed to delete user", variant: "destructive" });
     },
   });
 

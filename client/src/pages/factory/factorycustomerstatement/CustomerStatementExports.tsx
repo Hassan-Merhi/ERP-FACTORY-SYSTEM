@@ -34,7 +34,8 @@ export function CustomerStatementExports({
         onClick={() => {
           const url = `/api/factory/customers/${customerId}/statement/export-pdf${exportQuery()}`;
           if (!navigator.onLine) {
-            window.print();
+            // The PDF is built on the server; offline there is nothing to save (owner decision 11).
+            toast({ title: "PDF needs a connection", variant: "destructive" });
             return;
           }
           window.open(url, "_blank");

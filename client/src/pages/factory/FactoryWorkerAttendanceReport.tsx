@@ -768,7 +768,10 @@ export default function FactoryWorkerAttendanceReport() {
                     {data.dates.map(({ date }) => {
                       const ds = data.dailySummary[date] || { present: 0, absent: 0 };
                       return (
-                        <td key={date} className="sticky bottom-0 z-20 w-8 border-r border-t-2 border-blue-200 bg-blue-50 px-0 py-2 text-center align-top dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static print:bg-gray-100">
+                        <td
+                          key={date}
+                          className="sticky bottom-0 z-20 w-8 border-r border-t-2 border-blue-200 bg-blue-50 px-0 py-2 text-center align-top dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static print:bg-gray-100"
+                        >
                           {ds.present > 0 && (
                             <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
                               {ds.present}

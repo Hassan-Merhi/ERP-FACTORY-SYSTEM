@@ -649,7 +649,7 @@ export function EditEmployeeDialog({
                 </Button>
                 <Button type="submit" disabled={editEmployeeMutation.isPending} data-testid="button-save-employee">
                   <Save className="mr-2 h-4 w-4" />
-                  {editEmployeeMutation.isPending ? "Saving..." : "Save Changes"}
+                  {editEmployeeMutation.isPending ? "Saving…" : "Save"}
                 </Button>
               </div>
             </div>

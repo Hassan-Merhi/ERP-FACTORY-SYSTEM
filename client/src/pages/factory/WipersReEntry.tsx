@@ -226,7 +226,7 @@ export default function WipersReEntry() {
       toast({ title: "Bales Created", description: `${data.bales?.length || 0} bales entered under ${entryDate}` });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -594,11 +594,19 @@ export default function WipersReEntry() {
                 <Button
                   onClick={() => {
                     if (!entryDate) {
-                      toast({ title: "Error", description: "Entry date is required", variant: "destructive" });
+                      toast({
+                        title: "Missing information",
+                        description: "Entry date is required",
+                        variant: "destructive",
+                      });
                       return;
                     }
                     if (!selectedLocationId) {
-                      toast({ title: "Error", description: "Warehouse location is required", variant: "destructive" });
+                      toast({
+                        title: "Missing information",
+                        description: "Warehouse location is required",
+                        variant: "destructive",
+                      });
                       return;
                     }
                     setConfirmOpen(true);

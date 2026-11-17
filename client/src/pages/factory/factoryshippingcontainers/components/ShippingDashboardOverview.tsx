@@ -156,7 +156,7 @@ export function ShippingDashboardOverview({
                 onClick={onOpenInvoicing}
                 data-testid="button-shipping-open-invoicing"
               >
-                <ClipboardList className="mr-1.5 h-4 w-4" /> New Order
+                <ClipboardList className="mr-1.5 h-4 w-4" /> Add Order
               </Button>
             )}
           </div>

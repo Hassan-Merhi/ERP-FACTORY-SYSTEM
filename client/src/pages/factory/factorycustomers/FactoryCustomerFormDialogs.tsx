@@ -288,7 +288,7 @@ export function FactoryCustomerFormDialogs({
                 disabled={!formData.legalName.trim()}
                 data-testid="button-submit-edit-customer"
               >
-                Save Changes
+                Save
               </FormSubmitButton>
             </div>
           </div>

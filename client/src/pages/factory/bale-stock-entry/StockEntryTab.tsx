@@ -291,7 +291,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
       });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -469,11 +469,15 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
 
   const handleConfirmClick = () => {
     if (!selectedLocationId) {
-      toast({ title: "Error", description: "Please select a warehouse location", variant: "destructive" });
+      toast({
+        title: "Missing information",
+        description: "Please select a warehouse location",
+        variant: "destructive",
+      });
       return;
     }
     if (cart.length === 0) {
-      toast({ title: "Error", description: "Please add items to the cart", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please add items to the cart", variant: "destructive" });
       return;
     }
     if (cart.length > MAX_ITEMS_PER_ENTRY) {
@@ -604,7 +608,9 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
                   <Package className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <CardTitle className="text-lg font-extrabold tracking-tight sm:text-xl">New Production Entry</CardTitle>
+                  <CardTitle className="text-lg font-extrabold tracking-tight sm:text-xl">
+                    New Production Entry
+                  </CardTitle>
                   <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Scan products to add production bales</p>
                 </div>
               </div>
@@ -826,9 +832,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
             // "No Design" only prints the full-size label; no sticker/blank tab.
             const preOpened = preOpenedWindowsRef.current;
             preOpenedWindowsRef.current = null;
-            const win = preOpened?.a4 && !preOpened.a4.closed
-              ? preOpened.a4
-              : window.open("", "_blank");
+            const win = preOpened?.a4 && !preOpened.a4.closed ? preOpened.a4 : window.open("", "_blank");
             if (preOpened?.sticker && !preOpened.sticker.closed) {
               preOpened.sticker.close();
             }

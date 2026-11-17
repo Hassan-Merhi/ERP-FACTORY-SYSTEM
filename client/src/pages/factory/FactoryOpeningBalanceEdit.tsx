@@ -130,7 +130,7 @@ export default function FactoryOpeningBalanceEdit() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -151,7 +151,7 @@ export default function FactoryOpeningBalanceEdit() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
       setDeleteDialogOpen(false);
     },
   });
