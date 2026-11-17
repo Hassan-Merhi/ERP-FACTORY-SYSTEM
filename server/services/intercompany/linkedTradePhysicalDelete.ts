@@ -125,9 +125,7 @@ export async function deletePristineLinkedTrade(tradeId: number, expectedVersion
   return withTradeScope(actor, [authorized.sourceCompanyId, authorized.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       await tx.execute(
-        sql.raw(
-          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + authorized.sourceCompanyId + ")"
-        )
+        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE}, ${authorized.sourceCompanyId})`
       );
       const data = await loadTradeTx(tx, tradeId);
       if (data.trade.version !== expectedVersion) {
