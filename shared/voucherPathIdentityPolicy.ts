@@ -62,10 +62,14 @@ export function isPhase5OperationalVoucherRequest(method: string, pathname: stri
   return false;
 }
 
+// POST /api/exchange-rates is deliberately absent. Since wave 9 a rate save
+// posts no revaluation voucher, and a body-hash identity made a later save of
+// an earlier rate on the same day replay the old response (605 -> 600 -> 605
+// left 600) or refuse it for another user. The audited save is a no-op for an
+// unchanged rate and serialises same-day saves itself.
 export const PHASE6_DETERMINISTIC_SPECIAL_PATHS = {
   "/api/fix-old-po-credits": "repair:old-po-credits",
   "/api/credit-sales-import/import": "import:credit-sales",
-  "/api/exchange-rates": "repair:exchange-rate-revaluation",
   "/api/pos-import/import": "import:pos-sales",
   "/api/stock-transfer-import/import": "import:stock-transfer",
   "/api/sp/migration/opening-balance": "migration:sp-opening-balance",

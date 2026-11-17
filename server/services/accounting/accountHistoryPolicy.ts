@@ -104,7 +104,7 @@ export async function countAccountLines(
     if (!LINE_COLUMNS.has(column) || !Number.isSafeInteger(id)) throw new Error("account_history_invalid_target");
   }
   const predicate = sql.join(
-    named.map(([column, id]) => sql`${sql.raw(`ve.${column}`)} = ${id}`),
+    named.map(([column, id]) => sql`ve.${sql.identifier(column)} = ${id}`),
     sql` OR `
   );
   const result = await executor.execute<{ live: string | number; any: string | number }>(sql`
@@ -130,7 +130,7 @@ const LOCKABLE_TABLES: ReadonlySet<string> = new Set([
 /** Locks the master row for the rest of the transaction (the check and the write see the same row). */
 export async function lockAccountRow(executor: DatabaseOrTransaction, table: string, id: number): Promise<void> {
   if (!LOCKABLE_TABLES.has(table) || !Number.isSafeInteger(id)) throw new Error("account_history_invalid_lock");
-  await executor.execute(sql`SELECT id FROM ${sql.raw(table)} WHERE id = ${id} FOR UPDATE`);
+  await executor.execute(sql`SELECT id FROM ${sql.identifier(table)} WHERE id = ${id} FOR UPDATE`);
 }
 
 /** The role a request acts with (the loaded user's, else the session's). */
@@ -202,8 +202,10 @@ export function assertAccountChangeAllowed(check: AccountChangeCheck): {
       // An unknown type is never guessed to be in the same category as another one.
       const sameType =
         (before.accountType ?? "").trim().toLowerCase() === (after.accountType ?? "").trim().toLowerCase();
-      if ((beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) &&
-          !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))) {
+      if (
+        (beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) &&
+        !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))
+      ) {
         throw new AccountHistoryError(ACCOUNT_TYPE_CATEGORY_CHANGE_MESSAGE, 409, ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
       }
     }

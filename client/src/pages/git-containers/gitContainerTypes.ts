@@ -2,6 +2,8 @@ export interface EnrichedContainerRow {
   id: number;
   containerNumber: string;
   companyId: number;
+  /** Active destination companies which share the parent physical tracking record. */
+  linkedDestinationCompanyIds?: number[];
   companyName: string;
   shopName: string | null;
   supplierName: string | null;
@@ -44,6 +46,19 @@ export interface EnrichedContainerRow {
   daysDelayed: number | null;
   docsReadyNotSent: boolean;
   isOverdue: boolean;
+}
+
+/** Editing a linked destination must write the same physical container as its parent. */
+export function canEditTrackedContainer(
+  container: Pick<EnrichedContainerRow, "companyId" | "linkedDestinationCompanyIds"> | null,
+  sessionCompanyId: number | null,
+  readOnly = false
+): boolean {
+  if (readOnly || !container) return false;
+  if (sessionCompanyId === null) return true; // privileged all-companies view
+  return (
+    container.companyId === sessionCompanyId || (container.linkedDestinationCompanyIds ?? []).includes(sessionCompanyId)
+  );
 }
 
 export interface GitContainersResponse {

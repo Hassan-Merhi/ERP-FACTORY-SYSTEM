@@ -156,6 +156,7 @@ vi.mock("@shared/schema", () => harness.tables);
 vi.mock("drizzle-orm", () => {
   const sql = Object.assign((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }), {
     raw: (value: string) => ({ raw: value }),
+    join: (chunks: unknown[], separator: unknown) => ({ join: chunks, separator }),
   });
   return {
     eq: (column: unknown, value: unknown) => ({ column, value }),

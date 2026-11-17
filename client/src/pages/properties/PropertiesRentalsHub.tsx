@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Building2, ClipboardList, ArrowLeftRight, Store } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -10,9 +12,10 @@ import {
 } from "@/properties/config/propertiesNavigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
-import PropertiesRentalWarehouses from "./PropertiesRentalWarehouses";
-import PropertiesRentalShops from "./PropertiesRentalShops";
-import PropertiesRentalPayments from "./PropertiesRentalPayments";
+// Each rentals tab owns independent data, calendars and report components.
+const PropertiesRentalWarehouses = lazy(() => import("./PropertiesRentalWarehouses"));
+const PropertiesRentalShops = lazy(() => import("./PropertiesRentalShops"));
+const PropertiesRentalPayments = lazy(() => import("./PropertiesRentalPayments"));
 
 const RENTAL_TABS = PROPERTIES_RENTAL_TABS.map((item) => item.value);
 
@@ -64,13 +67,37 @@ export default function PropertiesRentalsHub() {
         </div>
 
         <TabsContent value="warehouses" className="mt-4">
-          <PropertiesRentalWarehouses />
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading warehouses…
+              </div>
+            }
+          >
+            <PropertiesRentalWarehouses />
+          </Suspense>
         </TabsContent>
         <TabsContent value="shops" className="mt-4">
-          <PropertiesRentalShops />
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading shops…
+              </div>
+            }
+          >
+            <PropertiesRentalShops />
+          </Suspense>
         </TabsContent>
         <TabsContent value="payments" className="mt-4">
-          <PropertiesRentalPayments />
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading rental payments…
+              </div>
+            }
+          >
+            <PropertiesRentalPayments />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>
