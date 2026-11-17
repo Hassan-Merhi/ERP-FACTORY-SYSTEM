@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -22,7 +23,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import * as XLSX from "@/lib/excelHelper";
-import { exportFileName } from "@/lib/exportFile";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import type { Cell, Row } from "exceljs";
 import { formatNumber } from "@/lib/formatNumber";
@@ -601,7 +601,14 @@ export default function GroundScan() {
         ws3.views = [{ state: "frozen", xSplit: 0, ySplit: 4 }];
       }
 
-      await XLSX.writeFile(wb, exportFileName("ground verification", "xlsx", { date: dateStr }));
+      styleFactoryOperationalWorkbook(wb, [
+        { name: "Summary", titleRow: 1, headerRow: 7 },
+        { name: "Missing Bales", titleRow: 1, headerRow: 4, preserveHeaderFill: true },
+        ...(extraBales.length > 0
+          ? [{ name: "Extra Bales", titleRow: 1, headerRow: 4, preserveHeaderFill: true }]
+          : []),
+      ]);
+      await XLSX.writeFile(wb, `ground-verification-${dateStr}.xlsx`);
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
