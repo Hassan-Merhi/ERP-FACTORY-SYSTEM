@@ -308,6 +308,8 @@ if (!globalThis[BRIDGE_FLAG]) {
 
       return this;
     };
+    // Keep the bridge identity: Express/compression may replace end/write later.
+    res[RESPONSE_STATE_KEY].bridgedEnd = res.end;
   }
 
   const previousEmit = Server.prototype.emit;
@@ -371,7 +373,17 @@ if (!globalThis[BRIDGE_FLAG]) {
       const store = requestContext.getStore();
       const label = store?.pathname ? `legacy-workbook:${store.pathname}` : "legacy-workbook:attachment";
 
-      if (!looksLikeWorkbookDownload(store)) {
+      // Response middlewares (notably compression) wrap res.write/res.end *after*
+      // the HTTP request bridge is installed. Their wrappers consume our
+      // zero-backed marker as an empty Buffer before bridgedResponseEnd can see
+      // it, yielding 0-byte XLSX downloads. Return the real serialized bytes in
+      // that case; keep the temp-file bridge only for unwrapped responses.
+      const responseBridge = store?.res?.[RESPONSE_STATE_KEY];
+      const responseWrapped = responseBridge && (
+        store.res.write !== responseBridge.rawWrite ||
+        store.res.end !== responseBridge.bridgedEnd
+      );
+      if (!looksLikeWorkbookDownload(store) || responseWrapped) {
         return withSharedExportSlot(label, () => originalWriteBuffer.call(this, options));
       }
 
