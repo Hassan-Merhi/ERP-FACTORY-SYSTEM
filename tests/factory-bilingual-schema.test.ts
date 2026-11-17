@@ -83,19 +83,10 @@ describe("Phase 2 Factory bilingual schema", () => {
 
   const databaseIt = process.env.DATABASE_URL ? it : it.skip;
 
-  databaseIt("applies twice and round-trips Arabic text without changing English snapshots", async () => {
-    const [{ readFile }, path, { pool }] = await Promise.all([
-      import("node:fs/promises"),
-      import("node:path"),
-      import("../server/db"),
-    ]);
-    const migrationSql = await readFile(
-      path.join(process.cwd(), "migrations/20260731_001_factory_bilingual_catalog_snapshots.sql"),
-      "utf8"
-    );
-
-    await pool.query(migrationSql);
-    await pool.query(migrationSql);
+  databaseIt("has the migrated bilingual columns and round-trips Arabic text without changing English snapshots", async () => {
+    // The database is built from migrations/ (the bilingual catalog columns are
+    // part of the baseline); nothing is installed at runtime.
+    const { pool } = await import("../server/db");
 
     const requiredColumns = [
       ["factory_categories", "name_ar"],
@@ -129,7 +120,8 @@ describe("Phase 2 Factory bilingual schema", () => {
           AND indexname = 'factory_bale_products_company_article_code_normalized_idx'`
     );
     expect(indexResult.rowCount).toBe(1);
-    expect(indexResult.rows[0].indexdef.toUpperCase()).toContain("UPPER(BTRIM((ARTICLE_CODE)::TEXT))");
+    // article_code is text in the migrated schema, so PostgreSQL renders no ::text cast.
+    expect(indexResult.rows[0].indexdef.toUpperCase()).toContain("UPPER(BTRIM(ARTICLE_CODE))");
 
     const client = await pool.connect();
     const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;

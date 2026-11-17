@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { columnDefinition, hasTrigger, manifestEntry } from "./helpers/schemaManifest";
+
 function read(relativePath: string): string {
   return readFileSync(resolve(process.cwd(), relativePath), "utf8");
 }
@@ -48,18 +50,20 @@ describe("Phase 4 hot-path performance regressions", () => {
   });
 
   it("keeps voucher-entry RLS on the direct DB-managed company key", () => {
-    const migration = read("migrations/0016_company_scope_rls_readiness.sql");
     const schema = read("shared/schema/erp/vouchers.ts");
-    const bridge = read("server/companyScopeRlsBridge.mjs");
+    const verifier = read("server/schema/verifyDatabaseSchema.mjs");
 
     expect(schema).toContain('companyId: integer("company_id").notNull().default(0)');
     expect(schema).toContain('index("voucher_entries_company_idx").on(t.companyId)');
-    expect(migration).toContain("voucher_entries_sync_company_id");
-    expect(migration).toContain("vouchers_sync_entry_company_id");
-    expect(migration).toContain("USING (erp_company_scope_matches(company_id))");
-    expect(migration).not.toContain("WHERE vouchers.id = voucher_entries.voucher_id");
-    expect(bridge).toContain("voucherEntryFastPath: true");
-    expect(bridge).toContain("Voucher-entry company scope is out of sync with parent vouchers.");
+    expect(columnDefinition("voucher_entries", "company_id")).toMatchObject({ type: "integer", notNull: true });
+    expect(hasTrigger("voucher_entries", "voucher_entries_sync_company_id")).toBe(true);
+    expect(hasTrigger("vouchers", "vouchers_sync_entry_company_id")).toBe(true);
+    // The policy filters on the entry's own company key, not a join to its parent voucher.
+    const policy = manifestEntry("policy", "public.voucher_entries.voucher_entries_company_scope_policy")?.def;
+    expect(policy).toMatchObject({ using: "erp_company_scope_matches(company_id)" });
+    expect(JSON.stringify(policy)).not.toContain("voucher_entries.voucher_id");
+    // The startup schema gate probes that entry company keys match their vouchers.
+    expect(verifier).toContain("Voucher-entry company scope is out of sync with parent vouchers.");
   });
 
   it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {

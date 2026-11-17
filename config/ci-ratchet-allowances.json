@@ -79,7 +79,6 @@
       "tests/factory-supplier-settlement-directory-parity.test.ts",
       "tests/factory-uk-basma-zero-reconciliation-20261015.test.ts",
       "server/routes/sp/spProfitReportPresentation.test.ts",
-      "tests/startup-schema-integrity.test.ts",
       "tests/continuation-loading-quantity-surfaces.test.ts",
       "tests/remaining-loading-plan.test.ts",
       "tests/ui/scheduled-containers-refresh.test.ts",

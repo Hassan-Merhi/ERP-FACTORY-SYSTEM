@@ -2,26 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { columnDefinition, functionDefinition, triggerDefinition } from "./helpers/schemaManifest";
+import { columnDefinition, functionDefinition, indexDefinition, triggerDefinition } from "./helpers/schemaManifest";
 
 const read = (relativePath: string) => fs.readFileSync(path.resolve(process.cwd(), relativePath), "utf8");
 
 describe("startup warning repairs", () => {
-  it("repairs duplicate exchange-rate rows before creating the unique index", () => {
-    const source = read("server/startupWarningRepair.mjs");
-
-    expect(source).toContain("pg_advisory_xact_lock");
-    expect(source).toContain("to_regclass('public.exchange_rates_company_date_pair_unique')");
-    expect(source).toContain("PARTITION BY company_id, effective_date, from_currency, to_currency");
-    expect(source).toContain("ORDER BY id DESC");
-    expect(source).toContain("duplicate_rank > 1");
-    expect(source).toContain("exchange_rates_company_date_pair_unique");
-    expect(source).toContain("LOCK TABLE exchange_rates IN SHARE ROW EXCLUSIVE MODE");
+  it("migrations define the exchange-rate pair unique index", () => {
+    // The boot-time duplicate cleanup (server/startupWarningRepair.mjs) only
+    // existed so it could create this index; the index now comes from migrations.
+    expect(indexDefinition("exchange_rates_company_date_pair_unique")).toBe(
+      "CREATE UNIQUE INDEX exchange_rates_company_date_pair_unique ON public.exchange_rates USING btree (company_id, effective_date, from_currency, to_currency)"
+    );
   });
 
-  it("runs the repair before the production server entrypoint", () => {
+  it("no longer loads a schema repair before the production server entrypoint", () => {
     const runtimeGuard = read("server/runtimeMemoryGuard.mjs");
-    expect(runtimeGuard).toContain('import "./startupWarningRepair.mjs"');
+    expect(runtimeGuard).not.toContain("startupWarningRepair");
+    expect(fs.existsSync(path.resolve(process.cwd(), "server/startupWarningRepair.mjs"))).toBe(false);
   });
 
   it("migrations define the SP supplier-link columns and trigger; the sync module keeps the reviewed repair", () => {

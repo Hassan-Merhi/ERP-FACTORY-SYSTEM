@@ -1,12 +1,12 @@
 /**
- * Phase 7: test the real Stage 039–042 schema on DISPOSABLE PostgreSQL.
+ * Phase 7: test the real Stage 039–042 schema (now defined by migrations/) on
+ * a DISPOSABLE PostgreSQL built from the migrations.
  *
  * Never run on a live/remote DB. The certification workflow sets
  * STO_WA_E2E_DISPOSABLE_DB=1 and localhost DATABASE_URL.
  */
 import { describe, expect, it, afterAll } from "vitest";
 import { Pool } from "pg";
-import { ensureStockTransferOrderWhatsAppApprovalSchema } from "../server/startup/ensureStockTransferOrderWhatsAppApprovalSchema";
 
 const url = process.env.DATABASE_URL || "";
 const disposable = process.env.STO_WA_E2E_DISPOSABLE_DB === "1" &&
@@ -17,10 +17,8 @@ const pool = disposable ? new Pool({ connectionString: url, ssl: false }) : null
 afterAll(async () => { await pool?.end(); });
 
 describe("STO WhatsApp full schema certification (throwaway local PostgreSQL only)", () => {
-  test("applies the complete foundation twice without destructive rewrites", async () => {
+  test("has the complete migrated foundation", async () => {
     const client = pool!;
-    await ensureStockTransferOrderWhatsAppApprovalSchema(client);
-    await ensureStockTransferOrderWhatsAppApprovalSchema(client);
     const tables = await client.query<{ name: string }>(
       "SELECT table_name AS name FROM information_schema.tables " +
       "WHERE table_schema='public' AND table_name LIKE 'stock_transfer_order_%' " +

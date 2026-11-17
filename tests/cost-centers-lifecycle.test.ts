@@ -11,7 +11,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
-import { applyCostCenterMigrations } from "./helpers/costCenterMigrations";
 
 const PREFIX = "costctrlife";
 const DATE = "2026-09-11";
@@ -109,7 +108,6 @@ function center(report: Awaited<ReturnType<typeof summary>>, id: number) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await applyCostCenterMigrations(pool);
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
     .post("/api/auth/login")

@@ -6,9 +6,12 @@ const repoRoot = path.resolve(process.cwd());
 const migrationPath = path.join(
   repoRoot,
   "migrations",
+  "archive",
+  "legacy",
   "0013_tenant_control_integrity_guards.sql"
 );
-const journalPath = path.join(repoRoot, "migrations", "meta", "_journal.json");
+// Historical (archived) migration and Drizzle journal; the live schema comes from migrations/0001+.
+const journalPath = path.join(repoRoot, "migrations", "archive", "legacy", "meta", "_journal.json");
 const auditPath = path.join(repoRoot, "scripts", "tenant-control-integrity-audit.mjs");
 
 function withoutSqlComments(value: string): string {

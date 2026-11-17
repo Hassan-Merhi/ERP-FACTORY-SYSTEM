@@ -5,6 +5,8 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+
+import { indexDefinition } from "./helpers/schemaManifest";
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");
@@ -13,8 +15,6 @@ const consumer = read("server/services/stockTransferOrderWhatsAppInbound.ts");
 const batch = read("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
 const entry = read("server/routes.ts");
 const origin = read("server/security/originGuard.ts");
-const stage = read("server/startup-schema/040-stock-transfer-order-wa-webhook.ts");
-const boot = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
 const settings = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as {
   routeCount: number; routes: string[]; middlewareMountCount: number; middlewareMounts: string[];
@@ -80,15 +80,15 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
   });
 
   it("atomically stages one and only one accepted decision per batch", () => {
-    expect(stage).toContain("sto_wa_batch_decision_once_uk");
-    expect(stage).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
-    expect(stage).toContain("event_type IN ('done_received','decline_received')");
+    // The partial unique index is defined by migrations (was startup-schema/040).
+    expect(indexDefinition("sto_wa_batch_decision_once_uk")).toBe(
+      "CREATE UNIQUE INDEX sto_wa_batch_decision_once_uk ON public.stock_transfer_order_approval_events USING btree (company_id, batch_id) WHERE (event_type = ANY (ARRAY['done_received'::text, 'decline_received'::text]))"
+    );
     expect(consumer).toContain("'done_received','decline_received'");
     expect(consumer).toContain("ON CONFLICT DO NOTHING");
     expect(consumer).toContain("FOR UPDATE OF b");
     expect(consumer).toContain("decline_received");
     expect(consumer).toContain("done_received");
-    expect(boot).toContain("stockTransferOrderWaWebhookIntegrity");
   });
 
   it("reports staged decisions in the existing Stock Transfer Order approval area", () => {
