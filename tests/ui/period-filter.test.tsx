@@ -88,6 +88,27 @@ describe("PeriodFilter interactions", () => {
     expect(screen.queryByTestId("period-custom-range-dialog")).not.toBeInTheDocument();
   });
 
+  it("offers only bounded choices when requireBoundedRange is set", async () => {
+    const user = userEvent.setup();
+    render(
+      <PeriodFilter
+        value={{ fromDate: "2026-07-01", toDate: "2026-07-31", preset: "this_month" }}
+        onChange={vi.fn()}
+        requireBoundedRange
+      />
+    );
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
+    expect(await screen.findByTestId("period-preset-today")).toBeInTheDocument();
+    expect(screen.queryByTestId("period-preset-all-time")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("period-preset-custom"));
+    const dialog = await screen.findByTestId("period-custom-range-dialog");
+    const day = Array.from(dialog.querySelectorAll("button")).find((el) => el.textContent?.trim() === "15");
+    await user.click(day!);
+    expect(screen.getByText("Now click an end date")).toBeInTheDocument();
+    expect(screen.queryByTestId("period-open-range-from")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("period-open-range-to")).not.toBeInTheDocument();
+  });
+
   it("labels open-ended ranges by the date they keep", () => {
     renderFilter({ fromDate: "2026-07-15", toDate: "", preset: "custom" });
     expect(screen.getByTestId("period-filter-dropdown")).toHaveTextContent("2026-07-15 –");
