@@ -95,7 +95,7 @@ export function CreateBaleProductDialog({ open, onOpenChange, adminAuth }: Creat
     },
     onError: (error: Error) => {
       if ((error as Error & { _handledGlobally?: boolean })._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

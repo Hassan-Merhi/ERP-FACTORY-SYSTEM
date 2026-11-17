@@ -112,7 +112,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
       if (!response.ok) throw new Error("Failed to fetch bales");
       setReprintBales(await response.json());
     } catch (error: unknown) {
-      toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+      toast({ title: "Load failed", description: errorMessage(error), variant: "destructive" });
       setReprintDialogOpen(false);
     } finally {
       setReprintLoading(false);

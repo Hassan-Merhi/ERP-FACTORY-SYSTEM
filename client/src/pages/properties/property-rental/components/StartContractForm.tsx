@@ -95,7 +95,7 @@ export function StartContractForm({
       // A contract insert may have committed before a later ledger-row error.
       // Refetch the unit so the operator cannot keep working from stale "Vacant" state.
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 

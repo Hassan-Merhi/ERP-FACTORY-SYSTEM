@@ -95,7 +95,7 @@ export function useVoucherSaveMutation({
     onSuccess: async (data) => {
       const isEditMode = !!voucherIdToEdit;
       toast({
-        title: "Success",
+        title: "Saved",
         description: `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
       });
       const waPrompt = resolveWhatsAppPrompt(data);
@@ -166,7 +166,7 @@ export function useVoucherSaveMutation({
       }
       if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || `Failed to ${voucherIdToEdit ? "update" : "create"} voucher`,
         variant: "destructive",
       });

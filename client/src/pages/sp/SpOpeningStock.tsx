@@ -85,7 +85,7 @@ export default function SpOpeningStock() {
       setFinalUC("");
       setNotes("");
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const qtyN = num(qty);

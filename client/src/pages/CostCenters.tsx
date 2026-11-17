@@ -184,7 +184,7 @@ export default function CostCenters() {
         </div>
         {canWrite && (
           <Button onClick={() => edit()} data-testid="create-cost-center">
-            <Plus className="w-4 h-4 mr-2" /> New Cost Center
+            <Plus className="w-4 h-4 mr-2" /> Add Cost Center
           </Button>
         )}
       </div>

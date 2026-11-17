@@ -282,7 +282,7 @@ export function usePayrollModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Deposit recorded successfully" });
+      toast({ title: "Saved", description: "Deposit recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
       setDepositDialogOpen(false);
@@ -304,7 +304,7 @@ export function usePayrollModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Withdrawal recorded successfully" });
+      toast({ title: "Saved", description: "Withdrawal recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
       setWithdrawalDialogOpen(false);
@@ -453,7 +453,7 @@ export function usePayrollModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Bonus recorded successfully" });
+      toast({ title: "Saved", description: "Bonus recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       if (selectedEmployee)
         queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee.id] });
@@ -527,7 +527,7 @@ export function usePayrollModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: `Deposited salary for ${validSelectedEmployees.length} employees` });
+      toast({ title: "Saved", description: `Deposited salary for ${validSelectedEmployees.length} employees` });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setBulkDepositDialogOpen(false);
       setBulkDepositSelections({});
@@ -552,7 +552,7 @@ export function usePayrollModel() {
     },
     onSuccess: () => {
       const count = Object.values(bulkWithdrawalAmounts).filter((amt) => parseFloat(amt) > 0).length;
-      toast({ title: "Success", description: `Processed withdrawals for ${count} employees` });
+      toast({ title: "Saved", description: `Processed withdrawals for ${count} employees` });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setBulkWithdrawalDialogOpen(false);
       setBulkWithdrawalAmounts({});
@@ -574,7 +574,7 @@ export function usePayrollModel() {
     },
     onSuccess: () => {
       const count = Object.values(bulkBonusAmounts).filter((amt) => parseFloat(amt) > 0).length;
-      toast({ title: "Success", description: `Bonus deposited for ${count} employees` });
+      toast({ title: "Saved", description: `Bonus deposited for ${count} employees` });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setBulkBonusDialogOpen(false);
       setBulkBonusAmounts({});
@@ -601,7 +601,7 @@ export function usePayrollModel() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: `Paid ${selectedPayments.length} workers` });
+      toast({ title: "Saved", description: `Paid ${selectedPayments.length} workers` });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setBulkPaymentDialogOpen(false);
       bulkPaymentForm.reset();

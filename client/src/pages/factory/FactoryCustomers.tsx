@@ -105,7 +105,7 @@ export default function FactoryCustomers() {
       return await factoryApiRequest("POST", "/api/factory/customers", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Customer created" });
+      toast({ title: "Created", description: "Customer created" });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
       setIsCreateOpen(false);
@@ -113,7 +113,7 @@ export default function FactoryCustomers() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -128,14 +128,14 @@ export default function FactoryCustomers() {
       return await factoryApiRequest("PUT", `/api/factory/customers/${id}`, data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Customer updated" });
+      toast({ title: "Updated", description: "Customer updated" });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
       setEditingCustomer(null);
       resetForm();
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -152,7 +152,7 @@ export default function FactoryCustomers() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -173,7 +173,7 @@ export default function FactoryCustomers() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Restore failed", description: error.message, variant: "destructive" });
     },
   });
 

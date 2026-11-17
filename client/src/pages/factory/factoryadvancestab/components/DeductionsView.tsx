@@ -94,7 +94,7 @@ export function DeductionsView() {
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -118,7 +118,7 @@ export function DeductionsView() {
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 

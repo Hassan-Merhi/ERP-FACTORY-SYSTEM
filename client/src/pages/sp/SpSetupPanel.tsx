@@ -176,7 +176,7 @@ export default function SpSetupPanel() {
         description: messages.join(" ") || "Accounts, warehouse, and supplier ledger links are already configured.",
       });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const goldenCoastMutation = useMutation({
@@ -210,7 +210,7 @@ export default function SpSetupPanel() {
         description: messages.join(" ") || "Golden Coast and HADI accounting accounts were already configured.",
       });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   if (isSpStatusLoading || isGoldenCoastStatusLoading) {

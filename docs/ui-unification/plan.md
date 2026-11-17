@@ -82,27 +82,22 @@ test suite and a production build pass.
 
 ## Owner decisions
 
-These change what users can do, so they are not decided by this program. Until
-decided, the existing behaviour stays.
+Answered by the owner on 2026-11-16.
 
-1. **Employees vs Workers (Factory).** Two parallel implementations with
-   unequal features. Merge into one people module, or keep both and only
-   equalise features (export, attendance print, detail tabs)?
-2. **POS vs Retail POS.** Two ~820-line sale screens sharing 30 lines. Merge
-   onto one sale workspace?
-3. **Dispatch Batches vs Loading Dispatch (Factory).** Two parallel
-   subsystems, each with its own scanner. Are both still in business use?
-4. **Stock Allocation V2 and V3.** The navigation already points to V5.
-   Phase 3 turns the V2/V3 routes into redirects to V5; say so if anyone still
-   needs the old screens.
-5. **Two voucher edit screens.** `/vouchers?edit=` (create form reused) and
-   `/vouchers/:id/edit` (separate edit forms). Which one is the keeper?
-6. **Supplier Partner sidebar.** Overview, Opening Stock, Aliases and Golden
-   Coast have routes but no menu entry. Add them, or retire them?
-7. **Payroll for Properties.** ERP and Factory have payroll; Properties has
-   none. Intended?
-8. **POS shell.** It is hand-built outside the shared shell (no notifications,
-   no pinned pages, no phone dialogs). Move it onto the shared shell?
+| # | Question | Decision | Where it lands |
+|---|---|---|---|
+| 1 | Factory Employees vs Workers | Keep both; give them the same features (export, attendance print, detail tabs) | Phase 9 |
+| 2 | POS vs Retail POS | Keep two sale screens; make them share the cart, payment panel, buttons and layout. No full merge | Phase 9 |
+| 3 | Dispatch Batches vs Loading Dispatch | Only Loading Dispatch (the Dispatch button on the container loading scan) is used. Retire Dispatch Batches; existing batch records stay readable wherever invoices and bale tracking link to them | Phase 9 |
+| 4 | Stock Allocation V2 and V3 | Only V5 is used. Retire V2 and V3; old links redirect to V5 | Phase 9 |
+| 5 | Two voucher edit screens | Keep the one the Daybook Edit button opens (`/vouchers?edit=`). Retire `/vouchers/:id/edit`; its links (Stock Item, Location Vouchers, Optional Vouchers) and the Factory/Properties equivalents move to the keeper first | Phase 9 |
+| 6 | Supplier Partner Overview, Opening Stock, Aliases, Golden Coast | Remove completely, without breaking anything that still uses their data | Phase 9 |
+| 7 | Payroll for Properties | Intended for now; may be added later | No change |
+| 8 | POS shell | Move POS onto the shared shell | Phase 9 |
+| 9 | Rental titles without "ERP —" / "Factory —" | Keep removed | Done |
+| 10 | Container detail "Print" that saves a PDF | Relabel "Export PDF" | Phase 6 |
+| 11 | "Export PDF" offline falls back to the print dialog | Show "PDF needs a connection" instead | Phase 6 |
+| 12 | Factory bilingual invoice menu without group headings | Fine as is | Done |
 
 ## Progress log
 

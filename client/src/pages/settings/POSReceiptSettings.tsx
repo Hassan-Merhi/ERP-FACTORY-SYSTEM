@@ -24,10 +24,10 @@ export function POSReceiptSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/pos-receipt", selectedCompany?.id] });
-      toast({ title: "Success", description: "Receipt settings updated" });
+      toast({ title: "Updated", description: "Receipt settings updated" });
     },
     onError: (e: ClientErrorLike) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 

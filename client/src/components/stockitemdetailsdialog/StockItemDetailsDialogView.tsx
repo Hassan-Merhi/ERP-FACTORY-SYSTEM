@@ -294,7 +294,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                       onClick={() => {
                         if (!newLocationId || !newLocationPrice) {
                           toast({
-                            title: "Error",
+                            title: "Missing information",
                             description: "Please fill in all fields",
                             variant: "destructive",
                           });
@@ -341,7 +341,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                                 onClick={() => {
                                   if (!newLocationPrice) {
                                     toast({
-                                      title: "Error",
+                                      title: "Missing information",
                                       description: "Please enter a price",
                                       variant: "destructive",
                                     });
