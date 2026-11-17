@@ -85,18 +85,40 @@ const externalGeneratedReferences = new Set([
   "tests/e2e/remote-support-harness/package.js",
   "tests/e2e/remote-support-harness/package-lock.js",
 ]);
+// Trigger filters may intentionally watch future files. Only command globs
+// must resolve to a tracked source file.
+function commandRanges(source) {
+  const ranges = [];
+  let blockIndent = null;
+  let offset = 0;
+  for (const line of source.split("\n")) {
+    const indent = line.search(/\S|$/);
+    if (blockIndent !== null && /\S/.test(line) && indent <= blockIndent) blockIndent = null;
+    const run = line.match(/^\s*(?:-\s*)?run:\s*(.*)$/);
+    if (run) {
+      ranges.push([offset, offset + line.length]);
+      blockIndent = /^[|>]/.test(run[1]) ? line.indexOf("run:") : null;
+    } else if (blockIndent !== null) {
+      ranges.push([offset, offset + line.length]);
+    }
+    offset += line.length + 1;
+  }
+  return ranges;
+}
 const seenFailures = new Set();
 let referencesChecked = 0;
 for(const owner of executableSources) {
   const source = read(owner);
+  const commands = owner === "package.json" ? [[0, source.length]] : commandRanges(source);
   for(const m of source.matchAll(referencePattern)){
     const candidate=m[0];
-    if(candidate.includes("*") || candidate.includes("..") || externalGeneratedReferences.has(candidate)) continue;
+    if(candidate.includes("..") || externalGeneratedReferences.has(candidate)) continue;
+    if(candidate.includes("*") && !commands.some(([start, end]) => m.index >= start && m.index < end)) continue;
     // Ignore paths mentioned exclusively in comments for the initial ratchet.
     const line = source.slice(source.lastIndexOf("\n",m.index)+1,source.indexOf("\n",m.index)<0?source.length:source.indexOf("\n",m.index));
     if (/^\s*(?:#|\/\/)/.test(line)) continue;
     referencesChecked++;
-    if(present.has(candidate)) continue;
+    if (candidate.includes("*") ? tracked.some(p => path.matchesGlob(p, candidate)) : present.has(candidate)) continue;
     const key=owner+" -> "+candidate;
     if(!seenFailures.has(key)) {
       problems.push({code:"DANGLING_ENTRYPOINT_REFERENCE",owner,path:candidate});

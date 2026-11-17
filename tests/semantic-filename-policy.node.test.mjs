@@ -111,3 +111,31 @@ test("persisted environment and database identifiers remain stable after filenam
   assert.match(read("server/startup/startupDataOperations.mjs"), /inventoryValuationGuardedRepair\.mjs/);
   assert.equal(fs.existsSync(path.join(root, "server/salesHotpathIndexRepair.mjs")), false);
 });
+
+test("an unmatched executable wildcard fails instead of silently losing its renamed target", () => {
+  withFixture((dir) => {
+    write(
+      dir,
+      ".github/workflows/glob-command.yml",
+      "name: check\njobs:\n  check:\n    steps:\n      - run: |\n          node scripts/audit-i18n-*.mjs\n"
+    );
+    assert.equal(shell(dir, ["add", "-A"]).status, 0);
+    const result = verify(dir);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /DANGLING_ENTRYPOINT_REFERENCE.*scripts\/audit-i18n-\*\.mjs/);
+  });
+});
+
+test("existing executable globs pass while future trigger patterns remain valid", () => {
+  withFixture((dir) => {
+    write(dir, "tests/sample-contract.test.ts", "export {};\n");
+    write(
+      dir,
+      ".github/workflows/glob-command.yml",
+      "name: check\non:\n  pull_request:\n    paths:\n      - scripts/future-*.mjs\njobs:\n  check:\n    steps:\n      - run: node tests/sample-*.test.ts\n"
+    );
+    assert.equal(shell(dir, ["add", "-A"]).status, 0);
+    const result = verify(dir);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  });
+});
