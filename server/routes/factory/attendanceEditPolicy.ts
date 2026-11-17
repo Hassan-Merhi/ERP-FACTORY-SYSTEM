@@ -73,6 +73,7 @@ export async function requireAttendanceEditApproval(
 
   // Trust the server-authenticated identity, NOT a role supplied in the request.
   // Company-scoped Admins and Developers may edit earlier attendance directly.
+  // Owners may edit historical Sunday records only, without step-up approval.
   const requesterId = String(req.session.userId || req.user?.id || "");
   if (requesterId) {
     const [requester] = await db
@@ -81,7 +82,8 @@ export async function requireAttendanceEditApproval(
       .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
       .where(eq(users.id, requesterId))
       .limit(1);
-    if (requester?.active && (requester.role === "Admin" || requester.role === "Developer")) {
+    if (requester?.active && (requester.role === "Admin" || requester.role === "Developer" ||
+      (requester.role === "Owner" && olderDates.every((date) => new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0)))) {
       return { id: requester.id, username: requester.username, authorizationMethod: "authenticated_role" };
     }
   }
