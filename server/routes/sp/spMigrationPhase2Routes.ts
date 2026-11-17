@@ -83,7 +83,7 @@ async function rollbackMigrationRun(req: Request, res: Response): Promise<unknow
     ]);
 
     if (directCompanyTables.has(table)) {
-      const result = await db.execute(sql.raw(`SELECT company_id FROM ${table} WHERE id = ${id} LIMIT 1`));
+      const result = await db.execute(sql`SELECT company_id FROM ${sql.identifier(table)} WHERE id = ${id} LIMIT 1`);
       return pn(firstRow(result)?.company_id) === targetId;
     }
     if (table === "voucher_entries") {
@@ -121,7 +121,7 @@ async function rollbackMigrationRun(req: Request, res: Response): Promise<unknow
         });
         continue;
       }
-      await db.execute(sql.raw(`DELETE FROM ${table} WHERE id = ${id}`));
+      await db.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE id = ${id}`);
       deleted++;
     }
   }

@@ -93,8 +93,12 @@ export async function requireAttendanceEditApproval(
       )
       .where(eq(users.id, requesterId))
       .limit(1);
-    if (requester?.active && (requester.role === "Admin" || requester.role === "Developer" ||
-      (requester.role === "Owner" && olderDates.every((date) => new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0)))) {
+    if (
+      requester?.active &&
+      (requester.role === "Admin" ||
+        requester.role === "Developer" ||
+        (requester.role === "Owner" && olderDates.every((date) => new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0)))
+    ) {
       return { id: requester.id, username: requester.username, authorizationMethod: "authenticated_role" };
     }
   }

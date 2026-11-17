@@ -20,6 +20,8 @@ export interface AttendanceAdminCredentials {
 /** Only authenticated Owners may bypass historical approval for Sunday dates. */
 export function canSkipAttendanceApproval(role: string | undefined, dates: string[]): boolean {
   if (role === "Admin" || role === "Developer") return true;
-  return role === "Owner" && dates.every((date) => /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-    new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0);
+  return (
+    role === "Owner" &&
+    dates.every((date) => /^\d{4}-\d{2}-\d{2}$/.test(date) && new Date(`${date}T00:00:00.000Z`).getUTCDay() === 0)
+  );
 }

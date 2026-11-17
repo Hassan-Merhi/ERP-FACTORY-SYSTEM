@@ -24,6 +24,17 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [erp-supplier-returns-phase6-excel-history.md](erp-supplier-returns-phase6-excel-history.md) | Export, history and controlled migration requirements |
 | Doc | What it covers |
 |---|---|
+
+| [phase-1-audit.md](universal-excel-export/phase-1-audit.md) | Export inventory and import dependency audit |
+| [phase-2-engine.md](universal-excel-export/phase-2-engine.md) | Shared workbook engine and compatibility contract |
+| [phase-3-design.md](universal-excel-export/phase-3-design.md) | Dakzo workbook appearance and print design |
+| [phase-4-smart-columns.md](universal-excel-export/phase-4-smart-columns.md) | Dynamic columns and typed values |
+| [phase-5-erp-operational.md](universal-excel-export/phase-5-erp-operational.md) | ERP operational export migration and permission safeguards |
+| [phase-6-factory-operational.md](universal-excel-export/phase-6-factory-operational.md) | Factory operational export migration and verification |
+| [phase-7-financial.md](universal-excel-export/phase-7-financial.md) | Financial workbook migration, DR/CR, FX and accounting integrity |
+| [phase-8-specialized.md](universal-excel-export/phase-8-specialized.md) | Specialized multi-sheet, formula-linked, import and large export contracts |
+| [phase-9-appearance.md](universal-excel-export/phase-9-appearance.md) | Per-company Admin/Developer styling, logos, previews, privacy and role checks |
+| [phase-10-release-certification.md](universal-excel-export/phase-10-release-certification.md) | Final integration evidence, CI/DB/i18n gates, rollout safety and approval criteria |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
@@ -106,6 +117,9 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |
 | [historical-sales-cogs-partial-apply-runbook.md](historical-sales-cogs-partial-apply-runbook.md) | Historical sales COGS: proven-rows-only partial apply and rollback |
 | [vouchers-flow.md](vouchers-flow.md) | Voucher lifecycle |
+| [intercompany-container-trading-phase1.md](intercompany-container-trading-phase1.md) | Intercompany trading Phases 1–4: linked POs, shared invoices, paired payments and release safeguards |
+| [intercompany-container-trading-phase5.md](intercompany-container-trading-phase5.md) | Branch-only destination stock receiving and unreceived trade cancellation, safeguards and certification gates |
+| [intercompany-container-trading-phase7.md](intercompany-container-trading-phase7.md) | Branch-only Phase 7 navigation consolidation: canonical intercompany pages and legacy route handling |
 | [containers-flow.md](containers-flow.md) | Import shipments, PO to warehouse receipt |
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
@@ -158,6 +172,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
+| [security/raw-sql-audit.md](security/raw-sql-audit.md) | Raw SQL injection audit results and the `npm run check:raw-sql` review gate (allowlist, register, how to fix findings) |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
@@ -197,6 +212,7 @@ These describe work in progress and carry live figures bound to their sources.
 |---|---|
 | [erp-90-phases-3-6.md](erp-90-phases-3-6.md) | ERP 90/100 Phases 3–6: tenant isolation, accounting and inventory convergence |
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Upload and export file-size limits shared through `shared/fileSizePolicy.ts` |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
 | [Retail fashion variants Wave 1 spec](superpowers/specs/2026-10-03-retail-fashion-variants-wave1-design.md) | Current Retail color + size variant and variant-image contract |
 | [Retail fashion variants Wave 1 plan](superpowers/plans/2026-10-03-retail-fashion-variants-wave1.md) | Implementation and verification plan for the current Retail fashion-variant rollout |

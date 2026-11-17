@@ -169,7 +169,7 @@ async function ensurePartyExistsTx(
   }>(
     await tx.execute(sql`
     SELECT id, opening_balance::text, ${side} AS opening_balance_side,
-      ${terms} AS payment_terms_days FROM ${sql.raw(table)}
+      ${terms} AS payment_terms_days FROM ${sql.identifier(table)}
     WHERE id=${input.partyId} AND company_id=${input.companyId} ${active} LIMIT 1
   `)
   )[0];

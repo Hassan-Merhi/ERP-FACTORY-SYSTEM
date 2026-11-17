@@ -1,26 +1,64 @@
-import { eq, and, asc, sql, ne } from "drizzle-orm";
+import { eq, and, asc, sql, ne, or } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { Container, InsertContainer, PurchaseOrder } from "@shared/schema";
+import { getTableColumns } from "drizzle-orm";
 import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
 
 // ---------------------------------------------------------------------------
 // Containers
 // ---------------------------------------------------------------------------
 
-export async function getAllContainers(companyId: number): Promise<Container[]> {
-  return await db
-    .select()
+/** The canonical physical container is owned by the source Properties company,
+ * but it is also visible to the active linked destination company. */
+export async function getAllContainers(
+  companyId: number
+): Promise<Array<Container & { linkedParentCompanyName: string | null }>> {
+  return db
+    .select({
+      ...getTableColumns(schema.containers),
+      linkedParentCompanyName: sql<string | null>`(
+        SELECT parent.name FROM intercompany_trades trade
+        JOIN companies parent ON parent.id = trade.source_company_id
+        WHERE trade.physical_container_id = "containers"."id"
+          AND trade.destination_company_id = ${companyId}
+          AND trade.state = 'active' LIMIT 1
+      )`,
+    })
     .from(schema.containers)
-    .where(eq(schema.containers.companyId, companyId))
+    .where(
+      or(
+        eq(schema.containers.companyId, companyId),
+        sql`EXISTS (
+        SELECT 1 FROM intercompany_trades trade
+        WHERE trade.physical_container_id = "containers"."id"
+          AND trade.source_company_id = "containers"."company_id"
+          AND trade.destination_company_id = ${companyId}
+          AND trade.state = 'active'
+      )`
+      )
+    )
     .orderBy(asc(schema.containers.containerNumber));
 }
 
 export async function getActiveContainers(companyId: number): Promise<Array<Container & { offloadingCost: string }>> {
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(schema.containers),
+      linkedParentCompanyName: sql<
+        string | null
+      >`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`,
+    })
     .from(schema.containers)
-    .where(and(eq(schema.containers.companyId, companyId), ne(schema.containers.status, "SOLD")))
+    .where(
+      and(
+        or(
+          eq(schema.containers.companyId, companyId),
+          sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
+        ),
+        ne(schema.containers.status, "SOLD")
+      )
+    )
     .orderBy(asc(schema.containers.containerNumber));
   return enrichContainerListOffloadingCost(rows, companyId);
 }
@@ -101,7 +139,10 @@ export async function getPurchaseOrderById(id: number): Promise<PurchaseOrder | 
   return po;
 }
 
-export async function getPurchaseOrderByIdForCompany(id: number, companyId: number): Promise<PurchaseOrder | undefined> {
+export async function getPurchaseOrderByIdForCompany(
+  id: number,
+  companyId: number
+): Promise<PurchaseOrder | undefined> {
   const [po] = await db
     .select()
     .from(schema.purchaseOrders)

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { Suspense, useState, useRef } from "react";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
@@ -10,7 +11,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { PropertiesSidebar } from "@/components/PropertiesSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { CommandPalette } from "@/components/CommandPalette";
+const CommandPalette = lazy(() =>
+  import("@/components/CommandPalette").then((module) => ({ default: module.CommandPalette }))
+);
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
 import { PropertiesRoutes } from "@/app/PropertiesRoutes";
@@ -39,15 +42,6 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(propertiesContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
-
-  // Fetch the frequently used Agent Ledger module in the background after the shell
-  // becomes interactive, instead of waiting until the first sidebar navigation.
-  // The same dynamic import is reused by React.lazy when the route opens.
-  useEffect(() => {
-    void import("@/pages/Agents").catch(() => {
-      // An unavailable chunk is handled by lazyRetry when the route is opened.
-    });
-  }, []);
 
   return (
     <PhoneSheetDialogs>
@@ -88,15 +82,21 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
             </div>
           </div>
         </SidebarProvider>
-        <CommandPalette
-          open={paletteOpen}
-          onOpenChange={setPaletteOpen}
-          hasErpAccess={false}
-          hasFactoryAccess={false}
-          hasPropertiesAccess={true}
-          isAdminOwner={hasAdminSearch}
-          user={user}
-        />
+        {/* Search is optional; do not download its ERP/Factory navigation dependencies
+            while a Properties route is trying to become interactive. */}
+        <Suspense fallback={null}>
+          {paletteOpen && (
+            <CommandPalette
+              open={paletteOpen}
+              onOpenChange={setPaletteOpen}
+              hasErpAccess={false}
+              hasFactoryAccess={false}
+              hasPropertiesAccess={true}
+              isAdminOwner={hasAdminSearch}
+              user={user}
+            />
+          )}
+        </Suspense>
         {leaveConfirmDialog}
       </AppModeProvider>
     </PhoneSheetDialogs>

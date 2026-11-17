@@ -104,7 +104,7 @@ export function registerSpGitTrackingRoutes(app: Express): void {
         if (textFields.has(field) && normalized !== null && String(normalized).length > 2000) {
           throw new Error("Logistics value is too long");
         }
-        return [sql`${sql.raw(names[field])} = ${normalized}`];
+        return [sql`${sql.identifier(names[field])} = ${normalized}`];
       });
       if (status !== undefined) assignments.push(sql`status = ${status}`);
       if (assignments.length === 0) return res.json({ ok: true });
