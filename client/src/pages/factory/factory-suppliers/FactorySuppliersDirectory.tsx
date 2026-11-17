@@ -33,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { FactorySuppliersDialogBundle } from "./FactorySuppliersDialogBundle";
 import type { SupplierFilter, useFactorySuppliersModel } from "./useFactorySuppliersModel";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
@@ -112,7 +113,12 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   className="font-bold tabular-nums text-red-600 dark:text-red-400"
                   data-testid="text-total-usd-owed"
                 >
-                  {"-$" + model.formatNum(model.totalUsdOwed.toFixed(2))}
+                  {"-" +
+                    formatMoneyDisplay(model.totalUsdOwed, {
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                 </span>
               </div>
               <div className="text-sm">
@@ -121,7 +127,11 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
                   data-testid="text-total-usd-overpaid"
                 >
-                  {"$" + model.formatNum(model.totalUsdOverpaid.toFixed(2))}
+                  {formatMoneyDisplay(model.totalUsdOverpaid, {
+                    currency: "USD",
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               </div>
               {model.unpricedSupplierCount > 0 && (
@@ -307,7 +317,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   >
                     {Math.abs(usdEquivalent) <= 0.005
                       ? "$0.00"
-                      : `${usdEquivalent > 0 ? "-" : ""}$${model.formatNum(Math.abs(usdEquivalent).toFixed(2))}`}
+                      : `${usdEquivalent > 0 ? "-" : ""}${formatMoneyDisplay(Math.abs(usdEquivalent), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   </div>
                 )}
               </div>

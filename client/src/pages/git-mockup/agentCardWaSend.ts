@@ -1,5 +1,6 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import { fmt, fmtD, clientReallocate } from "./helpers";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { fmtD, clientReallocate } from "./helpers";
 import type { AgentDutySummary, ApiAllocatedRow, ApiAllocStatus } from "./types";
 
 interface AdjEntry {
@@ -18,6 +19,9 @@ export interface SendAgentDutyWaParams {
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
   setWaSending: (b: boolean) => void;
 }
+
+const usd0 = (amount: number) =>
+  formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Promise<void> {
   const { agent, customOrder, dbPrepaidIds, adjustments, transitTransporterFilter, toast, setWaSending } = params;
@@ -143,9 +147,9 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
           <td style="${tdOpen()}">${esc(fmtD(r.borderDate))}</td>
           <td style="${tdOpen()}">${esc(r.transporter ?? "—")}</td>
           <td style="${tdOpen()}">${esc(r.location ?? "—")}</td>
-          <td style="${tdOpen("right", true)}">${esc("$" + fmt(r.dutyFee, 0))}</td>
+          <td style="${tdOpen("right", true)}">${esc(usd0(r.dutyFee))}</td>
           <td style="${tdOpen("right", false, "#9ca3af")}">—</td>
-          <td style="${tdOpen("right", true)}">${esc("$" + fmt(r.dutyFee, 0))}</td>
+          <td style="${tdOpen("right", true)}">${esc(usd0(r.dutyFee))}</td>
           <td style="${tdOpen("center", false, "#059669")};font-weight:700;">Prepaid</td>
         </tr>`;
       });
@@ -162,9 +166,9 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
           <td style="${tdOpen()}">${esc(fmtD(r.borderDate))}</td>
           <td style="${tdOpen()}">${esc(r.transporter ?? "—")}</td>
           <td style="${tdOpen()}">${esc(r.location ?? "—")}</td>
-          <td style="${tdOpen("right", true)}">${esc("$" + fmt(r.dutyFee, 0))}</td>
-          <td style="${tdOpen("right", false, r.clearedAmount > 0 ? "#059669" : "#9ca3af")}">${r.clearedAmount > 0 ? esc("$" + fmt(r.clearedAmount, 0)) : "—"}</td>
-          <td style="${tdOpen("right", true)}">${esc("$" + fmt(r.remainingAmount, 0))}</td>
+          <td style="${tdOpen("right", true)}">${esc(usd0(r.dutyFee))}</td>
+          <td style="${tdOpen("right", false, r.clearedAmount > 0 ? "#059669" : "#9ca3af")}">${r.clearedAmount > 0 ? esc(usd0(r.clearedAmount)) : "—"}</td>
+          <td style="${tdOpen("right", true)}">${esc(usd0(r.remainingAmount))}</td>
           <td style="${tdOpen("center", false, statusColor)};font-weight:600">${esc(statusLabel)}</td>
         </tr>`;
       });
@@ -181,7 +185,7 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
             <tr>
               <td style="font-size:10.5px;padding:2px 0;color:#374151;">${esc(a.description)}</td>
               <td style="font-size:10.5px;padding:2px 0;text-align:right;font-weight:600;color:${a.type === "debit" ? "#059669" : "#dc2626"};">
-                ${a.type === "debit" ? "+" : "-"}$${esc(fmt(a.amount, 0))}
+                ${a.type === "debit" ? "+" : "-"}${esc(usd0(a.amount))}
               </td>
               <td style="font-size:10.5px;padding:2px 0 2px 8px;font-weight:600;color:${a.type === "debit" ? "#059669" : "#dc2626"};">
                 ${a.type === "debit" ? "Dr" : "Cr"}
@@ -201,7 +205,7 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
       <tr style="background:${balRowBg}">
         <td colspan="9" style="padding:9px 10px;font-size:11px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.06em;border:1px solid rgba(0,0,0,0.15);">Account Balance</td>
         <td style="padding:9px 10px;font-size:14px;font-weight:800;color:#ffffff;text-align:right;border:1px solid rgba(0,0,0,0.15);">
-          $${esc(fmt(Math.abs(finalBal), 0))}
+          ${esc(usd0(Math.abs(finalBal)))}
           ${finalLabel ? `<span style="font-size:11px;opacity:0.85;margin-left:4px;">(${esc(finalLabel)})</span>` : ""}
         </td>
         <td style="padding:9px 10px;border:1px solid rgba(0,0,0,0.15);"></td>
@@ -232,7 +236,7 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
           <td style="${tdTransit()}">${esc(fmtD(r.borderDate))}</td>
           <td style="${tdTransit()}">${esc(r.transporter ?? "—")}</td>
           <td style="${tdTransit()}">${esc(r.location ?? "—")}</td>
-          <td style="${tdTransit("right", true)}">${esc("$" + fmt(r.dutyFee, 0))}</td>
+          <td style="${tdTransit("right", true)}">${esc(usd0(r.dutyFee))}</td>
         </tr>`;
       });
       const transitCols = ["CONTAINER", "SUPPLIER", "PLATE", "BORDER DATE", "TRANSPORTER", "LOCATION", "DUTY"];
@@ -241,7 +245,7 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
           <span style="font-size:12px;font-weight:700;color:#f8fafc;text-transform:uppercase;letter-spacing:0.08em;">
             In Transit — ${waTransitRows.length} Container${waTransitRows.length !== 1 ? "s" : ""}${waPrepaidRows.length > 0 ? ` (${waPrepaidRows.length} Prepaid)` : ""}
           </span>
-          <span style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:0.04em;">$${fmt(transitTotal, 0)} Upcoming Duty</span>
+          <span style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:0.04em;">${usd0(transitTotal)} Upcoming Duty</span>
         </div>
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr>${transitCols.map((h) => `<th style="${thTransit()}">${h}</th>`).join("")}</tr></thead>

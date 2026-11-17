@@ -28,6 +28,7 @@ import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 
 import type { Props } from "./createproformav5drawer/types";
 import { useCreateProformaV5Model } from "./createproformav5drawer/useCreateProformaV5Model";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 export default function CreateProformaV5Drawer({ open, onClose, articleRows, onSuccess }: Props) {
   const {
     customerId,
@@ -789,7 +790,11 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
               )}
               <td className="px-2 py-3 text-center font-mono tabular-nums text-foreground">
                 {totalValue > 0 ? (
-                  `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  formatMoneyDisplay(totalValue, {
+                    currency: "USD",
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
                 ) : (
                   <span className="text-muted-foreground/40">—</span>
                 )}

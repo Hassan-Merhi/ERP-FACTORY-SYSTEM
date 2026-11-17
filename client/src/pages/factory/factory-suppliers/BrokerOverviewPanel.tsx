@@ -17,15 +17,13 @@ import {
   Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { CurrencyBalance, SupplierWithBalance } from "./factorySupplierTypes";
 import { DirectContainer } from "./AssignContainersDialog";
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  IN_TRANSIT: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  ARRIVED: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  OFFLOADED: "bg-muted text-muted-foreground",
-};
+const usdText = (amount: number | string) =>
+  formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface BrokerOverviewLedgerSection {
   currencyCode: string;
@@ -189,8 +187,8 @@ export function BrokerOverviewPanel({
                 }`}
                 data-testid="text-broker-usd-equivalent"
               >
-                {Number(parentSup.usdEquivalentBalance ?? 0) < 0 ? "-" : ""}$
-                {formatNum(Math.abs(Number(parentSup.usdEquivalentBalance ?? 0)).toFixed(2))}
+                {Number(parentSup.usdEquivalentBalance ?? 0) < 0 ? "-" : ""}
+                {usdText(Math.abs(Number(parentSup.usdEquivalentBalance ?? 0)).toFixed(2))}
               </div>
             )}
           </div>
@@ -268,8 +266,9 @@ export function BrokerOverviewPanel({
                   }`}
                   data-testid={`text-pool-balance-${b.currencyCode}`}
                 >
-                  {b.currencyCode === "USD" ? "$" : `${b.currencyCode} `}
-                  {formatNum(Math.abs(b.balance).toFixed(2))}
+                  {b.currencyCode === "USD"
+                    ? usdText(Math.abs(b.balance).toFixed(2))
+                    : `${b.currencyCode} ${formatNum(Math.abs(b.balance).toFixed(2))}`}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {b.isBrokerPool
@@ -323,11 +322,7 @@ export function BrokerOverviewPanel({
               {directContainers.map((c) => (
                 <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                   <span className="font-mono font-semibold text-sm">{c.containerNumber}</span>
-                  <span
-                    className={`text-[11px] font-medium px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
-                  >
-                    {c.status}
-                  </span>
+                  <StatusBadge status={c.status} label={c.status} showIcon={false} className="text-[11px]" />
                   <span className="text-xs text-muted-foreground">{c.currencyCode}</span>
                   {c.totalKg && (
                     <span className="text-xs text-muted-foreground">
@@ -336,11 +331,12 @@ export function BrokerOverviewPanel({
                   )}
                   {c.finalPayableAmount && (
                     <span className="text-xs font-medium">
-                      {c.currencyCode === "USD" ? "$" : c.currencyCode + " "}
-                      {parseFloat(c.finalPayableAmount).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {c.currencyCode === "USD"
+                        ? usdText(parseFloat(c.finalPayableAmount))
+                        : `${c.currencyCode} ${parseFloat(c.finalPayableAmount).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`}
                     </span>
                   )}
                   {c.arrivalDate && <span className="text-xs text-muted-foreground ml-auto">{c.arrivalDate}</span>}

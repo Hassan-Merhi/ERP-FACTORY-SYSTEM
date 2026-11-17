@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import type { DisplayRow } from "../types";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 export function isShippingEtaOverdue(row: DisplayRow, today: string): boolean {
   const eta = (row._trackedEta || row.eta || "").slice(0, 10);
@@ -185,7 +186,7 @@ export function ShippingDashboardOverview({
         {showOrderValue && (
           <Metric
             label="Total order value"
-            value={"$" + total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            value={formatMoneyDisplay(total, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             caption="Sum of listed order totals (USD)"
             icon={<DollarSign className="h-5 w-5" />}
             tone="cyan"

@@ -1,7 +1,8 @@
 import { Fragment } from "react";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { CheckCircle2, XCircle, Building2, Layers3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmt, fmtD, parseNum, getRealRowBg, groupBySupplier } from "./helpers";
+import { fmtD, parseNum, getRealRowBg, groupBySupplier } from "./helpers";
 import type { EnrichedContainerApi } from "./types";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
@@ -10,15 +11,16 @@ export function WorkbookLegend() {
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/70 px-3 py-2 text-[11px] text-muted-foreground shadow-sm">
       <span className="mr-1 font-semibold text-foreground/80">Row status</span>
       <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
-        <span className="inline-block h-2.5 w-2.5 rounded-full border border-yellow-400 bg-yellow-300" /> Upcoming ETA, docs
-        pending
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-yellow-400 bg-yellow-300" /> Upcoming ETA,
+        docs pending
       </span>
       <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
-        <span className="inline-block h-2.5 w-2.5 rounded-full border border-rose-400 bg-rose-400" /> At port, docs missing
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-rose-400 bg-rose-400" /> At port, docs
+        missing
       </span>
       <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
-        <span className="inline-block h-2.5 w-2.5 rounded-full border border-amber-400 bg-amber-300" /> Docs ready, not sent
-        to truck
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-amber-400 bg-amber-300" /> Docs ready, not
+        sent to truck
       </span>
       <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-red-500 bg-red-400" /> Offload overdue
@@ -34,10 +36,21 @@ const WORKBOOK_COLS = 14;
 
 function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
   return (
-    <tr className={cn("border-b border-border/40 transition-colors last:border-b-0 hover:bg-violet-500/10", getRealRowBg(r))}>
+    <tr
+      className={cn(
+        "border-b border-border/40 transition-colors last:border-b-0 hover:bg-violet-500/10",
+        getRealRowBg(r)
+      )}
+    >
       <td className="py-0.5 px-2 font-mono font-bold">{r.containerNumber}</td>
       <td className="py-0.5 px-2">{r.supplierCode ?? "—"}</td>
-      <td className="py-0.5 px-2 text-right font-semibold">${fmt(parseNum(r.grandTotal), 2)}</td>
+      <td className="py-0.5 px-2 text-right font-semibold">
+        {formatMoneyDisplay(parseNum(r.grandTotal), {
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </td>
       <td className="py-0.5 px-2">{fmtD(r.eta)}</td>
       <td className="py-0.5 px-2 font-mono">{r.numberPlate ?? "—"}</td>
       <td className="py-0.5 px-2">{r.trackingLocation ?? "—"}</td>
@@ -55,10 +68,24 @@ function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
       </td>
       <td className="py-0.5 px-2">{r.transporter ?? "—"}</td>
       <td className="py-0.5 px-2 text-right">
-        {parseNum(r.transportFee) > 0 ? `$${fmt(parseNum(r.transportFee), 0)}` : "—"}
+        {parseNum(r.transportFee) > 0
+          ? formatMoneyDisplay(parseNum(r.transportFee), {
+              currency: "USD",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })
+          : "—"}
       </td>
       <td className="py-0.5 px-2">{r.agent ?? "—"}</td>
-      <td className="py-0.5 px-2 text-right">{parseNum(r.dutyFee) > 0 ? `$${fmt(parseNum(r.dutyFee), 0)}` : "—"}</td>
+      <td className="py-0.5 px-2 text-right">
+        {parseNum(r.dutyFee) > 0
+          ? formatMoneyDisplay(parseNum(r.dutyFee), {
+              currency: "USD",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })
+          : "—"}
+      </td>
       <td className="py-0.5 px-2 max-w-40 truncate text-muted-foreground italic">{r.trackingDescription ?? "—"}</td>
     </tr>
   );
@@ -68,7 +95,10 @@ function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
 function WorkbookTable({ children }: { children: React.ReactNode }) {
   const { tableProps } = useMobileCardTable();
   return (
-    <table {...tableProps} className="w-full border-collapse whitespace-nowrap text-xs [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
+    <table
+      {...tableProps}
+      className="w-full border-collapse whitespace-nowrap text-xs [&_th]:sticky [&_th]:top-0 [&_th]:z-10"
+    >
       {children}
     </table>
   );
@@ -153,13 +183,16 @@ export function RealWorkbookBlock({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm dark:shadow-black/20">
-      <div className={cn("flex flex-wrap items-center justify-between gap-2 px-4 py-3 shadow-sm", headerBg, headerText)}>
+      <div
+        className={cn("flex flex-wrap items-center justify-between gap-2 px-4 py-3 shadow-sm", headerBg, headerText)}
+      >
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 opacity-80" aria-hidden="true" />
           <span className="text-sm font-bold tracking-wide">{companyName}</span>
         </div>
         <span className="rounded-full bg-black/10 px-3 py-1 text-xs font-bold tabular-nums dark:bg-white/10">
-          {rows.length} containers — ${fmt(total.amount, 2)}
+          {rows.length} containers —{" "}
+          {formatMoneyDisplay(total.amount, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
 
@@ -179,7 +212,12 @@ export function RealWorkbookBlock({
                     {name}
                   </span>
                   <span className="rounded-full border border-violet-200/70 bg-background/60 px-2.5 py-1 text-xs font-semibold tabular-nums text-violet-800 dark:border-violet-400/20 dark:text-violet-200">
-                    {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} — ${fmt(st.amount, 2)}
+                    {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} —{" "}
+                    {formatMoneyDisplay(st.amount, {
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
                 <div className="overflow-x-auto">
@@ -190,11 +228,33 @@ export function RealWorkbookBlock({
                       <tr className="border-t border-violet-200 bg-violet-50/70 text-xs font-semibold text-violet-900 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200">
                         <td className="py-1 px-2">SUB-TOTAL — {shopRows.length} CTR</td>
                         <td />
-                        <td className="py-1 px-2 text-right">${fmt(st.amount, 2)}</td>
+                        <td className="py-1 px-2 text-right">
+                          {formatMoneyDisplay(st.amount, {
+                            currency: "USD",
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
                         <td colSpan={7} />
-                        <td className="py-1 px-2 text-right">{st.fee > 0 ? `$${fmt(st.fee, 0)}` : "—"}</td>
+                        <td className="py-1 px-2 text-right">
+                          {st.fee > 0
+                            ? formatMoneyDisplay(st.fee, {
+                                currency: "USD",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })
+                            : "—"}
+                        </td>
                         <td />
-                        <td className="py-1 px-2 text-right">{st.duty > 0 ? `$${fmt(st.duty, 0)}` : "—"}</td>
+                        <td className="py-1 px-2 text-right">
+                          {st.duty > 0
+                            ? formatMoneyDisplay(st.duty, {
+                                currency: "USD",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })
+                            : "—"}
+                        </td>
                         <td colSpan={1} />
                       </tr>
                     </tbody>
@@ -203,12 +263,42 @@ export function RealWorkbookBlock({
               </div>
             );
           })}
-          <div className={cn("flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs font-bold", headerBg, headerText)}>
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs font-bold",
+              headerBg,
+              headerText
+            )}
+          >
             <span>TOTAL — {rows.length} CTR</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <span>${fmt(total.amount, 2)}</span>
-              {total.fee > 0 && <span>TRANSPORT: ${fmt(total.fee, 0)}</span>}
-              {total.duty > 0 && <span>DUTY: ${fmt(total.duty, 0)}</span>}
+              <span>
+                {formatMoneyDisplay(total.amount, {
+                  currency: "USD",
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+              {total.fee > 0 && (
+                <span>
+                  TRANSPORT:{" "}
+                  {formatMoneyDisplay(total.fee, {
+                    currency: "USD",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })}
+                </span>
+              )}
+              {total.duty > 0 && (
+                <span>
+                  DUTY:{" "}
+                  {formatMoneyDisplay(total.duty, {
+                    currency: "USD",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -230,11 +320,33 @@ export function RealWorkbookBlock({
                 <tr className={cn("border-t-2 text-xs font-bold", headerBg, headerText)}>
                   <td className="py-1 px-2">TOTAL — {rows.length} CTR</td>
                   <td />
-                  <td className="py-1 px-2 text-right">${fmt(total.amount, 2)}</td>
+                  <td className="py-1 px-2 text-right">
+                    {formatMoneyDisplay(total.amount, {
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </td>
                   <td colSpan={7} />
-                  <td className="py-1 px-2 text-right">{total.fee > 0 ? `$${fmt(total.fee, 0)}` : "—"}</td>
+                  <td className="py-1 px-2 text-right">
+                    {total.fee > 0
+                      ? formatMoneyDisplay(total.fee, {
+                          currency: "USD",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })
+                      : "—"}
+                  </td>
                   <td />
-                  <td className="py-1 px-2 text-right">{total.duty > 0 ? `$${fmt(total.duty, 0)}` : "—"}</td>
+                  <td className="py-1 px-2 text-right">
+                    {total.duty > 0
+                      ? formatMoneyDisplay(total.duty, {
+                          currency: "USD",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })
+                      : "—"}
+                  </td>
                   <td colSpan={1} />
                 </tr>
               )}

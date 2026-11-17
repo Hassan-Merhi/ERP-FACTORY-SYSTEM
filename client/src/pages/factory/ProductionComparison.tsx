@@ -41,6 +41,7 @@ import { PeriodOverviewCard } from "./productioncomparison/components/PeriodOver
 import { SupplierDailyTrend } from "./productioncomparison/components/SupplierDailyTrend";
 import { buildWorkerSummaryByArticle, WorkerSummaryHover } from "./productioncomparison/components/WorkerSummaryHover";
 import type { RouteComponentProps } from "wouter";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
@@ -715,7 +716,13 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                         )}
                         {!costsHidden && (
                           <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {row.aKg > 0 ? "$" + (row.aCost / row.aKg).toFixed(4) : "—"}
+                            {row.aKg > 0
+                              ? formatMoneyDisplay(row.aCost / row.aKg, {
+                                  currency: "USD",
+                                  minimumFractionDigits: 4,
+                                  maximumFractionDigits: 4,
+                                })
+                              : "—"}
                           </TableCell>
                         )}
                         <TableCell className="text-right tabular-nums">{fmtKg(row.bKg)} kg</TableCell>
@@ -726,7 +733,13 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                         )}
                         {!costsHidden && (
                           <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {row.bKg > 0 ? "$" + (row.bCost / row.bKg).toFixed(4) : "—"}
+                            {row.bKg > 0
+                              ? formatMoneyDisplay(row.bCost / row.bKg, {
+                                  currency: "USD",
+                                  minimumFractionDigits: 4,
+                                  maximumFractionDigits: 4,
+                                })
+                              : "—"}
                           </TableCell>
                         )}
                         <TableCell className="text-right">
@@ -786,7 +799,13 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                       )}
                       {!costsHidden && (
                         <TableCell className="text-right font-bold tabular-nums">
-                          {totalSupAKg > 0 ? "$" + (totalSupACost / totalSupAKg).toFixed(4) : "—"}
+                          {totalSupAKg > 0
+                            ? formatMoneyDisplay(totalSupACost / totalSupAKg, {
+                                currency: "USD",
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4,
+                              })
+                            : "—"}
                         </TableCell>
                       )}
                       <TableCell className="text-right font-bold tabular-nums">{fmtKg(totalSupBKg)} kg</TableCell>
@@ -795,7 +814,13 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                       )}
                       {!costsHidden && (
                         <TableCell className="text-right font-bold tabular-nums">
-                          {totalSupBKg > 0 ? "$" + (totalSupBCost / totalSupBKg).toFixed(4) : "—"}
+                          {totalSupBKg > 0
+                            ? formatMoneyDisplay(totalSupBCost / totalSupBKg, {
+                                currency: "USD",
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4,
+                              })
+                            : "—"}
                         </TableCell>
                       )}
                       <TableCell className="text-right font-bold">

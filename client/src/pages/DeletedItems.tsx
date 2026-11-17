@@ -54,6 +54,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import type { LucideIcon } from "lucide-react";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface DeletedItem {
   id: number;
@@ -495,12 +496,22 @@ export default function DeletedItems() {
                               )}
                               {item.type === "orphanedPosSale" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.locationName} | ${item.amount?.toLocaleString() || "0"}
+                                  {item.locationName} |{" "}
+                                  {formatMoneyDisplay(item.amount ?? 0, {
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 3,
+                                  })}
                                 </span>
                               )}
                               {item.type === "voucher" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.voucherType} | ${item.amount?.toLocaleString() || "0"}
+                                  {item.voucherType} |{" "}
+                                  {formatMoneyDisplay(item.amount ?? 0, {
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 3,
+                                  })}
                                 </span>
                               )}
                             </div>
@@ -756,7 +767,13 @@ export default function DeletedItems() {
               {detailItem.amount !== undefined && (
                 <div>
                   <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-medium">${detailItem.amount?.toLocaleString() || "0"}</p>
+                  <p className="font-medium">
+                    {formatMoneyDisplay(detailItem.amount ?? 0, {
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 3,
+                    })}
+                  </p>
                 </div>
               )}
               {detailItem.date && (
@@ -805,12 +822,20 @@ export default function DeletedItems() {
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.debitAmount || "0") > 0
-                                    ? `$${parseFloat(entry.debitAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatMoneyDisplay(parseFloat(entry.debitAmount || "0"), {
+                                        currency: "USD",
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.creditAmount || "0") > 0
-                                    ? `$${parseFloat(entry.creditAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatMoneyDisplay(parseFloat(entry.creditAmount || "0"), {
+                                        currency: "USD",
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })
                                     : "—"}
                                 </td>
                               </tr>
@@ -820,16 +845,16 @@ export default function DeletedItems() {
                             <tr className="bg-muted/50 font-semibold">
                               <td className="px-3 py-2 text-xs">Total</td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatMoneyDisplay(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0),
+                                  { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatMoneyDisplay(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0),
+                                  { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                                )}
                               </td>
                             </tr>
                           </tfoot>

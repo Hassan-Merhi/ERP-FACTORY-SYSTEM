@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface OrderLike {
   status: string;
@@ -170,7 +171,9 @@ export function InvoiceSummaryBar({
         </span>
         {!hideTotalsUsd && (
           <span>
-            <span className="font-medium text-foreground">${fmt(totalAmount)}</span>
+            <span className="font-medium text-foreground">
+              {formatMoneyDisplay(totalAmount, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+            </span>
           </span>
         )}
       </div>
@@ -201,7 +204,13 @@ export function InvoiceSummaryBar({
                   </span>
                   {!hideTotalsUsd && (
                     <span>
-                      <span className="font-medium text-foreground">${fmt(amount)}</span>
+                      <span className="font-medium text-foreground">
+                        {formatMoneyDisplay(amount, {
+                          currency: "USD",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
                     </span>
                   )}
                 </div>
@@ -235,7 +244,14 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.remainingPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatMoneyDisplay(loadingStats.remainingPrice, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -260,7 +276,14 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.overloadedPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatMoneyDisplay(loadingStats.overloadedPrice, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -285,7 +308,13 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span>
-                        <span className="font-medium text-foreground">${fmt(loadingStats.underLoadedPrice)}</span>
+                        <span className="font-medium text-foreground">
+                          {formatMoneyDisplay(loadingStats.underLoadedPrice, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -312,7 +341,14 @@ export function InvoiceSummaryBar({
                     </span>
                     {!hideTotalsUsd && (
                       <span className="text-muted-foreground/70">
-                        est. <span className="font-medium text-foreground">${fmt(loadingStats.notRequestedPrice)}</span>
+                        est.{" "}
+                        <span className="font-medium text-foreground">
+                          {formatMoneyDisplay(loadingStats.notRequestedPrice, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </span>
                     )}
                   </div>

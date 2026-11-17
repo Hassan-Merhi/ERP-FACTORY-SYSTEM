@@ -22,6 +22,7 @@ import {
 } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface SupplierRawStock {
   supplierName: string;
@@ -458,8 +459,13 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
                     const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
                     return (
                       <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name || b.batchCode} — {formatNumber(remaining)} kg remaining @ $
-                        {parseFloat(b.costPerKg).toFixed(4)}/kg
+                        {b.name || b.batchCode} — {formatNumber(remaining)} kg remaining @{" "}
+                        {formatMoneyDisplay(parseFloat(b.costPerKg), {
+                          currency: "USD",
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4,
+                        })}
+                        /kg
                       </SelectItem>
                     );
                   })}
@@ -556,8 +562,13 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
                   <SelectContent>
                     {availableSuppliers?.map((stock) => (
                       <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
-                        {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @ $
-                        {getSupplierRate(stock).toFixed(4)}/kg)
+                        {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @{" "}
+                        {formatMoneyDisplay(getSupplierRate(stock), {
+                          currency: "USD",
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4,
+                        })}
+                        /kg)
                       </SelectItem>
                     ))}
                     {(!availableSuppliers || availableSuppliers.length === 0) && (
@@ -577,8 +588,13 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
                       const remaining = parseFloat(batch.totalWeightKg) - parseFloat(batch.usedKg);
                       return (
                         <SelectItem key={batch.id} value={batch.id.toString()}>
-                          {batch.name || batch.batchCode} ({formatNumber(remaining)} kg @ $
-                          {parseFloat(batch.costPerKg).toFixed(4)}/kg)
+                          {batch.name || batch.batchCode} ({formatNumber(remaining)} kg @{" "}
+                          {formatMoneyDisplay(parseFloat(batch.costPerKg), {
+                            currency: "USD",
+                            minimumFractionDigits: 4,
+                            maximumFractionDigits: 4,
+                          })}
+                          /kg)
                         </SelectItem>
                       );
                     })}
@@ -640,8 +656,20 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
                           maximumFractionDigits: 3,
                         })}
                       </TableCell>
-                      <TableCell className="text-right font-mono">${selection.costPerKg.toFixed(4)}</TableCell>
-                      <TableCell className="text-right font-mono">${formatNumber(selection.totalCost)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatMoneyDisplay(selection.costPerKg, {
+                          currency: "USD",
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4,
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatMoneyDisplay(selection.totalCost, {
+                          currency: "USD",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        })}
+                      </TableCell>
                       <TableCell>
                         <Button
                           type="button"
@@ -670,13 +698,17 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
             <div>
               <p className="text-sm text-muted-foreground">Total Cost</p>
               <p className="text-2xl font-bold font-mono" data-testid="text-total-cost">
-                ${formatNumber(totalCost)}
+                {formatMoneyDisplay(totalCost, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 })}
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
               <p className="text-2xl font-bold font-mono" data-testid="text-cost-per-kg">
-                ${blendedCostPerKg.toFixed(4)}
+                {formatMoneyDisplay(blendedCostPerKg, {
+                  currency: "USD",
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
               </p>
             </div>
           </div>

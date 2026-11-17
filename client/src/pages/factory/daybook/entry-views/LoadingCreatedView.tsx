@@ -9,8 +9,17 @@ import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/di
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
-import type { BadgeVariant, DaybookEntry, DisplayDate, LoadingBale, LoadingLine, LoadingOrder, Navigate } from "./types";
+import type {
+  BadgeVariant,
+  DaybookEntry,
+  DisplayDate,
+  LoadingBale,
+  LoadingLine,
+  LoadingOrder,
+  Navigate,
+} from "./types";
 import { apiNumber } from "./types";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 export function LoadingCreatedView({
   entry,
@@ -34,7 +43,7 @@ export function LoadingCreatedView({
   const balesList: LoadingBale[] = lo?.bales ?? [];
   const n = apiNumber;
 
-  const expectedBalesTotal = lines.reduce((s: number, l) => s + (apiNumber(l.quantity)), 0);
+  const expectedBalesTotal = lines.reduce((s: number, l) => s + apiNumber(l.quantity), 0);
   const scannedBales = balesList.length;
   const totalWeightKg = balesList.reduce((s: number, b) => s + n(b.weight), 0);
   const grandTotal = lo ? n(lo.grandTotal) : 0;
@@ -155,10 +164,22 @@ export function LoadingCreatedView({
                             </td>
                             <td className="px-3 py-2 text-right font-mono">{qty}</td>
                             <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                              {price > 0 ? `$${formatNumber(price)}` : "—"}
+                              {price > 0
+                                ? formatMoneyDisplay(price, {
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  })
+                                : "—"}
                             </td>
                             <td className="px-3 py-2 text-right font-mono font-medium">
-                              {total > 0 ? `$${formatNumber(total)}` : "—"}
+                              {total > 0
+                                ? formatMoneyDisplay(total, {
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  })
+                                : "—"}
                             </td>
                           </tr>
                         );
@@ -171,7 +192,13 @@ export function LoadingCreatedView({
                           <td className="px-3 py-2 text-right font-mono">{expectedBalesTotal}</td>
                           <td />
                           <td className="px-3 py-2 text-right font-mono">
-                            {subtotalBales > 0 ? `$${formatNumber(subtotalBales)}` : "—"}
+                            {subtotalBales > 0
+                              ? formatMoneyDisplay(subtotalBales, {
+                                  currency: "USD",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 2,
+                                })
+                              : "—"}
                           </td>
                         </tr>
                       </tfoot>
@@ -229,10 +256,7 @@ export function LoadingCreatedView({
                         <td className="px-3 py-2 text-right font-mono">{balesList.length}</td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                           {formatNumber(
-                            balesList.reduce(
-                              (sum: number, b) => sum + apiNumber(b.weight ?? b.weightKg),
-                              0
-                            )
+                            balesList.reduce((sum: number, b) => sum + apiNumber(b.weight ?? b.weightKg), 0)
                           )}
                         </td>
                       </tr>
@@ -250,19 +274,37 @@ export function LoadingCreatedView({
                     {subtotalBales > 0 && (
                       <tr className="border-b">
                         <td className="px-3 py-2 text-muted-foreground">Subtotal (bales)</td>
-                        <td className="px-3 py-2 text-right font-mono font-medium">${formatNumber(subtotalBales)}</td>
+                        <td className="px-3 py-2 text-right font-mono font-medium">
+                          {formatMoneyDisplay(subtotalBales, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
                       </tr>
                     )}
                     {freightAmount > 0 && (
                       <tr className="border-b">
                         <td className="px-3 py-2 text-muted-foreground">Freight</td>
-                        <td className="px-3 py-2 text-right font-mono font-medium">${formatNumber(freightAmount)}</td>
+                        <td className="px-3 py-2 text-right font-mono font-medium">
+                          {formatMoneyDisplay(freightAmount, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
                       </tr>
                     )}
                     {grandTotal > 0 && (
                       <tr className="bg-muted/50 font-bold">
                         <td className="px-3 py-2">Grand Total</td>
-                        <td className="px-3 py-2 text-right font-mono">${formatNumber(grandTotal)}</td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {formatMoneyDisplay(grandTotal, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
                       </tr>
                     )}
                   </tbody>

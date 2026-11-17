@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Package } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 export interface DirectContainer {
   id: number;
@@ -27,13 +29,6 @@ interface AssignContainersDialogProps {
   isPending: boolean;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  IN_TRANSIT: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  ARRIVED: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  OFFLOADED: "bg-muted text-muted-foreground",
-};
-
 function fmtKg(v: string | null) {
   if (!v) return null;
   const n = parseFloat(v);
@@ -44,7 +39,9 @@ function fmtAmt(v: string | null, cc: string) {
   if (!v) return null;
   const n = parseFloat(v);
   if (isNaN(n)) return null;
-  return `${cc === "USD" ? "$" : cc + " "}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (cc === "USD")
+    return formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${cc} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function AssignContainersDialog({
@@ -134,11 +131,7 @@ export function AssignContainersDialog({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-semibold text-sm">{c.containerNumber}</span>
-                      <span
-                        className={`text-[11px] font-medium px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
-                      >
-                        {c.status}
-                      </span>
+                      <StatusBadge status={c.status} label={c.status} showIcon={false} className="text-[11px]" />
                       <span className="text-[11px] text-muted-foreground">{c.currencyCode}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">

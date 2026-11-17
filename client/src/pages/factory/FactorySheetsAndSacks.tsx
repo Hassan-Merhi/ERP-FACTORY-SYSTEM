@@ -47,10 +47,11 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 
 import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
-import { TYPES, fmt, fmtInt } from "./factorysheetsandsacks/utils";
+import { TYPES, fmtInt } from "./factorysheetsandsacks/utils";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { RouteComponentProps } from "wouter";
 import { SearchField } from "@/components/ui/search-field";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
@@ -297,7 +298,7 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
           {
             label: "Total Sheets",
             value: stats.sheets.toLocaleString(),
-            detail: `$${fmt(stats.sheetValue)} value`,
+            detail: `${formatMoneyDisplay(stats.sheetValue, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })} value`,
             icon: Layers,
             colors:
               "from-blue-50 to-cyan-50 border-blue-200/80 dark:from-blue-950 dark:to-blue-900 dark:border-blue-500/40",
@@ -306,7 +307,7 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
           {
             label: "Total Sacks",
             value: stats.sacks.toLocaleString(),
-            detail: `$${fmt(stats.sackValue)} value`,
+            detail: `${formatMoneyDisplay(stats.sackValue, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })} value`,
             icon: ShoppingBag,
             colors:
               "from-emerald-50 to-teal-50 border-emerald-200/80 dark:from-[#053c38] dark:to-[#07564a] dark:border-emerald-500/40",
@@ -323,7 +324,11 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
           },
           {
             label: "Total Value",
-            value: `$${fmt(stats.totalValue)}`,
+            value: formatMoneyDisplay(stats.totalValue, {
+              currency: "USD",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
             detail: "Current inventory value",
             icon: Wallet,
             colors:
@@ -642,10 +647,22 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
                                 </TableCell>
                               )}
                               {columnVisible("price") && (
-                                <TableCell className="text-right font-mono">${fmt(item.unitPrice)}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                  {formatMoneyDisplay(parseFloat(String(item.unitPrice) || "0"), {
+                                    currency: "USD",
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </TableCell>
                               )}
                               {columnVisible("value") && (
-                                <TableCell className="text-right font-mono font-semibold">${fmt(totalVal)}</TableCell>
+                                <TableCell className="text-right font-mono font-semibold">
+                                  {formatMoneyDisplay(totalVal, {
+                                    currency: "USD",
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </TableCell>
                               )}
                               {columnVisible("notes") && (
                                 <TableCell className="max-w-[210px] truncate text-xs text-muted-foreground">
@@ -725,7 +742,11 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
                           {columnVisible("price") && <td className="px-4 py-3" />}
                           {columnVisible("value") && (
                             <td className="px-4 py-3 text-right font-mono text-sm font-bold">
-                              ${fmt(colTotals.value)}
+                              {formatMoneyDisplay(colTotals.value, {
+                                currency: "USD",
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
                             </td>
                           )}
                           {columnVisible("notes") && <td className="px-4 py-3" />}

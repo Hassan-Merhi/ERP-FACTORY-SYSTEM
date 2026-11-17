@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/page-state";
 import { BatchRow } from "./BatchRow";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
   const {
@@ -147,7 +148,11 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               >
                 {projectionRows === undefined
                   ? "—"
-                  : `$${projectionTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  : formatMoneyDisplay(projectionTotal, {
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
               </p>
             </div>
           </>

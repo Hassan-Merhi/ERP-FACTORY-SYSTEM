@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -77,7 +78,7 @@ function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
   return isNaN(n)
     ? `$0.${"0".repeat(dec)}`
-    : `$${n.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+    : formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
 function toLocalDateInputValue(date: Date) {

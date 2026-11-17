@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check, Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 type Account = { id: number; name: string; code: string; accountType: string };
 type Entry = {
@@ -42,7 +43,7 @@ const ENTRY_PAGE_SIZE = 100;
 
 function fmtMoney(v: string | number | null | undefined) {
   if (!v || v === "0" || v === "0.00") return null;
-  return Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatMoneyDisplay(Number(v), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function AccountCombobox({
@@ -431,14 +432,14 @@ export default function AccountTransfer() {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {dr ? (
-                              <span className="font-medium">${dr}</span>
+                              <span className="font-medium">{dr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {cr ? (
-                              <span className="font-medium">${cr}</span>
+                              <span className="font-medium">{cr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -500,7 +501,11 @@ export default function AccountTransfer() {
                     <span>
                       Debit:{" "}
                       <span className="font-medium text-foreground">
-                        ${totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        {formatMoneyDisplay(totalDebit, {
+                          currency: "USD",
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 3,
+                        })}
                       </span>
                     </span>
                   )}
@@ -508,7 +513,11 @@ export default function AccountTransfer() {
                     <span>
                       Credit:{" "}
                       <span className="font-medium text-foreground">
-                        ${totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        {formatMoneyDisplay(totalCredit, {
+                          currency: "USD",
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 3,
+                        })}
                       </span>
                     </span>
                   )}

@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExternalLink, Ship } from "lucide-react";
-import { formatNumber } from "@/lib/formatNumber";
 import { SearchField } from "@/components/ui/search-field";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface InvoiceContainerRow {
   id: number;
@@ -138,7 +138,11 @@ export default function FactoryContainerTracking() {
                     data-testid={`text-cost-${row.id}`}
                   >
                     {row.grandTotal ? (
-                      `$${formatNumber(parseFloat(row.grandTotal))}`
+                      formatMoneyDisplay(parseFloat(row.grandTotal), {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      })
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

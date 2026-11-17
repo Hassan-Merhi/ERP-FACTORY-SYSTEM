@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { BadgeVariant, DaybookEntry, DisplayDate, PayrollSummary } from "./types";
 import { apiNumber } from "./types";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+
+const usd = (value: number) =>
+  formatMoneyDisplay(value, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 export function PayrollPaymentView({
   entry,
@@ -103,7 +107,7 @@ export function PayrollPaymentView({
                   {n(p.baseSalary) > 0 && (
                     <tr className="border-b">
                       <td className="px-3 py-2">Base Salary</td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.baseSalary))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.baseSalary))}</td>
                     </tr>
                   )}
                   {n(p.baleEarnings) > 0 && (
@@ -114,7 +118,7 @@ export function PayrollPaymentView({
                           <span className="text-xs text-muted-foreground ml-1">({p.balesCount} bales)</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.baleEarnings))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.baleEarnings))}</td>
                     </tr>
                   )}
                   {n(p.kgEarnings) > 0 && (
@@ -127,7 +131,7 @@ export function PayrollPaymentView({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.kgEarnings))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.kgEarnings))}</td>
                     </tr>
                   )}
                   {n(p.overtimePay) > 0 && (
@@ -140,46 +144,42 @@ export function PayrollPaymentView({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.overtimePay))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.overtimePay))}</td>
                     </tr>
                   )}
                   {n(p.bonuses) > 0 && (
                     <tr className="border-b">
                       <td className="px-3 py-2">Bonuses</td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.bonuses))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.bonuses))}</td>
                     </tr>
                   )}
                   {n(p.transport) > 0 && (
                     <tr className="border-b">
                       <td className="px-3 py-2">Transport</td>
-                      <td className="px-3 py-2 text-right font-mono">${formatNumber(n(p.transport))}</td>
+                      <td className="px-3 py-2 text-right font-mono">{usd(n(p.transport))}</td>
                     </tr>
                   )}
                   <tr className="border-b bg-muted/20">
                     <td className="px-3 py-2 font-medium">Gross Earnings</td>
-                    <td className="px-3 py-2 text-right font-mono font-medium">${formatNumber(grossEarnings)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-medium">{usd(grossEarnings)}</td>
                   </tr>
                   {n(p.deductions) > 0 && (
                     <tr className="border-b">
                       <td className="px-3 py-2 text-destructive">Deductions</td>
-                      <td className="px-3 py-2 text-right font-mono text-destructive">
-                        −${formatNumber(n(p.deductions))}
-                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-destructive">−{usd(n(p.deductions))}</td>
                     </tr>
                   )}
                   {n(p.advances) > 0 && (
                     <tr className="border-b">
                       <td className="px-3 py-2 text-destructive">Advance Recovery</td>
-                      <td className="px-3 py-2 text-right font-mono text-destructive">
-                        −${formatNumber(n(p.advances))}
-                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-destructive">−{usd(n(p.advances))}</td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted/50 font-bold border-t">
                     <td className="px-3 py-2">Net Pay</td>
-                    <td className="px-3 py-2 text-right font-mono">${formatNumber(netPay)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{usd(netPay)}</td>
                   </tr>
                 </tfoot>
               </table>

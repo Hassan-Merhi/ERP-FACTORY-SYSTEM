@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRightLeft, Pencil, Trash2, Package } from "lucide-react";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface SupplierStatementRowsProps {
   statementData: StatementResponse;
@@ -50,7 +51,7 @@ export function SupplierStatementRows({
   const fmtCcAmt = (cc: string, amt: number) =>
     cc !== "USD"
       ? `${cc} ${formatNum(String(Math.abs(amt).toFixed(2)))}`
-      : `$${formatNum(String(Math.abs(amt).toFixed(2)))}`;
+      : formatMoneyDisplay(Math.abs(amt), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const finalBalanceStr =
     Object.entries(currencyTotals)

@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 /**
  * LedgerView — extracted sub-component.
  *
@@ -16,7 +17,7 @@ import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
-import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
+import { MONTH_NAMES, billingDayLabel, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import type { AuthMe } from "@shared/apiTypes";
@@ -457,7 +458,13 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {formatMoneyDisplay(p.amount, {
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
+                  </td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -502,7 +509,13 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">
+                    {formatMoneyDisplay(p.amount, {
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
+                  </td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -548,7 +561,13 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">
+                    {formatMoneyDisplay(p.amount, {
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
+                  </td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>

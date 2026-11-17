@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { confirmAction } from "@/components/ConfirmHost";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 interface SupplierImpact {
   supplierId: number;
@@ -81,10 +82,7 @@ const PREVIEW_KEY = ["/api/factory/raw-stock/recalc/historical-replay"] as const
 function money(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "Unavailable";
   const sign = value < 0 ? "-" : "";
-  return `${sign}$${Math.abs(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `${sign}${formatMoneyDisplay(Math.abs(value), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function number(value: number): string {
@@ -412,8 +410,20 @@ export function HistoricalReplaySafetyPanel() {
               <TableRow key={row.supplierId}>
                 <TableCell className="font-medium">{row.supplierName}</TableCell>
                 <TableCell className="text-right tabular-nums">{number(row.replayRemainingKg)}</TableCell>
-                <TableCell className="text-right font-mono">${row.currentStoredRate.toFixed(8)}</TableCell>
-                <TableCell className="text-right font-mono">${row.endingExpectedRate.toFixed(8)}</TableCell>
+                <TableCell className="text-right font-mono">
+                  {formatMoneyDisplay(row.currentStoredRate, {
+                    currency: "USD",
+                    minimumFractionDigits: 8,
+                    maximumFractionDigits: 8,
+                  })}
+                </TableCell>
+                <TableCell className="text-right font-mono">
+                  {formatMoneyDisplay(row.endingExpectedRate, {
+                    currency: "USD",
+                    minimumFractionDigits: 8,
+                    maximumFractionDigits: 8,
+                  })}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{money(row.currentValue)}</TableCell>
                 <TableCell className="text-right tabular-nums">{money(row.projectedValue)}</TableCell>
                 <TableCell

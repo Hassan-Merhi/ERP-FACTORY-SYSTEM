@@ -15,7 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarChart3, Calendar } from "lucide-react";
 
 import type { LogEntry, SheetsAndSacksItem } from "../types";
-import { DATE_PRESETS, fmt, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
+import { DATE_PRESETS, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+
+const usd = (value: string | number) =>
+  formatMoneyDisplay(parseFloat(String(value) || "0"), {
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
   const [preset, setPreset] = useState("week");
@@ -183,7 +191,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
             <p className="font-mono font-bold text-sm text-green-700 dark:text-green-300">
               {totals.inPcs.toLocaleString()} pcs
             </p>
-            <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">${fmt(totals.inVal)}</p>
+            <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">{usd(totals.inVal)}</p>
           </div>
           <div className="rounded-lg border bg-red-50 dark:bg-red-950/20 px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400 mb-1">
@@ -193,7 +201,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
             <p className="font-mono font-bold text-sm text-red-700 dark:text-red-300">
               {totals.outPcs.toLocaleString()} pcs
             </p>
-            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">${fmt(totals.outVal)}</p>
+            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">{usd(totals.outVal)}</p>
           </div>
           <div
             className={`rounded-lg border px-3 py-2.5 ${totals.net >= 0 ? "bg-blue-50 dark:bg-blue-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
@@ -328,10 +336,10 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
                             {e.pieces.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                            ${fmt(e.unitPrice)}
+                            {usd(e.unitPrice)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm font-medium">
-                            ${fmt(e.totalValue)}
+                            {usd(e.totalValue)}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
                             {e.notes || "—"}

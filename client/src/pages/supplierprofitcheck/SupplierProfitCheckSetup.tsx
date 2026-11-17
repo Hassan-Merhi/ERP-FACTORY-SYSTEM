@@ -17,6 +17,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -395,9 +396,25 @@ function LandingCharges({ model }: { model: ProfitModel }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { label: "Total Extra", value: `$${fmt(model.totalExtraCharges)}`, highlight: false },
+            {
+              label: "Total Extra",
+              value: formatMoneyDisplay(model.totalExtraCharges, {
+                currency: "USD",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+              highlight: false,
+            },
             { label: "Total Bales", value: model.totalBales.toLocaleString(), highlight: false },
-            { label: "Extra / Bale", value: `$${fmt(model.extraCostPerBale)}`, highlight: true },
+            {
+              label: "Extra / Bale",
+              value: formatMoneyDisplay(model.extraCostPerBale, {
+                currency: "USD",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+              highlight: true,
+            },
           ].map((metric) => (
             <div
               key={metric.label}
@@ -443,13 +460,17 @@ function ProfitSummary({ model }: { model: ProfitModel }) {
         icon={CircleDollarSign}
         iconBg="bg-amber-500/10 text-amber-500"
         label="Total Landing Cost"
-        value={`$${fmt(summary.totalLandingCost)}`}
+        value={formatMoneyDisplay(summary.totalLandingCost, {
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
       />
       <StatCard
         icon={TrendingUp}
         iconBg={summary.totalCostProfit >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"}
         label="Cost Profit"
-        value={`${summary.totalCostProfit < 0 ? "-" : ""}$${fmt(Math.abs(summary.totalCostProfit))}`}
+        value={`${summary.totalCostProfit < 0 ? "-" : ""}${formatMoneyDisplay(Math.abs(summary.totalCostProfit), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         sub={summary.costProfitPct != null ? `${fmt(Math.abs(summary.costProfitPct), 1)}%` : undefined}
         valueColor={summary.totalCostProfit >= 0 ? "text-emerald-500" : "text-red-500"}
       />

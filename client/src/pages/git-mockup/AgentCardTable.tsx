@@ -1,8 +1,9 @@
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronsUp, ArrowUp, ArrowDown, ArrowLeftRight, XIcon } from "lucide-react";
-import { fmt, fmtD } from "./helpers";
+import { fmtD } from "./helpers";
 import type { ApiAllocatedRow, ApiPreviewRow } from "./types";
 
 interface ReplaceTargetLite {
@@ -83,11 +84,17 @@ export function AgentCardTable(props: AgentCardTableProps) {
 
   return (
     <div className="mx-3 my-2 overflow-x-auto rounded-xl border border-border/70 shadow-sm dark:border-violet-500/20">
-      <table className="w-full border-collapse whitespace-nowrap text-xs [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:brightness-[0.97] dark:[&_tbody_tr:hover]:brightness-110" {...tableProps}>
+      <table
+        className="w-full border-collapse whitespace-nowrap text-xs [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:brightness-[0.97] dark:[&_tbody_tr:hover]:brightness-110"
+        {...tableProps}
+      >
         <thead>
           <tr className="border-b border-violet-500/20 bg-slate-100 text-slate-700 dark:bg-violet-950/60 dark:text-violet-100">
             {cols.map((h) => (
-              <th key={h} className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]">
+              <th
+                key={h}
+                className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]"
+              >
                 {h}
               </th>
             ))}
@@ -105,9 +112,13 @@ export function AgentCardTable(props: AgentCardTableProps) {
               <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
               <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
               <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-              <td className="py-0.5 px-2 text-right">${fmt(r.dutyFee, 0)}</td>
+              <td className="py-0.5 px-2 text-right">
+                {formatMoneyDisplay(r.dutyFee, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </td>
               <td className="py-0.5 px-2 text-center text-muted-foreground">—</td>
-              <td className="py-0.5 px-2 text-right font-semibold">${fmt(r.dutyFee, 0)}</td>
+              <td className="py-0.5 px-2 text-right font-semibold">
+                {formatMoneyDisplay(r.dutyFee, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </td>
               <td className="py-0.5 px-2 text-center">
                 <Badge
                   variant="outline"
@@ -173,11 +184,29 @@ export function AgentCardTable(props: AgentCardTableProps) {
                 <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
                 <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
                 <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-                <td className="py-0.5 px-2 text-right">${fmt(r.dutyFee, 0)}</td>
-                <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                  {r.clearedAmount > 0 ? `$${fmt(r.clearedAmount, 0)}` : "—"}
+                <td className="py-0.5 px-2 text-right">
+                  {formatMoneyDisplay(r.dutyFee, {
+                    currency: "USD",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })}
                 </td>
-                <td className="py-0.5 px-2 text-right font-semibold">${fmt(r.remainingAmount, 0)}</td>
+                <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
+                  {r.clearedAmount > 0
+                    ? formatMoneyDisplay(r.clearedAmount, {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      })
+                    : "—"}
+                </td>
+                <td className="py-0.5 px-2 text-right font-semibold">
+                  {formatMoneyDisplay(r.remainingAmount, {
+                    currency: "USD",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })}
+                </td>
                 <td className="py-0.5 px-2 text-center">
                   {r.allocationStatus === "Partially Cleared" ? (
                     <Badge
@@ -246,7 +275,11 @@ export function AgentCardTable(props: AgentCardTableProps) {
                         Account Balance
                       </td>
                       <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                        ${fmt(Math.abs(rawBal), 0)}
+                        {formatMoneyDisplay(Math.abs(rawBal), {
+                          currency: "USD",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
                         {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                       </td>
                       <td colSpan={2} />
@@ -268,7 +301,11 @@ export function AgentCardTable(props: AgentCardTableProps) {
                       Account Balance
                     </td>
                     <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                      ${fmt(adjAbs, 0)}
+                      {formatMoneyDisplay(adjAbs, {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      })}
                       <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({adjLabel})</span>
                     </td>
                     <td colSpan={2} />
@@ -281,7 +318,11 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     Account Balance
                   </td>
                   <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                    ${fmt(Math.abs(rawBal), 0)}
+                    {formatMoneyDisplay(Math.abs(rawBal), {
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
                     {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                   </td>
                   <td />
@@ -302,8 +343,20 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">${fmt(r.dutyFee, 0)}</td>
-                    <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">${fmt(r.dutyFee, 0)}</td>
+                    <td className="py-0.5 px-2 text-right text-muted-foreground">
+                      {formatMoneyDisplay(r.dutyFee, {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      })}
+                    </td>
+                    <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
+                      {formatMoneyDisplay(r.dutyFee, {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      })}
+                    </td>
                     <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
                     <td className="py-0.5 px-2 text-center">
                       <Badge
@@ -327,9 +380,21 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">${fmt(r.dutyFee, 0)}</td>
+                    <td className="py-0.5 px-2 text-right text-muted-foreground">
+                      {formatMoneyDisplay(r.dutyFee, {
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      })}
+                    </td>
                     <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                      {r.clearedAmount > 0 ? `$${fmt(r.clearedAmount, 0)}` : "—"}
+                      {r.clearedAmount > 0
+                        ? formatMoneyDisplay(r.clearedAmount, {
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })
+                        : "—"}
                     </td>
                     <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
                     <td className="py-0.5 px-2 text-center">

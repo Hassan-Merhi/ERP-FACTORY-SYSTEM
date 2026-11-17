@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge as SharedStatusBadge, type StatusKind } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -74,11 +75,16 @@ export interface MarketResponse {
   };
 }
 
+const MARKET_STATUS_BADGE: Record<MarketRow["marketStatus"], { kind: StatusKind; label: string }> = {
+  strong: { kind: "success", label: "Strong" },
+  losing: { kind: "losing", label: "Losing" },
+  watch: { kind: "warning", label: "Watch" },
+  no_sales: { kind: "neutral", label: "No sales" },
+};
+
 export function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
-  if (status === "strong") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Strong</Badge>;
-  if (status === "losing") return <Badge variant="destructive">Losing</Badge>;
-  if (status === "watch") return <Badge variant="secondary">Watch</Badge>;
-  return <Badge variant="outline">No sales</Badge>;
+  const badge = MARKET_STATUS_BADGE[status] ?? MARKET_STATUS_BADGE.no_sales;
+  return <SharedStatusBadge status={badge.kind} label={badge.label} showIcon={false} />;
 }
 
 export type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
