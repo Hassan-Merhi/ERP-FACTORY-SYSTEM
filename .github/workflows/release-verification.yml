@@ -90,14 +90,14 @@ jobs:
             config/i18n-phase9-final-release.json \
             docs/archive/translation/phase-8-current-main-reconciliation.md \
             docs/archive/translation/phase-9-current-main-release.md \
-            scripts/run-phase9-language-browser-smoke.mjs \
-            scripts/prepare-phase9-browser-smoke-fixture.mjs \
+            scripts/run-language-browser-smoke.mjs \
+            scripts/prepare-browser-smoke-fixture.mjs \
             scripts/verify-multilingual-phases-4-7-current-main.mjs \
-            scripts/verify-phase8-current-main-reconciliation.mjs \
-            scripts/verify-phase9-current-main-release.mjs \
-            scripts/verify-phase9-final-i18n-baseline.mjs \
-            tests/phase8-rtl-responsive-accessibility.test.ts \
-            tests/phase9-final-release-gate.test.ts \
+            scripts/verify-current-main-reconciliation.mjs \
+            scripts/verify-current-main-release.mjs \
+            scripts/verify-final-i18n-baseline.mjs \
+            tests/rtl-responsive-accessibility.test.ts \
+            tests/final-release-gate.test.ts \
             vitest.config.phase9.ts
 
       - name: TypeScript
@@ -130,8 +130,8 @@ jobs:
         continue-on-error: true
         run: |
           node scripts/verify-multilingual-phases-4-7-current-main.mjs
-          node scripts/verify-phase8-current-main-reconciliation.mjs
-          node scripts/verify-phase9-current-main-release.mjs
+          node scripts/verify-current-main-reconciliation.mjs
+          node scripts/verify-current-main-release.mjs
 
       - name: Final production readiness
         id: readiness
@@ -156,7 +156,7 @@ jobs:
         id: browser_fixture
         if: always() && steps.db_schema.outcome == 'success'
         continue-on-error: true
-        run: node scripts/prepare-phase9-browser-smoke-fixture.mjs
+        run: node scripts/prepare-browser-smoke-fixture.mjs
 
       - name: Application startup and multilingual browser smoke
         id: browser_smoke
@@ -189,7 +189,7 @@ jobs:
 
           curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health" > artifacts/phase9-startup/health.json
           curl --fail --silent --show-error "http://127.0.0.1:${PORT}/login" > artifacts/phase9-startup/login.html
-          node scripts/run-phase9-language-browser-smoke.mjs
+          node scripts/run-language-browser-smoke.mjs
 
       - name: Sharded backend tests and coverage
         id: backend
@@ -234,10 +234,10 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p artifacts/phase9-i18n
-          node scripts/audit-i18n-phase14.mjs \
+          node scripts/audit-i18n.mjs \
             --json-out artifacts/phase9-i18n/report.json \
             --markdown-out artifacts/phase9-i18n/report.md
-          node scripts/verify-phase9-final-i18n-baseline.mjs
+          node scripts/verify-final-i18n-baseline.mjs
 
       - name: Focused security checks
         id: security

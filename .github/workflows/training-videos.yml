@@ -167,7 +167,7 @@ jobs:
       - name: Prepare isolated sample companies
         run: |
           node node_modules/drizzle-kit/bin.cjs push --force
-          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+          node scripts/prepare-browser-e2e-fixture.mjs
       - name: Capture actual working screens with read-only browser automation
         run: |
           mkdir -p artifacts/training-videos

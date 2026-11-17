@@ -141,7 +141,7 @@ jobs:
       - name: Seed ONLY disposable example companies and accounts
         run: |
           node node_modules/drizzle-kit/bin.cjs push --force
-          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+          node scripts/prepare-browser-e2e-fixture.mjs
       - name: Run real fake-company transactions and reconcile
         shell: bash
         run: |
@@ -163,7 +163,7 @@ jobs:
             sleep 1
           done
           set +e
-          node scripts/run-phase7-browser-e2e.mjs
+          node scripts/run-browser-e2e.mjs
           browser_result=$?
           node scripts/verify-nightly-transaction-reconciliation.mjs
           reconciliation_result=$?

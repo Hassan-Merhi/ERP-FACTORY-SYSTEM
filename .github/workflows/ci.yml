@@ -214,7 +214,7 @@ jobs:
         run: npm run audit:scripts
       - name: Readable logging contracts
         if: always() && steps.install.outcome == 'success'
-        run: node scripts/verify-readable-logging-phase-10.mjs
+        run: node scripts/verify-readable-logging.mjs
 
   typecheck:
     name: Type-check

@@ -238,7 +238,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run verify:observability
-          node scripts/verify-phase11-12-observability-disaster-recovery.mjs
+          node scripts/verify-observability-disaster-recovery.mjs
           npm run verify:stabilization
 
       - name: Verify bandwidth and mobile-routing contracts

@@ -22,5 +22,5 @@ jobs:
       - name: Validate modified runtime imports and query contracts
         run: |
           npm run check
-          node scripts/verify-phase6-chat-report-domains.mjs
-          node node_modules/vitest/vitest.mjs run tests/chat-phase1-classifier.test.ts tests/phase6-chat-report-domains.test.ts tests/inventory-valuation-wave6-repair.test.ts tests/startup-preload-manifest.test.ts
+          node scripts/verify-chat-report-domains.mjs
+          node node_modules/vitest/vitest.mjs run tests/chat-classifier.test.ts tests/chat-report-domains.test.ts tests/inventory-valuation-repair.test.ts tests/startup-preload-manifest.test.ts

@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/offline-phase6-contract.yml"
-      - "scripts/edge/certify-offline-phase6.mjs"
-      - "tests/offline-phase6-certification.node.test.mjs"
+      - "scripts/edge/certify-offline.mjs"
+      - "tests/offline-certification.node.test.mjs"
       - "docs/operations/factory-lan-phase6-certification.md"
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
           node-version: "24.22.2"
       - name: Syntax and fail-closed contract tests (no secrets or DB)
         run: |
-          node --check scripts/edge/certify-offline-phase6.mjs
-          node --check tests/offline-phase6-certification.node.test.mjs
-          node --test tests/offline-phase6-certification.node.test.mjs
-          node scripts/edge/certify-offline-phase6.mjs --help
+          node --check scripts/edge/certify-offline.mjs
+          node --check tests/offline-certification.node.test.mjs
+          node --test tests/offline-certification.node.test.mjs
+          node scripts/edge/certify-offline.mjs --help

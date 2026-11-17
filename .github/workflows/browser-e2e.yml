@@ -7,8 +7,8 @@ on:
       - "client/**"
       - "server/**"
       - "shared/**"
-      - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
-      - "scripts/run-phase7-browser-e2e.mjs"
+      - "scripts/prepare-browser-e2e-fixture.mjs"
+      - "scripts/run-browser-e2e.mjs"
       - "scripts/verify-factory-blue-theme-browser.mjs"
       - "package.json"
       - "package-lock.json"
@@ -90,7 +90,7 @@ jobs:
       - name: Prepare disposable transactional fixture
         run: |
           node node_modules/drizzle-kit/bin.cjs push --force
-          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+          node scripts/prepare-browser-e2e-fixture.mjs
       - name: Run transactional browser E2E
         run: |
           mkdir -p artifacts/phase7-browser-startup
@@ -118,7 +118,7 @@ jobs:
             sleep 1
           done
 
-          node scripts/run-phase7-browser-e2e.mjs
+          node scripts/run-browser-e2e.mjs
       - name: Show server log on failure
         if: failure()
         run: cat artifacts/phase7-browser-startup/server.log || true

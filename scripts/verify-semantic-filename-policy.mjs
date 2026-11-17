@@ -30,7 +30,6 @@ const allowedConfig = new Set([
   "deploy/lan/phase7-prepare-restricted-role.sql",
 ]);
 const legacyWorkflowNames = new Set([
-  ".github/workflows/backend-phase2-apply.yml",
   ".github/workflows/edge-phase3-validate-once.yml",
   ".github/workflows/factory-blue-theme-phase5.yml",
   ".github/workflows/offline-phase5-acceptance.yml",
@@ -71,7 +70,7 @@ for (const expected of allowedConfig) if (!present.has(expected)) {
 // TS does not verify that these commands actually refer to extant files.
 const executableSources = tracked.filter(p=>p.startsWith(".github/workflows/") && /\.ya?ml$/.test(p));
 if (present.has("package.json")) executableSources.push("package.json");
-const referencePattern = /(?:scripts|tests|server|client|build|shared|config|deploy)\/[A-Za-z0-9_./*-]+\.(?:mjs|cjs|tsx?|jsx?|sh|json|ya?ml)/g;
+const referencePattern = /(?:scripts|tests|server|client|build|shared|config|deploy)\/[A-Za-z0-9_./*-]+\.(?:json|mjs|cjs|tsx?|jsx?|sh|ya?ml)(?![A-Za-z0-9_.])/g;
 const externalGeneratedReferences = new Set([
   // Generated at runtime by build tools; not source files.
   "config/route-manifest.js",

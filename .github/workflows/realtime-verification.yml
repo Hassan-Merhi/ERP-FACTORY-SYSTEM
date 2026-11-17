@@ -17,9 +17,9 @@ on:
       - "server/wsServer.ts"
       - "shared/realtimeInvalidation.ts"
       - "tests/ui/ws-invalidation-traffic.test.tsx"
-      - "tests/ui/realtime-wave5-cache-policy.test.ts"
-      - "tests/ui/realtime-wave6-hardening.test.ts"
-      - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
+      - "tests/ui/realtime-cache-policy.test.ts"
+      - "tests/ui/realtime-hardening.test.ts"
+      - "scripts/prepare-browser-e2e-fixture.mjs"
       - "scripts/run-realtime-browser-e2e.mjs"
       - "package.json"
       - "package-lock.json"
@@ -98,8 +98,8 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts \
             tests/ui/ws-invalidation-traffic.test.tsx \
-            tests/ui/realtime-wave5-cache-policy.test.ts \
-            tests/ui/realtime-wave6-hardening.test.ts
+            tests/ui/realtime-cache-policy.test.ts \
+            tests/ui/realtime-hardening.test.ts
 
       - name: Prepare disposable database schema
         run: node node_modules/drizzle-kit/bin.cjs push --force
@@ -116,7 +116,7 @@ jobs:
           node scripts/verify-runtime-dependencies.mjs
 
       - name: Prepare disposable realtime fixture
-        run: node scripts/prepare-phase7-browser-e2e-fixture.mjs
+        run: node scripts/prepare-browser-e2e-fixture.mjs
 
       - name: Run two-session realtime browser verification
         run: |
