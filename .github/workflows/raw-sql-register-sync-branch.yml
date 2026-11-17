@@ -2,7 +2,7 @@ name: One-time raw SQL review register sync (audit branch only)
 on:
   push:
     branches: [fix/program6d-query-safety-20261117]
-    paths: [.github/workflows/raw-sql-register-sync-branch.yml]
+    paths: [.github/workflows/raw-sql-register-sync-branch.yml, docs/security/raw-sql-allowlist.json]
 permissions:
   contents: write
 jobs:
