@@ -9125,6 +9125,741 @@
         }
       ],
       "reason": "Schema identifier at :119 is derived only from code constants and the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "6cf382fdc37033749e0c",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-linked-physical-delete-postgres.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "807a7429963e90d2381d",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-linked-physical-delete-postgres.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "f75ceb9bbf8c6177b1fd",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "migration",
+          "source": "Loop variable over migration SQL read with readFileSync from this repository's migrations/20261105_*_intercompany_*.sql files named by a literal list in intercompany-linked-physical-delete-postgres.test.ts.",
+          "validation": "File names are string literals in the test; the content is the committed migration SQL under review in the same repository."
+        }
+      ],
+      "reason": "Applies the committed intercompany migration scripts to the throwaway schema so the guards under test exist. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "7c20bf71cec974a7f0b7",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "First element of literal [table, where] pairs listed in the for-of loop that contains the query in intercompany-linked-physical-delete-postgres.test.ts.",
+          "validation": "One of the table-name string literals written in that loop; the list is closed and code-authored."
+        },
+        {
+          "expression": "where",
+          "source": "Second element of the same literal [table, where] pairs in intercompany-linked-physical-delete-postgres.test.ts.",
+          "validation": "One of the predicate string literals written in that loop, each a fixed id comparison such as id=1 or id IN (21,22)."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "13d2452a2feab1dce46d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Table name from a literal array of [drizzle table, name] pairs in intercompany-phase1-foundation.test.ts, used only inside expect(...).toContain(...).",
+          "validation": "String literals from the test's expected-table list; the assembled text is compared against migration source and never sent to a database."
+        }
+      ],
+      "reason": "Builds the expected CREATE TABLE text to compare with migration source in an assertion; it is never executed. Only table-name literals from the test's own list are appended."
+    },
+    {
+      "id": "732bb87b1761dc8b13de",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "Module-level constant in intercompany-phase1-foundation.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "b9e9fb1df43e85df85e8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "Module-level constant in intercompany-phase1-foundation.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "93fe56cdfc4f14183bc8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase1-foundation.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "61032fce13b2bcc3b34d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "Parameter of the local rejects() helper in intercompany-phase1-foundation.test.ts; every call site in the file passes a SQL string literal or a concatenation of literals and test constants.",
+          "validation": "All callers are inside this test file and pass code-authored fixture SQL; the helper is not exported and receives no external data."
+        }
+      ],
+      "reason": "Runs the fixture statement the test expects the database guard to reject; the text is authored at each call site in this file. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "f8d3f1d89e37322cab2b",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase1-foundation.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "39f706b243bdc5de480f",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase1-foundation.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "9f21029ad4c70ca1d946",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "hash",
+          "source": "const hash = \"a\".repeat(64) declared in intercompany-phase1-foundation.test.ts just above the statement.",
+          "validation": "Fixed 64-character string of the letter a, a stand-in SHA-256 hex digest; no quote or SQL syntax can occur in it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "b5a62e35eae6f121cf97",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Inline expression \"b\".repeat(64) in intercompany-phase1-foundation.test.ts.",
+          "validation": "Fixed 64-character string of one hex letter used as a stand-in fingerprint; no quote or SQL syntax can occur in it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "1ae215aaf4e7cadc8927",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"c\".repeat(64)",
+          "source": "Inline expression \"c\".repeat(64) in intercompany-phase1-foundation.test.ts.",
+          "validation": "Fixed 64-character string of one hex letter used as a stand-in fingerprint; no quote or SQL syntax can occur in it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "7c934988134a0d36bbd6",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase2-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "1c87d68b7f915972fe18",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase2-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "758cbd7f636b0315af84",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase2-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "e23dafa56e9602dc37c3",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "Parameter of the local rejects() helper in intercompany-phase2-database-guards.test.ts; every call site in the file passes a SQL string literal or a concatenation of literals and test constants.",
+          "validation": "All callers are inside this test file and pass code-authored fixture SQL; the helper is not exported and receives no external data."
+        }
+      ],
+      "reason": "Runs the fixture statement the test expects the database guard to reject; the text is authored at each call site in this file. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "337f5b630bb126102a97",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase2-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "16847fb1c0529156be11",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase2-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "ff6f08eeb000acf8f69b",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Table name from a literal array of [drizzle table, name] pairs in intercompany-phase3-database-guards.test.ts, used only inside expect(...).toContain(...).",
+          "validation": "String literals from the test's expected-table list; the assembled text is compared against migration source and never sent to a database."
+        }
+      ],
+      "reason": "Builds the expected CREATE TABLE text to compare with migration source in an assertion; it is never executed. Only table-name literals from the test's own list are appended."
+    },
+    {
+      "id": "24e3a253fabf255210e6",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase3-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "97ed3c75a344bb1f2efe",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase3-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "b6a9a27a41e4834034ac",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Loop variable over migration SQL read with readFileSync from this repository's migrations/20261105_*_intercompany_*.sql files named by a literal list in intercompany-phase3-database-guards.test.ts.",
+          "validation": "File names are string literals in the test; the content is the committed migration SQL under review in the same repository."
+        }
+      ],
+      "reason": "Applies the committed intercompany migration scripts to the throwaway schema so the guards under test exist. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "d60d758b73b75b085d21",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase3-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "fce9b70a8bab02ac06e7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Parameter of the local rejects() helper in intercompany-phase3-database-guards.test.ts; every call site in the file passes a SQL string literal or a concatenation of literals and test constants.",
+          "validation": "All callers are inside this test file and pass code-authored fixture SQL; the helper is not exported and receives no external data."
+        }
+      ],
+      "reason": "Runs the fixture statement the test expects the database guard to reject; the text is authored at each call site in this file. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "9bb2fb27535ae779fae3",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase3-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "29dc810057bf8c93f4b7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase3-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "d6717b869f725c7834fb",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase4-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "8f9b31877b712e1aab53",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase4-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "6da1f31b793064c95ad5",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Loop variable over migration SQL read with readFileSync from this repository's migrations/20261105_*_intercompany_*.sql files named by a literal list in intercompany-phase4-database-guards.test.ts.",
+          "validation": "File names are string literals in the test; the content is the committed migration SQL under review in the same repository."
+        }
+      ],
+      "reason": "Applies the committed intercompany migration scripts to the throwaway schema so the guards under test exist. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "043cf3b671066c9190f1",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"a\".repeat(64)",
+          "source": "Inline expression \"a\".repeat(64) in intercompany-phase4-database-guards.test.ts.",
+          "validation": "Fixed 64-character string of one hex letter used as a stand-in fingerprint; no quote or SQL syntax can occur in it."
+        },
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Inline expression \"b\".repeat(64) in intercompany-phase4-database-guards.test.ts.",
+          "validation": "Fixed 64-character string of one hex letter used as a stand-in fingerprint; no quote or SQL syntax can occur in it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "2aa2fb161e0c797620f0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase4-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "a7e5b80cf4f5aa7b89d2",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Parameter of the local rejects() helper in intercompany-phase4-database-guards.test.ts; every call site in the file passes a SQL string literal or a concatenation of literals and test constants.",
+          "validation": "All callers are inside this test file and pass code-authored fixture SQL; the helper is not exported and receives no external data."
+        }
+      ],
+      "reason": "Runs the fixture statement the test expects the database guard to reject; the text is authored at each call site in this file. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "7e123d0e02edf9d6dbe0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase4-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "3da2b963e8c3bb26d9ce",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase4-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "94ca47b3c5e0d83a9971",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "paymentColumns.slice(1)",
+          "source": "paymentColumns is a const string literal declared earlier in the same test in intercompany-phase4-database-guards.test.ts (a fixed column list); slice(1) drops its opening parenthesis.",
+          "validation": "Code-authored literal text only; no variable or external value is interpolated into it."
+        },
+        {
+          "expression": "goodValues.slice(1)",
+          "source": "goodValues is a const string literal declared earlier in the same test in intercompany-phase4-database-guards.test.ts (a fixed VALUES tuple); slice(1) drops its opening parenthesis.",
+          "validation": "Code-authored literal text only; no variable or external value is interpolated into it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "e9ca647bd69b027ad7f8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase5-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "ecf6a9abd0be525824b8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Module-level constant in intercompany-phase5-database-guards.test.ts: a literal prefix concatenated with process.pid.",
+          "validation": "Literal identifier prefix plus the numeric process id, matching /^[a-z0-9_]+_\\d+$/; nothing else is appended."
+        }
+      ],
+      "reason": "Creates and selects a throwaway schema whose name is a literal prefix plus the process id, so parallel runs do not collide. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "4a4cf63194313c345ddc",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "ddl",
+          "source": "Loop variable over migration SQL read with readFileSync from this repository's migrations/20261105_*_intercompany_*.sql files named by a literal list in intercompany-phase5-database-guards.test.ts.",
+          "validation": "File names are string literals in the test; the content is the committed migration SQL under review in the same repository."
+        }
+      ],
+      "reason": "Applies the committed intercompany migration scripts to the throwaway schema so the guards under test exist. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "52c3e3eefe40a4f129cd",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase5-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "cfe35b8434253b721732",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Parameter of the local rejects() helper in intercompany-phase5-database-guards.test.ts; every call site in the file passes a SQL string literal or a concatenation of literals and test constants.",
+          "validation": "All callers are inside this test file and pass code-authored fixture SQL; the helper is not exported and receives no external data."
+        }
+      ],
+      "reason": "Runs the fixture statement the test expects the database guard to reject; the text is authored at each call site in this file. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "facbb9e4d2e50ad25b60",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase5-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "6a054cac7b7f175c0731",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Declared on the line above the query in the local rejects() helper of intercompany-phase5-database-guards.test.ts: a literal prefix plus a pre-incremented local integer counter.",
+          "validation": "Literal prefix plus an integer counter, matching /^[a-z0-9_]+_\\d+$/; the helper takes no savepoint name from its caller."
+        }
+      ],
+      "reason": "Names a savepoint used to prove that a rejected fixture statement rolls back; the name is a literal prefix plus a local counter. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
+    },
+    {
+      "id": "67ff7d686f6952cd8b56",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "receiveColumns.slice(1)",
+          "source": "receiveColumns is a const string literal declared earlier in the same test in intercompany-phase5-database-guards.test.ts (a fixed column list); slice(1) drops its opening parenthesis.",
+          "validation": "Code-authored literal text only; no variable or external value is interpolated into it."
+        }
+      ],
+      "reason": "Inserts or counts fixture rows using literal column lists, literal predicates or fixed repeated-letter fingerprints written in the test. Test file run only by vitest against a disposable PostgreSQL schema that it creates and rolls back; no HTTP request, cookie, import file or stored data reaches this text."
     }
   ]
 }
