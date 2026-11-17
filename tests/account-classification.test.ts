@@ -23,7 +23,7 @@ import {
 import { classifyNetPositionAccounts, getAccountNetBalance } from "../server/netPositionHelper";
 import { getProfitLoss } from "../server/services/reports/financialReportsService";
 import { calculateIncomeStatementForPeriod } from "../server/helpers/calculateIncomeStatementForPeriod";
-import { accountingDetailReportShard } from "../server/chat/reports/implementations/accountingDetailReportShard";
+import { phase5ReportShard as accountingDetailReportShard } from "../server/chat/reports/implementations/accountingDetailReportShard";
 import { closeFiscalPeriod } from "../server/storage/accounting/fiscal-periods";
 import { insertLedgerAccountSchema } from "../shared/schema";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";

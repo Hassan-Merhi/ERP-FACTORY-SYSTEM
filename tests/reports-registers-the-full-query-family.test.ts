@@ -9,7 +9,7 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
 
 import {
   phase5QueryTypes,
-  accountingDetailReportShard,
+  phase5ReportShard as accountingDetailReportShard,
 } from "../server/chat/reports/implementations/accountingDetailReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
