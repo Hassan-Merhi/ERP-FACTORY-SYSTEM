@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
 import {
   DropdownMenu,

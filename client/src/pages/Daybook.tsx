@@ -664,7 +664,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
       refreshBalances();
-      toast({ title: "Deleted", description: "Voucher deleted" });
+      toast({
+        title: "Deleted",
+        description: linked
+          ? "Linked POs and original vouchers deleted in both companies. No reversals created."
+          : "Voucher deleted",
+      });
       setDeleteDialogOpen(false);
     },
     onError: (error: Error) => {
