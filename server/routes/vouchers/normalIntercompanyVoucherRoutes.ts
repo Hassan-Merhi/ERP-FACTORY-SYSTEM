@@ -76,7 +76,7 @@ function actor(req: Request): EditIdentity {
 async function inspect(req: Request) {
   const identity = actor(req);
   if (!req.body || typeof req.body !== "object" || !["Payment", "Receipt"].includes(req.body.voucherType)) {
-    return { identity, match: null };
+    return { identity, match: null, policyTableAvailable: true };
   }
   // The optional policy table is absent in some production ERP databases.
   // Do not turn unrelated Payment/Receipt vouchers into HTTP 500 responses.
