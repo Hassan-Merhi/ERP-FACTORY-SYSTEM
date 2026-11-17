@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4989,
+    "scannedFiles": 5003,
     "perRoot": {
-      "server": 2765,
+      "server": 2776,
       "shared": 170,
       "scripts": 282,
       "migrations": 98,
-      "tests": 1671
+      "tests": 1674
     },
     "totalSites": 1276,
     "byCategory": {
@@ -17721,12 +17721,12 @@
     },
     {
       "findingId": "RSQL-0834",
-      "id": "659d6b7a13575d157fc1",
+      "id": "7f464d019348fae6ff86",
       "path": "server/services/sp-sales-form/generate.ts",
-      "line": 653,
+      "line": 99,
       "category": "assembled-sql-text",
       "sink": "string assembly",
-      "context": "generateSpSalesFormExcel",
+      "context": "generateSpSalesFormExcelStep4",
       "dynamicInputs": [
         {
           "expression": "S_DATE_START",

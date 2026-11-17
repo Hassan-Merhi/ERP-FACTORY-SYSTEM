@@ -8,572 +8,114 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { EXPECTED_CLIENT_RESPONSE_CODES, markExpectedClientResponse } from "../../../../lib/expectedClientResponse";
-import { parseId } from "../../../../lib/parseId";
-import { getCompanyBusinessDate } from "../../../../lib/dateUtils";
-import { db } from "../../../../db";
-import { storage } from "../../../../storage";
 import { requireAuth } from "../../../../auth";
-import { recalculateOrderTotalsForScannedArticle, type ScannedArticleTotalsPatch } from "./incrementalTotals";
-import {
-  normalizeLoadingArticleCode,
-  shouldEnforceProformaOverload,
-  shouldRequireProformaMembership,
-} from "./proformaScanPolicy";
-import { getProformaCapacitySnapshot } from "../proformaCapacity";
-import {
-  advanceSatisfiedPriorityScanConfigs,
-  PRIORITY_SCAN_LOCK_NAMESPACE,
-  resolvePriorityScanArticleTarget,
-} from "../priorityScanQueue";
-import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
-import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
-import {
-  factoryBales,
-  customerProformaLines,
-  customerOrders,
-  customerOrderBales,
-  customerOrderBaleRemovals,
-} from "@shared/schema";
-import { eq, and, or, sql } from "drizzle-orm";
-import { firstRow, resultRows } from "../../../../lib/queryResult";
-import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
-import { toMoney } from "../../../../lib/money";
+import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
+import { handlePostFactoryCustomerOrdersIdBalesStep1 } from "./handlePostFactoryCustomerOrdersIdBalesStep1";
+import { handlePostFactoryCustomerOrdersIdBalesStep2 } from "./handlePostFactoryCustomerOrdersIdBalesStep2";
 
 export function registerOrderBaleScanRoutes(app: Express) {
+  registerOrderBaleScanRoutesPart1(app);
+}
+
+function registerOrderBaleScanRoutesPart1(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const orderId = parseId(req.params.id);
-      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-
-      const { scanCode, locationId } = req.body;
-      if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
-      if (!(await isFactorySessionLocation(req.session, locationId))) {
-        return res.status(400).json({ message: "Location not found" });
-      }
-
-      const isPriorityScan = req.body.priorityScan === true;
-      if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
-        return res.status(400).json({
-          message:
-            "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
-        });
-      }
-
-      const parsedLocationId = Number.parseInt(String(locationId), 10);
-      if (!Number.isInteger(parsedLocationId) || parsedLocationId <= 0) {
-        return res.status(400).json({ message: "scanCode and locationId are required" });
-      }
-
-      const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
-      const priorityScanBusinessDate = isPriorityScan
-        ? getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone)
-        : null;
-
-      const [order] = await db
-        .select()
-        .from(customerOrders)
-        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order || order.deletedAt) return res.status(404).json({ message: "Order not found" });
-      if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(order.status)) {
-        return res
-          .status(400)
-          .json({ message: "Can only add bales to DRAFT, LOADING, or PENDING_VERIFICATION orders" });
-      }
-
-      // V5 guard: proformaIdUsed IS NOT NULL
-      // V5 bales are SOLD once the order reaches PENDING_VERIFICATION — no further scanning allowed.
-      // Legacy V2/V3 behavior (PENDING_VERIFICATION scan allowed) is unchanged.
-      if (order.proformaIdUsed && order.status === "PENDING_VERIFICATION") {
-        return res
-          .status(400)
-          .json({ message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" });
-      }
-
-      const scanTrimmed = String(scanCode).trim();
-      const scanLower = scanTrimmed.toLowerCase();
-      const scanLike = `%${scanTrimmed}%`;
-
-      // Successful scans used to pay for two preflight reads before entering the
-      // transaction: one RESERVED_FOR_ORDER lookup and one product-name lookup.
-      // Fold both into the locked candidate query instead. Exact reserved unique
-      // identifiers still win so the user keeps the same descriptive error.
-      const uniqueIdentifierCondition = or(
-        sql`LOWER(${factoryBales.referenceNumber}) = ${scanLower}`,
-        sql`LOWER(${factoryBales.baleCode}) = ${scanLower}`
-      );
-      const availableNameCondition = or(
-        uniqueIdentifierCondition,
-        sql`LOWER(${factoryBales.articleCode}) = ${scanLower}`,
-        sql`LOWER(${factoryBales.productName}) = ${scanLower}`,
-        sql`EXISTS (
-          SELECT 1
-          FROM factory_bale_products fbp
-          WHERE fbp.id = ${factoryBales.productId}
-            AND fbp.company_id = ${companyId}
-            AND (
-              LOWER(fbp.name) = ${scanLower}
-              OR fbp.name ILIKE ${scanLike}
-              OR LOWER(fbp.article_code) = ${scanLower}
-              OR fbp.article_code ILIKE ${scanLike}
-            )
-        )`
-      );
-
-      type PickResult =
-        | {
-            ok: true;
-            bale: typeof customerOrderBales.$inferSelect;
-            line: ScannedArticleTotalsPatch["line"];
-            totals: ScannedArticleTotalsPatch["totals"];
-          }
-        | { ok: false; httpStatus: number; body: Record<string, unknown> };
-
-      const result: PickResult = await db.transaction(async (tx) => {
-        // Priority Scan serializes queue routing before taking any proforma
-        // capacity locks. Config edits use the same priority -> proforma order.
-        // Normal loading scans keep their established proforma-first path.
-        if (isPriorityScan) {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-        }
-
-        if (order.proformaIdUsed) {
-          await acquireProformaCapacityTransactionLock(tx, {
-            companyId,
-            proformaId: order.proformaIdUsed,
-          });
-        }
-
-        // Re-read the order under the lock: the checks above ran before it was
-        // held, so a finalization or cancellation could have landed in between.
-        const [currentOrder] = await tx
-          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed, deletedAt: customerOrders.deletedAt })
-          .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
-          .for("update");
-        if (!currentOrder || currentOrder.deletedAt) {
-          return { ok: false, httpStatus: 404, body: { message: "Order not found" } };
-        }
-        if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
-          return {
-            ok: false,
-            httpStatus: 400,
-            body: { message: "Can only add bales to DRAFT, LOADING, or PENDING_VERIFICATION orders" },
-          };
-        }
-        if (currentOrder.proformaIdUsed && currentOrder.status === "PENDING_VERIFICATION") {
-          return {
-            ok: false,
-            httpStatus: 400,
-            body: { message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" },
-          };
-        }
-        if (
-          isPriorityScan &&
-          (currentOrder.status !== "LOADING" ||
-            !currentOrder.proformaIdUsed ||
-            currentOrder.proformaIdUsed !== order.proformaIdUsed)
-        ) {
-          return {
-            ok: false,
-            httpStatus: 409,
-            body: {
-              code: "PRIORITY_SCAN_ROUTE_CHANGED",
-              message: "Priority Scan loading changed while the reference was routing. Scan again.",
-            },
-          };
-        }
-
-        const [bale] = await tx
-          .select({
-            id: factoryBales.id,
-            status: factoryBales.status,
-            referenceNumber: factoryBales.referenceNumber,
-            baleCode: factoryBales.baleCode,
-            articleCode: factoryBales.articleCode,
-            productName: factoryBales.productName,
-            productId: factoryBales.productId,
-            weightKg: factoryBales.weightKg,
-            stockEntryDate: factoryBales.stockEntryDate,
-            productArticleCode: sql<string | null>`(
-              SELECT fbp.article_code
-              FROM factory_bale_products fbp
-              WHERE fbp.id = ${factoryBales.productId}
-                AND fbp.company_id = ${companyId}
-              LIMIT 1
-            )`,
-            canonicalProductName: sql<string | null>`(
-              SELECT fbp.name
-              FROM factory_bale_products fbp
-              WHERE fbp.id = ${factoryBales.productId}
-                AND fbp.company_id = ${companyId}
-              LIMIT 1
-            )`,
-            canonicalProductNameAr: sql<string | null>`(
-              SELECT fbp.name_ar
-              FROM factory_bale_products fbp
-              WHERE fbp.id = ${factoryBales.productId}
-                AND fbp.company_id = ${companyId}
-              LIMIT 1
-            )`,
-            productSellingPrice: sql<string | null>`(
-              SELECT fbp.selling_price
-              FROM factory_bale_products fbp
-              WHERE fbp.id = ${factoryBales.productId}
-                AND fbp.company_id = ${companyId}
-              LIMIT 1
-            )`,
-            reservedInThisOrder: sql<boolean>`EXISTS (
-              SELECT 1
-              FROM customer_order_bales cob
-              WHERE cob.order_id = ${orderId}
-                AND cob.bale_id = ${factoryBales.id}
-            )`,
-            removedFromThisOrder: sql<boolean>`EXISTS (
-              SELECT 1
-              FROM ${customerOrderBaleRemovals} cobr
-              WHERE cobr.order_id = ${orderId}
-                AND cobr.bale_id = ${factoryBales.id}
-            )`,
-          })
-          .from(factoryBales)
-          .where(
-            and(
-              eq(factoryBales.companyId, companyId),
-              or(
-                and(eq(factoryBales.status, "RESERVED_FOR_ORDER"), uniqueIdentifierCondition),
-                and(
-                  eq(factoryBales.status, "IN_STOCK"),
-                  eq(factoryBales.erpLocationId, parsedLocationId),
-                  availableNameCondition
-                )
-              )
-            )
-          )
-          .orderBy(sql`CASE WHEN ${factoryBales.status} = 'RESERVED_FOR_ORDER' THEN 0 ELSE 1 END`, factoryBales.id)
-          .limit(1)
-          .for("update");
-
-        if (!bale) {
-          return {
-            ok: false,
-            httpStatus: 404,
-            body: { message: "Bale not found, not at this location, or not available for sale" },
-          };
-        }
-
-        if (
-          isPriorityScan &&
-          bale.referenceNumber.toLowerCase() !== scanLower &&
-          bale.baleCode.toLowerCase() !== scanLower
-        ) {
-          return {
-            ok: false,
-            httpStatus: 400,
-            body: { message: "Priority Scan requires an exact bale reference or bale code." },
-          };
-        }
-
-        if (bale.status === "RESERVED_FOR_ORDER") {
-          const reservedBale = bale;
-          if (reservedBale.reservedInThisOrder) {
-            return {
-              ok: false,
-              httpStatus: 400,
-              body: { message: `${reservedBale.referenceNumber || scanCode} is already loaded in this order` },
-            };
-          }
-          return {
-            ok: false,
-            httpStatus: 400,
-            body: { message: `Bale ${reservedBale.referenceNumber || scanCode} is reserved for another loading order` },
-          };
-        }
-
-        // One active-order lookup covers both "already in this order" and
-        // "already in another order". V5 bales stay IN_STOCK while loading, so
-        // status alone cannot enforce this duplicate rule.
-        const activeOrderCheck = await tx.execute(
-          sql`SELECT cob.order_id, co.status, co.invoice_number
-              FROM customer_order_bales cob
-              JOIN customer_orders co ON co.id = cob.order_id
-              WHERE cob.bale_id = ${bale.id}
-                AND co.company_id = ${companyId}
-                AND co.deleted_at IS NULL
-                AND co.status != 'CANCELLED'
-              ORDER BY CASE WHEN cob.order_id = ${orderId} THEN 0 ELSE 1 END, cob.order_id
-              LIMIT 1`
-        );
-        const crossOrderDupRow = firstRow(activeOrderCheck);
-        if (crossOrderDupRow) {
-          if (Number(crossOrderDupRow.order_id) === orderId) {
-            return { ok: false, httpStatus: 400, body: { message: "Bale already added to this order" } };
-          }
-          const orderRef = crossOrderDupRow.invoice_number
-            ? `invoice ${crossOrderDupRow.invoice_number}`
-            : `loading #${crossOrderDupRow.order_id}`;
-          return {
-            ok: false,
-            httpStatus: 400,
-            body: {
-              message: `Bale ${bale.referenceNumber || scanCode} is already in ${orderRef} (${crossOrderDupRow.status}). Remove it from that order first.`,
-            },
-          };
-        }
-
-        // Non-bale priority exclusions apply to automatic allocation and background
-        // Daily/Ground Scan only. An operator may still manually scan an exact
-        // reference here into an eligible priority loading, with the normal
-        // proforma capacity, duplicate, company and stock-location protections.
-        const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
-        const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
-        let priorityScanSnapshot: { priority: number; color: string } | null = null;
-
-        if (isPriorityScan) {
-          const authoritativeTarget = effectiveArticleCode
-            ? await resolvePriorityScanArticleTarget(tx, companyId, effectiveArticleCode)
-            : null;
-          if (!authoritativeTarget || authoritativeTarget.orderId !== orderId) {
-            return {
-              ok: false,
-              httpStatus: 409,
-              body: {
-                code: "PRIORITY_SCAN_ROUTE_CHANGED",
-                message: authoritativeTarget
-                  ? `Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.`
-                  : "This reference is no longer required by an active Priority Scan loading.",
-              },
-            };
-          }
-          priorityScanSnapshot = {
-            priority: authoritativeTarget.priority,
-            color: authoritativeTarget.color,
-          };
-        }
-
-        const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
-        const enforceOverload = shouldEnforceProformaOverload({
-          ignoreProforma,
-          allowBypassOverload: !isPriorityScan && req.body.allowBypassOverload === true,
-          isReinstatingRemovedBale: !isPriorityScan && bale.removedFromThisOrder,
-        });
-
-        let priceUsed = bale.productSellingPrice || "0";
-
-        if (order.proformaIdUsed) {
-          const matchingProformaLines = await tx
-            .select({
-              pricingMode: customerProformaLines.pricingMode,
-              pricePerKg: customerProformaLines.pricePerKg,
-              pricePerBale: customerProformaLines.pricePerBale,
-            })
-            .from(customerProformaLines)
-            .where(
-              and(
-                eq(customerProformaLines.proformaId, order.proformaIdUsed),
-                sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${normalizedEffectiveArticleCode}`
-              )
-            );
-          const pricingLine = matchingProformaLines[0] || null;
-          // A loading-specific override wins over the reusable master price
-          // for THIS order only, including articles already on its master.
-          const extraPrice = resultRows<{ price_per_bale: string }>(await tx.execute(sql`
-            SELECT price_per_bale::text AS price_per_bale
-            FROM customer_order_extra_expected_lines
-            WHERE company_id = ${companyId} AND order_id = ${orderId}
-              AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
-            LIMIT 1
-          `))[0];
-          if (extraPrice) {
-            priceUsed = extraPrice.price_per_bale;
-          } else if (pricingLine) {
-            const pricingMode = pricingLine.pricingMode ?? "per_bale";
-            const perKgVal = pricingLine.pricePerKg;
-            if (pricingMode === "per_kg" && perKgVal) {
-              // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
-              priceUsed = toMoney(bale.weightKg).times(toMoney(perKgVal)).toFixed(2);
-            } else {
-              priceUsed = pricingLine.pricePerBale || "0";
-            }
-          }
-
-          if (!ignoreProforma) {
-            const capacity = await getProformaCapacitySnapshot(tx, {
-              companyId,
-              proformaId: order.proformaIdUsed,
-              currentOrderId: orderId,
-            });
-            if (!capacity) {
-              return {
-                ok: false,
-                httpStatus: 400,
-                body: {
-                  confirmationRequired: true,
-                  confirmationType: "not_in_proforma",
-                  notInProforma: true,
-                  message: "Linked proforma is unavailable. Scan again to bypass.",
-                },
-              };
-            }
-
-            const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading");
-            if (decision.reason === "quantity_exceeded" && enforceOverload) {
-              return {
-                ok: false,
-                httpStatus: 400,
-                body: {
-                  confirmationRequired: true,
-                  confirmationType: "overload",
-                  overloaded: true,
-                  capacity: decision,
-                  message: `Quantity exceeded (${decision.consumedQty}/${decision.requestedQty}). Scan again to bypass.`,
-                },
-              };
-            }
-            if (
-              decision.reason === "not_in_proforma" &&
-              shouldRequireProformaMembership({ ignoreProforma, hasProformaLine: false })
-            ) {
-              return {
-                ok: false,
-                httpStatus: 400,
-                body: {
-                  confirmationRequired: true,
-                  confirmationType: "not_in_proforma",
-                  notInProforma: true,
-                  capacity: decision,
-                  message: "Item loaded not requested. Please scan again to bypass.",
-                },
-              };
-            }
-          }
-        }
-
-        const resolvedBaleName =
-          bale.canonicalProductName || bale.productName || bale.articleCode || bale.baleCode || "Bale";
-
-        const [insertedOrderBale] = await tx
-          .insert(customerOrderBales)
-          .values({
-            orderId,
-            baleId: bale.id,
-            baleReference: bale.referenceNumber,
-            locationId: parsedLocationId,
-            weight: bale.weightKg,
-            articleCode: effectiveArticleCode || bale.articleCode,
-            baleName: resolvedBaleName,
-            baleNameAr: bale.canonicalProductNameAr,
-            priceUsed,
-            scannedBy: scannerName,
-          })
-          .returning();
-
-        if (isPriorityScan && priorityScanSnapshot && priorityScanBusinessDate) {
-          await tx.execute(sql`
-            INSERT INTO factory_priority_scan_history
-              (company_id, order_id, bale_id, reference_number, product_name, article_code,
-               priority, color, business_date, scanned_by, assigned_by_user_id, proforma_id, allocation_source)
-            VALUES (
-              ${companyId},
-              ${orderId},
-              ${bale.id},
-              ${bale.referenceNumber},
-              ${resolvedBaleName},
-              ${effectiveArticleCode || bale.articleCode},
-              ${priorityScanSnapshot.priority},
-              ${priorityScanSnapshot.color},
-              ${priorityScanBusinessDate},
-              ${scannerName},
-              ${req.session.userId ?? null},
-              ${order.proformaIdUsed ?? null},
-              'manual'
-            )
-          `);
-        }
-
-        // V5 bales remain IN_STOCK during loading — only legacy V2/V3 orders set RESERVED_FOR_ORDER.
-        if (!order.proformaIdUsed) {
-          await tx
-            .update(factoryBales)
-            .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
-            .where(eq(factoryBales.id, bale.id));
-        }
-
-        // A successful Priority Scan is also a Daily Scan verification for the
-        // bale's production day. Keep this in the same transaction so the two
-        // scan views can never disagree after a successful allocation. The
-        // unique constraint makes rescans/idempotent retries harmless.
-        if (isPriorityScan && bale.stockEntryDate) {
-          await tx.execute(sql`
-            INSERT INTO factory_daily_bale_scans
-              (company_id, scan_date, reference_number, article_code, product_name, weight_kg, scanned_by_user_id)
-            VALUES (
-              ${String(companyId)},
-              ${bale.stockEntryDate},
-              ${bale.referenceNumber},
-              ${bale.articleCode},
-              ${bale.productName},
-              ${bale.weightKg},
-              ${req.session.userId == null ? null : String(req.session.userId)}
-            )
-            ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
-          `);
-        }
-
-        const recalculated = await recalculateOrderTotalsForScannedArticle(
-          tx,
-          orderId,
-          effectiveArticleCode || bale.articleCode
-        );
-        return {
-          ok: true,
-          bale: insertedOrderBale,
-          line: recalculated.line,
-          totals: recalculated.totals,
-        };
-      });
-
-      if (!result.ok) {
-        if (result.body?.confirmationType === "overload") {
-          markExpectedClientResponse(res, EXPECTED_CLIENT_RESPONSE_CODES.BALE_SCAN_OVERLOAD);
-        } else if (result.body?.confirmationType === "not_in_proforma") {
-          markExpectedClientResponse(res, EXPECTED_CLIENT_RESPONSE_CODES.BALE_SCAN_NOT_IN_PROFORMA);
-        }
-        return res.status(result.httpStatus).json(result.body);
-      }
-
-      let priorityScanAdvance = null;
-      if (req.body.priorityScan === true) {
-        try {
-          priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
-        } catch (advanceError) {
-          // The bale allocation has already committed. Never turn a successful
-          // physical scan into a retryable 500 just because queue advancement
-          // failed; the next Priority Scan route resolution will reconcile it.
-          logger.error("Priority Scan auto-advance failed after bale allocation", {
-            orderId,
-            error: getErrorMessage(advanceError),
-          });
-        }
-      }
-
-      return res.json({
-        compactBaleScan: true,
+      const step1Result = await handlePostFactoryCustomerOrdersIdBalesStep1(req, res);
+      if (step1Result.done) return step1Result.value;
+      const {
+        availableNameCondition,
+        companyId,
+        isPriorityScan,
+        order,
         orderId,
-        order: {
-          ...order,
-          ...result.totals,
+        parsedLocationId,
+        priorityScanBusinessDate,
+        scanCode,
+        scanLower,
+        scannerName,
+        uniqueIdentifierCondition,
+      } = step1Result;
+      const { result } = await handlePostFactoryCustomerOrdersIdBalesStep2(
+        {
+          availableNameCondition,
+          companyId,
+          isPriorityScan,
+          order,
+          orderId,
+          parsedLocationId,
+          priorityScanBusinessDate,
+          scanCode,
+          scanLower,
+          scannerName,
+          uniqueIdentifierCondition,
         },
-        bale: result.bale,
-        line: result.line,
-        totals: result.totals,
-        priorityScanAdvance,
-      });
+        req
+      );
+      const step3Result = await handlePostFactoryCustomerOrdersIdBalesStep3(
+        { companyId, order, orderId, result },
+        req,
+        res
+      );
+      if (step3Result.done) return step3Result.value;
     } catch (error: unknown) {
       logger.error("Error adding bale to order:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
+}
+
+async function handlePostFactoryCustomerOrdersIdBalesStep3(
+  {
+    companyId,
+    order,
+    orderId,
+    result,
+  }: Pick<
+    Extract<Awaited<ReturnType<typeof handlePostFactoryCustomerOrdersIdBalesStep1>>, { done: false }> &
+      Awaited<ReturnType<typeof handlePostFactoryCustomerOrdersIdBalesStep2>>,
+    "companyId" | "order" | "orderId" | "result"
+  >,
+  req: Request,
+  res: Response
+) {
+  if (!result.ok) {
+    if (result.body?.confirmationType === "overload") {
+      markExpectedClientResponse(res, EXPECTED_CLIENT_RESPONSE_CODES.BALE_SCAN_OVERLOAD);
+    } else if (result.body?.confirmationType === "not_in_proforma") {
+      markExpectedClientResponse(res, EXPECTED_CLIENT_RESPONSE_CODES.BALE_SCAN_NOT_IN_PROFORMA);
+    }
+    return { done: true as const, value: res.status(result.httpStatus).json(result.body) };
+  }
+
+  let priorityScanAdvance = null;
+  if (req.body.priorityScan === true) {
+    try {
+      priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+    } catch (advanceError) {
+      // The bale allocation has already committed. Never turn a successful
+      // physical scan into a retryable 500 just because queue advancement
+      // failed; the next Priority Scan route resolution will reconcile it.
+      logger.error("Priority Scan auto-advance failed after bale allocation", {
+        orderId,
+        error: getErrorMessage(advanceError),
+      });
+    }
+  }
+
+  return {
+    done: true as const,
+    value: res.json({
+      compactBaleScan: true,
+      orderId,
+      order: {
+        ...order,
+        ...result.totals,
+      },
+      bale: result.bale,
+      line: result.line,
+      totals: result.totals,
+      priorityScanAdvance,
+    }),
+  };
+  return { done: false as const };
 }
