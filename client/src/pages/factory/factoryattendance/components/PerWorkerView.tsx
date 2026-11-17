@@ -23,14 +23,14 @@ import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, Chevr
 
 import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
 import { AttendanceAdminApprovalDialog } from "./AttendanceAdminApprovalDialog";
-import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
+import { attendancePastDates, canSkipAttendanceApproval, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
 import { generateDateRange } from "../utils";
 import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
-  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
+  const canEditPastWithoutPassword = (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates);
   const recordChanges = useExistingRecordChangeAccess();
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
@@ -141,7 +141,7 @@ export function PerWorkerView() {
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !canEditPastWithoutPassword) {
+    if (priorDates.length && !canEditPastWithoutPassword(priorDates)) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -159,7 +159,7 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && !canEditPastWithoutPassword && (
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && !canEditPastWithoutPassword(attendancePastDates(generateDateRange(startDate, endDate))) && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
