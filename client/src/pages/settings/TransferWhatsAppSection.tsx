@@ -7,6 +7,7 @@ import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -187,10 +188,7 @@ export function TransferWhatsAppSection() {
       {expanded && (
         <div className="border-t p-4 space-y-5">
           {isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading settings…
-            </div>
+            <LoadingState title="Loading settings…" />
           ) : (
             <>
               {/* Credential check */}
@@ -229,12 +227,9 @@ export function TransferWhatsAppSection() {
               </div>
 
               {locLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading locations…
-                </div>
+                <LoadingState title="Loading locations…" />
               ) : locations.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No locations found.</p>
+                <EmptyState title="No locations found." />
               ) : (
                 <div className="space-y-2">
                   {locations.map((loc) => {

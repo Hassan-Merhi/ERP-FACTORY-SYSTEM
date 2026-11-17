@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload } from "lucide-react";
 import type { ContainerPriceImportPreviewRow, useContainerDetailModel } from "../useContainerDetailModel";
+import { EmptyState } from "@/components/ui/page-state";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailPriceImportDialog({ model }: { model: Model }) {
@@ -146,7 +147,7 @@ export function ContainerDetailPriceImportDialog({ model }: { model: Model }) {
           )}
 
           {priceImportPreview && priceImportPreview.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center">No rows found in the file.</p>
+            <EmptyState title="No rows found in the file." />
           )}
         </div>
 

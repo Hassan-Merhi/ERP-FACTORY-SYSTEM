@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -35,7 +36,7 @@ export default function BarcodeManager() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [manualBarcode, setManualBarcode] = useState("");
 
-  const { data: barcodes = [], isLoading } = useQuery<PendingBarcode[]>({
+  const { data: barcodes = [], isLoading, isError, refetch } = useQuery<PendingBarcode[]>({
     queryKey: ["/api/pending-barcodes", selectedCompany?.id],
     enabled: !!selectedCompany,
   });
@@ -321,12 +322,11 @@ export default function BarcodeManager() {
         </div>
 
         {isLoading ? (
-          <p>Loading...</p>
+          <LoadingState />
+        ) : isError && barcodes.length === 0 ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
         ) : unusedBarcodes.length === 0 ? (
-          <div className="text-center py-12">
-            <Barcode className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No pending barcodes. Import from Excel or add manually.</p>
-          </div>
+          <EmptyState icon={Barcode} title="No pending barcodes. Import from Excel or add manually." className="py-12" />
         ) : (
           <>
             <div className="hidden md:block phone-land:hidden">

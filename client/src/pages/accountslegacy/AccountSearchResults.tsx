@@ -9,17 +9,14 @@ import { ArrowRight, Pencil, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AccountsLegacyModel } from "./useAccountsLegacyModel";
 import { FxAgentNativeBalance } from "../accounts/FxAgentNativeBalance";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) {
   const { filteredAccounts, hideBalances } = model;
 
   if (filteredAccounts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <Search className="w-8 h-8 mb-3 opacity-30" />
-        <p className="text-sm font-medium">No accounts found</p>
-        <p className="text-xs mt-1 opacity-70">Try a different name or account code</p>
-      </div>
+      <EmptyState icon={Search} title="No accounts found" description="Try a different name or account code" />
     );
   }
 

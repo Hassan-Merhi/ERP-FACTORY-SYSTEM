@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { useDashboard } from "../useDashboard";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 interface DashboardFinancePanelProps {
   dashboard: ReturnType<typeof useDashboard>;
@@ -141,9 +142,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center h-[200px]">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+          <LoadingState className="h-[200px] min-h-0" />
         ) : (
           <div
             className={cn("grid gap-3", isFactoryMode ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}
@@ -401,7 +400,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
               {cashAccountsError ? (
                 <p className="text-sm text-destructive text-center py-4">Error loading accounts</p>
               ) : displayedCashAccounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+                <EmptyState title="No accounts added yet" className="min-h-0 py-6" />
               ) : (
                 <div className="space-y-1">
                   {displayedCashAccounts.map((dca) => {
@@ -537,7 +536,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
               {payableAccountsError ? (
                 <p className="text-sm text-destructive text-center py-4">Error loading accounts</p>
               ) : dashboardPayableAccounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+                <EmptyState title="No accounts added yet" className="min-h-0 py-6" />
               ) : (
                 <div className="space-y-1">
                   {dashboardPayableAccounts.map((account) => (

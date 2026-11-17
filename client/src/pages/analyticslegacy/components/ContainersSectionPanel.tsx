@@ -12,6 +12,7 @@ import type { ReportContainer } from "../types";
 import { FactoryAllContainersReport } from "./FactoryAllContainersReport";
 
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 function ContainerCostBreakdown({
   container,
@@ -214,7 +215,7 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
           </div>
 
           {loadingContainers ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            <LoadingState className="border-0" />
           ) : containerData ? (
             (() => {
               const isAllCompanies = reportAllCompanies === "all";
@@ -420,11 +421,12 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
               );
             })()
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 py-14 text-muted-foreground">
-              <ContainerIcon className="h-10 w-10 opacity-25" />
-              <p className="text-sm font-medium">No data yet</p>
-              <p className="text-xs opacity-60">Adjust the filters above to load the report</p>
-            </div>
+            <EmptyState
+              icon={ContainerIcon}
+              title="No data yet"
+              description="Adjust the filters above to load the report"
+              className="border-0"
+            />
           )}
         </Card>
       )}

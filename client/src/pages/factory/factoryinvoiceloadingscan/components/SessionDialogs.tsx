@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { StatusBadge } from "./StatusBadge";
@@ -135,7 +136,7 @@ export function SessionBalesDialog({
           </DialogTitle>
         </DialogHeader>
         {bales.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">No bales found in this session.</p>
+          <EmptyState title="No bales found in this session." className="py-6" />
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
@@ -232,7 +233,7 @@ export function BaleReferencesDialog({
         </DialogHeader>
         {line &&
           (sorted.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No bale references found for this item.</p>
+            <EmptyState title="No bale references found for this item." className="py-4" />
           ) : (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">

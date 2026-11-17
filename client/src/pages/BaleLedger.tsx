@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -388,7 +389,7 @@ function SectionTable({
 }
 
 export default function BaleLedger() {
-  const { data, isLoading, refetch, isFetching } = useQuery<LedgerData>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<LedgerData>({
     queryKey: ["/api/factory/bale-ledger"],
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -430,6 +431,8 @@ export default function BaleLedger() {
               </Card>
             ))}
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : (
           <>
             <SectionTable

@@ -5,6 +5,7 @@ import { Wallet, Package, FileText, Landmark } from "lucide-react";
 
 import { calculateNetAccountTotal, formatSignedSmartCurrency } from "../accountMath";
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
   const {
@@ -46,7 +47,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                 ))}
               </div>
             ) : assetAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No asset accounts found</p>
+              <EmptyState title="No asset accounts found" />
             ) : (
               <div className="table-responsive">
                 <Table>
@@ -96,7 +97,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                 ))}
               </div>
             ) : liabilityAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No liability accounts found</p>
+              <EmptyState title="No liability accounts found" />
             ) : (
               <div className="table-responsive">
                 <Table>
@@ -146,7 +147,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                 ))}
               </div>
             ) : cashAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No cash accounts found</p>
+              <EmptyState title="No cash accounts found" />
             ) : (
               <div className="table-responsive">
                 <Table>
@@ -196,7 +197,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                 ))}
               </div>
             ) : loansBanksAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No loan or bank accounts found</p>
+              <EmptyState title="No loan or bank accounts found" />
             ) : (
               <div className="table-responsive">
                 <Table>

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchField } from "@/components/ui/search-field";
 import { voucherTypeToTab } from "./utils";
 import type { AccountsLegacyModel } from "./useAccountsLegacyModel";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function FindVoucherTab({ model }: { model: AccountsLegacyModel }) {
   const { debouncedFindQuery, voucherSearchLoading, voucherSearchResults } = model;
@@ -36,11 +37,12 @@ export function FindVoucherTab({ model }: { model: AccountsLegacyModel }) {
       ) : voucherSearchLoading ? (
         <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/70 py-16 text-sm text-muted-foreground dark:border-slate-700/70 dark:bg-[#101b2b]/70" role="status">Searching…</div>
       ) : voucherSearchResults.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-5 py-20 text-center text-muted-foreground dark:border-slate-700/70 dark:bg-[#101b2b]/70">
-          <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><FileText className="h-6 w-6" aria-hidden="true" /></span>
-          <p className="text-sm font-semibold text-foreground">No vouchers found</p>
-          <p className="mt-1 text-xs">Try a different number, description, or amount</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No vouchers found"
+          description="Try a different number, description, or amount"
+          className="rounded-2xl py-20"
+        />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm divide-y divide-slate-100 dark:divide-slate-700/60 dark:border-slate-700/80 dark:bg-[#111e31]/95" aria-label="Voucher search results">
           {voucherSearchResults.map((v) => (

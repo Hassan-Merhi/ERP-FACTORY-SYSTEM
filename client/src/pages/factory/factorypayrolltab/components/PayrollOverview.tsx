@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { BatchRow } from "./BatchRow";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
@@ -202,13 +203,12 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
             ))}
           </div>
         ) : payrollGroups.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm font-medium">No payroll records yet</p>
-            <p className="text-xs text-muted-foreground">Click "Run Payroll" to generate records for your workers</p>
-          </div>
+          <EmptyState
+            icon={DollarSign}
+            title="No payroll records yet"
+            description='Click "Run Payroll" to generate records for your workers'
+            className="rounded-none border-0 bg-transparent py-14"
+          />
         ) : (
           <div>
             {/* ── Active batches (any pending records) ── */}

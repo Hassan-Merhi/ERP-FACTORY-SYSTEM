@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -46,7 +47,12 @@ export function DocumentsModal({
   // Using [LIST_KEY, rowId, "documents"] would cause every refetch to hit LIST_KEY (the row list)
   // instead of the documents endpoint, wiping the docs list after each optimistic update.
   const docsKey = rowId !== null ? [`${LIST_KEY}/${rowId}/documents`] : [`${LIST_KEY}/null/documents`];
-  const { data: docs = [], isLoading } = useQuery<ShippingDocument[]>({
+  const {
+    data: docs = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ShippingDocument[]>({
     queryKey: docsKey,
     enabled: open && rowId !== null,
     staleTime: 0,
@@ -163,14 +169,11 @@ export function DocumentsModal({
 
         <div className="space-y-4">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading documents…
-            </div>
+            <LoadingState title="Loading documents…" className="py-8" />
+          ) : isError && docs.length === 0 ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
           ) : docs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <XCircle className="h-8 w-8 mb-2 text-red-400" />
-              <p className="text-sm">No documents uploaded yet</p>
-            </div>
+            <EmptyState icon={XCircle} iconClassName="text-red-400" title="No documents uploaded yet" className="py-8" />
           ) : (
             <div className="border rounded-md overflow-hidden">
               <Table mobileLayout="cards">

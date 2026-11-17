@@ -2,6 +2,7 @@ import { Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/page-state";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { money, type CartLine, type RetailSale } from "./retailPosTypes";
 import type { RetailReceiptPaperWidth } from "./retailReceipt";
@@ -245,7 +246,7 @@ export function RetailRecentSalesCard({
           </div>
         ))}
         {!isLoading && !sales.length && (
-          <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>
+          <EmptyState title="No retail sales at this location yet." />
         )}
       </CardContent>
     </Card>
