@@ -19,7 +19,9 @@ describe("posted dispatch loading priorities and one customer-facing charge", ()
   const preview = read("client/src/pages/factory/FactoryDispatchCombinedInvoicePanel.tsx");
 
   it("permits only priority-config PUT/DELETE through the posted-trip mutation gate", () => {
-    expect(middleware).toContain('["PUT", "DELETE"].includes(req.method) && suffix === "loading-list/priority-scan-config"');
+    expect(middleware).toContain(
+      '["PUT", "DELETE"].includes(req.method) && suffix === "loading-list/priority-scan-config"'
+    );
     expect(middleware).toContain("!priorityQueueOnly");
     expect(middleware).toContain('code: "POSTED_DISPATCH_LOCK"');
     expect(priority).toContain("canManagePriorityPosition(req)");
