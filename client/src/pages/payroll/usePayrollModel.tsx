@@ -37,8 +37,9 @@ export function usePayrollModel() {
   const assertCanChangeRecords = () => {
     if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
   };
-  const showError = (error: unknown) =>
-    toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+  // The toast title names the action that failed ("Save failed", "Delete failed", ...).
+  const showError = (title: string) => (error: unknown) =>
+    toast({ title, description: errorMessage(error), variant: "destructive" });
 
   const state = usePayrollState();
   const {
@@ -373,7 +374,7 @@ export function usePayrollModel() {
       const data = (await res.json()) as SalesPreview;
       setBonusSalesPreview(data);
     } catch (error: unknown) {
-      showError(error);
+      showError("Load failed")(error);
     } finally {
       setBonusSalesLoading(false);
     }
@@ -459,7 +460,7 @@ export function usePayrollModel() {
         queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee.id] });
       setBonusDialogOpen(false);
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const submitSmartBonus = () => {
@@ -533,7 +534,7 @@ export function usePayrollModel() {
       setBulkDepositSelections({});
       setBulkDepositAmounts({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkWithdrawalMutation = useMutation({
@@ -557,7 +558,7 @@ export function usePayrollModel() {
       setBulkWithdrawalDialogOpen(false);
       setBulkWithdrawalAmounts({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkBonusMutation = useMutation({
@@ -582,7 +583,7 @@ export function usePayrollModel() {
       setPendingBonuses({});
       setBulkBonusStep("edit");
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkPaymentMutation = useMutation({
@@ -607,7 +608,7 @@ export function usePayrollModel() {
       bulkPaymentForm.reset();
       setWorkerOverrides({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const autoCalculateBonuses = async () => {
@@ -658,7 +659,7 @@ export function usePayrollModel() {
         });
       }
     } catch (error: unknown) {
-      showError(error);
+      showError("Load failed")(error);
     } finally {
       setBulkBonusAutoLoading(false);
     }
@@ -697,7 +698,7 @@ export function usePayrollModel() {
           toast({ title: "Deleted", description: "Employee deleted" });
           queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
         })
-        .catch(showError);
+        .catch(showError("Delete failed"));
     }
   };
 
@@ -709,7 +710,7 @@ export function usePayrollModel() {
         queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
         setDeleteConflict(null);
       })
-      .catch(showError);
+      .catch(showError("Delete failed"));
   };
 
   const editEmployeeMutation = useMutation({
@@ -765,7 +766,7 @@ export function usePayrollModel() {
       setEditEmployeeDialogOpen(false);
       setEditingEmployee(null);
     },
-    onError: showError,
+    onError: showError("Update failed"),
   });
 
   const createEmployeeMutation = useMutation({
@@ -781,7 +782,7 @@ export function usePayrollModel() {
       setCreateEmployeeDialogOpen(false);
       createEmployeeForm.reset();
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const {

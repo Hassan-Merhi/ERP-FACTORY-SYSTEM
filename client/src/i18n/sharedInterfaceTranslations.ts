@@ -427,6 +427,21 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Phase 9e: voucher action bar, Settings section save model.
+  { en: "Update Voucher", ar: "تحديث السند", fr: "Mettre à jour le bon" },
+  { en: "Ctrl+Enter", ar: "Ctrl+Enter", fr: "Ctrl+Entrée" },
+  { en: "⌘ Enter", ar: "⌘ Enter", fr: "⌘ Entrée" },
+  { en: "Esc", ar: "Esc", fr: "Échap" },
+  { en: "Save changes", ar: "حفظ التغييرات", fr: "Enregistrer les modifications" },
+  { en: "Floating widgets saved", ar: "تم حفظ الأدوات العائمة", fr: "Widgets flottants enregistrés" },
+  { en: "Date format saved", ar: "تم حفظ تنسيق التاريخ", fr: "Format de date enregistré" },
+  { en: "Receipt settings saved", ar: "تم حفظ إعدادات الإيصال", fr: "Paramètres du reçu enregistrés" },
+  { en: "Timezone saved", ar: "تم حفظ المنطقة الزمنية", fr: "Fuseau horaire enregistré" },
+  {
+    en: "Show or hide the floating tools that appear on every page of your account.",
+    ar: "أظهر أو أخفِ الأدوات العائمة التي تظهر في كل صفحة من حسابك.",
+    fr: "Affichez ou masquez les outils flottants présents sur chaque page de votre compte.",
+  },
   { en: "On the Way", ar: "في الطريق", fr: "En route" },
   // Shared period filter: open-ended custom ranges.
   { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },

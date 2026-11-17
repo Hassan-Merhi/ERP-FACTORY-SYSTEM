@@ -1,6 +1,5 @@
 import { SearchField } from "@/components/ui/search-field";
-import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { VoucherActionBar } from "@/pages/vouchers/VoucherActionBar";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -19,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Package, MapPin, Pencil } from "lucide-react";
+import { Trash2, Package, MapPin, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AccountAutocomplete } from "@/components/AccountAutocomplete";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
@@ -112,7 +111,6 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   const { selectedCurrency, displayCurrency } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   // Same predicate as the phone save bar, so exactly one save action shows (phone landscape too).
-  const isPhoneLayout = useErpPhoneLayout();
   const [items, setItems] = useState<CreditNoteItem[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState("");
@@ -414,7 +412,8 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (filteredItems.length === 0) return;
+      // Ctrl/⌘+Enter is the shared voucher Save shortcut, not "add the highlighted item".
+      if (filteredItems.length === 0 || event.ctrlKey || event.metaKey) return;
       const target = event.target;
       const isEditable =
         target instanceof HTMLInputElement ||
@@ -492,6 +491,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   const cashAccountType = form.watch("cashAccountType");
   const cashAccountName = form.watch("cashAccountName");
   const isPending = createCreditNoteMutation.isPending || updateCreditNoteMutation.isPending;
+  const creditNoteSummary = `${items.length} items · Refund ${formatNumber(totalRefund)}`;
 
   if (editLoading) {
     return (
@@ -519,23 +519,6 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
                 </>
               )}
             </CardTitle>
-            {/* Phones save from the pinned action bar at the bottom of the tab. */}
-            <div className={cn("w-full flex-wrap gap-2 sm:w-auto", isPhoneLayout ? "hidden" : "flex")}>
-              {isEditMode && (
-                <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">
-                  Cancel
-                </Button>
-              )}
-              <Button
-                type="button"
-                onClick={form.handleSubmit(onSubmit)}
-                disabled={items.length === 0 || isPending}
-                data-testid="button-create-credit-note"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                {isPending ? "Saving..." : isEditMode ? "Update Note" : "Create Note"}
-              </Button>
-            </div>
           </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto">
@@ -712,6 +695,21 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
             </form>
           </Form>
         </CardContent>
+        <VoucherActionBar
+          isEditing={isEditMode}
+          saving={isPending}
+          disabled={items.length === 0}
+          onSave={form.handleSubmit(onSubmit)}
+          saveTestId="button-create-credit-note"
+          data-testid="credit-note-actions"
+          className="mt-0 shrink-0"
+          summary={
+            <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+              {creditNoteSummary}
+            </span>
+          }
+          phoneSummary={creditNoteSummary}
+        />
       </Card>
 
       <Card className="w-full lg:w-80 flex flex-col">
@@ -815,16 +813,6 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
           </ScrollArea>
         </CardContent>
       </Card>
-
-      <VoucherPhoneActionBar
-        summary={`${items.length} items · Refund ${formatNumber(totalRefund)}`}
-        saveLabel={isEditMode ? "Update Note" : "Create Note"}
-        saving={isPending}
-        disabled={items.length === 0}
-        onSave={form.handleSubmit(onSubmit)}
-        onCancel={isEditMode ? resetForm : undefined}
-        data-testid="credit-note-phone-actions"
-      />
     </div>
   );
 }

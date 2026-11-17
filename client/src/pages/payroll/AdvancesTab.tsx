@@ -27,6 +27,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useForm } from "react-hook-form";
+import { isPayrollAdvancesTab, usePayrollAdvancesTab } from "./payrollTabs";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -57,6 +58,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const { user } = useAuthenticatedUser();
   const recordChanges = useExistingRecordChangeAccess();
   const canCreateAdvance = recordChanges.canCreate("POST", "/api/salary-advances");
+  const [advancesTab, setAdvancesTab] = usePayrollAdvancesTab();
   const canReassignAdvance =
     recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(user?.currentRole ?? user?.role ?? "");
   const modeApiRequest = getApiRequest(appMode);
@@ -382,7 +384,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="advances">
+      <Tabs value={advancesTab} onValueChange={(value) => isPayrollAdvancesTab(value) && setAdvancesTab(value)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Advance and deduction sections">
             <TabsTrigger value="advances">Advances</TabsTrigger>

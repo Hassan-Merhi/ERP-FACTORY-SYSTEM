@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { exportFileName } from "@/lib/exportFile";
+import { usePayrollRunTab } from "@/pages/payroll/payrollTabs";
 
 import type {
   Employee,
@@ -25,7 +26,8 @@ export function useERPRunPayrollModel() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id;
 
-  const [activeTab, setActiveTab] = useState<"run" | "history">("run");
+  // Run / History sub-tab lives in `?tab=` (ERP Payroll is `?section=run-payroll&tab=history`).
+  const [activeTab, setActiveTab] = usePayrollRunTab();
 
   // ── Step 1: worker selection ──────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");

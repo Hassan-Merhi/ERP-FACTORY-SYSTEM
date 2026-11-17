@@ -36,7 +36,7 @@ export function VoucherPhoneActionBar({
   summary,
   status,
   saveLabel,
-  savingLabel = "Saving...",
+  savingLabel = "Saving…",
   saving = false,
   disabled = false,
   onSave,
@@ -92,6 +92,7 @@ export function VoucherPhoneActionBar({
           onClick={onSave}
           disabled={disabled || saving}
           className="min-h-11"
+          data-voucher-save=""
           data-testid={`${testId}-save`}
         >
           {saving ? savingLabel : saveLabel}

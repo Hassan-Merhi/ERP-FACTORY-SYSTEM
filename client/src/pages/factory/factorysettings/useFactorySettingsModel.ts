@@ -1,5 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
@@ -282,6 +282,15 @@ export function useFactorySettingsModel() {
     setRenamePreview(null);
   }, [selectedCompany?.id]);
 
+  // The bulk settings as last saved, so the page can show unsaved changes and discard them.
+  const savedSettings = useMemo<FactorySettingsData>(() => {
+    if (!data) return defaultSettings;
+    const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } = data as FactorySettingsData & {
+      automaticPriorityPrintingEnabled?: boolean;
+    };
+    return { ...defaultSettings, ...bulkSettings };
+  }, [data]);
+
   useEffect(() => {
     if (data) {
       // Select company-specific rename UI default only if the existing settings API provides it.
@@ -465,6 +474,8 @@ export function useFactorySettingsModel() {
   };
 
   const handleSave = () => mutation.mutate(settings);
+  const isDirty = Boolean(data) && JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const handleReset = () => setSettings(savedSettings);
 
   const handleEnableAll = () => {
     const allEnabled: FactorySettingsData = {
@@ -518,6 +529,8 @@ export function useFactorySettingsModel() {
     handleToggle,
     handleNumberChange,
     handleSave,
+    isDirty,
+    handleReset,
     handleEnableAll,
     locations,
     codePrefix,

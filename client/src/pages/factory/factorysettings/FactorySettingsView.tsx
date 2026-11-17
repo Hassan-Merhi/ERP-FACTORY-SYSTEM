@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingState } from "@/components/ui/page-state";
+import { SectionSaveBar } from "@/components/SectionSaveBar";
 import { Switch } from "@/components/ui/switch";
-import { ArrowRight, CheckCircle, Images, Loader2, MessageCircle, Save, ToggleRight, WifiOff } from "lucide-react";
+import { ArrowRight, CheckCircle, Images, Loader2, MessageCircle, ToggleRight, WifiOff } from "lucide-react";
 import type { FactorySettingsData } from "./types";
 import { FactorySettingsAdminTools } from "./FactorySettingsAdminTools";
 import { AutomaticPriorityPrintingCard } from "./AutomaticPriorityPrintingCard";
@@ -30,6 +31,8 @@ export function FactorySettingsView({ model }: Props) {
     handleToggle,
     handleNumberChange,
     handleSave,
+    isDirty,
+    handleReset,
     handleEnableAll,
     prodWaGroupId,
     setProdWaGroupId,
@@ -94,10 +97,6 @@ export function FactorySettingsView({ model }: Props) {
           >
             <ToggleRight className="h-4 w-4 mr-2" />
             Enable All
-          </Button>
-          <Button onClick={handleSave} disabled={mutation.isPending} data-testid="button-save-settings">
-            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Settings
           </Button>
         </div>
       </div>
@@ -262,6 +261,16 @@ export function FactorySettingsView({ model }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {/* One save for the feature switches and cost defaults above: they are one settings record. */}
+      <SectionSaveBar
+        isDirty={isDirty}
+        isSaving={mutation.isPending}
+        onSave={handleSave}
+        onReset={handleReset}
+        className="sticky bottom-0 z-10 -mt-3 rounded-b-md bg-background pb-3"
+        data-testid="factory-settings-save"
+      />
 
       <FactorySettingsAdminTools model={model} />
 
