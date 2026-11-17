@@ -75,7 +75,7 @@ describe("Daily Scan", () => {
     const [y, m, d] = date.split("-");
     const ws = exported.workbook!.worksheets[0];
     expect(ws.name).toBe(`${d}-${m}-${y}`);
-    expect(exported.fileName).toBe(`daily-scan-${date}.xlsx`);
+    expect(exported.fileName).toBe(`daily-scan_${date}.xlsx`);
 
     // Universal report metadata occupies rows 1–4; the table begins at row 5.
     // Address actual Excel row numbers rather than counting nonempty metadata rows.

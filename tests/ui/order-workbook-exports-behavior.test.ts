@@ -25,6 +25,7 @@ vi.mock("@/lib/excelHelper", async (importOriginal) => {
 
 import { exportStockTransferOrderWorkbook } from "@/pages/stock-transfer-order/exportStockTransferOrderWorkbook";
 import { downloadNoPriceBaleOrderSheet, downloadPricedBaleOrderSheet } from "@/pages/baleproducts/baleOrderSheetExport";
+import { exportFileName } from "@/lib/exportFile";
 
 function rowValues(ws: ExcelJS.Worksheet) {
   const rows: unknown[][] = [];
@@ -188,7 +189,7 @@ describe("bale order sheets", () => {
     const { priceHeader } = await downloadPricedBaleOrderSheet({ priceType: "selling", products, categoryMap });
 
     expect(priceHeader).toBe("Selling Price");
-    expect(clicked).toEqual(["HMD_Order_Selling_Price.xlsx"]);
+    expect(clicked).toEqual([exportFileName("HMD order selling price", "xlsx")]);
     const ws = await readDownloaded();
 
     expect(ws.getCell("C2").value).toBe("Make Your Order – Selling Price");
@@ -218,7 +219,7 @@ describe("bale order sheets", () => {
     const { priceHeader } = await downloadPricedBaleOrderSheet({ priceType: "production", products, categoryMap });
 
     expect(priceHeader).toBe("Production Price");
-    expect(clicked).toEqual(["HMD_Order_Production_Price.xlsx"]);
+    expect(clicked).toEqual([exportFileName("HMD order production price", "xlsx")]);
     const ws = await readDownloaded();
     expect(ws.getCell("F7").value).toBe(80);
   });
@@ -226,7 +227,7 @@ describe("bale order sheets", () => {
   it("builds the no-price sheet with a bales total only", async () => {
     await downloadNoPriceBaleOrderSheet({ products, categoryMap });
 
-    expect(clicked).toEqual(["HMD_Order_No_Prices.xlsx"]);
+    expect(clicked).toEqual([exportFileName("HMD order no prices", "xlsx")]);
     const ws = await readDownloaded();
     const names: unknown[] = [];
     ws.eachRow((row) => names.push(row.getCell(3).value));

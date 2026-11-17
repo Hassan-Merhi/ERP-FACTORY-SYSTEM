@@ -209,7 +209,7 @@ function MemberFormDialog({
               pendingLabel="Saving…"
               data-testid="button-save-member"
             >
-              {existing ? "Save Changes" : "Add Member"}
+              {existing ? "Save" : "Add Member"}
             </FormSubmitButton>
           )}
         </DialogFooter>

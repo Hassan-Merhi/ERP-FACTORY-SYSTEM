@@ -354,22 +354,12 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 min-h-0 overflow-hidden p-3 sm:p-4 flex flex-col gap-3">
         {!embedded && (
-          <div className="relative shrink-0 overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-r from-violet-50 via-slate-50 to-sky-100 px-4 pt-4 shadow-sm dark:border-violet-400/20 dark:from-[#1e1644] dark:via-[#161c39] dark:to-[#17335a] sm:px-6">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-12 -top-24 h-64 w-80 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/20"
+          <div className="shrink-0">
+            <PageHeader
+              title="Containers OTW"
+              subtitle="Active container logistics and tracking"
+              icon={<Ship className="h-5 w-5" aria-hidden="true" />}
             />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute right-20 bottom-0 h-16 w-80 rounded-full bg-sky-500/10 blur-2xl dark:bg-sky-400/15"
-            />
-            <div className="relative z-10">
-              <PageHeader
-                title="Containers OTW"
-                subtitle="Active container logistics and tracking"
-                icon={<Ship className="h-5 w-5 text-violet-600 dark:text-violet-300" />}
-              />
-            </div>
           </div>
         )}
         {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}

@@ -127,7 +127,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
       toast({ title: "Saved", description: "Parent company updated." });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update parent company.", variant: "destructive" });
+      toast({ title: "Update failed", description: "Failed to update parent company.", variant: "destructive" });
     },
   });
 

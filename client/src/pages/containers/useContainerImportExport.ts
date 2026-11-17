@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { utils, writeFile, read } from "@/lib/excelHelper";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import type { Container } from "@shared/schema";
 import { cellVal, cellStr, cellNum, excelDateToString } from "./containerExcel";
 
@@ -56,17 +57,9 @@ export function useContainerImportExport({
       return;
     }
     try {
-      const response = await fetch("/api/containers/export-all");
-      if (!response.ok) throw new Error("Export failed");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `containers_full_export_${new Date().toLocaleDateString("en-CA")}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadFromUrl("/api/containers/export-all", {
+        fileName: exportFileName("containers full export", "xlsx"),
+      });
       toast({ title: "Export successful", description: "All containers exported with full details" });
     } catch (error) {
       toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });

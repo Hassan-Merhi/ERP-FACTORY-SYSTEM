@@ -201,7 +201,7 @@ export function useFactoryWorkersModel() {
       setCategoryDialogOpen(false);
       toast({ title: "Category created" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const updateCatMutation = useMutation({
@@ -217,7 +217,7 @@ export function useFactoryWorkersModel() {
       setCategoryDialogOpen(false);
       toast({ title: "Category updated" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteCatMutation = useMutation({
@@ -229,7 +229,7 @@ export function useFactoryWorkersModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       toast({ title: "Category deleted" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const openNewCategory = () => {
@@ -282,7 +282,7 @@ export function useFactoryWorkersModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: "Save failed", description: getErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -304,7 +304,7 @@ export function useFactoryWorkersModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: "Update failed", description: getErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -323,7 +323,7 @@ export function useFactoryWorkersModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: "Update failed", description: getErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -450,7 +450,7 @@ export function useFactoryWorkersModel() {
       setEndResult(data);
       setEndStep(2);
     } catch (err: unknown) {
-      toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: "Preview failed", description: getErrorMessage(err), variant: "destructive" });
     } finally {
       setEndCalculating(false);
     }
@@ -481,7 +481,7 @@ export function useFactoryWorkersModel() {
       toast({ title: "Contract ended", description: payNow ? `Paid ${data.balance}` : "Balance recorded as pending" });
       setEndContractWorker(null);
     } catch (err: unknown) {
-      toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: "Settlement failed", description: getErrorMessage(err), variant: "destructive" });
     } finally {
       setEndSubmitting(false);
     }

@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
-import { CreateErpTestCompanyDialog } from "./CreateErpTestCompanyDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +33,10 @@ export function CompaniesTab() {
   const [isCompanyDialogOpen, setIsCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companySearch, setCompanySearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
+  const [forceDeleteWithHistory, setForceDeleteWithHistory] = useState(false);
 
   const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -65,8 +67,12 @@ export function CompaniesTab() {
       }
     },
     onSuccess: () => {
-      toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
+      toast({
+        title: editingCompany ? "Updated" : "Created",
+        description: editingCompany ? "Company updated." : "Company created.",
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       if (editingCompany) {
         queryClient.invalidateQueries({ queryKey: [`/api/companies/${editingCompany.id}`] });
         queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
@@ -97,22 +103,32 @@ export function CompaniesTab() {
       });
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to save company.", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to save company.", variant: "destructive" });
     },
   });
 
   const deleteCompanyMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await apiRequest("DELETE", `/api/companies/${id}`, {});
+      const res = await apiRequest("DELETE", `/api/companies/${id}`, {
+        forceDeleteWithHistory,
+        confirmedCompanyCode: deleteConfirmationCode,
+      });
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Deleted", description: "Company deleted successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       setCompanyToDelete(null);
+      setDeleteConfirmationCode("");
+      setForceDeleteWithHistory(false);
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to delete company.", variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete company.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -164,10 +180,9 @@ export function CompaniesTab() {
             Company Management
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {companies.length} {companies.length === 1 ? "company" : "companies"} configured
+            {companies.filter((company) => company.active).length} active companies
           </p>
         </div>
-        <CreateErpTestCompanyDialog />
         <Dialog
           open={isCompanyDialogOpen}
           onOpenChange={(open) => {
@@ -410,18 +425,29 @@ export function CompaniesTab() {
         </Dialog>
       </div>
 
-      {companies.length > 3 && (
-        <div className="relative max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search companies…"
-            value={companySearch}
-            onChange={(e) => setCompanySearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-company-search"
+      <div className="flex flex-wrap items-center gap-4">
+        {companies.length > 3 && (
+          <div className="relative max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search companies…"
+              value={companySearch}
+              onChange={(e) => setCompanySearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-company-search"
+            />
+          </div>
+        )}
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox
+            checked={showInactive}
+            onCheckedChange={(checked) => setShowInactive(checked === true)}
+            data-testid="checkbox-show-inactive-companies"
           />
-        </div>
-      )}
+          Show inactive ({companies.filter((company) => !company.active).length})
+        </label>
+      </div>
 
       {isLoadingCompanies ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -441,13 +467,15 @@ export function CompaniesTab() {
         (() => {
           const q = companySearch.toLowerCase();
           const filtered = companies.filter(
-            (c) => !q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q)
+            (c) =>
+              (showInactive ? !c.active : c.active) &&
+              (!q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q))
           );
 
           if (filtered.length === 0) {
             return (
               <p className="text-sm text-muted-foreground text-center py-10">
-                No companies match "<span className="font-medium">{companySearch}</span>"
+                {showInactive ? "No inactive companies match the search." : "No active companies match the search."}
               </p>
             );
           }
@@ -554,15 +582,21 @@ export function CompaniesTab() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setCompanyToDelete(company)}
-                        data-testid={`button-delete-company-${company.id}`}
-                        title="Delete company"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {!company.active && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setCompanyToDelete(company);
+                            setDeleteConfirmationCode("");
+                            setForceDeleteWithHistory(false);
+                          }}
+                          data-testid={`button-delete-company-${company.id}`}
+                          title="Delete company"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -572,7 +606,16 @@ export function CompaniesTab() {
         })()
       )}
 
-      <AlertDialog open={!!companyToDelete} onOpenChange={(open) => !open && setCompanyToDelete(null)}>
+      <AlertDialog
+        open={!!companyToDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCompanyToDelete(null);
+            setDeleteConfirmationCode("");
+            setForceDeleteWithHistory(false);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Company</AlertDialogTitle>
@@ -582,7 +625,8 @@ export function CompaniesTab() {
                   Are you sure you want to delete <strong>{companyToDelete?.name}</strong>?
                 </p>
                 <p className="text-destructive font-medium">
-                  This will permanently delete ALL data associated with this company, including:
+                  Inactive companies may be permanently deleted. Select the financial-history option below if the
+                  company has transactions or balances. Deletion removes associated records, including:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1 ml-2">
                   <li>All locations and inventory</li>
@@ -593,6 +637,29 @@ export function CompaniesTab() {
                   <li>All user role assignments for this company</li>
                 </ul>
                 <p className="font-bold text-destructive mt-2">This action cannot be undone!</p>
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={forceDeleteWithHistory}
+                    onCheckedChange={(checked) => setForceDeleteWithHistory(checked === true)}
+                    data-testid="checkbox-force-delete-history"
+                  />
+                  Permanently remove accounting history too (vouchers, inventory, closures and balances)
+                </label>
+                {forceDeleteWithHistory && (
+                  <div className="space-y-1">
+                    <p className="text-sm">
+                      Type company code <strong>{companyToDelete?.code}</strong> to confirm permanent deletion of its
+                      financial records.
+                    </p>
+                    <Input
+                      value={deleteConfirmationCode}
+                      onChange={(event) => setDeleteConfirmationCode(event.target.value)}
+                      placeholder="Exact company code"
+                      data-testid="input-force-delete-company-code"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -601,7 +668,10 @@ export function CompaniesTab() {
             <AlertDialogAction
               onClick={() => companyToDelete && deleteCompanyMutation.mutate(companyToDelete.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteCompanyMutation.isPending}
+              disabled={
+                deleteCompanyMutation.isPending ||
+                (forceDeleteWithHistory && deleteConfirmationCode !== companyToDelete?.code)
+              }
               data-testid="button-confirm-delete-company"
             >
               {deleteCompanyMutation.isPending ? "Deleting..." : "Delete Company"}

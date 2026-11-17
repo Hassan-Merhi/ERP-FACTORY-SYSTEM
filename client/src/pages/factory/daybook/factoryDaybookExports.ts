@@ -2,14 +2,14 @@
  * Excel export builders for the Factory Daybook.
  *
  * Extracted verbatim from FactoryDaybook.tsx: both helpers keep the exact
- * column order, widths, sheet names and file names the page shipped with, so
+ * column order, widths and sheet names the page shipped with, so
  * downstream spreadsheets keep parsing. Toast messaging stays with the caller -
  * these functions only build and write the workbook.
  */
-import { format } from "date-fns";
 import { exportOperationalWorkbook } from "@/lib/operationalExcelExport";
 import { formatDaybookDescription, formatTxType } from "./daybookUtils";
 import type { DaybookEntry } from "./types";
+import { exportFileName } from "@/lib/exportFile";
 
 type FormatDisplayDate = (value: string) => string;
 
@@ -33,7 +33,7 @@ export async function exportFactoryDaybookSummary(
     "Amount (USD)": parseFloat(e.amountUsd || "0"),
     Optional: e.optional ? "Yes" : "No",
   }));
-  const fileName = `FactoryDaybook_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+  const fileName = exportFileName("factory daybook", "xlsx");
   await exportOperationalWorkbook({
     title: "Factory Daybook",
     fileName,
@@ -149,7 +149,7 @@ export async function exportFactoryDaybookDetailed(
       columns: detailColumns,
       rows: dataByType[type],
     }));
-  const fileName = `FactoryDaybook_Detailed_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+  const fileName = exportFileName("factory daybook detailed", "xlsx");
   await exportOperationalWorkbook({
     title: "Factory Daybook — Detailed",
     fileName,

@@ -1,7 +1,7 @@
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { Suspense } from "react";
-import { Link } from "wouter";
-import { ArrowLeft, History, RefreshCw } from "lucide-react";
+import { History, RefreshCw } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,63 +49,56 @@ export default function RawStockRecalculate() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Link href="/factory/raw-stock">
-            <Button variant="ghost" size="icon" className="h-9 w-9">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-lg font-bold leading-tight">Recalculate Raw Material Cost</h1>
-            <p className="text-xs text-muted-foreground leading-tight">
-              Recomputes each container's true landed cost/kg from its stored charges and shows what would change before
-              anything is saved.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-            <Checkbox
-              checked={includeCompletedBatches}
-              onCheckedChange={(v) => setIncludeCompletedBatches(v === true)}
-              data-testid="checkbox-include-completed-batches"
-            />
-            Also rewrite completed mix batches
-          </label>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-            <Checkbox
-              checked={includeHistoricalContainers}
-              onCheckedChange={(v) => setIncludeHistoricalContainers(v === true)}
-              data-testid="checkbox-include-historical"
-            />
-            <History className="h-3 w-3" />
-            Include CLOSED/COMPLETED containers
-          </label>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={recomputeDryRunMutation.isPending}
-            onClick={handleRecomputeSupplierRates}
-            title="Recompute all supplier locked rates from receipt-weighted average of their corrected raw-stock rows. Use after a recalc run where all containers were fully used."
-            className="gap-2"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Recompute Supplier Rates
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              refetch();
-              refetchAudit();
-              refetchSources();
-            }}
-            className="gap-2"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Recalculate Raw Material Cost"
+        backTarget="/factory/raw-stock"
+        subtitle={
+          <>
+            Recomputes each container's true landed cost/kg from its stored charges and shows what would change before
+            anything is saved.
+          </>
+        }
+      >
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+          <Checkbox
+            checked={includeCompletedBatches}
+            onCheckedChange={(v) => setIncludeCompletedBatches(v === true)}
+            data-testid="checkbox-include-completed-batches"
+          />
+          Also rewrite completed mix batches
+        </label>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+          <Checkbox
+            checked={includeHistoricalContainers}
+            onCheckedChange={(v) => setIncludeHistoricalContainers(v === true)}
+            data-testid="checkbox-include-historical"
+          />
+          <History className="h-3 w-3" />
+          Include CLOSED/COMPLETED containers
+        </label>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={recomputeDryRunMutation.isPending}
+          onClick={handleRecomputeSupplierRates}
+          title="Recompute all supplier locked rates from receipt-weighted average of their corrected raw-stock rows. Use after a recalc run where all containers were fully used."
+          className="gap-2"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Recompute Supplier Rates
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            refetch();
+            refetchAudit();
+            refetchSources();
+          }}
+          className="gap-2"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+        </Button>
+      </PageHeader>
 
       {/* Tabs */}
       <TabsList className="w-max max-w-full" aria-label="Raw stock recalculation">

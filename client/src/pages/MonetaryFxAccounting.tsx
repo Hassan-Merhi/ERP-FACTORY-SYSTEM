@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 // Phase 15 source-only rollout: an independent financial release is still required.
 const UNIFIED_FINANCIAL_POSTING_CERTIFIED = false;
@@ -157,13 +158,10 @@ export default function MonetaryFxAccounting() {
 
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="unified-monetary-fx">
-      <div>
-        <h1 className="text-2xl font-semibold">Multi-Currency Accounting</h1>
-        <p className="text-sm text-muted-foreground">
-          Dated foreign-exchange rates, monetary cash/bank valuation and separately recognized invoice/payment exchange
-          differences — ERP, Factory and Rentals.
-        </p>
-      </div>
+      <PageHeader
+        title="Multi-Currency Accounting"
+        subtitle="Dated foreign-exchange rates, monetary cash/bank valuation and separately recognized invoice/payment exchange differences — ERP, Factory and Rentals."
+      />
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-2">
           <div className="space-y-1">

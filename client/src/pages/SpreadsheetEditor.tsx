@@ -23,7 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Upload, Download, FileSpreadsheet, Trash2, Check, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, Plus, Upload, FileSpreadsheet, Trash2, Check, Loader2, Pencil } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -629,7 +630,7 @@ export default function SpreadsheetEditor() {
         });
         downloadBlob(blob, `${sheetName}.xlsx`);
       } catch {
-        toast({ title: "Download failed", variant: "destructive" });
+        toast({ title: "Export failed", variant: "destructive" });
       }
     } else {
       // Native mode: existing xlsx-js-style export path (unchanged)
@@ -716,10 +717,7 @@ export default function SpreadsheetEditor() {
             {saveStatus === "unsaved" && <span>Unsaved changes</span>}
           </div>
           <div className="ml-auto flex items-center gap-1">
-            <Button variant="outline" size="sm" onClick={handleDownload} data-testid="button-download-xlsx">
-              <Download className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">Download .xlsx</span>
-            </Button>
+            <ExportButton iconOnlyOnPhone size="sm" onClick={handleDownload} data-testid="button-download-xlsx" />
           </div>
         </div>
         <div

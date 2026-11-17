@@ -20,6 +20,14 @@ describe("Retail navigation", () => {
     expect(RETAIL_NAV_LINKS.map((link) => link.href)).toEqual(["/retail/inventory"]);
   });
 
+  it("opens the ERP Dashboard for Retail instead of Tracking, including saved bookmarks", () => {
+    for (const path of ["/", "/retail/dashboard", "/tracking"]) {
+      expect(route(path, "retail")).toEqual({ kind: "redirect", to: "/financial-overview" });
+    }
+    expect(route("/financial-overview", "retail")).toEqual({ kind: "continue" });
+    expect(route("/tracking", "erp")).toEqual({ kind: "continue" });
+  });
+
   it("redirects old Selling settings bookmarks to Retail Inventory", () => {
     expect(route("/retail/selling", "retail")).toEqual({ kind: "redirect", to: "/retail/inventory" });
   });

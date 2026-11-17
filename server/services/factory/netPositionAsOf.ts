@@ -100,8 +100,8 @@ export function netPositionLegacyScanKnown(
   companyId: number,
   scope: FactoryNetPositionAsOf
 ): SQL {
-  const scan = sql.raw(scanAlias);
-  const order = sql.raw(orderAlias);
+  const scan = sql.identifier(scanAlias);
+  const order = sql.identifier(orderAlias);
   // Uncorrelated scalar subquery: PostgreSQL evaluates it once per query
   // (an InitPlan), not once per scan row.
   const started = sql`(SELECT MIN(first_cob.scanned_at)

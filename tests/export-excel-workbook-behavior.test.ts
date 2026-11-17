@@ -103,18 +103,29 @@ describe("full company workbook export behavior", () => {
       ])
     );
 
-    const sql = harness.poolQuery.mock.calls.map(([query]) => String(query));
+    const calls = harness.poolQuery.mock.calls as unknown as Array<[string, unknown[] | undefined]>;
+    const sql = calls.map(([query]) => String(query));
     expect(sql.some((query) => query.includes("company_id = 4"))).toBe(true);
-    expect(
-      sql.some(
-        (query) =>
-          query.includes("FROM vouchers") &&
-          query.includes("voucher_date >= '2026-08-01'") &&
-          query.includes("voucher_date <= '2026-08-12'")
-      )
-    ).toBe(true);
+    // The date range is bound, never spliced into the SQL text.
+    const voucherQuery = calls.find(
+      ([query]) =>
+        query.includes("FROM vouchers") && query.includes("voucher_date >= $1") && query.includes("voucher_date <= $2")
+    );
+    expect(voucherQuery?.[1]).toEqual(["2026-08-01", "2026-08-12"]);
+    expect(sql.some((query) => query.includes("2026-08-01"))).toBe(false);
+    // Queries without a date filter carry no parameters.
+    expect(calls.find(([query]) => query.includes("FROM companies WHERE id = 4"))?.[1]).toBeUndefined();
     expect(harness.loggerWarn).toHaveBeenCalledWith(
       expect.stringContaining("[ExportStream] Query warning: optional table unavailable")
     );
+  });
+
+  it("rejects a malformed or hostile date range before running any query", async () => {
+    const before = harness.poolQuery.mock.calls.length;
+    await expect(streamCompanyWorkbookDirect(4, "2026-08-01' OR '1'='1", undefined)).rejects.toThrow(
+      /Invalid date format/
+    );
+    await expect(streamCompanyWorkbookDirect(4, undefined, "2026-02-30")).rejects.toThrow(/Invalid date format/);
+    expect(harness.poolQuery.mock.calls.length).toBe(before);
   });
 });

@@ -11,7 +11,6 @@ import {
   AlertCircle,
   RefreshCw,
   Printer,
-  Download,
   ChevronDown,
   ChevronUp,
   Tag,
@@ -46,6 +45,8 @@ import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPrevie
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 export default function FactoryBaleRelabeling() {
   const { selectedCompany } = useCompany();
@@ -67,9 +68,10 @@ export default function FactoryBaleRelabeling() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_relabeling_main", "hide_tab_relabeling_wipers"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_relabeling_main", "hide_tab_relabeling_wipers"];
   const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
   const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
 
@@ -593,14 +595,15 @@ export default function FactoryBaleRelabeling() {
               <Button onClick={handlePrint} className="w-full sm:w-auto" data-testid="button-print-labels">
                 <Printer className="h-4 w-4 mr-2" /> Print Labels ({printFormatLabel})
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => downloadCsv(applyResult.items, `relabeling-${applyResult.sessionId}.csv`)}
+              <ExportButton
+                kind="csv"
+                label="Export CSV (Result)"
+                onClick={() =>
+                  downloadCsv(applyResult.items, exportFileName(`relabeling ${applyResult.sessionId}`, "csv"))
+                }
                 className="w-full sm:w-auto"
                 data-testid="button-export-csv"
-              >
-                <Download className="h-4 w-4 mr-2" /> Export Result CSV
-              </Button>
+              />
             </div>
 
             {/* ── Label Preview ── */}

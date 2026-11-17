@@ -18,6 +18,7 @@ import {
 import { getAccessibleCompanyIds } from "../security/companyAccessBoundary";
 import { COST_CENTER_ERP_PAGE_KEY } from "../middleware/costCenterErpPageAccess";
 import { toMoney } from "../lib/money";
+import { assertSqlAlias } from "../lib/sqlTextGuards";
 
 const READ = new Set(["Developer", "Owner", "Admin", "Manager"]);
 const WRITE = new Set(["Developer", "Owner", "Admin"]);
@@ -167,7 +168,7 @@ async function transactional<T>(handler: (c: PoolClient) => Promise<T>): Promise
  * everywhere, including in cost-center attribution.
  */
 export function reversalPairSql(alias: string): string {
-  const v = alias;
+  const v = assertSqlAlias(alias, "cost_center_reversal_alias");
   return [
     "(" + v + ".reversal_of_voucher_id IS NOT NULL",
     "OR EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=" + v + ".id AND rev.deleted_at IS NULL)",

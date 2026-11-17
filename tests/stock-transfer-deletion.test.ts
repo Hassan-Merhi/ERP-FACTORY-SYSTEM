@@ -200,5 +200,22 @@ describe("stock transfer deletion transaction", () => {
     expect(result.replayed).toBe(false);
     expect(result.reversedInventory).toBe(false);
     expect([await quantity(sourceId), await quantity(destinationId)]).toEqual(before);
+
+    const [deletedVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, draftVoucherId));
+    expect(deletedVoucher.deletedAt).not.toBeNull();
+    const [retainedTransfer] = await db
+      .select()
+      .from(stockTransferVouchers)
+      .where(eq(stockTransferVouchers.voucherId, draftVoucherId));
+    expect(retainedTransfer).toBeDefined();
+    expect(retainedTransfer.inventoryApplied).toBe(false);
+    expect(
+      await db.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, retainedTransfer.id))
+    ).toHaveLength(1);
+
+    const replay = await deleteStockTransferVoucher({ companyId, voucherId: draftVoucherId });
+    expect(replay.replayed).toBe(true);
+    expect(replay.reversedInventory).toBe(false);
+    expect([await quantity(sourceId), await quantity(destinationId)]).toEqual(before);
   });
 });

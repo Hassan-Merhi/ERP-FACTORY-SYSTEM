@@ -1,3 +1,4 @@
+import { exportFileName } from "@/lib/exportFile";
 import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import type { UniversalExcelAppearance } from "@shared/universal-excel/design";
 import { optionalSpecializedExcelAppearance } from "@/lib/excelAppearanceClient";
@@ -306,6 +307,5 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 export async function exportMonthlyProductionExcel(options: MonthlyProductionExcelOptions): Promise<void> {
   const appearance = await optionalSpecializedExcelAppearance();
   const workbook = buildMonthlyProductionExcelWorkbook({ ...options, appearance });
-  const fileName = "factory-monthly-production-" + new Date().toISOString().slice(0, 10) + ".xlsx";
-  await writeFile(workbook, fileName);
+  await writeFile(workbook, exportFileName("factory monthly production", "xlsx"));
 }

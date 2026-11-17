@@ -1,6 +1,5 @@
 import { writeFile } from "@/lib/excelHelper";
 import { buildUniversalExcelWorkbook, type UniversalExcelColumn } from "@shared/universal-excel/engine";
-import { format } from "date-fns";
 import type { SalesReportItem } from "./types";
 
 /**

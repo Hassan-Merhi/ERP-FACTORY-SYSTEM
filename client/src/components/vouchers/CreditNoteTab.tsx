@@ -308,7 +308,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       return response.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Success", description: data.message || "Credit/Debit note created successfully" });
+      toast({ title: "Created", description: data.message || "Credit/Debit note created successfully" });
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/locations", selectedLocationId, "inventory"] });
@@ -316,7 +316,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || "Failed to create credit/debit note",
         variant: "destructive",
       });
@@ -341,7 +341,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       return response.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Success", description: data.message || "Credit/Debit note updated successfully" });
+      toast({ title: "Updated", description: data.message || "Credit/Debit note updated successfully" });
       resetForm();
       window.history.pushState({}, "", "/vouchers?tab=credit-note");
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
@@ -351,7 +351,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update credit/debit note",
         variant: "destructive",
       });

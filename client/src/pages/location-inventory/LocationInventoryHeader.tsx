@@ -173,7 +173,7 @@ export function LocationInventoryHeader({
         className={
           landing
             ? "relative isolate overflow-hidden rounded-[24px] border border-violet-200/80 bg-gradient-to-r from-violet-50 via-white to-indigo-100/90 shadow-[0_16px_40px_-32px_rgba(107,45,180,.5)] dark:border-violet-300/20 dark:from-[#191333] dark:via-[#17152f] dark:to-[#101a34]"
-            : "overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-background to-indigo-50/80 px-4 pt-3 shadow-sm dark:border-violet-500/25 dark:from-[#171035] dark:via-[#111a36] dark:to-[#0c142c] sm:px-5 sm:pt-4 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:border-b-0"
+            : undefined
         }
       >
         {landing && (
@@ -204,9 +204,13 @@ export function LocationInventoryHeader({
           <PageHeader
             title="Location Inventory"
             icon={
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/20">
-                {landing ? <Warehouse className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
-              </span>
+              landing ? (
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/20">
+                  <Warehouse className="h-5 w-5" />
+                </span>
+              ) : (
+                <MapPin className="h-5 w-5" aria-hidden="true" />
+              )
             }
             meta={
               <span className="min-w-0 truncate">

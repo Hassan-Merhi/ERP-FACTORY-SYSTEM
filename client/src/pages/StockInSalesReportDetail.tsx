@@ -1,7 +1,7 @@
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -522,7 +522,7 @@ export default function StockInSalesReportDetail() {
           disabled={isLoading}
           options={[
             { id: "stock-flow-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
-            { id: "stock-flow-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+            { id: "stock-flow-print", label: "Print", kind: "print", onSelect: () => window.print() },
           ]}
         />
       </PageHeader>

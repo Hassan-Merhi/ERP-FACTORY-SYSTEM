@@ -19,7 +19,12 @@ describe("Factory Phase 4 navigation presentation contract", () => {
     expect(FACTORY_OTHERS_NAV_LINKS.map((item) => item.url)).toEqual([
       "/factory/others?tab=comparison",
       "/factory/others?tab=product-comparison",
+      "/factory/others?tab=sale-returns",
     ]);
+    // Finalized Sale Returns is the only admin-only Others tab.
+    expect(
+      FACTORY_OTHERS_NAV_LINKS.filter((item) => "adminOnly" in item && item.adminOnly).map((item) => item.url)
+    ).toEqual(["/factory/others?tab=sale-returns"]);
     expect(FACTORY_OTHERS_NAV_LINKS.every((item) => item.accessKey === "factory/production-report")).toBe(true);
     for (const item of FACTORY_OTHERS_NAV_LINKS) {
       expect(factoryHubTabHideKey("/factory/others", item.url.split("tab=")[1])).toBe(item.hideKey);
@@ -35,7 +40,12 @@ describe("Factory Phase 4 navigation presentation contract", () => {
   });
   it("preserves worker hub hide keys with exact tab values", () => {
     expect(Object.keys(FACTORY_WORKERS_HUB_TABS)).toEqual([
-      "workers", "payroll", "attendance", "report", "advances", "bonuses",
+      "workers",
+      "payroll",
+      "attendance",
+      "report",
+      "advances",
+      "bonuses",
     ]);
     expect(FACTORY_WORKERS_HUB_TABS.attendance).toBe("hide_tab_workers_attendance");
   });

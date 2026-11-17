@@ -22,6 +22,8 @@ import {
 } from "@shared/schema";
 
 import { utils, writeFile, read as readExcel, ExcelJS } from "@/lib/excelHelper";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import type { ContainerDetailData, SpContainerDetailResponse } from "../containers/types";
 
 /** Row returned by the container price-import preview endpoint. */
@@ -373,7 +375,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       const worksheet = utils.json_to_sheet(rows);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Container Items");
-      await writeFile(workbook, `container_${data.container.containerNumber}.xlsx`);
+      await writeFile(workbook, exportFileName(`container ${data.container.containerNumber}`, "xlsx"));
 
       toast({ title: "Export successful", description: "Container data downloaded as Excel" });
     } catch (error) {
@@ -502,14 +504,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       // ── download ──
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `container_${containerNumber}_no_cost.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, exportFileName(`container ${containerNumber} no cost`, "xlsx"));
 
       toast({ title: "No-cost export downloaded" });
     } catch (error) {

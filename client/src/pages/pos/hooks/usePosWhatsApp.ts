@@ -127,7 +127,7 @@ export function usePosWhatsApp({
     } catch (e) {
       setInvoiceWaStatus("failed");
       toast({
-        title: "Error",
+        title: "Send failed",
         description: getErrorDetails(e).message || "Could not reach the server.",
         variant: "destructive",
       });

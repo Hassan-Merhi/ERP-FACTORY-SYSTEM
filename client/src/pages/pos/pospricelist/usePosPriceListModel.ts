@@ -300,7 +300,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       lastSavedRef.current = null;
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -621,14 +621,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         return row;
       });
 
-      const locationLabel = isAllMode ? "All_Locations" : (selectedLocation?.name.replace(/\s+/g, "_") ?? "Unknown");
-      const dateStr = new Date().toLocaleDateString("en-CA");
-      const filterPart = showUnpriced
-        ? "_unpriced"
-        : groupFilter !== "all"
-          ? `_${groupFilter.replace(/\s+/g, "_")}`
-          : "";
-      const searchPart = search.trim() ? `_search-${search.trim().replace(/\s+/g, "_")}` : "";
+      const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
+      const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
+      const searchPart = search.trim() ? ` search ${search.trim()}` : "";
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       const headers = [

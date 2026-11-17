@@ -239,7 +239,7 @@ export default function ImportCycleDiagnostics() {
       queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-diagnostics"] });
       toast({ title: "Recalculated", description: data.message ?? "" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Recalculation failed", description: e.message, variant: "destructive" }),
   });
 
   if (isLoading) {

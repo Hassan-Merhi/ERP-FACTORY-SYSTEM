@@ -7,7 +7,7 @@
 import { getParentRoute, isFactoryTopLevelPath } from "@/lib/parent-routes";
 
 const PARENTS: Array<[path: string, parent: string]> = [
-  ["/factory/containers/new", "/factory/containers-hub?section=containers"],
+  ["/factory/containers/new", "/factory/containers-hub"],
   ["/factory/sales/loading/new", "/factory/sales/loadings"],
   ["/factory/sales/loading/pending", "/factory/sales/loadings"],
   ["/factory/raw-stock/recalculate", "/factory/raw-materials"],
@@ -54,7 +54,7 @@ const PARENTS: Array<[path: string, parent: string]> = [
   ["/factory/vouchers/55/edit", "/factory/vouchers"],
   ["/factory/dispatch-batches/4/rides/2/scan", "/factory/dispatch-batches/4"],
   ["/factory/dispatch-batches/4", "/factory/dispatch-batches"],
-  ["/factory/net-position-details/2026", "/factory/intelligence/financial-hub?section=net-position"],
+  ["/factory/net-position-details/2026", "/factory/intelligence/financial-hub"],
   ["/factory/financial-snapshot", "/factory/analytics"],
   ["/factory/import-cycle-diagnostics", "/factory/settings"],
   ["/factory/inventory-repair", "/factory/settings"],

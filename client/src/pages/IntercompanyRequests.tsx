@@ -106,7 +106,8 @@ export default function IntercompanyRequests() {
       setSelectedAccountId("");
       setApproveDescription("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Approval failed", description: err.message, variant: "destructive" }),
   });
 
   const dismissMutation = useMutation({
@@ -120,7 +121,8 @@ export default function IntercompanyRequests() {
       setDismissDialogRequest(null);
       setDismissNote("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Dismiss failed", description: err.message, variant: "destructive" }),
   });
 
   function handleApprove() {

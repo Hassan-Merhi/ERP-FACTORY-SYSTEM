@@ -1,3 +1,4 @@
+import { exportFileName } from "@/lib/exportFile";
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ import { formatNumber } from "@/lib/formatNumber";
 
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
 import StockInSalesReportDetail from "./StockInSalesReportDetail";
+import { useLocation } from "wouter";
 
 interface LocationOption {
   id: number;
@@ -229,6 +231,7 @@ export default function StockInSalesReport() {
 }
 
 function StockInSalesReportSummary() {
+  const [, navigate] = useLocation();
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();
@@ -418,7 +421,10 @@ function StockInSalesReportSummary() {
     exportErpReportCsv({
       headers,
       rows: values,
-      fileName: erpReportFileName("stock-in-sales-report", "csv", new Date(), "-"),
+      fileName: exportFileName("stock in sales report", "csv", {
+        from: periodFilter.fromDate,
+        to: periodFilter.toDate,
+      }),
     });
   };
 
@@ -428,7 +434,7 @@ function StockInSalesReportSummary() {
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
       <PageHeader
         title="Stock & Sales Report"
-        onBack={() => (window.location.href = "/sales-report")}
+        onBack={() => navigate("/sales-report")}
         backButtonTestId="button-back-stock-in-sales"
         meta={<span>Stock and sales overview{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
       >
@@ -443,7 +449,7 @@ function StockInSalesReportSummary() {
           options={[
             { id: "stock-sales-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
             { id: "stock-sales-csv", label: "Export CSV", kind: "csv", onSelect: exportCsv },
-            { id: "stock-sales-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+            { id: "stock-sales-print", label: "Print", kind: "print", onSelect: () => window.print() },
           ]}
         />
       </PageHeader>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { Calculator, Download, Loader2, Lock, LockOpen, MessageCircle, RefreshCw, Save } from "lucide-react";
+import { Calculator, Loader2, Lock, LockOpen, MessageCircle, RefreshCw, Save } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { queryClient } from "@/lib/queryClient";
 import type { RawStockRow } from "./RawStockTable";
 import type { OffloadSupplierOption } from "./offloadDialogTypes";
 import { FixedProductionPlannerImage } from "./FixedProductionPlannerImage";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import {
   calculateFixedProductionCategoryRows,
   sumFixedProductionRows,
@@ -404,18 +405,17 @@ export function FixedProductionPlannerDialog({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
+              <ExportButton
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
+                label={tr("downloadPng")}
                 disabled={!ready || !locked || reportRows.length === 0 || pending}
                 onClick={() => {
                   void downloadImage();
                 }}
                 data-testid="button-fixed-production-download-image"
-              >
-                <Download className="h-3.5 w-3.5" /> {tr("downloadPng")}
-              </Button>
+              />
               {recordChanges.allowed && (
                 <Button
                   variant="outline"

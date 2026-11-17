@@ -18,7 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, ArrowLeft, Printer, TruckIcon } from "lucide-react";
+import { Trash2, Plus, ArrowLeft, TruckIcon } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
 
@@ -115,7 +116,7 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
       setDescription("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -227,7 +228,7 @@ function PaymentDialog({
       setDescription("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -328,7 +329,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
       queryClient.invalidateQueries({ queryKey: [API] });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
@@ -350,9 +351,13 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print-statement">
-            <Printer className="h-4 w-4 mr-1" /> Print
-          </Button>
+          <ExportButton
+            kind="print"
+            variant="outline"
+            size="sm"
+            onClick={() => handlePrint()}
+            data-testid="button-print-statement"
+          />
           {recordChanges.allowed && (
             <>
               <Button
@@ -536,7 +541,7 @@ function AddTransporterDialog({ open, onClose }: { open: boolean; onClose: () =>
       setNotes("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (

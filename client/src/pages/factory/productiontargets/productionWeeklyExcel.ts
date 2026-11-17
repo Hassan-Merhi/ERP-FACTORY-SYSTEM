@@ -11,6 +11,8 @@ import {
   type ProductionResponse,
   type ProductionRow,
 } from "../factoryProductionTargetsModel";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 export class ProductionDateRangeError extends Error {
   constructor(public readonly code: "invalid" | "future" | "tooLong") {
@@ -635,16 +637,6 @@ export async function exportWeeklyProductionExcel(
   const blob = new Blob([raw], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  try {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "Production_Targets_" + start + "_to_" + end + ".xlsx";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
+  downloadBlob(blob, exportFileName("production targets", "xlsx", { from: start, to: end }));
   return { start, end, through: end };
 }

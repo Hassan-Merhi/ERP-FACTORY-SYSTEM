@@ -4,7 +4,9 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import * as XLSX from "@/lib/excelHelper";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Package, Link2, AlertTriangle, Pencil, Trash2, BarChart2 } from "lucide-react";
+import { Plus, Package, Link2, AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,11 +101,11 @@ export default function MixBatches() {
       setAssignDialogOpen(false);
       setSourceBatchId("");
       setSelectedBaleIds(new Set());
-      toast({ title: "Success", description: `${data.balesUpdated} bale(s) assigned to batch` });
+      toast({ title: "Updated", description: `${data.balesUpdated} bale(s) assigned to batch` });
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -124,7 +126,7 @@ export default function MixBatches() {
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -185,7 +187,7 @@ export default function MixBatches() {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mix Batches");
-    await XLSX.writeFile(wb, `mix-batches-${new Date().toLocaleDateString("en-CA")}.xlsx`);
+    await XLSX.writeFile(wb, exportFileName("mix batches", "xlsx"));
   };
 
   if (selectedBatchId !== null) {
@@ -217,10 +219,7 @@ export default function MixBatches() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportReport} data-testid="button-report">
-            <BarChart2 className="h-4 w-4 mr-2" />
-            Report
-          </Button>
+          <ExportButton onClick={handleExportReport} data-testid="button-report" />
           {recordChanges.allowed && (
             <Button
               variant="outline"

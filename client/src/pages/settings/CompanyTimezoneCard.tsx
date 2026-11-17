@@ -65,7 +65,7 @@ export function CompanyTimezoneCard() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 

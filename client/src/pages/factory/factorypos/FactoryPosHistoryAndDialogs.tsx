@@ -5,7 +5,8 @@
  * Split out of FactoryPOS.tsx unchanged: history rows still use each sale's
  * own currency prefix, and voided sales still hide the Void action.
  */
-import { History, Printer } from "lucide-react";
+import { History } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -113,10 +114,13 @@ export function FactoryPosDialogs({ model }: { model: FactoryPosModel }) {
             <Button variant="outline" onClick={() => model.setShowPrintDialog(false)} data-testid="button-cancel-print">
               Close
             </Button>
-            <Button onClick={model.handlePrint} className="gap-2" data-testid="button-print-invoice">
-              <Printer className="h-4 w-4" />
-              Print Invoice
-            </Button>
+            <ExportButton
+              kind="print"
+              variant="default"
+              onClick={model.handlePrint}
+              className="gap-2"
+              data-testid="button-print-invoice"
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

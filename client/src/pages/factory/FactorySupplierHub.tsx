@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipboardCheck, FileText, Award } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import FactorySupplierReport from "@/pages/factory/FactorySupplierReport";
 import FactorySupplierStatement from "@/pages/factory/FactorySupplierStatement";
 import FactorySupplierScoreboard from "@/pages/factory/FactorySupplierScoreboard";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -19,28 +22,33 @@ const HIDDEN_KEYS: Record<Section, string> = {
 
 export default function FactorySupplierHub() {
   const { selectedCompany } = useCompany();
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : Object.values(HIDDEN_KEYS);
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hidden =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : Object.values(HIDDEN_KEYS);
   const sections: Section[] = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "report";
   const allowedSections: readonly Section[] = sections;
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [section, setSection] = useHubQueryState<Section>({
     key: "section",
-    allowedValues: allowedSections,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? allowedSections : SECTIONS,
     knownValues: SECTIONS,
     defaultValue: defaultSection,
     clearKeys: ["tab"],
   });
 
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
+
   if (sections.length === 0) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        No Supplier Intelligence tabs are available for this user.
-      </div>
-    );
+    return <RestrictedTabsState />;
   }
 
   return (
@@ -50,6 +58,10 @@ export default function FactorySupplierHub() {
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
+        {/* Hub title: the sidebar label of /factory/intelligence/supplier-hub. */}
+        <div className="shrink-0 px-4 pt-4 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
+          <PageHeader title="Supplier Intel" icon={<ClipboardCheck className="h-5 w-5" />} showBackButton={false} />
+        </div>
         <div className="erp-mobile-scroll-tabs border-b px-4 pt-3 pb-1 shrink-0">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory supplier sections">
             {sections.includes("report") && (

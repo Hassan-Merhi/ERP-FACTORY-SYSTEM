@@ -104,7 +104,7 @@ export function useLoadingOrderMutations({
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Remove failed",
         description: error.message,
         variant: "destructive",
       });
@@ -268,7 +268,7 @@ export function useLoadingOrderMutations({
     onError: (error: Error) => {
       if ((error as Error & { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Finalize failed",
         description: error.message,
         variant: "destructive",
       });

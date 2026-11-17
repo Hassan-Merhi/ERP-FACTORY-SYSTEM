@@ -104,7 +104,7 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
       setRoleToDelete(null);
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 

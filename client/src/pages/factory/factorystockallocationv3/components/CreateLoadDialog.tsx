@@ -4,18 +4,18 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from FactoryStockAllocationV3.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useMutation} from "@tanstack/react-query";
-import {queryClient} from "@/lib/queryClient";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {Textarea} from "@/components/ui/textarea";
-import {useToast} from "@/hooks/use-toast";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from "@/components/ui/dialog";
-import {AlertTriangle, Loader2} from "lucide-react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
-import type {Proforma} from "../types";
+import type { Proforma } from "../types";
 
 export function CreateLoadDialog({
   proforma,
@@ -52,7 +52,8 @@ export function CreateLoadDialog({
       setNotes("");
       onClose();
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Save failed", description: err.message, variant: "destructive" }),
   });
 
   return (

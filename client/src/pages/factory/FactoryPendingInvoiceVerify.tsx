@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ChevronsUpDown,
@@ -33,13 +32,12 @@ import {
   Wrench,
   RefreshCw,
   FileText,
-  Container,
   DollarSign,
-  FileDown,
   FileSpreadsheet,
   GitCompare,
   Hammer,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { fmtNum } from "./factorypendinginvoiceverify/utils";
@@ -142,23 +140,11 @@ export default function FactoryPendingInvoiceVerify() {
     <div
       className={`flex h-full flex-col overflow-y-auto sm:p-4 lg:p-6 ${isPending || isVerified ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-4 lg:pb-6` : ""}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/factory/invoicing?tab=invoices")}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">
-              Verify Order #{orderId}
-            </h1>
-            <p className="text-muted-foreground text-sm">Review loaded bales against proforma</p>
-          </div>
-        </div>
+      <PageHeader
+        title={`Verify Order #${orderId}`}
+        subtitle="Review loaded bales against proforma"
+        backTarget="/factory/invoicing?tab=invoices"
+      >
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -227,24 +213,24 @@ export default function FactoryPendingInvoiceVerify() {
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
                   <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
                     <FileSpreadsheet className="h-4 w-4" />
-                    Download Excel
+                    Export Excel
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="menu-export-excel-no-charges">
                     <FileSpreadsheet className="h-4 w-4" />
-                    Download Excel (No Charges)
+                    Export Excel (No Charges)
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportPdf} data-testid="menu-export-pdf">
-                    <FileDown className="h-4 w-4" />
-                    Download PDF
+                    <FileText className="h-4 w-4" />
+                    Export PDF
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="menu-export-pdf-no-charges">
-                    <FileDown className="h-4 w-4" />
-                    Download PDF (No Charges)
+                    <FileText className="h-4 w-4" />
+                    Export PDF (No Charges)
                   </DropdownMenuItem>
                   {isAdminOrOwner && (
                     <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="menu-export-loading-status">
-                      <Container className="h-4 w-4" />
-                      Loading Status
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Export Excel (Loading Status)
                     </DropdownMenuItem>
                   )}
 
@@ -296,7 +282,7 @@ export default function FactoryPendingInvoiceVerify() {
             </Badge>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Fallback notice — shown only to Developer role when bale records are missing but order lines cover the data */}
       {!verificationLoading && verification?.dataSource === "order_lines" && currentUser?.role === "Developer" && (

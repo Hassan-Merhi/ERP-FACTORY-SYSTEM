@@ -172,7 +172,7 @@ export function ContainerDetailPriceImportDialog({ model }: { model: Model }) {
               disabled={priceApplyMutation.isPending}
               data-testid="button-save-price-import"
             >
-              {priceApplyMutation.isPending ? "Saving…" : "Save Changes"}
+              {priceApplyMutation.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         )}

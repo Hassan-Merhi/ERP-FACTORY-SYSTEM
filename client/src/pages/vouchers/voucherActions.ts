@@ -1,3 +1,4 @@
+import { exportFileName } from "@/lib/exportFile";
 import { format } from "date-fns";
 import { exportOperationalWorkbook } from "@/lib/operationalExcelExport";
 
@@ -52,7 +53,7 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
       Notes: formData.notes || "",
       Optional: formData.optional ? "Yes" : "No",
     }));
-    const fileName = `${voucherType}_Voucher_Detailed_${voucherDate}.xlsx`;
+    const fileName = exportFileName(`${voucherType} voucher detailed`, "xlsx", { date: voucherDate });
     await exportOperationalWorkbook({
       title: voucherType + " Voucher — Detailed",
       fileName,
@@ -86,7 +87,7 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
         Optional: formData.optional ? "Yes" : "No",
       },
     ];
-    const fileName = `${voucherType}_Voucher_Summary_${voucherDate}.xlsx`;
+    const fileName = exportFileName(`${voucherType} voucher summary`, "xlsx", { date: voucherDate });
     await exportOperationalWorkbook({
       title: voucherType + " Voucher — Summary",
       fileName,
