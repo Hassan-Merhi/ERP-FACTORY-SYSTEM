@@ -381,7 +381,7 @@ export function useDataToolsModel() {
       const workbook = await readFile(file);
       const worksheet = workbook.getWorksheet(1);
       if (!worksheet) {
-        toast({ title: "Error", description: "Could not read worksheet", variant: "destructive" });
+        toast({ title: "Import failed", description: "Could not read worksheet", variant: "destructive" });
         return;
       }
       const rows = utils.sheet_to_json<{
@@ -529,7 +529,7 @@ export function useDataToolsModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
     } catch (error: unknown) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error instanceof Error ? error.message : String(error),
         variant: "destructive",
       });

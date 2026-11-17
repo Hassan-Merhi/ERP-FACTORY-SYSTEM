@@ -93,8 +93,8 @@ const EVENT_META: Record<string, { label: string; className: string }> = {
 };
 
 function getNavPath(item: NotificationItem, isFactory: boolean): string | null {
-  if(item.entityType==="support_ticket" && item.entityId && item.entityId>0){
-    return `${isFactory?"/factory/tickets":"/tickets"}?ticketId=${item.entityId}`;
+  if (item.entityType === "support_ticket" && item.entityId && item.entityId > 0) {
+    return `${isFactory ? "/factory/tickets" : "/tickets"}?ticketId=${item.entityId}`;
   }
   switch (item.eventType) {
     case "LOADING_STARTED":
@@ -232,7 +232,8 @@ export function NotificationsCenter() {
       setApproveReq(null);
       setSelectedAccountId("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Approval failed", description: err.message, variant: "destructive" }),
   });
 
   const dismissMutation = useMutation({
@@ -244,17 +245,19 @@ export function NotificationsCenter() {
       setDismissReq(null);
       setDismissNote("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Dismiss failed", description: err.message, variant: "destructive" }),
   });
 
   // Reuse the existing, individually authorized dismissal endpoint. Each request
   // is claimed only while pending; no source or destination vouchers are changed.
   const dismissAllICMutation = useMutation({
-    mutationFn: (ids: number[]) => dismissIntercompanyRequestsInBatches(
-      ids,
-      (id) => apiRequest("POST", `/api/intercompany-requests/${id}/dismiss`,
-        { note: "Bulk dismissed from notification center" }),
-    ),
+    mutationFn: (ids: number[]) =>
+      dismissIntercompanyRequestsInBatches(ids, (id) =>
+        apiRequest("POST", `/api/intercompany-requests/${id}/dismiss`, {
+          note: "Bulk dismissed from notification center",
+        })
+      ),
     onSuccess: ({ dismissed, failed }) => {
       setConfirmBulkDismiss(false);
       invalidateIC();
@@ -275,7 +278,10 @@ export function NotificationsCenter() {
   // ── Notification item click ───────────────────────────────────────────────────
   const handleNotifClick = (item: NotificationItem) => {
     if (!item.isRead) markReadMutation.mutate(item.id);
-    const path = getNavPath(item, selectedCompany?.companyType==="factory" || selectedCompany?.companyType==="factory_v2");
+    const path = getNavPath(
+      item,
+      selectedCompany?.companyType === "factory" || selectedCompany?.companyType === "factory_v2"
+    );
     if (path) {
       setOpen(false);
       navigate(path);
@@ -344,9 +350,7 @@ export function NotificationsCenter() {
                     onClick={() => setConfirmBulkDismiss(true)}
                     data-testid="button-ic-dismiss-all"
                   >
-                    {dismissAllICMutation.isPending
-                      ? <Loader2 className="h-3 w-3 animate-spin" />
-                      : "Dismiss all"}
+                    {dismissAllICMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Dismiss all"}
                   </Button>
                   <Button
                     variant="ghost"
@@ -471,7 +475,10 @@ export function NotificationsCenter() {
                 <div className="divide-y">
                   {notifList.map((item) => {
                     const meta = EVENT_META[item.eventType];
-                    const navPath = getNavPath(item, selectedCompany?.companyType==="factory" || selectedCompany?.companyType==="factory_v2");
+                    const navPath = getNavPath(
+                      item,
+                      selectedCompany?.companyType === "factory" || selectedCompany?.companyType === "factory_v2"
+                    );
                     return (
                       <div
                         key={item.id}
@@ -610,25 +617,35 @@ export function NotificationsCenter() {
       </Dialog>
 
       {/* Confirm that bulk dismissal is a request decision, not just hiding an alert. */}
-      <Dialog open={confirmBulkDismiss} onOpenChange={(value) => {
-        if (!dismissAllICMutation.isPending) setConfirmBulkDismiss(value);
-      }}>
+      <Dialog
+        open={confirmBulkDismiss}
+        onOpenChange={(value) => {
+          if (!dismissAllICMutation.isPending) setConfirmBulkDismiss(value);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dismiss all intercompany requests?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Dismiss all {icRequests.length} pending intercompany payment
-            {icRequests.length === 1 ? " request" : " requests"} shown to you?
-            These requests will no longer be available for approval. No mirror
-            vouchers will be posted, and existing vouchers will not be deleted.
+            {icRequests.length === 1 ? " request" : " requests"} shown to you? These requests will no longer be
+            available for approval. No mirror vouchers will be posted, and existing vouchers will not be deleted.
           </p>
           <DialogFooter>
-            <Button variant="outline" disabled={dismissAllICMutation.isPending}
-              onClick={() => setConfirmBulkDismiss(false)}>Cancel</Button>
-            <Button variant="destructive" disabled={icRequests.length === 0 || dismissAllICMutation.isPending}
+            <Button
+              variant="outline"
+              disabled={dismissAllICMutation.isPending}
+              onClick={() => setConfirmBulkDismiss(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={icRequests.length === 0 || dismissAllICMutation.isPending}
               data-testid="button-confirm-ic-dismiss-all"
-              onClick={() => dismissAllICMutation.mutate(icRequests.map((request) => request.id))}>
+              onClick={() => dismissAllICMutation.mutate(icRequests.map((request) => request.id))}
+            >
               {dismissAllICMutation.isPending ? "Dismissing…" : `Dismiss all (${icRequests.length})`}
             </Button>
           </DialogFooter>

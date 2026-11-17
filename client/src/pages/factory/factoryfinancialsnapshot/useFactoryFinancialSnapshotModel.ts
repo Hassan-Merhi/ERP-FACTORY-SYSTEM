@@ -95,7 +95,7 @@ export function useFactoryFinancialSnapshotModel() {
       else queryClient.invalidateQueries({ queryKey: [`/api/snapshot-pinned-accounts/${type as string}`] });
     },
     onError: (err: unknown) =>
-      toast({ title: "Error", description: getFinancialSnapshotErrorMessage(err), variant: "destructive" }),
+      toast({ title: "Save failed", description: getFinancialSnapshotErrorMessage(err), variant: "destructive" }),
   });
 
   const removeAccountMutation = useMutation({
@@ -111,7 +111,7 @@ export function useFactoryFinancialSnapshotModel() {
       else queryClient.invalidateQueries({ queryKey: [`/api/snapshot-pinned-accounts/${type as string}`] });
     },
     onError: (err: unknown) =>
-      toast({ title: "Error", description: getFinancialSnapshotErrorMessage(err), variant: "destructive" }),
+      toast({ title: "Delete failed", description: getFinancialSnapshotErrorMessage(err), variant: "destructive" }),
   });
 
   // True only on first load (no cached data yet) — triggers full skeleton screen

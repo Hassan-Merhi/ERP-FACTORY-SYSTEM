@@ -427,7 +427,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     onSuccess: () => {
       const isEditMode = !!voucherIdToEdit;
       if (!savingTransferRevisionRef.current) {
-        toast({ title: "Success", description: `Stock transfer ${isEditMode ? "updated" : "created"} successfully` });
+        toast({ title: "Saved", description: `Stock transfer ${isEditMode ? "updated" : "created"} successfully` });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
@@ -460,7 +460,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       if (error?._handledGlobally) return;
       const isEditMode = !!voucherIdToEdit;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || `Failed to ${isEditMode ? "update" : "create"} stock transfer`,
         variant: "destructive",
       });

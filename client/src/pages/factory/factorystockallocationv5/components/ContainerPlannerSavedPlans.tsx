@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Check, Edit3, Lock, Loader2, RefreshCw, Save, Shuffle, Trash2, Unlock, X } from "lucide-react";
+import { ArrowRight, Check, Lock, Pencil, Loader2, RefreshCw, Save, Shuffle, Trash2, Unlock, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readActiveCompanyScope } from "@/lib/progressivePagination";
@@ -552,7 +552,7 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                   onClick={() => renameMutation.mutate({ planId: detail.id, name: renameValue.trim() })}
                   data-testid="button-rename-container-plan"
                 >
-                  <Edit3 className="mr-2 h-4 w-4" />
+                  <Pencil className="mr-2 h-4 w-4" />
                   Save Name
                 </Button>
               </div>

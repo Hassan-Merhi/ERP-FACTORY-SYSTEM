@@ -37,7 +37,7 @@ function NoteCell({ contractId, note, testId }: { contractId: number; note: stri
       setEditing(false);
       toast({ title: "Note saved" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   if (!recordChanges.allowed) {

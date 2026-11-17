@@ -88,7 +88,8 @@ export default function FactoryStockAllocationV3() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
       setActiveTab("loading");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   const cancelMutation = useMutation({
@@ -104,7 +105,8 @@ export default function FactoryStockAllocationV3() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/loads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
   });
 
   // If scanning panel is open, show it full-screen

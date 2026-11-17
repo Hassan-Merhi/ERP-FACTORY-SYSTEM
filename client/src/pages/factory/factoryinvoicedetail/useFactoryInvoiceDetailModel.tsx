@@ -86,7 +86,7 @@ export function useFactoryInvoiceDetailModel() {
       setEditingChargeLedger(null);
       toast({ title: "Ledger account updated" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const addChargeMutation = useMutation({
@@ -124,7 +124,7 @@ export function useFactoryInvoiceDetailModel() {
         toast({ title: "Charge added", description: "Accounting voucher posted." });
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const relinkVouchersMutation = useMutation({
@@ -138,7 +138,7 @@ export function useFactoryInvoiceDetailModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       toast({ title: data.linked > 0 ? "Ledger entries created" : "Nothing to relink", description: data.message });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Linking failed", description: e.message, variant: "destructive" }),
   });
 
   const updateChargeAmountMutation = useMutation({
@@ -156,7 +156,7 @@ export function useFactoryInvoiceDetailModel() {
       setChargeAmountInput("");
       toast({ title: "Charge amount updated" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({
@@ -288,7 +288,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -318,7 +318,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -345,7 +345,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
       setEditingArticleCode(null);
     },
   });
@@ -397,7 +397,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -429,7 +429,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -454,7 +454,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Exchange failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -475,7 +475,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: error.message, variant: "destructive" });
     },
   });
 

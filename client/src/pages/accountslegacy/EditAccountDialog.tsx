@@ -7,7 +7,7 @@
  * account itself and is hidden for Group accounts) and the same active toggle.
  */
 import { useState } from "react";
-import { ArrowLeftRight, Check, ChevronsUpDown, Edit, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronsUpDown, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -74,7 +74,7 @@ export function EditAccountDialog({ model }: { model: AccountsLegacyModel }) {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-4 w-4 text-muted-foreground" />
+              <Pencil className="h-4 w-4 text-muted-foreground" />
               Edit Account
               {alterSelectedAccount && (
                 <span className="text-muted-foreground font-normal text-sm truncate">
@@ -364,7 +364,7 @@ export function EditAccountDialog({ model }: { model: AccountsLegacyModel }) {
                       disabled={updateLedgerMutation.isPending}
                       data-testid="button-alter-save"
                     >
-                      {updateLedgerMutation.isPending ? "Saving…" : "Save Changes"}
+                      {updateLedgerMutation.isPending ? "Saving…" : "Save"}
                     </Button>
                   </div>
                 </div>

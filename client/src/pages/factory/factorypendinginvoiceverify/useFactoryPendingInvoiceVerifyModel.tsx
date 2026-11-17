@@ -184,7 +184,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -199,7 +199,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Return failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -224,7 +224,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Assignment failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -241,7 +241,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -255,7 +255,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -271,7 +271,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Finalize failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -287,7 +287,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -355,7 +355,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -371,7 +371,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -387,7 +387,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -447,7 +447,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
         setShowFinalizePreview(true);
       }
     } catch (error) {
-      toast({ title: "Error", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({ title: "Preview failed", description: getErrorDetails(error).message, variant: "destructive" });
     } finally {
       setPreviewLoading(false);
     }

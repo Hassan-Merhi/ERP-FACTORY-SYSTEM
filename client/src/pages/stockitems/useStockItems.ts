@@ -137,11 +137,15 @@ export function useStockItems() {
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items/light"] });
       setSelectedIds([]);
-      toast({ title: "Success", description: "Stock items deleted successfully" });
+      toast({ title: "Deleted", description: "Stock items deleted successfully" });
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to delete stock items", variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete stock items",
+        variant: "destructive",
+      });
     },
   });
 
@@ -157,11 +161,11 @@ export function useStockItems() {
       setAdjustLocationId("");
       setAdjustQuantity("");
       setAdjustType("add");
-      toast({ title: "Success", description: "Stock adjusted successfully" });
+      toast({ title: "Updated", description: "Stock adjusted successfully" });
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to adjust stock", variant: "destructive" });
+      toast({ title: "Update failed", description: error.message || "Failed to adjust stock", variant: "destructive" });
     },
   });
 
@@ -174,11 +178,15 @@ export function useStockItems() {
       setSelectedIds([]);
       setAssignCategoryDialogOpen(false);
       setPendingCategoryId("");
-      toast({ title: "Success", description: "Category assigned successfully" });
+      toast({ title: "Updated", description: "Category assigned successfully" });
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to assign category", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to assign category",
+        variant: "destructive",
+      });
     },
   });
 
@@ -191,7 +199,7 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -206,7 +214,7 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -220,7 +228,7 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -233,7 +241,7 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -248,7 +256,7 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -262,18 +270,22 @@ export function useStockItems() {
     },
     onError: (error: Error) => {
       if (error._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
   const handleAdjustStock = () => {
     if (!adjustStockItemId || !adjustLocationId || !adjustQuantity) {
-      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
     const quantity = parseFloat(adjustQuantity);
     if (isNaN(quantity) || quantity <= 0) {
-      toast({ title: "Error", description: "Please enter a valid quantity greater than 0", variant: "destructive" });
+      toast({
+        title: "Validation failed",
+        description: "Please enter a valid quantity greater than 0",
+        variant: "destructive",
+      });
       return;
     }
     adjustStockMutation.mutate({
