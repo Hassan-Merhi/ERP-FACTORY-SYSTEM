@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useEditMixBatchDialogState } from "./useEditMixBatchDialogState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function EditMixBatchDialogSection({
   addSourceType,
@@ -88,8 +89,9 @@ export function EditMixBatchDialogSection({
             <SelectContent>
               {availableSuppliers?.map((stock) => (
                 <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
-                  {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @ $
-                  {parseFloat(stock.costPerKgUsd || stock.costPerKg || "0").toFixed(4)}/kg USD)
+                  {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @{" "}
+                  {formatUsd(parseFloat(stock.costPerKgUsd || stock.costPerKg || "0"), 4)}
+                  /kg USD)
                 </SelectItem>
               ))}
               {(!availableSuppliers || availableSuppliers.length === 0) && (
@@ -109,7 +111,8 @@ export function EditMixBatchDialogSection({
                 const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
                 return (
                   <SelectItem key={b.id} value={b.id.toString()}>
-                    {b.name || b.batchCode} ({formatNumber(remaining)} kg @ ${parseFloat(b.costPerKg).toFixed(4)}/kg)
+                    {b.name || b.batchCode} (
+                    {`${formatNumber(remaining)} kg @ ${formatUsd(parseFloat(b.costPerKg), 4)}/kg`})
                   </SelectItem>
                 );
               })}
@@ -196,20 +199,20 @@ export function EditMixBatchDialogMixSourceEditReview({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Saved USD</p>
-              <p className="font-mono">${formatNumber(Number(sourceReview.recordedTotalCost), 4)}</p>
+              <p className="font-mono">{formatUsd(Number(sourceReview.recordedTotalCost), 0, 4)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Estimated USD</p>
               <p className="font-mono">
                 {sourceReview.estimatedTotalCost == null
                   ? "Unavailable"
-                  : "$" + formatNumber(Number(sourceReview.estimatedTotalCost), 4)}
+                  : formatUsd(Number(sourceReview.estimatedTotalCost), 0, 4)}
               </p>
             </div>
           </div>
           {sourceReview.estimatedDeltaUsd != null && (
             <p className="text-xs text-muted-foreground">
-              Estimated valuation difference: ${formatNumber(Number(sourceReview.estimatedDeltaUsd), 4)} USD. The server
+              Estimated valuation difference: {formatUsd(Number(sourceReview.estimatedDeltaUsd), 0, 4)} USD. The server
               recalculates the cost during the final transaction.
             </p>
           )}
@@ -245,18 +248,18 @@ export function EditMixBatchDialogMixBatchRecordedValuation({
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Recorded total cost</p>
-          <p className="font-mono font-semibold">${formatNumber(recordedBatchCost.totalCost, 4)}</p>
+          <p className="font-mono font-semibold">{formatUsd(recordedBatchCost.totalCost, 0, 4)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Recorded blended cost/kg</p>
           <p className="font-mono font-semibold" data-testid="text-edit-recorded-blended-cost">
-            ${recordedBatchCost.costPerKg.toFixed(4)}
+            {formatUsd(recordedBatchCost.costPerKg, 4)}
           </p>
         </div>
       </div>
       {currentSources && savedSourceDifference > 0.02 && (
         <p role="alert" className="text-xs text-destructive">
-          Recorded source total differs from the saved batch header by ${formatNumber(savedSourceDifference, 2)}. Review
+          Recorded source total differs from the saved batch header by {formatUsd(savedSourceDifference, 0, 2)}. Review
           before changing costs.
         </p>
       )}

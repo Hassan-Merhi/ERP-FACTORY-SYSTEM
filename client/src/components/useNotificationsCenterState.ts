@@ -10,6 +10,7 @@ import { dismissIntercompanyRequestsInBatches } from "@/lib/bulkDismissIntercomp
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { liveCountQueryPolicy, stableReferenceQueryPolicy } from "@/lib/queryPolicies";
 import { useToast } from "@/hooks/use-toast";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,9 +103,8 @@ export function getNavPath(item: NotificationItem, isFactory: boolean): string |
 
 export function formatAmount(amount: string) {
   const n = parseFloat(amount);
-  return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const decimals = Number.isInteger(n) ? 0 : 2;
+  return formatUsd(n, decimals);
 }
 
 export function useNotificationsCenterState() {

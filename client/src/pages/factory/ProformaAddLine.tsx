@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchField } from "@/components/ui/search-field";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useProformaAddLineState } from "./useProformaAddLineState";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
@@ -172,7 +173,7 @@ export default function ProformaAddLine() {
                     </p>
                   )}
                   {item.salePrice && parseFloat(item.salePrice) > 0 && (
-                    <p className="text-xs text-muted-foreground">${parseFloat(item.salePrice).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{formatUsd(parseFloat(item.salePrice), 2)}</p>
                   )}
                   {item.stockGroup?.name && (
                     <Badge variant="secondary" className="text-xs mt-1 w-fit no-default-active-elevate">

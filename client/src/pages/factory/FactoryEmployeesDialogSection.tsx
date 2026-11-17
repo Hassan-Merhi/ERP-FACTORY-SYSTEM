@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFactoryEmployeesState } from "./useFactoryEmployeesState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactoryEmployeesDialogFooterSection({
   createMutation,
@@ -84,8 +85,7 @@ export function FactoryEmployeesDialogSection({
           (() => {
             const liveEmp = employees.find((e) => e.id === endingContractEmployee.id) ?? endingContractEmployee;
             const balance = parseFloat(liveEmp.currentBalance || "0");
-            const fmtBal = (v: number) =>
-              v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmtBal = (v: number) => formatUsd(v, 2);
             return (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
@@ -99,11 +99,11 @@ export function FactoryEmployeesDialogSection({
                   <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 space-y-1.5">
                     <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium text-sm">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
-                      Outstanding balance: ${fmtBal(balance)}
+                      Outstanding balance: {fmtBal(balance)}
                     </div>
                     <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
                       Running payroll records salary as <em>earned</em> — it doesn't mean cash was handed out. To clear
-                      this balance, go to <strong>Withdrawals</strong> and record a cash payment of ${fmtBal(balance)}{" "}
+                      this balance, go to <strong>Withdrawals</strong> and record a cash payment of {fmtBal(balance)}{" "}
                       before ending the contract.
                     </p>
                   </div>
@@ -111,10 +111,10 @@ export function FactoryEmployeesDialogSection({
                   <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700 p-3 space-y-1.5">
                     <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium text-sm">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
-                      Employee owes: ${fmtBal(Math.abs(balance))}
+                      Employee owes: {fmtBal(Math.abs(balance))}
                     </div>
                     <p className="text-xs text-red-700/80 dark:text-red-400/80">
-                      This employee has a negative balance — they owe the company ${fmtBal(Math.abs(balance))}. Collect
+                      This employee has a negative balance — they owe the company {fmtBal(Math.abs(balance))}. Collect
                       this before ending the contract if needed.
                     </p>
                   </div>

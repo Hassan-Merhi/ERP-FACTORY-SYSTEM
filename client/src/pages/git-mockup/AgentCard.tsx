@@ -19,13 +19,13 @@ import {
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmt } from "./helpers";
 import { AgentCardTable } from "./AgentCardTable";
 import { AgentCardTransit } from "./AgentCardTransit";
 import type { AgentDutySummary } from "./types";
 import { WARNING_META } from "./types";
 import { useAgentCardState } from "./useAgentCardState";
 import { AgentCardSection, AgentCardSection2, AgentCardSection3 } from "./AgentCardSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function AgentCard(props: { agent: AgentDutySummary; companyId: number; waGroupChatId?: string }) {
   const {
@@ -301,8 +301,8 @@ export function AgentCard(props: { agent: AgentDutySummary; companyId: number; w
             <DialogTitle>Replace Prepaid Container</DialogTitle>
             <DialogDescription>
               Select an in-transit container to swap in place of{" "}
-              <span className="font-mono font-semibold">{replaceTarget?.containerNumber}</span> ($
-              {fmt(replaceTarget?.dutyFee ?? 0, 0)} duty).
+              <span className="font-mono font-semibold">{replaceTarget?.containerNumber}</span> (
+              {formatUsd(replaceTarget?.dutyFee ?? 0, 0)} duty).
             </DialogDescription>
           </DialogHeader>
           {replaceAmountWarning && (
@@ -311,8 +311,8 @@ export function AgentCard(props: { agent: AgentDutySummary; companyId: number; w
               <div className="flex-1">
                 <p className="font-semibold mb-1">Duty amounts differ — click again to confirm</p>
                 <p>
-                  Old: <span className="font-mono font-semibold">${fmt(replaceAmountWarning.oldAmount, 0)}</span> → New:{" "}
-                  <span className="font-mono font-semibold">${fmt(replaceAmountWarning.newAmount, 0)}</span>
+                  Old: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.oldAmount, 0)}</span> →
+                  New: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.newAmount, 0)}</span>
                 </p>
               </div>
             </div>
@@ -353,7 +353,7 @@ export function AgentCard(props: { agent: AgentDutySummary; companyId: number; w
                     </span>
                     <span className="text-muted-foreground grow">{r.supplierCode ?? r.supplierName ?? "—"}</span>
                     <span className="font-mono text-muted-foreground shrink-0">{r.numberPlate ?? ""}</span>
-                    <span className="font-semibold text-right shrink-0 w-20">${fmt(r.dutyFee, 0)}</span>
+                    <span className="font-semibold text-right shrink-0 w-20">{formatUsd(r.dutyFee, 0)}</span>
                     {amountsDiffer && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
                   </button>
                 );

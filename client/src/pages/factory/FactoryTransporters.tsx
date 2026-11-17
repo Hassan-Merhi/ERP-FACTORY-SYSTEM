@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, TruckIcon } from "lucide-react";
-import { API, fmt, type Transporter } from "./FactoryTransportersPaymentDialog";
+import { API, fmtUsd, type Transporter } from "./FactoryTransportersPaymentDialog";
 import { TransporterStatement } from "./FactoryTransportersTransporterStatement";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
@@ -169,7 +169,7 @@ export default function FactoryTransporters() {
               <div
                 className={`text-2xl font-bold ${transporters.reduce((s, t) => s + t.totalPaid, 0) > 0 ? "text-green-600 dark:text-green-400" : ""}`}
               >
-                ${fmt(transporters.reduce((s, t) => s + t.totalPaid, 0))}
+                {fmtUsd(transporters.reduce((s, t) => s + t.totalPaid, 0))}
               </div>
             </CardContent>
           </Card>
@@ -181,7 +181,7 @@ export default function FactoryTransporters() {
               <div
                 className={`text-2xl font-bold ${transporters.reduce((s, t) => s + t.outstanding, 0) > 0 ? "text-red-600 dark:text-red-400" : ""}`}
               >
-                ${fmt(transporters.reduce((s, t) => s + t.outstanding, 0))}
+                {fmtUsd(transporters.reduce((s, t) => s + t.outstanding, 0))}
               </div>
             </CardContent>
           </Card>
@@ -232,16 +232,16 @@ export default function FactoryTransporters() {
                     >
                       <td className="px-4 py-3 font-medium">{t.name}</td>
                       <td className="px-4 py-3 text-muted-foreground">{t.phone || "—"}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">${fmt(t.totalCharged)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtUsd(t.totalCharged)}</td>
                       <td
                         className={`px-4 py-3 text-right tabular-nums ${t.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(t.totalPaid)}
+                        {fmtUsd(t.totalPaid)}
                       </td>
                       <td
                         className={`px-4 py-3 text-right tabular-nums font-medium ${t.outstanding > 0 ? "text-red-600 dark:text-red-400" : t.outstanding < 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(t.outstanding)}
+                        {fmtUsd(t.outstanding)}
                       </td>
                     </tr>
                   ))}

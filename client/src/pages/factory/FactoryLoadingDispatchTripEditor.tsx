@@ -1,7 +1,7 @@
 // Extracted from ./FactoryLoadingDispatch.tsx to keep that module under the source-size cap.
 import type { FormEvent } from "react";
 import { Loader2, Package } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -128,17 +128,7 @@ export function fromTrip(trip: DispatchTrip): TripForm {
 }
 
 export function TripStatusBadge({ status }: { status: TripStatus }) {
-  const statusStyle =
-    status === "OPEN"
-      ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-200"
-      : status === "CLOSED"
-        ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
-        : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
-  return (
-    <Badge variant="outline" className={statusStyle}>
-      {FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]}
-    </Badge>
-  );
+  return <StatusBadge status={status} label={FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]} showIcon={false} />;
 }
 
 export function StatCard({

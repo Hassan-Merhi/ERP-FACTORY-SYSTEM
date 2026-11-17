@@ -24,6 +24,14 @@ import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatNumber";
 import type { Location } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
+import { formatUsd } from "@/lib/moneyDisplay";
+import type {
+  AdditionalCharge,
+  LedgerAccountOption,
+  SpSetupStatusData,
+  ParentAgentOption,
+  ContainerOffloadData,
+} from "./offloadDialogTypes";
 
 interface OffloadDialogProps {
   open: boolean;
@@ -31,41 +39,6 @@ interface OffloadDialogProps {
   containerId: number;
   containerNumber: string;
   totalBales: number;
-}
-
-interface AdditionalCharge {
-  id: string;
-  description: string;
-  amount: string;
-  ledgerAccountId: string;
-}
-
-interface LedgerAccountOption {
-  id: string | number;
-  name: string;
-}
-
-interface SpSetupAccountOption {
-  id: string | number;
-  subType: string;
-  name?: string | null;
-}
-
-interface SpSetupStatusData {
-  spAccounts?: SpSetupAccountOption[];
-}
-
-interface ParentAgentOption {
-  ledger_account_id: string | number;
-  account_name: string;
-}
-
-interface ContainerCharge {
-  amount?: string | number | null;
-}
-
-interface ContainerOffloadData {
-  charges?: ContainerCharge[];
 }
 
 interface AccountComboboxProps {
@@ -715,19 +688,19 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
                 {manualCharges > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Manual Charges</span>
-                    <span className="font-medium tabular-nums">${formatNumber(manualCharges)}</span>
+                    <span className="font-medium tabular-nums">{formatUsd(manualCharges, 0, 2)}</span>
                   </div>
                 )}
                 {poChargesTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">PO Charges (Freight, Docs, etc.)</span>
-                    <span className="font-medium tabular-nums">${formatNumber(poChargesTotal)}</span>
+                    <span className="font-medium tabular-nums">{formatUsd(poChargesTotal, 0, 2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                   <span>Total Charges</span>
                   <span className="tabular-nums" data-testid="text-total-charges">
-                    ${formatNumber(totalCharges)}
+                    {formatUsd(totalCharges, 0, 2)}
                   </span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
@@ -739,7 +712,7 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
                 <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                   <span>Cost Added per Bale</span>
                   <span className="tabular-nums" data-testid="text-cost-per-bale">
-                    ${formatNumber(additionalCostPerBale)}
+                    {formatUsd(additionalCostPerBale, 0, 2)}
                   </span>
                 </div>
               </div>

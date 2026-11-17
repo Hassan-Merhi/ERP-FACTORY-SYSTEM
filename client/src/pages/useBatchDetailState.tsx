@@ -12,6 +12,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch, FactoryMixBatchSource } from "@shared/schema";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface BatchBaleRow {
   bale: {
@@ -34,14 +35,7 @@ export interface BatchDetailProps {
   onDeleted?: () => void;
 }
 
-export const STATUS_COLORS: Record<string, string> = {
-  PENDING_PRESSING: "outline",
-  LABEL_PRINTED: "secondary",
-  PRESSED: "default",
-  FINALIZED: "default",
-  RESERVED: "outline",
-  SOLD: "destructive",
-};
+export const costPerKgText = (value: number | string) => formatUsd(value, 4);
 
 export function useBatchDetailState({ batchId, onBack, onDeleted }: BatchDetailProps) {
   const { formatDisplayDate } = useDateFormat();
@@ -183,7 +177,7 @@ export function BatchDetailCardSources({ sources }: Pick<ReturnType<typeof useBa
                     </TableCell>
                     <TableCell className="text-right font-mono">{formatNumber(parseFloat(source.weightKg))}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
-                      ${parseFloat(source.costPerKg).toFixed(4)}
+                      {costPerKgText(parseFloat(source.costPerKg))}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       ${formatNumber(parseFloat(source.totalCost), 2)}

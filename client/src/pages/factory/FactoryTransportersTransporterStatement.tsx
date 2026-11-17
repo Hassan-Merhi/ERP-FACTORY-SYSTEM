@@ -15,7 +15,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
-import { API, ChargeDialog, PaymentDialog, fmt, type TransporterDetail } from "./FactoryTransportersPaymentDialog";
+import { API, ChargeDialog, PaymentDialog, fmtUsd, type TransporterDetail } from "./FactoryTransportersPaymentDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 // ─────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
             <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL CHARGED</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${fmt(data.totalCharged)}</div>
+            <div className="text-2xl font-bold">{fmtUsd(data.totalCharged)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -110,7 +110,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${data.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}>
-              ${fmt(data.totalPaid)}
+              {fmtUsd(data.totalPaid)}
             </div>
           </CardContent>
         </Card>
@@ -122,7 +122,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
             <div
               className={`text-2xl font-bold ${data.outstanding > 0 ? "text-red-600 dark:text-red-400" : data.outstanding < 0 ? "text-green-600 dark:text-green-400" : ""}`}
             >
-              ${fmt(data.outstanding)}
+              {fmtUsd(data.outstanding)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">positive = you owe them</p>
           </CardContent>
@@ -163,11 +163,11 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{tx.description || "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {tx.txType === "charge" ? <span>${fmt(Number(tx.amount))}</span> : "—"}
+                        {tx.txType === "charge" ? <span>{fmtUsd(Number(tx.amount))}</span> : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {tx.txType === "payment" ? (
-                          <span className="text-green-600 dark:text-green-400">${fmt(Number(tx.amount))}</span>
+                          <span className="text-green-600 dark:text-green-400">{fmtUsd(Number(tx.amount))}</span>
                         ) : (
                           "—"
                         )}
@@ -175,7 +175,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
                       <td
                         className={`px-3 py-2 text-right tabular-nums font-medium ${tx.runningBalance > 0 ? "text-red-600 dark:text-red-400" : tx.runningBalance < 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(tx.runningBalance)}
+                        {fmtUsd(tx.runningBalance)}
                       </td>
                       <td className="px-3 py-2 print:hidden">
                         {recordChanges.allowed && (
@@ -202,14 +202,14 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
                     <td className="px-3 py-2" colSpan={3}>
                       TOTALS
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">${fmt(data.totalCharged)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtUsd(data.totalCharged)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-green-600 dark:text-green-400">
-                      ${fmt(data.totalPaid)}
+                      {fmtUsd(data.totalPaid)}
                     </td>
                     <td
                       className={`px-3 py-2 text-right tabular-nums ${data.outstanding > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                     >
-                      ${fmt(data.outstanding)}
+                      {fmtUsd(data.outstanding)}
                     </td>
                     <td className="print:hidden" />
                   </tr>

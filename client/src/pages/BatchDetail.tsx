@@ -2,6 +2,7 @@ import { ArrowLeft, Package, Boxes, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import {
   BatchDetailCardSources,
-  STATUS_COLORS,
+  costPerKgText,
   useBatchDetailState,
   type BatchDetailProps,
 } from "./useBatchDetailState";
@@ -78,18 +79,6 @@ export default function BatchDetail(props: BatchDetailProps) {
     totalBalesCount > 0
       ? bales.reduce((sum: number, row) => sum + parseFloat(row.bale?.costPerKg || "0"), 0) / totalBalesCount
       : 0;
-
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "default";
-      case "COMPLETED":
-        return "secondary";
-      default:
-        return "outline";
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -122,9 +111,12 @@ export default function BatchDetail(props: BatchDetailProps) {
             <div className="flex items-center gap-3 flex-wrap">
               <Boxes className="h-5 w-5 text-muted-foreground" />
               <CardTitle data-testid="text-batch-name">{batch.name || batch.batchCode}</CardTitle>
-              <Badge variant={getStatusVariant(batch.status)} data-testid="badge-batch-status">
-                {batch.status}
-              </Badge>
+              <StatusBadge
+                status={batch.status}
+                label={batch.status}
+                showIcon={false}
+                data-testid="badge-batch-status"
+              />
             </div>
             <span className="text-sm text-muted-foreground" data-testid="text-batch-date">
               {formatDisplayDate(batch.createdAt)}
@@ -154,7 +146,7 @@ export default function BatchDetail(props: BatchDetailProps) {
             <div>
               <p className="text-xs text-muted-foreground">Recorded cost/kg</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-cost-per-kg">
-                ${costPerKg.toFixed(4)}
+                {costPerKgText(costPerKg)}
               </p>
             </div>
           </div>
@@ -218,27 +210,15 @@ export default function BatchDetail(props: BatchDetailProps) {
                             {formatNumber(parseFloat(bale.weightKg || "0"))}
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            ${parseFloat(bale.costPerKg || "0").toFixed(4)}
+                            {costPerKgText(parseFloat(bale.costPerKg || "0"))}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                (STATUS_COLORS[bale.status] || "secondary") as
-                                  | "default"
-                                  | "outline"
-                                  | "secondary"
-                                  | "destructive"
-                                  | "success"
-                                  | "warning"
-                                  | "info"
-                                  | "muted"
-                                  | null
-                                  | undefined
-                              }
+                            <StatusBadge
+                              status={bale.status}
+                              label={bale.status.replace(/_/g, " ")}
+                              showIcon={false}
                               data-testid={`badge-status-${bale.id}`}
-                            >
-                              {bale.status.replace(/_/g, " ")}
-                            </Badge>
+                            />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {location?.name || bale.warehouseLocation || "-"}
@@ -265,7 +245,7 @@ export default function BatchDetail(props: BatchDetailProps) {
                   <span className="font-mono font-medium text-foreground">{formatNumber(totalBalesWeight)} kg</span>
                 </span>
                 <span>
-                  Avg Cost/kg: <span className="font-mono font-medium text-foreground">${avgCost.toFixed(4)}</span>
+                  Avg Cost/kg: <span className="font-mono font-medium text-foreground">{costPerKgText(avgCost)}</span>
                 </span>
               </div>
             </>

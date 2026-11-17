@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fmt, today } from "./FactoryEmployeeAdvancesTabTypes";
+import { fmtUsd, today } from "./FactoryEmployeeAdvancesTabTypes";
 import { useFactoryEmployeeAdvancesTabState } from "./useFactoryEmployeeAdvancesTabState";
 import { ErrorState } from "@/components/ui/page-state";
 
@@ -102,12 +102,12 @@ export function FactoryEmployeeAdvancesTabSection({
                   {adv.firstName} {adv.lastName}
                 </TableCell>
                 <TableCell className="py-3 text-sm text-muted-foreground">{adv.advanceDate}</TableCell>
-                <TableCell className="py-3 text-right font-mono text-sm">${fmt(adv.amount)}</TableCell>
+                <TableCell className="py-3 text-right font-mono text-sm">{fmtUsd(adv.amount)}</TableCell>
                 <TableCell className="py-3 text-right font-mono text-sm">
                   {adv.fullyPaid ? (
                     <span className="text-muted-foreground/40">—</span>
                   ) : (
-                    <span className="text-amber-600 dark:text-amber-400">${fmt(adv.remainingBalance)}</span>
+                    <span className="text-amber-600 dark:text-amber-400">{fmtUsd(adv.remainingBalance)}</span>
                   )}
                 </TableCell>
                 <TableCell className="py-3">

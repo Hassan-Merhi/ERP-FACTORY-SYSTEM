@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarColor, getInitials } from "./utils";
 import { useFactoryWorkersRosterPanelState } from "./useFactoryWorkersRosterPanelState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactoryWorkersRosterPanelTableBodySection({
   amountDue,
@@ -155,14 +156,14 @@ export function FactoryWorkersRosterPanelTableBodySection({
             </TableCell>
             <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
               {worker.baseSalary ? (
-                `$${parseFloat(worker.baseSalary).toLocaleString()}`
+                formatUsd(parseFloat(worker.baseSalary), 0, 3)
               ) : (
                 <span className="text-muted-foreground/40">—</span>
               )}
             </TableCell>
             <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
               {parseFloat(worker.transportAllowance || "0") > 0 ? (
-                `$${parseFloat(worker.transportAllowance || "0").toLocaleString()}`
+                formatUsd(parseFloat(worker.transportAllowance || "0"), 0, 3)
               ) : (
                 <span className="text-muted-foreground/40">—</span>
               )}
@@ -170,7 +171,7 @@ export function FactoryWorkersRosterPanelTableBodySection({
             <TableCell className="py-3 text-right font-mono text-sm">
               {parseFloat(worker.pendingAdvanceBalance || "0") > 0 ? (
                 <span className="text-amber-600 dark:text-amber-400">
-                  ${parseFloat(worker.pendingAdvanceBalance || "0").toLocaleString()}
+                  {formatUsd(parseFloat(worker.pendingAdvanceBalance || "0"), 0, 3)}
                 </span>
               ) : (
                 <span className="text-muted-foreground/40">—</span>

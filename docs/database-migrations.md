@@ -22,6 +22,7 @@ migrations/
   0005_employee_opening_side_default_credit.sql
   0006_retire_retail_catalog_cost_snapshot_trigger.sql
   0007_intercompany_container_trading.sql
+  0008_restore_defaults_the_code_relies_on.sql
   NNNN_short_description.sql           every later change
   manifest/0001_baseline_schema.tsv    catalog right after the baseline (adoption target)
   manifest/schema.tsv                  catalog after all migrations (startup + CI contract)
@@ -41,6 +42,7 @@ server/schema/                         read-only catalog snapshot, registry, ver
 | `npm run db:adopt -- --dry-run` | writes, always rolled back | Executes the whole adoption in one transaction, verifies it, rolls back. Takes table locks while it runs. |
 | `MIGRATION_CONFIRMATION=ADOPT_EXISTING_DATABASE npm run db:adopt:apply` | writes | Adopts an existing database. |
 | `npm run db:verify` | read-only | Migration history + full catalog comparison + tenant-isolation probes. |
+| `npm run db:deploy` | writes | Release step that `npm start` runs before the server: adopts a database without history once, then applies pending migrations. `SKIP_DEPLOY_MIGRATIONS=1` skips it. |
 | `npm run db:manifest` / `db:manifest:check` | writes to an **empty, disposable** database | Regenerates / checks `migrations/manifest/*.tsv`. |
 | `npm run audit:runtime-ddl` | none | Fails if any runtime code under `server/` or `shared/` contains schema-changing SQL. |
 | `npm run verify:boot-no-ddl` | disposable database | Boots the built server under a PostgreSQL event trigger and proves no DDL ran. |
@@ -127,8 +129,10 @@ Procedure:
    3. Run `npm run db:adopt:apply` with the confirmation, then `npm run db:migrate`,
       `npm run db:verify`, and start the release against the restore to smoke
       test it.
-3. On production, in a maintenance window, before deploying the release that
-   contains this system:
+3. On production, the first deploy of a release with this system adopts the
+   database automatically: `npm start` runs the `deploy` release step (see
+   [Deployment](#deployment)). The manual sequence still works, and gives a
+   human-reviewed plan first:
    1. Run `npm run db:adopt` (read-only). Compare its plan with the reviewed one.
       It must match, apart from any objects changed since the backup.
    2. Run `MIGRATION_CONFIRMATION=ADOPT_EXISTING_DATABASE npm run db:adopt:apply`.
@@ -169,12 +173,32 @@ schema exposed them. The fixes ship as reviewed migrations:
 | 0005 | `employees.opening_balance_side` defaults to `'Cr'` for new rows. Existing rows are untouched. | The code treats employees as credit-normal and never sets the side. Production defaulted to `'Dr'`, so new employees' openings were booked on the wrong side; owner-approved repairs had to flip them. **81 of 92 production employees currently carry `'Dr'`.** Reviewing those is a separate, business-approved data task. |
 | 0006 | Drops the legacy `retail_pos_sale_items_snapshot_cost` trigger and its function. | It overwrote retail sale-line costs with the catalog cost, contradicting the value-exact retail accounting. Production has 1 retail sale line. **Requires owner sign-off before release.** |
 
-Differences deliberately **not** changed (owner decision): column defaults
-where production and the repository disagree but the code always supplies the
-value. Examples are `factory_bales.pressed_at DEFAULT now()`,
-`factory_mix_batches.status 'OPEN'` vs `'ACTIVE'`, `users.chatbot_enabled
-false` vs `true`, and `production_bales.status`. Narrowing type differences
-(`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are left untouched too.
+### Column defaults (resolved 2026-11-17)
+
+Drizzle inserts omit columns that are not given, so the database's default is
+the one that applies; a default declared only in Drizzle is never used. Every
+column default was compared between the Drizzle declarations and the migrated
+schema, ignoring cast and spelling differences. 26 disagreed:
+
+- **24, declarations corrected.** The Drizzle files now state the deployed
+  default, so nothing changes in any database. That includes
+  `users.chatbot_enabled` (false: new users start with the chatbot off, and an
+  administrator enables it in Chatbot Settings; owner decision),
+  `factory_mix_batches.status` (`'OPEN'`), `production_bales.status`
+  (`'PENDING'`), `factory_bales.pressed_at` (`now()`) and
+  `support_tickets.due_at` (`now() + 24h`). The code sets the two status
+  columns explicitly on every insert.
+- **2, databases corrected by `0008`.** The code relies on these defaults and
+  the databases never had them:
+  - `factory_bales.cost_per_kg` gets `DEFAULT 0`;
+  - `pressing_batches.id` gets its serial sequence. Without it, every insert
+    from the legacy production-bale route failed; the table has 0 rows in
+    production.
+
+`tests/drizzle-column-defaults-match-migrations.test.ts` keeps the two in step.
+A default changed on only one side fails the test. Narrowing type differences
+(`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are still left as they
+are.
 
 ## Intercompany container trading (0007)
 
@@ -241,15 +265,38 @@ runner suite redefines a CHECK from source SQL before adopting.
 
 ## Deployment
 
-1. Back up (see the operational checklist below).
-2. With the new release's code, run `npm run db:migrate:status` against
-   production (read-only) and review the pending list.
-3. Run `MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate`. Use
-   the Render shell or a one-off job with the release's commit; this is
-   deliberately not part of `npm start` or the build command.
-4. Run `npm run db:verify`.
-5. Deploy the release. At startup the schema gate re-verifies; if anything is
-   missing it exits, and Render keeps the previous instance serving.
+Every deploy applies its own migrations (owner decision, 2026-11-17). Render
+runs `npm start`, which is:
+
+```
+node scripts/db/migrate.mjs deploy && node --import ./server/startupPreload.mjs ... dist/index.js
+```
+
+`deploy` runs in its own process before the server starts:
+
+1. On an existing ERP database with no migration history (the first deploy
+   after the cutover), it adopts the database once, through the same path
+   as `db:adopt:apply`. That means one transaction; nothing is dropped; only
+   lossless type changes; foreign keys and CHECKs are added `NOT VALID` on
+   populated tables. A blocker or a data violation rolls everything back.
+2. It applies pending migrations, each in its own transaction under the
+   advisory lock. With nothing pending it is a no-op.
+3. If anything fails, it exits non-zero, the server is not started, and
+   Render keeps the previous instance serving. Nothing is half applied.
+
+The server process then verifies the schema read-only (startup gate) and
+never changes it.
+
+Rehearsed against copies of both production schemas: HMD (CHECKs in the
+live source form) adopted 328 statements in 0.6 s, applied 0002–0008 and
+passed the startup gate, healthy in 7 s. The Factory copy adopted 565
+statements. A second deploy applies nothing.
+
+Before a release whose migrations change existing data or take long locks,
+still take a backup (see the operational checklist), and review
+`npm run db:migrate:status` with the release's code. Set
+`SKIP_DEPLOY_MIGRATIONS=1` to deploy without running migrations; the startup
+gate will still refuse a database that does not match.
 
 Migrations must be backward compatible with the previous release, because the
 old instance keeps running until the new one is healthy. Use expand → migrate →
@@ -303,7 +350,7 @@ restore data. To undo:
 - [ ] `npm run db:migrate:status` reviewed (pending list and no blocked state).
 - [ ] For adoption: plan reviewed on a restore; `--dry-run` converged; read-only data checks are all 0.
 - [ ] No long-running transactions holding locks on the tables being changed (`pg_stat_activity`). The runner uses `lock_timeout = 15s`.
-- [ ] Migrations applied with the explicit confirmation; `npm run db:verify` is `"ok": true`.
+- [ ] Migrations applied, by the `npm start` deploy step or manually with the explicit confirmation; `npm run db:verify` is `"ok": true`.
 - [ ] Release deployed; `/api/health/ready` and `/api/health/db` are healthy; startup log shows "Database schema verified".
 - [ ] Post-deploy: watch error rates, slow queries and lock waits for the changed tables.
 

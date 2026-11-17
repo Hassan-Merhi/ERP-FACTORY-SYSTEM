@@ -12,7 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fmt } from "./FactoryEmployeeAdvancesTabTypes";
+import { fmt, fmtUsd } from "./FactoryEmployeeAdvancesTabTypes";
 import { useFactoryEmployeeAdvancesTabState } from "./useFactoryEmployeeAdvancesTabState";
 import { FactoryEmployeeAdvancesTabSection } from "./FactoryEmployeeAdvancesTabSection";
 
@@ -80,7 +80,9 @@ export default function FactoryEmployeeAdvancesTab() {
           <div className="flex items-center gap-2 rounded-lg border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 px-3 py-1.5 text-sm">
             <Banknote className="h-4 w-4 text-amber-500 shrink-0" />
             <span className="text-muted-foreground">Outstanding</span>
-            <span className="font-semibold font-mono text-amber-700 dark:text-amber-300">${fmt(totalOutstanding)}</span>
+            <span className="font-semibold font-mono text-amber-700 dark:text-amber-300">
+              {fmtUsd(totalOutstanding)}
+            </span>
           </div>
         )}
         {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const REPORT_TABS = ["profit", "sales-form"] as const;
 
@@ -59,9 +60,7 @@ function extractAccounts(payload: AccountsResponse | CashAccount[] | undefined):
 
 export function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n)
-    ? `$0.${"0".repeat(dec)}`
-    : `$${n.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+  return isNaN(n) ? `$0.${"0".repeat(dec)}` : formatUsd(n, dec);
 }
 
 function toLocalDateInputValue(date: Date) {

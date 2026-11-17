@@ -91,7 +91,7 @@ export function NotificationsCenter() {
                   <span className="text-muted-foreground">From:</span> {approveReq.fromCompanyName}
                 </p>
                 <p>
-                  <span className="text-muted-foreground">Amount:</span> ${formatAmount(approveReq.amount)}
+                  <span className="text-muted-foreground">Amount:</span> {formatAmount(approveReq.amount)}
                 </p>
                 <p>
                   <span className="text-muted-foreground">CR side:</span> {approveReq.linkDestLedgerName}

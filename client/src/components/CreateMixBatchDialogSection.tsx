@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getSupplierRate } from "./CreateMixBatchDialogTypes";
 import { useCreateMixBatchDialogState } from "./useCreateMixBatchDialogState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function CreateMixBatchDialogSection({
   addSourceType,
@@ -75,8 +76,9 @@ export function CreateMixBatchDialogSection({
             <SelectContent>
               {availableSuppliers?.map((stock) => (
                 <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
-                  {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @ $
-                  {getSupplierRate(stock).toFixed(4)}/kg)
+                  {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @{" "}
+                  {formatUsd(getSupplierRate(stock), 4)}
+                  /kg)
                 </SelectItem>
               ))}
               {(!availableSuppliers || availableSuppliers.length === 0) && (
@@ -96,8 +98,9 @@ export function CreateMixBatchDialogSection({
                 const remaining = parseFloat(batch.totalWeightKg) - parseFloat(batch.usedKg);
                 return (
                   <SelectItem key={batch.id} value={batch.id.toString()}>
-                    {batch.name || batch.batchCode} ({formatNumber(remaining)} kg @ $
-                    {parseFloat(batch.costPerKg).toFixed(4)}/kg)
+                    {batch.name || batch.batchCode} ({formatNumber(remaining)} kg @{" "}
+                    {formatUsd(parseFloat(batch.costPerKg), 4)}
+                    /kg)
                   </SelectItem>
                 );
               })}

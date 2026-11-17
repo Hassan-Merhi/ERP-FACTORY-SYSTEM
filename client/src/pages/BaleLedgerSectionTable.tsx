@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface BaleDetail {
   ref: string;
@@ -33,9 +34,9 @@ export function fmtMoney(n: number): string {
   if (n === 0) return "$0";
   const rounded = Math.round(n * 100) / 100;
   if (rounded % 1 === 0) {
-    return "$" + new Intl.NumberFormat("en-US").format(rounded);
+    return formatUsd(rounded, 0);
   }
-  return "$" + new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rounded);
+  return formatUsd(rounded, 2);
 }
 
 export function fmtKg(n: number) {

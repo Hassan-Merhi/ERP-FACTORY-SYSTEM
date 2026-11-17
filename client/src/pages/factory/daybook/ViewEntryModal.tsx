@@ -34,6 +34,7 @@ import {
   formatTxType,
   getFactoryTxTypeBadge,
 } from "./daybookUtils";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // Stable empty default: `= []` is a new array each render while the query is
 // disabled (entries that are not voucher-backed), and the balance effect below
@@ -555,7 +556,7 @@ export function ViewEntryModal({
             </p>
             {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd || "1") !== 1 && (
               <p className="text-xs font-mono text-muted-foreground">
-                ${formatNumber(parseFloat(entry.amountUsd || "0"))} USD
+                {formatUsd(parseFloat(entry.amountUsd || "0"), 0, 2)} USD
               </p>
             )}
             {entry.description && <p className="text-sm text-muted-foreground mt-1">{entry.description}</p>}
@@ -705,7 +706,7 @@ export function ViewEntryModal({
           {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd) !== 1 && (
             <div className="text-right">
               <p className="text-xs text-muted-foreground">USD Equivalent</p>
-              <p className="text-sm font-mono">${formatNumber(parseFloat(entry.amountUsd || "0"))}</p>
+              <p className="text-sm font-mono">{formatUsd(parseFloat(entry.amountUsd || "0"), 0, 2)}</p>
             </div>
           )}
         </div>

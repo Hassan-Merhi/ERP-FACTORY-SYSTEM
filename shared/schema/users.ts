@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   active: boolean("active").notNull().default(true),
-  chatbotEnabled: boolean("chatbot_enabled").notNull().default(true),
+  chatbotEnabled: boolean("chatbot_enabled").notNull().default(false),
   hiddenErpCostFields: text("hidden_erp_cost_fields").array().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -151,7 +151,7 @@ export const userPreferences = pgTable("user_preferences", {
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
   dateFormat: text("date_format").notNull().default("MM/DD/YYYY"),
-  preferredCurrency: varchar("preferred_currency", { length: 10 }),
+  preferredCurrency: varchar("preferred_currency", { length: 10 }).default("USD"),
   showProfitComparisonOnPOS: boolean("show_profit_comparison_on_pos").notNull().default(false),
   showChatWidget: boolean("show_chat_widget").notNull().default(true),
   showNotesPanel: boolean("show_notes_panel").notNull().default(true),

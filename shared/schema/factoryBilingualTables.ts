@@ -140,7 +140,7 @@ export const factoryBales = pgTable(
     costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull().default("0"),
     totalCost: decimal("total_cost", { precision: 20, scale: 7 }).notNull().default("0"),
     status: text("status").notNull().default("PENDING_PRESSING"),
-    pressedAt: timestamp("pressed_at"),
+    pressedAt: timestamp("pressed_at").defaultNow(),
     finalizedAt: timestamp("finalized_at"),
     finalizedBy: integer("finalized_by"),
     workerName: text("worker_name"),

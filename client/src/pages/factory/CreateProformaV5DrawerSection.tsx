@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateProformaV5DrawerState } from "./useCreateProformaV5DrawerState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function CreateProformaV5DrawerSection({
   errors,
@@ -321,11 +322,7 @@ export function CreateProformaV5DrawerSection({
               </td>
             )}
             <td className="px-2 py-3 text-center font-mono tabular-nums text-foreground">
-              {totalValue > 0 ? (
-                `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              ) : (
-                <span className="text-muted-foreground/40">—</span>
-              )}
+              {totalValue > 0 ? formatUsd(totalValue, 2) : <span className="text-muted-foreground/40">—</span>}
             </td>
           </tr>
         </tfoot>

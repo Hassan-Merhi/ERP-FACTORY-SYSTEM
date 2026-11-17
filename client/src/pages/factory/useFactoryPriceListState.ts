@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ExcelJS, readFile } from "@/lib/excelHelper";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-
 interface FactoryBaleProduct {
   id: number;
   code: string;

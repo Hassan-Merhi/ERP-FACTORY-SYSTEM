@@ -12,6 +12,7 @@ import { MIX_BATCH_TARGET_OPTIONS } from "@/pages/factory/production-raw-stock/m
 import type { CreateMixBatchDialogProps } from "./CreateMixBatchDialogTypes";
 import { useCreateMixBatchDialogState } from "./useCreateMixBatchDialogState";
 import { CreateMixBatchDialogSection } from "./CreateMixBatchDialogSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
   const {
@@ -144,8 +145,9 @@ export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
                     const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
                     return (
                       <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name || b.batchCode} — {formatNumber(remaining)} kg remaining @ $
-                        {parseFloat(b.costPerKg).toFixed(4)}/kg
+                        {b.name || b.batchCode} — {formatNumber(remaining)} kg remaining @{" "}
+                        {formatUsd(parseFloat(b.costPerKg), 4)}
+                        /kg
                       </SelectItem>
                     );
                   })}
@@ -240,8 +242,8 @@ export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
                           maximumFractionDigits: 3,
                         })}
                       </TableCell>
-                      <TableCell className="text-right font-mono">${selection.costPerKg.toFixed(4)}</TableCell>
-                      <TableCell className="text-right font-mono">${formatNumber(selection.totalCost)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatUsd(selection.costPerKg, 4)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatUsd(selection.totalCost, 0, 2)}</TableCell>
                       <TableCell>
                         <Button
                           type="button"
@@ -270,13 +272,13 @@ export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
             <div>
               <p className="text-sm text-muted-foreground">Total Cost</p>
               <p className="text-2xl font-bold font-mono" data-testid="text-total-cost">
-                ${formatNumber(totalCost)}
+                {formatUsd(totalCost, 0, 2)}
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
               <p className="text-2xl font-bold font-mono" data-testid="text-cost-per-kg">
-                ${blendedCostPerKg.toFixed(4)}
+                {formatUsd(blendedCostPerKg, 4)}
               </p>
             </div>
           </div>

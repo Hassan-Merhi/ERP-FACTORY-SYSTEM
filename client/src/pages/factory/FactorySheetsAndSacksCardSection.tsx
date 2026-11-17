@@ -4,8 +4,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Layers, Loader2, MinusCircle, Pencil, Plus, PlusCircle, Trash2 } from "lucide-react";
-import { fmt, fmtInt } from "./factorysheetsandsacks/utils";
+import { fmtInt } from "./factorysheetsandsacks/utils";
 import { useFactorySheetsAndSacksState } from "./useFactorySheetsAndSacksState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactorySheetsAndSacksCardSection({
   allVisibleSelected,
@@ -160,10 +161,12 @@ export function FactorySheetsAndSacksCardSection({
                         </TableCell>
                       )}
                       {columnVisible("price") && (
-                        <TableCell className="text-right font-mono">${fmt(item.unitPrice)}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatUsd(parseFloat(String(item.unitPrice) || "0"), 2)}
+                        </TableCell>
                       )}
                       {columnVisible("value") && (
-                        <TableCell className="text-right font-mono font-semibold">${fmt(totalVal)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">{formatUsd(totalVal, 2)}</TableCell>
                       )}
                       {columnVisible("notes") && (
                         <TableCell className="max-w-[210px] truncate text-xs text-muted-foreground">
@@ -240,7 +243,9 @@ export function FactorySheetsAndSacksCardSection({
                   )}
                   {columnVisible("price") && <td className="px-4 py-3" />}
                   {columnVisible("value") && (
-                    <td className="px-4 py-3 text-right font-mono text-sm font-bold">${fmt(colTotals.value)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm font-bold">
+                      {formatUsd(colTotals.value, 2)}
+                    </td>
                   )}
                   {columnVisible("notes") && <td className="px-4 py-3" />}
                   {canEdit && <td className="px-4 py-3" />}

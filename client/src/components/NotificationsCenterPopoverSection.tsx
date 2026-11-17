@@ -188,7 +188,7 @@ export function NotificationsCenterPopoverSection({
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
-                      <span className="font-semibold">${formatAmount(req.amount)}</span>
+                      <span className="font-semibold">{formatAmount(req.amount)}</span>
                       <span className="text-muted-foreground text-xs truncate">CR: {req.linkDestLedgerName}</span>
                     </div>
                     {req.description && <p className="text-xs text-muted-foreground truncate">{req.description}</p>}

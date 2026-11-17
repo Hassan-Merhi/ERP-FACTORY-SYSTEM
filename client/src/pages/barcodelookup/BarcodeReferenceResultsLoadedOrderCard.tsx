@@ -3,28 +3,24 @@ import { Container, FileText, FlaskConical, Layers, Package, Ship, Truck, User2 
 import { Badge } from "@/components/ui/badge";
 import { InfoRow } from "./components/InfoRow";
 import type { useBarcodeLookupModel } from "./useBarcodeLookupModel";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export type BarcodeLookupModel = ReturnType<typeof useBarcodeLookupModel>;
 
 export function LoadedOrderCard({ model }: { model: BarcodeLookupModel }) {
   const order = model.referenceResult?.loadedOnOrder;
   if (!order) return null;
-  const statusColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-    FINALIZED: "default",
-    VERIFIED: "default",
-    PENDING_VERIFICATION: "secondary",
-    LOADING: "secondary",
-    DRAFT: "outline",
-    CANCELLED: "destructive",
-  };
   return (
     <div className="rounded-xl border overflow-hidden" data-testid="card-loaded-on-order">
       <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
         <Ship className="h-4 w-4 text-muted-foreground shrink-0" />
         <span className="font-semibold text-sm">Loaded onto Outbound Container</span>
-        <Badge variant={statusColors[order.status] ?? "outline"} className="text-xs">
-          {order.status.replace("_", " ")}
-        </Badge>
+        <StatusBadge
+          status={order.status}
+          label={order.status.replace("_", " ")}
+          showIcon={false}
+          className="text-xs"
+        />
       </div>
       <div className="px-4 py-4 grid grid-cols-2 md:grid-cols-3 gap-4">
         {order.containerNumber && (

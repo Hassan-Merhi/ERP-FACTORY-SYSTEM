@@ -4,6 +4,7 @@ import { Boxes, Check, Coins, Plus, Trash2, Truck, Wallet, XIcon } from "lucide-
 import { cn } from "@/lib/utils";
 import { fmt } from "./helpers";
 import { useAgentCardState } from "./useAgentCardState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function AgentCardSection({
   adjustments,
@@ -48,7 +49,8 @@ export function AgentCardSection({
                   a.type === "debit" ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"
                 )}
               >
-                {a.type === "debit" ? "+" : "−"}${fmt(a.amount, 0)}
+                {a.type === "debit" ? "+" : "−"}
+                {formatUsd(a.amount, 0)}
               </span>
               <Badge
                 variant="outline"
@@ -215,7 +217,7 @@ export function AgentCardSection2({
         </span>
         <div className="min-w-0">
           <p className="text-[11px] font-medium text-muted-foreground">Upcoming Duty</p>
-          <p className="truncate text-lg font-bold tabular-nums text-foreground">${fmt(upcomingDuty, 0)}</p>
+          <p className="truncate text-lg font-bold tabular-nums text-foreground">{formatUsd(upcomingDuty, 0)}</p>
         </div>
       </div>
     </div>

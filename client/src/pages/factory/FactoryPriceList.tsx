@@ -10,6 +10,7 @@ import { Check, X, Pencil, Tag, RefreshCw, AlertCircle, Download, Upload } from 
 import { PageHeader } from "@/components/PageHeader";
 import { useFactoryPriceListState } from "./useFactoryPriceListState";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export default function FactoryPriceList() {
   const {
@@ -250,7 +251,7 @@ export default function FactoryPriceList() {
                             <span
                               className={`font-mono font-medium ${sellingPrice > 0 ? "" : "text-muted-foreground"}`}
                             >
-                              {sellingPrice > 0 ? `$${sellingPrice.toFixed(2)}` : "—"}
+                              {sellingPrice > 0 ? formatUsd(sellingPrice, 2) : "—"}
                             </span>
                             {recordChanges.allowed && (
                               <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
@@ -304,7 +305,7 @@ export default function FactoryPriceList() {
                             data-testid={`cell-production-price-${product.id}`}
                           >
                             <span className={`font-mono text-sm text-muted-foreground`}>
-                              {productionPrice > 0 ? `$${productionPrice.toFixed(2)}` : "—"}
+                              {productionPrice > 0 ? formatUsd(productionPrice, 2) : "—"}
                             </span>
                             {recordChanges.allowed && (
                               <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />

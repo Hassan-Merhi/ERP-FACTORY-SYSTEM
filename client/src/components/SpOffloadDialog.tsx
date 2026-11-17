@@ -15,10 +15,19 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
+import { formatUsd } from "@/lib/moneyDisplay";
+import type {
+  ChargeLine,
+  SpOffloadContainer,
+  SpSetupStatus,
+  SpLedgerAccount,
+  SpLocationOption,
+  ParentAgentOption,
+} from "./spOffloadDialogTypes";
 
 function fmt2(v: string | number | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n) ? "$0.00" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return isNaN(n) ? "$0.00" : formatUsd(n, 2);
 }
 
 const CHARGE_TYPES = [
@@ -29,74 +38,6 @@ const CHARGE_TYPES = [
   { value: "other", label: "Other (Any Account)" },
   { value: "parent_agent", label: "Agent via HADI L'SHI" },
 ];
-
-interface ChargeLine {
-  chargeType: string;
-  description: string;
-  amountUsd: string;
-  prepaidChargeId: string;
-  creditBankAccountId: string;
-  creditLedgerAccountId: string;
-  parentAgentAccountId: string;
-}
-
-interface SpContainerLine {
-  qty?: string | number | null;
-  unitRateUsd?: string | number | null;
-}
-
-interface SpPrepaidCharge {
-  id: string | number;
-  chargeType: string;
-  amountPaidUsd: string | number;
-}
-
-interface SpOffloadContainer {
-  id: number;
-  supplierName?: string | null;
-  containerNumber?: string | null;
-  invoiceNumber?: string | null;
-  discountPct?: string | number | null;
-  invoiceTotalUsd?: string | number | null;
-  freightEstimateUsd?: string | number | null;
-  surchargeUsd?: string | number | null;
-  fumigationUsd?: string | number | null;
-  documentChargesUsd?: string | number | null;
-  lines?: SpContainerLine[];
-  prepaid?: SpPrepaidCharge[];
-}
-
-interface SpSetupAccount {
-  id: string | number;
-  subType: string;
-  name?: string | null;
-}
-
-interface SpBankAccount {
-  id: string | number;
-  bankName: string;
-}
-
-interface SpSetupStatus {
-  spAccounts?: SpSetupAccount[];
-  bankAccounts?: SpBankAccount[];
-}
-
-interface SpLedgerAccount {
-  id: string | number;
-  code?: string | null;
-  name: string;
-}
-
-interface SpLocationOption {
-  id: string | number;
-  name: string;
-}
-
-interface ParentAgentOption {
-  ledger_account_id: string | number;
-  account_name: string;
-}
 
 interface SpOffloadDialogProps {
   open: boolean;

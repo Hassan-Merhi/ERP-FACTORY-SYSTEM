@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Check, Search, X } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export type Account = { id: number; name: string; code: string; accountType: string };
 
@@ -33,7 +34,7 @@ export const ENTRY_PAGE_SIZE = 100;
 
 export function fmtMoney(v: string | number | null | undefined) {
   if (!v || v === "0" || v === "0.00") return null;
-  return Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(Number(v), 2);
 }
 
 export function AccountCombobox({

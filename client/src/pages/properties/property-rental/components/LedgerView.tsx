@@ -4,9 +4,10 @@ import { CalendarDays, Wrench } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
-import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
+import { MONTH_NAMES, billingDayLabel, fmtMoneyCurrency } from "../utils";
 import { useLedgerViewState } from "./useLedgerViewState";
 import { LedgerViewSection } from "./LedgerViewSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export // ──────────────────────────────────────────────────────────
 // LEDGER VIEW / STATEMENT
@@ -135,7 +136,7 @@ function LedgerView(props: {
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -180,7 +181,7 @@ function LedgerView(props: {
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -226,7 +227,7 @@ function LedgerView(props: {
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>

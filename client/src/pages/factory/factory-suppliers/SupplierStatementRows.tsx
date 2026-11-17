@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRightLeft, Pencil, Trash2, Package } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface SupplierStatementRowsProps {
   statementData: StatementResponse;
@@ -48,9 +49,7 @@ export function SupplierStatementRows({
   if (displayedRows.length === 0) return <EmptyState icon={Package} title="No activity yet" />;
 
   const fmtCcAmt = (cc: string, amt: number) =>
-    cc !== "USD"
-      ? `${cc} ${formatNum(String(Math.abs(amt).toFixed(2)))}`
-      : `$${formatNum(String(Math.abs(amt).toFixed(2)))}`;
+    cc !== "USD" ? `${cc} ${formatNum(String(Math.abs(amt).toFixed(2)))}` : formatUsd(Math.abs(amt), 2);
 
   const finalBalanceStr =
     Object.entries(currencyTotals)

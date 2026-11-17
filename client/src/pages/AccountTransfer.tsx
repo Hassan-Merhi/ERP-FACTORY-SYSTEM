@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { AccountCombobox, ENTRY_PAGE_SIZE, fmtMoney, type Account, type EntryPage } from "./AccountCombobox";
 
 export default function AccountTransfer() {
@@ -302,14 +303,14 @@ export default function AccountTransfer() {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {dr ? (
-                              <span className="font-medium">${dr}</span>
+                              <span className="font-medium">{dr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {cr ? (
-                              <span className="font-medium">${cr}</span>
+                              <span className="font-medium">{cr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -369,18 +370,12 @@ export default function AccountTransfer() {
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   {totalDebit > 0 && (
                     <span>
-                      Debit:{" "}
-                      <span className="font-medium text-foreground">
-                        ${totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
+                      Debit: <span className="font-medium text-foreground">{formatUsd(totalDebit, 2, 3)}</span>
                     </span>
                   )}
                   {totalCredit > 0 && (
                     <span>
-                      Credit:{" "}
-                      <span className="font-medium text-foreground">
-                        ${totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
+                      Credit: <span className="font-medium text-foreground">{formatUsd(totalCredit, 2, 3)}</span>
                     </span>
                   )}
                 </div>

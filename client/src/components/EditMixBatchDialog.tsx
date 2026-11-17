@@ -16,6 +16,7 @@ import {
   EditMixBatchDialogMixSourceEditReview,
   EditMixBatchDialogSection,
 } from "./EditMixBatchDialogSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
   const {
@@ -198,14 +199,14 @@ export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
                                     : "Current supplier rate, used only for an edit estimate"
                                 }
                               >
-                                ${sel.costPerKg.toFixed(4)}
+                                {formatUsd(sel.costPerKg, 4)}
                               </span>
                               {!historicalSourcesLocked && originalSupplierRates.has(sel.sourceId) && (
                                 <div
                                   className="text-[11px] text-muted-foreground"
                                   title="Saved weighted-average supplier cost in this batch"
                                 >
-                                  Recorded: ${originalSupplierRates.get(sel.sourceId)!.toFixed(4)}
+                                  Recorded: {formatUsd(originalSupplierRates.get(sel.sourceId)!, 4)}
                                 </div>
                               )}
                             </div>
@@ -215,13 +216,11 @@ export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
                               title="Recorded cost of the upstream batch. Only its source/weight can be changed."
                               data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
                             >
-                              ${sel.costPerKg.toFixed(4)}
+                              {formatUsd(sel.costPerKg, 4)}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          ${formatNumber(sel.totalCost, 4)}
-                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{formatUsd(sel.totalCost, 0, 4)}</TableCell>
                         <TableCell>
                           <Button
                             type="button"
@@ -259,7 +258,7 @@ export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
                 <p className="text-2xl font-bold font-mono">
                   {hasMissingCurrentRates
                     ? "Unavailable"
-                    : "$" + formatNumber(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 4)}
+                    : formatUsd(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 0, 4)}
                 </p>
               </div>
               <div>
@@ -269,7 +268,7 @@ export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
                 <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">
                   {hasMissingCurrentRates
                     ? "Unavailable"
-                    : "$" + (historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg).toFixed(4)}
+                    : formatUsd(historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg, 4)}
                 </p>
               </div>
             </div>

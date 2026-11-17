@@ -20,6 +20,8 @@ import {
   statusLabel,
   stickyCellBase,
   stickyHeadBase,
+  shippingCostUsd,
+  localIsoDate,
 } from "./factoryshippingcontainers/utils";
 import { DocIndicator } from "./factoryshippingcontainers/components/DocIndicator";
 import { EditableCellInput } from "./factoryshippingcontainers/components/EditableCellInput";
@@ -244,14 +246,7 @@ export default function FactoryShippingContainers() {
   }, [activeRows, trackingMap]);
 
   // ── Shipping filters and local pagination (backing rows are unchanged). ──
-  const today = (() => {
-    const date = new Date();
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-    ].join("-");
-  })();
+  const today = localIsoDate();
 
   const destinations = useMemo(
     () => [...new Set(allDisplayRows.map((r) => r.destination?.trim()).filter((v): v is string => Boolean(v)))].sort(),
@@ -602,7 +597,7 @@ export default function FactoryShippingContainers() {
                     {colVis.containerCost && (
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {r.grandTotal ? (
-                          <span className="shipping-cost">${Number(r.grandTotal).toLocaleString()}</span>
+                          <span className="shipping-cost">{shippingCostUsd(r.grandTotal)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

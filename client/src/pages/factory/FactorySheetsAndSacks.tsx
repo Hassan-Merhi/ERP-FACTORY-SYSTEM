@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Layers, Loader2, Package, ShoppingBag, History, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { fmt } from "./factorysheetsandsacks/utils";
 import { useFactorySheetsAndSacksState, type EmbeddablePageProps } from "./useFactorySheetsAndSacksState";
 import { FactorySheetsAndSacksCardSection } from "./FactorySheetsAndSacksCardSection";
 import { FactorySheetsAndSacksSection } from "./FactorySheetsAndSacksSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 // Optional workflows should not extend the initial stock tab's JavaScript load.
 const ItemFormDialog = lazy(() =>
   import("./factorysheetsandsacks/components/ItemFormDialog").then((module) => ({ default: module.ItemFormDialog }))
@@ -95,7 +95,7 @@ export default function FactorySheetsAndSacks(props: EmbeddablePageProps) {
           {
             label: "Total Sheets",
             value: stats.sheets.toLocaleString(),
-            detail: `$${fmt(stats.sheetValue)} value`,
+            detail: `${formatUsd(stats.sheetValue, 2)} value`,
             icon: Layers,
             colors:
               "from-blue-50 to-cyan-50 border-blue-200/80 dark:from-blue-950 dark:to-blue-900 dark:border-blue-500/40",
@@ -104,7 +104,7 @@ export default function FactorySheetsAndSacks(props: EmbeddablePageProps) {
           {
             label: "Total Sacks",
             value: stats.sacks.toLocaleString(),
-            detail: `$${fmt(stats.sackValue)} value`,
+            detail: `${formatUsd(stats.sackValue, 2)} value`,
             icon: ShoppingBag,
             colors:
               "from-emerald-50 to-teal-50 border-emerald-200/80 dark:from-[#053c38] dark:to-[#07564a] dark:border-emerald-500/40",
@@ -121,7 +121,7 @@ export default function FactorySheetsAndSacks(props: EmbeddablePageProps) {
           },
           {
             label: "Total Value",
-            value: `$${fmt(stats.totalValue)}`,
+            value: formatUsd(stats.totalValue, 2),
             detail: "Current inventory value",
             icon: Wallet,
             colors:

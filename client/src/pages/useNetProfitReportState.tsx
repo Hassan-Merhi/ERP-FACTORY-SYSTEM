@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import type { ApiListRow, AuthMe } from "@shared/apiTypes";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export type Period =
   "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
@@ -94,12 +95,7 @@ function getDateRange(
 }
 
 export function formatAmount(n: number) {
-  return (
-    "$" +
-    new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
-      Math.abs(Math.round(n))
-    )
-  );
+  return formatUsd(Math.abs(Math.round(n)), 0);
 }
 
 function AmountCell({ value, alwaysGreen }: { value: number; alwaysGreen?: boolean }) {

@@ -74,9 +74,9 @@ test suite and a production build pass.
 | 3 | Dead code | Unrouted pages, superseded versions, dead dialogs, unused `lazyPages` exports, unused primitives | In progress (unreferenced code removed; routed legacy pages wait on owner decisions) |
 | 4 | Export and print | Every existing export moved to the standard menu, labels, icon, filename and download helper; exports added to list/report pages that have none | In progress (existing exports migrated; missing exports not yet added) |
 | 5 | Headers, hubs and tabs | `PageHeader` everywhere, double titles removed, all hubs on default pill tabs with URL state, tab labels match page titles and sidebar labels | Done (Daybook tab state moves with phase 9) |
-| 6 | Actions and wording | Create/save/delete/refresh labels and icons, toast titles, one confirm pattern replacing hand-built `AlertDialog` deletes | Not started |
+| 6 | Actions and wording | Create/save/delete/refresh labels and icons, toast titles, one confirm pattern replacing hand-built `AlertDialog` deletes | Done |
 | 7 | Filters, tables and states | `SearchField`, `PeriodFilter`, shadcn `Select`, shared states and `PaginationBar` on every list page | Done (7a, 7b, 7c) |
-| 8 | Formatting and status colours | Local formatters and hard-coded `$` replaced; local status maps replaced by `StatusBadge` | Not started |
+| 8 | Formatting and status colours | Local formatters and hard-coded `$` replaced; local status maps replaced by `StatusBadge` | Done |
 | 9 | Cross-company convergence | Factory and POS Daybook onto the ERP Daybook frame; rental pages on one header and one navigation model; Settings on one save model; voucher forms on one action bar, save label and shortcut set; ERP payroll tabs URL-backed | Not started |
 | 10 | Guard rails | Lint/audit ratchets so new code cannot reintroduce `window.confirm`, raw export code, bare `<h1>` page titles or a hub tab held only in component state | Not started |
 
@@ -113,6 +113,7 @@ Answered by the owner on 2026-11-16.
 | 2026-11-17 | 7a | About 90 hand-built search boxes moved to `SearchField` and about 85 plain `<select>`s to the shared `Select` (empty-value options map back through a sentinel so stored state is unchanged); scanner inputs, popover comboboxes and test-driven selects left as they were |
 | 2026-11-17 | 7b | Page and card-level loading text, "No … found/yet" messages and missing error branches on list and report pages moved to `LoadingState` / `EmptyState` / `ErrorState` (with Try again); about 85 pages that showed nothing or an empty list when their query failed now show an error |
 | 2026-11-17 | 7c | Six hand-built pagers moved to `PaginationBar`; 19 hand-built From/To date pairs on list and report filters moved to `PeriodFilter`, which gained open-ended custom ranges ("Start date only" / "End date only") so no page loses one-sided filtering (owner decision 2026-11-17). Kept: the transaction journal pager (test-driven), Cost Center Reports' From/To (its reports need a bounded period), form date fields and export/action ranges |
+| 2026-11-17 | 8 | Local status colour maps and pills on list, report and scanner pages moved to `StatusBadge` (new kinds for pressing, reservation, verification and in-transit/arrived/offloaded/closed states; every pill keeps its exact label); hand-built `$` strings moved to `formatMoneyDisplay` through a new `formatUsd` helper with the same decimals and separators, so no visible amount changes. Kept: chart colours, scanner row tints, export builders and amounts in translated sentences |
 
 ### Follow-ups found during phase 4
 

@@ -9,7 +9,6 @@ import {
   DEFAULT_OTW_COL_VIS,
   EnrichedContainerRow,
   type EtaFilterValue,
-  fmt,
   OTW_COLS,
   OtwColId,
 } from "./git-containers/gitContainerTypes";
@@ -19,6 +18,7 @@ import { useGITContainersData } from "./git-containers/useGITContainersData";
 import { usePaginatedGITContainers } from "./git-containers/usePaginatedGITContainers";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
+import { formatUsd } from "@/lib/moneyDisplay";
 export function useGITContainersState({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: user, isLoading: userLoading } = useQuery(authenticatedUserQueryOptions());
   const { selectedCompany } = useCompany();
@@ -129,9 +129,9 @@ export function useGITContainersState({ embedded = false }: { embedded?: boolean
   const arrived = data?.summary?.arrived ?? localSummary.arrived;
   const delayed = data?.summary?.delayed ?? localSummary.delayed;
   const offloadOverdue = data?.summary?.overdue ?? localSummary.offloadOverdue;
-  const totalCost = data?.summary ? `$${fmt(data.summary.totalCost)}` : localSummary.totalCost;
+  const totalCost = data?.summary ? formatUsd(data.summary.totalCost, 0) : localSummary.totalCost;
   const totalTransportDuty = data?.summary
-    ? `$${fmt(data.summary.totalTransportDuty)}`
+    ? formatUsd(data.summary.totalTransportDuty, 0)
     : localSummary.totalTransportDuty;
 
   const companies = data?.facets?.companies ?? [...new Set(allContainers.map((c) => c.companyName))].sort();

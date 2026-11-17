@@ -13,12 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export const API = "/api/factory/transporters";
 
-export function fmt(n: number | null | undefined) {
-  if (n == null || isNaN(n)) return "0.00";
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function fmtUsd(n: number | null | undefined) {
+  const value = n == null || isNaN(n) ? 0 : n;
+  return formatUsd(value, 2);
 }
 
 type LedgerAccount = { id: number; name: string; accountType: string };

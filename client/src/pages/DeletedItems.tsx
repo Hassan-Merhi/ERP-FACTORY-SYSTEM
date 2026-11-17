@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Separator } from "@/components/ui/separator";
 import { typeIcons, typeLabels, useDeletedItemsState } from "./useDeletedItemsState";
 import { DeletedItemsCardSection } from "./DeletedItemsCardSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export default function DeletedItems() {
   const {
@@ -217,7 +218,7 @@ export default function DeletedItems() {
               {detailItem.amount !== undefined && (
                 <div>
                   <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-medium">${detailItem.amount?.toLocaleString() || "0"}</p>
+                  <p className="font-medium">{formatUsd(detailItem.amount ?? 0, 0, 3)}</p>
                 </div>
               )}
               {detailItem.date && (
@@ -266,12 +267,12 @@ export default function DeletedItems() {
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.debitAmount || "0") > 0
-                                    ? `$${parseFloat(entry.debitAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatUsd(parseFloat(entry.debitAmount || "0"), 2)
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.creditAmount || "0") > 0
-                                    ? `$${parseFloat(entry.creditAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatUsd(parseFloat(entry.creditAmount || "0"), 2)
                                     : "—"}
                                 </td>
                               </tr>
@@ -281,16 +282,16 @@ export default function DeletedItems() {
                             <tr className="bg-muted/50 font-semibold">
                               <td className="px-3 py-2 text-xs">Total</td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatUsd(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0),
+                                  2
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatUsd(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0),
+                                  2
+                                )}
                               </td>
                             </tr>
                           </tfoot>

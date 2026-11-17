@@ -31,6 +31,8 @@ import {
   thisYearRange,
   todayStr,
   yesterdayStr,
+  costPerKgUsd,
+  escapeSupplierCsvCell,
 } from "./productioncomparison/utils";
 import { MultiSelectFilter } from "./productioncomparison/components/MultiSelectFilter";
 import { BaleComparisonFilters } from "./productioncomparison/components/BaleComparisonFilters";
@@ -367,13 +369,7 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
       }
       return values;
     });
-    const escapeCell = (value: string) => {
-      // Avoid CSV formula injection when opening supplier names in Excel.
-      const unsafe = /^[\s]*[=+@\t\r]/.test(value) || /^[\s]*-(?!\d+(?:\.\d+)?$)/.test(value);
-      const safe = unsafe ? "'" + value : value;
-      return '"' + safe.replace(/"/g, '""') + '"';
-    };
-    const csv = [header, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
+    const csv = [header, ...rows].map((row) => row.map(escapeSupplierCsvCell).join(",")).join("\r\n");
     downloadBlob(
       new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
       exportFileName("production supplier comparison", "csv")
@@ -715,7 +711,7 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                         )}
                         {!costsHidden && (
                           <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {row.aKg > 0 ? "$" + (row.aCost / row.aKg).toFixed(4) : "—"}
+                            {costPerKgUsd(row.aCost, row.aKg)}
                           </TableCell>
                         )}
                         <TableCell className="text-right tabular-nums">{fmtKg(row.bKg)} kg</TableCell>
@@ -726,7 +722,7 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                         )}
                         {!costsHidden && (
                           <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {row.bKg > 0 ? "$" + (row.bCost / row.bKg).toFixed(4) : "—"}
+                            {costPerKgUsd(row.bCost, row.bKg)}
                           </TableCell>
                         )}
                         <TableCell className="text-right">
@@ -786,7 +782,7 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                       )}
                       {!costsHidden && (
                         <TableCell className="text-right font-bold tabular-nums">
-                          {totalSupAKg > 0 ? "$" + (totalSupACost / totalSupAKg).toFixed(4) : "—"}
+                          {costPerKgUsd(totalSupACost, totalSupAKg)}
                         </TableCell>
                       )}
                       <TableCell className="text-right font-bold tabular-nums">{fmtKg(totalSupBKg)} kg</TableCell>
@@ -795,7 +791,7 @@ export default function ProductionComparison({ embedded = false }: EmbeddablePag
                       )}
                       {!costsHidden && (
                         <TableCell className="text-right font-bold tabular-nums">
-                          {totalSupBKg > 0 ? "$" + (totalSupBCost / totalSupBKg).toFixed(4) : "—"}
+                          {costPerKgUsd(totalSupBCost, totalSupBKg)}
                         </TableCell>
                       )}
                       <TableCell className="text-right font-bold">

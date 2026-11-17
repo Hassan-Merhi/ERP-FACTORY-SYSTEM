@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, Package, RotateCcw, Trash2, X } from "lucide-react";
 import { typeIcons, typeLabels, useDeletedItemsState } from "./useDeletedItemsState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function DeletedItemsCardSection({
   data,
@@ -189,12 +190,12 @@ export function DeletedItemsCardSection({
                             )}
                             {item.type === "orphanedPosSale" && (
                               <span className="text-xs text-muted-foreground">
-                                {item.locationName} | ${item.amount?.toLocaleString() || "0"}
+                                {item.locationName} | {formatUsd(item.amount ?? 0, 0, 3)}
                               </span>
                             )}
                             {item.type === "voucher" && (
                               <span className="text-xs text-muted-foreground">
-                                {item.voucherType} | ${item.amount?.toLocaleString() || "0"}
+                                {item.voucherType} | {formatUsd(item.amount ?? 0, 0, 3)}
                               </span>
                             )}
                           </div>
