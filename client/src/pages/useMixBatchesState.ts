@@ -46,8 +46,12 @@ export function useMixBatchesState() {
   useEscapeBack(selectedBatchId !== null ? () => setSelectedBatchId(null) : null);
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
-
-  const { data: batches, isLoading } = useQuery<FactoryMixBatch[]>({
+  const {
+    data: batches,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<FactoryMixBatch[]>({
     queryKey: ["/api/factory/mix-batches"],
   });
 
@@ -177,6 +181,9 @@ export function useMixBatchesState() {
     await XLSX.writeFile(wb, exportFileName("mix batches", "xlsx"));
   };
   return {
+    batches,
+    refetch,
+    isError,
     activeBatchesWithStock,
     assignDialogOpen,
     assignMutation,

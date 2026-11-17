@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, FolderOpen, Layers } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import type { CombinedRow, StockGroupSummary } from "./CombinedInventoryTypes";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function GroupsView({
   groups,
@@ -18,13 +19,12 @@ export function GroupsView({
 }) {
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock groups found</h2>
-        <p className="text-sm text-muted-foreground">Try adjusting your search.</p>
-      </div>
+      <EmptyState
+        icon={Layers}
+        title="No stock groups found"
+        description="Try adjusting your search."
+        className="py-16"
+      />
     );
   }
 
@@ -154,15 +154,7 @@ export function ItemsTable({
   );
 
   if (rows.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock items found</h2>
-        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-      </div>
-    );
+    return <EmptyState icon={Layers} title="No stock items found" description={emptyMessage} className="py-16" />;
   }
 
   return (

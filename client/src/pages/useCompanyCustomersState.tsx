@@ -83,8 +83,12 @@ export function useCompanyCustomersState() {
     enabled: selectedCompany?.companyType === "retail" && Boolean(statementCustomer?.id),
     staleTime: 15_000,
   });
-
-  const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
+  const {
+    data: customers = [],
+    isLoading,
+    isError: customersError,
+    refetch: refetchCustomers,
+  } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
     queryKey: erpCompanyDataKey("/api/customers/stats", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
@@ -305,6 +309,9 @@ export function useCompanyCustomersState() {
     </Form>
   );
   return {
+    customers,
+    refetchCustomers,
+    customersError,
     CustomerForm,
     filteredCustomers,
     form,

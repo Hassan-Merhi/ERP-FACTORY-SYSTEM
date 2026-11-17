@@ -30,7 +30,6 @@ export {
   Phase9ApplyRefusal,
   Phase9EventConflict,
   Phase9StageConflict,
-  ensurePhase9CloudEventSchema,
 } from "./ensurePhase9CloudEventSchema.mjs";
 export { stagePhase9Events } from "./stagePhase9Events.mjs";
 export { applyStagedEventOnce } from "./applyStagedEventOnce.mjs";

@@ -20,17 +20,16 @@ import { registerPosTransferDelegatedApprovalRoutesStep2 } from "./registerPosTr
 
 export function registerPosTransferDelegatedApprovalRoutes(
   app: Express,
-  dependencies: { ensureGroupsTable: () => Promise<void>; createNoCostExcel: ExcelBuilder }
+  dependencies: { createNoCostExcel: ExcelBuilder }
 ) {
-  const { setup } = registerPosTransferDelegatedApprovalRoutesStep1(app, dependencies);
-  registerPosTransferDelegatedApprovalRoutesStep2({ setup }, app, dependencies);
-  registerPosTransferDelegatedApprovalRoutesStep3({ setup }, app, dependencies);
+  registerPosTransferDelegatedApprovalRoutesStep1(app);
+  registerPosTransferDelegatedApprovalRoutesStep2(app, dependencies);
+  registerPosTransferDelegatedApprovalRoutesStep3(app, dependencies);
 }
 
 function registerPosTransferDelegatedApprovalRoutesStep3(
-  { setup }: Pick<Awaited<ReturnType<typeof registerPosTransferDelegatedApprovalRoutesStep1>>, "setup">,
   app: Express,
-  dependencies: { ensureGroupsTable: () => Promise<void>; createNoCostExcel: ExcelBuilder }
+  dependencies: { createNoCostExcel: ExcelBuilder }
 ) {
   app.post("/api/pos-transfer-approval/:revisionId/approve-send", requireAuth, async (req, res) => {
     try {
@@ -40,7 +39,6 @@ function registerPosTransferDelegatedApprovalRoutesStep3(
       if (!Number.isSafeInteger(revisionId) || revisionId < 1) {
         return res.status(400).json({ message: "Invalid revision." });
       }
-      await setup();
       const configured = await pool.query(
         'SELECT grp.chat_id AS "chatId", grp.name AS "groupName" ' +
           "FROM pos_transfer_approval_settings s " +

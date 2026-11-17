@@ -5,11 +5,11 @@ import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
 import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
 import { getLiveCutover } from "./spMigrationCutoverState";
-import { restoreExactCutoverStock } from "./spMigrationPhase4Inventory";
+import { backfillLegacyCutoverStockDeltaKeys, restoreExactCutoverStock } from "./spMigrationPhase4Inventory";
 import { restoreUsersToSourceExact } from "./spMigrationPhase4Users";
 import { exactCutoverConfirmation } from "./spMigrationPhase4Policy";
 import { resultRows, firstRow } from "../../lib/queryResult";
-import { ensurePhase4Schema, installPhase4WriteGuard, invalidatePhase4HoldCache } from "./phase4WriteGuard";
+import { installPhase4WriteGuard, invalidatePhase4HoldCache } from "./phase4WriteGuard";
 import {
   finalizeCutover,
   loadCutover,
@@ -21,7 +21,7 @@ import {
 async function rollbackCutover(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   if (cutover.status !== "active")
@@ -71,7 +71,7 @@ async function rollbackCutover(req: Request, res: Response): Promise<Response | 
 async function cancelPreparedCutover(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   if (cutover.status !== "prepared")
@@ -124,7 +124,7 @@ async function cancelPreparedCutover(req: Request, res: Response): Promise<Respo
 async function releaseTargetHold(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   const error = exactCutoverConfirmation(
@@ -166,7 +166,7 @@ async function releaseTargetHold(req: Request, res: Response): Promise<Response 
 async function statusCutover(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, false);
   if (!pair) return;
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const live = await getLiveCutover(pair.sourceId, pair.targetId);
   const latestResult = await db.execute(sql`
     SELECT * FROM sp_migration_cutovers
@@ -189,8 +189,8 @@ async function finalVerification(req: Request, res: Response): Promise<Response 
 
 export function registerSpMigrationPhase4Routes(app: Express): void {
   installPhase4WriteGuard(app);
-  void ensurePhase4Schema().catch((error) => {
-    logger.warn("[SP Phase 4] Schema setup deferred", {
+  void backfillLegacyCutoverStockDeltaKeys().catch((error) => {
+    logger.warn("[SP Phase 4] Legacy stock-delta key backfill deferred", {
       error: error instanceof Error ? error.message : String(error),
     });
   });

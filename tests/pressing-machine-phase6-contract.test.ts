@@ -5,6 +5,8 @@ import {
   pressingReportFiltersSchema,
   pressingSavedViewSchema,
 } from "../shared/pressingReportContracts";
+
+import { indexDefinition } from "./helpers/schemaManifest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const server = readModuleFamily("server/routes/factory/factoryPressingReportRoutes.ts");
@@ -12,8 +14,6 @@ const client = readModuleFamily("client/src/pages/factory/pressing-scanner/press
 const page = readModuleFamily("client/src/pages/factory/PressingHistoryReport.tsx");
 const parent = readModuleFamily("client/src/pages/factory/PressingMachineManagement.tsx");
 const registration = readModuleFamily("server/routes/factoryRoutes.ts");
-const indexSql = readModuleFamily("migrations/20261027_002_factory_pressing_history_report_indexes.sql");
-const stage = readModuleFamily("server/startup-schema/038-factory-pressing-history-report.ts");
 
 describe("pressing machine Phase 6 reporting contracts", () => {
   it("rejects invalid dates, excessive pagination and unknown filter fields", () => {
@@ -111,9 +111,9 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("p.machine_id = c.machine_id");
     expect(server).toContain("p.voided_at IS NULL");
     expect(server).toContain('AS "secondsSincePrevious"');
-    expect(indexSql).toContain("factory_pressing_confirmations_machine_time_idx");
-    expect(indexSql).toContain("confirmed_at DESC, id DESC");
-    expect(stage).toContain("factory_pressing_confirmations_machine_time_idx");
+    expect(indexDefinition("factory_pressing_confirmations_machine_time_idx")).toContain(
+      "(company_id, machine_id, confirmed_at DESC, id DESC) WHERE (voided_at IS NULL)"
+    );
   });
   it("has a company-scoped history UI, saved filters, paginated rows and export", () => {
     expect(parent).toContain("<PressingHistoryReport");

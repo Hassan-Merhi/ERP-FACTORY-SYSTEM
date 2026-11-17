@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TabsContent } from "@/components/ui/tabs";
 import { Edit, Save, X } from "lucide-react";
 import { useStockItemDetailsDialogViewState } from "./useStockItemDetailsDialogViewState";
+import { LoadingState } from "@/components/ui/page-state";
 
 export function StockItemDetailsDialogViewTabsContentSection2({
   editedCategoryId,
@@ -85,9 +86,7 @@ export function StockItemDetailsDialogViewTabsContentSection2({
         </div>
 
         {loadingItem ? (
-          <div className="flex items-center justify-center py-8">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+          <LoadingState className="py-8" />
         ) : stockItem ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

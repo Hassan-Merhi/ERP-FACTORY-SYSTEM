@@ -10,6 +10,9 @@ import { useFactoryStatusBuilderStatePart2 } from "./useFactoryStatusBuilderStat
 
 export function useFactoryStatusBuilderState() {
   const {
+    apiSheets,
+    refetch,
+    isError,
     activeIdx,
     activeSheet,
     autosaveTimerRef,
@@ -89,6 +92,9 @@ export function useFactoryStatusBuilderState() {
     updateSheet,
   });
   return {
+    apiSheets,
+    refetch,
+    isError,
     activeIdx,
     activeSheet,
     addColumn,

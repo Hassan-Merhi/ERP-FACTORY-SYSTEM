@@ -22,11 +22,15 @@ import { StatusAddRow } from "./factorystatusbuilder/components/StatusAddRow";
 import { StatusCellLinkMenu } from "./factorystatusbuilder/components/StatusCellLinkMenu";
 import { StatusDiffFooterRow } from "./factorystatusbuilder/components/StatusDiffFooterRow";
 import { FactoryStatusBuilderSection, useFactoryStatusBuilderState } from "./useFactoryStatusBuilderState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
   const {
+    apiSheets,
+    refetch,
+    isError,
     activeIdx,
     activeSheet,
     addColumn,
@@ -74,7 +78,11 @@ export default function FactoryStatusBuilder() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-[200px] text-muted-foreground">Loading pages…</div>;
+    return <LoadingState title="Loading pages…" />;
+  }
+
+  if (isError && !apiSheets) {
+    return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
   }
 
   const diffRow = activeSheet ? calcDiff(localSheets, activeSheet) : [];
@@ -127,12 +135,11 @@ export default function FactoryStatusBuilder() {
 
         {/* Content */}
         {!activeSheet ? (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-            <div className="text-center space-y-2">
-              <LayoutGrid className="h-10 w-10 mx-auto opacity-30" />
-              <p>No pages yet. Import an Excel file or add a page.</p>
-            </div>
-          </div>
+          <EmptyState
+            icon={LayoutGrid}
+            title="No pages yet. Import an Excel file or add a page."
+            className="flex-1 rounded-none border-0"
+          />
         ) : viewMode === "history" ? (
           <StatusHistoryPanel historyLoading={historyLoading} historyLog={historyLog} />
         ) : (

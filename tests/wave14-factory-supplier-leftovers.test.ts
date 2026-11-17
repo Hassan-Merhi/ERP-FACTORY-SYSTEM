@@ -27,7 +27,6 @@ import { db, pool } from "../server/db";
 import { storage } from "../server/storage";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { loadPartyMemoLines } from "../server/services/accounting/balances/unpostedMemo";
 import { getPartyBalances } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
@@ -191,7 +190,6 @@ async function cleanup(id: number) {
 const companyCodes = ["FAC", "PAR", "CHD"].map((suffix) => `${PREFIX.toUpperCase()}-${suffix}`);
 
 beforeAll(async () => {
-  await ensureFactoryCostBasisSchema(pool);
   for (const leftover of await all<{ id: number }>(`SELECT id FROM companies WHERE code = ANY($1) ORDER BY id DESC`, [
     companyCodes,
   ])) {

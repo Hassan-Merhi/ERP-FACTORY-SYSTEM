@@ -10,7 +10,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
-import { ensureLedgerIntegrityGuard } from "../server/services/accounting/ledgerIntegrityGuard";
 
 const PREFIX = `lig${Date.now().toString(36)}`;
 let companyA: number;
@@ -54,7 +53,6 @@ async function attempt(text: string, values: unknown[]): Promise<string | null> 
 }
 
 beforeAll(async () => {
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
   await maintenance<{ id: number }>(async (q) => {
     const company = async (code: string, parent: number | null) =>
       (
@@ -215,31 +213,5 @@ describe("ledger_accounts delete guard", () => {
       await q(insertLine, [voucherA, emptied, null, "0", "25"]);
     });
     expect(await attempt(`UPDATE ledger_accounts SET deleted_at = NOW() WHERE id = $1`, [emptied])).toBeNull();
-  });
-
-  it("is idempotent to install again", async () => {
-    expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  });
-});
-
-describe("first install", () => {
-  const guardsPresent = async () =>
-    (
-      await pool.query<{ n: number }>(
-        `SELECT (SELECT COUNT(*) FROM pg_trigger WHERE tgname IN ('voucher_entries_target_guard', 'ledger_accounts_delete_guard'))
-              + (SELECT COUNT(*) FROM pg_constraint WHERE conname = 'voucher_entries_single_side') AS n`
-      )
-    ).rows[0].n;
-
-  it("installs on a database where the guard function does not exist yet", async () => {
-    await maintenance(async (q) => {
-      await q(`DROP TRIGGER IF EXISTS voucher_entries_target_guard ON voucher_entries`);
-      await q(`DROP TRIGGER IF EXISTS ledger_accounts_delete_guard ON ledger_accounts`);
-      await q(`DROP FUNCTION IF EXISTS erp_voucher_entry_target_guard()`);
-      await q(`ALTER TABLE voucher_entries DROP CONSTRAINT IF EXISTS voucher_entries_single_side`);
-    });
-    expect(Number(await guardsPresent())).toBe(0);
-    expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-    expect(Number(await guardsPresent())).toBe(3);
   });
 });

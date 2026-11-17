@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignJustify, ChevronDown, ChevronRight, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,12 +14,18 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
 import type { StockEntryWorker } from "./stockentryhistory/derived";
 import type { BaleDetail, GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
+import { buildStockEntryWorkerGroups, buildStockEntryWorkerTargets } from "./stockEntryHistoryWorkerGroups";
 import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
 import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import { STATUS_COLORS, fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
+import {
+  STATUS_COLORS,
+  fetchAllStockEntryHistoryPages,
+  formatDailyNum,
+  formatHistoryTime,
+} from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -74,7 +81,13 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   params.set("limit", "250");
 
   const {
-    data: historyPages, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage,
+    data: historyPages,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
   } = useInfiniteQuery<StockEntryHistoryPage, Error>({
     queryKey: companyQueryKey("/api/factory/bales/stock-entry-history", selectedCompany?.id, params.toString()),
     initialPageParam: 1,
@@ -89,7 +102,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       if (!Array.isArray(data.items)) throw new Error("Invalid response: items is not an array");
       return data as StockEntryHistoryPage;
     },
-    getNextPageParam: (lastPage) => lastPage.hasNextPage ? lastPage.page + 1 : undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.page + 1 : undefined),
     enabled: Boolean(selectedCompany?.id) && dateRangeValid,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -99,9 +112,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element || !hasNextPage || isFetchingNextPage || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) void fetchNextPage();
-    }, { rootMargin: "300px" });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void fetchNextPage();
+      },
+      { rootMargin: "300px" }
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, viewMode]);
@@ -110,7 +126,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const groups: GroupRow[] = useMemo(() => historyPages?.pages.flatMap((page) => page.items) ?? [], [historyPages]);
   const allBales = useMemo(() => groups.flatMap((group) => group.bales ?? []), [groups]);
   const totalBales = useMemo(() => groups.reduce((sum, group) => sum + group.baleCount, 0), [groups]);
-  const totalWeight = useMemo(() => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0), [groups]);
+  const totalWeight = useMemo(
+    () => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0),
+    [groups]
+  );
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
     queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
@@ -121,6 +140,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
 
   const targetDate = isSingleDay ? fromDate : null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
+    // prettier-ignore
     queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", "daily", targetDate, targetDate),
     queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
     enabled: canReadProductionTargets && Boolean(targetDate),
@@ -128,68 +148,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     refetchOnWindowFocus: false,
   });
 
-  const workerTargets = useMemo<
-    Record<number, { targetBales: number; producedBales: number; workerCount: number }>
-  >(() => {
-    const targets: Record<number, { targetBales: number; producedBales: number; workerCount: number }> = {};
-    for (const row of productionTargets?.rows ?? []) {
-      if (row.targetBales === null || row.targetBales === undefined) continue;
-      const targetBales = Number(row.targetBales);
-      const producedBales = Number(row.producedBales ?? 0);
-      if (!Number.isFinite(targetBales) || !Number.isFinite(producedBales)) continue;
-      targets[row.personId] = { targetBales, producedBales, workerCount: 1 };
-    }
-    return targets;
-  }, [productionTargets]);
+  const workerTargets = useMemo(() => buildStockEntryWorkerTargets(productionTargets), [productionTargets]);
 
-  const workerGroups = useMemo(() => {
-    const workerMap = new Map<
-      string,
-      {
-        workerKey: string;
-        workerId: number | null;
-        workerName: string | null;
-        totalBales: number;
-        totalWeight: number;
-        groups: GroupRow[];
-      }
-    >();
-
-    for (const group of groups) {
-      const key = group.workerId != null ? String(group.workerId) : "unassigned";
-      const existing = workerMap.get(key) ?? {
-        workerKey: key,
-        workerId: group.workerId,
-        workerName: group.workerName,
-        totalBales: 0,
-        totalWeight: 0,
-        groups: [],
-      };
-      existing.totalBales += group.baleCount;
-      existing.totalWeight += parseFloat(group.totalWeight || "0");
-      existing.groups.push(group);
-      workerMap.set(key, existing);
-    }
-
-    const workerNameById = new Map(
-      workers.map((worker) => [worker.id, worker.fullName ?? worker.full_name ?? worker.name ?? ""])
-    );
-    for (const workerIdString of Object.keys(workerTargets)) {
-      const workerId = Number(workerIdString);
-      const key = String(workerId);
-      if (workerMap.has(key)) continue;
-      workerMap.set(key, {
-        workerKey: key,
-        workerId,
-        workerName: workerNameById.get(workerId) || null,
-        totalBales: 0,
-        totalWeight: 0,
-        groups: [],
-      });
-    }
-
-    return Array.from(workerMap.values()).sort((left, right) => right.totalBales - left.totalBales);
-  }, [groups, workerTargets, workers]);
+  const workerGroups = useMemo(
+    () => buildStockEntryWorkerGroups(groups, workerTargets, workers),
+    [groups, workerTargets, workers]
+  );
 
   const expandedGroupBaleKeys = useMemo(
     () => Array.from(expandedKeys).filter((key) => key.endsWith("-bales")),
@@ -216,7 +180,11 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       if (debouncedSearch.trim()) groupParams.set("search", debouncedSearch.trim());
 
       return {
-        queryKey: companyQueryKey("/api/factory/bales/stock-entry-history/group", selectedCompany?.id, groupParams.toString()),
+        queryKey: companyQueryKey(
+          "/api/factory/bales/stock-entry-history/group",
+          selectedCompany?.id,
+          groupParams.toString()
+        ),
         queryFn: (): Promise<BaleDetail[]> =>
           fetchAllStockEntryHistoryPages(groupParams).then((rows) => rows.flatMap((item) => item.bales ?? [])),
         staleTime: 5 * 60 * 1000,
@@ -365,7 +333,14 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                   </td>
                 </tr>
               )}
-              {!isLoading && workerGroups.length === 0 && (
+              {!isLoading && isError && !historyPages && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8">
+                    <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
+                  </td>
+                </tr>
+              )}
+              {!isLoading && !(isError && !historyPages) && workerGroups.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     No stock entry records found for the selected filters.

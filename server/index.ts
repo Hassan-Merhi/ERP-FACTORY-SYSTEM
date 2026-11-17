@@ -2,7 +2,8 @@
  * Server entry point: composes middleware, routes, static serving, and the
  * startup sequence. Individual concerns live in focused modules:
  *   - server/startup/sessionMiddleware.ts   session config + PG store
- *   - server/startup/ensureRuntimeSchema.ts always-running schema repairs
+ *   - server/startup/startupDataOperations / approved repairs  boot-time DML
+ *   (The schema is owned by migrations/; startupPreload verifies it read-only.)
  *   - server/startup/postStartupJobs.ts     post-listen background jobs
  *   - server/startup/staticServing.ts       production SPA serving
  *   - server/startup/listenWithRetry.ts     listen + graceful shutdown
@@ -12,7 +13,6 @@
  */
 import express from "express";
 import { createHttpApp } from "./httpApp";
-import { runCoreStartupSchemaGuards } from "./startup/runCoreStartupSchemaGuards";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
@@ -38,13 +38,19 @@ import { registerErrorHandler } from "./middleware/errorHandler";
 import { capacitorCors } from "./middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/httpConventions";
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
+import { recordFactoryRowHistoryBaselines } from "./services/audit/factoryRowHistory";
+import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
-import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
+import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
+import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
+import { applyApprovedEmployeeOpeningCredits } from "./startup/applyApprovedEmployeeOpeningCredits";
 import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
 import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
+import { repairCompletedOrderBaleStatuses } from "./startup/repairCompletedOrderBaleStatuses";
+import { warmupDb } from "./startup/warmupDb";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
 import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
@@ -62,8 +68,7 @@ import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCas
 import { runApprovedFactoryWorkerAdvanceNonCashGLRepair } from "./startup/runApprovedFactoryWorkerAdvanceNonCashGLRepair";
 import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
 import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/applyApprovedOctoberPayrollOverlapReclass20261103";
-import { ensureSpGitTracking } from "./lib/spGitTracking";
-import { startupMigrations } from "./startup-schema";
+import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 
 registerProcessErrorHandlers();
 
@@ -179,14 +184,13 @@ registerCsrfProtection(app);
 registerCspReportRoute(app);
 
 // Flag used by /api/health/db to signal readiness to Render's health check.
-// Port opens immediately; migrations run in background. Render holds traffic
-// on the old instance (via health check 503) until this flips to true.
-let migrationsDone = false;
+// The schema was already verified read-only before this module loaded
+// (server/startupPreload.mjs); this flips once the boot-time data operations
+// below have finished. Render holds traffic on the old instance until then.
+let startupDataReady = false;
 
 (async () => {
-  const migrations = startupMigrations;
-
-  registerDbHealthRoute(app, () => migrationsDone);
+  registerDbHealthRoute(app, () => startupDataReady);
 
   // Build info endpoint for frontend version checking (must be before registerRoutes)
   app.get("/api/build-info", async (req, res) => {
@@ -255,11 +259,6 @@ let migrationsDone = false;
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  const runMigrations = () =>
-    runStartupMigrations(migrations, () => {
-      migrationsDone = true;
-    });
-
   // Keep Puppeteer/Chrome out of production baseline RSS. Development keeps
   // the old convenience pre-warm so a missing local Chromium can still be
   // installed automatically; production can opt back in explicitly if needed.
@@ -273,23 +272,85 @@ let migrationsDone = false;
 
   registerGracefulShutdown();
 
-  // ── Startup sequence: warmup → migrations → listen ────────────────────────
-  // Migrations run to completion BEFORE the port opens. This guarantees:
-  //   1. The schema is always up-to-date before any request reaches new code.
-  //   2. A failed migration aborts startup, keeping the old deployment alive
-  //      instead of serving requests against a stale or broken schema.
-  // Set RUN_STARTUP_MIGRATIONS=false to skip migrations entirely (emergency
-  // kill-switch for severe lock contention).
-  const migrationsEnabled = process.env.RUN_STARTUP_MIGRATIONS !== "false";
-  if (!migrationsEnabled) {
-    logger.info("⚠ Startup migrations DISABLED via RUN_STARTUP_MIGRATIONS=false");
-    migrationsDone = true;
-    markStartupMigrationsComplete({ skipped: true });
-  }
-
+  // ── Startup sequence: warmup → boot data operations → listen ─────────────
+  // No schema work happens here. migrations/ owns the schema; the preload gate
+  // already refused to start unless the database is at exactly this release's
+  // migration level. The steps below only read and write business data, and
+  // run to completion BEFORE the port opens so a failure keeps the previous
+  // deployment serving.
   warmupDb()
     .then(async () => {
-      await runCoreStartupSchemaGuards();
+      // Data operations formerly embedded in the (removed) runtime schema
+      // repairs, kept in their original order. None changes the schema.
+      // The payroll daybook pass rewrites the factory daybook mirror only (no
+      // voucher, line or account).
+      const { runPhase3PayrollDaybookRepair } = await import("./services/accounting/phase3PayrollDaybookRepair");
+      await runPhase3PayrollDaybookRepair();
+      // Immutable inventory valuation cutover snapshots, captured after the
+      // daybook pass while startup still blocks traffic to the new instance.
+      const { ensurePhase3InventoryValuationBaselines } =
+        await import("./services/accounting/phase3InventoryValuation");
+      const baselinesCreated = await ensurePhase3InventoryValuationBaselines(pool);
+      logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
+      // Disabled by default: an explicitly reviewed one-shot historical-sales repair.
+      const { maybeRunHistoricalSalesCostRepairFromEnv } =
+        await import("./services/inventory/historicalSalesCostRepairStartup");
+      await maybeRunHistoricalSalesCostRepairFromEnv();
+      // Factory row history baseline snapshots (historical Net Position). Data
+      // only; the history triggers are part of the schema. Never fatal.
+      await recordFactoryRowHistoryBaselines(pool);
+      await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
+        logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
+      });
+      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        await bootstrapRecurringJournalFromEnvironment();
+      }
+      // Owner-confirmed: HADI L'SHI Zakaria El Ali #103's $9,930.12
+      // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
+      // salary/bonus postings or other employees.
+      await applyApprovedZakariaOpeningCredit();
+      // The historical payroll import used positive openings for employee
+      // credits; several records still carry the default Dr side. Correct the
+      // verified records once with before/after audit; never alter vouchers.
+      try {
+        await applyApprovedEmployeeOpeningCredits();
+      } catch (openingRepairError: unknown) {
+        logger.error("[startup] Historical employee openings were not fully corrected", {
+          error: getErrorMessage(openingRepairError),
+        });
+        // Do not take the whole ERP offline for a historical correction.
+        // Failed database transactions roll back; errors remain visible here.
+      }
+      // The one-time historical bonus reclassification has already been applied.
+      // Never rerun a historical voucher mutation on every server startup.
+      // A later legitimate voucher edit can change a paid amount while its old
+      // claim still reflects the original value. Report that discrepancy for
+      // audited reconciliation; do not change accounting or take ERP offline.
+      if (process.env.RENDER_SERVICE_ID === "srv-d6kibgtactks739u7vl0") {
+        try {
+          const database = await pool.query<{ name: string }>("SELECT current_database() AS name");
+          if (database.rows[0]?.name !== "erp_db_qscj_64lv_e7rz_8744_2lm3") {
+            logger.warn("[startup] Historical bonus inspection skipped on unexpected database");
+          } else {
+            const inspection = await inspectHistoricalProductionBonusExpenseAccounts();
+            if (inspection.inspected !== 9 || inspection.discrepancies.length > 0) {
+              logger.warn("[startup] Historical production bonus claims require manual reconciliation", inspection);
+            } else {
+              logger.info("[startup] Historical production bonus expense accounts reconciled", inspection);
+            }
+          }
+        } catch (inspectionError: unknown) {
+          logger.warn(
+            "[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers",
+            {
+              error: getErrorMessage(inspectionError),
+            }
+          );
+        }
+      }
+      // Before accepting requests, reconcile old completed-order bales still
+      // marked IN_STOCK (audited; the guard trigger is part of the schema).
+      await repairCompletedOrderBaleStatuses(pool);
       // Explicitly owner-approved, one-time monetary correction. Disabled by
       // default and guarded against repeat execution or accounting cutover.
       // Startup repair writers are forbidden on independently authoritative LAN
@@ -366,29 +427,8 @@ let migrationsDone = false;
           });
         }
       }
-      if (migrationsEnabled) {
-        try {
-          await runMigrations();
-        } catch (err: unknown) {
-          if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
-            // A strict migration cutover must never fall back to the old
-            // nonfatal readiness behavior. Keep prior Render instance alive.
-            logger.error("Strict legacy migration verification blocked boot", {
-              error: getErrorMessage(err) ?? err,
-            });
-            throw err;
-          }
-          logger.error("Migration error (non-fatal — server will still start):", {
-            error: getErrorMessage(err) ?? err,
-          });
-          migrationsDone = true;
-          markStartupMigrationsComplete();
-        }
-      }
-      // Initialize isolated GIT metadata before production accepts requests.
-      // Financial SP containers and Goods OTW vouchers remain untouched.
-      await ensureSpGitTracking();
-      logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
+      startupDataReady = true;
+      markStartupMigrationsComplete();
     })
     .then(() => {
       listenWithRetry(server, port, () => {

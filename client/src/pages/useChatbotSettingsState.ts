@@ -82,8 +82,12 @@ export function useChatbotSettingsState() {
       });
     },
   });
-
-  const { data: users = [], isLoading: usersLoading } = useQuery<UserChatbotStatus[]>({
+  const {
+    data: users = [],
+    isLoading: usersLoading,
+    isError: usersError,
+    refetch: refetchUsers,
+  } = useQuery<UserChatbotStatus[]>({
     queryKey: ["/api/users/chatbot-status"],
   });
 
@@ -110,6 +114,7 @@ export function useChatbotSettingsState() {
   const {
     data: patchHistory = [],
     isLoading: patchHistoryLoading,
+    isError: patchHistoryError,
     refetch: refetchPatchHistory,
   } = useQuery<PatchHistoryEntry[]>({
     queryKey: ["/api/chatbot/patch-history"],
@@ -231,6 +236,10 @@ export function useChatbotSettingsState() {
     },
   });
   return {
+    refetchPatchHistory,
+    patchHistoryError,
+    usersError,
+    refetchUsers,
     activeTab,
     allHistoryLoading,
     allSessions,

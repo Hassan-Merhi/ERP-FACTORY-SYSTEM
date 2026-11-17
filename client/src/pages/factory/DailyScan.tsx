@@ -8,9 +8,13 @@ import { formatDisplay } from "./DailyScanTypes";
 import { StatusBadge } from "./getDailyScanPriority";
 import { useDailyScanState } from "./useDailyScanState";
 import { DailyScanSection } from "./DailyScanSection";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export default function DailyScan() {
   const {
+    refetch,
+    isError,
+    dayBalesData,
     allDone,
     handleExport,
     handleScan,
@@ -84,11 +88,11 @@ export default function DailyScan() {
 
       {/* ── Body ── */}
       {isLoading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+        <LoadingState />
+      ) : isError && !dayBalesData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : totalBales === 0 ? (
-        <div className="py-14 text-center text-sm text-muted-foreground">
-          No bales produced on {formatDisplay(selectedDate)}
-        </div>
+        <EmptyState title={`No bales produced on ${formatDisplay(selectedDate)}`} />
       ) : (
         <div className="space-y-4">
           {/* ── All-done banner ── */}

@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronsUpDown, GripVertical, Plus, X } from "lucide-react";
 import { useDashboardFinancePanelState } from "./useDashboardFinancePanelState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function DashboardFinancePanelSection({
   addAccountMutation,
@@ -166,7 +167,7 @@ export function DashboardFinancePanelSection({
         {cashAccountsError ? (
           <p className="text-sm text-destructive text-center py-4">Error loading accounts</p>
         ) : displayedCashAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+          <EmptyState title="No accounts added yet" className="min-h-0 py-6" />
         ) : (
           <div className="space-y-1">
             {displayedCashAccounts.map((dca) => {
@@ -302,7 +303,7 @@ export function DashboardFinancePanelSection({
         {payableAccountsError ? (
           <p className="text-sm text-destructive text-center py-4">Error loading accounts</p>
         ) : dashboardPayableAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+          <EmptyState title="No accounts added yet" className="min-h-0 py-6" />
         ) : (
           <div className="space-y-1">
             {dashboardPayableAccounts.map((account) => (

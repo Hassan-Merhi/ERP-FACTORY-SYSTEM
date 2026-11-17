@@ -65,7 +65,12 @@ export function useFiscalPeriodTabState({ currentCompanyId, userRole }: FiscalPe
   });
 
   // Fetch fiscal period closures for the current company
-  const { data: closures = [], isLoading: isLoadingClosures } = useQuery<Serialized<FiscalPeriodClosure>[]>({
+  const {
+    data: closures = [],
+    isLoading: isLoadingClosures,
+    isError: isClosuresError,
+    refetch: refetchClosures,
+  } = useQuery<Serialized<FiscalPeriodClosure>[]>({
     queryKey: ["/api/fiscal-period/closures", { companyId: currentCompanyId }],
     enabled: !!currentCompanyId,
   });
@@ -156,6 +161,8 @@ export function useFiscalPeriodTabState({ currentCompanyId, userRole }: FiscalPe
     (acc) => acc.id.toString() === pendingFormData?.retainedEarningsAccountId
   );
   return {
+    refetchClosures,
+    isClosuresError,
     canReopen,
     closePeriodMutation,
     closures,

@@ -3,16 +3,12 @@
  * and the legacy repair, against the database.
  *
  * - The normalized factory amounts must be accepted by the production
- *   voucher-entry currency trigger (migrations/20260720_005), which neither the
- *   test database nor CI installs; it is installed here inside a transaction
- *   that is rolled back.
+ *   voucher-entry currency trigger (normalize_voucher_entry_currency_amounts(),
+ *   defined by the migrations the test database is built from).
  * - The legacy repair classifies each line from its own voucher, converts at the
  *   voucher's stored rate, never half-converts a voucher, skips unset rates and
  *   closed periods, and is idempotent.
  */
-import fs from "node:fs";
-import path from "node:path";
-
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
@@ -24,10 +20,6 @@ import {
 } from "../server/services/factory/factoryFxLegacyRepair";
 
 const PREFIX = `fxr${Date.now().toString(36)}`;
-const TRIGGER_SQL = fs.readFileSync(
-  path.join(process.cwd(), "migrations/20260720_005_voucher_entry_currency_normalization_trigger.sql"),
-  "utf8"
-);
 
 let companyId: number;
 let supplierId: number;
@@ -168,7 +160,6 @@ describe("normalized factory amounts and the production currency trigger", () =>
     try {
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
-      await client.query(TRIGGER_SQL);
       const v = (
         await client.query(
           `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, exchange_rate, source_module)
@@ -267,25 +258,12 @@ describe("legacy factory foreign-currency repair", () => {
   });
 
   it("applies only the repairable lines, through the production trigger, and is idempotent", async () => {
-    // Test files run one at a time, so the trigger is installed for this apply
-    // only, and removed again unless the database already had it.
-    const hadTrigger =
-      (await pool.query(`SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_normalize_currency_before_write'`))
-        .rowCount === 1;
-    if (!hadTrigger) await pool.query(TRIGGER_SQL);
-    let applied;
-    try {
-      // The reviewed plan's hash is required since wave 17 C.
-      const reviewed = await asMaintenance(() => planFactoryFxLegacyRepair(companyId));
-      applied = await asMaintenance(() =>
-        applyFactoryFxLegacyRepair(companyId, { expectedPlanHash: reviewed.planHash })
-      );
-    } finally {
-      if (!hadTrigger) {
-        await pool.query(`DROP TRIGGER IF EXISTS voucher_entries_normalize_currency_before_write ON voucher_entries`);
-        await pool.query(`DROP FUNCTION IF EXISTS normalize_voucher_entry_currency_amounts()`);
-      }
-    }
+    // The production trigger is part of the migrated schema the test database is built from.
+    // The reviewed plan's hash is required since wave 17 C.
+    const reviewed = await asMaintenance(() => planFactoryFxLegacyRepair(companyId));
+    const applied = await asMaintenance(() =>
+      applyFactoryFxLegacyRepair(companyId, { expectedPlanHash: reviewed.planHash })
+    );
     expect(applied.repairableLines).toBe(4);
 
     const rows = await asMaintenance(() =>

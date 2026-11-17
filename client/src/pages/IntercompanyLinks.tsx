@@ -9,9 +9,12 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { useIntercompanyLinksState } from "./useIntercompanyLinksState";
 import { IntercompanyLinksDialogSection } from "./IntercompanyLinksDialogSection";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export default function IntercompanyLinks() {
   const {
+    refetch,
+    isError,
     allUsers,
     canSave,
     closeDialog,
@@ -61,11 +64,15 @@ export default function IntercompanyLinks() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">Loading…</div>
+            <LoadingState className="m-4 py-12" />
+          ) : isError && links.length === 0 ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4 py-12" />
           ) : links.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">
-              No intercompany links configured yet. Click <strong>New Link</strong> to add one.
-            </div>
+            <EmptyState
+              title="No intercompany links configured yet."
+              description="Click New Link to add one."
+              className="m-4 py-12"
+            />
           ) : (
             <Table>
               <TableHeader>

@@ -8,12 +8,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmt } from "./FactoryEmployeeDetailTypes";
 import { useFactoryEmployeeDetailState } from "./useFactoryEmployeeDetailState";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export function FactoryEmployeeDetailSection({
+  stmtError,
+  refetchStatement,
   formatDate,
   statement,
   stmtLoading,
-}: Pick<ReturnType<typeof useFactoryEmployeeDetailState>, "formatDate" | "statement" | "stmtLoading">) {
+}: Pick<
+  ReturnType<typeof useFactoryEmployeeDetailState>,
+  "formatDate" | "statement" | "stmtLoading" | "refetchStatement" | "stmtError"
+>) {
   return (
     <div className="flex-1 min-w-0">
       <Card>
@@ -27,8 +33,10 @@ export function FactoryEmployeeDetailSection({
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
+          ) : stmtError && !statement ? (
+            <ErrorState onAction={() => void refetchStatement()} actionLabel="Try again" />
           ) : !statement?.rows || statement.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">No transactions yet</p>
+            <EmptyState title="No transactions yet" />
           ) : (
             <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">

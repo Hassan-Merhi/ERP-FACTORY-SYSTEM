@@ -26,7 +26,12 @@ export function useIntercompanyLinksState() {
   const [recipientForm, setRecipientForm] = useState<string[]>([]);
 
   // Queries
-  const { data: links = [], isLoading } = useQuery<ICLink[]>({
+  const {
+    data: links = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ICLink[]>({
     queryKey: ["/api/intercompany-links"],
   });
 
@@ -235,6 +240,8 @@ export function useIntercompanyLinksState() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const canSave = form.sourceCompanyId && form.sourceLedgerAccountId && form.destCompanyId && form.destLedgerAccountId;
   return {
+    refetch,
+    isError,
     allUsers,
     canSave,
     closeDialog,

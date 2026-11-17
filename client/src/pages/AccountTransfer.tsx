@@ -8,6 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check } from "lucide-react";
@@ -32,7 +33,12 @@ export default function AccountTransfer() {
     enabled: !!selectedCompany,
   });
 
-  const { data: entryData, isLoading: loadingEntries } = useQuery<EntryPage>({
+  const {
+    data: entryData,
+    isLoading: loadingEntries,
+    isError: entriesError,
+    refetch: refetchEntries,
+  } = useQuery<EntryPage>({
     queryKey: ["/api/voucher-entries/by-account", fromAccountId, entryPage, deferredEntrySearch],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -230,9 +236,11 @@ export default function AccountTransfer() {
           </CardHeader>
           <CardContent className="p-0">
             {loadingEntries ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">Loading entries…</div>
+              <LoadingState title="Loading entries…" className="py-10" />
+            ) : entriesError && !entryData ? (
+              <ErrorState onAction={() => void refetchEntries()} actionLabel="Try again" className="py-10" />
             ) : entries.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">No entries found for this account</div>
+              <EmptyState title="No entries found for this account" className="py-10" />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

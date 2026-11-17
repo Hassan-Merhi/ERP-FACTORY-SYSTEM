@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useChatState } from "./ChatUseChatState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function ChatCardSection({
   fileInputRef,
@@ -108,7 +109,7 @@ export function ChatCardSection({
                 ))}
               </div>
             ) : messages.length === 0 ? (
-              <div className="text-center text-muted-foreground text-sm py-8">No messages yet. Say hello!</div>
+              <EmptyState title="No messages yet. Say hello!" className="py-8" />
             ) : (
               messages.map((msg) => {
                 const isMine = msg.senderId !== selectedUserId;

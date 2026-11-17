@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { ArrowDownLeft, ArrowUpRight, ChevronRight, Wallet } from "lucide-react";
 import { useDashboardFinancePanelState, type DashboardFinancePanelProps } from "./useDashboardFinancePanelState";
 import { DashboardFinancePanelSection } from "./DashboardFinancePanelSection";
+import { LoadingState } from "@/components/ui/page-state";
 
 export function DashboardFinancePanel(props: DashboardFinancePanelProps) {
   const {
@@ -123,9 +124,7 @@ export function DashboardFinancePanel(props: DashboardFinancePanelProps) {
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center h-[200px]">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+          <LoadingState className="h-[200px] min-h-0" />
         ) : (
           <div
             className={cn("grid gap-3", isFactoryMode ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}

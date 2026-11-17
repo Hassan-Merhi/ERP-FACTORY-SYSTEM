@@ -1,11 +1,12 @@
 /** Phase 5 route/workflow safeguards; full PostgreSQL/Green API E2E in Phase 7. */
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { stockTransferOrderWaDeliverySchema } from "../server/startup-schema/041-stock-transfer-order-wa-delivery";
+
+import { columnDefinition, hasPolicy, tableRowLevelSecurity, triggerDefinition } from "./helpers/schemaManifest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+
 const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 
-const migration = read("migrations/20261111_003_stock_transfer_order_whatsapp_excel_phase5.sql");
 const snapshot = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
 const delivery = read("server/services/stockTransferOrderWaDeliveryWorker.ts");
 const approval = read("server/services/stockTransferOrderWhatsAppBatchExecution.ts");
@@ -16,18 +17,16 @@ const settings = read("client/src/pages/settings/StockTransferOrderApprovalSetti
 const panel = read("client/src/pages/stock-transfer-order/StockTransferOrderApprovalRequestPanel.tsx");
 const endpoints = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const manualExport = read("server/routes/stockTransferExportWhatsAppRoutes.ts");
-const ensure = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
 
 describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
-  it("mirrors seven idempotent migration statements, protects workbook snapshot and binary", () => {
-    expect(stockTransferOrderWaDeliverySchema).toHaveLength(7);
-    for (const statement of stockTransferOrderWaDeliverySchema) expect(migration).toContain(statement);
-    const ddl = stockTransferOrderWaDeliverySchema.join("; ");
-    expect(ddl).toContain("stock_transfer_order_approval_workbooks");
-    expect(ddl).toContain("workbook_bytes bytea");
-    expect(ddl).toContain("sto_wa_workbook_immutable_trg");
-    expect(ddl).toContain("FORCE ROW LEVEL SECURITY");
-    expect(ensure).toContain("stockTransferOrderWaDeliverySchema");
+  it("migrations define the protected workbook snapshot and binary table", () => {
+    // Was startup-schema/041 mirrored in an SQL file; migrations now own it.
+    expect(tableRowLevelSecurity("stock_transfer_order_approval_workbooks")).toEqual({ rls: true, forceRls: true });
+    expect(hasPolicy("stock_transfer_order_approval_workbooks", "sto_wa_company_scope")).toBe(true);
+    expect(columnDefinition("stock_transfer_order_approval_workbooks", "workbook_bytes")?.type).toBe("bytea");
+    expect(triggerDefinition("stock_transfer_order_approval_workbooks", "sto_wa_workbook_immutable_trg")).toContain(
+      "BEFORE DELETE OR UPDATE ON public.stock_transfer_order_approval_workbooks"
+    );
   });
 
   it("freezes final approved quantities in the SAME revision approval transaction", () => {

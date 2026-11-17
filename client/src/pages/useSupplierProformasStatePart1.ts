@@ -89,8 +89,12 @@ export function useSupplierProformasStatePart1() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
-
-  const { data: proformas, isLoading } = useQuery<Proforma[]>({
+  const {
+    data: proformas,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Proforma[]>({
     queryKey: ["/api/suppliers", supplierId, "proformas"],
     queryFn: async () => {
       const res = await fetch(`/api/suppliers/${supplierId}/proformas`, { credentials: "include" });
@@ -256,6 +260,8 @@ export function useSupplierProformasStatePart1() {
     },
   });
   return {
+    isError,
+    refetch,
     addLineMutation,
     addingLine,
     commitRename,

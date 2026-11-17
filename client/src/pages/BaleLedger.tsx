@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Package, Trash2, ShoppingCart, AlertTriangle, RefreshCw, Layers, Truck } from "lucide-react";
 import { SectionTable, fmtKg, fmtMoney, fmtN, type BucketRow, type SectionTotal } from "./BaleLedgerSectionTable";
@@ -23,7 +24,7 @@ interface LedgerData {
 }
 
 export default function BaleLedger() {
-  const { data, isLoading, refetch, isFetching } = useQuery<LedgerData>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<LedgerData>({
     queryKey: ["/api/factory/bale-ledger"],
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -65,6 +66,8 @@ export default function BaleLedger() {
               </Card>
             ))}
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : (
           <>
             <SectionTable

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
+import { indexDefinition } from "./helpers/schemaManifest";
+
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
 const normalizeCode = (code: string) =>
@@ -19,7 +21,6 @@ const hub = read("server/routes/factoryRoutes.ts");
 const client = read("client/src/pages/factory/pressing-scanner/pressingConfirmClient.ts");
 const scanner = read("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
-const ddl = read("migrations/20261027_001_factory_pressing_machine_tracking.sql");
 
 describe("Pressing machine Phase 4 transaction safety", () => {
   it("wires server confirmation after the shared tenant and Factory access boundaries", () => {
@@ -63,8 +64,12 @@ describe("Pressing machine Phase 4 transaction safety", () => {
     expectCode(route, "PRESSING_REQUEST_ID_REUSED");
     expectCode(route, "PRESSING_CONFIRMATION_VOIDED");
     expect(route).toMatch(/\.onConflictDoNothing\(\)\s*\.returning\(\)/);
-    expectCode(ddl, "ON factory_pressing_confirmations (company_id, bale_id) WHERE voided_at IS NULL");
-    expectCode(ddl, "ON factory_pressing_confirmations (company_id, request_id)");
+    expect(indexDefinition("factory_pressing_confirmations_one_active_bale_uk")).toContain(
+      "ON public.factory_pressing_confirmations USING btree (company_id, bale_id) WHERE (voided_at IS NULL)"
+    );
+    expect(indexDefinition("factory_pressing_confirmations_request_uk")).toContain(
+      "ON public.factory_pressing_confirmations USING btree (company_id, request_id)"
+    );
     expectCode(route, "requestId: parsed.requestId");
     expectCode(route, "return res.status(result.replayed ? 200 : 201)");
   });

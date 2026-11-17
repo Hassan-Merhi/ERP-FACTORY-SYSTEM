@@ -1,9 +1,7 @@
 // Extracted from ./historicalSalesCostRepair.ts to keep that module under the source-size cap.
 import { pool } from "../../db";
-import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 
 export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Record<string, unknown> | null> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const run = await pool.query(
     `SELECT id,algorithm_version,status,source_cutoff_at,requested_company_ids,created_by,created_at,
             completed_at,applied_by,applied_at,audit_hash,total_sales_rows,changed_rows,blocked_rows,

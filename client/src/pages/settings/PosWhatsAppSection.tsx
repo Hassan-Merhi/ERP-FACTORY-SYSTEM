@@ -18,6 +18,8 @@ import { SearchField } from "@/components/ui/search-field";
 
 export function PosWhatsAppSection() {
   const {
+    refetchLocations,
+    locError,
     apiToken,
     chatSearch,
     chatsError,
@@ -187,6 +189,8 @@ export function PosWhatsAppSection() {
 
       {/* ── Location group assignments ── */}
       <PosWhatsAppSectionSection
+        refetchLocations={refetchLocations}
+        locError={locError}
         locLoading={locLoading}
         locations={locations}
         openDialog={openDialog}

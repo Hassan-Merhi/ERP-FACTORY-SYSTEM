@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -18,6 +19,9 @@ import { SearchField } from "@/components/ui/search-field";
 
 export default function Chat() {
   const {
+    chatUsers,
+    usersError,
+    refetchUsers,
     clearConfirmOpen,
     clearMutation,
     conversationUsers,
@@ -74,12 +78,10 @@ export default function Chat() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : usersError && chatUsers.length === 0 ? (
+            <ErrorState onAction={() => void refetchUsers()} actionLabel="Try again" className="m-3" />
           ) : conversationUsers.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              No conversations yet.
-              <br />
-              Click <strong>+</strong> to start one.
-            </div>
+            <EmptyState title="No conversations yet." description="Click + to start one." className="m-3" />
           ) : (
             conversationUsers.map((user) => (
               <button

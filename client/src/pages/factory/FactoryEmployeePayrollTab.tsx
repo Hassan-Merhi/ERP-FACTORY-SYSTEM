@@ -26,9 +26,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { fmt, useFactoryEmployeePayrollTabState } from "./useFactoryEmployeePayrollTabState";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export default function FactoryEmployeePayrollTab() {
   const {
+    refetch,
+    isError,
+    employeesData,
     amounts,
     deductions,
     employees,
@@ -69,6 +73,9 @@ export default function FactoryEmployeePayrollTab() {
       </div>
     );
   }
+  if (isError && !employeesData) {
+    return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
+  }
 
   return (
     <div className="space-y-4">
@@ -99,12 +106,7 @@ export default function FactoryEmployeePayrollTab() {
       </div>
 
       {employees.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>No active employees found.</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Users} title="No active employees found." />
       ) : (
         <div className="space-y-2.5">
           {Object.entries(grouped).map(([dept, emps]) => {

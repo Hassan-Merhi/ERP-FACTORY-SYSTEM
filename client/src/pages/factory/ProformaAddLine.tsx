@@ -7,9 +7,13 @@ import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchField } from "@/components/ui/search-field";
 import { useProformaAddLineState } from "./useProformaAddLineState";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export default function ProformaAddLine() {
   const {
+    allItems,
+    refetchItems,
+    itemsError,
     addMutation,
     autoSave,
     autoSaveCountdown,
@@ -127,11 +131,10 @@ export default function ProformaAddLine() {
               <Skeleton key={i} className="h-24" />
             ))}
           </div>
+        ) : itemsError && allItems.length === 0 ? (
+          <ErrorState onAction={() => void refetchItems()} actionLabel="Try again" className="mt-2" />
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Search className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">No items found</p>
-          </div>
+          <EmptyState icon={Search} title="No items found" className="mt-2" />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mt-2">
             {filtered.map((item) => {

@@ -43,7 +43,6 @@ const MANUAL_VERIFICATION_CATALOG = Object.freeze([
   "audit-write-route-coverage.mjs",
   "verify-bandwidth-phase-3-sales-report.mjs",
   "verify-bandwidth-phases-1-2.mjs",
-  "verify-ci-disposable-schema.mjs",
   "verify-database-backup.mjs",
   "verify-dependency-audit.mjs",
   "verify-env-documentation.mjs",
@@ -52,7 +51,6 @@ const MANUAL_VERIFICATION_CATALOG = Object.freeze([
   "verify-i18n-audit-classifier.mjs",
   "verify-lockfile-registry.mjs",
   "verify-memory-stabilization.mjs",
-  "verify-migration-registry.mjs",
   "verify-mobile-responsive-phase1-browser.mjs",
   "verify-mobile-responsive-phase1-critical-flows.mjs",
   "verify-mobile-responsive-phase10-performance.mjs",
@@ -127,7 +125,6 @@ const MANUAL_VERIFICATION_CATALOG = Object.freeze([
   "verify-runtime-dependencies.mjs",
   "verify-server-bundle.mjs",
   "verify-sp-migration-rehearsal.mjs",
-  "verify-startup-migrations.mjs",
   "verify-stock-transfer-revision-lifecycle.mjs",
   "verify-wave3-api-payload-bandwidth.mjs",
   "verify-workspace-lockfile-hygiene.mjs"

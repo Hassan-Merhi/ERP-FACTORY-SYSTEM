@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useSpreadsheetEditorState } from "./useSpreadsheetEditorState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 function formatRelativeTime(ts: string | Date): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -78,6 +79,10 @@ const TOOLBAR_ITEMS = [
 
 export default function SpreadsheetEditor() {
   const {
+    sheetError,
+    refetchSheet,
+    refetchLibrary,
+    libraryError,
     confirmRename,
     containerRef,
     createMutation,
@@ -169,11 +174,10 @@ export default function SpreadsheetEditor() {
           onKeyDown={markInteracted}
           onTouchStart={markInteracted}
         >
-          {sheetLoading || !openedSheet ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              Loading spreadsheet…
-            </div>
+          {sheetError && !openedSheet ? (
+            <ErrorState onAction={() => void refetchSheet()} actionLabel="Try again" className="h-full" />
+          ) : sheetLoading || !openedSheet ? (
+            <LoadingState title="Loading spreadsheet…" className="h-full" />
           ) : (
             <Workbook
               ref={workbookRef}
@@ -224,28 +228,28 @@ export default function SpreadsheetEditor() {
       </PageHeader>
 
       {libraryLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Loading…
-        </div>
+        <LoadingState className="py-16" />
+      ) : libraryError && library.length === 0 ? (
+        <ErrorState onAction={() => void refetchLibrary()} actionLabel="Try again" className="py-20" />
       ) : library.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <FileSpreadsheet className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <p className="text-sm font-medium text-muted-foreground">No spreadsheets yet</p>
-          <p className="text-xs text-muted-foreground mt-1 mb-4">
-            Create a new spreadsheet or upload an existing .xlsx file
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-1.5" />
-              Upload .xlsx
-            </Button>
-            <Button size="sm" onClick={handleNew}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              New Spreadsheet
-            </Button>
-          </div>
-        </div>
+        <EmptyState
+          icon={FileSpreadsheet}
+          title="No spreadsheets yet"
+          description="Create a new spreadsheet or upload an existing .xlsx file"
+          className="py-20"
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-1.5" />
+                Upload .xlsx
+              </Button>
+              <Button size="sm" onClick={handleNew}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                New Spreadsheet
+              </Button>
+            </div>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {library.map((sheet) => (

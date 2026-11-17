@@ -12,6 +12,7 @@ import type { ReportContainer } from "../types";
 import { FactoryAllContainersReport } from "./FactoryAllContainersReport";
 
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 function ContainerCostBreakdown({
   container,
@@ -214,7 +215,7 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
           </div>
 
           {loadingContainers ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            <LoadingState className="border-0" />
           ) : containerData ? (
             (() => {
               const isAllCompanies = reportAllCompanies === "all";
@@ -264,8 +265,14 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                 g.containers.sort((a, b) => getDate(b).localeCompare(getDate(a)));
               }
               const visibleGrandTotal = visibleContainers.reduce((s, c) => s + parseFloat(c.grandTotal || "0"), 0);
-              const visibleOffloadingCharges = visibleContainers.reduce((s, c) => s + parseFloat(c.offloadingCharges || "0"), 0);
-              const visibleTotalCost = visibleContainers.reduce((s, c) => s + parseFloat(c.totalContainerCost || "0"), 0);
+              const visibleOffloadingCharges = visibleContainers.reduce(
+                (s, c) => s + parseFloat(c.offloadingCharges || "0"),
+                0
+              );
+              const visibleTotalCost = visibleContainers.reduce(
+                (s, c) => s + parseFloat(c.totalContainerCost || "0"),
+                0
+              );
               const colSpan = isAllCompanies ? 8 : 7;
 
               return (
@@ -277,10 +284,14 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                     </div>
                     <div className="rounded-lg border p-3">
                       <div className="text-xs text-muted-foreground">Offloading & Extra Charges</div>
-                      <div className="mt-1 text-lg font-semibold tabular-nums">{formatAmount(visibleOffloadingCharges)}</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">
+                        {formatAmount(visibleOffloadingCharges)}
+                      </div>
                     </div>
                     <div className="rounded-lg border bg-muted/30 p-3">
-                      <div className="text-xs text-muted-foreground">Total Container Cost ({visibleContainers.length})</div>
+                      <div className="text-xs text-muted-foreground">
+                        Total Container Cost ({visibleContainers.length})
+                      </div>
                       <div className="mt-1 text-lg font-bold tabular-nums">{formatAmount(visibleTotalCost)}</div>
                     </div>
                   </div>
@@ -326,9 +337,15 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                                 {sg.supplierName} — {sg.containers.length} container
                                 {sg.containers.length !== 1 ? "s" : ""}
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm">{formatAmount(sg.grandTotal)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm">{formatAmount(sg.offloadingCharges)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm">{formatAmount(sg.totalContainerCost)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {formatAmount(sg.grandTotal)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {formatAmount(sg.offloadingCharges)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {formatAmount(sg.totalContainerCost)}
+                              </TableCell>
                             </TableRow>
                           </TableBody>
                         </Fragment>
@@ -337,7 +354,9 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                         <TableRow className="font-bold border-t-2">
                           <TableCell colSpan={colSpan - 3}>TOTALS ({visibleContainers.length} containers)</TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(visibleGrandTotal)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatAmount(visibleOffloadingCharges)}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {formatAmount(visibleOffloadingCharges)}
+                          </TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(visibleTotalCost)}</TableCell>
                         </TableRow>
                       </TableBody>
@@ -364,11 +383,15 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                               </div>
                               <div className="flex items-center justify-between gap-2 text-sm">
                                 <span className="text-muted-foreground">Purchase Grand Total</span>
-                                <span className="font-mono">{formatAmount(parseFloat(container.grandTotal || "0"))}</span>
+                                <span className="font-mono">
+                                  {formatAmount(parseFloat(container.grandTotal || "0"))}
+                                </span>
                               </div>
                               <div className="flex items-center justify-between gap-2 text-sm">
                                 <span className="text-muted-foreground">Offloading & Extras</span>
-                                <span className="font-mono">{formatAmount(parseFloat(container.offloadingCharges || "0"))}</span>
+                                <span className="font-mono">
+                                  {formatAmount(parseFloat(container.offloadingCharges || "0"))}
+                                </span>
                               </div>
                               <div className="flex items-center justify-between gap-2 border-t pt-2 text-sm">
                                 <span className="font-semibold">Total Container Cost</span>
@@ -381,7 +404,9 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                         ))}
                         <Card className="bg-muted/40">
                           <CardContent className="p-3 space-y-2">
-                            <span className="text-sm font-semibold">{sg.supplierName} ({sg.containers.length})</span>
+                            <span className="text-sm font-semibold">
+                              {sg.supplierName} ({sg.containers.length})
+                            </span>
                             <div className="flex justify-between text-xs gap-2">
                               <span>Grand Total</span>
                               <span className="font-mono">{formatAmount(sg.grandTotal)}</span>
@@ -420,11 +445,12 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
               );
             })()
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 py-14 text-muted-foreground">
-              <ContainerIcon className="h-10 w-10 opacity-25" />
-              <p className="text-sm font-medium">No data yet</p>
-              <p className="text-xs opacity-60">Adjust the filters above to load the report</p>
-            </div>
+            <EmptyState
+              icon={ContainerIcon}
+              title="No data yet"
+              description="Adjust the filters above to load the report"
+              className="border-0"
+            />
           )}
         </Card>
       )}

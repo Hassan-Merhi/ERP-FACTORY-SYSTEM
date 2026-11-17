@@ -67,8 +67,12 @@ export function useFactoryReprintLabelsState() {
   const { data: locations = [], isLoading: locationsLoading } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
   });
-
-  const { data: balesData = [], isLoading: balesLoading } = useQuery<BaleRow[]>({
+  const {
+    data: balesData = [],
+    isLoading: balesLoading,
+    isError: balesError,
+    refetch: refetchBales,
+  } = useQuery<BaleRow[]>({
     queryKey: ["/api/factory/bales", selectedLocationId],
     queryFn: async () => {
       if (!selectedLocationId) return [];
@@ -228,6 +232,8 @@ export function useFactoryReprintLabelsState() {
 
   const allFilteredSelected = filteredBales.length > 0 && filteredBales.every((r) => selectedIds.has(r.bale.id));
   return {
+    refetchBales,
+    balesError,
     allFilteredSelected,
     articleCodeFilters,
     articleCodeSearch,

@@ -69,8 +69,12 @@ export function useFactoryPriceListState() {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, [editingCellKey]);
-
-  const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
+  const {
+    data: products = [],
+    isLoading,
+    isError: productsError,
+    refetch: refetchProducts,
+  } = useQuery<FactoryBaleProduct[]>({
     queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -285,6 +289,8 @@ export function useFactoryPriceListState() {
   const updatedCount = products.filter((p) => p.active && parseFloat(p.sellingPrice || "0") > 0).length;
   const totalActive = products.filter((p) => p.active).length;
   return {
+    refetchProducts,
+    productsError,
     categories,
     categoryFilter,
     categoryMap,

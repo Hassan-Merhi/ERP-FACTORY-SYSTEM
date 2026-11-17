@@ -103,7 +103,12 @@ export function useFactoryStatusBuilderStatePart1() {
   );
 
   // ── Load ───────────────────────────────────────────────────────────────────
-  const { data: apiSheets, isLoading } = useQuery<ApiSheet[]>({
+  const {
+    data: apiSheets,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ApiSheet[]>({
     queryKey: companyQueryKey("/api/factory/status-builder/sheets", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -244,6 +249,9 @@ export function useFactoryStatusBuilderStatePart1() {
     onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
   return {
+    apiSheets,
+    refetch,
+    isError,
     activeIdx,
     activeSheet,
     autosaveTimerRef,

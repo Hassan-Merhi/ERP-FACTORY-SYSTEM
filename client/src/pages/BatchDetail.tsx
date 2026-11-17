@@ -2,6 +2,7 @@ import { ArrowLeft, Package, Boxes, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,10 +185,7 @@ export default function BatchDetail(props: BatchDetailProps) {
         </CardHeader>
         <CardContent>
           {bales.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No bales produced from this batch yet</p>
-            </div>
+            <EmptyState icon={Package} title="No bales produced from this batch yet" className="py-8" />
           ) : (
             <>
               <div className="border rounded-md overflow-auto">

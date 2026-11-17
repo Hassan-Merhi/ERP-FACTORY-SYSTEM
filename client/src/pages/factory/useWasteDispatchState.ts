@@ -6,6 +6,9 @@ import { useWasteDispatchStatePart1 } from "./useWasteDispatchStatePart1";
 
 export function useWasteDispatchState() {
   const {
+    data,
+    isError,
+    refetch,
     bales,
     confirming,
     deleteDispatchId,
@@ -56,6 +59,9 @@ export function useWasteDispatchState() {
     toast,
   });
   return {
+    data,
+    isError,
+    refetch,
     bales,
     confirming,
     deleteDispatchId,

@@ -7,7 +7,6 @@ import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
-
 interface Employee {
   id: number;
   code: string;
@@ -67,8 +66,12 @@ export function useFactoryEmployeePayrollTabState() {
   const [deductions, setDeductions] = useState<Record<number, string>>({});
   const [previewRows, setPreviewRows] = useState<Record<number, PayrollPreview>>({});
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
-
-  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -78,7 +81,7 @@ export function useFactoryEmployeePayrollTabState() {
       return all.filter((e: Employee) => e.active);
     },
   });
-
+  const employees = useMemo(() => employeesData ?? [], [employeesData]);
   const { isLoading: previewLoading, refetch: refetchPreview } = useQuery<{ preview: PayrollPreview[] }>({
     queryKey: companyQueryKey("/api/factory/employee-payroll-preview", selectedCompany?.id, startDate, endDate),
     queryFn: async () => {
@@ -189,6 +192,9 @@ export function useFactoryEmployeePayrollTabState() {
     [employees]
   );
   return {
+    refetch,
+    isError,
+    employeesData,
     amounts,
     deductions,
     employees,

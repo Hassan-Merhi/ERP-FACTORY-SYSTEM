@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useChatbotSettingsState, type MySession } from "./useChatbotSettingsState";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export function ChatbotSettingsTabsContentSection({
   allHistoryLoading,
@@ -98,11 +99,12 @@ export function ChatbotSettingsTabsContentSection({
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : (viewAllChats ? allSessions : mySessions).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <MessageCircle className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-sm">No conversations yet.</p>
-                <p className="text-xs mt-1 opacity-70">Start a chat to see history here.</p>
-              </div>
+              <EmptyState
+                icon={MessageCircle}
+                title="No conversations yet."
+                description="Start a chat to see history here."
+                className="py-10"
+              />
             ) : (
               <ScrollArea className="h-[440px]">
                 <div className="space-y-0.5 p-2">
@@ -232,9 +234,14 @@ export function ChatbotSettingsTabsContentSection({
 
 export function ChatbotSettingsTabsContentSection2({
   patchHistory,
+  patchHistoryError,
   patchHistoryLoading,
+  refetchPatchHistory,
   revertMutation,
-}: Pick<ReturnType<typeof useChatbotSettingsState>, "patchHistory" | "patchHistoryLoading" | "revertMutation">) {
+}: Pick<
+  ReturnType<typeof useChatbotSettingsState>,
+  "patchHistory" | "patchHistoryError" | "patchHistoryLoading" | "refetchPatchHistory" | "revertMutation"
+>) {
   return (
     <TabsContent value="patches" className="space-y-4">
       <Card>
@@ -252,12 +259,15 @@ export function ChatbotSettingsTabsContentSection2({
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : patchHistoryError && patchHistory.length === 0 ? (
+            <ErrorState onAction={() => void refetchPatchHistory()} actionLabel="Try again" className="py-12" />
           ) : patchHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <FileCode className="h-10 w-10 mb-3 opacity-40" />
-              <p className="text-sm">No patches applied yet.</p>
-              <p className="text-xs mt-1 opacity-70">Applied AI code changes will appear here.</p>
-            </div>
+            <EmptyState
+              icon={FileCode}
+              title="No patches applied yet."
+              description="Applied AI code changes will appear here."
+              className="py-12"
+            />
           ) : (
             <div className="table-responsive">
               <Table mobileLayout="cards">

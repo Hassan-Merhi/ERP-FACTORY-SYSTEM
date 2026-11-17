@@ -85,8 +85,12 @@ export function useFactoryEmployeesState() {
     updated: number;
     employees: Array<{ id: number; name: string; oldBalance: number; newBalance: number }>;
   } | null>(null);
-
-  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -95,7 +99,7 @@ export function useFactoryEmployeesState() {
       return res.json();
     },
   });
-
+  const employees = employeesData ?? [];
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const res = await factoryApiRequest("POST", "/api/factory/employees", data);
@@ -204,6 +208,9 @@ export function useFactoryEmployeesState() {
     },
   });
   return {
+    refetch,
+    isError,
+    employeesData,
     createMutation,
     createOpen,
     deactivateMutation,

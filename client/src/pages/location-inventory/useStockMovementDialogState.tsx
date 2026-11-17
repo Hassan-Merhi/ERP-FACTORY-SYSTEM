@@ -57,8 +57,12 @@ export function useStockMovementDialogState({
     const n = toSafeNumber(value);
     return n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
   };
-
-  const { data: stockMovementData, isLoading: stockMovementLoading } = useQuery<StockMovementResponse>({
+  const {
+    data: stockMovementData,
+    isLoading: stockMovementLoading,
+    isError: stockMovementError,
+    refetch: refetchStockMovement,
+  } = useQuery<StockMovementResponse>({
     queryKey: stockMovementItem
       ? ["/api/inventory/movement", stockMovementItem.stockItemId, stockMovementItem.locationId, stockMovementPeriod]
       : [],
@@ -74,8 +78,12 @@ export function useStockMovementDialogState({
       return res.json();
     },
   });
-
-  const { data: smDrillData, isLoading: smDrillLoading } = useQuery<StockMovementDrillResponse>({
+  const {
+    data: smDrillData,
+    isLoading: smDrillLoading,
+    isError: smDrillError,
+    refetch: refetchSmDrill,
+  } = useQuery<StockMovementDrillResponse>({
     queryKey:
       stockMovementItem && drillMonth
         ? [
@@ -123,6 +131,10 @@ export function useStockMovementDialogState({
   const outNumberCell = cn(numberCell, "text-rose-600 dark:text-rose-400");
   const closingNumberCell = cn(numberCell, "font-semibold text-blue-600 dark:text-blue-400");
   return {
+    stockMovementError,
+    smDrillError,
+    refetchStockMovement,
+    refetchSmDrill,
     closingNumberCell,
     drillMonth,
     fmtA,

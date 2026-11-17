@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Plus, Users, DollarSign } from "lucide-react";
 import { drCrClass } from "@/lib/formatNumber";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -16,6 +17,9 @@ import { POSCustomersSection } from "./POSCustomersSection";
 
 export default function POSCustomers() {
   const {
+    customers,
+    refetch,
+    isError,
     closingBalance,
     createMutation,
     filteredCustomers,
@@ -206,14 +210,15 @@ export default function POSCustomers() {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
+        ) : isError && customers.length === 0 ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
         ) : filteredCustomers.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">{searchQuery ? "No customers found" : "No customers yet"}</p>
-            <p className="text-sm mt-1">
-              {searchQuery ? "Try a different search term" : "Create your first customer to get started"}
-            </p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title={searchQuery ? "No customers found" : "No customers yet"}
+            description={searchQuery ? "Try a different search term" : "Create your first customer to get started"}
+            className="py-12"
+          />
         ) : (
           <div className="border rounded-xl overflow-hidden">
             <div className="table-responsive">

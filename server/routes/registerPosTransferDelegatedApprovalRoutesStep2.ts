@@ -11,17 +11,11 @@ import {
   sendWhatsAppFileToChatId,
 } from "../services/whatsappService";
 import { logAudit } from "./_helpers";
-import {
-  context,
-  errorResponse,
-  registerPosTransferDelegatedApprovalRoutesStep1,
-  type ExcelBuilder,
-} from "./registerPosTransferDelegatedApprovalRoutesStep1";
+import { context, errorResponse, type ExcelBuilder } from "./registerPosTransferDelegatedApprovalRoutesStep1";
 
 export function registerPosTransferDelegatedApprovalRoutesStep2(
-  { setup }: Pick<Awaited<ReturnType<typeof registerPosTransferDelegatedApprovalRoutesStep1>>, "setup">,
   app: Express,
-  dependencies: { ensureGroupsTable: () => Promise<void>; createNoCostExcel: ExcelBuilder }
+  dependencies: { createNoCostExcel: ExcelBuilder }
 ) {
   // A destination represents the receiving stock-transfer order shown to POS.
   // Underlying vouchers remain independent for accounting and inventory; only
@@ -47,7 +41,6 @@ export function registerPosTransferDelegatedApprovalRoutesStep2(
       ) {
         return res.status(400).json({ message: "Select between 1 and 100 valid transfer vouchers." });
       }
-      await setup();
       const configured = await pool.query(
         'SELECT grp.chat_id AS "chatId" FROM pos_transfer_approval_settings s ' +
           "JOIN stock_transfer_export_wa_groups grp ON grp.id=s.group_id AND grp.company_id=s.company_id " +

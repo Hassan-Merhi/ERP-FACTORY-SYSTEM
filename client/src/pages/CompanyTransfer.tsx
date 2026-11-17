@@ -14,6 +14,8 @@ import { CompanyTransferSection } from "./CompanyTransferSection";
 
 export default function CompanyTransfer() {
   const {
+    transfersError,
+    refetchTransfers,
     accountOptions,
     addingModule,
     autoConfigQueries,
@@ -52,6 +54,8 @@ export default function CompanyTransfer() {
       </div>
 
       <CompanyTransferSection
+        transfersError={transfersError}
+        refetchTransfers={refetchTransfers}
         accountOptions={accountOptions}
         addingModule={addingModule}
         autoConfigQueries={autoConfigQueries}

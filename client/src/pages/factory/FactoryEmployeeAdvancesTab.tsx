@@ -18,6 +18,9 @@ import { FactoryEmployeeAdvancesTabSection } from "./FactoryEmployeeAdvancesTabS
 
 export default function FactoryEmployeeAdvancesTab() {
   const {
+    refetch,
+    isError,
+    advancesData,
     addForm,
     addMutation,
     addOpen,
@@ -89,6 +92,9 @@ export default function FactoryEmployeeAdvancesTab() {
 
       {/* Table */}
       <FactoryEmployeeAdvancesTabSection
+        refetch={refetch}
+        isError={isError}
+        advancesData={advancesData}
         advances={advances}
         empFilter={empFilter}
         isLoading={isLoading}

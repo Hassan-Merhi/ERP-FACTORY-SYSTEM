@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpCanDenialMessage as canDenialMessage } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Edit, Eye, EyeOff, FileText, Search, Truck, Plus } from "lucide-react";
 import { getAvatarColor, getInitials } from "./suppliers/supplierDisplay";
@@ -11,6 +12,8 @@ import { SuppliersSection, useSuppliersState } from "./useSuppliersState";
 
 export default function Suppliers() {
   const {
+    refetch,
+    isError,
     activeSuppliers,
     companies,
     companyFilter,
@@ -128,20 +131,19 @@ export default function Suppliers() {
             </div>
           ))}
         </div>
+      ) : isError && suppliers.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
       ) : suppliers.length === 0 ? (
-        <div className="border rounded-xl bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
-          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-            <Truck className="w-5 h-5 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-medium">No suppliers found</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {isProperties
-                ? "Use Add Supplier above to create your first supplier"
-                : "Create suppliers in the Master Data page"}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={Truck}
+          title="No suppliers found"
+          description={
+            isProperties
+              ? "Use Add Supplier above to create your first supplier"
+              : "Create suppliers in the Master Data page"
+          }
+          className="py-16"
+        />
       ) : sortedSuppliers.length === 0 ? (
         <div className="border rounded-xl bg-muted/20 flex flex-col items-center justify-center py-12 gap-3 text-center">
           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">

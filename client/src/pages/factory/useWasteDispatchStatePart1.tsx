@@ -32,7 +32,7 @@ export function useWasteDispatchStatePart1() {
   const [deleteDispatchId, setDeleteDispatchId] = useState<number | null>(null);
 
   // ── Dispatch queries ───────────────────────────────────────────
-  const { data, isLoading } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
     queryKey: companyQueryKey("/api/factory/waste-dispatch/bales", selectedCompany?.id, search),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -226,6 +226,9 @@ export function useWasteDispatchStatePart1() {
     win.close();
   };
   return {
+    data,
+    isError,
+    refetch,
     bales,
     confirming,
     deleteDispatchId,

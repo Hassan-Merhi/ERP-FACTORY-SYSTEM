@@ -90,7 +90,12 @@ export function useCompanyTransferState() {
   });
 
   const transferKey = companyKeys.simpleTransfers(fromCompanyId);
-  const { data: transfers = [], isLoading } = useQuery<Transfer[]>({
+  const {
+    data: transfers = [],
+    isLoading,
+    isError: transfersError,
+    refetch: refetchTransfers,
+  } = useQuery<Transfer[]>({
     queryKey: transferKey,
     enabled: !!fromCompanyId,
   });
@@ -197,6 +202,8 @@ export function useCompanyTransferState() {
   const accountOptions = (accounts: LedgerAccount[]) =>
     accounts.filter((account) => account.code !== "TRANSFER-CLEARING");
   return {
+    transfersError,
+    refetchTransfers,
     accountOptions,
     addingModule,
     autoConfigQueries,

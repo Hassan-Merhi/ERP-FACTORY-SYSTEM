@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { CustomNetPositionView } from "./propertiesdashboard/components/CustomNetPositionView";
 import { usePropertiesDashboardState } from "./usePropertiesDashboardState";
 import { PropertiesDashboardSection } from "./PropertiesDashboardSection";
+import { LoadingState } from "@/components/ui/page-state";
 
 export default function PropertiesDashboard() {
   const {
@@ -98,9 +99,7 @@ export default function PropertiesDashboard() {
           <h3 className="text-lg font-medium">Net Position Breakdown</h3>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center h-[200px]">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+          <LoadingState className="h-[200px]" />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {/* What We Have (Assets) */}

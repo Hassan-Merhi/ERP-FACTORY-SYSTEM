@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TabsContent } from "@/components/ui/tabs";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { useStockItemDetailsDialogViewState } from "./useStockItemDetailsDialogViewState";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 export function StockItemDetailsDialogViewTabsContentSection({
   deleteLocationPriceMutation,
@@ -99,9 +100,9 @@ export function StockItemDetailsDialogViewTabsContentSection({
         </Card>
 
         {loadingLocationPrices ? (
-          <div className="text-center py-4 text-muted-foreground">Loading...</div>
+          <LoadingState className="py-4" />
         ) : locationPrices.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">No location prices added yet</div>
+          <EmptyState title="No location prices added yet" className="py-4" />
         ) : (
           <div className="space-y-2">
             {locationPrices.map((price) => (

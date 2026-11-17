@@ -29,8 +29,12 @@ export function useChatState() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
-
-  const { data: chatUsers = [], isLoading: usersLoading } = useQuery<ChatUser[]>({
+  const {
+    data: chatUsers = [],
+    isLoading: usersLoading,
+    isError: usersError,
+    refetch: refetchUsers,
+  } = useQuery<ChatUser[]>({
     queryKey: ["/api/chat/users"],
   });
 
@@ -312,6 +316,9 @@ export function useChatState() {
 
   const isSending = sendMutation.isPending || isUploading;
   return {
+    chatUsers,
+    usersError,
+    refetchUsers,
     clearConfirmOpen,
     clearMutation,
     conversationUsers,

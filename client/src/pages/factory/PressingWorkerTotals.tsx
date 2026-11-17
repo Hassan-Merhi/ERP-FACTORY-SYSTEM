@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,16 @@ interface WorkerTotalsResponse {
 const formatCount = (value: number) => value.toLocaleString();
 const formatKg = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 
-const standingStyles: Record<PressingStanding, {
-  row: string; name: string; kg: string; badge: string; label: string;
-}> = {
+const standingStyles: Record<
+  PressingStanding,
+  {
+    row: string;
+    name: string;
+    kg: string;
+    badge: string;
+    label: string;
+  }
+> = {
   leading: {
     row: "bg-emerald-500/5",
     name: "text-base font-extrabold text-emerald-700 dark:text-emerald-400",
@@ -49,8 +57,14 @@ const standingStyles: Record<PressingStanding, {
 };
 
 /** Workers see colleague totals, never another worker's individual bale history. */
-export default function PressingWorkerTotals({ active, companyId, userId }: {
-  active: boolean; companyId: number; userId: string;
+export default function PressingWorkerTotals({
+  active,
+  companyId,
+  userId,
+}: {
+  active: boolean;
+  companyId: number;
+  userId: string;
 }) {
   const [day, setDay] = useState("");
   const totals = useQuery<WorkerTotalsResponse>({
@@ -58,7 +72,8 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
     enabled: active,
     queryFn: async () => {
       const response = await fetch(ROOT + "/worker-totals" + (day ? "?day=" + encodeURIComponent(day) : ""), {
-        credentials: "include", cache: "no-store",
+        credentials: "include",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not load pressing worker totals");
       return response.json() as Promise<WorkerTotalsResponse>;
@@ -81,21 +96,29 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
           <p className="text-xs text-muted-foreground">Daily confirmed scans (Beirut time) · ranked by KG</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input aria-label="Scanned items date" type="date"
+          <Input
+            aria-label="Scanned items date"
+            type="date"
             data-testid="input-pressing-worker-date"
             max={totals.data?.serverToday}
             className="h-9 w-[145px] text-xs"
             value={day || totals.data?.day || ""}
-            onChange={event => setDay(event.target.value)} />
-          <Button type="button" size="sm" variant="outline"
+            onChange={(event) => setDay(event.target.value)}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             data-testid="button-refresh-pressing-totals"
             disabled={totals.isFetching}
-            onClick={() => void totals.refetch()}>
-            <RefreshCw className="mr-1 h-4 w-4" />Refresh
+            onClick={() => void totals.refetch()}
+          >
+            <RefreshCw className="mr-1 h-4 w-4" />
+            Refresh
           </Button>
         </div>
       </div>
-      {totals.isLoading && <p className="text-sm text-muted-foreground">Loading worker totals…</p>}
+      {totals.isLoading && <LoadingState title="Loading worker totals…" />}
       {totals.isError && (
         <p role="alert" className="text-sm text-destructive">
           {totals.error instanceof Error ? totals.error.message : "Could not load worker totals"}
@@ -106,33 +129,52 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
           <table className="w-full min-w-[550px] text-left text-sm">
             <thead className="bg-muted">
               <tr>
-                <th scope="col" className="p-3 font-medium">Worker</th>
-                <th scope="col" className="p-3 text-right font-medium">Total Items</th>
-                <th scope="col" className="p-3 text-right font-medium">Total KG</th>
+                <th scope="col" className="p-3 font-medium">
+                  Worker
+                </th>
+                <th scope="col" className="p-3 text-right font-medium">
+                  Total Items
+                </th>
+                <th scope="col" className="p-3 text-right font-medium">
+                  Total KG
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rankedWorkers.map(worker => {
+              {rankedWorkers.map((worker) => {
                 const style = standingStyles[worker.standing];
                 return (
-                  <tr key={worker.userId} data-testid={"pressing-worker-row-" + worker.userId}
-                    className={"border-t " + style.row}>
+                  <tr
+                    key={worker.userId}
+                    data-testid={"pressing-worker-row-" + worker.userId}
+                    className={"border-t " + style.row}
+                  >
                     <td className="min-w-[210px] p-3">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className={style.name}>{worker.name?.trim() || "Display name not set"}</span>
-                        {worker.userId === userId && <span className="text-xs font-normal text-muted-foreground">(You)</span>}
+                        {worker.userId === userId && (
+                          <span className="text-xs font-normal text-muted-foreground">(You)</span>
+                        )}
                         <span className={"rounded-full border px-2 py-0.5 text-xs font-semibold " + style.badge}>
                           {style.label}
                         </span>
                       </div>
                     </td>
-                    <td className="p-3 text-right font-semibold tabular-nums">{formatCount(Number(worker.totalBales || 0))}</td>
-                    <td className={"p-3 text-right tabular-nums " + style.kg}>{formatKg(Number(worker.totalKg || 0))}</td>
+                    <td className="p-3 text-right font-semibold tabular-nums">
+                      {formatCount(Number(worker.totalBales || 0))}
+                    </td>
+                    <td className={"p-3 text-right tabular-nums " + style.kg}>
+                      {formatKg(Number(worker.totalKg || 0))}
+                    </td>
                   </tr>
                 );
               })}
               {!workers.length && (
-                <tr><td colSpan={3} className="p-4 text-center text-muted-foreground">No pressing workers yet.</td></tr>
+                <tr>
+                  <td colSpan={3} className="p-4 text-center text-muted-foreground">
+                    No pressing workers yet.
+                  </td>
+                </tr>
               )}
             </tbody>
             <tfoot className="border-t bg-muted/50 font-semibold">

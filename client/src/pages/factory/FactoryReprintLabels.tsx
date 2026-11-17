@@ -18,6 +18,8 @@ import { FactoryReprintLabelsSection } from "./FactoryReprintLabelsSection";
 
 export default function FactoryReprintLabels() {
   const {
+    refetchBales,
+    balesError,
     allFilteredSelected,
     articleCodeFilters,
     articleCodeSearch,
@@ -107,6 +109,8 @@ export default function FactoryReprintLabels() {
       {/* Only show content once a location is picked */}
       {selectedLocationId && (
         <FactoryReprintLabelsSection
+          refetchBales={refetchBales}
+          balesError={balesError}
           allFilteredSelected={allFilteredSelected}
           articleCodeFilters={articleCodeFilters}
           articleCodeSearch={articleCodeSearch}

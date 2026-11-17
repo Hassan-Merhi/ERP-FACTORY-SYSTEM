@@ -1,16 +1,19 @@
 // Extracted from ./PosWhatsAppSection.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageCircle, X } from "lucide-react";
+import { MessageCircle, X } from "lucide-react";
 import { usePosWhatsAppSectionState } from "./usePosWhatsAppSectionState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export function PosWhatsAppSectionSection({
+  refetchLocations,
+  locError,
   locLoading,
   locations,
   openDialog,
   saveGroupMutation,
 }: Pick<
   ReturnType<typeof usePosWhatsAppSectionState>,
-  "locLoading" | "locations" | "openDialog" | "saveGroupMutation"
+  "locLoading" | "locations" | "openDialog" | "saveGroupMutation" | "locError" | "refetchLocations"
 >) {
   return (
     <div>
@@ -20,12 +23,11 @@ export function PosWhatsAppSectionSection({
       </p>
 
       {locLoading ? (
-        <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading locations…
-        </div>
+        <LoadingState title="Loading locations…" className="py-8" />
+      ) : locError && locations.length === 0 ? (
+        <ErrorState onAction={() => void refetchLocations()} actionLabel="Try again" className="py-8" />
       ) : locations.length === 0 ? (
-        <p className="text-muted-foreground text-sm text-center py-8">No POS locations found.</p>
+        <EmptyState title="No POS locations found." className="py-8" />
       ) : (
         <div className="space-y-2">
           {locations.map((loc) => {

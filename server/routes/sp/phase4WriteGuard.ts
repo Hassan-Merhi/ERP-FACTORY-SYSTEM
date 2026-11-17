@@ -6,8 +6,7 @@ import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { pn } from "./spMigrationPhase2Common";
 import { invalidateCutoverLockCache } from "./spMigrationCutoverState";
-import { ensureCutoverHardening } from "./spMigrationCutoverHardening";
-import { ensurePhase4CutoverSchema } from "./spMigrationPhase4Inventory";
+import { backfillLegacyCutoverStockDeltaKeys } from "./spMigrationPhase4Inventory";
 import { latestCutoverBlocksCompany } from "./spMigrationPhase4Policy";
 import { firstRow } from "../../lib/queryResult";
 
@@ -15,30 +14,9 @@ const installedApps = new WeakSet<object>();
 
 let holdCache: { expiresAt: number; byCompany: Map<number, Record<string, unknown> | null> } | null = null;
 
-let phase4RouteSchemaPromise: Promise<void> | null = null;
-
 export function invalidatePhase4HoldCache(): void {
   holdCache = null;
   invalidateCutoverLockCache();
-}
-
-export function ensurePhase4Schema(): Promise<void> {
-  if (!phase4RouteSchemaPromise) {
-    phase4RouteSchemaPromise = (async () => {
-      await Promise.all([ensurePhase4CutoverSchema(), ensureCutoverHardening()]);
-      await db.execute(
-        sql.raw(`
-        ALTER TABLE sp_migration_cutovers
-          ADD COLUMN IF NOT EXISTS rollback_window_hours INTEGER NOT NULL DEFAULT 72,
-          ADD COLUMN IF NOT EXISTS finalize_started_at TIMESTAMPTZ
-      `)
-      );
-    })().catch((error) => {
-      phase4RouteSchemaPromise = null;
-      throw error;
-    });
-  }
-  return phase4RouteSchemaPromise;
 }
 
 function collectCompanyIds(req: Request): number[] {
@@ -64,7 +42,7 @@ function collectCompanyIds(req: Request): number[] {
 async function loadLatestCutoversForCompanies(
   companyIds: number[]
 ): Promise<Map<number, Record<string, unknown> | null>> {
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   if (holdCache && holdCache.expiresAt > Date.now() && companyIds.every((id) => holdCache!.byCompany.has(id))) {
     return holdCache.byCompany;
   }

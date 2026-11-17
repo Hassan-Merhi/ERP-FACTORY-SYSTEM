@@ -8,8 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Pencil, Star, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useSupplierProformasState } from "./useSupplierProformasState";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export function SupplierProformasSection({
+  isError,
+  refetch,
   commitRename,
   deleteMutation,
   destinationLabel,
@@ -50,6 +53,8 @@ export function SupplierProformasSection({
   | "setSelectedProformaId"
   | "starMutation"
   | "startRename"
+  | "isError"
+  | "refetch"
 >) {
   return (
     <div>
@@ -58,8 +63,12 @@ export function SupplierProformasSection({
           <CardTitle className="text-sm">Proformas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {(!proformas || proformas.length === 0) && (
-            <p className="text-sm text-muted-foreground">No proformas yet. Create one to get started.</p>
+          {isError && !proformas ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
+          ) : (
+            (!proformas || proformas.length === 0) && (
+              <EmptyState title="No proformas yet. Create one to get started." />
+            )
           )}
           <div className="mb-3">
             <Select value={filterDestinationId} onValueChange={setFilterDestinationId}>

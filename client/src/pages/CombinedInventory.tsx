@@ -9,9 +9,12 @@ import type { CombinedInventoryProps } from "./CombinedInventoryTypes";
 import { useCombinedInventoryState } from "./useCombinedInventoryState";
 import { GroupsView, ItemsTable } from "./CombinedInventoryItemsTable";
 import { SearchField } from "@/components/ui/search-field";
+import { ErrorState } from "@/components/ui/page-state";
 
 export default function CombinedInventory(props: CombinedInventoryProps) {
   const {
+    inventoryPage,
+    isInventoryError,
     drillGroup,
     filteredAll,
     formatAmount,
@@ -55,6 +58,9 @@ export default function CombinedInventory(props: CombinedInventoryProps) {
         </div>
       </div>
     );
+  }
+  if (isInventoryError && !inventoryPage) {
+    return <ErrorState onAction={() => void refetchInventory()} actionLabel="Try again" />;
   }
 
   return (

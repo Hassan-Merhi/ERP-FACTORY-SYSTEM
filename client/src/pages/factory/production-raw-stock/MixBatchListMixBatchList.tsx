@@ -9,6 +9,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { recordedMixBatchCost, summarizeRecordedMixBatches } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -439,11 +440,12 @@ export function MixBatchList({
             </div>
           </>
         ) : (
-          <div className="text-center py-10">
-            <Layers className="mx-auto h-10 w-10 text-muted-foreground" />
-            <h3 className="mt-3 text-base font-semibold">No mix batches</h3>
-            <p className="text-muted-foreground text-sm mt-1">No mix batches yet. Create one to get started.</p>
-          </div>
+          <EmptyState
+            icon={Layers}
+            title="No mix batches"
+            description="No mix batches yet. Create one to get started."
+            className="py-10"
+          />
         )}
       </CardContent>
     </Card>

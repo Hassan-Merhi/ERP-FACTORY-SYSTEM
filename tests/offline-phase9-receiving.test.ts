@@ -22,7 +22,6 @@ import {
   offlineReceivingCapture,
   offlineReceivingInputs,
 } from "../server/routes/containers/containerOffloadOfflinePolicy";
-import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/phase9ReceivingOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
@@ -156,8 +155,6 @@ beforeAll(async () => {
     [ctx.companyId, `${PREFIX}SUP`.toUpperCase(), `${PREFIX}_supplier`, `${PREFIX}@example.test`]
   );
   supplierId = Number(supplier.rows[0].id);
-  edge.config = LAN;
-  await ensurePhase9ReceivingOutboxSchema(pool);
   edge.config = CLOUD;
 }, 120_000);
 

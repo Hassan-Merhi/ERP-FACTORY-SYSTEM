@@ -19,7 +19,6 @@ import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { adjustInventory } from "../server/inventoryHelper";
 import { classifyAccountType } from "../server/services/accounting/accountClassification";
-import { ensureInventoryCutoverSchema } from "../server/services/accounting/perpetualInventory/cutover";
 import {
   assertNoInventoryCutoverTx,
   InventoryCutoverRefusalError,
@@ -36,10 +35,7 @@ import {
 } from "../server/services/accounting/perpetualInventory/inventoryMovementJournal";
 import { ensureSystemAccounts, systemAccountDefinition } from "../server/services/accounting/systemAccounts";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
-import {
-  ensureInventoryFidelitySchema,
-  VALUE_MOVED_TABLES,
-} from "../server/services/inventory/inventoryFidelitySchema";
+import { columnDefinition } from "./helpers/schemaManifest";
 import {
   companyStockValuation,
   companyStockValuationAsOf,
@@ -78,8 +74,6 @@ async function journalLines(company: number, voucherNumber: string) {
 }
 
 beforeAll(async () => {
-  expect(await ensureInventoryCutoverSchema(pool)).toBe(true);
-  await ensureInventoryFidelitySchema(pool);
   await withFixtureTransaction(async (client) => {
     await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
     const company = async (suffix: string, type: string | null) =>
@@ -371,36 +365,25 @@ describe("inventory movement journal", () => {
   });
 });
 
-describe("boot DDL", () => {
-  it("is idempotent and matches the schema", async () => {
-    await ensureInventoryFidelitySchema(pool);
-    await ensureInventoryFidelitySchema(pool);
-    const { rows } = await pool.query(
-      `SELECT table_name, column_name, numeric_precision, numeric_scale, is_nullable
-         FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND ((column_name = 'value_moved' AND table_name = ANY($1)) OR (table_name = 'inventory' AND column_name = 'average_rate'))
-        ORDER BY table_name`,
-      [VALUE_MOVED_TABLES]
-    );
-    expect(rows).toEqual(
-      [
-        ...VALUE_MOVED_TABLES.map((table) => ({
-          table_name: table,
-          column_name: "value_moved",
-          numeric_precision: 20,
-          numeric_scale: 2,
-          is_nullable: "YES",
-        })),
-        {
-          table_name: "inventory",
-          column_name: "average_rate",
-          numeric_precision: 20,
-          numeric_scale: 7,
-          is_nullable: "NO",
-        },
-      ].sort((a, b) => a.table_name.localeCompare(b.table_name))
-    );
+/** The tables that record the value each line moved (wave 11). */
+const VALUE_MOVED_TABLES = [
+  "sales_items",
+  "credit_note_items",
+  "stock_adjustment_items",
+  "stock_transfer_items",
+  "container_offload_items",
+] as const;
+
+describe("wave 11 schema (defined by the schema migrations)", () => {
+  it("has value_moved on every line table, cogs_variance, and the 7 dp average rate", () => {
+    for (const table of VALUE_MOVED_TABLES) {
+      expect(columnDefinition(table, "value_moved"), table).toMatchObject({ type: "numeric(20,2)", notNull: false });
+    }
+    expect(columnDefinition("container_offload_items", "cogs_variance")).toMatchObject({
+      type: "numeric(20,2)",
+      notNull: false,
+    });
+    expect(columnDefinition("inventory", "average_rate")).toMatchObject({ type: "numeric(20,7)", notNull: true });
   });
 });
 

@@ -150,8 +150,12 @@ export function useFactoryDispatchBatchesState() {
   const qParams = new URLSearchParams();
   if (filterCustomer && filterCustomer !== "_all") qParams.set("customerId", filterCustomer);
   if (filterStatus && filterStatus !== "_all") qParams.set("status", filterStatus);
-
-  const { data: batches = [], isLoading } = useQuery<BatchRow[]>({
+  const {
+    data: batchesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<BatchRow[]>({
     queryKey: companyQueryKey("/api/factory/dispatch-batches", selectedCompany?.id, filterCustomer, filterStatus),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -163,7 +167,7 @@ export function useFactoryDispatchBatchesState() {
     refetchInterval: visibleTabInterval(60_000),
     refetchIntervalInBackground: false,
   });
-
+  const batches = batchesData ?? [];
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
@@ -277,6 +281,9 @@ export function useFactoryDispatchBatchesState() {
     return searchAny(search, b.batchNumber, b.customerName, b.invoiceNumber);
   });
   return {
+    refetch,
+    isError,
+    batchesData,
     activeProformas,
     canCreateBatch,
     createMutation,

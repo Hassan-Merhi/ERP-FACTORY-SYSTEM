@@ -10,8 +10,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useFactoryReprintLabelsState } from "./useFactoryReprintLabelsState";
 import { SearchField } from "@/components/ui/search-field";
+import { ErrorState } from "@/components/ui/page-state";
 
 export function FactoryReprintLabelsSection({
+  refetchBales,
+  balesError,
   allFilteredSelected,
   articleCodeFilters,
   articleCodeSearch,
@@ -52,6 +55,8 @@ export function FactoryReprintLabelsSection({
   | "setSearch"
   | "toggleSelect"
   | "uniqueArticleCodes"
+  | "balesError"
+  | "refetchBales"
 >) {
   return (
     <>
@@ -203,6 +208,8 @@ export function FactoryReprintLabelsSection({
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
+      ) : balesError && balesData.length === 0 ? (
+        <ErrorState onAction={() => void refetchBales()} actionLabel="Try again" />
       ) : filteredBales.length === 0 ? (
         <Card className="p-8 text-center text-muted-foreground">
           <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />

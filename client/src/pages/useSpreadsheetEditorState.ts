@@ -9,6 +9,10 @@ import { useSpreadsheetEditorStatePart2 } from "./useSpreadsheetEditorStatePart2
 
 export function useSpreadsheetEditorState() {
   const {
+    sheetError,
+    refetchSheet,
+    refetchLibrary,
+    libraryError,
     containerRef,
     createMutation,
     currentDataRef,
@@ -72,6 +76,10 @@ export function useSpreadsheetEditorState() {
     updateMutation,
   });
   return {
+    sheetError,
+    refetchSheet,
+    refetchLibrary,
+    libraryError,
     confirmRename,
     containerRef,
     createMutation,

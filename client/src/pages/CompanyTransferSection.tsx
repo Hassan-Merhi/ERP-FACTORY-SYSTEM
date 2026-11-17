@@ -8,8 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Undo2, Zap } from "lucide-react";
 import { MODULES, MODULE_LABELS, formatUsdBase, useCompanyTransferState } from "./useCompanyTransferState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export function CompanyTransferSection({
+  transfersError,
+  refetchTransfers,
   accountOptions,
   addingModule,
   autoConfigQueries,
@@ -56,6 +59,8 @@ export function CompanyTransferSection({
   | "setUndoTarget"
   | "toggleCashAccount"
   | "transfers"
+  | "refetchTransfers"
+  | "transfersError"
 >) {
   return (
     <div className="space-y-6 p-6">
@@ -261,9 +266,11 @@ export function CompanyTransferSection({
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+            <LoadingState className="m-4" />
+          ) : transfersError && transfers.length === 0 ? (
+            <ErrorState onAction={() => void refetchTransfers()} actionLabel="Try again" className="m-4" />
           ) : transfers.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No transfers yet.</p>
+            <EmptyState title="No transfers yet." className="m-4" />
           ) : (
             <Table>
               <TableHeader className="sticky top-0 z-30 bg-background">

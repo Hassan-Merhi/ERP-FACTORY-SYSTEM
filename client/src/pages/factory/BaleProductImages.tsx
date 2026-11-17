@@ -11,6 +11,7 @@ import type { FactoryBaleProductImage } from "@shared/schema";
 import { PageHeader } from "@/components/PageHeader";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import { confirmAction } from "@/components/ConfirmHost";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 interface BaleProduct {
   id: number;
@@ -130,11 +131,11 @@ export default function BaleProductImages() {
 
         <div className="flex-1 overflow-y-auto">
           {productsQuery.isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState className="m-3" />
+          ) : productsQuery.isError && !productsQuery.data ? (
+            <ErrorState onAction={() => void productsQuery.refetch()} actionLabel="Try again" className="m-3" />
           ) : filteredProducts.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">No products found</p>
+            <EmptyState title="No products found" className="m-3" />
           ) : (
             <div className="divide-y">
               {filteredProducts.map((p) => (
@@ -229,13 +230,11 @@ export default function BaleProductImages() {
 
             {/* Image grid */}
             {imagesQuery.isLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
+              <LoadingState />
+            ) : imagesQuery.isError && !imagesQuery.data ? (
+              <ErrorState onAction={() => void imagesQuery.refetch()} actionLabel="Try again" />
             ) : images.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No images yet. Upload the first one above.
-              </div>
+              <EmptyState title="No images yet. Upload the first one above." />
             ) : (
               <div>
                 <div className="mb-3 flex items-center justify-between">

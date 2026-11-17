@@ -1,39 +1,44 @@
 /** Phase 6 source contracts; live PostgreSQL/WhatsApp E2E remains Phase 7. */
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { stockTransferOrderWaReconciliationSchema } from "../server/startup-schema/042-stock-transfer-order-wa-reconciliation";
+
+import { columnDefinition, tableConstraints } from "./helpers/schemaManifest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
-// Whitespace-insensitive source matching: Prettier formats the split route modules.
-const compact = (text: string) => text.replace(/\s+/g, "");
 
 const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
-const sqlMigration = read("migrations/20261111_004_stock_transfer_order_whatsapp_reconciliation_phase6.sql");
+// Whitespace-insensitive source matching: Prettier formats the split route modules.
+const compact = (text: string) => text.replace(/\s+/g, "");
+// Historical SQL (archived); the live schema is asserted against the manifest.
+const sqlMigration = read(
+  "migrations/archive/legacy/20261111_004_stock_transfer_order_whatsapp_reconciliation_phase6.sql"
+);
 const service = read("server/services/stockTransferOrderWaDeliveryReconciliation.ts");
 const policy = read("server/services/stockTransferOrderWaReconciliationPolicy.ts");
 const routes = compact(read("server/routes/stockTransferOrderWaApprovalRoutes.ts"));
 const worker = read("server/services/stockTransferOrderWaDeliveryWorker.ts");
-const index = read("server/startup-schema/index.ts");
-const ensure = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
 const screen = read("client/src/pages/stock-transfer-order/StockTransferOrderApprovalRequestPanel.tsx");
 const review = read("client/src/pages/stock-transfer-order/StockTransferOrderWaDeliveryReconciliation.tsx");
 const manifest = JSON.parse(read("config/route-manifest.json")) as { routes: string[]; routeCount: number };
 const schema = read("shared/schema/erp/stock-transfer-order-approvals.ts");
 
 describe("Stock Transfer Order WhatsApp Phase 6 administrator reconciliation", () => {
-  it("adds four idempotent statements without touching transfer voucher or GL rows", () => {
-    expect(stockTransferOrderWaReconciliationSchema).toHaveLength(4);
-    for (const statement of stockTransferOrderWaReconciliationSchema) expect(sqlMigration).toContain(statement);
-    const sql = stockTransferOrderWaReconciliationSchema.join(";\n");
-    expect(sql).toContain("manual_retry_count");
-    expect(sql).toContain("delivery_manually_verified");
-    expect(sql).toContain("delivery_manual_retry");
-    expect(sql).toContain("sto_wa_manual_retry_count_ck");
-    expect(sql).toContain("status IN ('pending','sending','accepted','failed','uncertain','verified')");
-    expect(sql).not.toMatch(
+  it("adds the reconciliation schema without touching transfer voucher or GL rows", () => {
+    expect(columnDefinition("stock_transfer_order_approval_deliveries", "manual_retry_count")).toMatchObject({
+      type: "integer",
+      notNull: true,
+      default: "0",
+    });
+    const deliveries = tableConstraints("stock_transfer_order_approval_deliveries");
+    expect(deliveries).toContain("CHECK (manual_retry_count >= 0 AND manual_retry_count <= 3) NOT VALID");
+    expect(deliveries).toContain(
+      "CHECK (status = ANY (ARRAY['pending'::text, 'sending'::text, 'accepted'::text, 'failed'::text, 'uncertain'::text, 'verified'::text])) NOT VALID"
+    );
+    const events = tableConstraints("stock_transfer_order_approval_events").join("\n");
+    expect(events).toContain("'delivery_manually_verified'::text");
+    expect(events).toContain("'delivery_manual_retry'::text");
+    expect(sqlMigration).not.toMatch(
       /(?:UPDATE|INSERT INTO|DELETE FROM)\s+(?:vouchers|stock_transfer_items|voucher_entries|inventory)\b/i
     );
-    expect(index).toContain("...stockTransferOrderWaReconciliationSchema");
-    expect(ensure).toContain("...stockTransferOrderWaReconciliationSchema");
     expect(schema).toContain('manualRetryCount: integer("manual_retry_count")');
   });
 

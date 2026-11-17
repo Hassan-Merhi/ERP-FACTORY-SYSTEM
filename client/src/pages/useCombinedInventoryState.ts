@@ -42,6 +42,7 @@ export function useCombinedInventoryState({ headerActions }: CombinedInventoryPr
     data: inventoryPage,
     isLoading: loadingInventory,
     isFetching: isFetchingInventory,
+    isError: isInventoryError,
     refetch: refetchInventory,
   } = useQuery<{ data: InventoryRow[]; total: number; page: number; pageSize: number; totalPages: number }>({
     // Include company ID so each company's data is cached separately and
@@ -389,6 +390,8 @@ export function useCombinedInventoryState({ headerActions }: CombinedInventoryPr
     }
   };
   return {
+    inventoryPage,
+    isInventoryError,
     drillGroup,
     filteredAll,
     formatAmount,

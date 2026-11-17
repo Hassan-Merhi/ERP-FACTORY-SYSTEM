@@ -98,8 +98,12 @@ export function useFactorySupplierStatementState() {
     },
     enabled: !!companyId,
   });
-
-  const { data: statement, isLoading: statementLoading } = useQuery({
+  const {
+    data: statement,
+    isLoading: statementLoading,
+    isError: statementError,
+    refetch: refetchStatement,
+  } = useQuery({
     queryKey: ["/api/factory/suppliers", supplierId, "statement"],
     queryFn: async () => {
       const res = await fetch(`/api/factory/suppliers/${supplierId}/statement`, { credentials: "include" });
@@ -132,6 +136,8 @@ export function useFactorySupplierStatementState() {
       )
     : [];
   return {
+    statementError,
+    refetchStatement,
     companies,
     companyId,
     currenciesInStatement,

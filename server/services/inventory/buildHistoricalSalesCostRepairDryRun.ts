@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
-import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
   historicalInventoryKey,
@@ -30,7 +29,6 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   createdBy: string;
   companyIds?: number[];
 }): Promise<HistoricalSalesCostDryRunResult> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   let runId = 0;
   try {

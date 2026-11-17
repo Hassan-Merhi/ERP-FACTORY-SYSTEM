@@ -15,12 +15,10 @@ import { getWaSettings, getStrictGreenMainInstanceState, fetchStrictGreenMainCha
 import { BATCH_STATE_CHANGED, actor, admins, errorResponse, groupPattern, idOf, makeMessage, phonePattern, registerStockTransferOrderWaApprovalRoutesPart1, senders, setBatchStatus, stockTransferApprovalSqlFailure } from "./registerStockTransferOrderWaApprovalRoutesPart1";
 import { registerStockTransferOrderWaApprovalRoutesPart2 } from "./registerStockTransferOrderWaApprovalRoutesPart2";
 
-export function registerStockTransferOrderWaApprovalRoutes(app: Express,
-  deps: { ensureGroupsTable: () => Promise<void> }) {
+export function registerStockTransferOrderWaApprovalRoutes(app: Express) {
   app.get("/api/stock-transfer-order/wa-approval/settings", requireAuth, senders, async (req, res) => {
     try {
       const a = await actor(req);
-      await deps.ensureGroupsTable();
       const [s, d, g] = await Promise.all([
         pool.query('SELECT enabled,approval_group_chat_id AS "approvalGroupChatId",' +
           'authorized_phone_e164 AS "authorizedPhoneE164" FROM stock_transfer_order_approval_settings WHERE company_id=$1', [a.companyId]),
@@ -46,7 +44,6 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         (phone&&!phonePattern.test(phone)) || (enabled&&(!groupId||!phone))) {
         return res.status(400).json({message:"Choose a saved group and international authorized phone (+countrycode)."});
       }
-      await deps.ensureGroupsTable();
       if(groupId) {
         const g=await pool.query("SELECT 1 FROM stock_transfer_export_wa_groups WHERE company_id=$1 AND chat_id=$2",[a.companyId,groupId]);
         if(!g.rowCount) return res.status(400).json({message:"Choose a company-linked WhatsApp group."});

@@ -4,12 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { fmt, fmtKg } from "./wastedispatch/utils";
 import { useWasteDispatchState } from "./useWasteDispatchState";
 import { SearchField } from "@/components/ui/search-field";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export function WasteDispatchCardSection({
+  data,
+  isError,
+  refetch,
   bales,
   expandedGroups,
   grandTotals,
@@ -36,6 +40,9 @@ export function WasteDispatchCardSection({
   | "toggleBale"
   | "toggleExpandGroup"
   | "toggleGroup"
+  | "data"
+  | "isError"
+  | "refetch"
 >) {
   return (
     <Card>
@@ -68,9 +75,9 @@ export function WasteDispatchCardSection({
       </CardHeader>
       <CardContent className="p-0">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+          <LoadingState className="rounded-none border-0" />
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="rounded-none border-0" />
         ) : productGroups.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Trash2 className="w-10 h-10 mx-auto mb-3 opacity-25" />

@@ -5,6 +5,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Package, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -68,7 +69,12 @@ export default function StockQuery() {
     search: debouncedSearch.trim() || undefined,
   });
 
-  const { data: pagedStockItems, isLoading: erpLoading } = useQuery<PagedStockItems>({
+  const {
+    data: pagedStockItems,
+    isLoading: erpLoading,
+    isError: erpError,
+    refetch: refetchErp,
+  } = useQuery<PagedStockItems>({
     queryKey: erpCompanyDataKey(stockQueryUrl, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(stockQueryUrl, { credentials: "include" });
@@ -78,12 +84,19 @@ export default function StockQuery() {
     enabled: !isFactory && selectedCompany?.id != null,
   });
 
-  const { data: factoryProducts = [], isLoading: factoryLoading } = useQuery<FactoryBaleProduct[]>({
+  const {
+    data: factoryProducts = [],
+    isLoading: factoryLoading,
+    isError: factoryError,
+    refetch: refetchFactory,
+  } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products"],
     enabled: isFactory,
   });
 
   const isLoading = isFactory ? factoryLoading : erpLoading;
+  const isError = isFactory ? factoryError && factoryProducts.length === 0 : erpError && !pagedStockItems;
+  const refetch = isFactory ? refetchFactory : refetchErp;
 
   // Server pagination never slices the returned page locally.
   // If a filtered result set shrinks, recover the last valid page.
@@ -148,14 +161,15 @@ export default function StockQuery() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-20" />
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Search className="h-10 w-10 opacity-25" />
-          <p className="text-sm font-medium">
-            {hasSearch ? "No items match your search" : "Search for a stock item to get started"}
-          </p>
-          {hasSearch && <p className="text-xs">Try a different name or code</p>}
-        </div>
+        <EmptyState
+          icon={Search}
+          title={hasSearch ? "No items match your search" : "Search for a stock item to get started"}
+          description={hasSearch ? "Try a different name or code" : undefined}
+          className="py-20"
+        />
       ) : (
         <>
           {/* Desktop table */}

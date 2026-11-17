@@ -5,7 +5,6 @@ import { logger } from "../../lib/logger";
 import {
   pn,
   money,
-  ensurePhase2Schema,
   validateMigrationPair,
   requireCompletedAction,
   createRun,
@@ -28,7 +27,6 @@ export async function importContainers(req: Request, res: Response): Promise<Res
   const dependencyError = await requireCompletedAction(pair.sourceId, pair.targetId, "gc_containers");
   if (dependencyError) return res.status(409).json({ message: dependencyError });
 
-  await ensurePhase2Schema();
   const runId = await createRun(
     pair.sourceId,
     pair.targetId,

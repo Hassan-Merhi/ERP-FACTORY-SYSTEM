@@ -28,7 +28,7 @@ const operationalEvents = read("server/lib/operationalEvents.ts");
 const hotspotGuard = read("client/src/lib/bandwidthPhase1HotspotGuard.ts");
 const payloadGuard = read("client/src/lib/bandwidthPhase2PayloadGuard.ts");
 const accountingGuard = read("client/src/lib/accountingRequestFetchGuard.ts");
-const apiBridge = read("server/apiPaginationBridge.mjs");
+const apiBridge = read("server/runtime/apiPagination.mjs");
 const inventoryRoutes = [
   read("server/routes/inventoryRoutes.ts"),
   read("server/routes/inventory/inventoryQueryService.ts"),

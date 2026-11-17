@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
@@ -15,82 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Building2, ChevronDown } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
-
-interface SalesItem {
-  stockItemId: number;
-  stockItemCode: string;
-  stockItemName: string;
-  stockGroupName: string | null;
-  quantity: string;
-  totalSales: string;
-  costProfit: string;
-  configuredProfit: number;
-  configuredProfitPercentage: number;
-  costProfitPercentage: number;
-  totalConfiguredCost: number;
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-}
-
-interface ItemRow {
-  stockItemCode: string;
-  stockItemName: string;
-  stockGroupName: string;
-  byCompany: Record<
-    string,
-    {
-      totalSales: number;
-      totalQty: number;
-      costProfit: number;
-    }
-  >;
-}
-
-type ViewFilter = "all" | "gaining" | "losing";
-
-interface Company {
-  code: string;
-  name: string;
-}
-
-function getAiResult(row: ItemRow, companies: Company[]): string {
-  if (companies.length < 2) return "—";
-
-  const data = companies.map((c) => ({
-    code: c.code,
-    name: c.name.toUpperCase(),
-    qty: row.byCompany[c.code]?.totalQty ?? 0,
-    profit: row.byCompany[c.code]?.costProfit ?? 0,
-  }));
-
-  const hasAnyData = data.some((d) => d.qty > 0 || d.profit !== 0);
-  if (!hasAnyData) return "—";
-
-  const maxQty = Math.max(...data.map((d) => d.qty));
-  const maxProfit = Math.max(...data.map((d) => d.profit));
-
-  const qtyWinners = data.filter((d) => d.qty === maxQty);
-  const profitWinners = data.filter((d) => d.profit === maxProfit);
-
-  const qtyTied = qtyWinners.length > 1;
-  const profitTied = profitWinners.length > 1;
-
-  if (qtyTied && profitTied) return "EQUAL IN BOTH";
-
-  const sameWinner = !qtyTied && !profitTied && qtyWinners[0].code === profitWinners[0].code;
-
-  if (sameWinner) {
-    return `${qtyWinners[0].name} BETTER IN SALES & PROFIT`;
-  }
-
-  const salesPart = qtyTied ? "SALES EQUAL" : `${qtyWinners[0].name} BETTER IN SALES`;
-  const profitPart = profitTied ? "PROFIT EQUAL" : `${profitWinners[0].name} BETTER IN PROFIT`;
-
-  if (qtyTied) return profitPart;
-  if (profitTied) return salesPart;
-  return `${profitPart} — ${salesPart}`;
-}
+import { getAiResult, type SalesItem, type ItemRow, type ViewFilter } from "./salesReportComparisonModel";
 
 export default function SalesReportComparison() {
   const [, navigate] = useLocation();
@@ -126,6 +52,8 @@ export default function SalesReportComparison() {
     data: rawItems = [],
     isFetching,
     isLoading,
+    isError,
+    refetch,
   } = useQuery<SalesItem[]>({
     queryKey: ["/api/dashboard/sales-report-all", queryString],
     enabled,
@@ -493,9 +421,11 @@ export default function SalesReportComparison() {
             )}
 
             {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground">Loading comparison data…</div>
+              <LoadingState title="Loading comparison data…" className="py-16" />
+            ) : isError && rawItems.length === 0 ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
             ) : tableData.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">No data found for the selected filters</div>
+              <EmptyState title="No data found for the selected filters" className="py-16" />
             ) : (
               <div className="rounded-md border overflow-auto">
                 <Table>

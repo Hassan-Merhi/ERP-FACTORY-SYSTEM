@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeAll, describe, expect, it } from "vitest";
 
 beforeAll(async () => {
-  await import("../server/apiPaginationBridge.mjs");
+  await import("../server/runtime/apiPagination.mjs");
 });
 
 describe("P2 compact API response profiles", () => {

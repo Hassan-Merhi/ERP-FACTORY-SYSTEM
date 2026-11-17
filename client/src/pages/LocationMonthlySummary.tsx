@@ -15,9 +15,12 @@ import {
 import type { AuthMe } from "@shared/apiTypes";
 import { useLocationMonthlySummaryState } from "./useLocationMonthlySummaryState";
 import { LocationMonthlySummaryCardContentSection } from "./LocationMonthlySummaryCardContentSection";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export default function LocationMonthlySummary(props: { posUser?: AuthMe }) {
   const {
+    refetch,
+    isError,
     data,
     detailData,
     detailDirection,
@@ -55,6 +58,14 @@ export default function LocationMonthlySummary(props: { posUser?: AuthMe }) {
       <div className="container mx-auto p-6 space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-0 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }
@@ -280,11 +291,7 @@ export default function LocationMonthlySummary(props: { posUser?: AuthMe }) {
                 };
 
                 if (!rows.length) {
-                  return (
-                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                      No transactions found for this period.
-                    </div>
-                  );
+                  return <EmptyState title="No transactions found for this period." className="m-4 py-12" />;
                 }
 
                 const totalQty = rows.reduce((s: number, r) => s + (r.qty || 0), 0);

@@ -2,6 +2,7 @@ import { MapPin, Eye, ArrowDownToLine, ArrowUpFromLine, Layers } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PeriodFilter } from "@/components/ui/period-filter";
@@ -12,6 +13,8 @@ import { LocationVouchersSection, LocationVouchersSection2 } from "./LocationVou
 
 export default function LocationVouchers(props: { posUser?: unknown }) {
   const {
+    refetch,
+    isError,
     calculatedTotals,
     data,
     displayRows,
@@ -46,6 +49,14 @@ export default function LocationVouchers(props: { posUser?: unknown }) {
       <div className="container mx-auto p-6 space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-0 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }

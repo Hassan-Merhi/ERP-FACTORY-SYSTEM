@@ -24,6 +24,7 @@ import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialo
 import { useBalesHistoryState, type EmbeddablePageProps } from "./useBalesHistoryState";
 import { BalesHistoryTableBodySection } from "./BalesHistoryTableBodySection";
 import { BalesHistorySection, BalesHistorySection2 } from "./BalesHistorySection";
+import { EmptyState } from "@/components/ui/page-state";
 
 /** `embedded`: rendered as the Bales hub "History" tab, whose PageHeader already titles the page. */
 export default function BalesHistory(props: EmbeddablePageProps) {
@@ -209,11 +210,11 @@ export default function BalesHistory(props: EmbeddablePageProps) {
         )}
 
         {filtered.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No bales found</p>
-            {searchTerm && <p className="text-xs mt-1">Try a different search term</p>}
-          </div>
+          <EmptyState
+            icon={Package}
+            title="No bales found"
+            description={searchTerm ? "Try a different search term" : undefined}
+          />
         ) : (
           <div>
             <Table>

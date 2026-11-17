@@ -6,8 +6,11 @@ import { CheckCircle, ChevronRight, Container, Package, Play, Plus, ScanLine, XC
 import { fmtDate, fmtDateTime, fmtKg } from "./factorystockallocationv3/utils";
 import { StatusBadge } from "./factorystockallocationv3/components/StatusBadge";
 import { useFactoryStockAllocationV3State } from "./useFactoryStockAllocationV3State";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export function FactoryStockAllocationV3Section({
+  stockError,
+  refetchStock,
   activeTab,
   expectedLoads,
   finalizedLoads,
@@ -32,6 +35,8 @@ export function FactoryStockAllocationV3Section({
   | "startMutation"
   | "stockLoading"
   | "stockRows"
+  | "refetchStock"
+  | "stockError"
 >) {
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
@@ -41,8 +46,11 @@ export function FactoryStockAllocationV3Section({
           <p className="text-sm text-muted-foreground mb-3">
             Per-article breakdown. FTP = Stock in Hand − Expected to Load − Loading.
           </p>
-          {stockLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-          {!stockLoading && stockRows.length === 0 && (
+          {stockLoading && <LoadingState />}
+          {!stockLoading && stockError && stockRows.length === 0 && (
+            <ErrorState onAction={() => void refetchStock()} actionLabel="Try again" />
+          )}
+          {!stockLoading && !stockError && stockRows.length === 0 && (
             <p className="text-sm text-muted-foreground">No stock data available.</p>
           )}
           {stockRows.length > 0 && (
@@ -210,12 +218,7 @@ export function FactoryStockAllocationV3Section({
       {/* ── Finalized ── */}
       {activeTab === "finalized" && (
         <div>
-          {finalizedLoads.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No finalized loads yet.</p>
-            </div>
-          )}
+          {finalizedLoads.length === 0 && <EmptyState icon={CheckCircle} title="No finalized loads yet." />}
           {finalizedLoads.length > 0 && (
             <div className="rounded-md border table-responsive">
               <Table>
@@ -258,12 +261,7 @@ export function FactoryStockAllocationV3Section({
           <p className="text-sm text-muted-foreground mb-3">
             Active proformas. Click "Send to Expected to Load" to create a loading job.
           </p>
-          {proformas.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No active proformas found.</p>
-            </div>
-          )}
+          {proformas.length === 0 && <EmptyState icon={Package} title="No active proformas found." />}
           {proformas.length > 0 && (
             <div className="rounded-md border table-responsive">
               <Table>

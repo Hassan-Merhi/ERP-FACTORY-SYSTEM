@@ -19,9 +19,12 @@ import {
   useFiscalPeriodTabState,
   type FiscalPeriodTabProps,
 } from "./useFiscalPeriodTabState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 export function FiscalPeriodTab(props: FiscalPeriodTabProps) {
   const {
+    refetchClosures,
+    isClosuresError,
     canReopen,
     closePeriodMutation,
     closures,
@@ -88,9 +91,11 @@ export function FiscalPeriodTab(props: FiscalPeriodTabProps) {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Fiscal Period Closure History</h3>
         {isLoadingClosures ? (
-          <div className="text-center py-8 text-muted-foreground">Loading closures...</div>
+          <LoadingState title="Loading closures..." className="py-8" />
+        ) : isClosuresError && closures.length === 0 ? (
+          <ErrorState onAction={() => void refetchClosures()} actionLabel="Try again" className="py-8" />
         ) : closures.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">No fiscal periods have been closed yet.</div>
+          <EmptyState title="No fiscal periods have been closed yet." className="py-8" />
         ) : (
           <Table>
             <TableHeader>

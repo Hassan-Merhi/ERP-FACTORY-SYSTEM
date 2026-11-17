@@ -17,6 +17,8 @@ import {
 
 export function useSupplierProformasState() {
   const {
+    isError,
+    refetch,
     addLineMutation,
     addingLine,
     commitRename,
@@ -75,6 +77,8 @@ export function useSupplierProformasState() {
     toast,
   });
   return {
+    isError,
+    refetch,
     addLineMutation,
     addingLine,
     commitRename,

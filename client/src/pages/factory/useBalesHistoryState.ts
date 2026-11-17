@@ -4,7 +4,6 @@ import { useBalesHistoryModel } from "./baleshistory/useBalesHistoryModel";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl } from "@/lib/exportFile";
 import type { RouteComponentProps } from "wouter";
-
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 export type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
 

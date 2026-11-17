@@ -24,6 +24,8 @@ import { FactoryEmployeeDetailDialogSection, FactoryEmployeeDetailSection } from
 
 export default function FactoryEmployeeDetail() {
   const {
+    stmtError,
+    refetchStatement,
     AdminDialog,
     cashAccounts,
     depositAmount,
@@ -233,7 +235,13 @@ export default function FactoryEmployeeDetail() {
         </div>
 
         {/* Statement */}
-        <FactoryEmployeeDetailSection formatDate={formatDate} statement={statement} stmtLoading={stmtLoading} />
+        <FactoryEmployeeDetailSection
+          stmtError={stmtError}
+          refetchStatement={refetchStatement}
+          formatDate={formatDate}
+          statement={statement}
+          stmtLoading={stmtLoading}
+        />
       </div>
 
       {/* Edit Employee Dialog */}

@@ -32,9 +32,12 @@ import {
   FactoryPendingLoadingsListPendingLoadings,
 } from "./FactoryPendingLoadingsDialogSection";
 import { SearchField } from "@/components/ui/search-field";
+import { ErrorState } from "@/components/ui/page-state";
 
 export default function FactoryPendingLoadings() {
   const {
+    refetchLoads,
+    loadsError,
     canStartLoading,
     closeLinkDialog,
     collapsedCustomers,
@@ -244,6 +247,8 @@ export default function FactoryPendingLoadings() {
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
+      ) : loadsError && loads.length === 0 ? (
+        <ErrorState onAction={() => void refetchLoads()} actionLabel="Try again" />
       ) : loads.length === 0 && undoItems.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 py-16 text-center text-muted-foreground"

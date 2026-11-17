@@ -25,6 +25,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { AuditScan, BatchDetail, InvoicePreview } from "./factorydispatchbatchdetail/types";
 import { fmt } from "./factorydispatchbatchdetail/utils";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function useFactoryDispatchBatchDetailState() {
   const { selectedCompany } = useCompany();
@@ -207,7 +208,7 @@ export function FactoryDispatchBatchDetailSection({
   return (
     <div className="mt-3 border-t pt-3">
       {auditScans.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">No active bale scans found.</p>
+        <EmptyState title="No active bale scans found." />
       ) : (
         <div className="overflow-x-auto">
           <Table mobileLayout="cards">

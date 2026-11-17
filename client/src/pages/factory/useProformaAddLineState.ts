@@ -82,8 +82,12 @@ export function useProformaAddLineState() {
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const numericProformaId = parseInt(proformaId);
-
-  const { data: allItems = [], isLoading: itemsLoading } = useQuery<StockItem[]>({
+  const {
+    data: allItems = [],
+    isLoading: itemsLoading,
+    isError: itemsError,
+    refetch: refetchItems,
+  } = useQuery<StockItem[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 10 * 60 * 1000,
@@ -243,6 +247,9 @@ export function useProformaAddLineState() {
   const isAdded = (item: StockItem) => addedCodes.has(item.code) || existingCodes.has(item.code);
   const isSelected = (item: StockItem) => selectedItem?.id === item.id;
   return {
+    allItems,
+    refetchItems,
+    itemsError,
     addMutation,
     autoSave,
     autoSaveCountdown,

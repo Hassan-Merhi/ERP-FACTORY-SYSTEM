@@ -7,6 +7,7 @@ import type { WasteDispatchHistoryBale } from "./wastedispatch/types";
 import { fmt, fmtKg } from "./wastedispatch/utils";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useWasteDispatchState } from "./useWasteDispatchState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function WasteDispatchCardSection2({
   expandedHistoryIds,
@@ -41,7 +42,7 @@ export function WasteDispatchCardSection2({
       </CardHeader>
       <CardContent className="p-0">
         {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground p-4">No dispatches yet.</p>
+          <EmptyState title="No dispatches yet." className="rounded-none border-0" />
         ) : (
           <div className="divide-y">
             {(showAllHistory ? history : history.slice(0, 10)).map((d) => {

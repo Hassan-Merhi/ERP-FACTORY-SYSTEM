@@ -30,7 +30,12 @@ export function useLocationVouchersState({ posUser }: { posUser?: unknown } = {}
   const [showAllMonths, setShowAllMonths] = useState(false);
 
   // Single-month query
-  const { data: monthData, isLoading: monthLoading } = useQuery<LocationVouchersData>({
+  const {
+    data: monthData,
+    isLoading: monthLoading,
+    isError: monthError,
+    refetch: refetchMonth,
+  } = useQuery<LocationVouchersData>({
     queryKey: [
       `/api/locations/${locationId}/stock-items/${stockItemId}/vouchers/${year}/${month}`,
       periodFilter.fromDate,
@@ -51,7 +56,12 @@ export function useLocationVouchersState({ posUser }: { posUser?: unknown } = {}
   // All-months (date range) query
   const allMonthsStart = `${year}-01-01`;
   const allMonthsEnd = `${year}-12-31`;
-  const { data: rangeData, isLoading: rangeLoading } = useQuery<RangeVouchersData>({
+  const {
+    data: rangeData,
+    isLoading: rangeLoading,
+    isError: rangeError,
+    refetch: refetchRange,
+  } = useQuery<RangeVouchersData>({
     queryKey: [`/api/locations/${locationId}/stock-items/${stockItemId}/transactions`, allMonthsStart, allMonthsEnd],
     queryFn: async () => {
       const url = `/api/locations/${locationId}/stock-items/${stockItemId}/transactions?startDate=${allMonthsStart}&endDate=${allMonthsEnd}`;
@@ -64,7 +74,8 @@ export function useLocationVouchersState({ posUser }: { posUser?: unknown } = {}
 
   const isLoading = showAllMonths ? rangeLoading : monthLoading;
   const data = showAllMonths ? rangeData : monthData;
-
+  const isError = showAllMonths ? rangeError : monthError;
+  const refetch = showAllMonths ? refetchRange : refetchMonth;
   const formatNumber = (num: number | null | undefined, decimals = 2) => {
     if (num == null || isNaN(num) || num === 0) return "";
     return num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -236,6 +247,8 @@ export function useLocationVouchersState({ posUser }: { posUser?: unknown } = {}
     return "bg-muted text-muted-foreground";
   };
   return {
+    refetch,
+    isError,
     calculatedTotals,
     data,
     displayRows,

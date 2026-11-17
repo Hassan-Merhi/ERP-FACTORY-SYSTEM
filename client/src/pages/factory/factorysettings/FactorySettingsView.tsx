@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { LoadingState } from "@/components/ui/page-state";
 import { Switch } from "@/components/ui/switch";
 import { ArrowRight, Images, Loader2, Save, ToggleRight, WifiOff } from "lucide-react";
 import type { FactorySettingsData } from "./types";
@@ -64,12 +65,7 @@ export function FactorySettingsView(props: Props) {
   } = useFactorySettingsViewState(props);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading factory settings...</span>
-      </div>
-    );
+    return <LoadingState title="Loading factory settings..." className="py-12" data-testid="loading-spinner" />;
   }
 
   const toggleItem = (label: string, key: keyof FactorySettingsData) => (

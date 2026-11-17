@@ -16,11 +16,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
-import { ensureFiscalReviewSchema } from "../server/services/accounting/ensureFiscalReviewSchema";
-import { ensureOpeningBalanceLock } from "../server/services/accounting/openingBalanceLock";
-import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
-import { ensureVoucherAuditTrigger } from "../server/services/audit/voucherAuditTrigger";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -114,13 +109,6 @@ async function clearBase(voucherId: number, side: "debit" | "credit", onSide: "d
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  // Install every guard the readiness check reads, as server startup does, so
-  // this file does not depend on which suites ran before it.
-  await ensureClosedPeriodGuard(pool);
-  await ensureOpeningBalanceLock(pool);
-  await ensureVoucherAuditTrigger(pool);
-  await ensureAuditLogAppendOnlyGuard(pool);
-  await ensureFiscalReviewSchema(pool);
   // Unified accounting is Developer-only; promote the seeded Admin.
   await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
     ctx.userId,

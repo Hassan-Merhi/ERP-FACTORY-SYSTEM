@@ -22,6 +22,8 @@ import { FactoryStockAllocationV3Section } from "./FactoryStockAllocationV3Secti
 
 export default function FactoryStockAllocationV3() {
   const {
+    stockError,
+    refetchStock,
     activeTab,
     cancelMutation,
     cancelTargetId,
@@ -124,6 +126,8 @@ export default function FactoryStockAllocationV3() {
 
       {/* Tab body */}
       <FactoryStockAllocationV3Section
+        stockError={stockError}
+        refetchStock={refetchStock}
         activeTab={activeTab}
         expectedLoads={expectedLoads}
         finalizedLoads={finalizedLoads}

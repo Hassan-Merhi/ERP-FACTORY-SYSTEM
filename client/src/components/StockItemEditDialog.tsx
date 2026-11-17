@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { LoadingState } from "@/components/ui/page-state";
 
 interface StockItemEditDialogProps {
   open: boolean;
@@ -189,7 +190,7 @@ export function StockItemEditDialog({ open, onOpenChange, stockItemId }: StockIt
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
-          <div className="flex items-center justify-center py-8">Loading...</div>
+          <LoadingState className="py-8" />
         </DialogContent>
       </Dialog>
     );

@@ -25,8 +25,12 @@ import {
 } from "./FactoryEmployeesDialogSection";
 import { SearchField } from "@/components/ui/search-field";
 
+import { ErrorState } from "@/components/ui/page-state";
 export default function FactoryEmployees() {
   const {
+    refetch,
+    isError,
+    employeesData,
     createMutation,
     createOpen,
     deactivateMutation,
@@ -235,6 +239,12 @@ export default function FactoryEmployees() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : isError && !employeesData ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
+                </TableCell>
+              </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5}>

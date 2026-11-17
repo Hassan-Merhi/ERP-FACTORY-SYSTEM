@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Package, ArrowLeft, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { cn } from "@/lib/utils";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import {
@@ -14,6 +15,10 @@ import { StockMovementDialogSection2 } from "./StockMovementDialogSection2";
 
 export function StockMovementDialog(props: StockMovementDialogProps) {
   const {
+    stockMovementError,
+    smDrillError,
+    refetchStockMovement,
+    refetchSmDrill,
     closingNumberCell,
     drillMonth,
     fmtA,
@@ -96,6 +101,12 @@ export function StockMovementDialog(props: StockMovementDialogProps) {
                     <Skeleton key={i} className="h-11 w-full rounded-lg" />
                   ))}
                 </div>
+              ) : smDrillError && !smDrillData ? (
+                <ErrorState
+                  onAction={() => void refetchSmDrill()}
+                  actionLabel="Try again"
+                  className="rounded-none border-0 p-6"
+                />
               ) : (
                 <table
                   {...mobileCards.tableProps}
@@ -232,6 +243,12 @@ export function StockMovementDialog(props: StockMovementDialogProps) {
                   <Skeleton key={i} className="h-12 w-full rounded-lg" />
                 ))}
               </div>
+            ) : stockMovementError && !stockMovementData ? (
+              <ErrorState
+                onAction={() => void refetchStockMovement()}
+                actionLabel="Try again"
+                className="rounded-none border-0 p-6"
+              />
             ) : (
               <StockMovementDialogSection2
                 closingNumberCell={closingNumberCell}

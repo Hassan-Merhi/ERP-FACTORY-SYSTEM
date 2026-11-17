@@ -16,6 +16,7 @@ import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
 import { API, ChargeDialog, PaymentDialog, fmt, type TransporterDetail } from "./FactoryTransportersPaymentDialog";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 // ─────────────────────────────────────────────────────────────
 // STATEMENT VIEW (detail page)
@@ -30,8 +31,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
   const printRef = useRef<HTMLDivElement>(null);
   // Charges and payments post to an existing transporter's ledger; read-only roles view and print only.
   const recordChanges = useExistingRecordChangeAccess();
-
-  const { data, isLoading } = useQuery<TransporterDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<TransporterDetail>({
     queryKey: companyQueryKey(API, selectedCompany?.id, transporterId),
     enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch(`${API}/${transporterId}`, { credentials: "include" }).then((r) => r.json()),
@@ -51,8 +51,8 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
   });
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
-
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading statement…</div>;
+  if (isLoading) return <LoadingState title="Loading statement…" />;
+  if (isError && !data) return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
   if (!data) return <div className="p-8 text-center text-muted-foreground">Transporter not found.</div>;
 
   return (
@@ -138,9 +138,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
           </div>
           <div className="table-responsive">
             {data.transactions.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                No transactions yet. Record a charge to get started.
-              </div>
+              <EmptyState title="No transactions yet. Record a charge to get started." className="border-0" />
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-30 bg-muted">

@@ -6,8 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmt, today } from "./FactoryEmployeeAdvancesTabTypes";
 import { useFactoryEmployeeAdvancesTabState } from "./useFactoryEmployeeAdvancesTabState";
+import { ErrorState } from "@/components/ui/page-state";
 
 export function FactoryEmployeeAdvancesTabSection({
+  refetch,
+  isError,
+  advancesData,
   advances,
   empFilter,
   isLoading,
@@ -26,6 +30,9 @@ export function FactoryEmployeeAdvancesTabSection({
   | "setRepayForm"
   | "setRepayOpen"
   | "statusFilter"
+  | "advancesData"
+  | "isError"
+  | "refetch"
 >) {
   return (
     <div className="border rounded-xl overflow-x-auto">
@@ -66,6 +73,12 @@ export function FactoryEmployeeAdvancesTabSection({
                 <TableCell></TableCell>
               </TableRow>
             ))
+          ) : isError && !advancesData ? (
+            <TableRow>
+              <TableCell colSpan={7}>
+                <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
+              </TableCell>
+            </TableRow>
           ) : advances.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7}>

@@ -9,6 +9,7 @@ import { PosCustomerSalesDialog } from "./PosCustomerSalesDialog";
 import { useSalesSectionPanelState } from "./useSalesSectionPanelState";
 import { SalesSectionPanelCardSection } from "./SalesSectionPanelCardSection";
 import { SalesSectionPanelCardSection2, SalesSectionPanelCardSection3 } from "./SalesSectionPanelCardSection3";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function SalesSectionPanel(props: { analytics: AnalyticsLegacyState }) {
   const {
@@ -142,7 +143,7 @@ export function SalesSectionPanel(props: { analytics: AnalyticsLegacyState }) {
                       ))}
                     </div>
                   ) : transactions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No transactions found</p>
+                    <EmptyState title="No transactions found" />
                   ) : (
                     <>
                       <div className="overflow-y-auto flex-1 min-h-0">

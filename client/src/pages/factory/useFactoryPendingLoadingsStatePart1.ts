@@ -71,8 +71,12 @@ export function useFactoryPendingLoadingsStatePart1() {
       if (tickRef.current) clearInterval(tickRef.current);
     };
   }, []);
-
-  const { data: loads = [], isLoading } = useQuery<PendingLoad[]>({
+  const {
+    data: loads = [],
+    isLoading,
+    isError: loadsError,
+    refetch: refetchLoads,
+  } = useQuery<PendingLoad[]>({
     queryKey: ["/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250"],
     refetchInterval: visibleTabInterval(60_000),
   });
@@ -241,6 +245,8 @@ export function useFactoryPendingLoadingsStatePart1() {
     groups.get(load.customerId)!.loads.push(load);
   }
   return {
+    refetchLoads,
+    loadsError,
     canStartLoading,
     cancelMutation,
     closeLinkDialog,

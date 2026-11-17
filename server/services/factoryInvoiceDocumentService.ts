@@ -2,7 +2,6 @@ export {
   buildCanonicalInvoiceExcel,
   buildCanonicalInvoiceFilename,
   currencySymbol,
-  ensureFactoryInvoiceDocumentSnapshotStore,
   freezeCanonicalInvoiceDocument,
   getCanonicalInvoiceDocument,
 } from "./buildCanonicalInvoiceExcel";

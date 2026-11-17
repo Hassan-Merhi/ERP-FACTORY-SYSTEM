@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Trash2, ScanLine, PackageCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/ui/page-state";
 import { useFactoryInvoiceCreateState } from "./useFactoryInvoiceCreateState";
 import { FactoryInvoiceCreateSection } from "./FactoryInvoiceCreateSection";
 
@@ -86,14 +87,13 @@ export default function FactoryInvoiceCreate() {
 
             <div className="flex-1 overflow-y-auto">
               {Object.keys(groupedBales).length === 0 ? (
-                <div
-                  className="flex flex-col items-center justify-center py-12 text-muted-foreground"
+                <EmptyState
+                  icon={ScanLine}
+                  title="No bales scanned yet"
+                  description="Select a customer and location, then scan bales"
+                  className="border-0"
                   data-testid="text-no-bales"
-                >
-                  <ScanLine className="h-12 w-12 mb-3 opacity-40" />
-                  <p>No bales scanned yet</p>
-                  <p className="text-sm mt-1">Select a customer and location, then scan bales</p>
-                </div>
+                />
               ) : (
                 <div className="space-y-4">
                   {Object.values(groupedBales).map((group) => (

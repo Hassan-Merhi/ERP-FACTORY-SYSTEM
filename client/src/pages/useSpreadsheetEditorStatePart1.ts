@@ -29,12 +29,20 @@ export function useSpreadsheetEditorStatePart1() {
   // Keyboard shortcut sequence state: tracks partial multi-key sequences
   const seqRef = useRef<string>("");
   const seqTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { data: library = [], isLoading: libraryLoading } = useQuery<SpreadsheetListItem[]>({
+  const {
+    data: library = [],
+    isLoading: libraryLoading,
+    isError: libraryError,
+    refetch: refetchLibrary,
+  } = useQuery<SpreadsheetListItem[]>({
     queryKey: ["/api/spreadsheets"],
   });
-
-  const { data: openedSheet, isLoading: sheetLoading } = useQuery({
+  const {
+    data: openedSheet,
+    isLoading: sheetLoading,
+    isError: sheetError,
+    refetch: refetchSheet,
+  } = useQuery({
     queryKey: ["/api/spreadsheets", openSheetId],
     queryFn: async () => {
       const res = await fetch(`/api/spreadsheets/${openSheetId}`, { credentials: "include" });
@@ -143,6 +151,10 @@ export function useSpreadsheetEditorStatePart1() {
     }
   }, [openedSheet]);
   return {
+    sheetError,
+    refetchSheet,
+    refetchLibrary,
+    libraryError,
     containerRef,
     createMutation,
     currentDataRef,

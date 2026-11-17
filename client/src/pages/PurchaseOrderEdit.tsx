@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { usePurchaseOrderEditState } from "./usePurchaseOrderEditState";
 import { PurchaseOrderEditSection } from "./PurchaseOrderEditSection";
 import { PurchaseOrderEditSection2 } from "./PurchaseOrderEditSection2";
+import { EmptyState } from "@/components/ui/page-state";
 
 export default function PurchaseOrderEdit() {
   const {
@@ -293,7 +294,7 @@ export default function PurchaseOrderEdit() {
               <ScrollArea className="h-[400px]">
                 <div className="p-2 space-y-1">
                   {filteredStockItems.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">No items found</div>
+                    <EmptyState title="No items found" className="py-8" />
                   ) : (
                     filteredStockItems.map((item, itemIndex) => {
                       const isHighlighted = itemIndex === highlightedIndex;

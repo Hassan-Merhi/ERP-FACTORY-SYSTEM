@@ -15,28 +15,6 @@ export type ExcelBuilder = (params: {
   items: NoCostItem[];
 }) => Promise<Buffer>;
 
-let tablePromise: Promise<void> | null = null;
-
-async function ensureApprovalTable(ensureGroupsTable: () => Promise<void>) {
-  await ensureGroupsTable();
-  if (!tablePromise) {
-    tablePromise = pool
-      .query(
-        `CREATE TABLE IF NOT EXISTS pos_transfer_approval_settings (
-        company_id integer PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
-        user_id varchar REFERENCES users(id) ON DELETE SET NULL,
-        group_id integer REFERENCES stock_transfer_export_wa_groups(id) ON DELETE SET NULL,
-        updated_at timestamptz NOT NULL DEFAULT now())`
-      )
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        tablePromise = null;
-        throw error;
-      });
-  }
-  await tablePromise;
-}
-
 export async function context(req: Request) {
   return getActiveCompanyPermissionContext(req);
 }
@@ -60,18 +38,12 @@ export function errorResponse(res: Response, error: unknown) {
   return res.status(500).json({ message: "Stock transfer approval could not be completed." });
 }
 
-export function registerPosTransferDelegatedApprovalRoutesStep1(
-  app: Express,
-  dependencies: { ensureGroupsTable: () => Promise<void>; createNoCostExcel: ExcelBuilder }
-) {
-  const setup = () => ensureApprovalTable(dependencies.ensureGroupsTable);
-
+export function registerPosTransferDelegatedApprovalRoutesStep1(app: Express) {
   // Settings: company-specific single POS delegate and ONE administrator-chosen group.
   app.get("/api/settings/pos-transfer-approval", requireAuth, async (req, res) => {
     try {
       const actor = await context(req);
       if (!["Admin", "Owner", "Developer"].includes(actor.role)) return res.sendStatus(403);
-      await setup();
       const [settings, users, groups] = await Promise.all([
         pool.query(
           'SELECT user_id AS "userId", group_id AS "groupId" FROM pos_transfer_approval_settings WHERE company_id=$1',
@@ -109,7 +81,6 @@ export function registerPosTransferDelegatedApprovalRoutesStep1(
       if (groupId !== null && (!Number.isSafeInteger(groupId) || Number(groupId) <= 0)) {
         return res.status(400).json({ message: "Select a configured WhatsApp group, or None." });
       }
-      await setup();
       if (userId) {
         const selected = await pool.query(
           "SELECT 1 FROM users u JOIN user_company_roles ucr ON ucr.user_id=u.id " +
@@ -150,7 +121,6 @@ export function registerPosTransferDelegatedApprovalRoutesStep1(
     try {
       const actor = await context(req);
       if (!["Admin", "Owner", "Developer"].includes(actor.role)) return res.sendStatus(403);
-      await setup();
       const saved = await pool.query(
         'SELECT s.user_id AS "userId", grp.name AS "groupName", grp.chat_id AS "chatId" ' +
           "FROM pos_transfer_approval_settings s " +
@@ -195,7 +165,6 @@ export function registerPosTransferDelegatedApprovalRoutesStep1(
     try {
       const actor = await context(req);
       if (actor.role !== "POS") return res.status(403).json({ message: "POS access only." });
-      await setup();
       const settings = await pool.query(
         "SELECT user_id,group_id FROM pos_transfer_approval_settings WHERE company_id=$1",
         [actor.companyId]
@@ -230,5 +199,4 @@ export function registerPosTransferDelegatedApprovalRoutesStep1(
       return errorResponse(res, error);
     }
   });
-  return { setup };
 }

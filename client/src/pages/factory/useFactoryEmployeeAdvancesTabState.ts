@@ -60,8 +60,12 @@ export function useFactoryEmployeeAdvancesTabState() {
     () => companyQueryKey("/api/factory/employee-advances", selectedCompany?.id, statusFilter, empFilter),
     [selectedCompany?.id, statusFilter, empFilter]
   );
-
-  const { data: advances = [], isLoading } = useQuery<AdvanceRecord[]>({
+  const {
+    data: advancesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<AdvanceRecord[]>({
     queryKey: qKey,
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -73,7 +77,7 @@ export function useFactoryEmployeeAdvancesTabState() {
       return res.json();
     },
   });
-
+  const advances = useMemo(() => advancesData ?? [], [advancesData]);
   useQuery<RepaymentRecord[]>({
     queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
@@ -174,6 +178,9 @@ export function useFactoryEmployeeAdvancesTabState() {
     [advances]
   );
   return {
+    refetch,
+    isError,
+    advancesData,
     addForm,
     addMutation,
     addOpen,

@@ -5,9 +5,9 @@
  * entry and a close handler and owns everything else itself.
  */
 import { useState, useEffect } from "react";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry } from "./types";
@@ -26,6 +26,7 @@ import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
 import { LoadingCreatedView } from "./entry-views/LoadingCreatedView";
+import { OpenContainerButton } from "./entry-views/OpenContainerButton";
 import {
   parseBalesMeta,
   formatDaybookDescription,
@@ -305,7 +306,7 @@ export function ViewEntryModal({
           <div>
             <h3 className="font-semibold mb-3">Entries</h3>
             {viewEntries.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No entries found</p>
+              <EmptyState title="No entries found" className="min-h-0 py-4 sm:py-4" />
             ) : (
               <div className="rounded-md border overflow-x-auto">
                 <table className="w-full text-sm">
@@ -532,7 +533,7 @@ export function ViewEntryModal({
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
             {!c && metaContainerId ? (
-              <p className="text-sm text-muted-foreground">Loading container details…</p>
+              <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
@@ -542,17 +543,7 @@ export function ViewEntryModal({
                   </p>
                   {c.origin && <p className="text-xs text-muted-foreground">Origin: {c.origin}</p>}
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${metaContainerId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
@@ -591,24 +582,14 @@ export function ViewEntryModal({
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
             {!c && metaContainerId ? (
-              <p className="text-sm text-muted-foreground">Loading container details…</p>
+              <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
                   <p className="font-semibold text-base">{c.containerNumber}</p>
                   {c.supplierName && <p className="text-xs text-muted-foreground">Supplier: {c.supplierName}</p>}
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${metaContainerId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
@@ -680,17 +661,7 @@ export function ViewEntryModal({
                     Container: <span className="font-mono">{c.containerNumber}</span>
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${entry.referenceId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={entry.referenceId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             </div>
           )}

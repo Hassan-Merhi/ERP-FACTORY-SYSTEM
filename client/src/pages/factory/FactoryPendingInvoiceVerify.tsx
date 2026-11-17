@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/ui/page-state";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -322,7 +323,7 @@ export default function FactoryPendingInvoiceVerify() {
                   No proforma is linked to this order.
                 </p>
               ) : !viewedMasterProforma ? (
-                <p className="text-sm text-muted-foreground italic">Loading original proforma...</p>
+                <LoadingState title="Loading original proforma..." />
               ) : proformaLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic" data-testid="text-proforma-no-lines">
                   This proforma has no lines.

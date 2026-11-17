@@ -9,8 +9,7 @@ on:
     paths:
       - "server/services/stockTransferOrder*"
       - "server/routes/stockTransferOrderWaApproval*"
-      - "server/startup-schema/03*-stock-transfer-order*"
-      - "server/startup-schema/04*-stock-transfer-order*"
+      - "migrations/**"
       - "client/src/pages/stock-transfer-order/**"
       - "tests/stock-transfer-order-wa-*"
       - ".github/workflows/stock-transfer-order-wa-certification.yml"
@@ -62,13 +61,9 @@ jobs:
             tests/stock-transfer-order-wa-main-connection-contract.test.ts \
             tests/stock-transfer-order-wa-webhook-readiness.test.ts \
             tests/stock-transfer-order-wa-phase3-incoming.test.ts \
-            tests/whatsapp-service-green-api.test.ts \
-            tests/startup-schema-integrity.test.ts
-      - name: Verify migration registry (database startup tested in PostgreSQL job)
-        run: npm run verify:migrations
-        # verify:startup-migrations requires a running ERP HTTP server on :5000.
-        # This job does not start one; the independent disposable PostgreSQL
-        # certification validates actual startup SQL, RLS and constraints.
+            tests/whatsapp-service-green-api.test.ts
+      - name: Verify migration registry (schema built in the PostgreSQL job)
+        run: npm run db:migrate:plan
       - name: Build client and server without enabling jobs
         run: npm run build
 
@@ -109,6 +104,6 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Prepare only the disposable local ERP schema
-        run: node node_modules/drizzle-kit/bin.cjs push --force
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
       - name: Test idempotent startup DDL, constraints and tenant policies
         run: node node_modules/vitest/vitest.mjs run tests/stock-transfer-order-wa-phase7-postgres.test.ts

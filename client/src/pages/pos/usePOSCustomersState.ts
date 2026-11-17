@@ -50,8 +50,12 @@ export function usePOSCustomersState() {
     contentRef: printRef,
     documentTitle: `Statement_${statementCustomer?.legalName?.replace(/\s+/g, "_") ?? "Customer"}`,
   });
-
-  const { data: customers = [], isLoading } = useQuery<POSCustomer[]>({
+  const {
+    data: customers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<POSCustomer[]>({
     queryKey: ["/api/pos/customers"],
   });
 
@@ -105,6 +109,9 @@ export function usePOSCustomersState() {
   const closingBalance = statementCustomer?.balance || 0;
   const openingBalance = closingBalance - totalDr + totalCr;
   return {
+    customers,
+    refetch,
+    isError,
     closingBalance,
     createMutation,
     filteredCustomers,

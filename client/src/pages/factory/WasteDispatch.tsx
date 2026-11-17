@@ -13,6 +13,9 @@ import { WasteDispatchCardSection2 } from "./WasteDispatchCardSection2";
 
 export default function WasteDispatch() {
   const {
+    data,
+    isError,
+    refetch,
     bales,
     confirming,
     deleteDispatchId,
@@ -129,6 +132,9 @@ export default function WasteDispatch() {
 
         {/* Bale Groups Table */}
         <WasteDispatchCardSection
+          data={data}
+          isError={isError}
+          refetch={refetch}
           bales={bales}
           expandedGroups={expandedGroups}
           grandTotals={grandTotals}

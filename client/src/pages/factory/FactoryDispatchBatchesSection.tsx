@@ -9,7 +9,11 @@ import { ChevronRight, Filter, Plus, Truck } from "lucide-react";
 import { StatusBadge, fmt, useFactoryDispatchBatchesState } from "./useFactoryDispatchBatchesState";
 import { SearchField } from "@/components/ui/search-field";
 
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 export function FactoryDispatchBatchesSection({
+  refetch,
+  isError,
+  batchesData,
   canCreateBatch,
   customers,
   effectiveActiveTab,
@@ -50,6 +54,9 @@ export function FactoryDispatchBatchesSection({
   | "setSearch"
   | "showBatches"
   | "showReports"
+  | "batchesData"
+  | "isError"
+  | "refetch"
 >) {
   return (
     <div className="flex-1 overflow-auto p-4 space-y-4">
@@ -227,16 +234,21 @@ export function FactoryDispatchBatchesSection({
                     <Skeleton key={i} className="h-12 w-full" />
                   ))}
                 </div>
+              ) : isError && !batchesData ? (
+                <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
               ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                  <Truck className="w-10 h-10 opacity-40" />
-                  <p className="text-sm">No dispatch batches found</p>
-                  {canCreateBatch && (
-                    <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                      <Plus className="w-4 h-4 mr-1" /> Create first batch
-                    </Button>
-                  )}
-                </div>
+                <EmptyState
+                  icon={Truck}
+                  title="No dispatch batches found"
+                  className="border-0"
+                  action={
+                    canCreateBatch ? (
+                      <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                        <Plus className="w-4 h-4 mr-1" /> Create first batch
+                      </Button>
+                    ) : undefined
+                  }
+                />
               ) : (
                 <Table mobileLayout="cards">
                   <TableHeader>

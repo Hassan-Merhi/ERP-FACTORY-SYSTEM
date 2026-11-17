@@ -74,8 +74,12 @@ export function useFactoryEmployeeDetailState() {
     },
     enabled: Boolean(selectedCompany?.id) && !!employeeId,
   });
-
-  const { data: statement, isLoading: stmtLoading } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
+  const {
+    data: statement,
+    isLoading: stmtLoading,
+    isError: stmtError,
+    refetch: refetchStatement,
+  } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}/statement`);
@@ -218,6 +222,8 @@ export function useFactoryEmployeeDetailState() {
     },
   });
   return {
+    stmtError,
+    refetchStatement,
     AdminDialog,
     cashAccounts,
     depositAmount,

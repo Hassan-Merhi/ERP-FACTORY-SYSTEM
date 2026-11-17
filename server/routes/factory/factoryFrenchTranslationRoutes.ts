@@ -25,22 +25,11 @@ function normalizeCode(value: unknown): string {
   return clean(value)?.toUpperCase() ?? "";
 }
 
-async function ensureFrenchColumns() {
-  await db.execute(
-    sql.raw(`
-    ALTER TABLE factory_categories ADD COLUMN IF NOT EXISTS name_fr VARCHAR(100);
-    ALTER TABLE factory_bale_products ADD COLUMN IF NOT EXISTS name_fr TEXT;
-    ALTER TABLE factory_bale_products ADD COLUMN IF NOT EXISTS description_fr TEXT;
-  `)
-  );
-}
-
 export function registerFactoryFrenchTranslationRoutes(app: Express) {
   app.get("/api/factory/french-catalog", requireAuth, async (req, res) => {
     try {
       const companyId = factoryCompanyId(req);
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      await ensureFrenchColumns();
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
       const status = typeof req.query.status === "string" ? req.query.status : "all";
       const result = await db.execute(sql`
@@ -76,7 +65,6 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
       const id = Number(req.params.id);
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
       if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid product id" });
-      await ensureFrenchColumns();
       const nameFr = clean(req.body?.nameFr);
       const descriptionFr = clean(req.body?.descriptionFr);
       const result = await db.execute(sql`
@@ -98,7 +86,6 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
       const id = Number(req.params.id);
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
       if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid category id" });
-      await ensureFrenchColumns();
       const nameFr = clean(req.body?.nameFr);
       const result = await db.execute(sql`
         UPDATE factory_categories
@@ -117,7 +104,6 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
     try {
       const companyId = factoryCompanyId(req);
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      await ensureFrenchColumns();
       const result = await db.execute(sql`
         SELECT p.article_code AS "articleCode", p.name AS "nameEn", p.name_fr AS "nameFr",
                c.name AS "categoryNameEn", c.name_fr AS "categoryNameFr",
@@ -155,7 +141,6 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
       const companyId = factoryCompanyId(req);
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
       if (!req.file) return res.status(400).json({ message: "Excel file is required" });
-      await ensureFrenchColumns();
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
       const sheet = workbook.worksheets[0];
@@ -225,7 +210,6 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
       if (!companyId) return res.status(403).json({ message: "Factory company access required" });
       const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
       if (rows.length === 0) return res.status(400).json({ message: "No translation rows supplied" });
-      await ensureFrenchColumns();
       let updatedProducts = 0;
       let updatedCategories = 0;
       await db.transaction(async (tx) => {

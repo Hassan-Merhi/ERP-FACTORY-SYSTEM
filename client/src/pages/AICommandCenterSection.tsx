@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { AlertTriangle, Ban, Bot, CheckCheck, History, Loader2, Play, RotateCcw, ShieldCheck } from "lucide-react";
 import {
   ApprovalCard,
@@ -234,11 +235,11 @@ export function AICommandCenterSection({
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           )}
-          {!tasksQuery.isLoading && allTasks.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground">
-              <History className="h-10 w-10 mx-auto mb-3 opacity-25" />
-              <p className="text-sm font-medium">No tasks yet</p>
-            </div>
+          {tasksQuery.isError && !tasksQuery.data && (
+            <ErrorState onAction={() => void tasksQuery.refetch()} actionLabel="Try again" className="py-16" />
+          )}
+          {!tasksQuery.isLoading && !(tasksQuery.isError && !tasksQuery.data) && allTasks.length === 0 && (
+            <EmptyState icon={History} title="No tasks yet" className="py-16" />
           )}
           {allTasks.length > 0 && (
             <div className="space-y-1.5">

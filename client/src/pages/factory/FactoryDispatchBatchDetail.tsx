@@ -49,6 +49,7 @@ import {
   FactoryDispatchBatchDetailSection,
   useFactoryDispatchBatchDetailState,
 } from "./useFactoryDispatchBatchDetailState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export default function FactoryDispatchBatchDetail() {
   const {
@@ -323,15 +324,18 @@ export default function FactoryDispatchBatchDetail() {
               </CardHeader>
               <CardContent className="p-0">
                 {rides.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-                    <Truck className="w-8 h-8 opacity-40" />
-                    <p className="text-sm">No truck rides yet</p>
-                    {canChangeBatch && (
-                      <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
-                        <Plus className="w-4 h-4 mr-1" /> Add first ride
-                      </Button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Truck}
+                    title="No truck rides yet"
+                    className="border-0"
+                    action={
+                      canChangeBatch ? (
+                        <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
+                          <Plus className="w-4 h-4 mr-1" /> Add first ride
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <Table mobileLayout="cards">
                     <TableHeader>

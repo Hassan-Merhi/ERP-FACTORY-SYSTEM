@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import { useSalesSectionPanelState } from "./useSalesSectionPanelState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function SalesSectionPanelCardSection2({
   factoryPosSummary,
@@ -31,7 +32,7 @@ export function SalesSectionPanelCardSection2({
           ))}
         </div>
       ) : !factoryPosSummary || (factoryPosSummary.byCustomer ?? []).length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">No factory POS sales data available</p>
+        <EmptyState title="No factory POS sales data available" />
       ) : (
         <div className="table-responsive">
           <Table>
@@ -185,7 +186,7 @@ export function SalesSectionPanelCardSection3({
           ))}
         </div>
       ) : salesData.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">No sales data available</p>
+        <EmptyState title="No sales data available" />
       ) : (
         <>
           <div className="hidden md:block">

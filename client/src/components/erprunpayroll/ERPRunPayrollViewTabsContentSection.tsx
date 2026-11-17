@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
 import { useERPRunPayrollViewState } from "./ERPRunPayrollViewSection";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function ERPRunPayrollViewTabsContentSection({
   canChangeExistingRecords,
@@ -50,11 +51,12 @@ export function ERPRunPayrollViewTabsContentSection({
           ))}
         </div>
       ) : payrollRuns.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <History className="mx-auto h-10 w-10 mb-3 opacity-40" />
-          <p className="font-medium">No payroll runs yet</p>
-          <p className="text-sm mt-1">Select workers and run a payroll to get started.</p>
-        </div>
+        <EmptyState
+          icon={History}
+          title="No payroll runs yet"
+          description="Select workers and run a payroll to get started."
+          className="py-20"
+        />
       ) : (
         <>
           <div className="border rounded-md overflow-x-auto">

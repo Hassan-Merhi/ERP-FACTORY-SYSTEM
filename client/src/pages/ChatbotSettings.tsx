@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
@@ -15,6 +16,10 @@ import {
 
 export default function ChatbotSettings() {
   const {
+    patchHistoryError,
+    refetchPatchHistory,
+    usersError,
+    refetchUsers,
     activeTab,
     allHistoryLoading,
     allSessions,
@@ -127,10 +132,7 @@ export default function ChatbotSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             {githubLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
-              </div>
+              <LoadingState />
             ) : (
               <>
                 {githubSettings?.configured && (
@@ -245,8 +247,10 @@ export default function ChatbotSettings() {
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              ) : usersError && users.length === 0 ? (
+                <ErrorState onAction={() => void refetchUsers()} actionLabel="Try again" className="py-8" />
               ) : users.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No users found.</p>
+                <EmptyState title="No users found." className="py-8" />
               ) : (
                 <div className="table-responsive">
                   <Table mobileLayout="cards">
@@ -303,6 +307,8 @@ export default function ChatbotSettings() {
 
         <ChatbotSettingsTabsContentSection2
           patchHistory={patchHistory}
+          patchHistoryError={patchHistoryError}
+          refetchPatchHistory={refetchPatchHistory}
           patchHistoryLoading={patchHistoryLoading}
           revertMutation={revertMutation}
         />

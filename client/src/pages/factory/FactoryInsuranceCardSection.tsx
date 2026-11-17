@@ -1,11 +1,12 @@
 // Extracted from ./FactoryInsurance.tsx to keep that module under the source-size cap.
-import { Edit, Loader2, Shield, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Edit, Shield, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFactoryInsuranceState } from "./useFactoryInsuranceState";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 export function FactoryInsuranceCardSection({
   filteredMembers,
@@ -37,9 +38,7 @@ export function FactoryInsuranceCardSection({
     <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_58%_10%)] dark:shadow-lg dark:shadow-blue-950/20">
       <CardContent className="overflow-x-auto p-0">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <LoadingState className="border-0" />
         ) : isError ? (
           <div className="flex flex-col items-center justify-center py-12 text-destructive gap-2">
             <Shield className="h-10 w-10 mb-2 opacity-30" />
@@ -57,14 +56,15 @@ export function FactoryInsuranceCardSection({
             </Button>
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Shield className="h-10 w-10 mb-2 opacity-30" />
-            <p className="text-sm">
-              {members.length === 0
+          <EmptyState
+            icon={Shield}
+            className="border-0"
+            title={
+              members.length === 0
                 ? "No insurance members yet. Add one to get started."
-                : "No members match your search."}
-            </p>
-          </div>
+                : "No members match your search."
+            }
+          />
         ) : (
           <Table className="min-w-[1140px]">
             <TableHeader className="bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_45%_20%)]">

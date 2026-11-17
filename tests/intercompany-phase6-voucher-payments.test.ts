@@ -1,4 +1,4 @@
-import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   canAccessPairedCash,
@@ -15,6 +15,7 @@ import {
   exactManualAllocation,
   oldestAvailableCredits,
 } from "../server/services/intercompany/paymentMoney";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const pair = { sourceCompanyId: 10, destinationCompanyId: 20 };
 const memberships: PaymentMemberRole[] = [
@@ -109,7 +110,7 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   it("reuses one paired payment posting service with transaction, FX, credits and reversal guards", () => {
     const service = readModuleFamily("server/services/intercompany/paymentSync.ts");
     const routes = readModuleFamily("server/routes/import/intercompany-phase4.ts");
-    const sql = readModuleFamily("migrations/20261105_004_intercompany_phase4_payments.sql");
+    const sql = readFileSync("migrations/archive/legacy/20261105_004_intercompany_phase4_payments.sql", "utf8");
     expect(service).toContain("await requirePairedCashAuthorization(pair, actor)");
     expect(service).toContain("db.transaction(async (tx)");
     expect(service).toContain("postErpVoucherTx(tx,");

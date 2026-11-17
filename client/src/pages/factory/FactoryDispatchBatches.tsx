@@ -12,6 +12,9 @@ import { FactoryDispatchBatchesSection } from "./FactoryDispatchBatchesSection";
 
 export default function FactoryDispatchBatches() {
   const {
+    refetch,
+    isError,
+    batchesData,
     activeProformas,
     canCreateBatch,
     createMutation,
@@ -81,6 +84,9 @@ export default function FactoryDispatchBatches() {
       )}
 
       <FactoryDispatchBatchesSection
+        refetch={refetch}
+        isError={isError}
+        batchesData={batchesData}
         canCreateBatch={canCreateBatch}
         customers={customers}
         effectiveActiveTab={effectiveActiveTab}

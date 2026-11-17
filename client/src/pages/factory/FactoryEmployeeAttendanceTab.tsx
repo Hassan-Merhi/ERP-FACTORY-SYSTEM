@@ -28,9 +28,13 @@ import {
   type AttendanceStatus,
 } from "./useFactoryEmployeeAttendanceTabState";
 import { PerEmployeeView } from "./PerEmployeeView";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 export default function FactoryEmployeeAttendanceTab() {
   const {
+    data,
+    refetch,
+    isError,
     canEditPastWithoutPassword,
     approvalDates,
     approvalOpen,
@@ -215,11 +219,10 @@ export default function FactoryEmployeeAttendanceTab() {
                     <Skeleton key={i} className="h-10 w-full rounded-md" />
                   ))}
                 </div>
+              ) : isError && !data ? (
+                <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
               ) : emps.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12 text-sm">
-                  <User className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                  No active employees found.
-                </div>
+                <EmptyState icon={User} title="No active employees found." />
               ) : (
                 <>
                   <div className="hidden overflow-x-auto rounded-xl border border-slate-200 sm:block dark:border-slate-600/70">

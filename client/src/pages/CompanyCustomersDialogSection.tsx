@@ -4,6 +4,7 @@ import { drCrClass } from "@/lib/formatNumber";
 import { Building2, Printer, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -77,13 +78,12 @@ export function CompanyCustomersDialogSection({
               let running = openingBalance;
 
               return sorted.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium">No transactions</p>
-                  <p className="text-xs text-muted-foreground">No ledger entries found for this customer</p>
-                </div>
+                <EmptyState
+                  icon={Building2}
+                  title="No transactions"
+                  description="No ledger entries found for this customer"
+                  className="py-10"
+                />
               ) : (
                 <div className="border rounded-xl overflow-hidden">
                   <Table>

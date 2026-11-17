@@ -1,6 +1,7 @@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowRight, ExternalLink, Pencil, X, ArrowLeftRight, DollarSign, Clock } from "lucide-react";
@@ -15,6 +16,8 @@ import {
 
 export default function StockTransfers(props: StockTransfersProps) {
   const {
+    refetch,
+    isError,
     editNotes,
     editingTransfer,
     filtered,
@@ -108,14 +111,15 @@ export default function StockTransfers(props: StockTransfersProps) {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
+      ) : isError && transfers.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-40" />
-          <p className="text-base font-medium">No transfers found</p>
-          <p className="text-sm mt-1">
-            {search ? "Try adjusting your search or date range" : "No stock transfers in the selected period"}
-          </p>
-        </div>
+        <EmptyState
+          icon={ArrowLeftRight}
+          title="No transfers found"
+          description={search ? "Try adjusting your search or date range" : "No stock transfers in the selected period"}
+          className="py-16"
+        />
       ) : (
         <>
           {/* Desktop table */}

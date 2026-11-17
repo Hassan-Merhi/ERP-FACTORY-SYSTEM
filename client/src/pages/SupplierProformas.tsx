@@ -14,6 +14,8 @@ import { SupplierProformasDialogSection, SupplierProformasSection } from "./Supp
 
 export default function SupplierProformas() {
   const {
+    isError,
+    refetch,
     addLineMutation,
     addingLine,
     commitRename,
@@ -102,6 +104,8 @@ export default function SupplierProformas() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <SupplierProformasSection
+          isError={isError}
+          refetch={refetch}
           commitRename={commitRename}
           deleteMutation={deleteMutation}
           destinationLabel={destinationLabel}

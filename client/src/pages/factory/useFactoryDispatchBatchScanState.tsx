@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScanLine, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/page-state";
 
 interface BatchDetail {
   batch: {
@@ -277,11 +278,12 @@ export function FactoryDispatchBatchScanSection2({
         </CardHeader>
         <CardContent className="p-0">
           {rideScans.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-              <ScanLine className="w-8 h-8 opacity-40" />
-              <p className="text-sm">No bales scanned yet</p>
-              {canScan && <p className="text-xs">Scan a barcode above to get started</p>}
-            </div>
+            <EmptyState
+              icon={ScanLine}
+              title="No bales scanned yet"
+              description={canScan ? "Scan a barcode above to get started" : undefined}
+              className="border-0"
+            />
           ) : (
             <Table>
               <TableHeader>

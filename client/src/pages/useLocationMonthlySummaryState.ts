@@ -144,8 +144,7 @@ export function useLocationMonthlySummaryState({ posUser }: { posUser?: AuthMe }
         `/api/locations/${locationId}/stock-items/${stockItemId}/monthly-summary`,
         { startDate: periodFilter.fromDate, endDate: periodFilter.toDate },
       ];
-
-  const { data, isLoading } = useQuery<LocationMonthlySummaryData>({
+  const { data, isLoading, isError, refetch } = useQuery<LocationMonthlySummaryData>({
     queryKey,
     queryFn: async () => {
       const response = await fetch(apiUrl, { credentials: "include" });
@@ -235,6 +234,8 @@ export function useLocationMonthlySummaryState({ posUser }: { posUser?: AuthMe }
     return () => clearCursorNav();
   }, [clearCursorNav, registerCursorNav, selectedRowIndex, visibleRows]);
   return {
+    refetch,
+    isError,
     data,
     detailData,
     detailDirection,

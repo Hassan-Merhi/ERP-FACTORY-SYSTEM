@@ -34,7 +34,12 @@ export function useCompaniesTabState() {
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
   const [forceDeleteWithHistory, setForceDeleteWithHistory] = useState(false);
-  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
+  const {
+    data: companies = [],
+    isLoading: isLoadingCompanies,
+    isError: isCompaniesError,
+    refetch: refetchCompanies,
+  } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
@@ -142,6 +147,8 @@ export function useCompaniesTabState() {
     setIsCompanyDialogOpen(true);
   }
   return {
+    refetchCompanies,
+    isCompaniesError,
     companies,
     companyForm,
     deleteConfirmationCode,

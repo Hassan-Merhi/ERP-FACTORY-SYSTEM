@@ -17,7 +17,12 @@ export function useFactoryStockAllocationV3State() {
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
 
   // Queries
-  const { data: stockRows = [], isLoading: stockLoading } = useQuery<StockRow[]>({
+  const {
+    data: stockRows = [],
+    isLoading: stockLoading,
+    isError: stockError,
+    refetch: refetchStock,
+  } = useQuery<StockRow[]>({
     queryKey: companyQueryKey("/api/factory/v3/stock-overview", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -86,6 +91,8 @@ export function useFactoryStockAllocationV3State() {
       toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
   });
   return {
+    stockError,
+    refetchStock,
     activeTab,
     cancelMutation,
     cancelTargetId,

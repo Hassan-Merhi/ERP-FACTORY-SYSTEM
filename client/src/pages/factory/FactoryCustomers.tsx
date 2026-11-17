@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, RotateCcw, History, Eye, EyeOff, Users, Wallet, Scale } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { ErrorState } from "@/components/ui/page-state";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PaginationBar } from "@/components/PaginationBar";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
@@ -253,7 +253,7 @@ export default function FactoryCustomers() {
             )}
           </div>
           {deletedCustomers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8 px-4">No deleted customers found</p>
+            <EmptyState title="No deleted customers found" className="m-4" />
           ) : (
             <div className="table-responsive">
               <Table mobileLayout="cards">

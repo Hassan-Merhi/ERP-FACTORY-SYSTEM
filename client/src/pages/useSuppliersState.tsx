@@ -103,8 +103,12 @@ export function useSuppliersState() {
       navigate(partyPath(txn.companyId, `/voucher-detail/${txn.voucherId}`));
     }
   };
-
-  const { data: suppliers = [], isLoading } = useQuery<SupplierWithStats[]>({
+  const {
+    data: suppliers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<SupplierWithStats[]>({
     queryKey: erpCompanyDataKey("/api/suppliers/stats", selectedCompany?.id),
     enabled: selectedCompany?.id != null,
   });
@@ -210,6 +214,8 @@ export function useSuppliersState() {
     });
   };
   return {
+    refetch,
+    isError,
     activeSuppliers,
     companies,
     companyFilter,

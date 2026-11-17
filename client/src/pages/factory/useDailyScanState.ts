@@ -37,7 +37,12 @@ export function useDailyScanState() {
   // One compact request replaces the old pair of 1,000-row produced + scan-log
   // requests. Local scan/remove mutations patch this cache directly, while a
   // slower visible-tab poll still picks up scans made by another workstation.
-  const { data: dayBales = [], isLoading } = useQuery<DayBale[]>({
+  const {
+    data: dayBalesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<DayBale[]>({
     queryKey: dailyQueryKey,
     queryFn: async () => {
       const params = new URLSearchParams({ date: selectedDate, profile: "day" });
@@ -51,7 +56,7 @@ export function useDailyScanState() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
-
+  const dayBales = dayBalesData ?? [];
   const scannedRefMap = new Map<string, { id: number; scanned_at: string }>();
   for (const bale of dayBales) {
     if (bale.scan_id != null && bale.scanned_at) {
@@ -216,6 +221,9 @@ export function useDailyScanState() {
     }
   };
   return {
+    refetch,
+    isError,
+    dayBalesData,
     allDone,
     handleExport,
     handleScan,

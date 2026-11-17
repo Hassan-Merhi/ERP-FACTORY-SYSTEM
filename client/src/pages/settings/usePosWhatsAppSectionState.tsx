@@ -51,8 +51,12 @@ export function usePosWhatsAppSectionState() {
       setEnabled(posSettings.enabled ?? true);
     }
   }, [posSettings, credsDirty]);
-
-  const { data: locations = [], isLoading: locLoading } = useQuery<Location[]>({
+  const {
+    data: locations = [],
+    isLoading: locLoading,
+    isError: locError,
+    refetch: refetchLocations,
+  } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
   });
 
@@ -115,6 +119,8 @@ export function usePosWhatsAppSectionState() {
     setDialogOpen(true);
   }
   return {
+    refetchLocations,
+    locError,
     apiToken,
     chatSearch,
     chatsError,

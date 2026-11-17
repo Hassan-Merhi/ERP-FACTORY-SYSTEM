@@ -73,8 +73,12 @@ export function useStockTransfersState({ hideVoucherNotes = false }: StockTransf
   const endDate = period.toDate ?? "";
 
   const queryUrl = erpRequestUrl("/api/stock-transfers/list", { startDate, endDate });
-
-  const { data: transfers = [], isLoading } = useQuery<StockTransferRow[]>({
+  const {
+    data: transfers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<StockTransferRow[]>({
     queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(queryUrl, { credentials: "include" });
@@ -137,6 +141,8 @@ export function useStockTransfersState({ hideVoucherNotes = false }: StockTransf
   const totalValue = transfers.reduce((s, t) => s + (t.totalAmount || 0), 0);
   const pendingCount = transfers.filter((t) => !t.inventoryApplied).length;
   return {
+    refetch,
+    isError,
     editNotes,
     editingTransfer,
     filtered,

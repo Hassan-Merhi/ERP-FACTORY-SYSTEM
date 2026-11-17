@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,7 +73,12 @@ export function ScheduledWhatsAppMessagesTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(blankForm);
   const [editorOpen, setEditorOpen] = useState(false);
-  const { data: schedules = [], isLoading: loading } = useQuery<Schedule[]>({
+  const {
+    data: schedules = [],
+    isLoading: loading,
+    isError: schedulesError,
+    refetch: refetchSchedules,
+  } = useQuery<Schedule[]>({
     queryKey: ["/api/whatsapp/message-schedules", companyId],
     enabled: !!companyId,
   });
@@ -343,8 +349,11 @@ export function ScheduledWhatsAppMessagesTab() {
           <CardDescription>Separate messages can have separate days, times, and group selections.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {loading && <p className="text-sm text-muted-foreground">Loading schedules...</p>}
-          {!loading && !schedules.length && <p className="text-sm text-muted-foreground">No scheduled messages yet.</p>}
+          {loading && <LoadingState title="Loading schedules..." />}
+          {!loading && schedulesError && !schedules.length && (
+            <ErrorState onAction={() => void refetchSchedules()} actionLabel="Try again" />
+          )}
+          {!loading && !schedulesError && !schedules.length && <EmptyState title="No scheduled messages yet." />}
           {schedules.map((item) => (
             <div key={item.id} className="rounded-lg border p-4 space-y-2">
               <div className="flex flex-wrap items-center gap-2 justify-between">
@@ -401,7 +410,7 @@ export function ScheduledWhatsAppMessagesTab() {
           <CardDescription>Latest 100 delivery attempts. A separate result is recorded for each group.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {!history.length && <p className="text-sm text-muted-foreground">No messages have been sent yet.</p>}
+          {!history.length && <EmptyState title="No messages have been sent yet." />}
           {history.map((entry) => (
             <div key={entry.id} className="flex flex-wrap justify-between gap-2 border-b py-2 text-sm">
               <div>

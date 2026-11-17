@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronsUpDown, GripVertical, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePropertiesDashboardState } from "./usePropertiesDashboardState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function PropertiesDashboardSection({
   addAccountMutation,
@@ -166,7 +167,7 @@ export function PropertiesDashboardSection({
             Error loading accounts: {cashAccountsError?.message || "Unknown error"}
           </p>
         ) : displayedCashAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+          <EmptyState title="No accounts added yet" className="min-h-0 py-4" />
         ) : (
           <div className="space-y-1">
             {displayedCashAccounts.map((dca) => {
@@ -310,7 +311,7 @@ export function PropertiesDashboardSection({
             Error loading accounts: {payableAccountsError?.message || "Unknown error"}
           </p>
         ) : dashboardPayableAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No accounts added yet</p>
+          <EmptyState title="No accounts added yet" className="min-h-0 py-4" />
         ) : (
           <div className="space-y-1">
             {dashboardPayableAccounts.map((account) => (

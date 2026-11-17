@@ -28,6 +28,7 @@ import {
   ERPRunPayrollViewDialogSection,
   ERPRunPayrollViewTabsContentSection,
 } from "./ERPRunPayrollViewTabsContentSection";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function ERPRunPayrollView(props: ERPRunPayrollViewProps) {
   const {
@@ -224,12 +225,11 @@ export function ERPRunPayrollView(props: ERPRunPayrollViewProps) {
               />
 
               {!hasResults ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <Users className="mx-auto h-10 w-10 mb-3 opacity-40" />
-                  <p className="font-medium">
-                    {searchQuery ? "No workers match your search" : "No active workers found"}
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Users}
+                  title={searchQuery ? "No workers match your search" : "No active workers found"}
+                  className="py-20"
+                />
               ) : (
                 <div className="space-y-6">
                   {workerGroups.map((group) =>

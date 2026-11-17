@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompanyCustomersState } from "./useCompanyCustomersState";
 import { CompanyCustomersDialogSection } from "./CompanyCustomersDialogSection";
+import { ErrorState } from "@/components/ui/page-state";
 
 type CustomerCurrencyBalances = Record<string, { debit: number; credit: number; net: number }>;
 
@@ -28,6 +29,9 @@ export default function Customers() {
 
 function CompanyCustomers() {
   const {
+    customers,
+    refetchCustomers,
+    customersError,
     CustomerForm,
     filteredCustomers,
     form,
@@ -175,6 +179,12 @@ function CompanyCustomers() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : customersError && customers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4}>
+                  <ErrorState onAction={() => void refetchCustomers()} actionLabel="Try again" className="my-2" />
+                </TableCell>
+              </TableRow>
             ) : filteredCustomers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4}>

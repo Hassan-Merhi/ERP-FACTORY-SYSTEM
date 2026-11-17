@@ -8,7 +8,11 @@ import { pn, validateMigrationPair } from "./spMigrationPhase2Common";
 import { importHistoricalSales } from "./spMigrationPhase2Sales";
 import { importContainers } from "./spMigrationPhase2Containers";
 import { getLiveCutover } from "./spMigrationCutoverState";
-import { restoreExactCutoverStock, synchronizeExactCutoverStock } from "./spMigrationPhase4Inventory";
+import {
+  backfillLegacyCutoverStockDeltaKeys,
+  restoreExactCutoverStock,
+  synchronizeExactCutoverStock,
+} from "./spMigrationPhase4Inventory";
 import { moveUsersToTargetExact, restoreUsersToSourceExact } from "./spMigrationPhase4Users";
 import { reconcileHistoricalSalesCopy, reconcileMigrationOwnedContainers } from "./spMigrationPhase4Reconcile";
 import { buildFinalMigrationVerification } from "./spMigrationPhase4Verification";
@@ -16,7 +20,6 @@ import { classifyFinalVerification, exactCutoverConfirmation } from "./spMigrati
 import { repairSpSupplierVoucherLinks } from "./spSupplierVoucherSync";
 import { firstRow, resultRows } from "../../lib/queryResult";
 import {
-  ensurePhase4Schema,
   invalidatePhase4HoldCache,
   invokeMigrationHandler,
   type CutoverRow,
@@ -129,7 +132,7 @@ export async function prepareCutover(req: Request, res: Response): Promise<Respo
     pair.sourceCompany.name
   );
   if (error) return res.status(400).json({ message: error });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const existing = await getLiveCutover(pair.sourceId, pair.targetId);
   if (existing)
     return res
@@ -178,7 +181,7 @@ export async function finalizeCutover(req: Request, res: Response): Promise<Resp
     pair.sourceCompany.name
   );
   if (error) return res.status(400).json({ message: error });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const live = await getLiveCutover(pair.sourceId, pair.targetId);
   if (!live || live.status !== "prepared") {
     return res.status(409).json({ message: "Prepare and lock this source/target pair before finalizing." });

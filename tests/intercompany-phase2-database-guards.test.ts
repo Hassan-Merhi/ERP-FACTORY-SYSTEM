@@ -3,8 +3,14 @@ import { join } from "node:path";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
 
-const phase1 = readFileSync(join(process.cwd(), "migrations/20261105_001_intercompany_phase1_foundation.sql"), "utf8");
-const phase2 = readFileSync(join(process.cwd(), "migrations/20261105_002_intercompany_phase2_import.sql"), "utf8");
+const phase1 = readFileSync(
+  join(process.cwd(), "migrations/archive/legacy/20261105_001_intercompany_phase1_foundation.sql"),
+  "utf8"
+);
+const phase2 = readFileSync(
+  join(process.cwd(), "migrations/archive/legacy/20261105_002_intercompany_phase2_import.sql"),
+  "utf8"
+);
 
 describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
   it("enforces partner provenance and blocks old offload, edit and voucher paths", async () => {

@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, TruckIcon } from "lucide-react";
 import { API, fmt, type Transporter } from "./FactoryTransportersPaymentDialog";
 import { TransporterStatement } from "./FactoryTransportersTransporterStatement";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 // ─────────────────────────────────────────────────────────────
 // ADD TRANSPORTER DIALOG
@@ -114,8 +115,12 @@ export default function FactoryTransporters() {
     setSelectedId(null);
     setAddOpen(false);
   }, [selectedCompany?.id]);
-
-  const { data: transporters = [], isLoading } = useQuery<Transporter[]>({
+  const {
+    data: transporters = [],
+    isLoading,
+    isError: transportersError,
+    refetch: refetchTransporters,
+  } = useQuery<Transporter[]>({
     queryKey: companyQueryKey(API, selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -192,12 +197,19 @@ export default function FactoryTransporters() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : transportersError && transporters.length === 0 ? (
+            <ErrorState
+              onAction={() => void refetchTransporters()}
+              actionLabel="Try again"
+              className="rounded-none border-0"
+            />
           ) : transporters.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <TruckIcon className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium mb-1">No transporters yet</p>
-              <p className="text-xs">Add your first transporter to start tracking charges and payments.</p>
-            </div>
+            <EmptyState
+              icon={TruckIcon}
+              title="No transporters yet"
+              description="Add your first transporter to start tracking charges and payments."
+              className="rounded-none border-0"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

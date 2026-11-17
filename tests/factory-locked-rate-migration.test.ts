@@ -1,19 +1,15 @@
 /**
  * Migration tests for factorySuppliers.currentRawMaterialCostPerKgUsd.
  *
- * These tests exercise the EXACT SQL the real startup migration runs
- * (server/index.ts imports the same FACTORY_SUPPLIER_LOCKED_RATE_* constants
- * from server/services/factory/rawStockLockedRate.ts), so a pass here proves
- * the production migration path — not a re-implemented copy of it.
+ * The column is defined by the schema migrations (migrations/); these tests
+ * exercise the exact data backfill (FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL in
+ * server/services/factory/rawStockLockedRate.ts).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { pool, db } from "../server/db";
 import * as schema from "../shared/schema";
 import { eq } from "drizzle-orm";
-import {
-  FACTORY_SUPPLIER_LOCKED_RATE_ADD_COLUMN_SQL,
-  FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL,
-} from "../server/services/factory/rawStockLockedRate";
+import { FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL } from "../server/services/factory/rawStockLockedRate";
 
 const TEST_PREFIX = "migtest_lockrate";
 
@@ -44,10 +40,7 @@ afterAll(async () => {
 
 describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", () => {
   it("column exists with the correct type (nullable NUMERIC(20,8))", async () => {
-    // The real startup migration has already run against this database (server
-    // boots it automatically) — assert the column it added is present and correctly
-    // typed, and that running the exact ADD COLUMN SQL again is a safe no-op.
-    await pool.query(FACTORY_SUPPLIER_LOCKED_RATE_ADD_COLUMN_SQL);
+    // The schema migrations define the column: assert it is present and correctly typed.
 
     const { rows } = await pool.query(
       `SELECT column_name, data_type, numeric_precision, numeric_scale, is_nullable
@@ -79,9 +72,9 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
       })
       .returning();
 
-    await db.insert(schema.factoryRawStock).values([
-      { companyId, containerId: container.id, receivedKg: "10000", costPerKg: "0.20", costPerKgUsd: "0.20" },
-    ]);
+    await db
+      .insert(schema.factoryRawStock)
+      .values([{ companyId, containerId: container.id, receivedKg: "10000", costPerKg: "0.20", costPerKgUsd: "0.20" }]);
 
     const [container2] = await db
       .insert(schema.factoryContainers)
@@ -94,9 +87,11 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
         fxRateToUsd: "1",
       })
       .returning();
-    await db.insert(schema.factoryRawStock).values([
-      { companyId, containerId: container2.id, receivedKg: "10000", costPerKg: "0.36", costPerKgUsd: "0.36" },
-    ]);
+    await db
+      .insert(schema.factoryRawStock)
+      .values([
+        { companyId, containerId: container2.id, receivedKg: "10000", costPerKg: "0.36", costPerKgUsd: "0.36" },
+      ]);
 
     // Confirm the row starts NULL (never established) before running the backfill.
     const [before] = await db
@@ -290,7 +285,6 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
       costPerKgUsd: "0.33",
     });
 
-    await pool.query(FACTORY_SUPPLIER_LOCKED_RATE_ADD_COLUMN_SQL);
     await pool.query(FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL);
     const [firstRun] = await db
       .select({ rate: schema.factorySuppliers.currentRawMaterialCostPerKgUsd })
@@ -298,9 +292,7 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
       .where(eq(schema.factorySuppliers.id, supplier.id));
     expect(parseFloat(firstRun.rate as unknown as string)).toBeCloseTo(0.33, 8);
 
-    // Re-running both statements must not throw and must not change the value —
-    // this is the transactional/idempotent guarantee the migration framework relies on.
-    await expect(pool.query(FACTORY_SUPPLIER_LOCKED_RATE_ADD_COLUMN_SQL)).resolves.toBeDefined();
+    // Re-running the backfill must not throw and must not change the value.
     await expect(pool.query(FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL)).resolves.toBeDefined();
 
     const [secondRun] = await db

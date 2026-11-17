@@ -4,7 +4,6 @@ import Decimal from "decimal.js";
 import { ledgerAccounts, spProfitSplits } from "@shared/schema";
 import {
   getLatestSpProfitCorrection,
-  ensureSpProfitManualCorrectionStorage,
   isDeveloperForProfitCorrection,
   GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE,
 } from "./spProfitManualCorrections";
@@ -207,7 +206,6 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
       });
       return;
     }
-    await ensureSpProfitManualCorrectionStorage();
     const target = new Decimal(rawTarget).toFixed(2);
     const actorId = String(req.user?.id ?? req.session.userId ?? "");
     if (!actorId) {

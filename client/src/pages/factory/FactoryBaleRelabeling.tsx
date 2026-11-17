@@ -12,6 +12,7 @@ import { downloadCsv } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
+import { EmptyState } from "@/components/ui/page-state";
 import { useFactoryBaleRelabelingState2 } from "./useFactoryBaleRelabelingState2";
 import { FactoryBaleRelabelingSection } from "./FactoryBaleRelabelingSection";
 import { FactoryBaleRelabelingCardSection } from "./FactoryBaleRelabelingCardSection";
@@ -288,7 +289,7 @@ export default function FactoryBaleRelabeling() {
           {showHistory && (
             <div className="border-t px-3 pb-4 pt-2 sm:px-4">
               {sessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No sessions yet</p>
+                <EmptyState title="No sessions yet" className="min-h-0 py-6" />
               ) : (
                 <div className="max-w-full overflow-x-auto">
                   <Table>

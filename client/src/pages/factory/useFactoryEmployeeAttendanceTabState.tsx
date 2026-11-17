@@ -150,8 +150,7 @@ export function useFactoryEmployeeAttendanceTabState() {
   const [shift, setShift] = useState("");
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
-
-  const { data, isLoading } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
     queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -250,6 +249,9 @@ export function useFactoryEmployeeAttendanceTabState() {
     }).length,
   };
   return {
+    data,
+    refetch,
+    isError,
     canEditPastWithoutPassword,
     approvalDates,
     approvalOpen,

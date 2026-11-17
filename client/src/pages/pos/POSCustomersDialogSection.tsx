@@ -7,6 +7,7 @@ import { ExportButton } from "@/components/export/ReportExportMenu";
 import { drCrClass } from "@/lib/formatNumber";
 import { format } from "date-fns";
 import { usePOSCustomersState } from "./usePOSCustomersState";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function POSCustomersDialogSection({
   closingBalance,
@@ -73,7 +74,7 @@ export function POSCustomersDialogSection({
               ))}
             </div>
           ) : sorted.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No transactions found</div>
+            <EmptyState title="No transactions found" className="py-8" />
           ) : (
             (() => {
               let running = openingBalance;

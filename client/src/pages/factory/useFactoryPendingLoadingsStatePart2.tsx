@@ -9,6 +9,8 @@ import { useFactoryPendingLoadingsStatePart1 } from "./useFactoryPendingLoadings
 
 export function useFactoryPendingLoadingsState() {
   const {
+    refetchLoads,
+    loadsError,
     canStartLoading,
     cancelMutation,
     closeLinkDialog,
@@ -71,6 +73,8 @@ export function useFactoryPendingLoadingsState() {
     setEditingNoteText,
   });
   return {
+    refetchLoads,
+    loadsError,
     canStartLoading,
     closeLinkDialog,
     collapsedCustomers,

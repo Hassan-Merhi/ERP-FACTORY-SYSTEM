@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+
+import { functionDefinition, triggerDefinition } from "./helpers/schemaManifest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const read = (path: string) => readModuleFamily(path);
@@ -9,7 +11,6 @@ const ui = read("client/src/pages/factory/PressingCorrectionReview.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
 const queue = read("client/src/pages/factory/PressingOfflineQueueStatus.tsx");
 const routes = read("server/routes/factoryRoutes.ts");
-const ddl = read("migrations/20261027_001_factory_pressing_machine_tracking.sql");
 const contract = read("shared/schema/factory/pressing-machine-tracking.ts");
 
 describe("Pressing Machines Phase 8 correction and audit controls", () => {
@@ -52,10 +53,15 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("voidedBy: ctx.userId");
     expect(correction).toContain('action: "void"');
     expect(correction).toContain("}, tx)");
-    expect(ddl).toContain("factory_pressing_corrections_immutable_trg");
-    expect(ddl).toContain("BEFORE UPDATE OR DELETE ON factory_pressing_corrections");
-    expect(ddl).toContain("factory_pressing_confirmations_protect_trg");
-    expect(ddl).toContain("A supervisor correction event must be recorded before voiding");
+    expect(triggerDefinition("factory_pressing_corrections", "factory_pressing_corrections_immutable_trg")).toContain(
+      "BEFORE DELETE OR UPDATE ON public.factory_pressing_corrections"
+    );
+    expect(triggerDefinition("factory_pressing_confirmations", "factory_pressing_confirmations_protect_trg")).toContain(
+      "BEFORE DELETE OR UPDATE ON public.factory_pressing_confirmations"
+    );
+    expect(functionDefinition("factory_pressing_confirmations_protect")).toContain(
+      "A supervisor correction event must be recorded before voiding"
+    );
   });
 
   it("keeps the original request and prevents rescan duplicates across machines", () => {
