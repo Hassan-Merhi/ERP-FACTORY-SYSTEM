@@ -181,7 +181,7 @@ export function useFactoryPendingInvoiceVerifyModelPart1Part1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -196,7 +196,7 @@ export function useFactoryPendingInvoiceVerifyModelPart1Part1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Return failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -221,7 +221,7 @@ export function useFactoryPendingInvoiceVerifyModelPart1Part1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Assignment failed", description: error.message, variant: "destructive" });
     },
   });
   return {
@@ -326,7 +326,7 @@ export function useFactoryPendingInvoiceVerifyModelPart1Part2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
   return { addChargeMutation };

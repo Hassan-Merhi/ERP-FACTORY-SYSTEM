@@ -46,7 +46,7 @@ export function useLocationInventoryMutations({
       if (selectedLocationLocal?.id === updated.id) setSelectedLocationLocal(updated);
       setRenameDialogOpen(false);
     },
-    onError: (error: Error) => toast({ title: "Error", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Update failed", description: error.message, variant: "destructive" }),
   });
 
   const createLocationMutation = useMutation({
@@ -60,7 +60,7 @@ export function useLocationInventoryMutations({
       setCreateLocationOpen(false);
       setCreateLocationName("");
     },
-    onError: (error: Error) => toast({ title: "Error", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Save failed", description: error.message, variant: "destructive" }),
   });
 
   const waGroupMutation = useMutation({
@@ -93,7 +93,7 @@ export function useLocationInventoryMutations({
       if (selectedLocationLocal?.id === updated.id) setSelectedLocationLocal(updated);
       setWaGroupDialogOpen(false);
     },
-    onError: (error: Error) => toast({ title: "Error", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Update failed", description: error.message, variant: "destructive" }),
   });
 
   const waTestMutation = useMutation({

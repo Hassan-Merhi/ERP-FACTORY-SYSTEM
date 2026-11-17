@@ -165,7 +165,7 @@ export function useDeletedItemsState() {
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Restore failed",
         description: error.message || "Failed to restore item",
         variant: "destructive",
       });
@@ -188,7 +188,7 @@ export function useDeletedItemsState() {
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Delete failed",
         description: error.message || "Failed to permanently delete item",
         variant: "destructive",
       });
@@ -214,7 +214,7 @@ export function useDeletedItemsState() {
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Delete failed",
         description: error.message || "Failed to delete some items",
         variant: "destructive",
       });

@@ -94,7 +94,7 @@ export function useFactorySettingsModelPart1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -118,7 +118,7 @@ export function useFactorySettingsModelPart1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -142,7 +142,7 @@ export function useFactorySettingsModelPart1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -158,7 +158,7 @@ export function useFactorySettingsModelPart1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
     },
   });
 

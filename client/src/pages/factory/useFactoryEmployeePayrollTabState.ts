@@ -171,7 +171,7 @@ export function useFactoryEmployeePayrollTabState() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-advances"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Run failed", description: e.message, variant: "destructive" }),
   });
 
   const grouped = useMemo(() => {

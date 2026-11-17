@@ -57,7 +57,7 @@ export function useFactoryInvoiceDetailModelPart3({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Exchange failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -78,7 +78,7 @@ export function useFactoryInvoiceDetailModelPart3({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: error.message, variant: "destructive" });
     },
   });
 

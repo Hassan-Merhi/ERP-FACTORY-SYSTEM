@@ -109,7 +109,7 @@ export function useVoucherHandlers({
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Save failed",
         description: getErrorDetails(error).message || "Failed to create account",
       });
       return null;

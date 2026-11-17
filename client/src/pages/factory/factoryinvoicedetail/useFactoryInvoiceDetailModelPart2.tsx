@@ -95,7 +95,7 @@ export function useFactoryInvoiceDetailModelPart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -125,7 +125,7 @@ export function useFactoryInvoiceDetailModelPart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -152,7 +152,7 @@ export function useFactoryInvoiceDetailModelPart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
       setEditingArticleCode(null);
     },
   });
@@ -204,7 +204,7 @@ export function useFactoryInvoiceDetailModelPart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -236,7 +236,7 @@ export function useFactoryInvoiceDetailModelPart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
   return {

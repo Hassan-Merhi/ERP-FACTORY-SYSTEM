@@ -2,6 +2,8 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -28,8 +30,10 @@ export function useCompaniesTabState() {
   const [isCompanyDialogOpen, setIsCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companySearch, setCompanySearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
-
+  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
+  const [forceDeleteWithHistory, setForceDeleteWithHistory] = useState(false);
   const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
@@ -59,8 +63,12 @@ export function useCompaniesTabState() {
       }
     },
     onSuccess: () => {
-      toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
+      toast({
+        title: editingCompany ? "Updated" : "Created",
+        description: editingCompany ? "Company updated." : "Company created.",
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       if (editingCompany) {
         queryClient.invalidateQueries({ queryKey: [`/api/companies/${editingCompany.id}`] });
         queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
@@ -91,22 +99,32 @@ export function useCompaniesTabState() {
       });
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to save company.", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to save company.", variant: "destructive" });
     },
   });
 
   const deleteCompanyMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await apiRequest("DELETE", `/api/companies/${id}`, {});
+      const res = await apiRequest("DELETE", `/api/companies/${id}`, {
+        forceDeleteWithHistory,
+        confirmedCompanyCode: deleteConfirmationCode,
+      });
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Deleted", description: "Company deleted successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       setCompanyToDelete(null);
+      setDeleteConfirmationCode("");
+      setForceDeleteWithHistory(false);
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to delete company.", variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete company.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -126,6 +144,12 @@ export function useCompaniesTabState() {
   return {
     companies,
     companyForm,
+    deleteConfirmationCode,
+    forceDeleteWithHistory,
+    setDeleteConfirmationCode,
+    setForceDeleteWithHistory,
+    setShowInactive,
+    showInactive,
     companySearch,
     companyToDelete,
     createCompanyMutation,
@@ -197,10 +221,32 @@ export function CompaniesTabSection({ companyForm }: Pick<ReturnType<typeof useC
 export function CompaniesTabAlertDialogSection({
   companyToDelete,
   deleteCompanyMutation,
+  deleteConfirmationCode,
+  forceDeleteWithHistory,
   setCompanyToDelete,
-}: Pick<ReturnType<typeof useCompaniesTabState>, "companyToDelete" | "deleteCompanyMutation" | "setCompanyToDelete">) {
+  setDeleteConfirmationCode,
+  setForceDeleteWithHistory,
+}: Pick<
+  ReturnType<typeof useCompaniesTabState>,
+  | "companyToDelete"
+  | "deleteCompanyMutation"
+  | "deleteConfirmationCode"
+  | "forceDeleteWithHistory"
+  | "setCompanyToDelete"
+  | "setDeleteConfirmationCode"
+  | "setForceDeleteWithHistory"
+>) {
   return (
-    <AlertDialog open={!!companyToDelete} onOpenChange={(open) => !open && setCompanyToDelete(null)}>
+    <AlertDialog
+      open={!!companyToDelete}
+      onOpenChange={(open) => {
+        if (!open) {
+          setCompanyToDelete(null);
+          setDeleteConfirmationCode("");
+          setForceDeleteWithHistory(false);
+        }
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Company</AlertDialogTitle>
@@ -210,7 +256,8 @@ export function CompaniesTabAlertDialogSection({
                 Are you sure you want to delete <strong>{companyToDelete?.name}</strong>?
               </p>
               <p className="text-destructive font-medium">
-                This will permanently delete ALL data associated with this company, including:
+                Inactive companies may be permanently deleted. Select the financial-history option below if the company
+                has transactions or balances. Deletion removes associated records, including:
               </p>
               <ul className="list-disc list-inside text-sm space-y-1 ml-2">
                 <li>All locations and inventory</li>
@@ -221,6 +268,29 @@ export function CompaniesTabAlertDialogSection({
                 <li>All user role assignments for this company</li>
               </ul>
               <p className="font-bold text-destructive mt-2">This action cannot be undone!</p>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={forceDeleteWithHistory}
+                  onCheckedChange={(checked) => setForceDeleteWithHistory(checked === true)}
+                  data-testid="checkbox-force-delete-history"
+                />
+                Permanently remove accounting history too (vouchers, inventory, closures and balances)
+              </label>
+              {forceDeleteWithHistory && (
+                <div className="space-y-1">
+                  <p className="text-sm">
+                    Type company code <strong>{companyToDelete?.code}</strong> to confirm permanent deletion of its
+                    financial records.
+                  </p>
+                  <Input
+                    value={deleteConfirmationCode}
+                    onChange={(event) => setDeleteConfirmationCode(event.target.value)}
+                    placeholder="Exact company code"
+                    data-testid="input-force-delete-company-code"
+                    autoComplete="off"
+                  />
+                </div>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -229,7 +299,10 @@ export function CompaniesTabAlertDialogSection({
           <AlertDialogAction
             onClick={() => companyToDelete && deleteCompanyMutation.mutate(companyToDelete.id)}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            disabled={deleteCompanyMutation.isPending}
+            disabled={
+              deleteCompanyMutation.isPending ||
+              (forceDeleteWithHistory && deleteConfirmationCode !== companyToDelete?.code)
+            }
             data-testid="button-confirm-delete-company"
           >
             {deleteCompanyMutation.isPending ? "Deleting..." : "Delete Company"}

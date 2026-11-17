@@ -257,7 +257,7 @@ export function useFactoryDispatchBatchesState() {
       if (data.batch?.id) navigate(`/factory/dispatch-batches/${data.batch.id}`);
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

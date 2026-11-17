@@ -47,11 +47,15 @@ export function useStockEntryTabStatePart3({
 
   const handleConfirmClick = () => {
     if (!selectedLocationId) {
-      toast({ title: "Error", description: "Please select a warehouse location", variant: "destructive" });
+      toast({
+        title: "Missing information",
+        description: "Please select a warehouse location",
+        variant: "destructive",
+      });
       return;
     }
     if (cart.length === 0) {
-      toast({ title: "Error", description: "Please add items to the cart", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please add items to the cart", variant: "destructive" });
       return;
     }
     if (cart.length > MAX_ITEMS_PER_ENTRY) {

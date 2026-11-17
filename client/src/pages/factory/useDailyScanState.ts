@@ -153,7 +153,7 @@ export function useDailyScanState() {
       queryClient.setQueryData<DayBale[]>(dailyQueryKey, (current = []) =>
         current.map((row) => (row.scan_id === id ? { ...row, scan_id: null, scanned_at: null } : row))
       ),
-    onError: () => toast({ title: "Error", description: "Could not remove scan.", variant: "destructive" }),
+    onError: () => toast({ title: "Remove failed", description: "Could not remove scan.", variant: "destructive" }),
   });
 
   const handleExport = async () => {

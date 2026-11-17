@@ -23,6 +23,7 @@ export function usePerEmployeeViewState() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
   const [startDate, setStartDate] = useState(attendanceToday);
@@ -119,7 +120,7 @@ export function usePerEmployeeViewState() {
       return { employeeId: empIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -141,6 +142,7 @@ export function usePerEmployeeViewState() {
     return acc;
   }, []);
   return {
+    canEditPastWithoutPassword,
     absentCount,
     approvalDates,
     approvalOpen,

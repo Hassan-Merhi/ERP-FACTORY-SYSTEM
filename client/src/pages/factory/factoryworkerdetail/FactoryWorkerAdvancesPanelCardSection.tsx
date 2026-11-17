@@ -136,7 +136,7 @@ export function FactoryWorkerAdvancesPanelCardSection({
               onClick={() => setShowAdvanceForm(true)}
               data-testid="button-new-advance"
             >
-              <Plus className="h-4 w-4 mr-1" /> New Advance
+              <Plus className="h-4 w-4 mr-1" /> Add Advance
             </Button>
           )}
         </div>

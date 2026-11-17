@@ -92,7 +92,7 @@ export function useContainerVerificationStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -107,7 +107,7 @@ export function useContainerVerificationStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -121,7 +121,7 @@ export function useContainerVerificationStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -143,7 +143,7 @@ export function useContainerVerificationStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -222,7 +222,7 @@ export function useContainerVerificationStatePart1() {
         const data = await res.json();
         setVerificationResult(data);
       } catch (err) {
-        toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
+        toast({ title: "Load failed", description: getErrorDetails(err).message, variant: "destructive" });
       }
     },
     [selectedSupplierId, selectedProformaId, containerId, toast, syncLoadedItemsFromContainer]

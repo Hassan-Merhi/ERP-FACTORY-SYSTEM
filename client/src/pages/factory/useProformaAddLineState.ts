@@ -174,7 +174,7 @@ export function useProformaAddLineState() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 

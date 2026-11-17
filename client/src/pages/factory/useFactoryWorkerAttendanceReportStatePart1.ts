@@ -1,5 +1,6 @@
 // Extracted from ./FactoryWorkerAttendanceReport.tsx to keep that module under the source-size cap.
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -26,6 +27,7 @@ import {
 import {
   type AttendanceAdminCredentials,
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
 } from "./factoryattendance/attendanceEditPolicy";
 import { useToast } from "@/hooks/use-toast";
@@ -40,7 +42,11 @@ type AttendanceReportSavePayload = {
 export function useFactoryWorkerAttendanceReportStatePart1() {
   const qc = useQueryClient();
   const { toast } = useToast();
-
+  const { selectedCompany } = useCompany();
+  const canEditPastWithoutPassword = useCallback(
+    (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates),
+    [selectedCompany?.role]
+  );
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");
   /* customStart/customEnd are used for both "thisMonth" navigation and "custom" range */
@@ -190,7 +196,7 @@ export function useFactoryWorkerAttendanceReportStatePart1() {
           return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
         });
         const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-        if (priorDates.length > 0) {
+        if (priorDates.length > 0 && !canEditPastWithoutPassword(priorDates)) {
           setApprovalDates(priorDates);
           setApprovalRecords(records);
           setApprovalOpen(true);
@@ -199,7 +205,7 @@ export function useFactoryWorkerAttendanceReportStatePart1() {
         }
       }, 800);
     },
-    [saveMutation]
+    [saveMutation, canEditPastWithoutPassword]
   );
 
   const cycleCell = useCallback(

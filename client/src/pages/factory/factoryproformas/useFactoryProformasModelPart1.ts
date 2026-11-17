@@ -208,7 +208,7 @@ export function useFactoryProformasModelPart1() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -217,7 +217,7 @@ export function useFactoryProformasModelPart1() {
       return await modeApiRequest("POST", "/api/factory/customer-proformas", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma created successfully" });
+      toast({ title: "Created", description: "Proforma created successfully" });
       invalidateCustomerProformas();
       setIsCreateOpen(false);
       setNewProformaName("");
@@ -225,7 +225,7 @@ export function useFactoryProformasModelPart1() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
   return {

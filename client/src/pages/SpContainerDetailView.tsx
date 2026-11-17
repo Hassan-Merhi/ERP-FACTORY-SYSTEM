@@ -217,9 +217,11 @@ export function SpContainerDetailView() {
               onSelect: () => exportInvoice(false),
             },
             {
+              // The container page's print hook saves a no-cost PDF, so the
+              // item says what it produces (owner decision 10).
               id: "container-print",
-              label: "Print",
-              kind: "print",
+              label: "Export PDF",
+              kind: "pdf",
               testId: "button-export-pdf",
               onSelect: () => window.print(),
             },

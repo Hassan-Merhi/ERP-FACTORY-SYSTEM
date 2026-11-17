@@ -142,7 +142,7 @@ export default function ProductionRawStock() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock/available-containers"] });
       setOffloadDialogOpen(false);
-      toast({ title: "Success", description: "Container offloaded successfully." });
+      toast({ title: "Offloaded", description: "Container offloaded successfully." });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
@@ -192,7 +192,7 @@ export default function ProductionRawStock() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       setAddToBatchOpen(false);
-      toast({ title: "Success", description: "Added to batch successfully." });
+      toast({ title: "Added", description: "Added to batch successfully." });
     },
   });
 
@@ -208,7 +208,7 @@ export default function ProductionRawStock() {
       toast({ title: "Deleted", description: "Mix batch deleted." });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -232,7 +232,7 @@ export default function ProductionRawStock() {
       toast({ title: "Sent", description: "Mix batch details sent to WhatsApp group." });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Send failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -282,8 +282,8 @@ export default function ProductionRawStock() {
               className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
               data-testid="button-create-mix-batch"
             >
-              <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
-              <span className="sm:hidden">New Batch</span>
+              <Layers className="h-4 w-4" /> <span className="hidden sm:inline">Add Mix Batch</span>
+              <span className="sm:hidden">Add Batch</span>
             </Button>
           )}
           {recordChanges.allowed && (

@@ -137,7 +137,7 @@ export function useFactoryInvoiceLoadingScanState() {
       toast({ title: "Session started", description: `Loading session #${data.session.id} is now open.` });
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -188,7 +188,7 @@ export function useFactoryInvoiceLoadingScanState() {
       toast({ title: "Removed", description: "Bale removed and returned to unloaded." });
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -204,7 +204,7 @@ export function useFactoryInvoiceLoadingScanState() {
       toast({ title: "Completed", description: "Loading session completed successfully." });
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -220,7 +220,7 @@ export function useFactoryInvoiceLoadingScanState() {
       toast({ title: "Cancelled", description: "Loading session cancelled." });
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Cancel failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -235,7 +235,7 @@ export function useFactoryInvoiceLoadingScanState() {
       navigate(`/factory/sales/proformas/${data.proformaId}`);
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

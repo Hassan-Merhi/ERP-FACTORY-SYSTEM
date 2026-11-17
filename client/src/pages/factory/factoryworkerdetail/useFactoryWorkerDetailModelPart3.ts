@@ -65,7 +65,7 @@ export function useFactoryWorkerDetailModelPart3({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Photo updated" });
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Photo upload failed", description: errorMessage(err), variant: "destructive" });
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -105,7 +105,7 @@ export function useFactoryWorkerDetailModelPart3({
       setEndResult(data);
       setEndStep(2);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Preview failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndCalculating(false);
     }
@@ -141,7 +141,7 @@ export function useFactoryWorkerDetailModelPart3({
       });
       setEndOpen(false);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Settlement failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndSubmitting(false);
     }
@@ -169,7 +169,7 @@ export function useFactoryWorkerDetailModelPart3({
       toast({ title: "Contract ended", description: "Worker deactivated. No settlement payroll was created." });
       setEndOpen(false);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Update failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndSubmitting(false);
     }

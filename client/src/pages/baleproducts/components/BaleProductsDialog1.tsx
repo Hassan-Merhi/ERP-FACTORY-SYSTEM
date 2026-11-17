@@ -277,7 +277,7 @@ export function BaleProductsDialog1({ model }: { model: Model }) {
                 disabled={!editForm.name.trim() || editProductMutation.isPending}
                 data-testid="button-save-edit-product"
               >
-                {editProductMutation.isPending ? "Saving..." : "Save Changes"}
+                {editProductMutation.isPending ? "Saving…" : "Save"}
               </Button>
             </div>
           </div>

@@ -82,7 +82,7 @@ export function useBalesHistoryModelPart2({
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: err.message, variant: "destructive" });
     },
   });
 

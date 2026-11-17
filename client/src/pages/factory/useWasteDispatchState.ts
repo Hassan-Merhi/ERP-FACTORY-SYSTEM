@@ -143,7 +143,7 @@ function useWasteDispatchStatePart2({
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
       setConfirming(false);
     },
   });
@@ -165,7 +165,7 @@ function useWasteDispatchStatePart2({
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
       setDeleteDispatchId(null);
     },
   });

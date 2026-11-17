@@ -85,7 +85,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -116,7 +116,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -146,7 +146,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -166,7 +166,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -186,7 +186,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -238,7 +238,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -262,7 +262,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -283,7 +283,7 @@ export function useFactoryWorkerDetailModelPart2({
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
   return {

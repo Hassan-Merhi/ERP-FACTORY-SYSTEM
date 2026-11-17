@@ -13,6 +13,7 @@ import { usePerEmployeeViewState } from "./usePerEmployeeViewState";
 
 export function PerEmployeeView() {
   const {
+    canEditPastWithoutPassword,
     absentCount,
     approvalDates,
     approvalOpen,
@@ -210,7 +211,7 @@ export function PerEmployeeView() {
           </CardContent>
         </Card>
       )}
-      {attendancePastDates(dates).length > 0 && (
+      {attendancePastDates(dates).length > 0 && !canEditPastWithoutPassword && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <AttendanceAdminApprovalDialog

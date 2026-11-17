@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
-import { CreateErpTestCompanyDialog } from "./CreateErpTestCompanyDialog";
 import {
   CompaniesTabAlertDialogSection,
   CompaniesTabSection,
@@ -29,6 +28,12 @@ export function CompaniesTab() {
     isLoadingCompanies,
     setCompanySearch,
     setCompanyToDelete,
+    setDeleteConfirmationCode,
+    setForceDeleteWithHistory,
+    setShowInactive,
+    showInactive,
+    deleteConfirmationCode,
+    forceDeleteWithHistory,
     setEditingCompany,
     setIsCompanyDialogOpen,
   } = useCompaniesTabState();
@@ -67,10 +72,9 @@ export function CompaniesTab() {
             Company Management
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {companies.length} {companies.length === 1 ? "company" : "companies"} configured
+            {companies.filter((company) => company.active).length} active companies
           </p>
         </div>
-        <CreateErpTestCompanyDialog />
         <Dialog
           open={isCompanyDialogOpen}
           onOpenChange={(open) => {
@@ -265,20 +269,29 @@ export function CompaniesTab() {
           </DialogContent>
         </Dialog>
       </div>
+      <div className="flex flex-wrap items-center gap-4">
+        {companies.length > 3 && (
+          <div className="relative max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search companies…"
+              value={companySearch}
+              onChange={(e) => setCompanySearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-company-search"
+            />
+          </div>
+        )}
 
-      {companies.length > 3 && (
-        <div className="relative max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search companies…"
-            value={companySearch}
-            onChange={(e) => setCompanySearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-company-search"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox
+            checked={showInactive}
+            onCheckedChange={(checked) => setShowInactive(checked === true)}
+            data-testid="checkbox-show-inactive-companies"
           />
-        </div>
-      )}
-
+          Show inactive ({companies.filter((company) => !company.active).length})
+        </label>
+      </div>
       {isLoadingCompanies ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -297,13 +310,15 @@ export function CompaniesTab() {
         (() => {
           const q = companySearch.toLowerCase();
           const filtered = companies.filter(
-            (c) => !q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q)
+            (c) =>
+              (showInactive ? !c.active : c.active) &&
+              (!q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q))
           );
 
           if (filtered.length === 0) {
             return (
               <p className="text-sm text-muted-foreground text-center py-10">
-                No companies match "<span className="font-medium">{companySearch}</span>"
+                {showInactive ? "No inactive companies match the search." : "No active companies match the search."}
               </p>
             );
           }
@@ -410,15 +425,21 @@ export function CompaniesTab() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setCompanyToDelete(company)}
-                        data-testid={`button-delete-company-${company.id}`}
-                        title="Delete company"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {!company.active && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setCompanyToDelete(company);
+                            setDeleteConfirmationCode("");
+                            setForceDeleteWithHistory(false);
+                          }}
+                          data-testid={`button-delete-company-${company.id}`}
+                          title="Delete company"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -431,7 +452,11 @@ export function CompaniesTab() {
       <CompaniesTabAlertDialogSection
         companyToDelete={companyToDelete}
         deleteCompanyMutation={deleteCompanyMutation}
+        deleteConfirmationCode={deleteConfirmationCode}
+        forceDeleteWithHistory={forceDeleteWithHistory}
         setCompanyToDelete={setCompanyToDelete}
+        setDeleteConfirmationCode={setDeleteConfirmationCode}
+        setForceDeleteWithHistory={setForceDeleteWithHistory}
       />
     </div>
   );

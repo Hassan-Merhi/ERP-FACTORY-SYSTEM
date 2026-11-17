@@ -70,12 +70,12 @@ export function useFactoryProformasModelPart2({
       return await modeApiRequest("DELETE", `/api/factory/customer-proformas/${id}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma deleted" });
+      toast({ title: "Deleted", description: "Proforma deleted" });
       invalidateCustomerProformas();
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -108,14 +108,14 @@ export function useFactoryProformasModelPart2({
       return await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { name });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Proforma renamed successfully" });
+      toast({ title: "Renamed", description: "Proforma renamed successfully" });
       invalidateCustomerProformas();
       setRenamingProforma(null);
       setRenameValue("");
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -152,7 +152,7 @@ export function useFactoryProformasModelPart2({
       return await modeApiRequest("POST", "/api/factory/customer-proforma-lines", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line added" });
+      toast({ title: "Added", description: "Line added" });
       invalidateCustomerProformas();
       queryClient.invalidateQueries({ queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId] });
       setIsAddLineOpen(false);
@@ -163,7 +163,7 @@ export function useFactoryProformasModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -183,14 +183,14 @@ export function useFactoryProformasModelPart2({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line updated" });
+      toast({ title: "Updated", description: "Line updated" });
       invalidateCustomerProformas();
       queryClient.invalidateQueries({ queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId] });
       setEditingLine(null);
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -199,12 +199,12 @@ export function useFactoryProformasModelPart2({
       return await modeApiRequest("DELETE", `/api/factory/customer-proforma-lines/${id}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Line deleted" });
+      toast({ title: "Deleted", description: "Line deleted" });
       invalidateCustomerProformas();
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -222,7 +222,7 @@ export function useFactoryProformasModelPart2({
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
       setInlineQtyLineId(null);
     },
   });

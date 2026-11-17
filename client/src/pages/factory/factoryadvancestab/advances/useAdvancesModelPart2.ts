@@ -70,7 +70,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (wasHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -120,7 +120,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Reconcile failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -154,7 +154,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -176,7 +176,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -196,7 +196,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (wasHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Reversal failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -233,7 +233,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -256,7 +256,7 @@ export function useAdvancesModelPart2({
     },
     onError: (err: Error) => {
       if (wasHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 

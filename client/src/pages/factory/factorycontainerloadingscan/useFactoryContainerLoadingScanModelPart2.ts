@@ -115,7 +115,7 @@ export function useFactoryContainerLoadingScanModelPart2({
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message,
         variant: "destructive",
       });

@@ -40,7 +40,7 @@ export function RetailInventorySection({
   | "toggleVariants"
 >) {
   return (
-    <div className="space-y-4 border-t p-3 sm:p-4">
+    <div className="space-y-4 border-t border-border/60 p-3 sm:p-5">
       {isLoading ? (
         <p className="p-6 text-sm text-muted-foreground">Loading products…</p>
       ) : catalogFailed ? (
@@ -225,16 +225,16 @@ export function RetailInventorySection4({
   | "stockStatus"
 >) {
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-5 sm:p-4">
       <Input
         placeholder="Search style, brand, barcode, SKU, color or size…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="sm:col-span-2 lg:col-span-2"
+        className="h-11 rounded-xl bg-background/60 sm:col-span-2 lg:col-span-2"
         aria-label="Search retail inventory"
       />
       <select
-        className="h-10 rounded-md border bg-background px-2 text-sm"
+        className="h-11 rounded-xl border border-border/70 bg-background/60 px-3 text-sm"
         aria-label="Filter by color"
         value={color}
         onChange={(e) => setColor(e.target.value)}

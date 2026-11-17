@@ -99,7 +99,7 @@ export function useBatchDetailState({ batchId, onBack, onDeleted }: BatchDetailP
       toast({ title: "Saved", description: "Batch updated successfully" });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -120,7 +120,7 @@ export function useBatchDetailState({ batchId, onBack, onDeleted }: BatchDetailP
       (onDeleted || onBack)();
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 

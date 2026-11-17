@@ -78,7 +78,7 @@ export function usePosWhatsAppSectionState() {
       setShowToken(false);
       toast({ title: "POS WhatsApp API saved" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const saveGroupMutation = useMutation({
@@ -104,7 +104,7 @@ export function usePosWhatsAppSectionState() {
       });
       setDialogOpen(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   // ── Handlers ──

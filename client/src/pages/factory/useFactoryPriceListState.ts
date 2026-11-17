@@ -109,7 +109,7 @@ export function useFactoryPriceListState() {
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -123,7 +123,7 @@ export function useFactoryPriceListState() {
     if (!editingCell || updatePriceMutation.isPending) return;
     const val = Number(editingCell.value.trim());
     if (!Number.isFinite(val) || val < 0) {
-      toast({ title: "Error", description: "Please enter a valid price.", variant: "destructive" });
+      toast({ title: "Update failed", description: "Please enter a valid price.", variant: "destructive" });
       return;
     }
 

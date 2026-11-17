@@ -93,7 +93,7 @@ export default function EditProformaV5Drawer(props: Props) {
     setAppliedPrice("customer");
     toast({
       title: "Agreed prices applied",
-      description: `${matchedCodes.length} matching article price${matchedCodes.length === 1 ? "" : "s"} updated. Click Save Changes to save the proforma.`,
+      description: `${matchedCodes.length} matching article price${matchedCodes.length === 1 ? "" : "s"} updated. Click Save to save the proforma.`,
     });
   }
 
@@ -775,7 +775,7 @@ export default function EditProformaV5Drawer(props: Props) {
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
                 )}
-                Save Changes
+                Save
               </Button>
             </div>
           </div>

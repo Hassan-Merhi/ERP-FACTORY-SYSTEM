@@ -88,7 +88,7 @@ export function useFactoryInvoicesStatePart2({
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 

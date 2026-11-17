@@ -95,11 +95,11 @@ export function usePropertiesDashboardState() {
       queryClient.refetchQueries({ queryKey: ["/api/dashboard-cash-accounts", selectedCompany?.id] });
       setIsAddDialogOpen(false);
       setSelectedAccountId(0);
-      toast({ title: "Success", description: "Account added to dashboard" });
+      toast({ title: "Saved", description: "Account added to dashboard" });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to add account", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to add account", variant: "destructive" });
     },
   });
 
@@ -110,11 +110,15 @@ export function usePropertiesDashboardState() {
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/dashboard-cash-accounts", selectedCompany?.id] });
-      toast({ title: "Success", description: "Account removed from dashboard" });
+      toast({ title: "Updated", description: "Account removed from dashboard" });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to remove account", variant: "destructive" });
+      toast({
+        title: "Remove failed",
+        description: error.message || "Failed to remove account",
+        variant: "destructive",
+      });
     },
   });
 
@@ -127,11 +131,15 @@ export function usePropertiesDashboardState() {
       queryClient.refetchQueries({ queryKey: ["/api/dashboard-payable-accounts", selectedCompany?.id] });
       setIsAddPayableDialogOpen(false);
       setSelectedPayableAccountId(0);
-      toast({ title: "Success", description: "Payable account added to dashboard" });
+      toast({ title: "Saved", description: "Payable account added to dashboard" });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to add payable account", variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: error.message || "Failed to add payable account",
+        variant: "destructive",
+      });
     },
   });
 
@@ -142,12 +150,12 @@ export function usePropertiesDashboardState() {
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/dashboard-payable-accounts", selectedCompany?.id] });
-      toast({ title: "Success", description: "Payable account removed from dashboard" });
+      toast({ title: "Updated", description: "Payable account removed from dashboard" });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Remove failed",
         description: error.message || "Failed to remove payable account",
         variant: "destructive",
       });

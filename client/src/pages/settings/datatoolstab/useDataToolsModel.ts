@@ -307,7 +307,7 @@ function useDataToolsModelPart3({
       queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
     } catch (error: unknown) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error instanceof Error ? error.message : String(error),
         variant: "destructive",
       });

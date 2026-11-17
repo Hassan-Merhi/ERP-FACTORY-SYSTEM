@@ -60,7 +60,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -76,7 +76,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Finalize failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -92,7 +92,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -160,7 +160,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -176,7 +176,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -192,7 +192,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -252,7 +252,7 @@ export function useFactoryPendingInvoiceVerifyModelPart2({
         setShowFinalizePreview(true);
       }
     } catch (error) {
-      toast({ title: "Error", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({ title: "Preview failed", description: getErrorDetails(error).message, variant: "destructive" });
     } finally {
       setPreviewLoading(false);
     }

@@ -143,14 +143,14 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Salary advance created successfully" });
+      toast({ title: "Created", description: "Salary advance created successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/net-profit"] });
       setAdvanceDialogOpen(false);
       advanceForm.reset();
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -164,7 +164,7 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -175,7 +175,7 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       return await modeApiRequest("POST", `/api/salary-advances/${selectedAdvance.id}/deduction`, data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Deduction recorded successfully" });
+      toast({ title: "Saved", description: "Deduction recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advance-deductions", selectedCompany?.id] });
       setDeductionDialogOpen(false);
@@ -183,7 +183,7 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       setSelectedAdvance(null);
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -211,7 +211,7 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -230,7 +230,7 @@ export function useAdvancesTabState({ cashAccounts = [] }: AdvancesTabProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/employees-with-balances", selectedCompany?.id] });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 

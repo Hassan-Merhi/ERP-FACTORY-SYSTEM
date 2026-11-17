@@ -188,7 +188,7 @@ export function usePayrollModelPart2({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Deposit recorded successfully" });
+      toast({ title: "Saved", description: "Deposit recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
       setDepositDialogOpen(false);
@@ -210,7 +210,7 @@ export function usePayrollModelPart2({
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Withdrawal recorded successfully" });
+      toast({ title: "Saved", description: "Withdrawal recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
       setWithdrawalDialogOpen(false);

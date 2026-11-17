@@ -242,11 +242,19 @@ export function WipersReEntryCardSection({
             <Button
               onClick={() => {
                 if (!entryDate) {
-                  toast({ title: "Error", description: "Entry date is required", variant: "destructive" });
+                  toast({
+                    title: "Missing information",
+                    description: "Entry date is required",
+                    variant: "destructive",
+                  });
                   return;
                 }
                 if (!selectedLocationId) {
-                  toast({ title: "Error", description: "Warehouse location is required", variant: "destructive" });
+                  toast({
+                    title: "Missing information",
+                    description: "Warehouse location is required",
+                    variant: "destructive",
+                  });
                   return;
                 }
                 setConfirmOpen(true);

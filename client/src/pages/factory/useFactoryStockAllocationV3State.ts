@@ -65,7 +65,8 @@ export function useFactoryStockAllocationV3State() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
       setActiveTab("loading");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   const cancelMutation = useMutation({
@@ -81,7 +82,8 @@ export function useFactoryStockAllocationV3State() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/loads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
   });
   return {
     activeTab,

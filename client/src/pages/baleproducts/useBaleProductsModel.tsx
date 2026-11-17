@@ -169,7 +169,7 @@ function useBaleProductsModelPart3({
       await XLSX.writeFile(wb, "bale_products_template.xlsx");
       toast({ title: "Template downloaded" });
     } catch {
-      toast({ title: "Error", description: "Failed to generate template", variant: "destructive" });
+      toast({ title: "Template download failed", description: "Failed to generate template", variant: "destructive" });
     }
   };
 

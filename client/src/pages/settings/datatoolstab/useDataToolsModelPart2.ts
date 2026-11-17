@@ -184,7 +184,7 @@ export function useDataToolsModelPart2({
       const workbook = await readFile(file);
       const worksheet = workbook.getWorksheet(1);
       if (!worksheet) {
-        toast({ title: "Error", description: "Could not read worksheet", variant: "destructive" });
+        toast({ title: "Import failed", description: "Could not read worksheet", variant: "destructive" });
         return;
       }
       const rows = utils.sheet_to_json<{

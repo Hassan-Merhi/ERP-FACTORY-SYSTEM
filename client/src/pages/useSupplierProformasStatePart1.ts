@@ -125,7 +125,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -140,7 +140,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -162,7 +162,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -177,7 +177,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -190,7 +190,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -207,7 +207,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -240,7 +240,7 @@ export function useSupplierProformasStatePart1() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
   return {

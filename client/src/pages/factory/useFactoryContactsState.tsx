@@ -195,7 +195,7 @@ export function useFactoryContactsState() {
       setDialogOpen(false);
     },
     onError: (e: Error) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -211,7 +211,7 @@ export function useFactoryContactsState() {
       setDeleteTarget(null);
     },
     onError: () => {
-      toast({ title: "Error", description: "Could not delete contact", variant: "destructive" });
+      toast({ title: "Delete failed", description: "Could not delete contact", variant: "destructive" });
     },
   });
 

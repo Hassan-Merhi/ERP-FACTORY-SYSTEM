@@ -140,6 +140,7 @@ export function useFactoryEmployeeAttendanceTabState() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
   const [mode, setMode] = useState<ViewMode>("daily");
 
   const [selectedDate, setSelectedDate] = useState(attendanceToday);
@@ -165,8 +166,7 @@ export function useFactoryEmployeeAttendanceTabState() {
     setNotesMap({});
     setApprovalOpen(false);
     setPendingApprovalRecords(null);
-  }, [selectedCompany?.id]);
-
+  }, [selectedCompany?.id, canEditPastWithoutPassword]);
   useEffect(() => {
     if (!data) return;
     const newMap: Record<number, AttendanceStatus> = {};
@@ -211,15 +211,14 @@ export function useFactoryEmployeeAttendanceTabState() {
       notes: notesMap[e.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id]);
-
+  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id, canEditPastWithoutPassword]);
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (selectedCompany?.id && pendingApprovalRecords)
       saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -251,6 +250,7 @@ export function useFactoryEmployeeAttendanceTabState() {
     }).length,
   };
   return {
+    canEditPastWithoutPassword,
     approvalDates,
     approvalOpen,
     approveAttendanceSave,

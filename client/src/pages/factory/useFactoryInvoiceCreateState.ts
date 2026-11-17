@@ -125,7 +125,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -162,7 +162,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -184,7 +184,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -198,7 +198,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -213,7 +213,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Linking failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -232,7 +232,7 @@ export function useFactoryInvoiceCreateState() {
       if (error?._handledGlobally) return;
       setShowFinalizeDialog(false);
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Finalize failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -277,7 +277,7 @@ export function useFactoryInvoiceCreateState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 

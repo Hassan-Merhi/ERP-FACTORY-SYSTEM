@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Edit3, Lock, Loader2, Shuffle, Trash2, Unlock, X } from "lucide-react";
+import { ArrowRight, Check, Lock, Pencil, Loader2, Shuffle, Trash2, Unlock, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -153,7 +153,7 @@ export function ContainerPlannerSavedPlans(props: Props) {
                   onClick={() => renameMutation.mutate({ planId: detail.id, name: renameValue.trim() })}
                   data-testid="button-rename-container-plan"
                 >
-                  <Edit3 className="mr-2 h-4 w-4" />
+                  <Pencil className="mr-2 h-4 w-4" />
                   Save Name
                 </Button>
               </div>

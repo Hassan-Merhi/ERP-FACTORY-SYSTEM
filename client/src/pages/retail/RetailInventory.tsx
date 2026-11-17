@@ -171,10 +171,10 @@ export default function RetailInventory() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 p-4 pb-24 md:p-6 md:pb-24">
+    <div className="mx-auto max-w-[1700px] space-y-6 p-4 pb-24 md:p-6 md:pb-24">
       <PageHeader
         title="Retail Inventory"
-        subtitle="Choose a location, open a category, then expand a brand to browse its items."
+        subtitle="Browse and manage retail products, variants, and stock."
         icon={<Boxes className="h-6 w-6" />}
       >
         {/* Create Only cannot import stock; View Only sees it disabled. */}
@@ -217,7 +217,7 @@ export default function RetailInventory() {
 
       <nav
         aria-label="Retail inventory breadcrumbs"
-        className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-2"
+        className="flex flex-wrap items-center gap-1 rounded-xl border border-border/70 bg-card/70 p-2 shadow-sm"
       >
         <Button
           variant={!locationId ? "secondary" : "ghost"}
@@ -283,7 +283,7 @@ export default function RetailInventory() {
         />
       ) : (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold" data-no-translate>
+          <h2 className="text-xl font-semibold tracking-tight" data-no-translate>
             Brands in {selectedCategory?.name ?? (categoryKey === "__uncategorized__" ? "Uncategorized" : categoryKey)}
           </h2>
           {!selectedCategory || selectedCategory.brands.length === 0 ? (
@@ -293,10 +293,13 @@ export default function RetailInventory() {
           ) : (
             <div className="space-y-3">
               {selectedCategory.brands.map((brand) => (
-                <div key={brand.key} className="overflow-hidden rounded-lg border bg-card">
+                <div
+                  key={brand.key}
+                  className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm"
+                >
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                    className="flex w-full items-center gap-4 bg-gradient-to-r from-primary/10 via-card to-card p-4 text-left transition-colors hover:from-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5"
                     aria-expanded={expandedBrandKey === brand.key}
                     onClick={() => {
                       setExpandedBrandKey((current) => (current === brand.key ? null : brand.key));
@@ -309,10 +312,12 @@ export default function RetailInventory() {
                     ) : (
                       <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     )}
-                    <span className="flex-1 truncate font-semibold" data-no-translate>
+                    <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight" data-no-translate>
                       {brand.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">{brand.productCount} products</span>
+                    <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                      {brand.productCount} products
+                    </span>
                   </button>
                   {expandedBrandKey === brand.key && (
                     <RetailInventorySection

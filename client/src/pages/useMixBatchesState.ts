@@ -88,11 +88,11 @@ export function useMixBatchesState() {
       setAssignDialogOpen(false);
       setSourceBatchId("");
       setSelectedBaleIds(new Set());
-      toast({ title: "Success", description: `${data.balesUpdated} bale(s) assigned to batch` });
+      toast({ title: "Updated", description: `${data.balesUpdated} bale(s) assigned to batch` });
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -113,7 +113,7 @@ export function useMixBatchesState() {
     },
     onError: (err: ClientErrorLike) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 

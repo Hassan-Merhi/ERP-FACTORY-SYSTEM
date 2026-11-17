@@ -83,7 +83,7 @@ export function useFactoryInvoiceDetailModelPart1() {
       setEditingChargeLedger(null);
       toast({ title: "Ledger account updated" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const addChargeMutation = useMutation({
@@ -121,7 +121,7 @@ export function useFactoryInvoiceDetailModelPart1() {
         toast({ title: "Charge added", description: "Accounting voucher posted." });
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const relinkVouchersMutation = useMutation({
@@ -135,7 +135,7 @@ export function useFactoryInvoiceDetailModelPart1() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       toast({ title: data.linked > 0 ? "Ledger entries created" : "Nothing to relink", description: data.message });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Linking failed", description: e.message, variant: "destructive" }),
   });
 
   const updateChargeAmountMutation = useMutation({
@@ -153,7 +153,7 @@ export function useFactoryInvoiceDetailModelPart1() {
       setChargeAmountInput("");
       toast({ title: "Charge amount updated" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({

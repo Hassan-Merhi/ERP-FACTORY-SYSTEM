@@ -183,7 +183,7 @@ export function useFactoryPosModelPart2({
       setShowPrintDialog(true);
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message || "Failed to create sale", variant: "destructive" });
+      toast({ title: "Sale failed", description: err.message || "Failed to create sale", variant: "destructive" });
     },
   });
 
@@ -199,7 +199,7 @@ export function useFactoryPosModelPart2({
       navigate("/factory/daybook");
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message || "Failed to update sale", variant: "destructive" });
+      toast({ title: "Update failed", description: err.message || "Failed to update sale", variant: "destructive" });
     },
   });
 
@@ -212,7 +212,7 @@ export function useFactoryPosModelPart2({
       toast({ title: "Sale voided" });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Void failed", description: err.message, variant: "destructive" });
     },
   });
 

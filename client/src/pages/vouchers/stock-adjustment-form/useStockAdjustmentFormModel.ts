@@ -268,7 +268,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
     onSuccess: () => {
       const isEditMode = !!voucherIdToEdit;
       toast({
-        title: "Success",
+        title: "Saved",
         description: `Production/Consumption voucher ${isEditMode ? "updated" : "created"} successfully`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
@@ -290,7 +290,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || `Failed to ${voucherIdToEdit ? "update" : "create"} stock adjustment`,
         variant: "destructive",
       });

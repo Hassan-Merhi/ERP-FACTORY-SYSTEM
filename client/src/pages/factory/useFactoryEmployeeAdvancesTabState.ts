@@ -112,7 +112,7 @@ export function useFactoryEmployeeAdvancesTabState() {
         queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
       });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const repayMutation = useMutation({
@@ -147,7 +147,7 @@ export function useFactoryEmployeeAdvancesTabState() {
         queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
       });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -166,7 +166,7 @@ export function useFactoryEmployeeAdvancesTabState() {
         queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
       });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const totalOutstanding = useMemo(

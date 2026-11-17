@@ -360,7 +360,7 @@ export function useFactoryLocationInventoryPart1Part2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
   return { createCustomerMutation };

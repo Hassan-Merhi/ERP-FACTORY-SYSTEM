@@ -123,7 +123,12 @@ export class CompanyHasHistoryError extends Error {
   }
 }
 
-export type CompanyDeletionActor = { userId?: string | null; username?: string | null };
+export type CompanyDeletionActor = {
+  userId?: string | null;
+  username?: string | null;
+  forceDeleteWithHistory?: boolean;
+  confirmedCompanyCode?: string;
+};
 
 export async function findCompanyHistory(
   client: PoolClient,

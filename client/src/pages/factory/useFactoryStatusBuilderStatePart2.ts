@@ -95,7 +95,7 @@ export function useFactoryStatusBuilderStatePart2({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
       toast({ title: "Page deleted" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const importMutation = useMutation({

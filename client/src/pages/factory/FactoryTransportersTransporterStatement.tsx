@@ -47,7 +47,7 @@ export function TransporterStatement({ transporterId, onBack }: { transporterId:
       queryClient.invalidateQueries({ queryKey: [API] });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const handlePrint = useReactToPrint({ contentRef: printRef });

@@ -95,7 +95,7 @@ export function useRawStockRecalculatePart3({
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Repair failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -153,7 +153,7 @@ export function useRawStockRecalculatePart3({
       setShowRecomputeDialog(true);
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Preview failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -186,7 +186,7 @@ export function useRawStockRecalculatePart3({
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Restore failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -253,7 +253,7 @@ export function useRawStockRecalculatePart3({
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Repair failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 

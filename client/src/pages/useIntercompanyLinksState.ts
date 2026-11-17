@@ -127,7 +127,8 @@ export function useIntercompanyLinksState() {
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });
       closeDialog();
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Save failed", description: err.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -149,7 +150,8 @@ export function useIntercompanyLinksState() {
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });
       closeDialog();
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -158,14 +160,16 @@ export function useIntercompanyLinksState() {
       toast({ title: "Link deleted" });
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
 
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, active }: { id: number; active: boolean }) =>
       apiRequest("PUT", `/api/intercompany-links/${id}`, { active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] }),
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   const saveRecipientsMutation = useMutation({
@@ -176,7 +180,8 @@ export function useIntercompanyLinksState() {
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });
       setRecipientsDialogLink(null);
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   function openCreate() {

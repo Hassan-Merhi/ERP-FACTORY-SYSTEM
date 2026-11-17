@@ -31,6 +31,7 @@ import { PerEmployeeView } from "./PerEmployeeView";
 
 export default function FactoryEmployeeAttendanceTab() {
   const {
+    canEditPastWithoutPassword,
     approvalDates,
     approvalOpen,
     approveAttendanceSave,
@@ -342,7 +343,7 @@ export default function FactoryEmployeeAttendanceTab() {
           </Card>
         </>
       )}
-      {selectedDate < attendanceToday() && (
+      {selectedDate < attendanceToday() && !canEditPastWithoutPassword && (
         <Badge variant="secondary">Earlier date — Admin approval required to save</Badge>
       )}
       <AttendanceAdminApprovalDialog

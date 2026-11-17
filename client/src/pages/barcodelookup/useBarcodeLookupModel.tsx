@@ -132,7 +132,7 @@ export function useBarcodeLookupModel() {
     onError: (error: unknown) => {
       if (isGloballyHandledError(error)) return;
       toast({
-        title: "Error",
+        title: "Scan failed",
         description: error instanceof Error ? error.message : "Request failed",
         variant: "destructive",
       });
@@ -171,7 +171,7 @@ export function useBarcodeLookupModel() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Delete failed",
         description: error instanceof Error ? error.message : "Request failed",
         variant: "destructive",
       });
@@ -198,7 +198,7 @@ export function useBarcodeLookupModel() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error instanceof Error ? error.message : "Request failed",
         variant: "destructive",
       });
@@ -240,7 +240,7 @@ export function useBarcodeLookupModel() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Restore failed",
         description: error instanceof Error ? error.message : "Request failed",
         variant: "destructive",
       });
@@ -299,7 +299,7 @@ export function useBarcodeLookupModel() {
     onError: (error: unknown) => {
       if (isGloballyHandledError(error)) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error instanceof Error ? error.message : "Request failed",
         variant: "destructive",
       });

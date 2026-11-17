@@ -220,7 +220,8 @@ export function useNotificationsCenterState() {
       setApproveReq(null);
       setSelectedAccountId("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Approval failed", description: err.message, variant: "destructive" }),
   });
 
   const dismissMutation = useMutation({
@@ -232,7 +233,8 @@ export function useNotificationsCenterState() {
       setDismissReq(null);
       setDismissNote("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Dismiss failed", description: err.message, variant: "destructive" }),
   });
 
   // Reuse the existing, individually authorized dismissal endpoint. Each request

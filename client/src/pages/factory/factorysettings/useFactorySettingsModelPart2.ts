@@ -170,7 +170,7 @@ export function useFactorySettingsModelPart2({
     },
     onError: (error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -197,7 +197,7 @@ export function useFactorySettingsModelPart2({
     },
     onError: (error: Error & { _handledGlobally?: boolean }) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -225,7 +225,7 @@ export function useFactorySettingsModelPart2({
     },
     onError: (error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -244,7 +244,7 @@ export function useFactorySettingsModelPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

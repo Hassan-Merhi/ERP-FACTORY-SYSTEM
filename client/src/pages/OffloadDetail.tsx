@@ -68,7 +68,7 @@ export default function OffloadDetail() {
       toast({ title: data.optional ? "Offload suspended" : "Offload restored", description: data.message });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 

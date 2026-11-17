@@ -114,27 +114,9 @@ export const FACTORY_HUB_TABS: PageEntry[] = [
     icon: PieChart,
   },
   {
-    label: "Net Profit",
-    description: "Net profit analytics",
-    path: "/factory/intelligence/financial-hub?section=net-profit",
-    icon: PieChart,
-  },
-  {
     label: "Net Position",
     description: "Assets vs liabilities net position",
-    path: "/factory/intelligence/financial-hub?section=net-position",
-    icon: PieChart,
-  },
-  {
-    label: "Cash Flow",
-    description: "Cashflow intelligence",
-    path: "/factory/intelligence/financial-hub?section=cashflow",
-    icon: PieChart,
-  },
-  {
-    label: "Profitability",
-    description: "Profitability analysis",
-    path: "/factory/intelligence/financial-hub?section=profitability",
+    path: "/factory/intelligence/financial-hub",
     icon: PieChart,
   },
   {

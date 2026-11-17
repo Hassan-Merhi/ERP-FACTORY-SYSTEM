@@ -105,7 +105,7 @@ export function useAdvancesModelPart1() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -147,7 +147,7 @@ export function useAdvancesModelPart1() {
     onError: (err: Error) => {
       setRepayingMonth(null);
       if (wasHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -186,7 +186,7 @@ export function useAdvancesModelPart1() {
     },
     onError: (err: Error) => {
       if (wasHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

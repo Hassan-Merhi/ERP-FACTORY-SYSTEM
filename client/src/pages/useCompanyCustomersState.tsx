@@ -117,7 +117,7 @@ export function useCompanyCustomersState() {
       return await customersApi.create(data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Customer created successfully" });
+      toast({ title: "Created", description: "Customer created successfully" });
       void invalidateErpDataFamilies(queryClient, ["/api/customers", "/api/accounts/all", "/api/ledger-accounts"]);
       setIsCreateOpen(false);
       form.reset({
@@ -130,7 +130,7 @@ export function useCompanyCustomersState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -139,7 +139,7 @@ export function useCompanyCustomersState() {
       return await customersApi.update(data.id, data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Customer updated successfully" });
+      toast({ title: "Updated", description: "Customer updated successfully" });
       void invalidateErpDataFamilies(queryClient, ["/api/customers", "/api/accounts/all", "/api/ledger-accounts"]);
       setIsEditOpen(false);
       setEditingCustomer(null);
@@ -153,7 +153,7 @@ export function useCompanyCustomersState() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 

@@ -134,7 +134,7 @@ export function useFactoryLocationInventoryPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -162,7 +162,7 @@ export function useFactoryLocationInventoryPart2({
     onError: (error: Error) => {
       isSilentAutoSaveRef.current = false;
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -197,7 +197,7 @@ export function useFactoryLocationInventoryPart2({
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -217,7 +217,7 @@ export function useFactoryLocationInventoryPart2({
       setRenameDialogOpen(false);
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
     },
   });
 

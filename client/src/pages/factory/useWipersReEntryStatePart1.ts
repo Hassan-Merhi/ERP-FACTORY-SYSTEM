@@ -194,7 +194,7 @@ export function useWipersReEntryStatePart1() {
       toast({ title: "Bales Created", description: `${data.bales?.length || 0} bales entered under ${entryDate}` });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

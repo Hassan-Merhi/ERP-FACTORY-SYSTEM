@@ -138,7 +138,7 @@ export function useFactoryWorkerBonusesTabState() {
       setAddForm({ workerId: "", bonusDate: today(), amount: "", notes: "" });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-bonuses"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const payMutation = useMutation({
@@ -163,7 +163,7 @@ export function useFactoryWorkerBonusesTabState() {
       setPayForm({ cashAccountId: "", paidDate: today() });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-bonuses"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -180,7 +180,7 @@ export function useFactoryWorkerBonusesTabState() {
       setDeleteConfirm(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-bonuses"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
   return {
     AdminDialog,

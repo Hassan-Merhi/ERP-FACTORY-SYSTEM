@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Shield, Activity, History } from "lucide-react";
 import { ActiveUsersSection } from "./ActiveUsersSection";
@@ -6,9 +6,17 @@ import { ActiveSessionsTab } from "./ActiveSessionsTab";
 import { LoginHistoryTab } from "./LoginHistoryTab";
 import { GlobalForceRefreshCard } from "./GlobalForceRefreshCard";
 
+const SESSIONS_TABS = ["sessions", "login-history", "watch"] as const;
+type SessionsTab = (typeof SESSIONS_TABS)[number];
+
 export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boolean }) {
-  const [tab, setTab] = useState(isDev ? "watch" : "sessions");
   const canWatchUsers = isAdmin || isDev;
+  const [tab, setTab] = useHubQueryState<SessionsTab>({
+    key: "tab",
+    allowedValues: canWatchUsers ? SESSIONS_TABS : SESSIONS_TABS.filter((value) => value !== "watch"),
+    knownValues: SESSIONS_TABS,
+    defaultValue: isDev ? "watch" : "sessions",
+  });
 
   return (
     <div className="space-y-4">
@@ -24,7 +32,7 @@ export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boole
 
       {isAdmin && <GlobalForceRefreshCard />}
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as SessionsTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Session sections">
             <TabsTrigger value="sessions" className="flex items-center gap-1">

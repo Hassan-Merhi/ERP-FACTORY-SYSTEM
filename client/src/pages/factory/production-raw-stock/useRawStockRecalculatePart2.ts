@@ -234,7 +234,7 @@ export function useRawStockRecalculatePart2({
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Recalculation failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 

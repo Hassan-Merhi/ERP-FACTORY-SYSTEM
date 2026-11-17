@@ -274,7 +274,7 @@ export function FactoryCustomerStatementSection2({
               data-testid="button-save-pricelist"
             >
               <Save className="h-4 w-4 mr-2" />
-              {savePricesMutation.isPending ? "Saving…" : "Save Changes"}
+              {savePricesMutation.isPending ? "Saving…" : "Save"}
             </Button>
           )}
         </div>

@@ -75,7 +75,11 @@ export function useChatbotSettingsState() {
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to save GitHub settings", variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: error.message || "Failed to save GitHub settings",
+        variant: "destructive",
+      });
     },
   });
 
@@ -142,7 +146,7 @@ export function useChatbotSettingsState() {
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update chatbot access",
         variant: "destructive",
       });
@@ -164,7 +168,7 @@ export function useChatbotSettingsState() {
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update AI provider",
         variant: "destructive",
       });
@@ -219,7 +223,11 @@ export function useChatbotSettingsState() {
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to delete conversation", variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete conversation",
+        variant: "destructive",
+      });
     },
   });
   return {

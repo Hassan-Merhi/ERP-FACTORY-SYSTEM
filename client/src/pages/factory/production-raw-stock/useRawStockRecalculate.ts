@@ -294,7 +294,7 @@ function useRawStockRecalculatePart4({
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Fix failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
   return { partialOffloadApplyMutation, partialOffloadLoading, partialOffloadScan, refetchPartialOffload };

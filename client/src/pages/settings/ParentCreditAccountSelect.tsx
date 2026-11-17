@@ -66,7 +66,7 @@ export function ParentCreditAccountSelect({ company }: { company: Pick<Company, 
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

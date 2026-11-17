@@ -339,7 +339,7 @@ export function EditMixBatchDialog(props: EditMixBatchDialogProps) {
                 }
                 data-testid="button-save-edit"
               >
-                {saveMutation.isPending ? "Saving…" : sourcesChanged ? "Apply Reviewed Changes" : "Save Changes"}
+                {saveMutation.isPending ? "Saving…" : sourcesChanged ? "Apply Reviewed Changes" : "Save"}
               </Button>
             </div>
           </div>
