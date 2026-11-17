@@ -412,6 +412,7 @@ describe("Landed-cost correction", () => {
       .values({
         companyId: ctx.companyId,
         batchCode: `${TEST_PREFIX}-OPEN`,
+        batchNumber: `${TEST_PREFIX}-OPEN`,
         status: "ACTIVE",
         totalWeightKg: "1000",
         usedKg: "0",
@@ -436,6 +437,7 @@ describe("Landed-cost correction", () => {
       .values({
         companyId: ctx.companyId,
         batchCode: `${TEST_PREFIX}-CLOSED`,
+        batchNumber: `${TEST_PREFIX}-CLOSED`,
         status: "COMPLETED",
         totalWeightKg: "500",
         usedKg: "500",

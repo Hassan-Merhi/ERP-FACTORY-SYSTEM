@@ -282,9 +282,12 @@ describe("after the cut-over", () => {
         id,
       ])
     ).toEqual({ n: "0" });
-    expect(await one<{ used_kg: string }>(`SELECT used_kg::text FROM factory_mix_batches WHERE id = $1`, [id])).toEqual(
-      { used_kg: "0.000" }
-    );
+    expect(
+      await one<{ used_kg: string }>(
+        `SELECT used_kg::numeric(15,3)::text AS used_kg FROM factory_mix_batches WHERE id = $1`,
+        [id]
+      )
+    ).toEqual({ used_kg: "0.000" });
     expect(await valuationTotal()).toBe(before);
     expect((await events()).length).toBe(eventsBefore);
   });

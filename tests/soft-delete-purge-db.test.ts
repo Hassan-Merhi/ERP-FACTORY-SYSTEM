@@ -125,7 +125,7 @@ describe("purgeOldSoftDeletes", () => {
       const batch = (code: string, deletedAt: string) =>
         id(
           client,
-          `INSERT INTO factory_mix_batches(company_id,batch_code,cost_per_kg,deleted_at) VALUES($1,$2,1,${deletedAt}) RETURNING id`,
+          `INSERT INTO factory_mix_batches(company_id,batch_code,batch_number,cost_per_kg,deleted_at) VALUES($1,$2::varchar,$2::text,1,${deletedAt}) RETURNING id`,
           [w.companyId, `${w.tag}-${code}`]
         );
       const orphan = await batch("ORPHAN", OLD);

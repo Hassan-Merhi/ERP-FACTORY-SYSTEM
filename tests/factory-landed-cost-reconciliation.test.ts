@@ -128,6 +128,7 @@ describe("cascadeContainerCostChange", () => {
       .values({
         companyId: ctx.companyId,
         batchCode: `${TEST_PREFIX}-B1`,
+        batchNumber: `${TEST_PREFIX}-B1`,
         totalWeightKg: "800",
         costPerKg: "0.575",
         totalCost: "460.00",
@@ -234,6 +235,7 @@ describe("GET /api/factory/raw-stock/history/:supplierId", () => {
       .values({
         companyId: ctx.companyId,
         batchCode: `${TEST_PREFIX}-B2`,
+        batchNumber: `${TEST_PREFIX}-B2`,
         totalWeightKg: "500",
         costPerKg: "1.20",
         totalCost: "600.00",

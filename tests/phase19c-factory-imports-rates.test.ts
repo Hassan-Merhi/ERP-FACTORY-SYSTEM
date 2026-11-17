@@ -389,18 +389,18 @@ describe("F7 / DI10: imports", () => {
 
   it("reimport keeps only this company's costed mix ids", async () => {
     const costed = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-OK', 100, 2, 200) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-OK', 'P19C-MIX-OK', 100, 2, 200) RETURNING id`,
       [ctx.companyId]
     );
     const zero = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-ZERO', 100, 0, 0) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-ZERO', 'P19C-MIX-ZERO', 100, 0, 0) RETURNING id`,
       [ctx.companyId]
     );
     const foreign = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-B', 100, 3, 300) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-B', 'P19C-MIX-B', 100, 3, 300) RETURNING id`,
       [companyB]
     );
     const file = await excel([
