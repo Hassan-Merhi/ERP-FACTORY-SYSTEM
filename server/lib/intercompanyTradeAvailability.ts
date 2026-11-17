@@ -36,3 +36,34 @@ export async function hasIntercompanyTradesTable(): Promise<boolean> {
     pending = null;
   }
 }
+
+/**
+ * Normal Payment/Receipt voucher previews run in all ERP companies, including
+ * installations where the optional intercompany trading migrations have not
+ * been applied. Absence of the policy table is NOT a broken ordinary voucher.
+ *
+ * Only cache a positive check: if the migration is installed later, the next
+ * request must immediately start enforcing verified intercompany mappings.
+ * Unexpected catalog/database errors propagate so they cannot bypass controls.
+ */
+let voucherPolicyTablePresent = false;
+let voucherPolicyTableCheck: Promise<boolean> | null = null;
+
+export async function hasIntercompanyVoucherPoliciesTable(): Promise<boolean> {
+  if (voucherPolicyTablePresent) return true;
+  if (voucherPolicyTableCheck) return voucherPolicyTableCheck;
+
+  voucherPolicyTableCheck = (async () => {
+    const result = await db.execute(sql`
+      SELECT to_regclass('public.intercompany_relationship_policies') IS NOT NULL AS "present"
+    `);
+    const [row] = resultRows<{ present: boolean }>(result);
+    voucherPolicyTablePresent = row?.present === true;
+    return voucherPolicyTablePresent;
+  })();
+  try {
+    return await voucherPolicyTableCheck;
+  } finally {
+    voucherPolicyTableCheck = null;
+  }
+}
