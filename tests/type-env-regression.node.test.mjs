@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkEnvExamplePolicy } from "../scripts/lib/env-example-policy.mjs";
-import { CLEAN_MAINTENANCE_SCRIPTS, inspectCleanMaintenanceScripts } from "../scripts/verify-clean-maintenance-types.mjs";
+import {
+  CLEAN_MAINTENANCE_SCRIPTS,
+  inspectCleanMaintenanceScripts,
+} from "../scripts/verify-clean-maintenance-types.mjs";
 
 test("environment examples reject duplicate declarations even when commented", () => {
   const result = checkEnvExamplePolicy({ ".env.example": "# ACTIVE=1\n# ACTIVE=0\n" });
@@ -33,10 +36,15 @@ test("maintenance script gate detects new any type syntax", () => {
 });
 
 test("maintenance script gate accepts valid strict types", () => {
-  assert.deepEqual(inspectCleanMaintenanceScripts(() => "const value: unknown = 1;\n"), []);
+  assert.deepEqual(
+    inspectCleanMaintenanceScripts(() => "const value: unknown = 1;\n"),
+    []
+  );
 });
 
 test("maintenance script gate fails closed if a file disappears", () => {
-  const outputs = inspectCleanMaintenanceScripts(() => { throw new Error("missing fixture"); });
+  const outputs = inspectCleanMaintenanceScripts(() => {
+    throw new Error("missing fixture");
+  });
   assert.equal(outputs.length, CLEAN_MAINTENANCE_SCRIPTS.length);
 });

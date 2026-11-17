@@ -21,10 +21,7 @@ export function runPostStartupJobs(): void {
   // historical vouchers: moves the source opening to the survivor and retires
   // its zero-net historical master. Disabled unless the exact scoped opt-in is
   // set; transaction refuses if source ledger or opening balance has drifted.
-  if (
-    process.env.ERP_MERGE_HADI_ERP_RENT_EXPENSE_20261106 ===
-    "approved-company1-rent1007-archive881-3500opening"
-  ) {
+  if (process.env.ERP_MERGE_HADI_ERP_RENT_EXPENSE_20261106 === "approved-company1-rent1007-archive881-3500opening") {
     const mergeHadiRentTimer = setTimeout(async () => {
       try {
         const { runApprovedHadiRentExpenseConsolidation } = await import("./runApprovedHadiRentExpenseConsolidation");
@@ -43,8 +40,7 @@ export function runPostStartupJobs(): void {
   // matches the reviewed November snapshot and the opposite opening stays
   // balanced. Disabled by default, production-only and idempotent.
   if (
-    process.env.ERP_REPAIR_HADI_LSHI_PREPAID_OPENING_20261106 ===
-    "approved-company1-prepaid1022-balanced-opening24500"
+    process.env.ERP_REPAIR_HADI_LSHI_PREPAID_OPENING_20261106 === "approved-company1-prepaid1022-balanced-opening24500"
   ) {
     const hadiLshiOpeningTimer = setTimeout(async () => {
       try {

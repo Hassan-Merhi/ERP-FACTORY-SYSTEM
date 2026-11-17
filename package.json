@@ -43,6 +43,7 @@
     "audit:source-text-assertions": "node scripts/audit-source-text-assertions.mjs",
     "audit:god-files": "node scripts/audit-god-file-boundaries.mjs",
     "audit:type-escapes": "node scripts/audit-type-escapes.mjs",
+    "audit:type-env-inventory": "node scripts/audit-type-env-inventory.mjs",
     "audit:doc-index": "node scripts/audit-doc-index.mjs",
     "audit:write-routes": "node scripts/audit-write-route-coverage.mjs",
     "audit:write-evidence": "node scripts/audit-write-evidence.mjs",
