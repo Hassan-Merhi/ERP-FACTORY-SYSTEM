@@ -11,7 +11,6 @@ import {
   Search,
   ShoppingCart,
   SlidersHorizontal,
-  Truck,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -327,34 +326,7 @@ export default function CustomerLoading() {
       className="mx-auto flex w-full max-w-[1800px] flex-col gap-5 p-4 pb-24 md:p-6 md:pb-24"
       data-testid="customer-loading-page"
     >
-      <section className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-slate-50 via-blue-50/70 to-indigo-100/70 p-5 shadow-sm dark:border-indigo-400/25 dark:from-[hsl(var(--factory-hue)_50%_13%)] dark:via-[hsl(var(--factory-hue)_55%_17%)] dark:to-[hsl(var(--factory-hue)_53%_19%)] sm:p-6">
-        <div
-          className="pointer-events-none absolute -right-8 -top-20 h-64 w-64 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-400/15"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none absolute bottom-0 right-12 hidden text-indigo-400/15 dark:text-blue-200/10 lg:block"
-          aria-hidden="true"
-        >
-          <Package className="h-40 w-40 -rotate-12" strokeWidth={1} />
-        </div>
-        <div className="relative flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-700 text-white shadow-lg shadow-violet-600/20">
-            <Truck className="h-7 w-7" />
-          </div>
-          <div className="min-w-0">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-700/75 dark:text-indigo-200/75">
-              Bale Explorer / Customer History
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
-              Customer Loading
-            </h1>
-            <p className="mt-1 max-w-3xl text-sm text-slate-600 dark:text-blue-100/75">
-              See what each customer has loaded, inspect history, select items, and create a proforma directly.
-            </p>
-          </div>
-        </div>
-      </section>
+      {/* Rendered as the Bales hub "Customer Loading" tab; the hub PageHeader titles the page. */}
 
       <Card className="overflow-hidden rounded-2xl border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 shadow-sm dark:border-indigo-400/35 dark:from-[hsl(var(--factory-hue)_55%_22%)] dark:via-[hsl(var(--factory-hue)_49%_21%)] dark:to-[hsl(var(--factory-hue)_35%_22%)]">
         <CardContent className="flex flex-col gap-4 p-4 sm:p-5 xl:flex-row xl:items-end xl:justify-between">

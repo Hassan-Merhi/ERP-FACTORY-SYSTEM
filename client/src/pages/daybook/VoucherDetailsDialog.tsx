@@ -6,7 +6,7 @@
  * revision history). This file owns only the dialog frame, the summary header,
  * the profit filter chips and the footer actions.
  */
-import { Edit } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
 import { useQuery } from "@tanstack/react-query";
@@ -298,7 +298,7 @@ export function VoucherDetailsDialog({
               }}
               data-testid="button-edit-from-view-dialog"
             >
-              <Edit className="w-4 h-4 mr-2" />
+              <Pencil className="w-4 h-4 mr-2" />
               Edit
             </Button>
           )}

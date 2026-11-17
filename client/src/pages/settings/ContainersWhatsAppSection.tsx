@@ -76,7 +76,7 @@ export function ContainersWhatsAppSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/git/containers-wa-settings"] });
       toast({ title: "Containers WhatsApp settings saved." });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const testSendMutation = useMutation({

@@ -3,7 +3,7 @@
  *
  * A rate decides the USD value of every later foreign-currency posting, so
  * changing a rate is restricted to Admin/Owner (and Developer) at the route
- * (any other writing role may only set today's company rate once), and every
+ * (any other writing role may only set or change today's company rate), and every
  * save, change or delete writes its audit row, with the old and the new value,
  * in the same transaction as the rate itself: a rate never changes without its
  * audit, and an audit never records a change that did not commit.
@@ -41,11 +41,7 @@ export interface CompanyRateInput {
 }
 
 /** Saves the company rate for its date and pair, with its audit, in one transaction. */
-export async function saveCompanyExchangeRate(
-  actor: RateActor,
-  input: CompanyRateInput,
-  options: { createOnly?: boolean } = {}
-): Promise<ExchangeRate> {
+export async function saveCompanyExchangeRate(actor: RateActor, input: CompanyRateInput): Promise<ExchangeRate> {
   return db.transaction(async (tx) => {
     // Serialises saves of one company/date/pair (the unique index may be absent
     // where startup migrations are off), so "old" is the row this save replaces.
@@ -70,16 +66,6 @@ export async function saveCompanyExchangeRate(
       );
     }
     const [existing] = sameDayRows;
-    // A non-editor (POS, Manager, ...) sets the day's rate once for the whole
-    // company; it never replaces a rate someone already set. Checked under the
-    // advisory lock, so two simultaneous first saves cannot both win.
-    if (existing && options.createOnly && !new Decimal(String(existing.rate)).eq(new Decimal(input.rate))) {
-      throw new MonetaryFxError(
-        "EXCHANGE_RATE_ALREADY_SET",
-        "Today's exchange rate has already been set. Ask an Admin or Owner to change it.",
-        409
-      );
-    }
     // A repeated submission of the same numerical rate is not a new revision.
     // Do not rewrite the row or create another audit event for a no-op.
     if (existing && new Decimal(String(existing.rate)).eq(new Decimal(input.rate))) {

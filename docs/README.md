@@ -162,6 +162,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
+| [security/raw-sql-audit.md](security/raw-sql-audit.md) | Raw SQL injection audit results and the `npm run check:raw-sql` review gate (allowlist, register, how to fix findings) |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
@@ -365,6 +366,8 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [factory-mix-cost-integrity-phase5.md](factory-mix-cost-integrity-phase5.md) | Factory Mix Cost Integrity — Phase 5 |
 | [factory-mix-cost-integrity-phase6.md](factory-mix-cost-integrity-phase6.md) | Factory Mix Cost Integrity — Phase 6 |
 | [factory-mix-cost-integrity-phase7.md](factory-mix-cost-integrity-phase7.md) | Factory Mix Cost Integrity — Phase 7 |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | File upload and export size limits (source of truth: `shared/fileSizePolicy.ts`) |
+| [ui-unification/plan.md](ui-unification/plan.md) | UI Unification — standards, phased plan, owner decisions and progress tracker |
 | [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
 | [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
 | [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |

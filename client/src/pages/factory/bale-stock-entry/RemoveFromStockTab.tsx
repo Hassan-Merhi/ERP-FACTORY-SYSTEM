@@ -282,7 +282,7 @@ export function RemoveFromStockTab() {
       setPrintWorkerIdSelected("");
       await printSingleBale(printWorkerBale);
     } catch (err) {
-      toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({ title: "Print failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setAssigningWorker(false);
     }
@@ -376,7 +376,7 @@ export function RemoveFromStockTab() {
 
   const handleRemoveClick = () => {
     if (selectedBaleIds.size === 0) {
-      toast({ title: "Error", description: "Select at least one bale to remove", variant: "destructive" });
+      toast({ title: "Remove failed", description: "Select at least one bale to remove", variant: "destructive" });
       return;
     }
     setRemoveDialogOpen(true);
@@ -401,7 +401,7 @@ export function RemoveFromStockTab() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Success", description: `Removed ${data.removed} bale(s) from stock.` });
+      toast({ title: "Removed", description: `Removed ${data.removed} bale(s) from stock.` });
       setSelectedBaleIds(new Set());
       setRemoveDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });

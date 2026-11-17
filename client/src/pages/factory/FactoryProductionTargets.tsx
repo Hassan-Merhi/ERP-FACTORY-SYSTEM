@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
   CalendarDays,
-  FileDown,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -60,6 +59,7 @@ import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./product
 import { ProductionTargetKpiGrid } from "./productiontargets/ProductionTargetKpiGrid";
 import { ProductionBonusesLauncher } from "./productiontargets/ProductionBonusesLauncher";
 import { ProductionTargetNotices } from "./productiontargets/ProductionTargetNotices";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
@@ -99,7 +99,14 @@ export default function FactoryProductionTargets() {
   );
 
   const { data, isLoading } = useQuery<ProductionResponse>({
-    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", periodType, period.start, period.end),
+    queryKey: companyQueryKey(
+      "/api/factory/staff-tracking",
+      selectedCompany?.id,
+      "production",
+      periodType,
+      period.start,
+      period.end
+    ),
     enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetchProduction(periodType, period.start, period.end),
   });
@@ -368,20 +375,15 @@ export default function FactoryProductionTargets() {
             </Button>
           )}
 
-          <Button
+          <ExportButton
+            kind="excel"
             variant="outline"
+            label={exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportProductionExcel")}
             onClick={() => setExcelRangeOpen(true)}
             disabled={busy}
             title={tr("weeklyExcelTooltip")}
             data-testid="button-export-production-weekly-excel"
-          >
-            {exportWeeklyMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileDown className="mr-2 h-4 w-4" />
-            )}
-            {exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportProductionExcel")}
-          </Button>
+          />
 
           <Button
             className="pt-btn-primary"

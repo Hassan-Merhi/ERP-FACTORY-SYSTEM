@@ -157,7 +157,7 @@ export async function loadCashBankAccountTx(
       opening_balance::text,opening_balance_side,
       opening_balance_native_amount::text,opening_balance_currency,
       ${accountType} AS account_type
-    FROM ${sql.raw(source)}
+    FROM ${sql.identifier(source)}
     WHERE id=${input.accountId} AND company_id=${input.companyId}
       AND deleted_at IS NULL LIMIT 1
   `)

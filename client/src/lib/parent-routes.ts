@@ -11,7 +11,7 @@ export function getParentRoute(pathname: string): string | null {
     if (/^\/factory\/customers\/\d+/.test(cleanPath)) return "/factory/parties?section=customers";
 
     // Containers, loading, and invoicing details → owning workflow.
-    if (cleanPath === "/factory/containers/new") return "/factory/containers-hub?section=containers";
+    if (cleanPath === "/factory/containers/new") return "/factory/containers-hub";
     if (/^\/factory\/sales\/loading\/dispatch\/\d+/.test(cleanPath)) {
       const match = cleanPath.match(/^\/factory\/sales\/loading\/dispatch\/(\d+)/);
       if (match) return "/factory/sales/loading/new?orderId=" + match[1];
@@ -56,7 +56,7 @@ export function getParentRoute(pathname: string): string | null {
 
     // Intelligence and administration children.
     if (/^\/factory\/net-position-details/.test(cleanPath)) {
-      return "/factory/intelligence/financial-hub?section=net-position";
+      return "/factory/intelligence/financial-hub";
     }
     if (/^\/factory\/financial-snapshot/.test(cleanPath)) return "/factory/analytics";
     if (/^\/factory\/import-cycle-diagnostics/.test(cleanPath)) return "/factory/settings";

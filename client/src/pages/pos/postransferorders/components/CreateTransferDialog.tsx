@@ -123,7 +123,7 @@ export function CreateTransferDialog({
       handleClose();
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ShoppingCart, TrendingUp, CalendarRange, Layers, ArrowLeftRight } from "lucide-react";
 import { ExchangeRateSettings } from "@/components/ExchangeRateSettings";
@@ -8,9 +8,16 @@ import { IntercompanyPosTab } from "./IntercompanyPosTab";
 import { PosSettingsTab } from "./PosSettingsTab";
 import { useCompany } from "@/contexts/CompanyContext";
 
+const POS_SETUP_TABS = ["pos-settings", "exchange-rates", "fiscal", "price-groups", "intercompany"] as const;
+type PosSetupTab = (typeof POS_SETUP_TABS)[number];
+
 export function PosSetupHub({ userRole }: { userRole?: string }) {
   const { selectedCompany } = useCompany();
-  const [tab, setTab] = useState("pos-settings");
+  const [tab, setTab] = useHubQueryState<PosSetupTab>({
+    key: "tab",
+    allowedValues: POS_SETUP_TABS,
+    defaultValue: "pos-settings",
+  });
 
   return (
     <div className="space-y-4">
@@ -24,7 +31,7 @@ export function PosSetupHub({ userRole }: { userRole?: string }) {
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as PosSetupTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="POS settings sections">
             <TabsTrigger value="pos-settings" className="flex items-center gap-1">

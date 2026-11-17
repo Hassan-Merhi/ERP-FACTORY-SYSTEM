@@ -73,7 +73,7 @@ export function ImportBalesTab() {
 
         if (headerRowIdx === -1) {
           toast({
-            title: "Error",
+            title: "Import failed",
             description: "Could not find header row with 'ITEM NAME' column",
             variant: "destructive",
           });

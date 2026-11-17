@@ -35,7 +35,7 @@ export function useFactoryWorkerDetailModel() {
   const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const [, navigate] = useLocation();
-  useEscapeToParent("/factory/payroll-hub?tab=workers");
+  useEscapeToParent("/factory/payroll-hub?section=workers");
   const [, params] = useRoute("/factory/workers/:id");
   const workerId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
@@ -274,7 +274,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -305,7 +305,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -335,7 +335,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -355,7 +355,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -375,7 +375,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -427,7 +427,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -451,7 +451,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -472,7 +472,7 @@ export function useFactoryWorkerDetailModel() {
     },
     onError: (err: Error) => {
       if (isHandledGlobally(err)) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -494,7 +494,7 @@ export function useFactoryWorkerDetailModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Photo updated" });
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Photo upload failed", description: errorMessage(err), variant: "destructive" });
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -534,7 +534,7 @@ export function useFactoryWorkerDetailModel() {
       setEndResult(data);
       setEndStep(2);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Preview failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndCalculating(false);
     }
@@ -570,7 +570,7 @@ export function useFactoryWorkerDetailModel() {
       });
       setEndOpen(false);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Settlement failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndSubmitting(false);
     }
@@ -598,7 +598,7 @@ export function useFactoryWorkerDetailModel() {
       toast({ title: "Contract ended", description: "Worker deactivated. No settlement payroll was created." });
       setEndOpen(false);
     } catch (err: unknown) {
-      toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
+      toast({ title: "Update failed", description: errorMessage(err), variant: "destructive" });
     } finally {
       setEndSubmitting(false);
     }

@@ -54,7 +54,7 @@ export function CleanEmptyAccountsDialog({ open, onOpenChange, companyId }: Clea
       });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 

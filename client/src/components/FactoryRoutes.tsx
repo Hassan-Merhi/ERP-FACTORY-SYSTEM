@@ -181,7 +181,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/containers/new" component={FactoryContainerCreate} />
       <Route path="/factory/containers">
-        <Redirect replace to="/factory/containers-hub?section=containers" />
+        <Redirect replace to="/factory/containers-hub" />
       </Route>
       <Route path="/factory/bale-products" component={BaleProducts} />
       <Route path="/factory/raw-stock/opening-balance/:id/edit" component={FactoryOpeningBalanceEdit} />
@@ -335,7 +335,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/intelligence/dashboard" component={FactoryDashboardIntel} />
       <Route path="/factory/intelligence/kpis" component={FactoryKpis} />
       <Route path="/factory/intelligence/profitability">
-        <Redirect replace to="/factory/intelligence/financial-hub?section=profitability" />
+        <Redirect replace to="/factory/intelligence/financial-hub" />
       </Route>
       <Route path="/factory/intelligence/alerts" component={FactoryAlerts} />
       <Route path="/factory/intelligence/supplier-hub" component={FactorySupplierHub} />
@@ -348,7 +348,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         <Redirect replace to="/factory/intelligence/production-hub?section=mix-optimizer" />
       </Route>
       <Route path="/factory/intelligence/cashflow">
-        <Redirect replace to="/factory/intelligence/financial-hub?section=cashflow" />
+        <Redirect replace to="/factory/intelligence/financial-hub" />
       </Route>
       <Route path="/factory/intelligence/waste">
         <Redirect replace to="/factory/intelligence/production-hub?section=waste" />
@@ -375,10 +375,10 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/company-data-reset" component={CompanyDataReset} />}
       <Route path="/factory/net-position-details" component={FactoryNetPositionDetails} />
       <Route path="/factory/net-profit-analytics">
-        <Redirect replace to="/factory/intelligence/financial-hub?section=net-profit" />
+        <Redirect replace to="/factory/intelligence/financial-hub" />
       </Route>
       <Route path="/factory/net-position">
-        <Redirect replace to="/factory/intelligence/financial-hub?section=net-position" />
+        <Redirect replace to="/factory/intelligence/financial-hub" />
       </Route>
       <Route path="/factory/financial-snapshot" component={FactoryFinancialSnapshot} />
       <Route path="/factory/production-comparison" component={ProductionComparison} />

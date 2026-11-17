@@ -19,6 +19,7 @@ import {
 import { ImportBalesTab } from "../bale-stock-entry/ImportBalesTab";
 import { LEGACY_FACTORY_RENAME_DEFAULTS } from "@shared/factoryUiDefaults";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 type Props = {
   model: ReturnType<typeof useFactorySettingsModel>;
@@ -290,12 +291,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
                 const header = "ITEM BARCODE\tQUANTITY\tPRODUCTION DATE\n";
                 const example = "HMD11298\t1\t2/11/2026\n";
                 const blob = new Blob([header + example], { type: "application/vnd.ms-excel" });
-                const url = URL.createObjectURL(blob);
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = "bale_import_template.xls";
-                anchor.click();
-                URL.revokeObjectURL(url);
+                downloadBlob(blob, "bale_import_template.xls");
               }}
               data-testid="button-download-bale-template"
             >

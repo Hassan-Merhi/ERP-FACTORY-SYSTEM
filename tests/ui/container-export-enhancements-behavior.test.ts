@@ -161,7 +161,9 @@ describe("Print on a container page", () => {
     await loadOn("/containers/12");
     window.print();
 
-    await vi.waitFor(() => expect(pdf.saved).toEqual(["container_MSKU_123_4_no_cost.pdf"]));
+    await vi.waitFor(() =>
+      expect(pdf.saved).toEqual([expect.stringMatching(/^container-msku-123-4-no-cost_\d{4}-\d{2}-\d{2}\.pdf$/)])
+    );
     expect(nativePrint).not.toHaveBeenCalled();
     const table = pdf.tables[0];
     expect(table.head).toEqual([["NO", "DESCRIPTION", "Q'TY"]]);

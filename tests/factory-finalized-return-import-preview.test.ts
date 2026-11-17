@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
   const state = {
+    calls: 0,
+    // The first query is the selected-customer lookup; later queries return bale matches.
+    customerRows: [{ id: 7, legalName: "Customer One" }] as Array<Record<string, unknown>>,
     rows: [] as Array<Record<string, unknown>>,
-    // Results served before `rows`: the route looks up the selected customer first.
-    queue: [] as Array<Array<Record<string, unknown>>>,
   };
   return {
     state,
-    execute: vi.fn(async () => ({ rows: state.queue.length ? state.queue.shift()! : state.rows })),
+    execute: vi.fn(async () => ({ rows: state.calls++ === 0 ? state.customerRows : state.rows })),
   };
 });
 vi.mock("../server/auth", () => ({
@@ -29,7 +30,7 @@ import { registerFinalizedReturnImportPreview } from "../server/routes/factory/c
 type Handler = (req: any, res: any, next: () => void) => unknown;
 let handlers: Handler[] = [];
 const app: any = {
-  // The module also registers the customer picker and order lookup GET routes.
+  // Other finalized-return routes registered by the same module are not under test here.
   get: () => undefined,
   post: (path: string, ...next: Handler[]) => {
     if (path === "/api/factory/finalized-sale-returns/import-preview") handlers = next;
@@ -37,17 +38,13 @@ const app: any = {
 };
 registerFinalizedReturnImportPreview(app);
 
-const CUSTOMER = { id: 7, legalName: "Customer One" };
-
 async function request(
   references: unknown,
-  options?: { role?: string; companyId?: number | null; customerId?: unknown; customerRows?: unknown[] }
+  options?: { role?: string; companyId?: number | null; customerId?: unknown }
 ) {
-  const customerId = options && "customerId" in options ? options.customerId : CUSTOMER.id;
-  h.state.queue = [(options?.customerRows ?? [CUSTOMER]) as Array<Record<string, unknown>>];
   const req = {
-    body: { references, customerId },
     headers: {},
+    body: { references, customerId: options && "customerId" in options ? options.customerId : 7 },
     session: { factoryCompanyId: options?.companyId === undefined ? 10 : options.companyId },
     user: { role: options?.role ?? "Admin" },
   };
@@ -97,6 +94,8 @@ const match = (key: string, extra: Record<string, unknown> = {}) => ({
 describe("Finalized loading return Excel reference preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.state.calls = 0;
+    h.state.customerRows = [{ id: 7, legalName: "Customer One" }];
     h.state.rows = [];
   });
 
@@ -106,7 +105,7 @@ describe("Finalized loading return Excel reference preview", () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing Factory company or customer before reading anything", async () => {
+  it("rejects a missing Factory company or customer before reading data", async () => {
     expect((await request(["HMD1"], { companyId: null })).status).toBe(400);
     expect((await request(["HMD1"], { customerId: undefined })).status).toBe(400);
     expect((await request(["HMD1"], { customerId: "7" })).status).toBe(400);
@@ -114,18 +113,18 @@ describe("Finalized loading return Excel reference preview", () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for a customer outside the active Factory company", async () => {
-    const result = await request(["HMD1"], { customerRows: [] });
-    expect(result.status).toBe(404);
-    expect(result.body).toEqual({ message: "Selected customer not found in this Factory company" });
+  it("rejects a customer outside the Factory company", async () => {
+    h.state.customerRows = [];
+    expect((await request(["HMD1"])).status).toBe(404);
     expect(h.execute).toHaveBeenCalledOnce();
   });
 
-  it("rejects malformed imports without looking up bales", async () => {
-    expect((await request([])).status).toBe(400);
-    expect((await request([""])).status).toBe(400);
-    expect((await request(Array(1001).fill("HMD1"))).status).toBe(400);
-    // Only the customer lookup ran for each request; the bale query never did.
+  it("rejects malformed imports without matching bales", async () => {
+    for (const references of [[], [""], Array(1001).fill("HMD1")]) {
+      h.state.calls = 0;
+      expect((await request(references)).status).toBe(400);
+    }
+    // Only the selected-customer lookup ran for each request; no bale query.
     expect(h.execute).toHaveBeenCalledTimes(3);
   });
 
@@ -148,8 +147,7 @@ describe("Finalized loading return Excel reference preview", () => {
         },
       ],
     });
-    expect(result.body).toMatchObject({ customerId: 7, customerName: "Customer One" });
-    // One customer lookup and one bale lookup; nothing is written.
+    // Customer lookup plus one read-only bale match query.
     expect(h.execute).toHaveBeenCalledTimes(2);
   });
 

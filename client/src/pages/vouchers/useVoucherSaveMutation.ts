@@ -115,7 +115,7 @@ export function useVoucherSaveMutation({
       const isEditMode = !!voucherIdToEdit;
       const mirrored = (data as { intercompanyMirrored?: boolean; paymentId?: number }).intercompanyMirrored === true;
       toast({
-        title: mirrored ? "Intercompany vouchers posted together" : "Success",
+        title: mirrored ? "Intercompany vouchers posted together" : "Saved",
         description: mirrored
           ? "Both the linked company Receipt and Payment were committed; no second standalone voucher was created."
           : `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
@@ -202,7 +202,7 @@ export function useVoucherSaveMutation({
       }
       if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || `Failed to ${voucherIdToEdit ? "update" : "create"} voucher`,
         variant: "destructive",
       });

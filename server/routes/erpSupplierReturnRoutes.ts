@@ -162,7 +162,21 @@ async function byId(executor: DatabaseOrTransaction, companyId: number, itemId: 
     throw new ReturnError(409, "RETURN_SOURCE_UNAVAILABLE", "The source container is no longer an active offload");
   return selected;
 }
+// The return tables come from controlled migrations (migrations/controlled/20261113_001
+// and 20261114_001), which are applied explicitly per environment. Reads must not fail
+// with a 500 where they have not been applied yet: there is simply no return history.
+async function tableExists(name: string): Promise<boolean> {
+  const [row] = resultRows<{ present: string | null }>(
+    await db.execute(sql`SELECT to_regclass(${"public." + name}::text)::text AS present`)
+  );
+  return Boolean(row?.present);
+}
+async function returnTablesReady(): Promise<boolean> {
+  return (await tableExists("erp_supplier_return_batches")) && (await tableExists("erp_supplier_return_lines"));
+}
+
 async function readHistory(companyId: number) {
+  if (!(await returnTablesReady())) return [];
   return resultRows<Row>(
     await db.execute(sql`
     SELECT b.id, b.return_date::text AS "returnDate", b.file_name AS "fileName",
@@ -278,6 +292,20 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       const batchId = Number(req.params.batchId);
       if (!Number.isInteger(batchId) || batchId < 1)
         throw new ReturnError(400, "RETURN_BATCH_ID_INVALID", "Invalid batch");
+      if (!(await returnTablesReady())) throw new ReturnError(404, "RETURN_BATCH_NOT_FOUND", "Return batch not found");
+      const allocationRowsReady = await tableExists("erp_supplier_return_allocation_rows");
+      const requestedRowsSql = allocationRowsReady
+        ? sql`LEFT JOIN LATERAL (
+            SELECT json_agg(json_build_object(
+              'inputRow', ar.input_row,
+              'requestedArticleCode', ar.requested_article_code,
+              'requestedQuantity', ar.requested_quantity::text,
+              'allocatedQuantity', ar.allocated_quantity::text
+            ) ORDER BY ar.input_row) AS input_rows
+            FROM erp_supplier_return_allocation_rows ar
+            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
+          ) mapping ON TRUE`
+        : sql`LEFT JOIN LATERAL (SELECT NULL::json AS input_rows) mapping ON TRUE`;
       const rows = resultRows<Row>(
         await db.execute(sql`
         SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",
@@ -294,16 +322,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           JOIN containers c ON c.id=l.container_id AND c.company_id=${companyId}
           JOIN suppliers s ON s.id=l.supplier_id
           LEFT JOIN vouchers v ON v.id=l.voucher_id
-          LEFT JOIN LATERAL (
-            SELECT json_agg(json_build_object(
-              'inputRow', ar.input_row,
-              'requestedArticleCode', ar.requested_article_code,
-              'requestedQuantity', ar.requested_quantity::text,
-              'allocatedQuantity', ar.allocated_quantity::text
-            ) ORDER BY ar.input_row) AS input_rows
-            FROM erp_supplier_return_allocation_rows ar
-            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
-          ) mapping ON TRUE
+          ${requestedRowsSql}
          WHERE l.company_id=${companyId} AND l.batch_id=${batchId}
          ORDER BY l.id
       `)

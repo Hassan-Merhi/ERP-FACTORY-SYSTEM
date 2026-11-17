@@ -118,7 +118,7 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to close fiscal period",
       });
       setIsConfirmDialogOpen(false);
@@ -145,7 +145,11 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to reopen fiscal period" });
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: error.message || "Failed to reopen fiscal period",
+      });
     },
   });
 

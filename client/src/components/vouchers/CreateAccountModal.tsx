@@ -116,7 +116,7 @@ export function CreateAccountModal({
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || "Failed to create account",
         variant: "destructive",
       });

@@ -99,7 +99,7 @@ export default function EditSupplier() {
     },
     onSuccess: (data) => {
       toast({
-        title: "Success",
+        title: "Updated",
         description: `Supplier "${data.legalName}" updated successfully`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
@@ -110,7 +110,7 @@ export default function EditSupplier() {
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update supplier",
         variant: "destructive",
       });

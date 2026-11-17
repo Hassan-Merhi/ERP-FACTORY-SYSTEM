@@ -159,6 +159,7 @@ export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
   const [mode, setMode] = useState<ViewMode>("daily");
 
   const [selectedDate, setSelectedDate] = useState(attendanceToday);
@@ -184,7 +185,7 @@ export default function FactoryEmployeeAttendanceTab() {
     setNotesMap({});
     setApprovalOpen(false);
     setPendingApprovalRecords(null);
-  }, [selectedCompany?.id]);
+  }, [selectedCompany?.id, canEditPastWithoutPassword]);
 
   useEffect(() => {
     if (!data) return;
@@ -230,14 +231,14 @@ export default function FactoryEmployeeAttendanceTab() {
       notes: notesMap[e.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id]);
+  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id, canEditPastWithoutPassword]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (selectedCompany?.id && pendingApprovalRecords)
@@ -556,7 +557,7 @@ export default function FactoryEmployeeAttendanceTab() {
           </Card>
         </>
       )}
-      {selectedDate < attendanceToday() && (
+      {selectedDate < attendanceToday() && !canEditPastWithoutPassword && (
         <Badge variant="secondary">Earlier date — Admin approval required to save</Badge>
       )}
       <AttendanceAdminApprovalDialog
@@ -574,6 +575,7 @@ function PerEmployeeView() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
   const [startDate, setStartDate] = useState(attendanceToday);
@@ -670,7 +672,7 @@ function PerEmployeeView() {
       return { employeeId: empIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -863,7 +865,7 @@ function PerEmployeeView() {
           </CardContent>
         </Card>
       )}
-      {attendancePastDates(dates).length > 0 && (
+      {attendancePastDates(dates).length > 0 && !canEditPastWithoutPassword && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <AttendanceAdminApprovalDialog

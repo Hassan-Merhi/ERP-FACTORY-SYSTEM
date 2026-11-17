@@ -440,7 +440,7 @@ export function useRawStockRecalculate() {
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Recalculation failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -505,7 +505,7 @@ export function useRawStockRecalculate() {
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Repair failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -563,7 +563,7 @@ export function useRawStockRecalculate() {
       setShowRecomputeDialog(true);
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Preview failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -596,7 +596,7 @@ export function useRawStockRecalculate() {
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Restore failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -663,7 +663,7 @@ export function useRawStockRecalculate() {
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Repair failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -727,7 +727,7 @@ export function useRawStockRecalculate() {
       });
     },
     onError: (err: unknown) => {
-      toast({ title: "Error", description: getRawStockErrorMessage(err), variant: "destructive" });
+      toast({ title: "Fix failed", description: getRawStockErrorMessage(err), variant: "destructive" });
     },
   });
 

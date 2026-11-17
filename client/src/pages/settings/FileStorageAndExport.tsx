@@ -1,12 +1,17 @@
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Upload, Download } from "lucide-react";
 import { FileStorageTab } from "./FileStorageTab";
 import { ExportAccountsSection } from "./ExportAccountsSection";
 
+const FILE_TABS = ["files", "export-accounts"] as const;
+type FileTab = (typeof FILE_TABS)[number];
+
 export function FileStorageAndExport() {
+  const [tab, setTab] = useHubQueryState<FileTab>({ key: "tab", allowedValues: FILE_TABS, defaultValue: "files" });
   return (
     <div className="space-y-4">
-      <Tabs defaultValue="files">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as FileTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Files and exports">
             <TabsTrigger value="files" className="flex items-center gap-1.5" data-testid="tab-file-storage">

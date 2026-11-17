@@ -21,9 +21,16 @@ vi.mock("../server/auth", () => ({
 vi.mock("../server/routes/_helpers", () => {
   const passThrough = {
     single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-  };
-  return { upload: passThrough, spreadsheetUpload: passThrough, generalUpload: passThrough };
-});
+  },
+  spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
+  generalUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
+}));
 
 vi.mock("../server/lib/aiActionPermission", () => ({
   requireAIActionPermission: harness.requireAIActionPermission,

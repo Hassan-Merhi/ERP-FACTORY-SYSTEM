@@ -45,11 +45,11 @@ behavior must remain unchanged.
    original-tender vs ERP customer-account credit, manager-gated damaged
    no-restock, atomic exchange, audit trails.
 6. **Retail voucher UI:** `retailVoucherPolicy.ts`, `Vouchers.tsx`,
-   `VoucherEdit.tsx`, `VoucherEditDialog.tsx`,
+   `VoucherEdit.tsx`,
    `StockTransferOrder.tsx`, command palette/sidebar/routes.
    Source-only Phase 8 adds `retailManualVoucherBoundary.ts` before generic
    voucher handlers in `voucherRoutes.ts` for Retail-only HTTP safeguards.
-7. **Transfers:** `RetailStockOperations.tsx`,
+7. **Transfers:**
    `retailTransferWorkflowRoutes.ts`, `server/routes/pos/index.ts`,
    `retailStockOpsRoutes.ts`, `retailInventoryJournal.ts`,
    `systemAccounts.ts`, `RetailPOSPanels.tsx`.

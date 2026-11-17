@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, PackageSearch } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, PackageSearch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 interface Article {
   articleCode: string;
@@ -106,10 +108,6 @@ async function readJson<T>(path: string): Promise<T> {
   if (!response.ok) throw new Error(body.message || "Unable to read posted trip");
   return body as T;
 }
-function safeFileName(number: string) {
-  const clean = number.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 90);
-  return "Factory_ERP_PO_" + clean + ".xlsx";
-}
 export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, companyId, role, status }: Props) {
   const { toast } = useToast();
   const [supplierCode, setSupplierCode] = useState("");
@@ -188,35 +186,15 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
       if (!source || !previewResult || !ratesReviewed || !chargesReviewed) {
         throw new Error("Preview and explicitly review the ERP purchase values first");
       }
-      const response = await fetch(base + "/po-export/download", {
+      await downloadFromUrl(base + "/po-export/download", {
         method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           ...payload(), expectedExportFingerprint: previewResult.exportFingerprint,
           confirmRatesReviewed: true, confirmChargesReviewed: true,
-        }),
+        },
+        fileName: exportFileName("factory erp po " + previewResult.containerNumber, "xlsx"),
+        preferLocalFileName: true,
       });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || "ERP PO download was refused");
-      }
-      const blob = await response.blob();
-      if (!blob.size) throw new Error("The ERP PO file was empty");
-      const url = URL.createObjectURL(blob);
-      try {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = safeFileName(previewResult.containerNumber);
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      } finally {
-        // Browsers need time to start the native file save (especially Safari).
-        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      }
     },
     onSuccess: () => {
       toast({
@@ -227,7 +205,7 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
       void queryClient.invalidateQueries({ queryKey: companyQueryKey(base + "/financial-history", companyId) });
     },
     onError: error => toast({
-      title: "PO export failed", description: errorMessage(error), variant: "destructive",
+      title: "Export failed", description: errorMessage(error), variant: "destructive",
     }),
   });
   const pending = preview.isPending || download.isPending;
@@ -369,11 +347,10 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
                   <Checkbox checked={chargesReviewed} onCheckedChange={v => setChargesReviewed(v === true)} />
                   <span>I reviewed all ERP PO charges and discounts, including any unmapped Factory charges.</span>
                 </label>
-                <Button type="button" className="w-full" disabled={pending || !ratesReviewed || !chargesReviewed}
-                  onClick={() => download.mutate()} data-testid="trip-po-download-button">
-                  {download.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  {frozen ? "Re-download original PO Excel" : "Export ERP PO Excel (.xlsx)"}
-                </Button>
+                <ExportButton variant="default" className="w-full" busy={download.isPending}
+                  disabled={pending || !ratesReviewed || !chargesReviewed}
+                  label={frozen ? "Export Excel (Original ERP PO)" : "Export Excel (ERP PO)"}
+                  onClick={() => download.mutate()} data-testid="trip-po-download-button" />
               </div>
             )}
             <p className="border-t pt-3 text-[11px] text-muted-foreground">

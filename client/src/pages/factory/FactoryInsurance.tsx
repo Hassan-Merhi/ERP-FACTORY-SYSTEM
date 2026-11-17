@@ -246,85 +246,61 @@ export default function FactoryInsurance() {
 
   return (
     <div className="space-y-5 px-3 pb-6 pt-3 sm:px-6 sm:pt-5">
-      <section className="relative overflow-hidden rounded-[26px] border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_56%_14%)] dark:via-[hsl(var(--factory-hue)_64%_18%)] dark:to-[hsl(var(--factory-hue)_70%_9%)]">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-24 -top-32 h-80 w-96 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/25"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-0 right-0 h-px w-3/4 bg-gradient-to-l from-sky-400/70 via-blue-400/20 to-transparent"
-        />
-        <div className="relative space-y-5 p-4 sm:p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-400/30 bg-gradient-to-br from-sky-400 to-blue-700 text-white shadow-lg shadow-blue-600/20">
-              <Shield className="h-7 w-7" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
-                Insurance
-              </h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                Manage insurance members and generate monthly entries
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {recordChanges.allowed && canClearInsurance && (
-              <Button
-                variant="destructive"
-                className="rounded-xl border border-red-400/30 bg-red-600 text-white shadow-sm shadow-red-700/15 hover:bg-red-700"
-                onClick={() => setShowClearDialog(true)}
-                data-testid="button-clear-all-insurance"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear All
-              </Button>
-            )}
-            {recordChanges.allowed && (
-              <>
-                <Button
-                  variant="outline"
-                  className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
-                  onClick={() => setShowImportDialog(true)}
-                  data-testid="button-import-insurance"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-1" />
-                  Import Excel
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
-                  onClick={() => setShowExtraCharges(true)}
-                  data-testid="button-extra-charges"
-                >
-                  <Receipt className="h-4 w-4 mr-1" />
-                  Add Extra Charges
-                </Button>
-                <Button
-                  className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600"
-                  onClick={() => setShowGenDialog(true)}
-                  data-testid="button-generate-entries"
-                >
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Generate Entries
-                </Button>
-              </>
-            )}
-            {recordChanges.canCreate("POST", "/api/insurance/members") && (
-              <Button
-                variant="outline"
-                className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
-                onClick={() => setShowAddDialog(true)}
-                data-testid="button-add-member"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Member
-              </Button>
-            )}
-          </div>
-        </div>
-      </section>
+      {/* Payroll hub "Insurance" tab: the hub PageHeader titles the page; keep the actions only. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {recordChanges.allowed && canClearInsurance && (
+          <Button
+            variant="destructive"
+            className="rounded-xl border border-red-400/30 bg-red-600 text-white shadow-sm shadow-red-700/15 hover:bg-red-700"
+            onClick={() => setShowClearDialog(true)}
+            data-testid="button-clear-all-insurance"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Clear All
+          </Button>
+        )}
+        {recordChanges.allowed && (
+          <>
+            <Button
+              variant="outline"
+              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+              onClick={() => setShowImportDialog(true)}
+              data-testid="button-import-insurance"
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Import Excel
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+              onClick={() => setShowExtraCharges(true)}
+              data-testid="button-extra-charges"
+            >
+              <Receipt className="h-4 w-4 mr-1" />
+              Add Extra Charges
+            </Button>
+            <Button
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600"
+              onClick={() => setShowGenDialog(true)}
+              data-testid="button-generate-entries"
+            >
+              <DollarSign className="h-4 w-4 mr-1" />
+              Generate Entries
+            </Button>
+          </>
+        )}
+        {recordChanges.canCreate("POST", "/api/insurance/members") && (
+          <Button
+            variant="outline"
+            className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
+            onClick={() => setShowAddDialog(true)}
+            data-testid="button-add-member"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Member
+          </Button>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

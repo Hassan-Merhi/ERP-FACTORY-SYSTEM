@@ -5,6 +5,8 @@ import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,6 @@ import {
   Boxes,
   CalendarDays,
   ChartNoAxesColumnIncreasing,
-  Download,
   FilterX,
   MapPin,
   Package,
@@ -80,7 +81,10 @@ const csvSafe = (value: string | number) => {
 };
 function exportCsv(rows: (string | number)[][]) {
   const csv = rows.map((row) => row.map(csvSafe).join(",")).join("\r\n");
-  downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "factory-stock-query-sales.csv");
+  downloadBlob(
+    new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+    exportFileName("factory stock query sales", "csv")
+  );
 }
 const baseSelect =
   "h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
@@ -263,7 +267,8 @@ export default function FactoryStockQueryWorkspace() {
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             Refresh
           </Button>
-          <Button
+          <ExportButton
+            kind="csv"
             variant="outline"
             size="sm"
             onClick={() =>
@@ -293,9 +298,7 @@ export default function FactoryStockQueryWorkspace() {
               ])
             }
             disabled={!sales.length}
-          >
-            <Download className="mr-1.5 h-4 w-4" /> Export sales CSV
-          </Button>
+          />
           <span className="ml-auto text-xs text-muted-foreground">
             Inventory is current; date, customer and container filters apply to sales only.
           </span>

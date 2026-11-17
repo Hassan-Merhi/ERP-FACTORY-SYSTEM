@@ -119,7 +119,7 @@ export function StockReportSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/stock-settings"] });
       toast({ title: "Stock report settings saved" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const sendNow = useMutation({

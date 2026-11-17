@@ -16,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "./StatusBadge";
 import type { SessionSummary } from "../types";
 import { fmtTime } from "../utils";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export function SessionHistoryCard({
   invoiceId,
@@ -30,30 +33,42 @@ export function SessionHistoryCard({
   onViewSession: (sessionId: number) => void;
   onResumeSession: (sessionId: number) => void;
 }) {
+  const { toast } = useToast();
+  const downloadExport = async (url: string, fileName: string) => {
+    try {
+      await downloadFromUrl(url, { fileName });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-medium">Loading Sessions</CardTitle>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
+            <ExportButton
               size="sm"
-              onClick={() => window.open(`/api/factory/invoices/${invoiceId}/loading-report/export/excel`, "_blank")}
+              label="Export Excel (Full Report)"
+              onClick={() =>
+                void downloadExport(
+                  `/api/factory/invoices/${invoiceId}/loading-report/export/excel`,
+                  exportFileName(`invoice ${invoiceId} loading report`, "xlsx")
+                )
+              }
               data-testid="button-export-report-excel"
-            >
-              <FileSpreadsheet className="h-4 w-4 mr-1" />
-              Full Report Excel
-            </Button>
-            <Button
-              variant="outline"
+            />
+            <ExportButton
+              kind="pdf"
               size="sm"
+              label="Export PDF (Full Report)"
               onClick={() => window.open(`/api/factory/invoices/${invoiceId}/loading-report/export/pdf`, "_blank")}
               data-testid="button-export-report-pdf"
-            >
-              <FileDown className="h-4 w-4 mr-1" />
-              Full Report PDF
-            </Button>
+            />
           </div>
         </div>
       </CardHeader>
@@ -120,9 +135,13 @@ export function SessionHistoryCard({
                       <Button
                         variant="ghost"
                         size="icon"
-                        title="Export session Excel"
+                        title="Export Excel (Session)"
+                        aria-label="Export Excel (Session)"
                         onClick={() =>
-                          window.open(`/api/factory/invoice-loading-sessions/${s.id}/export/excel`, "_blank")
+                          void downloadExport(
+                            `/api/factory/invoice-loading-sessions/${s.id}/export/excel`,
+                            exportFileName(`loading session ${s.id}`, "xlsx")
+                          )
                         }
                         data-testid={`button-session-excel-${s.id}`}
                       >
@@ -131,7 +150,8 @@ export function SessionHistoryCard({
                       <Button
                         variant="ghost"
                         size="icon"
-                        title="Export session PDF"
+                        title="Export PDF (Session)"
+                        aria-label="Export PDF (Session)"
                         onClick={() =>
                           window.open(`/api/factory/invoice-loading-sessions/${s.id}/export/pdf`, "_blank")
                         }

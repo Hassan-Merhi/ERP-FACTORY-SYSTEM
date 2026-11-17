@@ -78,15 +78,14 @@ vi.mock("../server/auth", () => ({
   // Wave 18 (B): bank PUT and DELETE are Admin/Owner (route-level requireRole).
   requireRole: () => (_req: any, _res: any, next: any) => next(),
 }));
-vi.mock("../server/routes/_helpers", () => {
-  const passThrough = { single: () => (_req: any, _res: any, next: any) => next() };
-  return {
-    upload: passThrough,
-    spreadsheetUpload: passThrough,
-    generalUpload: passThrough,
-    logAudit: harness.logAudit,
-  };
-});
+vi.mock("../server/routes/_helpers", () => ({
+  upload: { single: () => (_req: any, _res: any, next: any) => next() },
+  logAudit: harness.logAudit,
+  spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
+}));
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));
 vi.mock("../server/lib/httpHandlers", () => ({
   getErrorMessage: (error: any) => error?.message || String(error),
@@ -101,6 +100,7 @@ vi.mock("drizzle-orm", () => ({
   sql: Object.assign((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }), {
     raw: (text: string) => ({ raw: text }),
     join: (parts: unknown[]) => ({ parts }),
+    identifier: (name: string) => ({ identifier: name }),
   }),
   ne: (column: unknown, value: unknown) => ({ type: "ne", column, value }),
   isNull: (column: unknown) => ({ type: "isNull", column }),

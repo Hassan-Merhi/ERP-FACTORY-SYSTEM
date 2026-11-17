@@ -13,6 +13,7 @@ import {
   Printer,
   Upload,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -285,10 +286,16 @@ export default function RetailInventory() {
     }
     return (
       <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6 md:pb-24">
-        <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/retail/inventory")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
-          </Button>
+        <PageHeader
+          title={detailProduct.name}
+          meta={
+            <span>
+              {detailProduct.brand.name}
+              {detailProduct.category ? ` · ${detailProduct.category}` : ""}
+            </span>
+          }
+          backTarget="/retail/inventory"
+        >
           <Button
             onClick={() => {
               if (!recordChanges.allowed) return;
@@ -301,22 +308,13 @@ export default function RetailInventory() {
           >
             <Pencil className="mr-2 h-4 w-4" /> Edit product
           </Button>
-        </div>
+        </PageHeader>
 
-        <div className="flex flex-wrap items-start gap-5">
-          <ProductImageGallery
-            product={detailProduct}
-            className="max-w-full"
-            imageClassName="h-36 w-36 rounded-lg border sm:h-44 sm:w-44"
-          />
-          <div>
-            <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
-            <p className="mt-1">
-              {detailProduct.brand.name}
-              {detailProduct.category ? ` · ${detailProduct.category}` : ""}
-            </p>
-          </div>
-        </div>
+        <ProductImageGallery
+          product={detailProduct}
+          className="max-w-full"
+          imageClassName="h-36 w-36 rounded-lg border sm:h-44 sm:w-44"
+        />
 
         <Card>
           <CardHeader>
@@ -359,50 +357,43 @@ export default function RetailInventory() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 p-4 pb-24 md:p-6 md:pb-24">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Boxes className="h-6 w-6" />
-            <h1 className="text-2xl font-bold">Retail Inventory</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose a location, open a category, then expand a brand to browse its items.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* Create Only cannot import stock; View Only sees it disabled. */}
-          {!recordChanges.isCreateOnly && (
-            <Button
-              onClick={() => setSupplierImportOpen(true)}
-              disabled={!recordChanges.allowed}
-              title={recordChanges.reason ?? undefined}
-            >
-              <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
-            </Button>
-          )}
+    <div className="mx-auto max-w-[1700px] space-y-6 p-4 pb-24 md:p-6 md:pb-24">
+      <PageHeader
+        title="Retail Inventory"
+        subtitle="Browse and manage retail products, variants, and stock."
+        icon={<Boxes className="h-6 w-6" />}
+      >
+        {/* Create Only cannot import stock; View Only sees it disabled. */}
+        {!recordChanges.isCreateOnly && (
           <Button
-            variant="outline"
-            onClick={() => {
-              setEditingProduct(null);
-              setEditorOpen(true);
-            }}
+            onClick={() => setSupplierImportOpen(true)}
+            disabled={!recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
           >
-            <Plus className="mr-2 h-4 w-4" /> Add Product
+            <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
           </Button>
-        </div>
-      </div>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => {
+            setEditingProduct(null);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Add Product
+        </Button>
+      </PageHeader>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-5 sm:p-4">
         <Input
           placeholder="Search style, brand, barcode, SKU, color or size…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="sm:col-span-2 lg:col-span-2"
+          className="h-11 rounded-xl bg-background/60 sm:col-span-2 lg:col-span-2"
           aria-label="Search retail inventory"
         />
         <select
-          className="h-10 rounded-md border bg-background px-2 text-sm"
+          className="h-11 rounded-xl border border-border/70 bg-background/60 px-3 text-sm"
           aria-label="Filter by color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
@@ -442,7 +433,7 @@ export default function RetailInventory() {
 
       <nav
         aria-label="Retail inventory breadcrumbs"
-        className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-2"
+        className="flex flex-wrap items-center gap-1 rounded-xl border border-border/70 bg-card/70 p-2 shadow-sm"
       >
         <Button
           variant={!locationId ? "secondary" : "ghost"}
@@ -566,7 +557,7 @@ export default function RetailInventory() {
         </section>
       ) : (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold" data-no-translate>
+          <h2 className="text-xl font-semibold tracking-tight" data-no-translate>
             Brands in {selectedCategory?.name ?? (categoryKey === "__uncategorized__" ? "Uncategorized" : categoryKey)}
           </h2>
           {!selectedCategory || selectedCategory.brands.length === 0 ? (
@@ -576,10 +567,10 @@ export default function RetailInventory() {
           ) : (
             <div className="space-y-3">
               {selectedCategory.brands.map((brand) => (
-                <div key={brand.key} className="overflow-hidden rounded-lg border bg-card">
+                <div key={brand.key} className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm">
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                    className="flex w-full items-center gap-4 bg-gradient-to-r from-primary/10 via-card to-card p-4 text-left transition-colors hover:from-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5"
                     aria-expanded={expandedBrandKey === brand.key}
                     onClick={() => {
                       setExpandedBrandKey((current) => (current === brand.key ? null : brand.key));
@@ -592,13 +583,13 @@ export default function RetailInventory() {
                     ) : (
                       <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     )}
-                    <span className="flex-1 truncate font-semibold" data-no-translate>
+                    <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight" data-no-translate>
                       {brand.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">{brand.productCount} products</span>
+                    <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{brand.productCount} products</span>
                   </button>
                   {expandedBrandKey === brand.key && (
-                    <div className="space-y-4 border-t p-3 sm:p-4">
+                    <div className="space-y-4 border-t border-border/60 p-3 sm:p-5">
                       {isLoading ? (
                         <p className="p-6 text-sm text-muted-foreground">Loading products…</p>
                       ) : catalogFailed ? (

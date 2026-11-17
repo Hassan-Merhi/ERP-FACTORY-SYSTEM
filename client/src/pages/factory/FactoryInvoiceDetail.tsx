@@ -7,14 +7,13 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { factoryRecordChangeAccess } from "./factoryRecordChangeAccess";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  FileDown,
   FileSpreadsheet,
+  FileText,
   ArrowLeft,
   Trash2,
   ClipboardCheck,
   CheckCircle,
   RefreshCw,
-  Container,
   Pencil,
   RotateCcw,
   Hammer,
@@ -25,6 +24,7 @@ import {
   Truck,
   ExternalLink,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -156,22 +156,16 @@ export default function FactoryInvoiceDetail() {
 
   return (
     <div className="flex flex-col h-full p-6 overflow-y-auto">
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(backTarget)} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-invoice-number">
-              {order.invoiceNumber || `Order #${order.id}`}
-            </h1>
+      <PageHeader
+        title={<span data-testid="text-invoice-number">{order.invoiceNumber || `Order #${order.id}`}</span>}
+        backTarget={backTarget}
+        meta={
+          <>
             {getStatusBadge(order.status)}
-          </div>
-          <p className="text-muted-foreground text-sm mt-1" data-testid="text-order-date">
-            {order.orderDate ? formatDisplayDate(order.orderDate) : "-"}
-          </p>
-        </div>
-      </div>
+            <span data-testid="text-order-date">{order.orderDate ? formatDisplayDate(order.orderDate) : "-"}</span>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex flex-wrap gap-6">
@@ -317,24 +311,24 @@ export default function FactoryInvoiceDetail() {
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
               <DropdownMenuItem onClick={handleExportExcel} data-testid="button-export-excel">
                 <FileSpreadsheet className="h-4 w-4" />
-                Download Excel
+                Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="button-export-excel-no-charges">
                 <FileSpreadsheet className="h-4 w-4" />
-                Download Excel (No Charges)
+                Export Excel (No Charges)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportPdf} data-testid="button-export-pdf">
-                <FileDown className="h-4 w-4" />
-                Download PDF
+                <FileText className="h-4 w-4" />
+                Export PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="button-export-pdf-no-charges">
-                <FileDown className="h-4 w-4" />
-                Download PDF (No Charges)
+                <FileText className="h-4 w-4" />
+                Export PDF (No Charges)
               </DropdownMenuItem>
               {isAdmin && (
                 <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="button-export-loading-status">
-                  <Container className="h-4 w-4" />
-                  Loading Status
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export Excel (Loading Status)
                 </DropdownMenuItem>
               )}
 

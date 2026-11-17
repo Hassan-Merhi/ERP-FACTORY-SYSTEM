@@ -1,3 +1,4 @@
+import { exportFileName } from "@/lib/exportFile";
 import type { MarketRow, ProfitDirectionFilter } from "./itemMarketAnalysisParts";
 
 type MarketStatus = MarketRow["marketStatus"];
@@ -80,15 +81,6 @@ function purchaseAmount(value: number | null, currencies: string[]): ExcelValue 
 
 function printableStatus(status: MarketStatus): string {
   return status === "no_sales" ? "No sales" : status === "strong" ? "Strong" : status === "watch" ? "Watch" : "Losing";
-}
-
-function safeFilePart(value: string): string {
-  return (
-    value
-      .replace(/[^a-zA-Z0-9_-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 36) || "all"
-  );
 }
 
 /** Export the complete filtered data returned by the report; never use the UI's 250-row page slice. */
@@ -386,15 +378,11 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     })
   );
 
-  const filename =
-    "item_market_analysis_" +
-    safeFilePart(
-      options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + "_companies"
-    ) +
-    "_" +
-    (options.startDate || "all") +
-    "_to_" +
-    (options.endDate || "all") +
-    ".xlsx";
+  const companyPart =
+    options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + " companies";
+  const filename = exportFileName(`item market analysis ${companyPart}`, "xlsx", {
+    from: options.startDate,
+    to: options.endDate,
+  });
   await writeFile(workbook, filename);
 }

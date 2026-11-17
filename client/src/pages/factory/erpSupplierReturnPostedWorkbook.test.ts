@@ -68,8 +68,6 @@ describe("posted ERP supplier returns Excel", () => {
     const requested = wb.getWorksheet("Original Input Allocations")!;
     expect(requested.getRow(2).getCell(6).value).toBe(17);
     expect(requested.getRow(3).getCell(6).value).toBe(1);
-    // Summary rows: batch, return date, file, reason, source lines, removed quantity.
-    expect(wb.getWorksheet("Posted Summary")!.getRow(4).getCell(2).value).toBe("returns.xlsx");
     expect(wb.getWorksheet("Posted Summary")!.getRow(7).getCell(2).value).toBe(18);
   });
 

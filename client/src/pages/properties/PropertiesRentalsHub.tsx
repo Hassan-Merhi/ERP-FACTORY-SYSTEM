@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
-import { Building2, ClipboardList, ArrowLeftRight } from "lucide-react";
+import { Building2, ClipboardList, ArrowLeftRight, Store } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthMe } from "@shared/apiTypes";
@@ -56,7 +56,7 @@ export default function PropertiesRentalsHub() {
               Warehouses
             </TabsTrigger>
             <TabsTrigger value="shops" data-testid="tab-properties-rentals-shops">
-              <Building2 className="mr-2 h-4 w-4" />
+              <Store className="mr-2 h-4 w-4" />
               Shops
             </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-properties-rentals-payments">

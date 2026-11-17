@@ -4,6 +4,8 @@ import type {
   ProductionTargetBonusReport,
 } from "@shared/productionTargetBonusReporting";
 import { bonusMoneyToCents, buildProductionTargetBonusReport } from "@shared/productionTargetBonusReporting";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 // Use typed text cells for source-controlled names/references; never let an
 // external worker name become a spreadsheet formula.
@@ -329,15 +331,5 @@ export async function exportProductionBonusHistoryExcel(report: ProductionTarget
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Production_Bonuses_" + report.start + "_to_" + report.end + ".xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
+  downloadBlob(blob, exportFileName("production bonuses", "xlsx", { from: report.start, to: report.end }));
 }

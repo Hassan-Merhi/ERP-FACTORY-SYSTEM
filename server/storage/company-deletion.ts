@@ -124,7 +124,12 @@ export class CompanyHasHistoryError extends Error {
   }
 }
 
-export type CompanyDeletionActor = { userId?: string | null; username?: string | null };
+export type CompanyDeletionActor = {
+  userId?: string | null;
+  username?: string | null;
+  forceDeleteWithHistory?: boolean;
+  confirmedCompanyCode?: string;
+};
 
 async function findCompanyHistory(
   client: PoolClient,
@@ -495,9 +500,8 @@ function mapDeletionError(error: unknown): Error {
 /**
  * Permanently removes one EMPTY company and its configuration rows.
  *
- * Wave 12 (owner decision 4): refused with CompanyHasHistoryError (409) while
- * the company has any voucher, stock, fiscal closure or non-zero opening or
- * balance (COMPANY_HISTORY_CHECKS); such a company is deactivated instead.
+ * Companies with history are refused unless an authorized administrator explicitly
+ * supplies a force-delete confirmation matching the inactive company code.
  * The deletion is audited in the same transaction, before anything is
  * removed, and audit_log is never deleted (RETAINED_TABLES).
  *
@@ -529,7 +533,15 @@ export async function deleteCompany(id: number, actor: CompanyDeletionActor = {}
     const { columnsByTable, foreignKeys } = await loadSchemaMetadata(client);
 
     const history = await findCompanyHistory(client, columnsByTable, id);
-    if (history.length > 0) throw new CompanyHasHistoryError(history);
+    if (history.length > 0) {
+      if (!actor.forceDeleteWithHistory) throw new CompanyHasHistoryError(history);
+      if (company.rows[0].active !== false) {
+        throw new Error("Deactivate this company before permanently deleting its history.");
+      }
+      if (!actor.confirmedCompanyCode || actor.confirmedCompanyCode !== String(company.rows[0].code)) {
+        throw new Error("Enter the exact company code to authorize deletion of its accounting history.");
+      }
+    }
 
     // Audited first, in this transaction: if the audit row cannot be written
     // nothing is deleted. It keeps the company id and survives the delete.
@@ -541,7 +553,12 @@ export async function deleteCompany(id: number, actor: CompanyDeletionActor = {}
         String(actor.username || "system"),
         id,
         String(company.rows[0].code ?? company.rows[0].name ?? id),
-        JSON.stringify({ company: { old: company.rows[0] }, permanentDelete: { new: true } }),
+        JSON.stringify({
+          company: { old: company.rows[0] },
+          permanentDelete: { new: true },
+          forcedHistoryDeletion: { new: history.length > 0 },
+          historyBlockers: { new: history },
+        }),
       ]
     );
     const { conditions, nullableReferences } = buildDeletionConditions(columnsByTable, foreignKeys);

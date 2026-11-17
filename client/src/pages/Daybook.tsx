@@ -664,13 +664,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
       refreshBalances();
-      toast({
-        title: "Success",
-        description: linked
-          ? "Linked POs and original vouchers deleted in both companies. No reversals created."
-          : "Voucher deleted",
-      });
-      setVoucherToDelete(null);
+      toast({ title: "Deleted", description: "Voucher deleted" });
       setDeleteDialogOpen(false);
     },
     onError: (error: Error) => {
@@ -687,7 +681,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     onSuccess: () => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
       refreshBalances();
-      toast({ title: "Success", description: "Voucher updated" });
+      toast({ title: "Updated", description: "Voucher updated" });
       setEditDialogOpen(false);
     },
   });

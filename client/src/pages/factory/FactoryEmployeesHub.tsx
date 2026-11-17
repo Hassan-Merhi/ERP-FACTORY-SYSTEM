@@ -7,6 +7,8 @@ import FactoryEmployeeAttendanceTab from "@/pages/factory/FactoryEmployeeAttenda
 import FactoryEmployeeAdvancesTab from "@/pages/factory/FactoryEmployeeAdvancesTab";
 import FactoryEmployeeBonusesTab from "@/pages/factory/FactoryEmployeeBonusesTab";
 import FactoryEmployeeWithdrawalsTab from "@/pages/factory/FactoryEmployeeWithdrawalsTab";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -26,25 +28,31 @@ const TAB_OPTIONS: { value: TabValue; label: string; icon: React.ElementType; hi
 export default function FactoryEmployeesHub() {
   const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : TAB_OPTIONS.map((tab) => tab.hiddenKey);
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : TAB_OPTIONS.map((tab) => tab.hiddenKey);
   const visibleOptions = TAB_OPTIONS.filter((option) => !hiddenTabs.includes(option.hiddenKey));
   const visibleValues = visibleOptions.map((option) => option.value);
   const defaultValue: TabValue = visibleValues[0] ?? "employees";
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [tab, setTab] = useHubQueryState<TabValue>({
     key: "tab",
-    allowedValues: visibleValues,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleValues : TAB_OPTIONS.map((option) => option.value),
     knownValues: TAB_OPTIONS.map((option) => option.value),
     defaultValue,
   });
 
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
+
   if (visibleOptions.length === 0) {
-    return <div className="p-4 text-sm text-muted-foreground">No Employee tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   const effectiveTab = visibleValues.includes(tab) ? tab : defaultValue;

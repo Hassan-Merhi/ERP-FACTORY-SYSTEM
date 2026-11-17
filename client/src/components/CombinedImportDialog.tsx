@@ -60,7 +60,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error.message || "Failed to import prices",
         variant: "destructive",
       });
@@ -77,7 +77,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     },
     onSuccess: (result) => {
       toast({
-        title: "Success",
+        title: "Imported",
         description: result.message || "Opening balances imported successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
@@ -90,7 +90,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error.message || "Failed to import opening balances",
         variant: "destructive",
       });
@@ -124,7 +124,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
   const handleImportPrices = async () => {
     if (!pricesFile) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a file",
         variant: "destructive",
       });
@@ -133,7 +133,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
     if (!selectedLocation) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a location",
         variant: "destructive",
       });
@@ -153,7 +153,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (data.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No data found in file",
           variant: "destructive",
         });
@@ -171,7 +171,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (prices.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No valid barcode entries found",
           variant: "destructive",
         });
@@ -182,7 +182,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
       importMutation.mutate(prices);
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: getErrorDetails(error).message || "Failed to read file",
         variant: "destructive",
       });
@@ -216,7 +216,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
   const handleImportOpening = async () => {
     if (!openingFile) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a file",
         variant: "destructive",
       });
@@ -237,7 +237,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (data.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No data found in file",
           variant: "destructive",
         });
@@ -256,7 +256,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (openingBalances.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No valid barcode entries found",
           variant: "destructive",
         });
@@ -267,7 +267,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
       openingBalanceMutation.mutate(openingBalances);
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: getErrorDetails(error).message || "Failed to read file",
         variant: "destructive",
       });

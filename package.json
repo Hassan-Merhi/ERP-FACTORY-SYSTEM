@@ -35,6 +35,7 @@
     "audit:inventory-contracts:payloads": "node scripts/audit-program6c-inventory-payloads.mjs --json",
     "audit:inventory-contracts:validate": "node scripts/validate-program6c-inventory-classifications.mjs",
     "audit:query-risks": "node scripts/audit-program6d-database-query-risks.mjs --json",
+    "check:raw-sql": "node scripts/verify-raw-sql-allowlist.mjs",
     "audit:query-risks:review": "node scripts/run-program6d-query-review.mjs",
     "audit:query-risks:validate": "node scripts/validate-program6d-query-classifications.mjs",
     "audit:source-text-assertions": "node scripts/audit-source-text-assertions.mjs",
@@ -227,7 +228,7 @@
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.5.13",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "5.0.5",
+    "@vitest/coverage-v8": "5.1.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
@@ -241,7 +242,7 @@
     "tsx": "^4.23.13",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.1.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

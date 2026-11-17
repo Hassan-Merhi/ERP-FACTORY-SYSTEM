@@ -235,7 +235,7 @@ export function PosWhatsAppSection() {
       setShowToken(false);
       toast({ title: "POS WhatsApp API saved" });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const saveGroupMutation = useMutation({
@@ -261,7 +261,7 @@ export function PosWhatsAppSection() {
       });
       setDialogOpen(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   // ── Handlers ──
@@ -599,7 +599,9 @@ export function PosWhatsAppSection() {
                 </button>
                 {chatsError && (
                   <p className="text-center text-destructive text-sm py-3 px-3">
-                    Could not load WhatsApp groups: {chatsErrorDetail instanceof Error ? chatsErrorDetail.message : "Connection failed"}. Please refresh.
+                    Could not load WhatsApp groups:{" "}
+                    {chatsErrorDetail instanceof Error ? chatsErrorDetail.message : "Connection failed"}. Please
+                    refresh.
                   </p>
                 )}
                 {!chatsError && filteredChats.length === 0 && (
