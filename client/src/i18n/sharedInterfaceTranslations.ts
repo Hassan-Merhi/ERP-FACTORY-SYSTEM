@@ -427,6 +427,9 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Shared period filter: open-ended custom ranges.
+  { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },
+  { en: "End date only", ar: "تاريخ النهاية فقط", fr: "Date de fin uniquement" },
   { en: "Loading settings…", ar: "جارٍ تحميل الإعدادات…", fr: "Chargement des paramètres…" },
   { en: "Loading locations…", ar: "جارٍ تحميل المواقع…", fr: "Chargement des emplacements…" },
   // Default texts of the shared loading and error states (components/ui/page-state).

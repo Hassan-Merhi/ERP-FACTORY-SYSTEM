@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -482,26 +483,19 @@ export default function FactoryAttendance() {
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="space-y-1">
                         <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          From
+                          Period
                         </Label>
-                        <Input
-                          type="date"
-                          data-testid="input-range-start"
-                          value={rangeStart}
-                          onChange={(e) => setRangeStart(e.target.value)}
-                          className="w-40 rounded-xl bg-background/70"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          To
-                        </Label>
-                        <Input
-                          type="date"
-                          data-testid="input-range-end"
-                          value={rangeEnd}
-                          onChange={(e) => setRangeEnd(e.target.value)}
-                          className="w-40 rounded-xl bg-background/70"
+                        <PeriodFilter
+                          value={{
+                            fromDate: rangeStart,
+                            toDate: rangeEnd,
+                            preset: rangeStart || rangeEnd ? "custom" : "all_time",
+                          }}
+                          onChange={(v) => {
+                            setRangeStart(v.fromDate);
+                            setRangeEnd(v.toDate);
+                          }}
+                          data-testid="attendance-range-period"
                         />
                       </div>
                       <ExportButton
