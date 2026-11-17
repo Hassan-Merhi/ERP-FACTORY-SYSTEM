@@ -209,6 +209,7 @@ describe("supplierLedgerToExportRows", () => {
       "Doc Number": "P-99",
       Type: "Purchase",
       Description: "rice",
+      Destination: "Unassigned",
       Currency: "LBP",
       "Native Debit": "120000",
       "Native Credit": "30000",

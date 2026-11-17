@@ -26,9 +26,9 @@ export default function Containers() {
   const { formatAmount } = useCurrencyContext();
   const [, setLocation] = useLocation();
 
+  const isProperties = selectedCompany?.companyType === "properties";
   const isSupplierPartner = selectedCompany?.companyType === "supplier_partner";
   const isFactory = selectedCompany?.companyType === "factory" || selectedCompany?.companyType === "factory_v2";
-  const canSyncAllVouchers = selectedCompany?.companyType === "erp";
 
   const {
     allContainers,
@@ -36,6 +36,8 @@ export default function Containers() {
     spContainersList,
     suppliers,
     isLoading,
+    containersError,
+    refetchContainers,
     spContainersLoading,
     hideContainerCosts,
   } = useContainerQueries(selectedCompany, isSupplierPartner, isFactory);
@@ -71,6 +73,20 @@ export default function Containers() {
     return <ContainerLoadingState />;
   }
 
+  if (containersError && !isSupplierPartner) {
+    return (
+      <div role="alert" className="rounded-lg border border-destructive/40 p-6 space-y-3">
+        <p className="font-semibold">Cannot load containers for the selected company</p>
+        <p className="text-sm text-muted-foreground">
+          {containersError instanceof Error ? containersError.message : "The container request failed"}
+        </p>
+        <button type="button" className="underline text-sm" onClick={() => void refetchContainers()}>
+          Retry loading containers
+        </button>
+      </div>
+    );
+  }
+
   if (isSupplierPartner) {
     return (
       <ContainerSpView
@@ -88,13 +104,14 @@ export default function Containers() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader title="Container Tracking" subtitle="Track containers and manage offloading">
+      <PageHeader
+        title={isProperties ? "Containers" : "Container Tracking"}
+        subtitle="Track containers and manage offloading"
+      >
         <ContainerToolbar
           onExportExcel={importExport.exportToExcel}
           onExportAllFull={importExport.exportAllContainersFull}
-          onSyncAll={() => syncAll.setSyncAllConfirmOpen(true)}
-          isSyncing={syncAll.syncAllMutation.isPending}
-          showSyncAll={canSyncAllVouchers && canChangeExistingRecords}
+          propertiesMode={isProperties}
         />
       </PageHeader>
 
@@ -164,6 +181,7 @@ export default function Containers() {
       <ActiveContainersTable
         containers={containers}
         allContainers={allContainers}
+        propertiesMode={isProperties}
         isLoading={isLoading}
         hideContainerCosts={hideContainerCosts}
         formatDisplayDate={formatDisplayDate}

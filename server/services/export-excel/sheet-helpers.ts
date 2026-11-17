@@ -84,15 +84,20 @@ export function addSheet(wb: ExcelJS.Workbook, name: string, rows: Record<string
     return;
   }
 
-  // Collect all unique keys across first 200 rows (handles sparse rows)
+  // Discover the complete deterministic union of keys, including columns that
+  // first appear after row 200. Scan in-place; do not duplicate large datasets.
+  // This is intentionally kept separate from branded human-readable reports:
+  // full-company data exports must retain their first-row machine headers.
   const keysSet = new Set<string>();
-  const sample = rows.slice(0, 200);
-  for (const row of sample) {
+  for (const row of rows) {
     if (row && typeof row === "object") {
       for (const key of Object.keys(row)) keysSet.add(key);
     }
   }
   const keys = Array.from(keysSet);
+  if (keys.length > 16_384) {
+    throw new Error("Excel sheet has more than 16,384 columns: " + name);
+  }
 
   const columns = keys.map((key) => ({
     key,

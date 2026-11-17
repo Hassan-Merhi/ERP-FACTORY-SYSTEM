@@ -124,7 +124,12 @@ export class CompanyHasHistoryError extends Error {
   }
 }
 
-export type CompanyDeletionActor = { userId?: string | null; username?: string | null; forceDeleteWithHistory?: boolean; confirmedCompanyCode?: string };
+export type CompanyDeletionActor = {
+  userId?: string | null;
+  username?: string | null;
+  forceDeleteWithHistory?: boolean;
+  confirmedCompanyCode?: string;
+};
 
 async function findCompanyHistory(
   client: PoolClient,
@@ -548,7 +553,12 @@ export async function deleteCompany(id: number, actor: CompanyDeletionActor = {}
         String(actor.username || "system"),
         id,
         String(company.rows[0].code ?? company.rows[0].name ?? id),
-        JSON.stringify({ company: { old: company.rows[0] }, permanentDelete: { new: true }, forcedHistoryDeletion: { new: history.length > 0 }, historyBlockers: { new: history } }),
+        JSON.stringify({
+          company: { old: company.rows[0] },
+          permanentDelete: { new: true },
+          forcedHistoryDeletion: { new: history.length > 0 },
+          historyBlockers: { new: history },
+        }),
       ]
     );
     const { conditions, nullableReferences } = buildDeletionConditions(columnsByTable, foreignKeys);

@@ -55,6 +55,7 @@ import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 export default function GITContainers({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: user, isLoading: userLoading } = useQuery(authenticatedUserQueryOptions());
   const { selectedCompany } = useCompany();
+  const isProperties = selectedCompany?.companyType === "properties";
   const { toast } = useToast();
 
   const [allCompanies, setAllCompanies] = useState(false);
@@ -118,11 +119,12 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const isAllowed = allowedRoles.includes(effectiveRole);
   const isTester = effectiveRole === "ERP Tester";
   const isViewOnly = isExistingRecordReadOnlyRole(effectiveRole);
-  const restrictedToCurrentCompany = isTester || isViewOnly;
+  const restrictedToCurrentCompany = isTester || isViewOnly || isProperties;
 
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
-    companyIdentity: allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
-    allCompanies,
+    companyIdentity:
+      !isProperties && allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
+    allCompanies: isProperties ? false : allCompanies,
     pageSize: CONTAINER_CHUNK_SIZE,
     companyFilter,
     containerFilters,
@@ -189,7 +191,11 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     setDrawerContainer(c);
     setDrawerOpen(true);
     try {
-      const detail = await loadContainerDetail(c.id, c.companyId);
+      const detail = await loadContainerDetail(
+        c.id,
+        data?.mode === "single" && data.companyId ? data.companyId : c.companyId,
+        data?.mode === "all"
+      );
       setDrawerContainer((current) => (current?.id === c.id ? detail : current));
     } catch (detailError) {
       toast({
@@ -711,6 +717,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             colVis={colVis}
             sessionCompanyId={sessionCompanyId}
             readOnly={isViewOnly}
+            propertiesMode={isProperties}
             onOpenDrawer={openDrawer}
             printRef={printRef}
           />
