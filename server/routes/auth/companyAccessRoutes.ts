@@ -180,23 +180,25 @@ export function registerCompanyAccessRoutes(app: Express) {
       if (req.user.role === "Developer") {
         const allCompanies = await storage.getAllCompanies();
         return res.json(
-          allCompanies.filter((company) => company.active).map((company) => ({
-            id: -1,
-            userId: req.user!.id,
-            companyId: company.id,
-            role: "Developer",
-            assignedLocationId: null,
-            cashAccountId: null,
-            posStation: null,
-            canSellNegativeStock: true,
-            daybookEditDays: 9999,
-            canAccessCustomers: true,
-            createdAt: new Date(),
-            companyCode: company.code,
-            companyName: company.name,
-            companyActive: company.active,
-            companyType: company.companyType || "erp",
-          }))
+          allCompanies
+            .filter((company) => company.active)
+            .map((company) => ({
+              id: -1,
+              userId: req.user!.id,
+              companyId: company.id,
+              role: "Developer",
+              assignedLocationId: null,
+              cashAccountId: null,
+              posStation: null,
+              canSellNegativeStock: true,
+              daybookEditDays: 9999,
+              canAccessCustomers: true,
+              createdAt: new Date(),
+              companyCode: company.code,
+              companyName: company.name,
+              companyActive: company.active,
+              companyType: company.companyType || "erp",
+            }))
         );
       }
 
@@ -381,7 +383,9 @@ export function registerCompanyAccessRoutes(app: Express) {
       const targetCompany = await storage.getCompanyById(companyId);
       if (!targetCompany) return res.status(404).json({ message: "Company not found" });
       if (targetCompany.active) {
-        return res.status(409).json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
+        return res
+          .status(409)
+          .json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
       }
       if (Number(req.session.currentCompanyId) === companyId) {
         return res.status(409).json({
@@ -395,14 +399,23 @@ export function registerCompanyAccessRoutes(app: Express) {
       // run this one operation under the already-authorized target scope. This is
       // required for forced RLS tables such as vouchers, customers and inventory.
       const forceDeleteWithHistory = req.body?.forceDeleteWithHistory === true;
-      const confirmedCompanyCode = typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
+      const confirmedCompanyCode =
+        typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
       if (forceDeleteWithHistory && confirmedCompanyCode !== targetCompany.code) {
-        return res.status(400).json({ message: "Enter the exact company code to permanently delete its accounting history." });
+        return res
+          .status(400)
+          .json({ message: "Enter the exact company code to permanently delete its accounting history." });
       }
       const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
       await runWithDatabaseScopeRuntimeContext(
         createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
-        () => storage.deleteCompany(companyId, { userId: req.user?.id, username: req.user?.username, forceDeleteWithHistory, confirmedCompanyCode })
+        () =>
+          storage.deleteCompany(companyId, {
+            userId: req.user?.id,
+            username: req.user?.username,
+            forceDeleteWithHistory,
+            confirmedCompanyCode,
+          })
       );
 
       res.json({ message: "Company deleted successfully" });
@@ -456,7 +469,10 @@ export function registerCompanyAccessRoutes(app: Express) {
         .limit(1);
 
       if (!companyRow?.active) {
-        return res.status(409).json({ message: "This company is inactive. Reactivate it in Company Management before switching.", code: "COMPANY_INACTIVE" });
+        return res.status(409).json({
+          message: "This company is inactive. Reactivate it in Company Management before switching.",
+          code: "COMPANY_INACTIVE",
+        });
       }
 
       req.session.currentCompanyId = companyId;

@@ -272,10 +272,12 @@ export async function deleteStockTransferVoucher(input: {
       // RESTRICT foreign keys. Physically deleting it fails even though no
       // inventory reversal is needed. The parent voucher's deletedAt hides the
       // draft from active voucher/stock reports.
-      if (shouldReverseStockTransferOnDelete({
-        inventoryApplied: transfer.inventoryApplied,
-        optional: lockedVoucher.optional,
-      })) {
+      if (
+        shouldReverseStockTransferOnDelete({
+          inventoryApplied: transfer.inventoryApplied,
+          optional: lockedVoucher.optional,
+        })
+      ) {
         await tx.delete(stockTransferItems).where(eq(stockTransferItems.transferId, transfer.id));
         await tx.delete(stockTransferVouchers).where(eq(stockTransferVouchers.id, transfer.id));
       }
