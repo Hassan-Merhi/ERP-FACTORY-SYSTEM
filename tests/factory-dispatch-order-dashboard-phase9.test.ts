@@ -54,9 +54,8 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(workbook).toContain("ERP PO Files");
     expect(workbook).toContain("Invoice & Postings");
     expect(workbook).toContain("Audit History");
-    // Whitespace-insensitive: #3204 reformatted this file without changing it.
-    expect(workbook.replace(/\s+/g, "")).toContain('orientation:"landscape"');
-    expect(workbook.replace(/\s+/g, "")).toContain('"+t:t');
+    expect(workbook).toContain('orientation: "landscape"');
+    expect(workbook).toContain('"\'" + t : t');
     expect(workbook).toContain("NO — Factory cannot confirm");
     expect(workbook).toContain("1,000 newest events");
     expect(routes).toContain("writeWorkbookToResponse");
