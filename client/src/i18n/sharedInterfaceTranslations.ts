@@ -427,6 +427,9 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Shared period filter: open-ended custom ranges.
+  { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },
+  { en: "End date only", ar: "تاريخ النهاية فقط", fr: "Date de fin uniquement" },
   {
     en: "No intercompany links configured yet.",
     ar: "لا توجد روابط بين الشركات مهيأة بعد.",

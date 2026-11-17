@@ -1,7 +1,7 @@
-import { CalendarDays, CircleAlert, ClipboardList, DollarSign, FileCheck2, PackageCheck, Truck } from "lucide-react";
+import { CircleAlert, ClipboardList, DollarSign, FileCheck2, PackageCheck, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import type { DisplayRow } from "../types";
 
 export function isShippingEtaOverdue(row: DisplayRow, today: string): boolean {
@@ -111,30 +111,14 @@ export function ShippingDashboardOverview({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border/70 bg-background/65 px-2.5 py-1.5">
-              <CalendarDays className="h-4 w-4 text-blue-500" />
-              <label className="sr-only" htmlFor="shipping-date-from">
-                Orders from date
-              </label>
-              <Input
-                id="shipping-date-from"
-                aria-label="Orders from date"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => onDateFrom(e.target.value)}
-                className="h-7 w-[124px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-              />
-              <span className="text-xs text-muted-foreground">to</span>
-              <label className="sr-only" htmlFor="shipping-date-to">
-                Orders to date
-              </label>
-              <Input
-                id="shipping-date-to"
-                aria-label="Orders to date"
-                type="date"
-                value={dateTo}
-                onChange={(e) => onDateTo(e.target.value)}
-                className="h-7 w-[124px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+            <div className="flex flex-wrap items-center gap-1.5">
+              <PeriodFilter
+                value={{ fromDate: dateFrom, toDate: dateTo, preset: dateFrom || dateTo ? "custom" : "all_time" }}
+                onChange={(v) => {
+                  onDateFrom(v.fromDate);
+                  onDateTo(v.toDate);
+                }}
+                data-testid="shipping-orders-period"
               />
               {(dateFrom || dateTo) && (
                 <Button
