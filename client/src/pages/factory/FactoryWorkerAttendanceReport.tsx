@@ -1,3 +1,4 @@
+import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +38,7 @@ import { AttendanceLegend } from "./factoryworkerattendancereport/components/Att
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
   type AttendanceAdminCredentials,
 } from "./factoryattendance/attendanceEditPolicy";
@@ -51,6 +53,8 @@ type AttendanceReportSavePayload = {
 export default function FactoryWorkerAttendanceReport() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const canEditPastWithoutPassword = (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates);
 
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");
@@ -201,7 +205,7 @@ export default function FactoryWorkerAttendanceReport() {
           return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
         });
         const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-        if (priorDates.length > 0) {
+        if (priorDates.length > 0 && !canEditPastWithoutPassword(priorDates)) {
           setApprovalDates(priorDates);
           setApprovalRecords(records);
           setApprovalOpen(true);
@@ -210,7 +214,7 @@ export default function FactoryWorkerAttendanceReport() {
         }
       }, 800);
     },
-    [saveMutation]
+    [saveMutation, canEditPastWithoutPassword]
   );
 
   const cycleCell = useCallback(
@@ -602,8 +606,8 @@ export default function FactoryWorkerAttendanceReport() {
             </Card>
           ) : (
             /* ── Attendance grid ────────────────────────────────────────────── */
-            <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_56%_11%)] dark:shadow-[0_16px_32px_rgba(0,0,0,0.2)] print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
-              <table className="w-full text-xs border-collapse min-w-max print:text-[11px]">
+            <div className="max-h-[min(70dvh,760px)] overflow-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_56%_11%)] dark:shadow-[0_16px_32px_rgba(0,0,0,0.2)] print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
+              <table className="w-full min-w-max border-separate border-spacing-0 text-xs print:text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 dark:bg-[hsl(var(--factory-hue)_52%_19%)] dark:text-slate-200 print:bg-gray-100 print:text-black">
                     <th className="sticky left-0 top-0 z-30 min-w-[88px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] print:bg-gray-100">
@@ -756,15 +760,18 @@ export default function FactoryWorkerAttendanceReport() {
                   ))}
 
                   {/* ── Daily summary row ────────────────────────────────────── */}
-                  <tr className="sticky bottom-0 border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:bg-gray-100">
-                    <td className="px-2 py-2 border-r sticky left-0 bg-blue-50 dark:bg-[hsl(var(--factory-hue)_54%_20%)] z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
-                    <td className="px-3 py-2 border-r sticky left-[88px] bg-blue-50 dark:bg-[hsl(var(--factory-hue)_54%_20%)] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
+                  <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:bg-gray-100">
+                    <td className="sticky bottom-0 left-0 z-30 border-r border-t-2 border-blue-200 bg-blue-50 px-2 py-2 text-[11px] text-muted-foreground dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static print:bg-gray-100" />
+                    <td className="sticky bottom-0 left-[88px] z-30 whitespace-nowrap border-r border-t-2 border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-muted-foreground dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static print:bg-gray-100">
                       Daily Total
                     </td>
                     {data.dates.map(({ date }) => {
                       const ds = data.dailySummary[date] || { present: 0, absent: 0 };
                       return (
-                        <td key={date} className="text-center px-0 py-2 border-r w-8 align-top">
+                        <td
+                          key={date}
+                          className="sticky bottom-0 z-20 w-8 border-r border-t-2 border-blue-200 bg-blue-50 px-0 py-2 text-center align-top dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static print:bg-gray-100"
+                        >
                           {ds.present > 0 && (
                             <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
                               {ds.present}
@@ -781,9 +788,9 @@ export default function FactoryWorkerAttendanceReport() {
                         </td>
                       );
                     })}
-                    <td className="border-r" />
-                    <td className="border-r" />
-                    <td className="text-center px-2 py-2 text-muted-foreground">
+                    <td className="sticky bottom-0 z-20 border-r border-t-2 border-blue-200 bg-blue-50 dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static" />
+                    <td className="sticky bottom-0 z-20 border-r border-t-2 border-blue-200 bg-blue-50 dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static" />
+                    <td className="sticky bottom-0 z-20 border-t-2 border-blue-200 bg-blue-50 px-2 py-2 text-center text-muted-foreground dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:static">
                       {overallPct !== null ? `${overallPct}%` : "—"}
                     </td>
                   </tr>
