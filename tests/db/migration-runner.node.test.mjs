@@ -31,7 +31,7 @@ import {
   takeCatalogSnapshot,
   parseSnapshot,
 } from "../../server/schema/schemaCatalog.mjs";
-import { isLosslessTypeChange } from "../../scripts/db/lib/schemaDdl.mjs";
+import { adoptionDataChecks, isLosslessTypeChange } from "../../scripts/db/lib/schemaDdl.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const RUNNER = path.join(ROOT, "scripts/db/migrate.mjs");
@@ -297,6 +297,34 @@ describe("migration registry", () => {
       const original = normalise(readFileSync(path.join(MIGRATIONS_DIR, "archive/legacy", name), "utf8")).trim();
       assert.ok(folded.includes(original), `${name} is not carried verbatim in 0007`);
     }
+  });
+
+  it("adoption data checks follow PostgreSQL NULL semantics and defer checks on planned columns", () => {
+    const checks = adoptionDataChecks([
+      "ALTER TABLE public.t ADD COLUMN company_id integer;",
+      "CREATE UNIQUE INDEX t_company_name ON public.t USING btree (company_id, name);",
+      "CREATE UNIQUE INDEX t_code ON public.t USING btree (lower(code), name DESC) WHERE (active = true);",
+      "CREATE UNIQUE INDEX t_strict ON public.t USING btree (code) NULLS NOT DISTINCT;",
+      "ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (id);",
+      "ALTER TABLE public.t ADD CONSTRAINT t_code_name UNIQUE (code, name);",
+      "ALTER TABLE public.t ADD CONSTRAINT t_company_ck CHECK ((company_id > 0)) NOT VALID;",
+    ]);
+    const by = (name) => checks.filter((c) => c.statement.includes(name));
+    // A planned column cannot be queried before the DDL runs: deferred to the dry run.
+    assert.match(by("t_company_name")[0].deferred, /company_id/);
+    assert.equal(by("t_company_name")[0].sql, undefined);
+    assert.match(by("t_company_ck")[0].deferred, /company_id/);
+    // Ordinary UNIQUE: keys containing NULL are distinct, so they are excluded.
+    assert.match(
+      by("t_code ")[0].sql,
+      /WHERE \(active = true\) AND \(lower\(code\), name\) IS NOT NULL GROUP BY lower\(code\), name /
+    );
+    assert.match(by("t_code_name")[0].sql, /WHERE \(code, name\) IS NOT NULL GROUP BY code, name /);
+    // NULLS NOT DISTINCT: NULL keys do collide, so they are counted.
+    assert.doesNotMatch(by("t_strict")[0].sql, /IS NOT NULL/);
+    // PRIMARY KEY: duplicates and NULL key rows both block.
+    assert.equal(by("t_pkey").length, 2);
+    assert.match(by("t_pkey")[1].sql, /WHERE NOT \(\(id\) IS NOT NULL\)/);
   });
 
   it("plan mode needs no database", () => {
@@ -649,6 +677,41 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
       const { rows } = await c.query("SELECT to_regclass('schema_migrations') IS NULL AS absent");
       assert.equal(rows[0].absent, true);
     });
+  });
+
+  it("does not treat NULL-containing keys as duplicates of a missing ordinary UNIQUE index", async () => {
+    const db = await legacyDatabase();
+    await withClient(db, async (c) => {
+      await c.query("DROP INDEX whatsapp_recipients_company_chat_unique");
+      // Valid under PostgreSQL UNIQUE semantics: NULL company_id keys are distinct.
+      await c.query(
+        "INSERT INTO whatsapp_recipients (chat_id, company_id) VALUES ('same-chat', NULL), ('same-chat', NULL)"
+      );
+    });
+    const plan = runner(["adopt"], { db });
+    assert.equal(plan.status, 0, plan.out);
+    assert.doesNotMatch(plan.out, /data: \d+ existing row/);
+    assert.equal(runner(["adopt", "--apply"], { db, env: ADOPT }).status, 0);
+    assert.equal(runner(["apply"], { db, env: APPLY }).status, 0);
+    const verify = runner(["verify"], { db });
+    assert.equal(verify.status, 0, verify.out);
+  });
+
+  it("defers data checks on columns the plan adds instead of querying them before they exist", async () => {
+    const db = await legacyDatabase();
+    await withClient(db, async (c) => {
+      // Drops the column together with its FK and the unique index that uses it.
+      await c.query("ALTER TABLE whatsapp_recipients DROP COLUMN company_id CASCADE");
+      await c.query("INSERT INTO whatsapp_recipients (chat_id) VALUES ('chat-a'), ('chat-b')");
+    });
+    const plan = runner(["adopt"], { db });
+    assert.equal(plan.status, 0, plan.out);
+    assert.match(plan.out, /ADD COLUMN company_id/);
+    assert.match(plan.out, /"deferred"/);
+    assert.match(plan.out, /depend on columns this plan adds/);
+    const dryRun = runner(["adopt", "--dry-run"], { db });
+    assert.equal(dryRun.status, 0, dryRun.out);
+    assert.match(dryRun.out, /rolled back/);
   });
 
   it("refuses to adopt an empty database or one that already has history", async () => {

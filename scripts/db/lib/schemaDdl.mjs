@@ -387,44 +387,117 @@ export function planAdoption(comparison) {
   return { statements: statements.length > 1 ? statements : [], blockers, notes };
 }
 
+/** Split a key list on top-level commas (not inside parentheses or quotes). */
+function splitKeyList(list) {
+  const parts = [];
+  let depth = 0;
+  let quote = null;
+  let current = "";
+  for (const ch of list) {
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === "(") depth += 1;
+    else if (ch === ")") depth -= 1;
+    else if (ch === "," && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+/** Key expressions without per-column sort order, usable in GROUP BY. */
+function keyExpressions(list) {
+  return splitKeyList(list)
+    .map((key) => key.replace(/\s+(ASC|DESC)$/i, "").replace(/\s+NULLS\s+(FIRST|LAST)$/i, "").replace(/\s+(ASC|DESC)$/i, ""))
+    .join(", ");
+}
+
 /**
  * Read-only data checks for the data-dependent statements of an adoption plan,
  * against tables that already hold rows. Each returns a count that must be 0:
- *   - UNIQUE index / PRIMARY KEY / UNIQUE constraint: duplicate key groups;
+ *   - UNIQUE index / UNIQUE constraint: duplicate key groups. Keys containing a
+ *     NULL are excluded, because PostgreSQL treats NULLs as distinct, except
+ *     for NULLS NOT DISTINCT keys;
+ *   - PRIMARY KEY: duplicate key groups, and rows with a NULL key column;
  *   - ADD COLUMN ... NOT NULL without DEFAULT: existing rows;
  *   - SET NOT NULL: NULL rows;
  *   - numeric precision change: values that would overflow;
  *   - CHECK added NOT VALID: historical rows that violate it (they could no
  *     longer be updated).
+ * A check that refers to a column the same plan adds cannot run before the
+ * DDL. It is returned as `deferred` (no `sql`): the transactional
+ * `adopt --dry-run` executes the real statement against the rows instead.
  * @param {string[]} statements
- * @returns {Array<{ statement: string, sql: string }>}
+ * @returns {Array<{ statement: string, sql?: string, deferred?: string }>}
  */
 export function adoptionDataChecks(statements) {
   const created = new Set();
+  const addedColumns = new Map();
   for (const sql of statements) {
-    const m = /^CREATE (?:UNLOGGED )?TABLE (\S+) \(/.exec(sql);
+    let m = /^CREATE (?:UNLOGGED )?TABLE (\S+) \(/.exec(sql);
     if (m) created.add(m[1]);
+    m = /^ALTER TABLE (\S+) ADD COLUMN (\S+) /.exec(sql);
+    if (m) {
+      if (!addedColumns.has(m[1])) addedColumns.set(m[1], new Set());
+      addedColumns.get(m[1]).add(m[2].replace(/^"|"$/g, ""));
+    }
   }
+  const addedColumnIn = (table, text) => {
+    for (const column of addedColumns.get(table) ?? []) {
+      const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`(^|[^\\w$])"?${escaped}"?(?![\\w$])`, "i").test(text)) return column;
+    }
+    return null;
+  };
   const checks = [];
-  const add = (statement, sql) => checks.push({ statement, sql });
+  const add = (statement, table, references, sql) => {
+    const column = addedColumnIn(table, references);
+    if (column) {
+      checks.push({
+        statement,
+        deferred: `refers to column ${column}, which this plan adds; adopt --dry-run validates it against the rows`,
+      });
+    } else {
+      checks.push({ statement, sql });
+    }
+  };
+  const duplicateGroups = (table, keys, where) =>
+    `SELECT count(*)::int AS n FROM (SELECT 1 FROM ${table}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} GROUP BY ${keys} HAVING count(*) > 1) d`;
   for (const sql of statements) {
     let m;
-    if ((m = /^CREATE UNIQUE INDEX \S+ ON (?:ONLY )?(\S+) USING \w+ \((.*?)\)( WHERE \((.*)\))?;$/s.exec(sql))) {
+    if (
+      (m =
+        /^CREATE UNIQUE INDEX \S+ ON (?:ONLY )?(\S+) USING \w+ \((.*?)\)( INCLUDE \((?:.*?)\))?( NULLS NOT DISTINCT)?( WHERE \((.*)\))?;$/s.exec(
+          sql
+        ))
+    ) {
       if (created.has(m[1])) continue;
-      add(sql, `SELECT count(*)::int AS n FROM (SELECT 1 FROM ${m[1]}${m[4] ? ` WHERE ${m[4]}` : ""} GROUP BY ${m[2]} HAVING count(*) > 1) d`);
-    } else if ((m = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ (?:PRIMARY KEY|UNIQUE) \((.*)\);$/s.exec(sql))) {
+      const keys = keyExpressions(m[2]);
+      const where = [];
+      if (m[6]) where.push(`(${m[6]})`);
+      if (!m[4]) where.push(`(${keys}) IS NOT NULL`);
+      add(sql, m[1], `${m[2]} ${m[6] ?? ""}`, duplicateGroups(m[1], keys, where));
+    } else if ((m = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ (PRIMARY KEY|UNIQUE)( NULLS NOT DISTINCT)? \((.*?)\)( INCLUDE \((?:.*)\))?;$/s.exec(sql))) {
       if (created.has(m[1])) continue;
-      add(sql, `SELECT count(*)::int AS n FROM (SELECT 1 FROM ${m[1]} GROUP BY ${m[2]} HAVING count(*) > 1) d`);
+      const keys = keyExpressions(m[4]);
+      const primary = m[2] === "PRIMARY KEY";
+      add(sql, m[1], m[4], duplicateGroups(m[1], keys, primary || m[3] ? [] : [`(${keys}) IS NOT NULL`]));
+      if (primary) add(sql, m[1], m[4], `SELECT count(*)::int AS n FROM ${m[1]} WHERE NOT ((${keys}) IS NOT NULL)`);
     } else if ((m = /^ALTER TABLE (\S+) ADD COLUMN (\S+) .* NOT NULL;$/s.exec(sql)) && !/ DEFAULT /.test(sql)) {
-      add(sql, `SELECT count(*)::int AS n FROM ${m[1]}`);
+      checks.push({ statement: sql, sql: `SELECT count(*)::int AS n FROM ${m[1]}` });
     } else if ((m = /^ALTER TABLE (\S+) ALTER COLUMN (\S+) SET NOT NULL;$/.exec(sql))) {
-      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE ${m[2]} IS NULL`);
+      add(sql, m[1], m[2], `SELECT count(*)::int AS n FROM ${m[1]} WHERE ${m[2]} IS NULL`);
     } else if ((m = /^ALTER TABLE (\S+) ALTER COLUMN (\S+) TYPE numeric\((\d+),(\d+)\)/.exec(sql))) {
       const limit = `1e${Number(m[3]) - Number(m[4])}`;
-      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE abs(${m[2]}) >= ${limit}`);
+      add(sql, m[1], m[2], `SELECT count(*)::int AS n FROM ${m[1]} WHERE abs(${m[2]}) >= ${limit}`);
     } else if ((m = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ CHECK (.*) NOT VALID;$/s.exec(sql))) {
       if (created.has(m[1])) continue;
-      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE NOT ${m[2]}`);
+      add(sql, m[1], m[2], `SELECT count(*)::int AS n FROM ${m[1]} WHERE NOT ${m[2]}`);
     }
   }
   return checks;

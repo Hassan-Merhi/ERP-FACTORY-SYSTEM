@@ -284,8 +284,15 @@ async function cmdAdopt(apply, dryRun = false) {
       };
       if (!apply && !dryRun) {
         // Read-only: the data-dependent statements, checked against the rows.
-        const checks = adoptionDataChecks(plan.statements);
-        report.dataChecks = { run: checks.length, failed: [] };
+        const all = adoptionDataChecks(plan.statements);
+        const checks = all.filter((check) => check.sql);
+        const deferred = all.filter((check) => !check.sql);
+        report.dataChecks = { run: checks.length, failed: [], deferred };
+        if (deferred.length) {
+          plan.notes.push(
+            `${deferred.length} data check(s) depend on columns this plan adds; run \`npm run db:adopt -- --dry-run\` to validate them against the rows`
+          );
+        }
         await client.query("BEGIN READ ONLY");
         try {
           await client.query("SET LOCAL search_path = public");
