@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 import {
   DropdownMenu,
   DropdownMenuContent,

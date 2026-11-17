@@ -622,6 +622,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       });
 
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
+      const dateStr = new Date().toLocaleDateString("en-CA");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
       const searchPart = search.trim() ? ` search ${search.trim()}` : "";
 
