@@ -2123,7 +2123,7 @@
     {"id":"PUT /api/whatsapp/stock-settings#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"GET /api/whatsapp/np-settings#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"PUT /api/whatsapp/np-settings#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
-    {"id":"POST /api/daily-export/trigger-whatsapp#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":["exp_whatsapp_send"]},
+    {"id":"POST /api/daily-export/trigger-whatsapp#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":["exp_whatsapp_send"]},
     {"id":"POST /api/whatsapp/send-np-all-now#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"POST /api/whatsapp/send-stock-report#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"GET /api/stock-transfer-order/whatsapp-groups#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner","Manager","ERP Tester"]}},"permission":"none"},
