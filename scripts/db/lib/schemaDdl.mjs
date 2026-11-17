@@ -447,10 +447,15 @@ export function adoptionDataChecks(statements) {
       addedColumns.get(m[1]).add(m[2].replace(/^"|"$/g, ""));
     }
   }
+  // Identifiers in a SQL fragment: quoted ("Name") or bare (name). Fixed
+  // pattern only, matched against the set of columns the plan adds.
+  const IDENTIFIER = /"((?:[^"]|"")+)"|\b([A-Za-z_][A-Za-z0-9_$]*)\b/g;
   const addedColumnIn = (table, text) => {
-    for (const column of addedColumns.get(table) ?? []) {
-      const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`(^|[^\\w$])"?${escaped}"?(?![\\w$])`, "i").test(text)) return column;
+    const added = addedColumns.get(table);
+    if (!added) return null;
+    for (const match of text.matchAll(IDENTIFIER)) {
+      const name = match[1] !== undefined ? match[1].replaceAll('""', '"') : match[2];
+      if (added.has(name) || (match[2] !== undefined && added.has(name.toLowerCase()))) return name;
     }
     return null;
   };
