@@ -85,7 +85,11 @@ const reviewedSpMounts: string[] = [];
 // normalIntercompanyVoucherRoutes registers POST /api/vouchers/payment-receipt and
 // PATCH /api/vouchers/:id/payment-receipt ahead of the standard handlers and calls
 // next() unless the voucher touches a linked intercompany account.
-const MAX_SHADOWED_REGISTRATIONS = 80;
+// Lowered from 80 to 66 by the manifest-driven access layer: the 14 action-permission
+// prerequisite routes that core/permissionBoundaryRoutes.ts registered ahead of their
+// handlers are gone. Their permission keys are declared on the handlers' own rules in
+// config/route-access-manifest.json and enforced by the access boundary.
+const MAX_SHADOWED_REGISTRATIONS = 66;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

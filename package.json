@@ -103,7 +103,8 @@
     "audit:startup-mutations": "node scripts/audit-startup-mutation-coverage.mjs",
     "audit:startup-mutations:strict": "node scripts/audit-startup-mutation-coverage.mjs --strict",
     "audit:database-integrity:catalog": "node scripts/audit-database-integrity-catalog.mjs --json",
-    "db:drift:fingerprint": "node scripts/audit-database-schema-drift.mjs --fingerprint"
+    "db:drift:fingerprint": "node scripts/audit-database-schema-drift.mjs --fingerprint",
+    "verify:route-access-coverage": "node node_modules/vitest/vitest.mjs run tests/route-access-manifest.test.ts tests/operational-permission-declarations.test.ts"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
@@ -179,6 +180,7 @@
     "nodemailer": "^10.1.4",
     "openai": "^7.28.0",
     "papaparse": "^5.7.0",
+    "path-to-regexp": "8.4.2",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.20.2",
     "pg": "^8.16.3",

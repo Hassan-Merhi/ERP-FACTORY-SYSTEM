@@ -38,7 +38,7 @@ const COMPANY_AUTH_MARKERS = [
   "resolveAuthorizedCompanyId",
   "getActiveCompanyPermissionContext",
   "enforceCompanyResourceScope",
-  "tenantIsolationBoundary",
+  "establishCompanyScope",
   "resolveActiveCompanyId",
   "resolveCompanyIdForPath",
   "resolveSessionCompanyActor",

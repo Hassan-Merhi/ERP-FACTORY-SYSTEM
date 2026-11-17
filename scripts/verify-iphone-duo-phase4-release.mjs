@@ -53,8 +53,8 @@ const requirements = [
   ["client/src/pages/SpPOImport.tsx", [
     'download="po-import-template.xlsx"', 'event.currentTarget.value = ""',
   ]],
-  ["server/services/security/operationalPermissionRoutePolicy.ts", [
-    '"GET /api/factory/monthly-production-matrix/export-bales"',
+  ["config/route-access-manifest.json", [
+    '"id":"GET /api/factory/monthly-production-matrix/export-bales#1"',
   ]],
   ["client/src/i18n/iphoneDuoMobileTranslations.ts", [
     "export function duoMobileText(", 'en: "Available balance"',

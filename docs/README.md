@@ -198,6 +198,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | Doc | What it covers |
 |---|---|
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
+| [manifest-driven-access-consolidation.md](manifest-driven-access-consolidation.md) | The access boundary: per-route access declarations, the one middleware that enforces them, and how to add or change a route |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
 | [security-posture.md](security-posture.md) | Current security controls, remaining risks and verification scorecard |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
