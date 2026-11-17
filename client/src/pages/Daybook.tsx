@@ -652,7 +652,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       await apiRequest("DELETE", `/api/vouchers/${id}`);
       return { linked: false };
     },
-    onSuccess: () => {
+    onSuccess: ({ linked }) => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
       for (const key of [
         "/api/intercompany-container-trading/daybook-linked-vouchers",
@@ -664,7 +664,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
       refreshBalances();
-      toast({ title: "Deleted", description: "Voucher deleted" });
+      toast({
+        title: "Deleted",
+        description: linked
+          ? "Linked POs and original vouchers deleted in both companies. No reversals created."
+          : "Voucher deleted",
+      });
       setDeleteDialogOpen(false);
     },
     onError: (error: Error) => {

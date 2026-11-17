@@ -79,6 +79,11 @@ function purchaseAmount(value: number | null, currencies: string[]): ExcelValue 
   return currencies.length > 1 ? "Mixed currencies" : value;
 }
 
+function printableStatus(status: MarketStatus): string {
+  return status === "no_sales" ? "No sales" : status === "strong" ? "Strong" : status === "watch" ? "Watch" : "Losing";
+}
+
+/** Export the complete filtered data returned by the report; never use the UI's 250-row page slice. */
 function safeFilePart(value: string): string {
   return (
     value
@@ -88,11 +93,6 @@ function safeFilePart(value: string): string {
   );
 }
 
-function printableStatus(status: MarketStatus): string {
-  return status === "no_sales" ? "No sales" : status === "strong" ? "Strong" : status === "watch" ? "Watch" : "Losing";
-}
-
-/** Export the complete filtered data returned by the report; never use the UI's 250-row page slice. */
 export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOptions): Promise<void> {
   // Load the large Excel library only when the user clicks Export.
   const { ExcelJS, writeFile } = await import("@/lib/excelHelper");

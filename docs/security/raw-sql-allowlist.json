@@ -7866,6 +7866,958 @@
         }
       ],
       "reason": "COMMENT ON FUNCTION interpolates a code-constant version marker (no quotes) into a string literal. Test file run only by vitest against the disposable test database (server/db.ts NODE_ENV=test); no request data reaches it."
+    },
+    {
+      "id": "2b7db69328e34592dba9",
+      "path": "server/services/intercompany/containerTradingImport.ts",
+      "kind": "sql.raw",
+      "context": "setTradingRelationship",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sourceCompanyId",
+          "source": "companyFromSession(req) in server/routes/import/intercompany-container-trading.ts:42-48: Number(req.session.currentCompanyId) from the server-side session",
+          "validation": "Rejected unless Number.isSafeInteger(companyId) && companyId > 0 (intercompany-container-trading.ts:45) before any service call"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. IMPORT_LOCK is the literal 741235 at containerTradingImport.ts:66; the only caller is the session-scoped route at intercompany-container-trading.ts:77."
+    },
+    {
+      "id": "48c019c4d1653f0f4ab8",
+      "path": "server/services/intercompany/containerTradingImport.ts",
+      "kind": "sql.raw",
+      "context": "postIntercompanyImport",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sourceCompanyId",
+          "source": "companyFromSession(req) in server/routes/import/intercompany-container-trading.ts:42-48: Number(req.session.currentCompanyId) from the server-side session",
+          "validation": "Rejected unless Number.isSafeInteger(companyId) && companyId > 0 (intercompany-container-trading.ts:45) before any service call"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. IMPORT_LOCK is the literal 741235 at containerTradingImport.ts:66; the only caller passes sourceCompanyId: companyId from the session at intercompany-container-trading.ts:207."
+    },
+    {
+      "id": "cc40d9e57b8dcb461d10",
+      "path": "server/services/intercompany/linkedTradePhysicalDelete.ts",
+      "kind": "sql.raw",
+      "context": "deletePristineLinkedTrade",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "INTERCOMPANY_PAYMENT_LOCK_NAMESPACE",
+          "source": "export const INTERCOMPANY_PAYMENT_LOCK_NAMESPACE = 741235 (server/services/intercompany/paymentAllocationCore.ts:11)",
+          "validation": "Numeric literal module constant; never reassigned and not derived from any input"
+        },
+        {
+          "expression": "authorized.sourceCompanyId",
+          "source": "authorized = await assertTradeAccess(tradeId, actor) (linkedTradePhysicalDelete.ts:124), the intercompany_trades row selected at tradeSync.ts:129",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:105) so the driver returns a JS number; it is a stored foreign key to companies.id, not request text"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. The company id is read from the stored trade row after the tradeId was checked with Number.isSafeInteger (tradeSync.ts:128)."
+    },
+    {
+      "id": "17617d25f34e7d074d9e",
+      "path": "server/services/intercompany/paymentSync.ts",
+      "kind": "sql.raw",
+      "context": "confirmMirroredPayment",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "INTERCOMPANY_PAYMENT_LOCK_NAMESPACE",
+          "source": "export const INTERCOMPANY_PAYMENT_LOCK_NAMESPACE = 741235 (server/services/intercompany/paymentAllocationCore.ts:11)",
+          "validation": "Numeric literal module constant; never reassigned and not derived from any input"
+        },
+        {
+          "expression": "pair.sourceCompanyId",
+          "source": "pair = await accessiblePaymentPair(input.relationshipId, actor) (paymentSync.ts:305), the intercompany_relationship_policies row selected at paymentSync.ts:167-170",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:37) returned as a JS number; relationshipId itself is checked with Number.isSafeInteger at paymentSync.ts:165 and only used as a bound parameter"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. The company id comes from the stored relationship policy row, not from the request body."
+    },
+    {
+      "id": "f2dd9cb6a920b88feb01",
+      "path": "server/services/intercompany/paymentSync.ts",
+      "kind": "sql.raw",
+      "context": "reverseMirroredPayment",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "INTERCOMPANY_PAYMENT_LOCK_NAMESPACE",
+          "source": "export const INTERCOMPANY_PAYMENT_LOCK_NAMESPACE = 741235 (server/services/intercompany/paymentAllocationCore.ts:11)",
+          "validation": "Numeric literal module constant; never reassigned and not derived from any input"
+        },
+        {
+          "expression": "pair.sourceCompanyId",
+          "source": "pair = await accessiblePaymentPair(original.relationshipId, actor, false) (paymentSync.ts:474), the intercompany_relationship_policies row selected at paymentSync.ts:167-170",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:37) returned as a JS number; the relationship id is taken from the stored payment row, not the request"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. The company id comes from the stored relationship policy row of the payment being reversed."
+    },
+    {
+      "id": "b1066817d807bb630126",
+      "path": "server/services/intercompany/paymentSync.ts",
+      "kind": "sql.raw",
+      "context": "reverseMirroredPayment",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "payment.id",
+          "source": "const [payment] = await tx.select().from(intercompanyContainerPayments)...for('update') (paymentSync.ts:482-486); id is the row primary key",
+          "validation": "id is bigserial with mode 'number' (shared/schema/intercompanyTrading.ts:457), so Drizzle returns a JS number; input.paymentId is only a bound parameter in the WHERE clause"
+        }
+      ],
+      "reason": "set_config value at :547 is the numeric primary key of the payment row just locked in this transaction; a JS number renders as digits only, so the quoted literal cannot be closed or extended by request data."
+    },
+    {
+      "id": "06d687d996e9990f4db4",
+      "path": "server/services/intercompany/phase5Cancel.ts",
+      "kind": "sql.raw",
+      "context": "cancelUnreceivedTrade",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "INTERCOMPANY_PAYMENT_LOCK_NAMESPACE",
+          "source": "export const INTERCOMPANY_PAYMENT_LOCK_NAMESPACE = 741235 (server/services/intercompany/paymentAllocationCore.ts:11)",
+          "validation": "Numeric literal module constant; never reassigned and not derived from any input"
+        },
+        {
+          "expression": "trade.sourceCompanyId",
+          "source": "trade = await assertTradeAccess(input.tradeId, actor) (phase5Cancel.ts:86), the intercompany_trades row selected at tradeSync.ts:129",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:105) so the driver returns a JS number; it is a stored foreign key to companies.id, not request text"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. The company id is read from the stored trade row after the tradeId was checked with Number.isSafeInteger (tradeSync.ts:128)."
+    },
+    {
+      "id": "d5ca0a16ed6fbde4c29f",
+      "path": "server/services/intercompany/phase5Cancel.ts",
+      "kind": "sql.raw",
+      "context": "cancelUnreceivedTrade",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "fresh.id",
+          "source": "const [fresh] = await tx.select().from(intercompanyTrades).where(eq(intercompanyTrades.id, input.tradeId)) (phase5Cancel.ts:95-98); id is the row primary key",
+          "validation": "id is a serial integer primary key (shared/schema/intercompanyTrading.ts:98) returned as a JS number; input.tradeId is only a bound parameter and was checked with Number.isSafeInteger in assertTradeAccess (tradeSync.ts:128)"
+        }
+      ],
+      "reason": "set_config value at :189 is the integer primary key of the trade row re-read inside this transaction; a JS number renders as digits only, so the quoted literal cannot be closed or extended by request data."
+    },
+    {
+      "id": "9895e1148837ba965aa9",
+      "path": "server/services/intercompany/phase5Receipt.ts",
+      "kind": "sql.raw",
+      "context": "receiveLinkedTrade",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "INTERCOMPANY_PAYMENT_LOCK_NAMESPACE",
+          "source": "export const INTERCOMPANY_PAYMENT_LOCK_NAMESPACE = 741235 (server/services/intercompany/paymentAllocationCore.ts:11)",
+          "validation": "Numeric literal module constant; never reassigned and not derived from any input"
+        },
+        {
+          "expression": "trade.sourceCompanyId",
+          "source": "trade = await assertTradeAccess(input.tradeId, actor) (phase5Receipt.ts:143), the intercompany_trades row selected at tradeSync.ts:129",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:105) so the driver returns a JS number; it is a stored foreign key to companies.id, not request text"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. The company id is read from the stored trade row after the tradeId was checked with Number.isSafeInteger (tradeSync.ts:128)."
+    },
+    {
+      "id": "9f28b82d86d2e100e668",
+      "path": "server/services/intercompany/sharedChargeSync.ts",
+      "kind": "sql.raw",
+      "context": "lockSource",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sourceCompanyId",
+          "source": "lockSource(tx, sourceCompanyId) has two callers: sharedChargeSync.ts:300 passes input.sourceCompanyId and :536 passes invoice.sourceCompanyId from the stored intercompany_shared_charge_invoices row",
+          "validation": "input.sourceCompanyId is rejected unless Number.isSafeInteger and > 0 (sharedChargeSync.ts:118-119) and must equal identity.initiatingCompanyId (:273); the invoice value is a PostgreSQL integer column returned as a JS number"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. IMPORT_LOCK is the literal 741235 at sharedChargeSync.ts:50; both callers supply an integer company id."
+    },
+    {
+      "id": "c571d7f33e7a73ca4498",
+      "path": "server/services/intercompany/tradeSync.ts",
+      "kind": "sql.raw",
+      "context": "beginRevisionTx",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "revision.id",
+          "source": "const [revision] = await tx.insert(intercompanyTradeRevisions).values({...}).returning() (tradeSync.ts:291-306); id is generated by the database",
+          "validation": "id is bigserial with mode 'number' (shared/schema/intercompanyTrading.ts:356), assigned by the sequence and returned as a JS number; no request field supplies it"
+        }
+      ],
+      "reason": "set_config value at :307 is the sequence-generated primary key of the revision row inserted on the previous statement; a JS number renders as digits only, so the quoted literal cannot be closed or extended by request data."
+    },
+    {
+      "id": "7e380062029ef4135c78",
+      "path": "server/services/intercompany/tradeSync.ts",
+      "kind": "sql.raw",
+      "context": "editLinkedTrade",
+      "classification": "validated-numeric",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "trade.sourceCompanyId",
+          "source": "trade = await assertTradeAccess(input.tradeId, identity) (tradeSync.ts:549), the intercompany_trades row selected at tradeSync.ts:129",
+          "validation": "source_company_id is a NOT NULL PostgreSQL integer column (shared/schema/intercompanyTrading.ts:105) so the driver returns a JS number; it is a stored foreign key to companies.id, not request text"
+        }
+      ],
+      "reason": "The advisory-lock statement concatenates only a numeric module constant and a positive safe integer company id; a JS number renders as digits, so no quote, keyword or other SQL syntax can enter the text. IMPORT_LOCK is the literal 741235 at tradeSync.ts:46; the company id is read from the stored trade row."
+    },
+    {
+      "id": "6cf382fdc37033749e0c",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_delete_probe_\" + process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :26 is a code constant concatenated with the process pid (:25), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "807a7429963e90d2381d",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_delete_probe_\" + process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_delete_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :27 is a code constant concatenated with the process pid (:25), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "f75ceb9bbf8c6177b1fd",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "migration",
+          "source": "Elements of `migrations` (:6-13): readFileSync of six hard-coded file names under <cwd>/migrations (20261105_001..005_intercompany_*.sql and 20261113_001_intercompany_pristine_physical_delete.sql), iterated at :47 in tests/intercompany-linked-physical-delete-postgres.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
+        }
+      ],
+      "reason": "Query text at :47 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "7c20bf71cec974a7f0b7",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "First element of each pair in the inline array literal at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144.",
+          "validation": "One of six hard-coded table names (intercompany_trades, purchase_orders, vouchers, voucher_entries, accounting_posting_requests, containers)."
+        },
+        {
+          "expression": "where",
+          "source": "Second element of each pair in the same inline array literal at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144.",
+          "validation": "One of six hard-coded predicates over integer literals, e.g. \"id=1\" or \"voucher_id IN (51,52,53,54)\"."
+        }
+      ],
+      "reason": "Count query at :145 loops over an inline array of literal [table, predicate] pairs (:137-144) to assert the fixture rows were deleted; both parts are string literals in the test source. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "13d2452a2feab1dce46d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Second element of each pair in the `expected` array literal at tests/intercompany-phase1-foundation.test.ts:28-38.",
+          "validation": "One of nine hard-coded intercompany_* table-name string literals (as const)."
+        }
+      ],
+      "reason": "The string built at :41 is never sent to a database: it is only the needle for expect(MIGRATION).toContain(...), checking the migration text declares each of nine literal table names. No HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "732bb87b1761dc8b13de",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :63 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "b9e9fb1df43e85df85e8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :64 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "93fe56cdfc4f14183bc8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :89 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "61032fce13b2bcc3b34d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase1-foundation.test.ts:87); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "validation": "Every one of the 19 call sites passes string literals, one of which (:155-159) concatenates `hash` = \"a\".repeat(64) from :149."
+        }
+      ],
+      "reason": "Statement executed at :92 is whatever the test's own rejects helper (:87) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "f8d3f1d89e37322cab2b",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :97 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "39f706b243bdc5de480f",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :98 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "9f21029ad4c70ca1d946",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "hash",
+          "source": "const hash = \"a\".repeat(64) at tests/intercompany-phase1-foundation.test.ts:149.",
+          "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
+        }
+      ],
+      "reason": "Duplicate-batch INSERT text assembled at :155-159 (passed to rejects) embeds only the constant fake SHA-256 `hash` from :149 inside quotes; the rest is string literals. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "b5a62e35eae6f121cf97",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:214 on a string literal.",
+          "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
+        }
+      ],
+      "reason": "Fixture INSERT at :212-216 embeds a constant fake fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "1ae215aaf4e7cadc8927",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"c\".repeat(64)",
+          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:219 on a string literal.",
+          "validation": "Fixed 64-character string of the letter c: always /^c{64}$/, no quote characters."
+        }
+      ],
+      "reason": "Fixture INSERT at :217-221 embeds a constant fake evidence fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "7c934988134a0d36bbd6",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :20 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "1c87d68b7f915972fe18",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :21 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "758cbd7f636b0315af84",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :54 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "e23dafa56e9602dc37c3",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase2-database-guards.test.ts:52); the helper is a closure inside the test and all 20 call sites are in this file.",
+          "validation": "Every one of the 20 call sites passes plain string literals with no interpolation or concatenated variables."
+        }
+      ],
+      "reason": "Statement executed at :57 is whatever the test's own rejects helper (:52) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "337f5b630bb126102a97",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :61 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "16847fb1c0529156be11",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :62 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "ff6f08eeb000acf8f69b",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Second element of each pair in the inline array literal at tests/intercompany-phase3-database-guards.test.ts:22-28.",
+          "validation": "One of five hard-coded intercompany_* table-name string literals (as const)."
+        }
+      ],
+      "reason": "The string built at :30 is never sent to a database: it is only the needle for expect(scripts[2]).toContain(...), checking the phase 3 migration text declares each of five literal table names. No HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "24e3a253fabf255210e6",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "97ed3c75a344bb1f2efe",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :49 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "b6a9a27a41e4834034ac",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Elements of `scripts` (:14-18): readFileSync of three hard-coded names (\"20261105_\" + literal + \".sql\") under <cwd>/migrations, iterated at :64 in tests/intercompany-phase3-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
+        }
+      ],
+      "reason": "Query text at :64 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "d60d758b73b75b085d21",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :99 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "fce9b70a8bab02ac06e7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase3-database-guards.test.ts:97); the helper is a closure inside the test and all 10 call sites are in this file.",
+          "validation": "Every one of the 10 call sites passes plain string literals with no interpolation or concatenated variables."
+        }
+      ],
+      "reason": "Statement executed at :102 is whatever the test's own rejects helper (:97) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "9bb2fb27535ae779fae3",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :107 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "29dc810057bf8c93f4b7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :108 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "d6717b869f725c7834fb",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :39 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "8f9b31877b712e1aab53",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :40 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "6da1f31b793064c95ad5",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Elements of `scripts` (:8-16): readFileSync of four hard-coded 20261105_00N_intercompany_*.sql names under <cwd>/migrations, iterated at :56 in tests/intercompany-phase4-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
+        }
+      ],
+      "reason": "Query text at :56 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "043cf3b671066c9190f1",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"a\".repeat(64)",
+          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:93 on a string literal.",
+          "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
+        },
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:95 on a string literal.",
+          "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
+        }
+      ],
+      "reason": "Fixture INSERT at :91-97 embeds two constant fake hashes produced by repeating literal letters; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "2aa2fb161e0c797620f0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :104 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "a7e5b80cf4f5aa7b89d2",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase4-database-guards.test.ts:102); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "validation": "Every one of the 19 call sites passes string literals, some concatenated with the string-literal constants paymentColumns (:118-119) and goodValues (:120-121)."
+        }
+      ],
+      "reason": "Statement executed at :107 is whatever the test's own rejects helper (:102) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "7e123d0e02edf9d6dbe0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :112 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "3da2b963e8c3bb26d9ce",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "94ca47b3c5e0d83a9971",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "paymentColumns.slice(1)",
+          "source": "const paymentColumns string literal at tests/intercompany-phase4-database-guards.test.ts:118-119, minus its leading parenthesis.",
+          "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
+        },
+        {
+          "expression": "goodValues.slice(1)",
+          "source": "const goodValues string literal at tests/intercompany-phase4-database-guards.test.ts:120-121, minus its leading parenthesis.",
+          "validation": "Fixed VALUES tuple of literals written in the test source; a single string literal with no interpolation."
+        }
+      ],
+      "reason": "Fixture INSERT at :170-175 splices an explicit id into two string-literal constants (column list :118-119, values tuple :120-121) via slice(1); nothing but test-source literals forms the text. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "e9ca647bd69b027ad7f8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :47 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "ecf6a9abd0be525824b8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
+        }
+      ],
+      "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "4a4cf63194313c345ddc",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "ddl",
+          "source": "Elements of `migrations` (:19): readFileSync of the five hard-coded names in migrationNames (:12-18) under <cwd>/migrations, iterated at :67 in tests/intercompany-phase5-database-guards.test.ts.",
+          "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
+        }
+      ],
+      "reason": "Query text at :67 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "52c3e3eefe40a4f129cd",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "cfe35b8434253b721732",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "First parameter of the local rejects helper (tests/intercompany-phase5-database-guards.test.ts:111); the helper is a closure inside the test and all 18 call sites are in this file.",
+          "validation": "Every one of the 18 call sites passes string literals, some concatenated with the string-literal constants cancelColumns (:151-152) and receiveColumns (:230-231)."
+        }
+      ],
+      "reason": "Statement executed at :116 is whatever the test's own rejects helper (:111) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "facbb9e4d2e50ad25b60",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :121 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "6a054cac7b7f175c0731",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
+        }
+      ],
+      "reason": "Savepoint name at :122 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "67ff7d686f6952cd8b56",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "receiveColumns.slice(1)",
+          "source": "const receiveColumns string literal at tests/intercompany-phase5-database-guards.test.ts:230-231, minus its leading parenthesis.",
+          "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
+        }
+      ],
+      "reason": "Fixture INSERT at :248-252 splices an explicit id column into the string-literal column list constant from :230-231 via slice(1); the VALUES tuple is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     }
   ]
 }
