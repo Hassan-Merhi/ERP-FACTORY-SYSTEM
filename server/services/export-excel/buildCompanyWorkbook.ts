@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import type { CompanyExportData } from "../export-data";
 import { addSheet } from "./sheet-helpers";
 import { addSummarySheet } from "./summary-sheet";
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 
 export async function buildCompanyWorkbook(
   data: CompanyExportData,
@@ -210,7 +211,11 @@ export async function buildCompanyWorkbook(
   addSheet(wb, "Salary Advances Detail", data.salaryAdvancesDetail);
   addSheet(wb, "Employee Txn Detail", data.employeeTxnDetail);
   addSheet(wb, "Location Stock Detail", data.locationStockDetail);
-
+  // Full-company archive is also a machine-readable import source. Style
+  // SUMMARY print metadata only; every raw sheet keeps row-1 headers intact.
+  styleSpecializedWorkbook(wb, {
+    sheets: [{ name: "SUMMARY", purpose: "report" }],
+  });
   const buf1 = Buffer.from(await wb.xlsx.writeBuffer());
   outputStream.write(buf1);
 }

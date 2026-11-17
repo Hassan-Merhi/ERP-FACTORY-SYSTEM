@@ -9317,6 +9317,741 @@
         }
       ],
       "reason": "The only dynamic part is a numeric literal constant rendered into the lease interval; it cannot carry SQL syntax, and the occurrence id and status travel as bound parameters."
+    },
+    {
+      "id": "6cf382fdc37033749e0c",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "807a7429963e90d2381d",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "f75ceb9bbf8c6177b1fd",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "migration",
+          "source": "Statements read from repo-committed intercompany migration files by the test",
+          "validation": "Version-controlled SQL executed only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "7c20bf71cec974a7f0b7",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "Table name from a fixed list of intercompany tables written in the test",
+          "validation": "Test-authored constant identifiers checked against a disposable fixture database"
+        },
+        {
+          "expression": "where",
+          "source": "WHERE clause from the same fixed list of literal id predicates written in the test",
+          "validation": "Test-authored constant predicates with literal integer ids only"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "13d2452a2feab1dce46d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Table name from the test's fixed list of expected intercompany tables",
+          "validation": "Used only in a string compared with toContain against migration text; never executed"
+        }
+      ],
+      "reason": "The concatenated text is a string expectation compared with migration source using toContain; it is never sent to a database, and the interpolated value comes from the test's own fixed table list."
+    },
+    {
+      "id": "732bb87b1761dc8b13de",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "Probe table/role name built from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "b9e9fb1df43e85df85e8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "Probe table/role name built from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "93fe56cdfc4f14183bc8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "61032fce13b2bcc3b34d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "Literal SQL statements written in the test cases and passed to the local rejects() helper",
+          "validation": "Test-authored constants run inside a savepoint against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "f8d3f1d89e37322cab2b",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "39f706b243bdc5de480f",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "9f21029ad4c70ca1d946",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "hash",
+          "source": "Fixed 64-character test hash literal defined in the test",
+          "validation": "Test constant made only of hex letters, used as fixture file hash values"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "b5a62e35eae6f121cf97",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "1ae215aaf4e7cadc8927",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"c\".repeat(64)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "7c934988134a0d36bbd6",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "1c87d68b7f915972fe18",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "758cbd7f636b0315af84",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "e23dafa56e9602dc37c3",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "Literal SQL statements written in the test cases and passed to the local rejects() helper",
+          "validation": "Test-authored constants run inside a savepoint against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "337f5b630bb126102a97",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "16847fb1c0529156be11",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "ff6f08eeb000acf8f69b",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "not-sql-text",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "Table name from the test's fixed list of expected intercompany tables",
+          "validation": "Used only in a string compared with toContain against migration text; never executed"
+        }
+      ],
+      "reason": "The concatenated text is a string expectation compared with migration source using toContain; it is never sent to a database, and the interpolated value comes from the test's own fixed table list."
+    },
+    {
+      "id": "24e3a253fabf255210e6",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "97ed3c75a344bb1f2efe",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "b6a9a27a41e4834034ac",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Statements read from repo-committed intercompany migration files by the test",
+          "validation": "Version-controlled SQL executed only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "d60d758b73b75b085d21",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "fce9b70a8bab02ac06e7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Literal SQL statements written in the test cases and passed to the local rejects() helper",
+          "validation": "Test-authored constants run inside a savepoint against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "9bb2fb27535ae779fae3",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "29dc810057bf8c93f4b7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "d6717b869f725c7834fb",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "8f9b31877b712e1aab53",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "6da1f31b793064c95ad5",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "Statements read from repo-committed intercompany migration files by the test",
+          "validation": "Version-controlled SQL executed only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "043cf3b671066c9190f1",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"a\".repeat(64)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        },
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "2aa2fb161e0c797620f0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "a7e5b80cf4f5aa7b89d2",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Literal SQL statements written in the test cases and passed to the local rejects() helper",
+          "validation": "Test-authored constants run inside a savepoint against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "7e123d0e02edf9d6dbe0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "3da2b963e8c3bb26d9ce",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "94ca47b3c5e0d83a9971",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "paymentColumns.slice(1)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        },
+        {
+          "expression": "goodValues.slice(1)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "e9ca647bd69b027ad7f8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "ecf6a9abd0be525824b8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "Disposable schema name built in the test from a fixed prefix plus process.pid",
+          "validation": "Code-owned prefix and the numeric process id; no external input reaches the identifier"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "4a4cf63194313c345ddc",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "ddl",
+          "source": "Statements read from repo-committed intercompany migration files by the test",
+          "validation": "Version-controlled SQL executed only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "52c3e3eefe40a4f129cd",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "cfe35b8434253b721732",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Literal SQL statements written in the test cases and passed to the local rejects() helper",
+          "validation": "Test-authored constants run inside a savepoint against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "facbb9e4d2e50ad25b60",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "6a054cac7b7f175c0731",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "Savepoint name built from a fixed prefix plus an incrementing test counter",
+          "validation": "Code-owned prefix and an integer counter; never derived from external input"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
+    },
+    {
+      "id": "67ff7d686f6952cd8b56",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "receiveColumns.slice(1)",
+          "source": "Fixture value built inside the test from literal strings/arrays defined in the same test file",
+          "validation": "Test-authored constant used only against the disposable test database"
+        }
+      ],
+      "reason": "Test-only SQL run against a disposable intercompany test database; every dynamic part is a test-authored constant, a committed migration statement or a name derived from process.pid or a local counter, so no external input can reach the SQL text."
     }
   ]
 }

@@ -1,4 +1,5 @@
 import SpPOImport from "./SpPOImport";
+import PropertiesIntercompanyPOImport from "./poimport/PropertiesIntercompanyPOImport";
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable } from "@/erp-core";
 import { Button } from "@/components/ui/button";
@@ -280,5 +281,6 @@ function ErpPOImport() {
 // while keeping their separate accounting and import endpoints.
 export default function POImport() {
   const { selectedCompany } = useCompany();
+  if (selectedCompany?.companyType === "properties") return <PropertiesIntercompanyPOImport />;
   return selectedCompany?.companyType === "supplier_partner" ? <SpPOImport /> : <ErpPOImport />;
 }

@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, FolderOpen, Layers } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
-import type { CombinedRow, StockGroupSummary } from "./useCombinedInventoryState";
+import type { CombinedRow, StockGroupSummary } from "./CombinedInventoryTypes";
 
 export function GroupsView({
   groups,

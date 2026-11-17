@@ -138,6 +138,7 @@ export const supplierProformas = pgTable(
     reference: varchar("reference", { length: 200 }).notNull(),
     notes: text("notes"),
     isStarred: boolean("is_starred").notNull().default(false),
+    destinationCompanyId: integer("destination_company_id").references(() => companies.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -1,7 +1,5 @@
 // Extracted from ./useStockItems.ts to keep that module under the source-size cap.
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useStockItemsPart1Part1 } from "./useStockItemsPart1Part1";
+import { useStockItemsPart1Part1, useStockItemsPart1Part2 } from "./useStockItemsPart1Part1";
 
 export function useStockItemsPart1() {
   const {
@@ -43,6 +41,7 @@ export function useStockItemsPart1() {
     locations,
     manageCategoriesOpen,
     manageGradesOpen,
+    myErpPages,
     newCategoryName,
     newGradeName,
     pendingCategoryId,
@@ -51,6 +50,7 @@ export function useStockItemsPart1() {
     resetFilters,
     searchTerm,
     selectedCategoryFilter,
+    selectedCompany,
     selectedGradeFilter,
     selectedGroupFilter,
     selectedIds,
@@ -94,12 +94,7 @@ export function useStockItemsPart1() {
     totalPages,
     updateGradeMutation,
   } = useStockItemsPart1Part1();
-  const { createCategoryMutation, updateCategoryMutation } = useStockItemsPart1Part2({
-    setEditingCategoryId,
-    setEditingCategoryName,
-    setNewCategoryName,
-    toast,
-  });
+  const { createCategoryMutation } = useStockItemsPart1Part2({ setNewCategoryName, toast });
   return {
     activeCount,
     adjustDialogOpen,
@@ -140,6 +135,7 @@ export function useStockItemsPart1() {
     locations,
     manageCategoriesOpen,
     manageGradesOpen,
+    myErpPages,
     newCategoryName,
     newGradeName,
     pendingCategoryId,
@@ -148,6 +144,7 @@ export function useStockItemsPart1() {
     resetFilters,
     searchTerm,
     selectedCategoryFilter,
+    selectedCompany,
     selectedGradeFilter,
     selectedGroupFilter,
     selectedIds,
@@ -189,46 +186,6 @@ export function useStockItemsPart1() {
     toast,
     totalItems,
     totalPages,
-    updateCategoryMutation,
     updateGradeMutation,
   };
-}
-
-function useStockItemsPart1Part2({
-  setEditingCategoryId,
-  setEditingCategoryName,
-  setNewCategoryName,
-  toast,
-}: Pick<
-  Awaited<ReturnType<typeof useStockItemsPart1Part1>>,
-  "setEditingCategoryId" | "setEditingCategoryName" | "setNewCategoryName" | "toast"
->) {
-  const createCategoryMutation = useMutation({
-    mutationFn: async (name: string) => apiRequest("POST", "/api/stock-categories", { name }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-categories"] });
-      setNewCategoryName("");
-      toast({ title: "Category created" });
-    },
-    onError: (error: Error) => {
-      if (error._handledGlobally) return;
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const updateCategoryMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) =>
-      apiRequest("PATCH", `/api/stock-categories/${id}`, { name }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-categories"] });
-      setEditingCategoryId(null);
-      setEditingCategoryName("");
-      toast({ title: "Category updated" });
-    },
-    onError: (error: Error) => {
-      if (error._handledGlobally) return;
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
-    },
-  });
-  return { createCategoryMutation, updateCategoryMutation };
 }

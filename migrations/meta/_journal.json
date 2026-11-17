@@ -323,6 +323,48 @@
       "when": 1793870002000,
       "tag": "20261105_003_ticket_notification_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793870003000,
+      "tag": "20261105_001_intercompany_phase1_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793870004000,
+      "tag": "20261105_002_intercompany_phase2_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793870400000,
+      "tag": "20261105_003_intercompany_phase3_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793877300000,
+      "tag": "20261105_004_intercompany_phase4_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793881000000,
+      "tag": "20261105_005_intercompany_phase5_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1794560400000,
+      "tag": "20261113_001_intercompany_pristine_physical_delete",
+      "breakpoints": true
     }
   ]
 }

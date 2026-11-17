@@ -6,6 +6,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { handleGetStatsNetPositionExcelStep1 } from "./handleGetStatsNetPositionExcelStep1";
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 
 export function registerStatsNetPositionRoutes(app: Express) {
   app.get("/api/stats/net-position-excel", requireAuth, requireNonPOS, async (req, res) => {
@@ -51,6 +52,7 @@ async function handleGetStatsNetPositionExcelStep2(
 
   // ── Send file ─────────────────────────────────────────────────────────
   const dateTag = getClientDate(req);
+  styleUniversalFinancialWorkbook(wb, wb.worksheets?.map((ws) => ({ name: ws.name })) ?? []);
   const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());
   // Non-fatal: audit write must not block the Excel download
   try {

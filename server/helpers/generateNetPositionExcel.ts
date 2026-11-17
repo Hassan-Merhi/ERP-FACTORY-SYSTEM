@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * Shared helper: builds the net-position monthly Excel workbook buffer.
  * Used by both the HTTP route (streams to browser) and the WhatsApp scheduler.
@@ -346,6 +347,10 @@ async function generateNetPositionExcelStep3(
     ws.getColumn(4).width = 18;
   }
 
+  styleUniversalFinancialWorkbook(
+    wb,
+    wb.worksheets.map((ws) => ({ name: ws.name }))
+  );
   const rawBuf = await wb.xlsx.writeBuffer();
   const buf = Buffer.isBuffer(rawBuf) ? rawBuf : Buffer.from(rawBuf);
   if (dest) {

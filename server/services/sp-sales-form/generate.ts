@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { cellFormula, cellResultText, cellText } from "../../lib/excelCellValue";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import ExcelJS from "exceljs";
@@ -40,6 +41,7 @@ import {
   r3,
   toUtcDate,
 } from "./layout";
+import { resolveFromMap } from "./generateResolveFromMap";
 
 export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promise<Buffer> {
   logger.info("RUNNING NEW SP EXPORT FIX 2026-07-06 DIRECT ENTRY WRITE");
@@ -224,25 +226,6 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
       openingAlias.set(k, resolved);
       openingAlias.set(nk(k), resolved);
     }
-  }
-
-  /**
-   * Resolve any lookup key to a value, trying:
-   *   1. Direct hit in map
-   *   2. Via alias map (original key)
-   *   3. Via alias map (normalized key)
-   *   4. Direct hit on normalized key
-   * Falls through all keys in order.
-   */
-  function resolveFromMap<V>(map: Map<string, V>, alias: Map<string, string>, ...keys: string[]): V | undefined {
-    for (const k of keys) {
-      if (!k) continue;
-      if (map.has(k)) return map.get(k);
-      const c = alias.get(k) ?? alias.get(nk(k));
-      if (c && map.has(c)) return map.get(c);
-      if (map.has(nk(k))) return map.get(nk(k));
-    }
-    return undefined;
   }
 
   /** Opening stock for an item — try all key variants. */
@@ -736,6 +719,10 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
   }
 
   // ── 7. Output ─────────────────────────────────────────────────────────────
+  // This workbook is filled from a positional Excel template. The imported
+  // template owns all formula ranges, print settings and sheet protection.
+  // Workbook-level branding only: do not change any worksheet contract.
+  styleSpecializedWorkbook(wb);
   const rawBuf = await wb.xlsx.writeBuffer();
   const buf = Buffer.from(new Uint8Array(rawBuf));
 

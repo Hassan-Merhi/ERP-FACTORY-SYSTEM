@@ -8,6 +8,10 @@ import {
   KeyRound,
   BarChart2,
   UserRound,
+  Package,
+  FileSpreadsheet,
+  Truck,
+  Users,
 } from "lucide-react";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useMemo } from "react";
@@ -15,7 +19,11 @@ import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock, LifeBuoy } from "lucide-react";
 import type { ShellUser } from "@/app/shellUser";
-import { canUsePropertiesCapability, canNavigateProperties, PROPERTIES_NAVIGATION } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  canNavigateProperties,
+  PROPERTIES_NAVIGATION,
+} from "@/properties/config/propertiesNavigation";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -50,6 +58,17 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "Logistics",
+    color: NAV_COLOR.finance,
+    items: [
+      { title: "Tracking", url: "/properties/tracking", icon: Truck },
+      { title: "Containers", url: "/properties/containers", icon: Package },
+      { title: "Stock", url: "/properties/stock", icon: Package },
+      { title: "Import PO", url: "/properties/po-import", icon: FileSpreadsheet },
+      { title: "Suppliers", url: "/properties/suppliers", icon: Users },
+    ],
+  },
+  {
     label: "Accounting Tools",
     color: NAV_COLOR.accounting,
     items: [{ title: "Accounting Toolbox", url: "/properties/accounting/toolbox", icon: ClipboardList }],
@@ -59,10 +78,15 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 /** One visibility policy for Properties sidebar and command search.
  * These routes are only registered for Developer in PropertiesRoutes.
  */
-export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSection[] {
+export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade = false): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => canNavigateProperties(item.url, { role: isDeveloper ? "Developer" : "User" }, null)),
+    items: section.items.filter((item) =>
+      canNavigateProperties(item.url, null, {
+        companyType: "properties",
+        role: isDeveloper ? "Developer" : canTrade ? "Owner" : "User",
+      })
+    ),
   })).filter((section) => section.items.length > 0);
 }
 
@@ -76,27 +100,28 @@ const pinnedIconsByPath = {
   "/properties/vouchers": FileText,
   "/properties/analytics": BarChart2,
 } as const;
-export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION
-  .filter((entry) => entry.navigation === "pinned")
-  .map((entry) => ({
-    title: entry.label,
-    url: entry.path,
-    icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
-  }));
+export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION.filter(
+  (entry) => entry.navigation === "pinned"
+).map((entry) => ({
+  title: entry.label,
+  url: entry.path,
+  icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
+}));
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const { selectedCompany } = useCompany();
   const isAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
   const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+  const canTrade = canUsePropertiesCapability("trading", user, selectedCompany);
   const canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany);
   // These pages are pinned at the top and should not also appear in
   // collapsible sections. Keep the registry entries for command search.
   const visibleSections = useMemo(
     () =>
-      getPropertiesVisibleNavSections(isDeveloper).filter(
+      getPropertiesVisibleNavSections(isDeveloper, canTrade).filter(
         (section) => !["Rentals", "Accounting"].includes(section.label)
       ),
-    [isDeveloper]
+    [isDeveloper, canTrade]
   );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
@@ -112,7 +137,10 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () => [...PROPERTIES_PINNED_DEFAULTS, ...visibleSections.flatMap((s) => s.items)],
     [visibleSections]
   );
-  const recentItems = useRecentNav(allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)), selectedCompany?.id);
+  const recentItems = useRecentNav(
+    allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)),
+    selectedCompany?.id
+  );
 
   const testIdFor = (i: NavItem) => `link-properties-${i.url.split("/").pop()}`;
 

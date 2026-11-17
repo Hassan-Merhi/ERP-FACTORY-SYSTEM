@@ -51,6 +51,8 @@ export const USD_FMT = '$#,##0.00;[Red]($#,##0.00);"–"';
 
 export const RATE_FMT = '$0.0000;[Red]($0.0000);"–"';
 
+export const PCT_FMT = '+0.0%;[Red]-0.0%;"–"';
+
 export function numeric(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;

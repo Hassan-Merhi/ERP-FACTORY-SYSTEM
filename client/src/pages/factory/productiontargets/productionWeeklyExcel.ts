@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import type ExcelJS from "exceljs";
 import { fetchProduction } from "../factoryProductionTargetsModel";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -306,6 +307,14 @@ function createWorkbook(
     workerSheet,
     "TOTAL PRODUCED = bales finalized under the worker on unlinked days + an equal whole-bale share of each linked team's output on that date. Team production is never counted twice. For odd totals, remaining bales go to the lowest worker ID; absent workers are excluded when another member is present.",
     12
+  );
+  styleFactoryOperationalWorkbook(
+    book,
+    book.worksheets.map((worksheet) => ({
+      name: worksheet.name,
+      titleRow: 1,
+      headerRow: 5,
+    }))
   );
   return book;
 }

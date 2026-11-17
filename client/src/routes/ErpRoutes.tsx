@@ -1,18 +1,15 @@
-import type { ComponentType } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import { legacyErpIntercompanyPaymentDestination } from "@/pages/intercompany/intercompanyLegacyNavigation";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const ErpHelpTraining = lazy(() =>
   import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.ErpHelpTraining }))
 );
 const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 const ErpSupplierReturns = lazy(() => import("@/pages/factory/FactorySupplierReturns"));
-import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
-import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
-import { useCompany } from "@/contexts/CompanyContext";
-import { canEnterErpGuardedRoute, effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
-import type { FeatureKey } from "@shared/schema";
+import { useErpRouteGuards, type ErpRouteUser, type RouteComponent } from "./useErpRouteGuards";
 import SpOverview from "@/pages/sp/SpOverview";
 import {
   AICommandCenter,
@@ -117,43 +114,16 @@ import {
   Vouchers,
 } from "@/lazyPages";
 
-interface ErpRouteUser {
-  role?: string | null;
-  currentRole?: string | null;
-}
-
 interface ErpRoutesProps {
   user: ErpRouteUser;
 }
 
-type RouteComponent = ComponentType;
+function LegacyIntercompanyPaymentRedirect() {
+  return <Redirect replace to={legacyErpIntercompanyPaymentDestination()} />;
+}
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
-  const { selectedCompany } = useCompany();
-  const { data: erpAccess } = useQuery<ErpFeatureAccess>({
-    ...erpPageAccessQueryOptions(selectedCompany?.id, Boolean(user)),
-  });
-
-  const effectiveRole = effectiveErpRole(user);
-  const roleAllowed = (path: string) => isErpRouteRoleAllowed(path, effectiveRole);
-  const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
-  const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
-  const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
-    canAccess(key) && roleAllowed(path) ? (
-      <Route path={path} component={Comp} />
-    ) : (
-      <Route path={path}>
-        <Redirect replace to="/tracking" />
-      </Route>
-    );
-  const R = (path: string, allowed: boolean, Comp: RouteComponent) =>
-    allowed && canEnterErpGuardedRoute(path, effectiveRole) ? (
-      <Route path={path} component={Comp} />
-    ) : (
-      <Route path={path}>
-        <Redirect replace to="/tracking" />
-      </Route>
-    );
+  const { erpAccess, effectiveRole, roleAllowed, canAccess, canAccessAny, G, R } = useErpRouteGuards(user);
 
   return (
     <Switch>
@@ -194,7 +164,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccessAny(["stock_items", "stock_query"]) ? (
+      {canAccessAny(["stock_items", "stock_query", "stock_otw"]) ? (
         <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/stock">
@@ -249,6 +219,24 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/offloads/:id", "containers", OffloadDetail)}
 
       {G("/po-import", "containers", POImport)}
+      {R(
+        "/intercompany/linked-trades",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LinkedTradesEditor
+      )}
+      {R(
+        "/intercompany/payments",
+        canAccess("vouchers") && canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LegacyIntercompanyPaymentRedirect
+      )}
+      {/* Destination ERP may still need the dedicated receipt/linked-PO route.
+          Keep these permission-gated compatibility routes until the ERP
+          container details have a matching receiving workflow. */}
+      {R(
+        "/intercompany/lifecycle",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyLifecycle
+      )}
       {R("/ai-validation", true, AiValidationPage)}
       {R("/ai-command-center", true, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}

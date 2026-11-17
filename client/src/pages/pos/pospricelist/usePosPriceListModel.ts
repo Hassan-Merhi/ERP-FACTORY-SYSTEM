@@ -20,7 +20,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
-import { exportFileName } from "@/lib/exportFile";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import type {
@@ -32,6 +31,7 @@ import type {
   PriceListRow,
 } from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
+import { buildPosPriceListExportRow } from "./posPriceListExportRow";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
 
@@ -587,52 +587,45 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (filteredItems.length === 0) return;
     setExporting(true);
     try {
-      const XLSX = await import("@/lib/excelHelper");
-
-      const rows = filteredItems.map((item) => {
-        const row: Record<string, unknown> = {
-          Code: item.code || "",
-          "Item Name": item.name,
-          Group: item.stockGroupName || "",
-        };
-
-        if (showCostPrice) {
-          row["Cost Price"] = item.costPrice && parseFloat(item.costPrice) > 0 ? parseFloat(item.costPrice) : "";
-          const offloadTotal = parseFloat(item.costPrice ?? "0") + parseFloat(item.offloadingCost ?? "0");
-          row["Cost + Offloading"] = offloadTotal > 0 ? offloadTotal : "";
-        }
-
-        if (isAllMode) {
-          row["Total Qty"] = parseFloat(item.totalQuantity ?? "0");
-          for (const m of masters) {
-            const price = masterPriceFor(item, m.id);
-            row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
-          }
-        } else {
-          row["Highest Price Sold"] = item.highestPriceSold == null ? "" : Number(item.highestPriceSold);
-          row["Lowest Price Sold"] = item.lowestPriceSold == null ? "" : Number(item.lowestPriceSold);
-          row["Qty Sold"] = Number(item.qtySold ?? 0);
-          row["Selling Price"] =
-            item.sellingPrice && parseFloat(item.sellingPrice) > 0
-              ? parseFloat(item.sellingPrice)
-              : item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0
-                ? parseFloat(item.baseSellingPrice)
-                : "";
-          row["Qty in Stock"] = item.quantity && parseFloat(item.quantity) > 0 ? parseFloat(item.quantity) : "";
-        }
-
-        return row;
-      });
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Price List");
+      const rows = filteredItems.map((item) =>
+        buildPosPriceListExportRow(item, { showCostPrice, isAllMode, masters, masterPriceFor })
+      );
 
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
       const searchPart = search.trim() ? ` search ${search.trim()}` : "";
 
-      await XLSX.writeFile(wb, exportFileName(`price list ${locationLabel}${filterPart}${searchPart}`, "xlsx"));
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const headers = [
+        "Code",
+        "Item Name",
+        "Group",
+        ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
+        ...(isAllMode
+          ? ["Total Qty", ...masters.map((master) => master.name)]
+          : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
+      ];
+      const types: Record<string, "auto" | "money" | "decimal"> = {};
+      for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
+      // In All Locations mode these price lists are intentionally re-importable:
+      // the parser expects Code and location names in the first worksheet row.
+      const dateStr = new Date().toLocaleDateString("en-CA");
+      await exportOperationalWorkbook({
+        title: "POS Price List",
+        fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",
+        mode: isAllMode ? "import-template" : "report",
+        filters: [{ label: "Location", value: isAllMode ? "All Locations" : (selectedLocation?.name ?? "Unknown") }],
+        sheets: [
+          {
+            name: "Price List",
+            rows,
+            columns: columnsFromOperationalRows(rows, {
+              orderedHeaders: headers,
+              types,
+            }),
+          },
+        ],
+      });
     } finally {
       setExporting(false);
     }

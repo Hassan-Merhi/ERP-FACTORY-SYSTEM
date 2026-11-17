@@ -1,5 +1,6 @@
 import { useStockItemsPart1 } from "./useStockItemsPart1";
 import { useStockItemsPart2 } from "./useStockItemsPart2";
+import { useStockItemsPart3 } from "./useStockItemsPart3";
 
 export function useStockItems() {
   const {
@@ -42,6 +43,7 @@ export function useStockItems() {
     locations,
     manageCategoriesOpen,
     manageGradesOpen,
+    myErpPages,
     newCategoryName,
     newGradeName,
     pendingCategoryId,
@@ -50,6 +52,7 @@ export function useStockItems() {
     resetFilters,
     searchTerm,
     selectedCategoryFilter,
+    selectedCompany,
     selectedGradeFilter,
     selectedGroupFilter,
     selectedIds,
@@ -91,14 +94,12 @@ export function useStockItems() {
     toast,
     totalItems,
     totalPages,
-    updateCategoryMutation,
     updateGradeMutation,
   } = useStockItemsPart1();
   const {
     allPageSelected,
     deleteCategoryMutation,
     exportSalesHistory,
-    exportToExcel,
     getCategoryName,
     getGradeName,
     getStockGroupName,
@@ -107,6 +108,7 @@ export function useStockItems() {
     handleSelectAll,
     handleSelectItem,
     handleStockItemClick,
+    updateCategoryMutation,
   } = useStockItemsPart2({
     adjustLocationId,
     adjustQuantity,
@@ -114,24 +116,35 @@ export function useStockItems() {
     adjustStockMutation,
     adjustType,
     displayItems,
-    exportingStockItems,
-    formatAmount,
-    locations,
-    searchTerm,
-    selectedCategoryFilter,
-    selectedGradeFilter,
-    selectedGroupFilter,
+    selectedCompany,
     selectedIds,
     setDetailsDialogOpen,
     setEditDialogOpen,
     setEditStockItemId,
-    setExportingStockItems,
+    setEditingCategoryId,
+    setEditingCategoryName,
     setSelectedIds,
     setSelectedStockItemId,
     setSelectedStockItemName,
     stockCategories,
     stockGrades,
     stockGroups,
+    toast,
+  });
+  const { exportToExcel } = useStockItemsPart3({
+    exportingStockItems,
+    getCategoryName,
+    getGradeName,
+    getStockGroupName,
+    hideStockRates,
+    locations,
+    myErpPages,
+    searchTerm,
+    selectedCategoryFilter,
+    selectedCompany,
+    selectedGradeFilter,
+    selectedGroupFilter,
+    setExportingStockItems,
     toast,
   });
 

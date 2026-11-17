@@ -1,4 +1,4 @@
-import { exportFileName } from "@/lib/exportFile";
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import type { MarketRow, ProfitDirectionFilter } from "./itemMarketAnalysisParts";
 
 type MarketStatus = MarketRow["marketStatus"];
@@ -378,11 +378,23 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     })
   );
 
-  const companyPart =
-    options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + " companies";
-  const filename = exportFileName(`item market analysis ${companyPart}`, "xlsx", {
-    from: options.startDate,
-    to: options.endDate,
+  const filename =
+    "item_market_analysis_" +
+    safeFilePart(
+      options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + "_companies"
+    ) +
+    "_" +
+    (options.startDate || "all") +
+    "_to_" +
+    (options.endDate || "all") +
+    ".xlsx";
+  styleSpecializedWorkbook(workbook, {
+    sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
   });
   await writeFile(workbook, filename);
+}
+
+/** File-name-safe form of a label: anything but letters, digits, "_" and "-" becomes "-". */
+function safeFilePart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
 }

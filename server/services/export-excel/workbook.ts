@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import ExcelJS from "exceljs";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -676,7 +677,9 @@ export async function streamCompanyWorkbookDirect(
     totalRow.getCell(2).font = { bold: true, size: 11 };
     totalRow.getCell(2).numFmt = "#,##0";
   }
-
+  styleSpecializedWorkbook(wb, {
+    sheets: [{ name: "SUMMARY", purpose: "report" }],
+  });
   const workbookBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(new Uint8Array(toArrayBuffer(new Uint8Array(workbookBuffer))));
 }

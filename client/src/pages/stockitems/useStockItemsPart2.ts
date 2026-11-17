@@ -2,8 +2,6 @@
 import type { MouseEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { exportFileName } from "@/lib/exportFile";
-import { loadStockItemsForExport } from "./stockItemsExport";
 import { useStockItemsPart1 } from "./useStockItemsPart1";
 
 export function useStockItemsPart2({
@@ -13,18 +11,13 @@ export function useStockItemsPart2({
   adjustStockMutation,
   adjustType,
   displayItems,
-  exportingStockItems,
-  formatAmount,
-  locations,
-  searchTerm,
-  selectedCategoryFilter,
-  selectedGradeFilter,
-  selectedGroupFilter,
+  selectedCompany,
   selectedIds,
   setDetailsDialogOpen,
   setEditDialogOpen,
   setEditStockItemId,
-  setExportingStockItems,
+  setEditingCategoryId,
+  setEditingCategoryName,
   setSelectedIds,
   setSelectedStockItemId,
   setSelectedStockItemName,
@@ -40,18 +33,13 @@ export function useStockItemsPart2({
   | "adjustStockMutation"
   | "adjustType"
   | "displayItems"
-  | "exportingStockItems"
-  | "formatAmount"
-  | "locations"
-  | "searchTerm"
-  | "selectedCategoryFilter"
-  | "selectedGradeFilter"
-  | "selectedGroupFilter"
+  | "selectedCompany"
   | "selectedIds"
   | "setDetailsDialogOpen"
   | "setEditDialogOpen"
   | "setEditStockItemId"
-  | "setExportingStockItems"
+  | "setEditingCategoryId"
+  | "setEditingCategoryName"
   | "setSelectedIds"
   | "setSelectedStockItemId"
   | "setSelectedStockItemName"
@@ -60,6 +48,21 @@ export function useStockItemsPart2({
   | "stockGroups"
   | "toast"
 >) {
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) =>
+      apiRequest("PATCH", `/api/stock-categories/${id}`, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-categories"] });
+      setEditingCategoryId(null);
+      setEditingCategoryName("");
+      toast({ title: "Category updated" });
+    },
+    onError: (error: Error) => {
+      if (error._handledGlobally) return;
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteCategoryMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/stock-categories/${id}`),
     onSuccess: () => {
@@ -178,106 +181,39 @@ export function useStockItemsPart2({
             : "",
         });
       }
-      const { utils, writeFile } = await import("@/lib/excelHelper");
-      const worksheet = utils.json_to_sheet(data);
-      const workbook = utils.book_new();
-      utils.book_append_sheet(workbook, worksheet, "Sales History");
-      await writeFile(workbook, exportFileName("stock items sales history", "xlsx"));
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      await exportOperationalWorkbook({
+        title: "Stock Items — Sales History",
+        fileName: "stock-items-sales-history.xlsx",
+        companyName: selectedCompany?.name,
+        sheets: [
+          {
+            name: "Sales History",
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: [
+                "Item Code",
+                "Item Name",
+                "Sale #",
+                "Voucher No.",
+                "Date",
+                "Location",
+                "Qty",
+                "Rate",
+                "Amount",
+              ],
+            }),
+            rows: data,
+          },
+        ],
+      });
     } catch {
       toast({ title: "Export failed", description: "Could not export sales history", variant: "destructive" });
-    }
-  };
-
-  const exportToExcel = async () => {
-    if (exportingStockItems) return;
-    if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Exports require a connection", variant: "destructive" });
-      return;
-    }
-    setExportingStockItems(true);
-    try {
-      const [allItems, pricesRes, costDubaiRes, aliasesRes] = await Promise.all([
-        loadStockItemsForExport({
-          search: searchTerm,
-          stockGroupId: selectedGroupFilter,
-          gradeId: selectedGradeFilter,
-          categoryId: selectedCategoryFilter,
-        }),
-        fetch("/api/stock-item-location-prices/all", { credentials: "include" }),
-        fetch("/api/stock-items/cost-dubai", { credentials: "include" }),
-        fetch("/api/stock-items/all-code-aliases", { credentials: "include" }),
-      ]);
-      if (!pricesRes.ok || !costDubaiRes.ok || !aliasesRes.ok) {
-        throw new Error("Failed to fetch stock item pricing or aliases");
-      }
-      if (allItems.length === 0) {
-        toast({ title: "No stock items", description: "No items match the current filters." });
-        return;
-      }
-      const locationPrices: { stockItemId: number; locationId: number; locationName: string; sellingPrice: string }[] =
-        await pricesRes.json();
-      const costDubaiData: { stockItemId: number; costDubai: string }[] = await costDubaiRes.json();
-      const aliasData: { stockItemId: number; aliasCode: string }[] = await aliasesRes.json();
-
-      const costDubaiMap = new Map<number, string>();
-      for (const costDubai of costDubaiData) costDubaiMap.set(costDubai.stockItemId, costDubai.costDubai);
-
-      const priceMap = new Map<number, Map<string, string>>();
-      for (const locationPrice of locationPrices) {
-        if (!priceMap.has(locationPrice.stockItemId)) priceMap.set(locationPrice.stockItemId, new Map());
-        priceMap.get(locationPrice.stockItemId)!.set(locationPrice.locationName, locationPrice.sellingPrice);
-      }
-
-      const exportAliasMap = new Map<number, string[]>();
-      for (const alias of aliasData) {
-        if (!exportAliasMap.has(alias.stockItemId)) exportAliasMap.set(alias.stockItemId, []);
-        exportAliasMap.get(alias.stockItemId)!.push(alias.aliasCode);
-      }
-
-      const sortedLocations = locations.map((location) => location.name).sort();
-      const data = allItems.map((item) => {
-        const costDubai = costDubaiMap.get(item.id);
-        const defaultPrice = item.sellingPrice || "0";
-        const itemAliases = exportAliasMap.get(item.id) ?? [];
-        const row: Record<string, string> = {
-          Code: item.code,
-          Name: item.name,
-          Barcode: item.barcode || "",
-          "Alias Codes": itemAliases.join(", "),
-          UOM: item.uom,
-          "Stock Group": getStockGroupName(item.stockGroupId) ?? "— No Group —",
-          Grade: getGradeName(item.gradeId) || "",
-          Category: getCategoryName(item.categoryId) || "",
-          "Default Selling Price": formatAmount(defaultPrice),
-          "Cost Dubai": costDubai ? formatAmount(costDubai) : "",
-        };
-        for (const location of sortedLocations) {
-          const locationPrice = priceMap.get(item.id)?.get(location);
-          row[`Price - ${location}`] = formatAmount(locationPrice ?? defaultPrice);
-        }
-        row.Active = item.active ? "Yes" : "No";
-        return row;
-      });
-      const { utils, writeFile } = await import("@/lib/excelHelper");
-      const worksheet = utils.json_to_sheet(data);
-      const workbook = utils.book_new();
-      utils.book_append_sheet(workbook, worksheet, "Stock Items");
-      await writeFile(workbook, exportFileName("stock items", "xlsx"));
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Could not export stock items",
-        variant: "destructive",
-      });
-    } finally {
-      setExportingStockItems(false);
     }
   };
   return {
     allPageSelected,
     deleteCategoryMutation,
     exportSalesHistory,
-    exportToExcel,
     getCategoryName,
     getGradeName,
     getStockGroupName,
@@ -286,5 +222,6 @@ export function useStockItemsPart2({
     handleSelectAll,
     handleSelectItem,
     handleStockItemClick,
+    updateCategoryMutation,
   };
 }

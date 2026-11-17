@@ -268,6 +268,7 @@ export function useStockItemsPart1Part1() {
     locations,
     manageCategoriesOpen,
     manageGradesOpen,
+    myErpPages,
     newCategoryName,
     newGradeName,
     pendingCategoryId,
@@ -276,6 +277,7 @@ export function useStockItemsPart1Part1() {
     resetFilters,
     searchTerm,
     selectedCategoryFilter,
+    selectedCompany,
     selectedGradeFilter,
     selectedGroupFilter,
     selectedIds,
@@ -319,4 +321,23 @@ export function useStockItemsPart1Part1() {
     totalPages,
     updateGradeMutation,
   };
+}
+
+export function useStockItemsPart1Part2({
+  setNewCategoryName,
+  toast,
+}: Pick<Awaited<ReturnType<typeof useStockItemsPart1Part1>>, "setNewCategoryName" | "toast">) {
+  const createCategoryMutation = useMutation({
+    mutationFn: async (name: string) => apiRequest("POST", "/api/stock-categories", { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-categories"] });
+      setNewCategoryName("");
+      toast({ title: "Category created" });
+    },
+    onError: (error: Error) => {
+      if (error._handledGlobally) return;
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    },
+  });
+  return { createCategoryMutation };
 }

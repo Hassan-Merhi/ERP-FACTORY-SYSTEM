@@ -1,24 +1,23 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * Pure helpers and lookup tables for the FactoryAttendance page.
  *
  * Extracted from FactoryAttendance.tsx during the Phase 4 god-file split.
  */
 import * as XLSX from "@/lib/excelHelper";
-import type { AttendanceRecord, AttendanceStatus, PrintLang, WeekDay, WorkerRow } from "./types";
-import { exportFileName } from "@/lib/exportFile";
-import { LABELS, STATUS_MARKS, WEEKLY_CSS, buildRangeSheet, weekLabel } from "./utilsBuildRangeSheet";
+import type { AttendanceRecord, AttendanceStatus, PrintLang, ViewMode, WeekDay, WorkerRow } from "./types";
+import { LABELS, STATUS_MARKS, WEEKLY_COLGROUP, WEEKLY_CSS, buildRangeSheet, weekLabel } from "./utilsBuildRangeSheet";
 export {
   LABELS,
   STATUS_COLORS,
   STATUS_MARKS,
-  STATUS_OPTIONS,
+  WEEKLY_COLGROUP,
   WEEKLY_CSS,
   buildRangeSheet,
   buildWeeklySheet,
   exportWeeklyExcel,
   formatDate,
   generateDateRange,
-  getInitialMode,
   getWeekDays,
   localDateStr,
   setModeInUrl,
@@ -26,15 +25,12 @@ export {
   weekLabel,
 } from "./utilsBuildRangeSheet";
 
-export const WEEKLY_COLGROUP = `
-  <colgroup>
-    <col class="col-num">
-    <col class="col-name">
-    <col class="col-day"><col class="col-day"><col class="col-day">
-    <col class="col-day"><col class="col-day"><col class="col-day">
-    <col class="col-notes">
-  </colgroup>
-`;
+export const STATUS_OPTIONS: AttendanceStatus[] = ["Present", "Absent", "Late", "Half Day", "Leave"];
+
+export function getInitialMode(): ViewMode {
+  const p = new URLSearchParams(window.location.search);
+  return p.get("mode") === "perWorker" ? "perWorker" : "daily";
+}
 
 export function generateWeeklyBlankSheetHtml(
   workers: WorkerRow[],
@@ -240,7 +236,11 @@ export async function exportRangeExcel(
   XLSX.utils.book_append_sheet(wb, activeSheet, lang === "ar" ? "نشط" : "Active Workers");
   XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
 
-  await XLSX.writeFile(wb, exportFileName("attendance range", "xlsx", { from: startDate, to: endDate }));
+  styleFactoryOperationalWorkbook(wb, [
+    { name: lang === "ar" ? "نشط" : "Active Workers", titleRow: 1, headerRow: 3 },
+    { name: lang === "ar" ? "غير نشط" : "Inactive Workers", titleRow: 1, headerRow: 3 },
+  ]);
+  await XLSX.writeFile(wb, `attendance-range-${startDate}-to-${endDate}.xlsx`);
 }
 
 export function generateRangePrintHtml(

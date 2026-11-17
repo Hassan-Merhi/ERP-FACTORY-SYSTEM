@@ -1,9 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -11,31 +9,33 @@ import { Plus, Trash2, Upload, Download, FileText, Pencil, Save, X } from "lucid
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { calculateLineTotal, parseFiniteNumber } from "./useSupplierProformasStatePart1";
-import {
-  SupplierProformasSection,
-  SupplierProformasTableRowSection,
-  useSupplierProformasState,
-} from "./SupplierProformasSection";
+import { SupplierProformasTableRowSection, useSupplierProformasState } from "./useSupplierProformasState";
+import { SupplierProformasDialogSection, SupplierProformasSection } from "./SupplierProformasSection";
 
 export default function SupplierProformas() {
   const {
     addLineMutation,
     addingLine,
     commitRename,
+    createDestinationId,
     createMutation,
     createNotes,
     createRef,
     deleteLineMutation,
     deleteMutation,
+    destinationLabel,
+    destinations,
     downloadTemplate,
     editLineData,
     editingLineId,
     exportProformaExcel,
     fileInputRef,
+    filterDestinationId,
     handleBack,
     handleFileImport,
     isLoading,
     newLine,
+    ownerCompanyId,
     pendingDelete,
     proformas,
     recordChanges,
@@ -45,10 +45,12 @@ export default function SupplierProformas() {
     selectedProforma,
     selectedProformaId,
     setAddingLine,
+    setCreateDestinationId,
     setCreateNotes,
     setCreateRef,
     setEditLineData,
     setEditingLineId,
+    setFilterDestinationId,
     setImportTarget,
     setNewLine,
     setPendingDelete,
@@ -102,12 +104,17 @@ export default function SupplierProformas() {
         <SupplierProformasSection
           commitRename={commitRename}
           deleteMutation={deleteMutation}
+          destinationLabel={destinationLabel}
+          destinations={destinations}
+          filterDestinationId={filterDestinationId}
+          ownerCompanyId={ownerCompanyId}
           proformas={proformas}
           recordChanges={recordChanges}
           renameInputRef={renameInputRef}
           renameValue={renameValue}
           renamingId={renamingId}
           selectedProformaId={selectedProformaId}
+          setFilterDestinationId={setFilterDestinationId}
           setPendingDelete={setPendingDelete}
           setRenameValue={setRenameValue}
           setRenamingId={setRenamingId}
@@ -318,45 +325,19 @@ export default function SupplierProformas() {
         }}
       />
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Proforma</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Reference *</label>
-              <Input
-                value={createRef}
-                onChange={(e) => setCreateRef(e.target.value)}
-                placeholder="e.g. PF-2026-001"
-                data-testid="input-proforma-ref"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Notes</label>
-              <Textarea
-                value={createNotes}
-                onChange={(e) => setCreateNotes(e.target.value)}
-                placeholder="Optional notes..."
-                data-testid="input-proforma-notes"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes })}
-                disabled={!createRef.trim() || createMutation.isPending}
-                data-testid="button-confirm-create"
-              >
-                Create
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SupplierProformasDialogSection
+        createDestinationId={createDestinationId}
+        createMutation={createMutation}
+        createNotes={createNotes}
+        createRef={createRef}
+        destinations={destinations}
+        ownerCompanyId={ownerCompanyId}
+        setCreateDestinationId={setCreateDestinationId}
+        setCreateNotes={setCreateNotes}
+        setCreateRef={setCreateRef}
+        setShowCreateDialog={setShowCreateDialog}
+        showCreateDialog={showCreateDialog}
+      />
     </div>
   );
 }

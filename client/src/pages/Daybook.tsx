@@ -60,12 +60,16 @@ import type {
   ViewVoucherEntry,
 } from "./daybook/types";
 import { loadDaybookState, saveDaybookState } from "./daybook/state";
+import {
+  openDaybookVoucherEditor,
+  useDaybookDeleteMutation,
+  useDaybookLinkedVoucherIds,
+} from "./useDaybookIntercompany";
 import { DaybookFilters } from "./daybook/DaybookFilters";
 import { DaybookTable } from "./daybook/DaybookTable";
 import "./daybook/daybook-premium.css";
 import { VoucherDetailsDialog } from "./daybook/VoucherDetailsDialog";
 import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
-import { voucherEditPath } from "./daybook/voucherEditRoute";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
@@ -557,6 +561,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     [allRows, hiddenRowIds, showHidden]
   );
   const displayedRows = useMemo(() => visibleRows.slice(0, daybookRowLimit), [visibleRows, daybookRowLimit]);
+  const linkedVoucherIds = useDaybookLinkedVoucherIds(selectedCompany?.id, displayedRows);
 
   const canEdit = (v: Voucher) =>
     recordChanges.allowed &&
@@ -571,35 +576,15 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     setViewProfitFilter("all");
     setViewDialogOpen(true);
   };
-  const handleEdit = (v: Voucher) => {
-    // Purchase lock icon → navigate directly to the container page for that PO
-    if (v.voucherType === "Purchase") {
-      const fallback = voucherEditPath(v, vouchersBase)!;
-      fetch(`/api/vouchers/${v.id}/view-entries`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          const po = data && !Array.isArray(data) ? data.purchaseOrder : null;
-          navigate(po?.containerId ? `/containers/${po.containerId}` : fallback);
-        })
-        .catch(() => navigate(fallback));
-      return;
-    }
-    const path = voucherEditPath(v, vouchersBase);
-    if (path) navigate(path);
-    else toast({ title: "Info", description: `Editing ${v.voucherType} not supported.`, variant: "destructive" });
-  };
+  const handleEdit = (v: Voucher) => openDaybookVoucherEditor(v, { vouchersBase, navigate, toast });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return apiRequest("DELETE", `/api/vouchers/${id}`);
-    },
-    onSuccess: () => {
-      void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
-      refreshBalances();
-      toast({ title: "Deleted", description: "Voucher deleted" });
-      setDeleteDialogOpen(false);
-    },
+  const deleteMutation = useDaybookDeleteMutation({
+    recordChanges,
+    voucherToDelete,
+    companyId: selectedCompany?.id,
+    refreshBalances,
+    toast,
+    setDeleteDialogOpen,
   });
 
   const editMutation = useMutation({
@@ -797,6 +782,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                 }}
                 canEdit={canEdit}
                 canDelete={canDelete}
+                linkedVoucherIds={linkedVoucherIds}
                 daybookRowLimit={daybookRowLimit}
                 setDaybookRowLimit={setDaybookRowLimit}
                 DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
@@ -880,13 +866,18 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              {voucherToDelete && linkedVoucherIds.has(voucherToDelete.id)
+                ? "This is an intercompany import voucher. Deleting it removes every original PO and import voucher in BOTH companies and their linked container. No reversal voucher is created. Received stock, payments, revised charges or other dependencies will block deletion."
+                : "This action cannot be undone."}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => voucherToDelete && deleteMutation.mutate(voucherToDelete.id)}
               className="bg-destructive"
+              disabled={deleteMutation.isPending}
             >
               Delete
             </AlertDialogAction>

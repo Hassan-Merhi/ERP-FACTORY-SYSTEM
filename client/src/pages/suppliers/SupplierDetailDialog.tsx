@@ -8,89 +8,55 @@
  * ./ledgerSummaries so the numbers stay identical to the pre-extraction page.
  */
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, Download, ExternalLink, EyeOff, FileText } from "lucide-react";
-import { format } from "date-fns";
-import type { Company } from "@/contexts/CompanyContext";
-import { typeBadgeClass } from "./supplierDisplay";
-import type { SupplierLedgerRow, SupplierPurchaseOrder, SupplierWithStats } from "./supplierDisplay";
-import {
-  computeLedgerKpis,
-  currentLedgerBalance,
-  displayedLedgerRows,
-  enrichPurchaseOrderTotals,
-  filterLedgerRowsByDate,
-  hiddenPaymentsCount,
-  purchaseOrderGrandTotal,
-  type SupplierDateFilter,
-} from "./ledgerSummaries";
+import { Download } from "lucide-react";
+import { useSupplierDetailDialogState, type SupplierDetailDialogProps } from "./useSupplierDetailDialogState";
+import { SupplierDetailDialogTabsSection } from "./SupplierDetailDialogTabsSection";
+export type { SupplierDetailDialogProps, SupplierDetailTab } from "./useSupplierDetailDialogState";
 
-export type SupplierDetailTab = "transactions" | "purchase-orders";
-
-export interface SupplierDetailDialogProps {
-  supplier: SupplierWithStats | null;
-  companies: Company[];
-  formatAmount: (amount: number) => string;
-  companyFilter: string;
-  onCompanyFilterChange: (value: string) => void;
-  dateFilter: SupplierDateFilter;
-  onDateFilterChange: (value: SupplierDateFilter) => void;
-  hidePayments: boolean;
-  onToggleHidePayments: () => void;
-  unifiedLedger: SupplierLedgerRow[];
-  ledgerLoading: boolean;
-  purchaseOrders: SupplierPurchaseOrder[];
-  posLoading: boolean;
-  dialogTab: SupplierDetailTab;
-  onDialogTabChange: (tab: SupplierDetailTab) => void;
-  onClose: () => void;
-  onExport: () => void;
-  canExport?: boolean;
-  exportUnavailableReason?: string;
-  onTransactionClick: (txn: SupplierLedgerRow) => void;
-  onPOClick: (po: SupplierPurchaseOrder) => void;
-  onContainerClick: (po: { companyId: number | null; containerId?: number | null }) => void;
-}
-
-export function SupplierDetailDialog({
-  supplier,
-  companies,
-  formatAmount,
-  companyFilter,
-  onCompanyFilterChange,
-  dateFilter,
-  onDateFilterChange,
-  hidePayments,
-  onToggleHidePayments,
-  unifiedLedger,
-  ledgerLoading,
-  purchaseOrders,
-  posLoading,
-  dialogTab,
-  onDialogTabChange,
-  onClose,
-  onExport,
-  canExport = true,
-  exportUnavailableReason,
-  onTransactionClick,
-  onPOClick,
-  onContainerClick,
-}: SupplierDetailDialogProps) {
-  const openingEntry = unifiedLedger.find((t) => t.type === "opening");
-  const ledgerRows = unifiedLedger.filter((t) => t.type !== "opening");
-  const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter);
-  const { txCount, totalPurchases, totalPayments, totalPurchasesQty } = computeLedgerKpis(filteredLedgerRows);
-  const currentBalance = currentLedgerBalance(unifiedLedger);
-  const displayedRows = displayedLedgerRows(filteredLedgerRows, hidePayments);
-  const hiddenCount = hiddenPaymentsCount(filteredLedgerRows, hidePayments);
-  const sortedPOs = enrichPurchaseOrderTotals(purchaseOrders);
-  const grandTotal = purchaseOrderGrandTotal(sortedPOs);
+export function SupplierDetailDialog(props: SupplierDetailDialogProps) {
+  const {
+    canExport,
+    companies,
+    companyFilter,
+    currentBalance,
+    dateFilter,
+    destinationFilter,
+    destinationOptions,
+    dialogTab,
+    displayedRows,
+    exportUnavailableReason,
+    filteredLedgerRows,
+    formatAmount,
+    grandTotal,
+    hasUnassigned,
+    hiddenCount,
+    hidePayments,
+    ledgerLoading,
+    onClose,
+    onCompanyFilterChange,
+    onContainerClick,
+    onDateFilterChange,
+    onDestinationFilterChange,
+    onDialogTabChange,
+    onExport,
+    onPOClick,
+    onToggleHidePayments,
+    onTransactionClick,
+    openingEntry,
+    posLoading,
+    runningDestinationNet,
+    sortedPOs,
+    supplier,
+    totalPayments,
+    totalPurchases,
+    totalPurchasesQty,
+    txCount,
+    unifiedLedger,
+  } = useSupplierDetailDialogState(props);
 
   return (
     <Dialog open={!!supplier} onOpenChange={onClose}>
@@ -111,6 +77,24 @@ export function SupplierDetailDialog({
                     {company.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={destinationFilter} onValueChange={onDestinationFilterChange}>
+              <SelectTrigger
+                className="w-48"
+                data-testid="select-destination-filter"
+                aria-label="Filter destination company"
+              >
+                <SelectValue placeholder="All Destinations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Destinations</SelectItem>
+                {destinationOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={String(id)}>
+                    {name}
+                  </SelectItem>
+                ))}
+                {hasUnassigned && <SelectItem value="unassigned">Unassigned</SelectItem>}
               </SelectContent>
             </Select>
             <Button
@@ -159,7 +143,9 @@ export function SupplierDetailDialog({
               {ledgerLoading ? <Skeleton className="h-5 w-10" /> : <p className="font-semibold text-sm">{txCount}</p>}
             </div>
             <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-              <p className="text-xs text-muted-foreground mb-1">Balance</p>
+              <p className="text-xs text-muted-foreground mb-1">
+                {destinationFilter === "all" ? "Balance" : "Destination Net"}
+              </p>
               {ledgerLoading ? (
                 <Skeleton className="h-5 w-24" />
               ) : (
@@ -199,242 +185,26 @@ export function SupplierDetailDialog({
         </DialogHeader>
 
         {/* ── Tabs ── */}
-        <Tabs
-          value={dialogTab}
-          onValueChange={(v) => onDialogTabChange(v as SupplierDetailTab)}
-          className="flex-1 flex flex-col overflow-hidden min-h-0"
-        >
-          <div className="px-6 pt-3 pb-0 shrink-0 flex items-center gap-3 flex-wrap">
-            <div className="erp-mobile-scroll-tabs min-w-0 max-w-full flex-1 pb-1">
-              <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Supplier details">
-                <TabsTrigger value="transactions" data-testid="tab-transactions">
-                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                  Transactions
-                </TabsTrigger>
-                <TabsTrigger value="purchase-orders" data-testid="tab-purchase-orders">
-                  <FileText className="h-3.5 w-3.5 mr-1.5" />
-                  Purchase Orders {purchaseOrders.length > 0 && `(${purchaseOrders.length})`}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-            {dialogTab === "transactions" && (
-              <Button
-                variant={hidePayments ? "default" : "outline"}
-                size="sm"
-                className="text-xs gap-1.5 ml-auto"
-                onClick={onToggleHidePayments}
-                data-testid="button-hide-payments"
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-                {hidePayments ? `Payments hidden (${hiddenCount})` : "Hide Payments"}
-              </Button>
-            )}
-          </div>
-
-          {/* Transactions tab */}
-          <TabsContent value="transactions" className="mt-0 px-6 pb-5 pt-3 flex-1 overflow-hidden">
-            {ledgerLoading ? (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
-                  {[80, 100, 80, 150, 80, 80, 80].map((w, i) => (
-                    <Skeleton key={i} className="h-3.5 rounded-sm" style={{ width: w }} />
-                  ))}
-                </div>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="px-4 py-3 border-b last:border-b-0 flex gap-6 items-center">
-                    {[80, 100, 80, 150, 80, 80, 80].map((w, j) => (
-                      <Skeleton key={j} className="h-3 rounded-sm" style={{ width: w }} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : unifiedLedger.length === 0 ? (
-              <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">No transactions</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    No transactions found{companyFilter !== "all" ? " for this company" : ""}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {openingEntry && (
-                  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-2.5">
-                    <span className="text-xs font-medium text-muted-foreground">Opening Balance</span>
-                    <span className="font-mono font-semibold text-sm">{formatAmount(openingEntry.balance)}</span>
-                  </div>
-                )}
-                <Table wrapperClassName="max-h-[calc(90vh-390px)]" mobileLayout="cards">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="h-9 text-xs font-semibold">Date</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold">Type</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold">Ref</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">Debit</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">Credit</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {displayedRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10 text-sm text-muted-foreground">
-                          {hidePayments && filteredLedgerRows.length > 0
-                            ? "All transactions are payments — toggle off to show them."
-                            : "No transactions in this period"}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      displayedRows.map((txn, idx: number) => {
-                        const isPayment = txn.voucherType === "Payment" || txn.debit > 0;
-                        return (
-                          <TableRow key={`${txn.type}-${txn.docNumber}-${idx}`} className="text-xs">
-                            <TableCell className="py-2.5 font-mono text-muted-foreground whitespace-nowrap">
-                              {txn.date ? format(new Date(txn.date), "dd MMM yyyy") : "-"}
-                            </TableCell>
-                            <TableCell className="py-2.5">
-                              <Badge variant="secondary" className="text-xs">
-                                {txn.companyName}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-2.5">
-                              <Badge
-                                variant="secondary"
-                                className={`text-xs ${typeBadgeClass[isPayment ? "Payment" : txn.voucherType] || ""}`}
-                              >
-                                {isPayment ? "Payment" : txn.voucherType}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-2.5">
-                              {txn.containerNumber ? (
-                                <button
-                                  onClick={() => onContainerClick(txn)}
-                                  className="font-mono text-xs text-primary hover:underline cursor-pointer flex items-center gap-1"
-                                  data-testid={`link-container-${idx}`}
-                                >
-                                  {txn.containerNumber}
-                                  <ExternalLink className="h-3 w-3 shrink-0" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => onTransactionClick(txn)}
-                                  className="text-xs text-muted-foreground hover:text-primary hover:underline cursor-pointer flex items-center gap-1"
-                                  data-testid={`link-transaction-${idx}`}
-                                >
-                                  {txn.docNumber || "-"}
-                                  <ExternalLink className="h-3 w-3 shrink-0" />
-                                </button>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-2.5 text-right font-mono">
-                              {txn.debit > 0 ? formatAmount(txn.debit) : "—"}
-                            </TableCell>
-                            <TableCell className="py-2.5 text-right font-mono">
-                              {txn.credit > 0 ? formatAmount(txn.credit) : "—"}
-                            </TableCell>
-                            <TableCell className="py-2.5 text-right font-mono font-semibold">
-                              {formatAmount(txn.balance)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Purchase Orders tab */}
-          <TabsContent value="purchase-orders" className="mt-0 px-6 pb-5 pt-3 flex-1 overflow-hidden">
-            {posLoading ? (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
-                  {[160, 120, 100, 100].map((w, i) => (
-                    <Skeleton key={i} className="h-3.5 rounded-sm" style={{ width: w }} />
-                  ))}
-                </div>
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="px-4 py-3.5 border-b last:border-b-0 flex gap-6 items-center">
-                    {[160, 120, 100, 100].map((w, j) => (
-                      <Skeleton key={j} className="h-3 rounded-sm" style={{ width: w }} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : purchaseOrders.length === 0 ? (
-              <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">No purchase orders</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    No purchase orders found{companyFilter !== "all" ? " for this company" : ""}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Table wrapperClassName="max-h-[calc(90vh-340px)]">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="h-9 text-xs font-semibold">Container</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold">Import Date</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedPOs.map((po, idx: number) => (
-                      <TableRow key={po.id} className="text-sm cursor-pointer" onClick={() => onPOClick(po)}>
-                        <TableCell className="py-3">
-                          {po.containerId ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onContainerClick(po);
-                              }}
-                              className="flex items-center gap-1.5 font-mono font-semibold text-primary hover:underline"
-                              data-testid={`link-po-container-${idx}`}
-                            >
-                              {po.containerNumber || "-"}
-                              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                            </button>
-                          ) : (
-                            <span className="font-mono font-semibold">{po.containerNumber || "-"}</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3 font-mono text-sm text-muted-foreground">
-                          {po.importDate ? format(new Date(po.importDate), "dd MMM yyyy") : "-"}
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <Badge variant="secondary" className="text-xs">
-                            {po.companyName}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-3 text-right font-mono font-semibold">
-                          {formatAmount(po.totalAmount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="flex justify-end">
-                  <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                    <span className="text-muted-foreground">Grand Total</span>
-                    <span className="font-mono font-semibold">{formatAmount(grandTotal)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        <SupplierDetailDialogTabsSection
+          destinationFilter={destinationFilter}
+          dialogTab={dialogTab}
+          displayedRows={displayedRows}
+          filteredLedgerRows={filteredLedgerRows}
+          formatAmount={formatAmount}
+          grandTotal={grandTotal}
+          hiddenCount={hiddenCount}
+          hidePayments={hidePayments}
+          ledgerLoading={ledgerLoading}
+          onContainerClick={onContainerClick}
+          onDialogTabChange={onDialogTabChange}
+          onPOClick={onPOClick}
+          onToggleHidePayments={onToggleHidePayments}
+          onTransactionClick={onTransactionClick}
+          openingEntry={openingEntry}
+          posLoading={posLoading}
+          runningDestinationNet={runningDestinationNet}
+          sortedPOs={sortedPOs}
+        />
       </DialogContent>
     </Dialog>
   );

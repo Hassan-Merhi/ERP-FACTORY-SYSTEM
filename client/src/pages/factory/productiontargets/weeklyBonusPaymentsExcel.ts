@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import type ExcelJS from "exceljs";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
@@ -237,6 +238,14 @@ export function buildWeeklyBonusPaymentsWorkbook(
     totals,
     8,
     "Paid = posted and not reversed. Reversed gross is shown separately; it is NOT an unpaid amount eligible for repayment."
+  );
+  styleFactoryOperationalWorkbook(
+    book,
+    book.worksheets.map((worksheet) => ({
+      name: worksheet.name,
+      titleRow: 1,
+      headerRow: 5,
+    }))
   );
   return book;
 }

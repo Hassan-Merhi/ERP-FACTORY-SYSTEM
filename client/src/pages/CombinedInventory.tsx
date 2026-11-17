@@ -6,7 +6,8 @@ import { Layers, Search, ChevronRight, List, FolderOpen, Loader2, RefreshCw } fr
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
-import { useCombinedInventoryState, type CombinedInventoryProps } from "./useCombinedInventoryState";
+import type { CombinedInventoryProps } from "./CombinedInventoryTypes";
+import { useCombinedInventoryState } from "./useCombinedInventoryState";
 import { GroupsView, ItemsTable } from "./CombinedInventoryItemsTable";
 
 export default function CombinedInventory(props: CombinedInventoryProps) {

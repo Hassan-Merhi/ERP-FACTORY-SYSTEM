@@ -1,4 +1,5 @@
 // Extracted from ./locationInventoryRoutes.ts to keep that module under the source-size cap.
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import ExcelJS from "exceljs";
 import type { Express, Request, Response } from "express";
 import { parseId } from "../../../lib/parseId";
@@ -19,7 +20,7 @@ import {
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { amount, cents, plus } from "./registerFactoryLocationInventoryRoutesPart1";
+import { amount, cents, plus } from "./locationInventoryRoutesAmount";
 
 export function registerFactoryLocationInventoryRoutesPart2(app: Express) {
   app.get(
@@ -426,6 +427,12 @@ export function registerFactoryLocationInventoryRoutesPart2(app: Express) {
 
         const dateStr = getClientDate(req);
         // Build buffer BEFORE setting headers so ExcelJS errors can still return a clean JSON 500.
+        styleFactoryOperationalWorkbook(workbook, [
+          { name: "Stock Summary", headerRow: 1 },
+          { name: "Wipers & Garbage", headerRow: 1 },
+          { name: "Bale Details", headerRow: 1 },
+          { name: "Garbage & Wiper Details", headerRow: 1 },
+        ]);
         const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="inventory_location_${locationId}_${dateStr}.xlsx"`);

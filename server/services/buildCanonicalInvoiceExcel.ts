@@ -17,6 +17,7 @@ import {
 } from "./factoryInvoiceDocumentModel";
 import { buildLiveCanonicalInvoiceDocument } from "./factoryInvoiceDocumentSource";
 import { buildInvoiceRenderGroups, localizedLineCategory, localizedLineProduct } from "./factoryInvoiceRenderGroups";
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 
 export function currencySymbol(currency: unknown): string {
   const code = safeString(currency, "USD").toUpperCase();
@@ -403,7 +404,12 @@ export async function buildCanonicalInvoiceExcel(
   };
   sheet.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
   if (language === "ar") configureFactoryArabicWorksheet(sheet, language);
-
+  // Preserve canonical invoice source, localized headers, print totals and
+  // existing HMD logo. No accounting or order recalculations in this adapter.
+  styleSpecializedWorkbook(workbook, {
+    expectedSheetNames: [sheet.name],
+    sheets: [{ name: sheet.name, purpose: "report" }],
+  });
   const raw = await workbook.xlsx.writeBuffer();
   const buffer = Buffer.isBuffer(raw) ? Buffer.from(raw) : Buffer.from(raw as ArrayBuffer);
   if (buffer.length < 2 || buffer.subarray(0, 2).toString("ascii") !== "PK") {

@@ -25,6 +25,7 @@ import { utils, writeFile, read as readExcel, ExcelJS } from "@/lib/excelHelper"
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
 import type { ContainerDetailData, SpContainerDetailResponse } from "../containers/types";
+import { containerExportItemRows } from "./containerExportItemRows";
 
 /** Row returned by the container price-import preview endpoint. */
 export interface ContainerPriceImportPreviewRow {
@@ -359,18 +360,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Export failed");
 
-      const rows: { Code: string; Name: string; Qty: string; Rate: string; Value: string }[] = [];
-      for (const po of data.purchaseOrders || []) {
-        for (const item of po.lineItems || []) {
-          rows.push({
-            Code: item.stockItemCode || "",
-            Name: item.stockItemName || "",
-            Qty: item.quantity || "0",
-            Rate: item.rate || "0",
-            Value: item.lineTotal || "0",
-          });
-        }
-      }
+      const rows = containerExportItemRows(data);
 
       const worksheet = utils.json_to_sheet(rows);
       const workbook = utils.book_new();
@@ -513,7 +503,12 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   };
 
   // Determine the back URL based on container status
-  const backUrl = containerData?.container?.status === "SOLD" ? "/sold-containers" : "/containers";
+  const backUrl =
+    selectedCompany?.companyType === "properties"
+      ? "/properties/containers"
+      : containerData?.container?.status === "SOLD"
+        ? "/sold-containers"
+        : "/containers";
 
   const form = useForm<z.infer<typeof saleFormSchema>>({
     resolver: zodResolver(saleFormSchema),
@@ -561,7 +556,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
         title: "Container Deleted",
         description: "The container and all associated data have been removed",
       });
-      setLocation("/containers");
+      setLocation(selectedCompany?.companyType === "properties" ? "/properties/containers" : "/containers");
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;

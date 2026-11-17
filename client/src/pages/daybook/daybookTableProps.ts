@@ -28,6 +28,7 @@ export interface DaybookTableProps {
   handleDelete: (v: Voucher) => void;
   canEdit: (v: Voucher) => boolean;
   canDelete: () => boolean;
+  linkedVoucherIds: ReadonlySet<number>;
   daybookRowLimit: number;
   setDaybookRowLimit: (n: number | ((prev: number) => number)) => void;
   DAYBOOK_PAGE_SIZE: number;
