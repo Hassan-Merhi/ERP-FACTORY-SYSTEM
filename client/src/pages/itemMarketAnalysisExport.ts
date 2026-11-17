@@ -75,6 +75,10 @@ const numberFormat = "#,##0.00;[Red](#,##0.00);–";
 const quantityFormat = "#,##0.###;[Red](#,##0.###);–";
 const percentFormat = '0.00"%"';
 
+function safeFilePart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "") || "report";
+}
+
 function purchaseAmount(value: number | null, currencies: string[]): ExcelValue {
   return currencies.length > 1 ? "Mixed currencies" : value;
 }
