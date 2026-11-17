@@ -640,7 +640,6 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
       // In All Locations mode these price lists are intentionally re-importable:
       // the parser expects Code and location names in the first worksheet row.
-      const dateStr = new Date().toLocaleDateString("en-CA");
       await exportOperationalWorkbook({
         title: "POS Price List",
         fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",
