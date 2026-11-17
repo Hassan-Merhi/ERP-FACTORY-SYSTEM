@@ -181,7 +181,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -199,7 +199,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -215,7 +215,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -328,7 +328,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -350,7 +350,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -368,7 +368,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -389,7 +389,7 @@ export function useBaleProductsModel() {
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -475,7 +475,7 @@ export function useBaleProductsModel() {
       await XLSX.writeFile(wb, "bale_products_template.xlsx");
       toast({ title: "Template downloaded" });
     } catch {
-      toast({ title: "Error", description: "Failed to generate template", variant: "destructive" });
+      toast({ title: "Template download failed", description: "Failed to generate template", variant: "destructive" });
     }
   };
 

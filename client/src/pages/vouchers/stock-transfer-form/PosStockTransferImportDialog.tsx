@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { downloadBlob } from "@/lib/downloadBlob";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +34,7 @@ export function PosStockTransferImportDialog({ model }: { model: StockTransferFo
   const downloadTemplate = () => {
     // CSV opens normally in Excel, and needs no privileged server import endpoint.
     const csv = "Item Code,Quantity\r\n";
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "POS_Stock_Transfer_Import_Template.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "POS_Stock_Transfer_Import_Template.csv");
   };
 
   const loadRows = async () => {

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, Download, CheckCircle2 } from "lucide-react";
 import { utils, read, ExcelJS } from "@/lib/excelHelper";
@@ -47,12 +48,7 @@ export function UpdateCategoriesTab() {
     ws.addRow({ itemCode: "ITEM003", categoryName: "BL" });
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "update_categories_template.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, "update_categories_template.xlsx");
     toast({ title: "Template Downloaded", description: "Fill in Item Code and Category Name, then upload" });
   };
 
@@ -149,7 +145,7 @@ export function UpdateCategoriesTab() {
           </div>
 
           <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-categories-template">
-            <Download className="h-4 w-4 mr-2" /> Download Template
+            <Download className="h-4 w-4 mr-2" /> Download template
           </Button>
 
           <div className="space-y-2">

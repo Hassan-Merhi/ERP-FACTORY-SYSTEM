@@ -4,7 +4,7 @@
  *
  * Extracted from BalesHistory.tsx during the god-file split.
  */
-import { Boxes, Download, Package, PackageCheck, Shirt, Trash2, Weight } from "lucide-react";
+import { Boxes, Download, PackageCheck, Shirt, Trash2, Weight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,16 +32,8 @@ export function BalesHistoryOverview({ model }: { model: Model }) {
   return (
     <>
       {/* ── Inventory overview: counts still come directly from the existing model ── */}
+      {/* The page title lives in BalesHistory's PageHeader (standalone) or the Bales hub header. */}
       <div className="bales-modern-summary-card">
-        <div className="bales-modern-heading">
-          <div className="bales-modern-heading-icon">
-            <Package className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold leading-tight">Bales</h1>
-            <p className="text-xs text-muted-foreground leading-tight">Stock history, status management and removal</p>
-          </div>
-        </div>
         <div className="bales-modern-actions">
           <div className="bales-modern-kpi">
             <span className="bales-modern-kpi-icon">

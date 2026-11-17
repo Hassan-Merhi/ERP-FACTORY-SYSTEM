@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import { Download, FileSpreadsheet, Upload } from "lucide-react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 export type FactoryArabicImportMode = "fill-missing" | "replace-existing";
 
@@ -68,14 +70,7 @@ async function downloadResponse(response: Response, fallbackName: string): Promi
   const disposition = response.headers.get("content-disposition") || "";
   const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
   const fileName = match ? decodeURIComponent(match[1].replace(/"/g, "")) : fallbackName;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  downloadBlob(blob, fileName);
 }
 
 function createFormData(file: File, mode: FactoryArabicImportMode, previewToken?: string): FormData {
@@ -247,7 +242,7 @@ export function FactoryArabicTranslationActions({ className }: FactoryArabicTran
       );
     } catch (error) {
       toast({
-        title: "Error workbook failed",
+        title: "Export failed",
         description: (error as Error).message,
         variant: "destructive",
       });
@@ -262,16 +257,14 @@ export function FactoryArabicTranslationActions({ className }: FactoryArabicTran
     <>
       <div className={`flex flex-wrap gap-2 ${className || ""}`} data-testid="factory-arabic-actions">
         {canExport && (
-          <Button
-            variant="outline"
+          <ExportButton
+            kind="excel"
+            label="Export Excel (Arabic Names Template)"
             size="sm"
             onClick={exportTemplate}
-            disabled={exporting}
+            busy={exporting}
             data-testid="button-export-arabic-template"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {exporting ? "Exporting…" : "Export Arabic Names Template"}
-          </Button>
+          />
         )}
         {canImport && recordChanges.allowed && (
           <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="button-import-arabic-names">

@@ -138,7 +138,11 @@ export function PageVisibilityTree({ appMode }: { appMode?: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/role-permissions", selectedCompany?.id] });
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to update permission", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update permission",
+        variant: "destructive",
+      });
     },
   });
 

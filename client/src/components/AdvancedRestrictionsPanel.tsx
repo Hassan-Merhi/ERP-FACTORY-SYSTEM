@@ -127,7 +127,7 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
       queryClient.invalidateQueries({ queryKey: ["/api/settings/role-permissions", companyId] });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

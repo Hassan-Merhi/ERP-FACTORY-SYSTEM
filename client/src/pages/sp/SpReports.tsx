@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +21,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, BarChart3, FileSpreadsheet } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { QuickMonthlyClose } from "./golden-coast/QuickMonthlyClose";
 
 const REPORT_TABS = ["profit", "sales-form"] as const;
@@ -220,21 +223,9 @@ export default function SpReports() {
     try {
       const params = new URLSearchParams({ fromDate: exportFrom, toDate: exportTo });
       if (exportLocationId && exportLocationId !== "all") params.set("locationId", exportLocationId);
-      const res = await fetch(`/api/sp/sales-form/export?${params}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Export failed" }));
-        throw new Error(err.message);
-      }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      const filename = match ? match[1] : `sales_form_${exportFrom}_${exportTo}.xlsx`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = await downloadFromUrl(`/api/sp/sales-form/export?${params}`, {
+        fileName: exportFileName("sales form", "xlsx", { from: exportFrom, to: exportTo }),
+      });
       toast({ title: "Sales form exported", description: filename });
     } catch (e) {
       toast({ title: "Export failed", description: getErrorDetails(e).message, variant: "destructive" });
@@ -253,21 +244,9 @@ export default function SpReports() {
       const params = new URLSearchParams({ fromDate: exportFrom, toDate: exportTo });
       if (exportLocationId && exportLocationId !== "all") params.set("locationId", exportLocationId);
       if (exportCashAccountId && exportCashAccountId !== "none") params.set("cashAccountId", exportCashAccountId);
-      const res = await fetch(`/api/sp/sales-form/export-v2?${params}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Export failed" }));
-        throw new Error(err.message);
-      }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      const filename = match ? match[1] : `system_sales_form_${exportFrom}_${exportTo}.xlsx`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = await downloadFromUrl(`/api/sp/sales-form/export-v2?${params}`, {
+        fileName: exportFileName("system sales form", "xlsx", { from: exportFrom, to: exportTo }),
+      });
       toast({ title: "System sales form exported", description: filename });
     } catch (e) {
       toast({ title: "Export failed", description: getErrorDetails(e).message, variant: "destructive" });
@@ -278,10 +257,7 @@ export default function SpReports() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div>
-        <h1 className="text-xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Profit & Loss and Sales Form export</p>
-      </div>
+      <PageHeader title="Reports" subtitle="Profit & Loss and Sales Form export" />
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as ReportTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
@@ -509,50 +485,37 @@ export default function SpReports() {
               </div>
 
               <div className="flex flex-wrap gap-3 pt-1">
-                <Button
+                <ExportButton
+                  kind="excel"
+                  label="Export Excel (Template Form)"
+                  busy={exporting}
                   onClick={handleExportSalesForm}
                   disabled={exporting || exportingV2 || !exportFrom || !exportTo}
                   variant="outline"
                   data-testid="button-sp-export-sales-form"
-                >
-                  {exporting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" /> Export Template Form
-                    </>
-                  )}
-                </Button>
-                <Button
+                />
+                <ExportButton
+                  kind="excel"
+                  label="Export Excel (System Sales Form)"
+                  busy={exportingV2}
                   onClick={handleExportSalesFormV2}
                   disabled={exporting || exportingV2 || !exportFrom || !exportTo}
+                  variant="default"
                   data-testid="button-sp-export-sales-form-v2"
-                >
-                  {exportingV2 ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" /> Export System Sales Form
-                    </>
-                  )}
-                </Button>
+                />
               </div>
 
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Export Template Form</span> — fills the original
+                  <span className="font-medium text-foreground">Export Excel (Template Form)</span> — fills the original
                   supplier template with your data (18-day max, formula-based).
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Export System Sales Form</span> — clean from-scratch
-                  workbook built from your live system data. Opening &amp; closing stock match the Location Inventory
-                  page. Supports any date range. Three sheets: ENTRY (visible) plus Costing and Sales (hidden). Items
-                  with no opening, closing, or sales activity are omitted. Opening cash defaults to GC Sales Cash when
-                  that account exists for the selected company.
+                  <span className="font-medium text-foreground">Export Excel (System Sales Form)</span> — clean
+                  from-scratch workbook built from your live system data. Opening &amp; closing stock match the Location
+                  Inventory page. Supports any date range. Three sheets: ENTRY (visible) plus Costing and Sales
+                  (hidden). Items with no opening, closing, or sales activity are omitted. Opening cash defaults to GC
+                  Sales Cash when that account exists for the selected company.
                 </p>
               </div>
             </CardContent>

@@ -1,4 +1,5 @@
 import * as XLSX from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 
 import type { GroupRow } from "./types";
 import { createStockEntryHistoryReports as createLegacyStockEntryHistoryReports } from "./reportsLegacy";
@@ -76,7 +77,7 @@ export function createStockEntryHistoryReports(input: StockEntryHistoryReportsIn
     matrixSheet["!freeze"] = { xSplit: 0, ySplit: 4 };
     XLSX.utils.book_append_sheet(wb, matrixSheet, "Worker Matrix");
 
-    await XLSX.writeFile(wb, `stock-entry-history-${fromDate}-to-${toDate}.xlsx`);
+    await XLSX.writeFile(wb, exportFileName("stock entry history", "xlsx", { from: fromDate, to: toDate }));
   }
 
   return {

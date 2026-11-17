@@ -682,7 +682,7 @@ export function useStockTransferOrderModel() {
     onError: (error: unknown) => {
       if (isGloballyHandledError(error)) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error instanceof Error ? error.message : "Failed to process order",
         variant: "destructive",
       });

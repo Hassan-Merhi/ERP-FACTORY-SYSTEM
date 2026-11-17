@@ -10,6 +10,7 @@ import { Loader2, Plus, Trash2, TrendingUp } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export function FxRatesCard() {
   const { toast } = useToast();
@@ -124,14 +125,20 @@ export function FxRatesCard() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remove ${r.currencyCode} rate ${parseFloat(r.rateToUsd).toFixed(4)} dated ${r.effectiveDate}? Historical document rates will be preserved, but new FX calculations may use a different rate.`
-                            )
-                          ) {
-                            deleteMutation.mutate(r.id);
-                          }
+                        onClick={async () => {
+                          const confirmed = await confirmAction({
+                            title: "Remove this exchange rate?",
+                            details: [
+                              { label: "Currency", value: r.currencyCode },
+                              { label: "Rate to USD", value: parseFloat(r.rateToUsd).toFixed(4) },
+                              { label: "Effective date", value: r.effectiveDate },
+                            ],
+                            description:
+                              "Historical document rates will be preserved, but new FX calculations may use a different rate.",
+                            confirmText: "Remove",
+                            tone: "destructive",
+                          });
+                          if (confirmed) deleteMutation.mutate(r.id);
                         }}
                         disabled={deleteMutation.isPending}
                         aria-label={`Remove ${r.currencyCode} rate dated ${r.effectiveDate}`}

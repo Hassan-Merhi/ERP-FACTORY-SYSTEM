@@ -10,7 +10,6 @@ import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
@@ -24,6 +23,7 @@ import {
   ShieldCheck,
   Truck,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -97,14 +97,13 @@ export default function FactoryLoadingDispatchCompare() {
     enabled: valid && Boolean(companyId),
     refetchInterval: 5000,
   });
-  const reconciliationUrl = "/api/factory/customer-orders/" + orderId +
-    "/loading-dispatches/order-reconciliation";
+  const reconciliationUrl = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-reconciliation";
   const financialReconciliation = useQuery<DispatchOrderReconciliation>({
     queryKey: companyQueryKey(reconciliationUrl, companyId),
     queryFn: async () => {
-      const response = await fetch(reconciliationUrl, { credentials:"include",cache:"no-store" });
-      const data = await response.json().catch(()=>({}));
-      if(!response.ok) throw new Error(data.message || "Unable to read financial reconciliation");
+      const response = await fetch(reconciliationUrl, { credentials: "include", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Unable to read financial reconciliation");
       return data as DispatchOrderReconciliation;
     },
     enabled: valid && Boolean(companyId) && dispatchId === null,
@@ -113,7 +112,7 @@ export default function FactoryLoadingDispatchCompare() {
   const refreshAllReconciliation = () => {
     void financialReconciliation.refetch();
     void comparison.refetch();
-    void queryClient.invalidateQueries({ queryKey: companyQueryKey(reconciliationUrl,companyId) });
+    void queryClient.invalidateQueries({ queryKey: companyQueryKey(reconciliationUrl, companyId) });
   };
   const result = comparison.data;
   const s = result?.summary;
@@ -124,10 +123,10 @@ export default function FactoryLoadingDispatchCompare() {
   );
   const allTripsEnded =
     Boolean(result?.trips.length) && (result?.trips.every((trip) => trip.status !== "OPEN") ?? false);
-  const isSupervisor = ["admin", "owner", "developer"]
-    .includes((auth?.currentRole ?? auth?.role ?? "").toLowerCase());
+  const isSupervisor = ["admin", "owner", "developer"].includes((auth?.currentRole ?? auth?.role ?? "").toLowerCase());
   const canReconcile =
-    !selectedId && allTripsEnded &&
+    !selectedId &&
+    allTripsEnded &&
     ["LOADING", "PENDING_VERIFICATION"].includes(result?.loadingStatus ?? "") &&
     isSupervisor &&
     Boolean(financialReconciliation.data) &&
@@ -145,32 +144,48 @@ export default function FactoryLoadingDispatchCompare() {
     );
   };
   const removeSelected = async () => {
-    const fin=financialReconciliation.data;
-    if (!canReconcile || removing || !fin || selectedCurrent.length===0 ||
-        !removeConfirmed || removalReason.trim().length<10) return;
+    const fin = financialReconciliation.data;
+    if (
+      !canReconcile ||
+      removing ||
+      !fin ||
+      selectedCurrent.length === 0 ||
+      !removeConfirmed ||
+      removalReason.trim().length < 10
+    )
+      return;
     setRemoving(true);
     try {
       // One signed, all-or-nothing database transaction. Never issue a
       // sequence of legacy DELETE calls that could partially remove a load.
-      const response=await apiRequest("POST",reconciliationUrl+"/remove-unshipped",{
-        confirm:true,orderBaleIds:selectedCurrent,
-        expectedFingerprint:fin.fingerprint,reason:removalReason.trim(),
+      const response = await apiRequest("POST", reconciliationUrl + "/remove-unshipped", {
+        confirm: true,
+        orderBaleIds: selectedCurrent,
+        expectedFingerprint: fin.fingerprint,
+        reason: removalReason.trim(),
       });
-      const result=await response.json() as {removed:number;remainingUnshipped:number};
-      toast({title:"Unshipped bales reconciled",
-        description:result.removed+" bale(s) returned to stock in one transaction. "+
-          result.remainingUnshipped+" still unshipped."});
+      const result = (await response.json()) as { removed: number; remainingUnshipped: number };
+      toast({
+        title: "Unshipped bales reconciled",
+        description:
+          result.removed +
+          " bale(s) returned to stock in one transaction. " +
+          result.remainingUnshipped +
+          " still unshipped.",
+      });
       setSelectedMissing([]);
       setRemovalReason("");
       setRemoveConfirmed(false);
       setRemoveOpen(false);
       void queryClient.invalidateQueries({
-        queryKey:companyQueryKey("/api/factory/customer-orders/"+orderId,companyId),
+        queryKey: companyQueryKey("/api/factory/customer-orders/" + orderId, companyId),
       });
-    } catch(error) {
-      toast({title:"No partial removal committed",
-        description:error instanceof Error?error.message:"Reconciliation failed",
-        variant:"destructive"});
+    } catch (error) {
+      toast({
+        title: "No partial removal committed",
+        description: error instanceof Error ? error.message : "Reconciliation failed",
+        variant: "destructive",
+      });
     } finally {
       setRemoving(false);
       refreshAllReconciliation();
@@ -200,51 +215,40 @@ export default function FactoryLoadingDispatchCompare() {
       data-testid="factory-dispatch-comparison-page"
     >
       <div className="mx-auto max-w-[1480px] space-y-4">
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50 to-sky-100 p-4 dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_53%_17%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_78%_18%)] sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="rounded-xl bg-blue-600 p-3 text-white">
-                <Layers3 className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-lg font-bold sm:text-xl">Dispatch Comparison</h1>
-                  <Badge variant="secondary">Loading #{orderId}</Badge>
-                  {result?.containerNumber && <Badge variant="outline">{result.containerNumber}</Badge>}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {result?.dispatch ? tripLabel(result.dispatch.dispatchNumber) : "All truck trips"} · Physical
-                  verification versus loaded bale references
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate(dispatchBase(orderId) + (selectedId ? "/" + selectedId : ""))}
-              >
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to {selectedId ? "trip" : "dispatches"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate(dispatchBase(orderId) + (selectedId ? "/" + selectedId : "") + "/report")}
-                data-testid="button-compare-dispatch-report"
-              >
-                <Printer className="mr-1.5 h-4 w-4" /> Print / Export
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void comparison.refetch()}
-                disabled={comparison.isFetching}
-              >
-                <RefreshCw className={"mr-1.5 h-4 w-4" + (comparison.isFetching ? " animate-spin" : "")} /> Refresh
-              </Button>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Dispatch Comparison"
+          icon={<Layers3 className="h-5 w-5" />}
+          backTarget={dispatchBase(orderId) + (selectedId ? "/" + selectedId : "")}
+          meta={
+            <>
+              <Badge variant="secondary">Loading #{orderId}</Badge>
+              {result?.containerNumber && <Badge variant="outline">{result.containerNumber}</Badge>}
+            </>
+          }
+          subtitle={
+            <>
+              {result?.dispatch ? tripLabel(result.dispatch.dispatchNumber) : "All truck trips"} · Physical verification
+              versus loaded bale references
+            </>
+          }
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(dispatchBase(orderId) + (selectedId ? "/" + selectedId : "") + "/report")}
+            data-testid="button-compare-dispatch-report"
+          >
+            <Printer className="mr-1.5 h-4 w-4" /> Print / Export
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void comparison.refetch()}
+            disabled={comparison.isFetching}
+          >
+            <RefreshCw className={"mr-1.5 h-4 w-4" + (comparison.isFetching ? " animate-spin" : "")} /> Refresh
+          </Button>
+        </PageHeader>
 
         {comparison.isError && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/20">
@@ -343,10 +347,13 @@ export default function FactoryLoadingDispatchCompare() {
               <FactoryDispatchOrderFinancialReview
                 value={financialReconciliation.data ?? null}
                 loading={financialReconciliation.isPending}
-                error={financialReconciliation.isError
-                  ? (financialReconciliation.error instanceof Error
-                    ? financialReconciliation.error.message : "Financial reconciliation unavailable")
-                  : null}
+                error={
+                  financialReconciliation.isError
+                    ? financialReconciliation.error instanceof Error
+                      ? financialReconciliation.error.message
+                      : "Financial reconciliation unavailable"
+                    : null
+                }
                 orderId={orderId}
                 companyId={companyId}
                 isSupervisor={isSupervisor}
@@ -445,9 +452,9 @@ export default function FactoryLoadingDispatchCompare() {
                     </>
                   )}
                   <p className="text-[11px] text-muted-foreground">
-                    Removal is restricted to Admin, Owner and Developer, requires an approval reason,
-                    and returns only unshipped bales to stock in one atomic transaction. No scanned/posted bale can be removed.
-                    After signing the final order reconciliation, all further removals are locked.
+                    Removal is restricted to Admin, Owner and Developer, requires an approval reason, and returns only
+                    unshipped bales to stock in one atomic transaction. No scanned/posted bale can be removed. After
+                    signing the final order reconciliation, all further removals are locked.
                   </p>
                 </CardContent>
               </Card>
@@ -709,13 +716,20 @@ export default function FactoryLoadingDispatchCompare() {
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="dispatch-shortfall-reason">Reason for removing the unshipped bales</Label>
-            <Textarea id="dispatch-shortfall-reason" rows={3} maxLength={1000}
-              value={removalReason} onChange={e=>setRemovalReason(e.target.value)}
-              placeholder="All trucks are closed; these bales were never physically loaded…" />
+            <Textarea
+              id="dispatch-shortfall-reason"
+              rows={3}
+              maxLength={1000}
+              value={removalReason}
+              onChange={(e) => setRemovalReason(e.target.value)}
+              placeholder="All trucks are closed; these bales were never physically loaded…"
+            />
             <label className="flex items-start gap-2 rounded-md border p-3 text-xs">
-              <Checkbox checked={removeConfirmed} onCheckedChange={v=>setRemoveConfirmed(v===true)} />
-              <span>I reviewed the selected exact bale references and authorize returning only
-                unshipped bales to stock as one atomic correction.</span>
+              <Checkbox checked={removeConfirmed} onCheckedChange={(v) => setRemoveConfirmed(v === true)} />
+              <span>
+                I reviewed the selected exact bale references and authorize returning only unshipped bales to stock as
+                one atomic correction.
+              </span>
             </label>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -724,8 +738,14 @@ export default function FactoryLoadingDispatchCompare() {
             </Button>
             <Button
               variant="destructive"
-              disabled={!canReconcile || removing || selectedCurrent.length === 0 ||
-                removalReason.trim().length < 10 || removalReason.trim().length > 1000 || !removeConfirmed}
+              disabled={
+                !canReconcile ||
+                removing ||
+                selectedCurrent.length === 0 ||
+                removalReason.trim().length < 10 ||
+                removalReason.trim().length > 1000 ||
+                !removeConfirmed
+              }
               onClick={() => void removeSelected()}
               data-testid="button-confirm-remove-missing-bales"
             >

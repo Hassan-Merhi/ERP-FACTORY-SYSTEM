@@ -51,7 +51,7 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
       onOpenChange(false);
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

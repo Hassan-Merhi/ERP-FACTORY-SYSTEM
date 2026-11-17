@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Package, Boxes } from "lucide-react";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/PageHeader";
 
 import type { ImportTab } from "./factoryimport/types";
 import { SupplierImport } from "./factoryimport/components/SupplierImport";
@@ -25,12 +26,14 @@ export default function FactoryImport() {
   const { selectedCompany } = useCompany();
   const [requestedTab, setRequestedTab] = useState<ImportTab>("suppliers");
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : IMPORT_TABS.map((tab) => tab.hiddenKey);
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : IMPORT_TABS.map((tab) => tab.hiddenKey);
   const tabs = IMPORT_TABS.filter((tab) => !hiddenTabs.includes(tab.hiddenKey));
   const activeTab = tabs.some((tab) => tab.key === requestedTab) ? requestedTab : tabs[0]?.key;
 
@@ -44,6 +47,8 @@ export default function FactoryImport() {
 
   return (
     <div className="min-w-0 space-y-4" data-testid="factory-import-page">
+      {/* Page title: the navigation label of /factory/import. */}
+      <PageHeader title="Import" />
       <div className="erp-mobile-scroll-tabs pb-1" data-testid="factory-import-tabs">
         <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory import sections">
           {tabs.map((tab) => {

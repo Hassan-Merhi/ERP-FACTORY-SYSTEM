@@ -7,6 +7,7 @@ import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type Choice = { id: number; name: string; code?: string; accountType?: string };
 type Wallet = {
@@ -199,11 +200,15 @@ export function FactoryFxAgentWalletCard({
                   disabled={write.isPending || !(scopeAccountId || Number(accountId))}
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      window.confirm(
-                        "Confirm this account represents USD funds held by the FX agent. Activate a EUR wallet using its existing posted USD balance? This does not change old vouchers."
-                      )
+                      await confirmAction({
+                        title: "Activate FX wallet?",
+                        description:
+                          "Confirm this account represents USD funds held by the FX agent. A EUR wallet will be activated using its existing posted USD balance. This does not change old vouchers.",
+                        confirmText: "Activate",
+                        tone: "warning",
+                      })
                     ) {
                       write.mutate({
                         path: "/api/factory/fx-agent-wallets",
@@ -276,13 +281,16 @@ export function FactoryFxAgentWalletCard({
                           size="sm"
                           variant="outline"
                           disabled={write.isPending || !rebaselineReason.trim() || Number(active.ledgerBookUsd) <= 0}
-                          onClick={() => {
+                          onClick={async () => {
                             if (
-                              window.confirm(
-                                "Reset this unused FX wallet to the current posted ledger balance USD " +
-                                  fmt(active.ledgerBookUsd) +
-                                  "? Its activation date will become today. Existing vouchers are unchanged."
-                              )
+                              await confirmAction({
+                                title: "Reset this unused FX wallet?",
+                                description:
+                                  "It will be reset to the current posted ledger balance. Its activation date will become today. Existing vouchers are unchanged.",
+                                details: [{ label: "Ledger balance (USD)", value: fmt(active.ledgerBookUsd) }],
+                                confirmText: "Reset wallet",
+                                tone: "warning",
+                              })
                             ) {
                               write.mutate({
                                 path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/rebaseline",
@@ -418,11 +426,14 @@ export function FactoryFxAgentWalletCard({
                       Number(eurAmount) > Number(active.state.eur) ||
                       !(Number(settleRate) > 0)
                     }
-                    onClick={() => {
+                    onClick={async () => {
                       if (
-                        window.confirm(
-                          "Pay the selected USD beneficiary using the quoted EUR and exchange rate? This will post a journal."
-                        )
+                        await confirmAction({
+                          title: "Pay the selected USD beneficiary?",
+                          description: "The quoted EUR and exchange rate will be used. This will post a journal.",
+                          confirmText: "Pay and post",
+                          tone: "warning",
+                        })
                       ) {
                         write.mutate({
                           path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/settle",
@@ -495,15 +506,19 @@ export function FactoryFxAgentWalletCard({
                             variant="destructive"
                             size="sm"
                             disabled={write.isPending || !reversalReason.trim()}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                window.confirm(
-                                  "Reverse this conversion? Restore USD " +
-                                    fmt(item.usdAmount) +
-                                    " by deducting exactly EUR " +
-                                    fmt(item.eurAmount) +
-                                    ". Original entries will remain in the audit trail."
-                                )
+                                await confirmAction({
+                                  title: "Reverse this conversion?",
+                                  description:
+                                    "The USD amount will be restored by deducting exactly the EUR amount. Original entries will remain in the audit trail.",
+                                  details: [
+                                    { label: "USD restored", value: fmt(item.usdAmount) },
+                                    { label: "EUR deducted", value: fmt(item.eurAmount) },
+                                  ],
+                                  confirmText: "Reverse",
+                                  tone: "destructive",
+                                })
                               ) {
                                 write.mutate({
                                   path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/reverse-conversion",

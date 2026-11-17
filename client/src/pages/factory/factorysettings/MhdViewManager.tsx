@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 import { Download, FileUp, Loader2, Save } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 type InputRow = { articleCode: string; itemName: string };
 type Product = { id: number; articleCode: string; name: string };
@@ -77,7 +79,10 @@ export function MhdViewManager() {
       }
       worksheet.views = [{ state: "frozen", ySplit: 1 }];
       const { writeFile } = await import("@/lib/excelHelper");
-      await writeFile(workbook, withProducts ? "factory-mhd-products.xlsx" : "factory-mhd-template.xlsx");
+      await writeFile(
+        workbook,
+        withProducts ? exportFileName("factory mhd products", "xlsx") : "factory-mhd-template.xlsx"
+      );
     } catch (cause) {
       toast({ title: t("mhd.downloadFailed"), description: String(cause), variant: "destructive" });
     }
@@ -172,10 +177,13 @@ export function MhdViewManager() {
             <Download className="mr-2 h-4 w-4" />
             {t("mhd.downloadTemplate")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void downloadTemplate(true)} disabled={!data || busy}>
-            <Download className="mr-2 h-4 w-4" />
-            {t("mhd.downloadCurrent")}
-          </Button>
+          <ExportButton
+            kind="excel"
+            variant="outline"
+            label={t("mhd.downloadCurrent")}
+            onClick={() => void downloadTemplate(true)}
+            disabled={!data || busy}
+          />
           {data?.canEdit && (
             <>
               <Button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>

@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ScanLine,
   X,
-  Download,
   Loader2,
   CalendarDays,
   ChevronDown,
@@ -24,6 +23,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import * as XLSX from "@/lib/excelHelper";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 function toLocalDateStr(d: Date): string {
   return d.toLocaleDateString("en-CA");
@@ -77,7 +78,8 @@ function StatusBadge({
     return <Badge className="daily-scan-status bg-amber-500 text-white border-0">Pending Loading</Badge>;
   if (s === "IN_STOCK") return <Badge className="daily-scan-status bg-green-600 text-white border-0">In Stock</Badge>;
   if (s === "SOLD") return <Badge className="daily-scan-status bg-red-600 text-white border-0">Sold</Badge>;
-  if (s === "RESERVED_FOR_ORDER") return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
+  if (s === "RESERVED_FOR_ORDER")
+    return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
   return <Badge variant="outline">{status || "—"}</Badge>;
 }
 
@@ -256,7 +258,7 @@ export default function DailyScan() {
       queryClient.setQueryData<DayBale[]>(dailyQueryKey, (current = []) =>
         current.map((row) => (row.scan_id === id ? { ...row, scan_id: null, scanned_at: null } : row))
       ),
-    onError: () => toast({ title: "Error", description: "Could not remove scan.", variant: "destructive" }),
+    onError: () => toast({ title: "Remove failed", description: "Could not remove scan.", variant: "destructive" }),
   });
 
   const handleExport = async () => {
@@ -347,7 +349,7 @@ export default function DailyScan() {
       if (col === 5) cell.alignment = { horizontal: "right", vertical: "middle" };
     });
 
-    await XLSX.writeFile(wb, `daily-scan-${selectedDate}.xlsx`);
+    await XLSX.writeFile(wb, exportFileName("daily scan", "xlsx", { date: selectedDate }));
   };
 
   return (
@@ -402,10 +404,12 @@ export default function DailyScan() {
               {scanned.length}/{totalBales} verified · {formatNumber(scannedKg)}/{formatNumber(totalKg)} kg
             </span>
           )}
-          <Button className="daily-scan-export" variant="outline" size="sm" onClick={handleExport} data-testid="button-daily-scan-export">
-            <Download className="h-4 w-4 mr-1" />
-            Export
-          </Button>
+          <ExportButton
+            className="daily-scan-export"
+            size="sm"
+            onClick={handleExport}
+            data-testid="button-daily-scan-export"
+          />
         </div>
       </div>
 
@@ -422,7 +426,12 @@ export default function DailyScan() {
           disabled={scanning}
         />
         <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
-        <Button className="daily-scan-submit" onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
+        <Button
+          className="daily-scan-submit"
+          onClick={() => void handleScan()}
+          disabled={scanning || !scanInput.trim()}
+          data-testid="button-daily-scan-submit"
+        >
           {scanning ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (

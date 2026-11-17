@@ -2,6 +2,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -183,7 +184,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -198,7 +199,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Return failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -223,7 +224,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Assignment failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -240,7 +241,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -254,7 +255,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -270,7 +271,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Finalize failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -286,7 +287,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -354,7 +355,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -370,7 +371,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -386,7 +387,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -446,7 +447,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
         setShowFinalizePreview(true);
       }
     } catch (error) {
-      toast({ title: "Error", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({ title: "Preview failed", description: getErrorDetails(error).message, variant: "destructive" });
     } finally {
       setPreviewLoading(false);
     }
@@ -467,59 +468,56 @@ export function useFactoryPendingInvoiceVerifyModel() {
   // Keep the verified-order Actions menu in parity with finalized invoices.
   // Fetching as a blob preserves auth cookies and lets us surface export errors
   // instead of opening a new tab that can fail silently.
-  const downloadFromUrl = async (url: string, fallbackName: string) => {
+  const downloadExport = async (url: string, fileName: string) => {
     try {
-      const res = await fetch(url, { credentials: "include", cache: "no-store" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `Server error ${res.status}`);
-      }
-      const blob = await res.blob();
-      if (blob.size === 0) {
-        throw new Error("Server returned an empty file.");
-      }
-      const cd = res.headers.get("content-disposition") || "";
-      const starMatch = cd.match(/filename\*=UTF-8''([^;\s]+)/i);
-      const plainMatch = cd.match(/filename="([^"]+)"/i);
-      const rawName = starMatch ? starMatch[1] : plainMatch ? plainMatch[1] : null;
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = rawName ? decodeURIComponent(rawName) : fallbackName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      }, 10000);
+      await downloadFromUrl(url, { fileName });
     } catch (error) {
-      toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleExportExcel = () => {
     if (!orderId) return;
-    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel`, "invoice.xlsx");
+    void downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-excel`,
+      exportFileName(`invoice ${orderId}`, "xlsx")
+    );
   };
 
   const handleExportExcelNoCharges = () => {
     if (!orderId) return;
-    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`, "invoice-no-charges.xlsx");
+    void downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`,
+      exportFileName(`invoice ${orderId} no charges`, "xlsx")
+    );
   };
 
   const handleExportPdf = () => {
     if (!orderId) return;
-    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf`, "invoice.pdf");
+    void downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-pdf`,
+      exportFileName(`invoice ${orderId}`, "pdf")
+    );
   };
 
   const handleExportPdfNoCharges = () => {
     if (!orderId) return;
-    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`, "invoice-no-charges.pdf");
+    void downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`,
+      exportFileName(`invoice ${orderId} no charges`, "pdf")
+    );
   };
 
   const handleExportLoadingStatus = () => {
     if (!orderId) return;
-    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/loading-status-export`, "loading-status.xlsx");
+    void downloadExport(
+      `/api/factory/customer-orders/${orderId}/loading-status-export`,
+      exportFileName(`loading status ${orderId}`, "xlsx")
+    );
   };
 
   const getStatusBadge = (status: ComparisonItem["status"]) => {

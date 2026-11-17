@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { CalendarDays, Save, Printer, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
+import { CalendarDays, Save, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
 
 import type {
   AttendanceBulkRecord,
@@ -47,11 +47,13 @@ import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageCho
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
   type AttendanceAdminCredentials,
 } from "./factoryattendance/attendanceEditPolicy";
 import "./factoryTrackingModern.css";
 import "./factoryAttendanceRefresh.css";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 
 interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
@@ -62,6 +64,11 @@ export default function FactoryAttendance() {
   const { selectedCompany } = useCompany();
   // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
+  const companyRole = selectedCompany?.role;
+  const canEditPastWithoutPassword = useCallback(
+    (dates: string[]) => canSkipAttendanceApproval(companyRole, dates),
+    [companyRole]
+  );
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -114,7 +121,7 @@ export default function FactoryAttendance() {
     const newMap: Record<number, AttendanceStatus> = {};
     const newNotes: Record<number, string> = {};
     for (const w of data.workers) {
-      newMap[w.id] = "Present";
+      newMap[w.id] = w.active === false ? "Absent" : "Present";
     }
     for (const a of data.attendance) {
       newMap[a.workerId] = a.status as AttendanceStatus;
@@ -169,7 +176,9 @@ export default function FactoryAttendance() {
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate),
+      });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
     onError: (err: ClientErrorLike) => {
@@ -180,22 +189,24 @@ export default function FactoryAttendance() {
 
   const handleSave = useCallback(() => {
     if (!data?.workers.length) return;
-    const records = data.workers.map((w) => ({
-      workerId: w.id,
-      attendanceDate: selectedDate,
-      shift: shift || undefined,
-      status: attendanceMap[w.id] ?? "Present",
-      notes: notesMap[w.id] || undefined,
-    }));
+    const records = data.workers
+      .filter((w) => w.active !== false)
+      .map((w) => ({
+        workerId: w.id,
+        attendanceDate: selectedDate,
+        shift: shift || undefined,
+        status: attendanceMap[w.id] ?? "Present",
+        notes: notesMap[w.id] || undefined,
+      }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword(priorDates)) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
+  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, canEditPastWithoutPassword]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -204,14 +215,14 @@ export default function FactoryAttendance() {
   const markAll = (status: AttendanceStatus) => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = status;
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = status;
     setAttendanceMap(next);
   };
 
   const reset = () => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = "Present";
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = "Present";
     setAttendanceMap(next);
     setNotesMap({});
   };
@@ -253,7 +264,11 @@ export default function FactoryAttendance() {
         openPrintWindow(html);
       }
     } catch (err) {
-      toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({
+        title: mode === "print" ? "Print failed" : "Export failed",
+        description: getErrorDetails(err).message,
+        variant: "destructive",
+      });
     } finally {
       setIsExportingRange(false);
     }
@@ -348,30 +363,16 @@ export default function FactoryAttendance() {
   return (
     <div className="factory-tracking-modern factory-tracking-attendance factory-attendance-refresh">
       <div className="space-y-4">
-        <div className="attendance-hero flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs">
-                <CalendarDays className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold tracking-tight">Workers Attendance</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Record the day, review attendance at a glance, and send or export reports.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
-                {formatDate(selectedDate)}
-              </Badge>
-              {selectedDate < attendanceToday() && (
-                <Badge variant="secondary" className="rounded-full">
-                  Earlier date — Admin approval required to save
-                </Badge>
-              )}
-            </div>
-          </div>
+        {/* Workers hub "Attendance" tab: the Payroll hub PageHeader titles the page; keep the date context only. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
+            {formatDate(selectedDate)}
+          </Badge>
+          {selectedDate < attendanceToday() && !canEditPastWithoutPassword([selectedDate]) && (
+            <Badge variant="secondary" className="rounded-full">
+              Earlier date — Admin approval required to save
+            </Badge>
+          )}
         </div>
 
         {mode === "perWorker" ? (
@@ -502,28 +503,22 @@ export default function FactoryAttendance() {
                           className="w-40 rounded-xl bg-background/70"
                         />
                       </div>
-                      <Button
-                        variant="outline"
+                      <ExportButton
                         size="default"
                         data-testid="button-range-export-excel"
                         onClick={() => setRangePrintDialog("excel")}
-                        disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
+                        disabled={!rangeStart || !rangeEnd || rangeInvalid}
+                        busy={isExportingRange}
                         className="rounded-xl"
-                      >
-                        <FileDown className="mr-1.5 h-4 w-4" />
-                        {isExportingRange ? "Exporting…" : "Excel"}
-                      </Button>
-                      <Button
-                        variant="outline"
+                      />
+                      <ExportButton
+                        kind="print"
                         size="default"
                         data-testid="button-range-print"
                         onClick={() => setRangePrintDialog("print")}
                         disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
                         className="rounded-xl"
-                      >
-                        <Printer className="mr-1.5 h-4 w-4" />
-                        Print
-                      </Button>
+                      />
                     </div>
                     {rangeInvalid && (
                       <p className="text-xs font-medium text-destructive">From date cannot be after To date.</p>

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, Download, ChevronDown, Filter } from "lucide-react";
+import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
@@ -294,7 +296,7 @@ export function ContainerSpView({
           "Line Items"
         );
       }
-      await writeFile(book, full ? "containers_full_export.xlsx" : "containers.xlsx");
+      await writeFile(book, exportFileName(full ? "containers full export" : "containers", "xlsx"));
     } catch (error) {
       toast({
         title: "Export failed",
@@ -308,21 +310,26 @@ export function ContainerSpView({
     <div className="space-y-4 sm:space-y-6">
       <PageHeader title="Container Tracking" subtitle="Track containers and manage offloading">
         <div className="flex flex-wrap gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
-                <Download className="h-4 w-4" /> Export <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => void exportContainers(false)} data-testid="button-export-excel">
-                Export
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportContainers(true)} data-testid="button-export-all-full">
-                Export All (Full)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ReportExportMenu
+            align="start"
+            data-testid="button-export-dropdown"
+            options={[
+              {
+                id: "containers",
+                label: "Export Excel",
+                kind: "excel",
+                onSelect: () => exportContainers(false),
+                testId: "button-export-excel",
+              },
+              {
+                id: "containers-full",
+                label: "Export Excel (Full)",
+                kind: "excel",
+                onSelect: () => exportContainers(true),
+                testId: "button-export-all-full",
+              },
+            ]}
+          />
           {recordChanges.canCreate("POST", "/api/po-import/import") && (
             <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
               <Plus className="h-4 w-4" /> Add

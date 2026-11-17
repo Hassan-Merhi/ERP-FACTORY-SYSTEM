@@ -111,7 +111,7 @@ export function IntercompanyPosTab() {
       toast({ title: "Saved", description: "Intercompany POS transfer config saved." });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -135,7 +135,7 @@ export function IntercompanyPosTab() {
       });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 

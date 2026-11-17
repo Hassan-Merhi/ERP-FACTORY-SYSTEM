@@ -27,7 +27,8 @@ vi.mock("../server/routes/_helpers", () => ({
     single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   },
   spreadsheetUpload: {
-    single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },
 }));
 

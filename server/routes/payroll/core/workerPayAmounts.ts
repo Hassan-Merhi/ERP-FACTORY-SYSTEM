@@ -78,7 +78,7 @@ export function exactMonthlyPay(salary: Decimal, startStr: string, endStr: strin
 }
 
 /**
- * Monthly salary paid for attended days (Present/Late = 1, Half Day = 0.5) at
+ * Monthly salary paid for eligible days (Present/Late/Leave = 1, Half Day = 0.5) at
  * salary / days in the period's first month. Same rule as
  * computeMonthlyPayFromAttendance in ./_helpers, in exact decimals.
  */
@@ -90,7 +90,7 @@ export function exactMonthlyPayFromAttendance(
   let attendedDays = 0;
   for (const row of attendance) {
     const s = row.status || "Absent";
-    if (s === "Present" || s === "Late") attendedDays += 1;
+    if (s === "Present" || s === "Late" || s === "Leave") attendedDays += 1;
     else if (s === "Half Day") attendedDays += 0.5;
   }
   return salary.times(attendedDays).div(daysInMonthOf(periodStart));

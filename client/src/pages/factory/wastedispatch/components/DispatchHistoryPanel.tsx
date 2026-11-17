@@ -5,7 +5,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, History, Loader2, Printer, Trash2, Weight } from "lucide-react";
+import { ChevronRight, History, Loader2, Trash2, Weight } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,14 +62,23 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
       <CardHeader className="space-y-4 border-b border-slate-200 px-4 pb-4 pt-4 dark:border-slate-700/70 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight sm:text-lg">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400"><History className="h-5 w-5" /></span> Dispatch History
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400">
+              <History className="h-5 w-5" />
+            </span>{" "}
+            Dispatch History
           </CardTitle>
-          <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" data-testid="text-dispatch-history-count">
+          <span
+            className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            data-testid="text-dispatch-history-count"
+          >
             {historyPagination.total} dispatch{historyPagination.total !== 1 ? "es" : ""}
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-950/30" aria-label="History display mode">
+          <div
+            className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-950/30"
+            aria-label="History display mode"
+          >
             <Button
               size="sm"
               variant={historyView === "condensed" ? "secondary" : "ghost"}
@@ -97,7 +107,10 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
             data-testid="period-filter-dispatch-history"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-3 sm:p-4" data-testid="bar-history-totals">
+        <div
+          className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-3 sm:p-4"
+          data-testid="bar-history-totals"
+        >
           <div className="flex flex-col gap-0.5">
             <span className="text-xs text-muted-foreground">Total Qty (Bales)</span>
             <span className="text-base font-semibold tabular-nums" data-testid="text-history-total-bales">
@@ -230,7 +243,8 @@ function DispatchHistoryItem({
           <Badge variant="outline" className="border-destructive/30 text-xs text-destructive">
             {fmt(dispatch.totalCostWrittenOff)}
           </Badge>
-          <Button
+          <ExportButton
+            kind="print"
             size="sm"
             variant="ghost"
             className="h-6 px-2 text-xs"
@@ -239,9 +253,7 @@ function DispatchHistoryItem({
               void handleHistoryPrint(dispatch);
             }}
             data-testid={`button-reprint-${dispatch.id}`}
-          >
-            <Printer className="mr-1 h-3 w-3" /> Print
-          </Button>
+          />
           <Button
             size="sm"
             variant="ghost"

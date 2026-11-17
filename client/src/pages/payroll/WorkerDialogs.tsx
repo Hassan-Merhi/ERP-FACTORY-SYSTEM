@@ -102,7 +102,7 @@ export function WorkerDialogs({
       toast({ title: "Group created" });
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to create group", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to create group", variant: "destructive" });
     },
   });
 

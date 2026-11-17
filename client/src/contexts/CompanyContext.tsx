@@ -132,6 +132,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   } = useQuery(userCompaniesQueryOptions());
 
   const companies: Company[] = userCompanyAssignments
+    .filter((assignment) => assignment.companyActive === true)
     .map(mapCompanyAssignment)
     .filter(
       (company, index, allCompanies) => index === allCompanies.findIndex((candidate) => candidate.id === company.id)

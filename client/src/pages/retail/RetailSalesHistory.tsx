@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { History, Search, UserRound } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -118,15 +119,11 @@ export default function RetailSalesHistory() {
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       <RetailNav />
-      <div className="rounded-xl border bg-card p-4 shadow-xs">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <History className="h-6 w-6" /> Sales &amp; customer history
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Search old receipts by number, customer, barcode/item or date. Returns and exchanges are refunded from the
-          amount the customer actually paid.
-        </p>
-      </div>
+      <PageHeader
+        title="Sales & customer history"
+        icon={<History className="h-6 w-6" />}
+        subtitle="Search old receipts by number, customer, barcode/item or date. Returns and exchanges are refunded from the amount the customer actually paid."
+      />
 
       <Card>
         <CardHeader className="pb-3">

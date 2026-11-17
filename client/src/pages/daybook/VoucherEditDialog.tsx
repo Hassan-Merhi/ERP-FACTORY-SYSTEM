@@ -378,7 +378,7 @@ export function VoucherEditDialog({
                   Cancel
                 </Button>
                 <Button type="submit" disabled={editMutationPending} data-testid="button-save-edit">
-                  {editMutationPending ? "Saving..." : "Save Changes"}
+                  {editMutationPending ? "Updating…" : "Update"}
                 </Button>
               </div>
             </form>

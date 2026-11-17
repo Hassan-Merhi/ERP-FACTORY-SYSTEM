@@ -10,6 +10,8 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePriorityScanText } from "@/i18n/priorityScanTranslations";
@@ -71,12 +73,16 @@ export default function FactoryInvoicing() {
   });
 
   const visibleTabKeys = tabs.map((tab) => tab.key);
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [activeTab, setActiveTab] = useHubQueryState<InvoicingTab>({
     key: "tab",
-    allowedValues: visibleTabKeys,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleTabKeys : ALL_INVOICING_TABS,
     knownValues: ALL_INVOICING_TABS,
     defaultValue: visibleTabKeys[0] ?? "invoices",
   });
+
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -148,12 +154,10 @@ export default function FactoryInvoicing() {
       </div>
 
       <div className="flex-1 overflow-auto min-h-0">
-        {tabs.length === 0 && (
-          <div className="p-6 text-sm text-muted-foreground">No Invoicing tabs are available for this user.</div>
-        )}
+        {tabs.length === 0 && <RestrictedTabsState />}
         {activeTab === "proformas" && showProformas && <FactoryProformas />}
         {activeTab === "invoices" && showInvoices && <FactoryInvoices />}
-        {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
+        {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan embedded />}
         {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
         {activeTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>
