@@ -211,10 +211,11 @@ vi.mock("@/pages/payroll/PayrollDialogs", () => ({
     ) : null,
 }));
 vi.mock("@/pages/payroll/BulkDialogs", () => ({
-  BulkDialogs: ({ handleSelectAllEmployees, bulkDepositTotal }: any) => (
+  BulkDialogs: ({ handleSelectAllEmployees, bulkDepositTotal, handlePrintBulkBonus }: any) => (
     <div>
       <span data-testid="bulk-total">{bulkDepositTotal}</span>
       <button onClick={() => handleSelectAllEmployees(true)}>Select all salaries</button>
+      <button onClick={handlePrintBulkBonus}>Print bulk bonus</button>
     </div>
   ),
 }));
@@ -318,6 +319,22 @@ describe("ERP payroll page behavior", () => {
       )
     );
     expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Deduction added" }));
+  });
+
+  it("tells the user when the bulk bonus print window is blocked", () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    try {
+      render(<Payroll />);
+      fireEvent.click(screen.getByRole("button", { name: "Print bulk bonus" }));
+      expect(open).toHaveBeenCalled();
+      expect(harness.toast).toHaveBeenCalledWith({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      open.mockRestore();
+    }
   });
 
   it("names the failed action in the error toast title", async () => {

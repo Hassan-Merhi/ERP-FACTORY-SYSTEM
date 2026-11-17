@@ -147,8 +147,10 @@ export function useFactorySuppliersModel() {
     suppliers,
     toast,
   });
-  const { formatDate, formatKg, formatNum, statusColor, statusDisplayLabel, toggleStmtSection } =
-    useFactorySuppliersModelPart3({ formatDisplayDate, setCollapsedStmtSections });
+  const { formatDate, formatKg, formatNum, statusDisplayLabel, toggleStmtSection } = useFactorySuppliersModelPart3({
+    formatDisplayDate,
+    setCollapsedStmtSections,
+  });
 
   return {
     canChangeExistingRecords: recordChanges.allowed,
@@ -268,7 +270,6 @@ export function useFactorySuppliersModel() {
     formatNum,
     formatDate,
     formatKg,
-    statusColor,
     statusDisplayLabel,
   };
 }
@@ -289,9 +290,7 @@ function useFactorySuppliersModelPart3({
   const formatDate = (date: string) => formatDisplayDate(date);
   const formatKg = (value: string) =>
     `${parseFloat(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kg`;
-  const statusColor = (status: string) =>
-    status === "OFFLOADED" ? "secondary" : status === "OTW" ? "outline" : "default";
   const statusDisplayLabel = (status: string) =>
     status === "OTW" ? "On the Way" : status.charAt(0) + status.slice(1).toLowerCase();
-  return { formatDate, formatKg, formatNum, statusColor, statusDisplayLabel, toggleStmtSection };
+  return { formatDate, formatKg, formatNum, statusDisplayLabel, toggleStmtSection };
 }

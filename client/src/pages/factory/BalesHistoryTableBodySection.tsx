@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { formatLabelNum } from "@/lib/labelHtml";
-import { BALE_STATUS_COLORS } from "./baleshistory/pagePolicies";
+import { StatusBadge } from "@/components/StatusBadge";
 import { useBalesHistoryState } from "./useBalesHistoryState";
 
 export function BalesHistoryTableBodySection({
@@ -115,25 +115,7 @@ export function BalesHistoryTableBodySection({
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {uniqueStatuses.map((s) => (
-                    <Badge
-                      key={s}
-                      variant={
-                        (BALE_STATUS_COLORS[s] || "secondary") as
-                          | "default"
-                          | "outline"
-                          | "secondary"
-                          | "destructive"
-                          | "success"
-                          | "warning"
-                          | "info"
-                          | "muted"
-                          | null
-                          | undefined
-                      }
-                      className="text-xs"
-                    >
-                      {s.replace(/_/g, " ")}
-                    </Badge>
+                    <StatusBadge key={s} status={s} label={s.replace(/_/g, " ")} showIcon={false} className="text-xs" />
                   ))}
                 </div>
               </TableCell>
@@ -243,24 +225,12 @@ export function BalesHistoryTableBodySection({
                           }
                         >
                           <SelectTrigger className="w-[140px] h-8 text-xs" data-testid={`select-status-${bale.id}`}>
-                            <Badge
-                              variant={
-                                (BALE_STATUS_COLORS[bale.status] || "secondary") as
-                                  | "default"
-                                  | "outline"
-                                  | "secondary"
-                                  | "destructive"
-                                  | "success"
-                                  | "warning"
-                                  | "info"
-                                  | "muted"
-                                  | null
-                                  | undefined
-                              }
+                            <StatusBadge
+                              status={bale.status}
+                              label={bale.status.replace(/_/g, " ")}
+                              showIcon={false}
                               className="text-xs"
-                            >
-                              {bale.status.replace(/_/g, " ")}
-                            </Badge>
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="PENDING_PRESSING">Pending Pressing</SelectItem>

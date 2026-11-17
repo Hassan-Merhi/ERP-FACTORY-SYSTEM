@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useFactoryInsuranceState } from "./useFactoryInsuranceState";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactoryInsuranceDialogSection({
   ecAmount,
@@ -248,7 +249,7 @@ export function FactoryInsuranceSection({
             className="mt-2 text-3xl font-bold tracking-tight text-violet-900 dark:text-violet-100"
             data-testid="stat-amount"
           >
-            ${stats.totalAmount % 1 === 0 ? stats.totalAmount.toFixed(0) : stats.totalAmount.toFixed(2)}
+            {formatUsd(stats.totalAmount, stats.totalAmount % 1 === 0 ? 0 : 2)}
           </div>
         </CardContent>
       </Card>

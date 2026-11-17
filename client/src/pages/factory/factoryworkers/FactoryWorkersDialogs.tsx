@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FactoryWorkerFormFields } from "./FactoryWorkerFormFields";
 import { PersonFormDialog } from "../people/PersonFormDialog";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface FactoryWorkersModelProps {
   model: ReturnType<typeof useFactoryWorkersModel>;
@@ -222,13 +223,13 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                 <div className="rounded-md border p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Earned</p>
                   <p className="font-semibold text-sm" data-testid="text-settlement-earned">
-                    ${parseFloat(endResult.earned).toFixed(2)}
+                    {formatUsd(parseFloat(endResult.earned), 2)}
                   </p>
                 </div>
                 <div className="rounded-md border p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Already Paid</p>
                   <p className="font-semibold text-sm" data-testid="text-settlement-paid">
-                    ${parseFloat(endResult.paid).toFixed(2)}
+                    {formatUsd(parseFloat(endResult.paid), 2)}
                   </p>
                 </div>
                 <div
@@ -236,7 +237,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                 >
                   <p className="text-xs text-muted-foreground mb-1">Advances</p>
                   <p className="font-semibold text-sm" data-testid="text-settlement-advances">
-                    ${parseFloat(endResult.advances).toFixed(2)}
+                    {formatUsd(parseFloat(endResult.advances), 2)}
                   </p>
                 </div>
                 <div
@@ -244,7 +245,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                 >
                   <p className="text-xs text-muted-foreground mb-1">Balance Owed</p>
                   <p className="font-semibold text-sm" data-testid="text-settlement-balance">
-                    ${balance.toFixed(2)}
+                    {formatUsd(balance, 2)}
                   </p>
                 </div>
               </div>
@@ -287,7 +288,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                       disabled={endSubmitting || !endCashAccountId}
                       data-testid="button-pay-now"
                     >
-                      {endSubmitting ? "Processing..." : `Pay Now $${balance.toFixed(2)}`}
+                      {endSubmitting ? "Processing..." : `Pay Now ${formatUsd(balance, 2)}`}
                     </Button>
                     <Button
                       variant="outline"
