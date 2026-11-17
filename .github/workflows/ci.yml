@@ -367,13 +367,21 @@ jobs:
           retention-days: 7
 
   backend-tests:
-    name: Backend / Database Tests
+    # Backend files must run serially against one database (vitest.config.ts:
+    # fileParallelism false), so a single job took 70-77 minutes for ~1,500
+    # files. Each shard below gets its own PostgreSQL service and runs its slice
+    # serially; shards are fully isolated from one another, so the serial
+    # guarantee still holds while wall-clock drops ~8x. Raise the shard count
+    # (here and BACKEND_TEST_SHARDS in backend-coverage-merge) as the suite grows.
+    name: Backend / Database Tests (${{ matrix.shard }}/8)
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-26.04
-    # The suite with coverage already took ~48 of 50 minutes on main (2026-10-08);
-    # each new DB-backed test file adds its setup time, so leave headroom.
-    timeout-minutes: 80
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     services:
       postgres:
         image: postgres:18
@@ -411,7 +419,7 @@ jobs:
       - name: Install dependencies
         id: install
         run: npm ci --no-audit --bin-links=true
-      - name: Build for startup migration verification
+      - name: Build for startup verification
         id: build
         if: always() && steps.install.outcome == 'success'
         run: |
@@ -421,7 +429,7 @@ jobs:
         if: always() && steps.build.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: backend-build-errors
+          name: backend-build-errors-${{ matrix.shard }}
           path: backend-build-errors-ci.txt
           if-no-files-found: error
           retention-days: 7
@@ -437,7 +445,7 @@ jobs:
         if: always() && steps.db_schema.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: database-schema-errors
+          name: database-schema-errors-${{ matrix.shard }}
           path: db-schema-ci.txt
           if-no-files-found: error
           retention-days: 7
@@ -461,34 +469,108 @@ jobs:
         if: always() && steps.runtime_boot.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: startup-errors
+          name: startup-errors-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/startup-ci.txt
             ${{ runner.temp }}/health-db-ci.json
           if-no-files-found: warn
           retention-days: 7
-      - name: Backend tests and coverage thresholds
+      - name: Backend tests and shard coverage
         id: backend_coverage
         if: always() && steps.runtime_boot.outcome == 'success'
+        env:
+          # Skip per-shard floors and emit coverage-final.json; the floors are
+          # enforced on the merged map in backend-coverage-merge.
+          BACKEND_COVERAGE_SHARD: "1"
+          SHARD: ${{ matrix.shard }}
         run: |
           set -o pipefail
-          npm run test:backend:coverage -- --maxWorkers=2 2>&1 | tee backend-coverage-errors-ci.txt
+          npm run test:backend:coverage -- "--shard=${SHARD}/8" 2>&1 | tee backend-coverage-errors-ci.txt
       - name: Upload backend coverage failure log
         if: always() && steps.backend_coverage.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: backend-coverage-errors
+          name: backend-coverage-errors-${{ matrix.shard }}
           path: backend-coverage-errors-ci.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Upload backend coverage summary
+      - name: Upload backend shard coverage
         if: always() && steps.backend_coverage.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: backend-coverage-shard-${{ matrix.shard }}
+          path: coverage/backend/coverage-final.json
+          if-no-files-found: error
+          retention-days: 1
+
+  backend-coverage-merge:
+    # Also runs the coverage ratchet (when frontend tests were selected and
+    # passed), which used to be a separate job paying for its own runner and
+    # npm ci on the critical path.
+    name: Backend Coverage Thresholds
+    needs:
+      - changes
+      - backend-tests
+      - frontend-tests
+    if: >-
+      always() &&
+      needs.changes.outputs.backend == 'true' &&
+      needs.backend-tests.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - name: Download repository source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
+      - name: Set up Node.js 24.22.2
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Download shard coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: backend-coverage-shard-*
+          path: coverage/shard-artifacts
+      - name: Merge shard coverage and enforce backend floors
+        env:
+          BACKEND_TEST_SHARDS: "8"
+        run: |
+          set -euo pipefail
+          # run-backend-verification.mjs reads coverage/backend-shards/shard-<0-based>/.
+          for shard in $(seq 1 "$BACKEND_TEST_SHARDS"); do
+            source_file="coverage/shard-artifacts/backend-coverage-shard-${shard}/coverage-final.json"
+            if [[ ! -s "$source_file" ]]; then echo "::error::Missing coverage for backend shard ${shard}"; exit 1; fi
+            mkdir -p "coverage/backend-shards/shard-$((shard - 1))"
+            cp "$source_file" "coverage/backend-shards/shard-$((shard - 1))/coverage-final.json"
+          done
+          node scripts/run-backend-verification.mjs --merge-only
+      - name: Upload backend coverage summary
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-coverage-summary
           path: coverage/backend/coverage-summary.json
           if-no-files-found: error
           retention-days: 7
+      - name: Download frontend coverage summary
+        id: frontend_summary
+        if: needs.changes.outputs.frontend == 'true' && needs.frontend-tests.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-coverage-summary
+          path: coverage/frontend
+      - name: Coverage ratchet audit
+        if: steps.frontend_summary.outcome == 'success'
+        run: npm run audit:coverage-ratchet
 
   frontend-tests:
     name: Frontend Tests
@@ -541,51 +623,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  coverage-ratchet:
-    name: Coverage Ratchet
-    needs:
-      - changes
-      - backend-tests
-      - frontend-tests
-    if: >-
-      always() &&
-      needs.changes.outputs.backend == 'true' &&
-      needs.changes.outputs.frontend == 'true' &&
-      needs.backend-tests.result == 'success' &&
-      needs.frontend-tests.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    steps:
-      - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
-        with:
-          egress-policy: audit
-      - name: Download repository source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.2
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: "24.22.2"
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --no-audit --bin-links=true
-      - name: Download backend coverage summary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: backend-coverage-summary
-          path: coverage/backend
-      - name: Download frontend coverage summary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: frontend-coverage-summary
-          path: coverage/frontend
-      - name: Coverage ratchet audit
-        run: npm run audit:coverage-ratchet
-
   ci-gate:
     name: Check / Build / Lint / Test
     if: always()
@@ -596,8 +633,8 @@ jobs:
       - lint-format
       - build
       - backend-tests
+      - backend-coverage-merge
       - frontend-tests
-      - coverage-ratchet
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -614,9 +651,9 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           BACKEND_SELECTED: ${{ needs.changes.outputs.backend }}
           BACKEND_RESULT: ${{ needs.backend-tests.result }}
+          BACKEND_COVERAGE_RESULT: ${{ needs.backend-coverage-merge.result }}
           FRONTEND_SELECTED: ${{ needs.changes.outputs.frontend }}
           FRONTEND_RESULT: ${{ needs.frontend-tests.result }}
-          COVERAGE_RESULT: ${{ needs.coverage-ratchet.result }}
         run: |
           set -euo pipefail
 
@@ -652,23 +689,8 @@ jobs:
           check_job "Lint / Format" "$LINT_FORMAT_SELECTED" "$LINT_FORMAT_RESULT"
           check_job "Build" "$BUILD_SELECTED" "$BUILD_RESULT"
           check_job "Backend / Database Tests" "$BACKEND_SELECTED" "$BACKEND_RESULT"
+          check_job "Backend Coverage Thresholds" "$BACKEND_SELECTED" "$BACKEND_COVERAGE_RESULT"
           check_job "Frontend Tests" "$FRONTEND_SELECTED" "$FRONTEND_RESULT"
-
-          if [[ "$BACKEND_SELECTED" == "true" && "$FRONTEND_SELECTED" == "true" ]]; then
-            if [[ "$COVERAGE_RESULT" != "success" ]]; then
-              echo "::error::Coverage Ratchet was applicable but finished as '${COVERAGE_RESULT}'."
-              failed=1
-            else
-              echo "Coverage Ratchet: success"
-            fi
-          else
-            if [[ "$COVERAGE_RESULT" != "skipped" ]]; then
-              echo "::error::Coverage Ratchet was not applicable but finished as '${COVERAGE_RESULT}' instead of 'skipped'."
-              failed=1
-            else
-              echo "Coverage Ratchet: correctly skipped"
-            fi
-          fi
 
           if [[ "$failed" -ne 0 ]]; then
             echo "::error::CI Gate rejected this commit."

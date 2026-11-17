@@ -19,6 +19,13 @@ const { backend } = JSON.parse(
 const measuringCoverage =
   process.argv.includes("--coverage") || process.env.npm_lifecycle_event === "test:backend:coverage";
 
+// PR CI splits the backend suite across parallel jobs (vitest --shard), each
+// with its own PostgreSQL. One shard's coverage cannot meet the global floors on
+// its own, so sharded runs emit a mergeable coverage-final.json instead and
+// `scripts/run-backend-verification.mjs --merge-only` enforces the very same
+// floors on the combined map.
+const coverageShard = process.env.BACKEND_COVERAGE_SHARD === "1";
+
 export default defineConfig({
   // tsconfig sets jsx "preserve" for the Vite React build, so without this esbuild
   // leaves JSX in its output and import analysis cannot parse it. These suites run in
@@ -57,7 +64,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
+      reporter: coverageShard ? ["json"] : ["text", "json-summary"],
       reportsDirectory: "coverage/backend",
       include: ["server/**/*.ts", "shared/**/*.ts"],
       exclude: ["server/index.ts", "server/vite.ts", "server/**/*.d.ts", "shared/**/*.d.ts"],
@@ -66,10 +73,12 @@ export default defineConfig({
       // costing, and tenant isolation. Both come from the shared config so
       // `npm run audit:coverage-ratchet` can report drift against the same
       // numbers CI enforces.
-      thresholds: {
-        ...backend.global,
-        ...backend.perFile,
-      },
+      thresholds: coverageShard
+        ? undefined
+        : {
+            ...backend.global,
+            ...backend.perFile,
+          },
     },
   },
   resolve: {
