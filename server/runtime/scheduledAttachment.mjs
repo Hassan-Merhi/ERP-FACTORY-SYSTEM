@@ -77,7 +77,7 @@ if (!globalThis[INSTALL_KEY]) {
     return String(new Error().stack || "")
       .split("\n")
       .slice(2)
-      .filter((line) => !line.includes("scheduledAttachmentBridge.mjs") && !line.includes("node:internal"));
+      .filter((line) => !/[\\/]runtime[\\/]scheduledAttachment\.mjs/.test(line) && !line.includes("node:internal"));
   }
 
   function isKnownAttachmentConcat() {
