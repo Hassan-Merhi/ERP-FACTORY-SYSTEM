@@ -51,6 +51,13 @@ const templates = {
   }),
 };
 
+// Specific source-review evidence supersedes the historical group templates.
+// The override cannot alter the finding ID or classification status.
+const reviewEvidence = manifest.reviewEvidence ?? {};
+if (!reviewEvidence || typeof reviewEvidence !== "object" || Array.isArray(reviewEvidence)) {
+  throw new Error("Phase 10 reviewEvidence must be an object keyed by finding ID.");
+}
+
 const classifications = [];
 const seen = new Set();
 for (const [status, ids] of Object.entries(manifest.groups)) {
@@ -60,8 +67,29 @@ for (const [status, ids] of Object.entries(manifest.groups)) {
     if (typeof id !== "string" || !id.startsWith("P6D-")) throw new Error(`Invalid Program 6D finding id: ${String(id)}`);
     if (seen.has(id)) throw new Error(`Duplicate Program 6D finding id: ${id}`);
     seen.add(id);
-    classifications.push(materialize(id));
+    const reviewed = reviewEvidence[id];
+    if (reviewed !== undefined) {
+      if (!reviewed || typeof reviewed !== "object" || Array.isArray(reviewed)) {
+        throw new Error(`Invalid specific review evidence for ${id}`);
+      }
+      if ("id" in reviewed || "status" in reviewed) {
+        throw new Error(`Review evidence for ${id} cannot override its ID or status`);
+      }
+      if (typeof reviewed.rationale !== "string" || reviewed.rationale.trim().length < 20) {
+        throw new Error(`Specific review evidence for ${id} needs a rationale`);
+      }
+      const requiredField = status === "transaction-order-dependency" ? "orderingDependency"
+        : status === "false-positive" ? "falsePositiveReason" : "boundingEvidence";
+      if (typeof reviewed[requiredField] !== "string" || reviewed[requiredField].trim().length < 10) {
+        throw new Error(`Specific review evidence for ${id} requires ${requiredField}`);
+      }
+    }
+    classifications.push({ ...materialize(id), ...(reviewed ?? {}) });
   }
+}
+
+for (const id of Object.keys(reviewEvidence)) {
+  if (!seen.has(id)) throw new Error(`Review evidence for unknown finding ${id}`);
 }
 
 const output = {

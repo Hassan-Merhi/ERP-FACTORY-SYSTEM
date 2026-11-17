@@ -83,6 +83,67 @@ assert.equal(response.body.subarray(0, 2).toString("ascii"), "PK");
 assert.equal(Number(response.headers["content-length"]), response.body.length);
 assert(response.body.length > 10_000);
 
+// Real production requests pass through Express compression middleware, which
+// wraps res.write/end after the export bridge is installed. Verify the workbook
+// stays a real Buffer and arrives intact (a zero-backed export marker would be
+// silently consumed by that wrapper and downloaded as 0 bytes).
+const express = (await import("express")).default;
+const compression = (await import("compression")).default;
+const app = express();
+app.use(compression({
+  filter: (req, res) => {
+    if (/spreadsheet|zip|pdf|octet-stream|image\//i.test(String(res.getHeader("Content-Type") || ""))) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+}));
+app.get("/api/accounts/statement/export-excel", async (_req, res) => {
+  try {
+    const book = new ExcelJS.Workbook();
+    const sheet = book.addWorksheet("Statement");
+    sheet.addRow(["Account", "Debit", "Credit"]);
+    for (let index = 0; index < 2000; index++) {
+      sheet.addRow(["KOLWEZI CASH", index, index / 2]);
+    }
+    const bytes = Buffer.from(await book.xlsx.writeBuffer());
+    assert(bytes.length > 10_000, "Middleware-wrapped XLSX must be real bytes, never an empty marker");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="KOLWEZI_CASH_Statement.xlsx"');
+    res.setHeader("Content-Length", String(bytes.length));
+    res.end(bytes);
+  } catch (error) {
+    res.status(500).end(String(error));
+  }
+});
+const middlewareServer = http.createServer(app);
+await new Promise((resolve, reject) => {
+  middlewareServer.once("error", reject);
+  middlewareServer.listen(0, "127.0.0.1", resolve);
+});
+const middlewareAddress = middlewareServer.address();
+assert(middlewareAddress && typeof middlewareAddress === "object");
+const middlewareResponse = await new Promise((resolve, reject) => {
+  const request = http.get({
+    hostname: "127.0.0.1",
+    port: middlewareAddress.port,
+    path: "/api/accounts/statement/export-excel",
+  }, (res) => {
+    const chunks = [];
+    res.on("data", (chunk) => chunks.push(chunk));
+    res.on("end", () => resolve({ statusCode: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+  });
+  request.once("error", reject);
+});
+await new Promise((resolve) => middlewareServer.close(resolve));
+assert.equal(middlewareResponse.statusCode, 200);
+assert(middlewareResponse.body.length > 10_000, "Account statement XLSX download must not be 0 bytes");
+assert.equal(middlewareResponse.body.subarray(0, 4).toString("hex"), "504b0304");
+assert.equal(Number(middlewareResponse.headers["content-length"]), middlewareResponse.body.length);
+const parsedStatement = new ExcelJS.Workbook();
+await parsedStatement.xlsx.load(middlewareResponse.body);
+assert.equal(parsedStatement.getWorksheet("Statement")?.getRow(2).getCell(1).value, "KOLWEZI CASH");
+
 const attachmentWorkbook = new ExcelJS.Workbook();
 attachmentWorkbook.addWorksheet("Attachment").addRow(["buffered", "attachment"]);
 const attachmentBytes = await attachmentWorkbook.xlsx.writeBuffer();
