@@ -3,8 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -305,31 +304,15 @@ export default function StockItemDetail() {
 
           {preset === "custom" && (
             <>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-from" className="text-xs text-muted-foreground">
-                  From
-                </Label>
-                <Input
-                  id="filter-from"
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="w-40"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-to" className="text-xs text-muted-foreground">
-                  To
-                </Label>
-                <Input
-                  id="filter-to"
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="w-40"
-                />
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => applyPreset("all")} className="gap-1.5 self-end">
+              <PeriodFilter
+                value={{ fromDate, toDate, preset: "custom" }}
+                onChange={(v) => {
+                  setFromDate(v.fromDate);
+                  setToDate(v.toDate);
+                }}
+                data-testid="stock-item-detail-period"
+              />
+              <Button variant="ghost" size="sm" onClick={() => applyPreset("all")} className="gap-1.5">
                 <X className="h-3.5 w-3.5" />
                 Clear dates
               </Button>

@@ -18,9 +18,6 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
-import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
 import {
   assertStagingUrl,
   compareBalances,
@@ -147,11 +144,7 @@ describe("drill reconciliation: real queries on the full schema", () => {
 
   beforeAll(async () => {
     ctx = await seedTestData("drillrec");
-    edge.config = { mode: "lan", primary: true, siteId: SITE };
-    await ensurePhase9StockOutboxSchema(pool);
     edge.config = { mode: "cloud", primary: false, siteId: null };
-    await ensurePhase9CloudEventSchema(pool);
-    await ensurePhase9StockItemMapSchema(pool);
     const item = await pool.query(
       "INSERT INTO stock_items (company_id, code, name, uom) VALUES ($1, 'DRL-1', 'Drill item', 'PCS') RETURNING id",
       [ctx.companyId]

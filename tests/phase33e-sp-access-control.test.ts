@@ -22,12 +22,7 @@ vi.mock("../server/routes/sp/spHelpers", () => ({
 }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
 
-import {
-  SP_PERMISSIONS,
-  classifyPermission,
-  ensureSpAccessControlStorage,
-  registerSpAccessControl,
-} from "../server/routes/sp/spAccessControl";
+import { SP_PERMISSIONS, classifyPermission, registerSpAccessControl } from "../server/routes/sp/spAccessControl";
 
 function fakeApp() {
   const registrations: Array<{
@@ -112,9 +107,8 @@ async function invoke(req: any) {
   return { res, next };
 }
 
-beforeAll(async () => {
+beforeAll(() => {
   harness.db.execute.mockResolvedValue({ rows: [] });
-  await ensureSpAccessControlStorage();
 });
 
 describe("Phase 33E Supplier Partner permission classification", () => {

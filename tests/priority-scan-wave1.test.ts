@@ -2,7 +2,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import { closeTestServer, cleanupTestData, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "priorityscanw1";
@@ -33,7 +32,6 @@ async function setRole(role: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({

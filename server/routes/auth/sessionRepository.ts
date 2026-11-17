@@ -10,12 +10,12 @@ export interface StoredSessionRow {
 }
 
 /**
- * connect-pg-simple is configured with createTableIfMissing, so it creates the
- * session table on its first store write rather than at startup. Until then the
- * table is genuinely absent and there are genuinely zero stored sessions, so
- * these queries answered a 42P01 (undefined_table) that surfaced as a 500 —
- * most visibly on DELETE /api/sessions/:sid, which should report 404 for a
- * session that is not stored.
+ * The session table is defined by migrations/0001_baseline_schema.sql. It used
+ * to be created lazily by connect-pg-simple (createTableIfMissing) on its first
+ * store write, so these queries could meet a 42P01 (undefined_table) that
+ * surfaced as a 500 — most visibly on DELETE /api/sessions/:sid, which should
+ * report 404 for a session that is not stored. The tolerance is kept for
+ * databases that are mid-adoption and is harmless otherwise.
  *
  * Narrow on purpose: only undefined_table, and only for this table's queries.
  * Any other database error still propagates.
@@ -25,7 +25,11 @@ function isMissingSessionTable(error: unknown): boolean {
 }
 
 export const sessionRepository = {
-  async listActiveSessions(userId: string | undefined, includeAllUsers: boolean, companyId?: number): Promise<StoredSessionRow[]> {
+  async listActiveSessions(
+    userId: string | undefined,
+    includeAllUsers: boolean,
+    companyId?: number
+  ): Promise<StoredSessionRow[]> {
     try {
       if (includeAllUsers) {
         if (companyId) {

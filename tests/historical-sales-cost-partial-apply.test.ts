@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
 
-import { ensureHistoricalSalesCostRepairSchema } from "../server/services/inventory/ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_PARTIAL_APPLY_MODE,
   applyHistoricalSalesCostPartialWithClient,
@@ -111,6 +110,136 @@ describe("row-set integrity", () => {
 //   HSCR_PARTIAL_APPLY_TEST_DATABASE_URL=postgresql://postgres@localhost:55432/hscr_test npx vitest run tests/historical-sales-cost-partial-apply.test.ts
 const databaseUrl = process.env.HSCR_PARTIAL_APPLY_TEST_DATABASE_URL;
 
+// The repair tables of the disposable database (the schema migrations define
+// them in a real one; this suite builds its own minimal schema).
+const REPAIR_TABLES_FIXTURE_SQL = `
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_runs (
+      id BIGSERIAL PRIMARY KEY,
+      algorithm_version TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('building','blocked','ready','applying','applied','failed')),
+      source_cutoff_at TIMESTAMPTZ NOT NULL,
+      requested_company_ids INTEGER[],
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      applied_by TEXT,
+      applied_at TIMESTAMPTZ,
+      audit_hash VARCHAR(64),
+      total_sales_rows INTEGER NOT NULL DEFAULT 0,
+      changed_rows INTEGER NOT NULL DEFAULT 0,
+      blocked_rows INTEGER NOT NULL DEFAULT 0,
+      blocked_item_locations INTEGER NOT NULL DEFAULT 0,
+      original_total_cost NUMERIC(24,2) NOT NULL DEFAULT 0,
+      proposed_total_cost NUMERIC(24,2) NOT NULL DEFAULT 0,
+      original_total_profit NUMERIC(24,2) NOT NULL DEFAULT 0,
+      proposed_total_profit NUMERIC(24,2) NOT NULL DEFAULT 0,
+      report JSONB NOT NULL DEFAULT '{}'::jsonb,
+      error TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_rows (
+      id BIGSERIAL PRIMARY KEY,
+      run_id BIGINT NOT NULL REFERENCES historical_sales_cost_repair_runs(id) ON DELETE RESTRICT,
+      company_id INTEGER NOT NULL,
+      location_id INTEGER NOT NULL,
+      stock_item_id INTEGER NOT NULL,
+      voucher_id INTEGER NOT NULL,
+      sales_item_id INTEGER NOT NULL,
+      occurred_at TIMESTAMPTZ NOT NULL,
+      evidence TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      original_cost_price NUMERIC(24,2) NOT NULL,
+      original_total_cost NUMERIC(24,2) NOT NULL,
+      original_profit NUMERIC(24,2) NOT NULL,
+      proposed_cost_price NUMERIC(24,2) NOT NULL,
+      proposed_total_cost NUMERIC(24,2) NOT NULL,
+      proposed_profit NUMERIC(24,2) NOT NULL,
+      changed BOOLEAN NOT NULL DEFAULT FALSE,
+      status TEXT NOT NULL CHECK (status IN ('ready','blocked','applied','unchanged')),
+      blocker_code TEXT,
+      blocker_detail TEXT,
+      applied_at TIMESTAMPTZ,
+      UNIQUE (run_id, sales_item_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_rows_run_status_idx
+      ON historical_sales_cost_repair_rows(run_id, status);
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_rows_company_idx
+      ON historical_sales_cost_repair_rows(run_id, company_id);
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_rows_sale_idx
+      ON historical_sales_cost_repair_rows(sales_item_id);
+
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_checks (
+      id BIGSERIAL PRIMARY KEY,
+      run_id BIGINT NOT NULL REFERENCES historical_sales_cost_repair_runs(id) ON DELETE RESTRICT,
+      company_id INTEGER NOT NULL,
+      location_id INTEGER,
+      stock_item_id INTEGER,
+      check_code TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('pass','block','warning')),
+      expected_value TEXT,
+      actual_value TEXT,
+      detail TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_checks_run_idx
+      ON historical_sales_cost_repair_checks(run_id, status, company_id);
+
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_apply_log (
+      id BIGSERIAL PRIMARY KEY,
+      run_id BIGINT NOT NULL REFERENCES historical_sales_cost_repair_runs(id) ON DELETE RESTRICT,
+      company_id INTEGER NOT NULL,
+      sales_item_id INTEGER NOT NULL,
+      before_cost_price NUMERIC(24,2) NOT NULL,
+      before_total_cost NUMERIC(24,2) NOT NULL,
+      before_profit NUMERIC(24,2) NOT NULL,
+      after_cost_price NUMERIC(24,2) NOT NULL,
+      after_total_cost NUMERIC(24,2) NOT NULL,
+      after_profit NUMERIC(24,2) NOT NULL,
+      applied_by TEXT NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (run_id, sales_item_id)
+    );
+
+    -- Proven-rows-only partial apply. One record per reviewed run; the
+    -- apply log below carries the per-row before/after snapshot used for an
+    -- exact rollback. Blocked and unchanged rows are never written.
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_partial_applies (
+      id BIGSERIAL PRIMARY KEY,
+      run_id BIGINT NOT NULL UNIQUE REFERENCES historical_sales_cost_repair_runs(id) ON DELETE RESTRICT,
+      audit_hash VARCHAR(64) NOT NULL,
+      algorithm_version TEXT NOT NULL,
+      target_hash VARCHAR(64) NOT NULL,
+      target_rows INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('applied','rolled_back')),
+      applied_by TEXT NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      rolled_back_by TEXT,
+      rolled_back_at TIMESTAMPTZ,
+      report JSONB NOT NULL DEFAULT '{}'::jsonb,
+      rollback_report JSONB
+    );
+
+    ALTER TABLE historical_sales_cost_repair_apply_log
+      ADD COLUMN IF NOT EXISTS apply_mode TEXT NOT NULL DEFAULT 'full',
+      ADD COLUMN IF NOT EXISTS partial_apply_id BIGINT REFERENCES historical_sales_cost_repair_partial_applies(id) ON DELETE RESTRICT,
+      ADD COLUMN IF NOT EXISTS voucher_id INTEGER,
+      ADD COLUMN IF NOT EXISTS location_id INTEGER,
+      ADD COLUMN IF NOT EXISTS stock_item_id INTEGER,
+      ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS evidence TEXT,
+      ADD COLUMN IF NOT EXISTS source_type TEXT,
+      ADD COLUMN IF NOT EXISTS source_id TEXT,
+      ADD COLUMN IF NOT EXISTS audit_hash VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS rolled_back_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS rolled_back_by TEXT;
+
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_apply_log_partial_idx
+      ON historical_sales_cost_repair_apply_log(partial_apply_id);
+  `;
+
 describe.skipIf(!databaseUrl)("partial apply against a real database", () => {
   let pool: Pool;
   let client: PoolClient;
@@ -193,7 +322,7 @@ describe.skipIf(!databaseUrl)("partial apply against a real database", () => {
         (104,11,503,3.00,3.00,1.00);
       INSERT INTO inventory VALUES (1,1,500,5,12,60),(1,1,501,2,8,16);
     `);
-    await ensureHistoricalSalesCostRepairSchema(pool);
+    await client.query(REPAIR_TABLES_FIXTURE_SQL);
     await client.query(
       `INSERT INTO historical_sales_cost_repair_runs
        (id,algorithm_version,status,source_cutoff_at,requested_company_ids,created_by,completed_at,audit_hash,

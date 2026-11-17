@@ -433,7 +433,7 @@ jobs:
       - name: Install dependencies
         id: install
         run: npm ci --no-audit --bin-links=true
-      - name: Build for startup migration verification
+      - name: Build for startup verification
         id: build
         if: always() && steps.install.outcome == 'success'
         run: |
@@ -447,12 +447,14 @@ jobs:
           path: backend-build-errors-ci.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Prepare test database schema
+      - name: Build test database from migrations
         id: db_schema
         if: always() && steps.install.outcome == 'success'
         run: |
           set -o pipefail
-          node node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee db-schema-ci.txt
+          # The schema is owned by migrations/ (no drizzle-kit push, no startup DDL).
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate 2>&1 | tee db-schema-ci.txt
+          npm run db:verify 2>&1 | tee -a db-schema-ci.txt
       - name: Upload database schema failure log
         if: always() && steps.db_schema.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -461,66 +463,35 @@ jobs:
           path: db-schema-ci.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Run application startup migrations
-        id: runtime_migrations
+      - name: Application boots against the migrated database
+        id: runtime_boot
         if: always() && steps.db_schema.outcome == 'success' && steps.build.outcome == 'success'
         run: |
           set -o pipefail
-          node dist/index.js > "$RUNNER_TEMP/startup-migrations-ci.txt" 2>&1 &
+          node --import ./server/startupPreload.mjs dist/index.js > "$RUNNER_TEMP/startup-ci.txt" 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
           for _attempt in $(seq 1 180); do
             if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > "$RUNNER_TEMP/health-db-ci.json"; then cat "$RUNNER_TEMP/health-db-ci.json"; exit 0; fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then echo "Application exited before startup migrations became ready."; cat "$RUNNER_TEMP/startup-migrations-ci.txt"; exit 1; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then echo "Application exited before becoming ready."; cat "$RUNNER_TEMP/startup-ci.txt"; exit 1; fi
             sleep 1
           done
-          echo "Timed out waiting for application startup migrations."
-          cat "$RUNNER_TEMP/startup-migrations-ci.txt"
+          echo "Timed out waiting for the application to become ready."
+          cat "$RUNNER_TEMP/startup-ci.txt"
           exit 1
-      - name: Upload startup migration failure log
-        if: always() && steps.runtime_migrations.outcome == 'failure'
+      - name: Upload startup failure log
+        if: always() && steps.runtime_boot.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: startup-migration-errors-${{ matrix.shard }}
+          name: startup-errors-${{ matrix.shard }}
           path: |
-            ${{ runner.temp }}/startup-migrations-ci.txt
+            ${{ runner.temp }}/startup-ci.txt
             ${{ runner.temp }}/health-db-ci.json
           if-no-files-found: warn
           retention-days: 7
-      - name: Startup migration ratchet
-        id: startup_migration_ratchet
-        if: always() && matrix.shard == 1 && steps.runtime_migrations.outcome == 'success'
-        run: |
-          set -o pipefail
-          HEALTH_REPORT="$RUNNER_TEMP/health-db-ci.json" HEALTH_LABEL='first boot, fresh schema' npm run verify:startup-migrations
-          node dist/index.js > "$RUNNER_TEMP/startup-migrations-verify.txt" 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
-          for _attempt in $(seq 1 180); do
-            if curl --fail --silent "http://127.0.0.1:${PORT}/api/health/db" | grep -q '"status":"ok"'; then break; fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then echo "Application exited before the migration report was readable."; cat "$RUNNER_TEMP/startup-migrations-verify.txt"; exit 1; fi
-            sleep 1
-          done
-          HEALTH_URL="http://127.0.0.1:${PORT}" HEALTH_LABEL='second boot, schema already applied' npm run verify:startup-migrations
-      - name: Upload startup migration ratchet log
-        if: always() && steps.startup_migration_ratchet.outcome == 'failure'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: startup-migration-ratchet
-          path: ${{ runner.temp }}/startup-migrations-verify.txt
-          if-no-files-found: warn
-          retention-days: 7
-      # Production boots through server/startupPreload.mjs, whose scan-audit
-      # bridge skips itself under NODE_ENV=test. Install the same schema here so
-      # tests that read customer_order_bales.scanned_at do not depend on order.
-      - name: Install production scan-audit schema
-        id: scan_audit_schema
-        if: always() && steps.runtime_migrations.outcome == 'success'
-        run: |
-          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
       - name: Backend tests and shard coverage
         id: backend_coverage
-        if: always() && steps.runtime_migrations.outcome == 'success' && steps.scan_audit_schema.outcome == 'success'
+        if: always() && steps.runtime_boot.outcome == 'success'
         env:
           # Skip per-shard floors and emit coverage-final.json; the floors are
           # enforced on the merged map in backend-coverage-merge.

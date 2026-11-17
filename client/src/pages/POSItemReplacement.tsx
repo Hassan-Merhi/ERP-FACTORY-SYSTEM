@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -352,31 +353,17 @@ export default function POSItemReplacement() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="pos-replacement-from">From</Label>
-                <Input
-                  id="pos-replacement-from"
-                  type="date"
-                  value={fromDate}
-                  onChange={(event) => {
-                    setFromDate(event.target.value);
-                    setReplaceQuantities({});
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pos-replacement-to">To</Label>
-                <Input
-                  id="pos-replacement-to"
-                  type="date"
-                  value={toDate}
-                  onChange={(event) => {
-                    setToDate(event.target.value);
-                    setReplaceQuantities({});
-                  }}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Period</Label>
+              <PeriodFilter
+                value={{ fromDate, toDate, preset: fromDate || toDate ? "custom" : "all_time" }}
+                onChange={(v) => {
+                  setFromDate(v.fromDate);
+                  setToDate(v.toDate);
+                  setReplaceQuantities({});
+                }}
+                data-testid="pos-replacement-period"
+              />
             </div>
           </div>
 

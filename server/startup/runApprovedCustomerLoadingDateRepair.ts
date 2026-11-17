@@ -47,23 +47,6 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
     await client.query("SELECT set_config('app.current_company_id', '12', true)");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('customer_loading_date_repair'), $1)", [COMPANY_ID]);
 
-    stage = "create-before-image-audit-table";
-    // Durable before-image. Must be written in the SAME transaction as the changes.
-    await client.query(`CREATE TABLE IF NOT EXISTS factory_customer_loading_date_repair_audit (
-      company_id INTEGER NOT NULL,
-      order_id INTEGER NOT NULL,
-      run_key TEXT NOT NULL,
-      source_daybook_entry_id INTEGER NOT NULL,
-      old_loading_finalized_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-      new_loading_finalized_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-      selected_loading_date DATE NOT NULL,
-      old_status TEXT NOT NULL,
-      invoice_number TEXT,
-      container_number TEXT,
-      repaired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (company_id, order_id)
-    )`);
-
     stage = "read-existing-repair";
     const existing = await client.query(
       "SELECT order_id FROM factory_customer_loading_date_repair_audit WHERE company_id = $1 AND run_key = $2",
@@ -73,7 +56,8 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
       if (existing.rowCount !== PLAN.length) {
         throw new Error("Historical loading date repair refused: incomplete/foreign existing audit");
       }
-      const verified = await client.query(`
+      const verified = await client.query(
+        `
         SELECT count(*)::int AS count
           FROM factory_customer_loading_date_repair_audit a
           JOIN customer_orders o ON o.id = a.order_id AND o.company_id = a.company_id
@@ -89,7 +73,6 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
       return;
     }
 
-    stage = "create-temporary-plan";
     await client.query(`CREATE TEMP TABLE customer_loading_date_plan (
       order_id INTEGER PRIMARY KEY,
       daybook_entry_id INTEGER NOT NULL,
@@ -139,7 +122,8 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
     }
 
     stage = "persist-before-after-audit";
-    const audit = await client.query(`
+    const audit = await client.query(
+      `
       INSERT INTO factory_customer_loading_date_repair_audit
         (company_id, order_id, run_key, source_daybook_entry_id,
          old_loading_finalized_at, new_loading_finalized_at,
@@ -149,13 +133,16 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
              p.selected_date, o.status, o.invoice_number, o.container_number
         FROM customer_loading_date_plan p
         JOIN customer_orders o ON o.company_id = 12 AND o.id = p.order_id
-      RETURNING order_id`, [RUN_KEY]);
+      RETURNING order_id`,
+      [RUN_KEY]
+    );
     if (audit.rowCount !== PLAN.length) {
       throw new Error("Historical loading date repair refused: incomplete before-image");
     }
 
     stage = "update-confirmed-loading-dates";
-    const updated = await client.query(`
+    const updated = await client.query(
+      `
       UPDATE customer_orders o
          SET loading_finalized_at = a.new_loading_finalized_at
         FROM factory_customer_loading_date_repair_audit a
@@ -163,18 +150,23 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
          AND o.id = a.order_id AND a.company_id = o.company_id
          AND a.run_key = $1
          AND o.loading_finalized_at = a.old_loading_finalized_at
-      RETURNING o.id`, [RUN_KEY]);
+      RETURNING o.id`,
+      [RUN_KEY]
+    );
     if (updated.rowCount !== PLAN.length) {
       throw new Error("Historical loading date repair refused: incomplete update");
     }
 
     stage = "verify-persisted-dates";
-    const verified = await client.query(`
+    const verified = await client.query(
+      `
       SELECT count(*)::int AS count
         FROM factory_customer_loading_date_repair_audit a
         JOIN customer_orders o ON o.id = a.order_id AND o.company_id = a.company_id
        WHERE a.company_id = 12 AND a.run_key = $1
-         AND o.loading_finalized_at = a.new_loading_finalized_at`, [RUN_KEY]);
+         AND o.loading_finalized_at = a.new_loading_finalized_at`,
+      [RUN_KEY]
+    );
     if (verified.rows[0]?.count !== PLAN.length) {
       throw new Error("Historical loading date repair refused: verification failed");
     }

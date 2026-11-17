@@ -191,36 +191,8 @@
       "reason": "Maintenance jobs select their company scope before running data repairs."
     },
     {
-      "path": "server/startup-schema/005-orphan-fk-repairs.ts",
-      "reason": "Startup orphan repair is controlled maintenance, not caller-driven data access."
-    },
-    {
-      "path": "server/startup-schema/008-pos-exports-and-dispatch.ts",
-      "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
-    },
-    {
-      "path": "server/startup-schema/010-security-notifications-and-precision.ts",
-      "reason": "Startup schema maintenance is controlled and idempotent, not caller-driven data access."
-    },
-    {
-      "path": "server/startup/ensureSupplierTrackingShopDutyDefaults.ts",
-      "reason": "Process-level startup DDL: the only containers reference is a to_regclass existence probe, and the applied statements install schema defaults/triggers. No tenant rows are read or written and no caller-supplied company identity exists at startup."
-    },
-    {
-      "path": "server/startup/ensureZambiaHistoricalPurchaseCost.ts",
-      "reason": "Process-level startup DDL: the purchase_orders and po_line_items references are a to_regclass existence probe and idempotent ADD COLUMN IF NOT EXISTS / NOT VALID constraint statements from startup stage 036. No tenant rows are read or written and no caller-supplied company identity exists at startup."
-    },
-    {
       "path": "server/startup/postStartupJobs.ts",
       "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
-    },
-    {
-      "path": "server/startup/runServerStartupMigrations.ts",
-      "reason": "Startup migrations and one-time repairs run in controlled process-level maintenance context across all companies, outside request handling and without caller-supplied tenant identity."
-    },
-    {
-      "path": "server/stockItemSchemaRepairBridge.mjs",
-      "reason": "Startup stock_items schema repair reads column names from information_schema and issues ADD COLUMN DDL under the explicit maintenance capability; it never reads or writes a stock_items row."
     },
     {
       "path": "server/storage/accounting/voucher-writes.ts",

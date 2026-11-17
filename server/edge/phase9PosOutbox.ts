@@ -6,11 +6,10 @@
  * that number, and records the committed sale in the same transaction. The
  * LAN invoice series can never collide with the cloud's SV- numbers; the cloud
  * replay keeps the LAN number on the cloud voucher for cross-reference.
- * Schema: reviewed DBA install only (server/edge/offlineSchemaInstall.ts).
+ * Schema: migrations/ (never created at runtime).
  */
 import { EdgeRefusal } from "./edgeRefusal";
 import { sql } from "drizzle-orm";
-import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
 import { resultRows } from "../lib/queryResult";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
@@ -35,51 +34,6 @@ export interface Phase9PosInvoice {
 export function isPhase9LanPrimary(): boolean {
   const config = readFactoryEdgeConfiguration();
   return config.mode === "lan" && config.primary === true;
-}
-
-export async function ensurePhase9PosOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
-  if (readFactoryEdgeConfiguration().mode !== "lan") return;
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_pos_counter (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL CHECK(last_sequence > 0)
-    )
-  `);
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_pos_outbox (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
-      local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      lan_invoice_number TEXT,
-      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('pos.sale.v1', 'pos.sale-edit.v1', 'pos.sale-cancel.v1')),
-      payload JSONB NOT NULL,
-      payload_sha256 CHAR(64) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, sequence),
-      UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, lan_invoice_number),
-      -- A sale has a LAN invoice number; an edit of it does not.
-      CHECK ((operation_kind = 'pos.sale.v1') = (lan_invoice_number IS NOT NULL)),
-      CONSTRAINT factory_edge_pos_source_fk
-        FOREIGN KEY (local_voucher_id) REFERENCES vouchers(id) ON DELETE RESTRICT
-    )
-  `);
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_pos_outbox_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE9_POS_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query(`DROP TRIGGER IF EXISTS factory_edge_pos_outbox_no_mutation ON factory_edge_pos_outbox`);
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_pos_outbox_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_pos_outbox
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_pos_outbox_immutable()
-  `);
 }
 
 /** Reserve the next LAN invoice number inside the sale transaction. */

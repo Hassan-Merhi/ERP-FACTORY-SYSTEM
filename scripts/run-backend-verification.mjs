@@ -106,14 +106,10 @@ function run(command, args, label, env = {}, timeoutMs = undefined) {
 }
 
 function bootstrapDatabase() {
-  // The bridge imports the factory bilingual/trilingual and RLS bridges before
-  // applying the supplier migration. Running it once per verification avoids
-  // repeating four idempotent database passes in every forked test file.
-  run(
-    process.execPath,
-    ["--import", "./server/schemaPreload.mjs", "-e", ""],
-    "database bootstrap"
-  );
+  // The test database must already be built by the migrations
+  // (`npm run db:migrate` on an empty database). Verify it read-only instead of
+  // repairing it: tests run against exactly the schema production adopts.
+  run(process.execPath, ["scripts/db/migrate.mjs", "verify"], "database schema verification");
 }
 
 function parseReporterOutput(file) {

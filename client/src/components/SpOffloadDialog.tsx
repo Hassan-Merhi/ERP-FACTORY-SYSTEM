@@ -15,10 +15,11 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 function fmt2(v: string | number | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n) ? "$0.00" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return isNaN(n) ? "$0.00" : formatUsd(n, 2);
 }
 
 const CHARGE_TYPES = [

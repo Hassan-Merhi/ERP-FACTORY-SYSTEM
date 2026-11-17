@@ -2,7 +2,7 @@ import { Eye, Package, Plus, Check, X, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Container } from "@shared/schema";
 import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTotalCost";
@@ -82,11 +82,6 @@ export function ActiveContainersTable({
   return (
     <div className="space-y-2">
       {containers.map((container) => {
-        const statusColors: Record<string, string> = {
-          OTW: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-transparent",
-          ARRIVED: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-transparent",
-          OFFLOADED: "bg-green-500/10 text-green-700 dark:text-green-300 border-transparent",
-        };
         return (
           <div
             key={container.id}
@@ -151,12 +146,12 @@ export function ActiveContainersTable({
                       )}
                     </div>
                   )}
-                  <Badge
-                    className={statusColors[container.status] || "border-transparent"}
+                  <StatusBadge
+                    status={container.status}
+                    label={container.status}
+                    showIcon={false}
                     data-testid={`badge-status-${container.id}`}
-                  >
-                    {container.status}
-                  </Badge>
+                  />
                 </div>
                 {container.linkedParentCompanyName ? (
                   <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">

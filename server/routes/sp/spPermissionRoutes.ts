@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { ensureSpAccessControlStorage, SP_PERMISSIONS } from "./spAccessControl";
+import { SP_PERMISSIONS } from "./spAccessControl";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
 
@@ -13,7 +13,6 @@ export function registerSpPermissionRoutes(app: Express): void {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
-      await ensureSpAccessControlStorage();
       const result = await db.execute(sql`
         SELECT company_id AS "companyId", user_id AS "userId", permission, enabled,
                granted_by AS "grantedBy", granted_at AS "grantedAt"
@@ -35,7 +34,6 @@ export function registerSpPermissionRoutes(app: Express): void {
       try {
         const companyId = await requireSpCompany(req, res);
         if (!companyId) return;
-        await ensureSpAccessControlStorage();
         const permission = String(req.params.permission);
         if (!(SP_PERMISSIONS as readonly string[]).includes(permission)) {
           return res.status(400).json({ message: releaseDebtEnglish("Unknown Supplier Partner permission") });
@@ -71,7 +69,6 @@ export function registerSpPermissionRoutes(app: Express): void {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
-      await ensureSpAccessControlStorage();
       const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 1000);
       const result = await db.execute(sql`
         SELECT * FROM sp_audit_events

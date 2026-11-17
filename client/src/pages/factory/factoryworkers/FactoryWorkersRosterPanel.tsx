@@ -37,6 +37,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getAvatarColor, getInitials } from "./utils";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
 import { SearchField } from "@/components/ui/search-field";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface FactoryWorkersModelProps {
   model: ReturnType<typeof useFactoryWorkersModel>;
@@ -674,14 +675,14 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                     </TableCell>
                     <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
                       {worker.baseSalary ? (
-                        `$${parseFloat(worker.baseSalary).toLocaleString()}`
+                        formatUsd(parseFloat(worker.baseSalary), 0, 3)
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
                     </TableCell>
                     <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
                       {parseFloat(worker.transportAllowance || "0") > 0 ? (
-                        `$${parseFloat(worker.transportAllowance || "0").toLocaleString()}`
+                        formatUsd(parseFloat(worker.transportAllowance || "0"), 0, 3)
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
@@ -689,7 +690,7 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                     <TableCell className="py-3 text-right font-mono text-sm">
                       {parseFloat(worker.pendingAdvanceBalance || "0") > 0 ? (
                         <span className="text-amber-600 dark:text-amber-400">
-                          ${parseFloat(worker.pendingAdvanceBalance || "0").toLocaleString()}
+                          {formatUsd(parseFloat(worker.pendingAdvanceBalance || "0"), 0, 3)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>

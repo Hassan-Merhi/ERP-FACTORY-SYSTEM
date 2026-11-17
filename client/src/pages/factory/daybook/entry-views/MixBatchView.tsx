@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry, DisplayDate, MixBatchDetail, MixBatchSource, Navigate } from "./types";
 import { apiNumber } from "./types";
+import { formatUsd } from "@/lib/moneyDisplay";
+
+const usd = (value: number) => formatUsd(value, 0, 2);
 
 export function MixBatchView({
   entry,
@@ -86,11 +89,11 @@ export function MixBatchView({
                 </div>
                 <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Total Cost</p>
-                  <p className="font-semibold font-mono">${formatNumber(totalCost)}</p>
+                  <p className="font-semibold font-mono">{usd(totalCost)}</p>
                 </div>
                 <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Cost / kg</p>
-                  <p className="font-semibold font-mono">${formatNumber(costPerKg)}</p>
+                  <p className="font-semibold font-mono">{usd(costPerKg)}</p>
                 </div>
               </div>
             </>
@@ -153,10 +156,8 @@ export function MixBatchView({
                           <p className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(1)}% of batch</p>
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono">{formatNumber(srcKg)} kg</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">
-                          ${formatNumber(srcCpk)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-medium">${formatNumber(srcTotal)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{usd(srcCpk)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono font-medium">{usd(srcTotal)}</td>
                       </tr>
                     );
                   })}
@@ -168,7 +169,7 @@ export function MixBatchView({
                       <td className="px-3 py-2 text-right font-mono font-medium">{formatNumber(sourcesTotalKg)} kg</td>
                       <td />
                       <td className="px-3 py-2 text-right font-mono font-medium">
-                        ${formatNumber(mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0))}
+                        {usd(mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0))}
                       </td>
                     </tr>
                   </tfoot>

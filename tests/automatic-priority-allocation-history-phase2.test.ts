@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import { reversePriorityAllocationForDeletedBaleTx } from "../server/routes/factory/customer-orders/priorityAutoAllocation";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../server/routes/factory/customer-orders/priorityScanQueue";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -25,7 +24,6 @@ let referenceNumber: string;
 let originalHistoryId: number;
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [ctx.companyId]);

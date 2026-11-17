@@ -45,3 +45,12 @@ export function formatMoneyNumber(amount: number | string | null | undefined, de
     ? numeric.toLocaleString(locale, { maximumFractionDigits: Math.max(0, Math.min(decimals, 20)) })
     : "—";
 }
+
+/** USD amounts with fixed decimals: the one-line form of formatMoneyDisplay for hard-USD screens. */
+export function formatUsd(
+  amount: number | string | null | undefined,
+  minimumFractionDigits = 2,
+  maximumFractionDigits = minimumFractionDigits
+): string {
+  return formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits, maximumFractionDigits });
+}

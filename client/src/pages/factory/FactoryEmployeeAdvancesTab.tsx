@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface Employee {
   id: number;
@@ -67,6 +68,11 @@ interface CashAccount {
 function fmt(val: string | number | null | undefined) {
   const n = parseFloat(String(val || 0));
   return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtUsd(val: string | number | null | undefined) {
+  const n = parseFloat(String(val || 0));
+  return formatUsd(isNaN(n) ? 0 : n, 2);
 }
 
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -270,7 +276,9 @@ export default function FactoryEmployeeAdvancesTab() {
           <div className="flex items-center gap-2 rounded-lg border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 px-3 py-1.5 text-sm">
             <Banknote className="h-4 w-4 text-amber-500 shrink-0" />
             <span className="text-muted-foreground">Outstanding</span>
-            <span className="font-semibold font-mono text-amber-700 dark:text-amber-300">${fmt(totalOutstanding)}</span>
+            <span className="font-semibold font-mono text-amber-700 dark:text-amber-300">
+              {fmtUsd(totalOutstanding)}
+            </span>
           </div>
         )}
         {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
@@ -348,12 +356,12 @@ export default function FactoryEmployeeAdvancesTab() {
                     {adv.firstName} {adv.lastName}
                   </TableCell>
                   <TableCell className="py-3 text-sm text-muted-foreground">{adv.advanceDate}</TableCell>
-                  <TableCell className="py-3 text-right font-mono text-sm">${fmt(adv.amount)}</TableCell>
+                  <TableCell className="py-3 text-right font-mono text-sm">{fmtUsd(adv.amount)}</TableCell>
                   <TableCell className="py-3 text-right font-mono text-sm">
                     {adv.fullyPaid ? (
                       <span className="text-muted-foreground/40">—</span>
                     ) : (
-                      <span className="text-amber-600 dark:text-amber-400">${fmt(adv.remainingBalance)}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{fmtUsd(adv.remainingBalance)}</span>
                     )}
                   </TableCell>
                   <TableCell className="py-3">

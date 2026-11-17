@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+import { columnDefinition, indexDefinition } from "./helpers/schemaManifest";
+
 function source(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
@@ -28,12 +30,13 @@ describe("POS location database-pool crash protection", () => {
 
   it("keeps schema and production SQL aligned", () => {
     const usersSchema = source("shared/schema/users.ts");
-    const migration = source("migrations/20260721_fix_pos_location_pool_crash.sql");
 
     expect(usersSchema).toContain("user_locations_user_company_location_idx");
-    expect(migration).toContain("ON user_locations (user_id, company_id, location_id)");
-    expect(migration).toContain("base_debit_amount NUMERIC(20,6)");
-    expect(migration).toContain("base_credit_amount NUMERIC(20,6)");
+    expect(indexDefinition("user_locations_user_company_location_idx")).toContain(
+      "ON public.user_locations USING btree (user_id, company_id, location_id)"
+    );
+    expect(columnDefinition("voucher_entries", "base_debit_amount")?.type).toBe("numeric(20,6)");
+    expect(columnDefinition("voucher_entries", "base_credit_amount")?.type).toBe("numeric(20,6)");
   });
 
   it("does not prefetch general ERP reference data for POS sessions", () => {

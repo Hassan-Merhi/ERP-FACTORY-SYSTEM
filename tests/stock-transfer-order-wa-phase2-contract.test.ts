@@ -33,7 +33,7 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(requestPanel).toContain("pendingRevisions");
     expect(settings).toContain("authorizedPhoneE164");
     expect(settings).toContain("Destination WhatsApp recipients");
-    expect(registration).toContain("registerStockTransferOrderWaApprovalRoutes(app, { ensureGroupsTable })");
+    expect(registration).toContain("registerStockTransferOrderWaApprovalRoutes(app);");
   });
 
   it("preserves the ordinary stock-transfer create path and marks only the order route", () => {

@@ -85,7 +85,6 @@ export function readFactoryEdgeConfiguration(env = process.env) {
   if (env.PGSSLMODE !== "disable") throw new Error("EDGE_DATABASE_MUST_USE_PRIVATE_NETWORK");
   if (env.CSRF_ENFORCE !== "1") throw new Error("EDGE_CSRF_REQUIRED");
   if (env.ENABLE_SCHEDULERS !== "false") throw new Error("EDGE_SCHEDULERS_MUST_BE_DISABLED");
-  if (env.RUN_STARTUP_MIGRATIONS !== "true") throw new Error("EDGE_MIGRATIONS_REQUIRED");
   if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 48) throw new Error("EDGE_SESSION_SECRET_WEAK");
   if (env.CAPACITOR_ENABLED === "true") throw new Error("EDGE_CROSS_ORIGIN_SESSIONS_DISABLED");
   const writeMode = env.FACTORY_EDGE_WRITE_MODE || "read-only";
