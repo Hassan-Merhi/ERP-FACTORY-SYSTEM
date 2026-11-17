@@ -8,6 +8,7 @@ import { BarChart3, FileSpreadsheet, Loader2 } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { QuickMonthlyClose } from "./golden-coast/QuickMonthlyClose";
 import { fmt, useSpReportsState, type ReportTab } from "./useSpReportsState";
+import { PeriodFilter } from "@/components/ui/period-filter";
 
 export function SpReportsTabsSection({
   accounts,
@@ -98,26 +99,14 @@ export function SpReportsTabsSection({
 
       <TabsContent value="profit" className="mt-4 space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <div>
-            <label className="text-xs text-muted-foreground">From</label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 w-36"
-              data-testid="input-sp-profit-start"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">To</label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="mt-1 w-36"
-              data-testid="input-sp-profit-end"
-            />
-          </div>
+          <PeriodFilter
+            value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+            onChange={(v) => {
+              setStartDate(v.fromDate);
+              setEndDate(v.toDate);
+            }}
+            data-testid="sp-profit-period"
+          />
         </div>
 
         {profitLoading ? (

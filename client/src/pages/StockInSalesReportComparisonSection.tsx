@@ -1,6 +1,4 @@
 // Extracted from ./StockInSalesReportComparison.tsx to keep that module under the source-size cap.
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +8,7 @@ import {
   useStockInSalesReportComparisonState,
   type MetricKey,
 } from "./useStockInSalesReportComparisonState";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export function StockInSalesReportComparisonSection({
   data,
@@ -243,31 +242,14 @@ export function StockInSalesReportComparisonSection({
               </TableBody>
             </Table>
           </div>
-          {data && data.itemRowCount > ITEM_PAGE_SIZE && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <p className="text-xs text-muted-foreground">
-                Page {itemPage} of {itemTotalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setItemPage((page) => Math.max(1, page - 1))}
-                  disabled={itemPage <= 1}
-                >
-                  <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))}
-                  disabled={itemPage >= itemTotalPages}
-                >
-                  Next <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationBar
+            page={itemPage}
+            totalPages={itemTotalPages}
+            total={data?.itemRows.length ?? 0}
+            pageSize={ITEM_PAGE_SIZE}
+            onPageChange={setItemPage}
+            noun="items"
+          />
         </div>
       </section>
     </>

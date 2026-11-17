@@ -1,5 +1,5 @@
 // Extracted from ./CustomerLoading.tsx to keep that module under the source-size cap.
-import { ChevronLeft, ChevronRight, Columns3, Package, SlidersHorizontal } from "lucide-react";
+import { Columns3, Package, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +8,7 @@ import type { AvailableNegativeFilter, AvailableZeroFilter, LoadingFilter } from
 import { PAGE_SIZE } from "./customerLoadingHelpers";
 import { useCustomerLoadingState } from "./useCustomerLoadingState";
 import { SearchField } from "@/components/ui/search-field";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export function CustomerLoadingSection({
   allVisibleSelected,
@@ -251,27 +252,13 @@ export function CustomerLoadingSection3({
   setPage,
 }: Pick<ReturnType<typeof useCustomerLoadingState>, "filteredProducts" | "pageCount" | "safePage" | "setPage">) {
   return (
-    <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-[hsl(var(--factory-hue)_44%_16%)] sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-xs text-muted-foreground">
-        Showing {filteredProducts.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–
-        {Math.min(safePage * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length}
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>
-          <ChevronLeft className="h-4 w-4" /> Previous
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Page {safePage} of {pageCount}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-          disabled={safePage >= pageCount}
-        >
-          Next <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
+    <PaginationBar
+      page={safePage}
+      totalPages={pageCount}
+      total={filteredProducts.length}
+      pageSize={PAGE_SIZE}
+      onPageChange={setPage}
+      noun="products"
+    />
   );
 }

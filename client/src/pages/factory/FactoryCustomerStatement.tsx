@@ -11,6 +11,7 @@ import { fmtMoney, fmtNum } from "./factorycustomerstatement/statementHelpers";
 import { useFactoryCustomerStatementState } from "./useFactoryCustomerStatementStatePart2";
 import { FactoryCustomerStatementSection, FactoryCustomerStatementSection2 } from "./FactoryCustomerStatementSection";
 import { FactoryCustomerStatementSection3 } from "./FactoryCustomerStatementSection3";
+import { PeriodFilter } from "@/components/ui/period-filter";
 
 export default function FactoryCustomerStatement() {
   const {
@@ -202,23 +203,18 @@ export default function FactoryCustomerStatement() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date From</label>
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-from"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date To</label>
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-to"
+                  <label className="text-xs text-muted-foreground font-medium">Period</label>
+                  <PeriodFilter
+                    value={{
+                      fromDate: filterDateFrom,
+                      toDate: filterDateTo,
+                      preset: filterDateFrom || filterDateTo ? "custom" : "all_time",
+                    }}
+                    onChange={(v) => {
+                      setFilterDateFrom(v.fromDate);
+                      setFilterDateTo(v.toDate);
+                    }}
+                    data-testid="customer-statement-period"
                   />
                 </div>
                 {hasFilters && (

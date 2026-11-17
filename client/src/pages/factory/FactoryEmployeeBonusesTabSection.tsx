@@ -2,7 +2,6 @@
 import { CalendarDays, Columns3, Filter, Gift, Plus, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +22,7 @@ import {
   useFactoryEmployeeBonusesTabState,
 } from "./useFactoryEmployeeBonusesTabState";
 import { SearchField } from "@/components/ui/search-field";
+import { PeriodFilter } from "@/components/ui/period-filter";
 
 export function FactoryEmployeeBonusesTabSection({
   bonuses,
@@ -155,7 +155,7 @@ export function FactoryEmployeeBonusesTabSection({
           </div>
         </div>
         {showFilters && (
-          <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 sm:grid-cols-[minmax(180px,1fr)_160px_160px_auto] sm:items-end">
+          <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 sm:grid-cols-[minmax(180px,1fr)_auto_auto] sm:items-end">
             <div>
               <Label htmlFor="bonus-search" className="mb-1.5 block text-xs text-muted-foreground">
                 Name or notes
@@ -169,27 +169,18 @@ export function FactoryEmployeeBonusesTabSection({
               />
             </div>
             <div>
-              <Label htmlFor="bonus-start-date" className="mb-1.5 block text-xs text-muted-foreground">
-                From date
-              </Label>
-              <Input
-                id="bonus-start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                data-testid="input-bonus-start-date"
-              />
-            </div>
-            <div>
-              <Label htmlFor="bonus-end-date" className="mb-1.5 block text-xs text-muted-foreground">
-                To date
-              </Label>
-              <Input
-                id="bonus-end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                data-testid="input-bonus-end-date"
+              <Label className="mb-1.5 block text-xs text-muted-foreground">Period</Label>
+              <PeriodFilter
+                value={{
+                  fromDate: startDate,
+                  toDate: endDate,
+                  preset: startDate || endDate ? "custom" : "all_time",
+                }}
+                onChange={(v) => {
+                  setStartDate(v.fromDate);
+                  setEndDate(v.toDate);
+                }}
+                data-testid="bonus-period-filter"
               />
             </div>
             <Button

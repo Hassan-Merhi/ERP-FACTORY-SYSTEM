@@ -2,9 +2,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Edit } from "lucide-react";
+import { Edit } from "lucide-react";
 import { PAGE_SIZE } from "./utils";
 import { useStockItemsViewState } from "./useStockItemsViewState";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export function StockItemsViewSection2({
   aliasMap,
@@ -134,33 +135,15 @@ export function StockItemsViewSection2({
           </div>
         ))
       )}
-      {totalItems > PAGE_SIZE && (
-        <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
-          <span>
-            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)} of {totalItems}
-          </span>
-          <div className="flex gap-1">
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={currentPage <= 1}
-              data-testid="button-prev-page-mobile"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={currentPage >= totalPages}
-              data-testid="button-next-page-mobile"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        page={currentPage}
+        totalPages={totalPages}
+        total={totalItems}
+        pageSize={PAGE_SIZE}
+        onPageChange={setCurrentPage}
+        noun="items"
+        data-testid="stock-items-pagination-mobile"
+      />
     </div>
   );
 }

@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Eye, EyeOff, SlidersHorizontal, ChevronDown, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InvoiceDashboardMetrics } from "./factoryinvoices/InvoiceDashboardMetrics";
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
@@ -21,6 +20,7 @@ import { ShippingAvailabilityTable } from "./factoryshippingcontainers/component
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { FactoryInvoicesSection, useFactoryInvoicesState } from "./FactoryInvoicesSection";
 import { SearchField } from "@/components/ui/search-field";
+import { PeriodFilter } from "@/components/ui/period-filter";
 
 export default function FactoryInvoices() {
   const {
@@ -266,28 +266,17 @@ export default function FactoryInvoices() {
         </div>
         {showMoreFilters && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <CalendarDays className="h-3.5 w-3.5" /> From date
-              </span>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs"
-                data-testid="input-invoice-from-date"
+            <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span>Period</span>
+              <PeriodFilter
+                value={{ fromDate, toDate, preset: fromDate || toDate ? "custom" : "all_time" }}
+                onChange={(v) => {
+                  setFromDate(v.fromDate);
+                  setToDate(v.toDate);
+                }}
+                data-testid="invoice-period-filter"
               />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <span>To date</span>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs"
-                data-testid="input-invoice-to-date"
-              />
-            </label>
+            </div>
             <Button
               variant="ghost"
               size="sm"

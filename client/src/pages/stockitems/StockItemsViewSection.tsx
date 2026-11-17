@@ -2,9 +2,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Edit, Package } from "lucide-react";
+import { Edit, Package } from "lucide-react";
 import { PAGE_SIZE } from "./utils";
 import { useStockItemsViewState } from "./useStockItemsViewState";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export function StockItemsViewSection({
   aliasMap,
@@ -121,37 +122,15 @@ export function StockItemsViewSection({
           ))}
         </div>
       )}
-      {totalItems > 0 && (
-        <div className="stock-items-grid-pagination mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>
-            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)} of{" "}
-            {totalItems.toLocaleString()} items
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={currentPage <= 1}
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span>
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={currentPage >= totalPages}
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        page={currentPage}
+        totalPages={totalPages}
+        total={totalItems}
+        pageSize={PAGE_SIZE}
+        onPageChange={setCurrentPage}
+        noun="items"
+        data-testid="stock-items-pagination-grid"
+      />
     </div>
   );
 }
