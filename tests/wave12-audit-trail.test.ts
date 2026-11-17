@@ -243,7 +243,10 @@ describe("company delete", () => {
     expect((await ownerAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
   }, 60_000);
 
-  it("is refused for an Admin, and with 409 for a company that has vouchers", async () => {
+  // #3255 moved company deletion to Admin/Developer and requires the company to
+  // be deactivated first; #3256 keeps history protected unless the exact company
+  // code is confirmed. An Owner who is not an Admin can no longer delete.
+  it("refuses an Owner and an active company, and an inactive company with vouchers with 409", async () => {
     const companyId = await createCompany("HIST");
     await pool.query(
       `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin')`,
@@ -255,8 +258,13 @@ describe("company delete", () => {
       [companyId, `${PREFIX}-HIST`]
     );
 
-    expect((await agent.delete(`/api/companies/${companyId}`)).status).toBe(403);
-    const refused = await ownerAgent.delete(`/api/companies/${companyId}`);
+    expect((await ownerAgent.delete(`/api/companies/${companyId}`)).status).toBe(403);
+    const active = await agent.delete(`/api/companies/${companyId}`);
+    expect(active.status).toBe(409);
+    expect(active.body.code).toBe("COMPANY_MUST_BE_INACTIVE");
+
+    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
+    const refused = await agent.delete(`/api/companies/${companyId}`);
     expect(refused.status).toBe(409);
     expect(refused.body.code).toBe("COMPANY_HAS_HISTORY");
     expect(refused.body.blockers).toContain("vouchers");
@@ -265,8 +273,8 @@ describe("company delete", () => {
 
   it("deletes an empty company in one audited transaction and keeps its audit rows", async () => {
     const companyId = await createCompany("EMPTY");
-    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner')`, [
-      ownerUserId,
+    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`, [
+      ctx.userId,
       companyId,
     ]);
     await pool.query(
@@ -279,7 +287,8 @@ describe("company delete", () => {
       [companyId]
     );
 
-    const deleted = await ownerAgent.delete(`/api/companies/${companyId}`);
+    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
+    const deleted = await agent.delete(`/api/companies/${companyId}`);
     expect(deleted.status).toBe(200);
     deletedCompanyIds.push(companyId);
     expect(await count(`SELECT COUNT(*) AS n FROM companies WHERE id = $1`, [companyId])).toBe(0);
