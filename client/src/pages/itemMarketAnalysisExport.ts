@@ -79,6 +79,15 @@ function purchaseAmount(value: number | null, currencies: string[]): ExcelValue 
   return currencies.length > 1 ? "Mixed currencies" : value;
 }
 
+function safeFilePart(value: string): string {
+  return (
+    value
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 36) || "all"
+  );
+}
+
 function printableStatus(status: MarketStatus): string {
   return status === "no_sales" ? "No sales" : status === "strong" ? "Strong" : status === "watch" ? "Watch" : "Losing";
 }

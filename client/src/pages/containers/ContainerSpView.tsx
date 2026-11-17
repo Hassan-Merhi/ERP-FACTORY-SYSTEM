@@ -28,6 +28,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 
 /**
  * Common display shape the SP list and the ERP (PO Import) containers are
