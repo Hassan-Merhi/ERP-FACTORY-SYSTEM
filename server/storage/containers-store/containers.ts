@@ -4,6 +4,7 @@ import * as schema from "@shared/schema";
 import type { Container, InsertContainer, PurchaseOrder } from "@shared/schema";
 import { getTableColumns } from "drizzle-orm";
 import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
+import { hasIntercompanyTradesTable } from "../../lib/intercompanyTradeAvailability";
 
 // ---------------------------------------------------------------------------
 // Containers
@@ -14,48 +15,56 @@ import { enrichContainerListOffloadingCost } from "../../services/containers/enr
 export async function getAllContainers(
   companyId: number
 ): Promise<Array<Container & { linkedParentCompanyName: string | null }>> {
+  const hasTradeTable = await hasIntercompanyTradesTable();
   return db
     .select({
       ...getTableColumns(schema.containers),
-      linkedParentCompanyName: sql<string | null>`(
-        SELECT parent.name FROM intercompany_trades trade
-        JOIN companies parent ON parent.id = trade.source_company_id
-        WHERE trade.physical_container_id = "containers"."id"
-          AND trade.destination_company_id = ${companyId}
-          AND trade.state = 'active' LIMIT 1
-      )`,
+      linkedParentCompanyName: hasTradeTable
+        ? sql<string | null>`(
+            SELECT parent.name FROM intercompany_trades trade
+            JOIN companies parent ON parent.id = trade.source_company_id
+            WHERE trade.physical_container_id = "containers"."id"
+              AND trade.destination_company_id = ${companyId}
+              AND trade.state = 'active' LIMIT 1
+          )`
+        : sql<string | null>`NULL::text`,
     })
     .from(schema.containers)
     .where(
-      or(
-        eq(schema.containers.companyId, companyId),
-        sql`EXISTS (
-        SELECT 1 FROM intercompany_trades trade
-        WHERE trade.physical_container_id = "containers"."id"
-          AND trade.source_company_id = "containers"."company_id"
-          AND trade.destination_company_id = ${companyId}
-          AND trade.state = 'active'
-      )`
-      )
+      hasTradeTable
+        ? or(
+            eq(schema.containers.companyId, companyId),
+            sql`EXISTS (
+              SELECT 1 FROM intercompany_trades trade
+              WHERE trade.physical_container_id = "containers"."id"
+                AND trade.source_company_id = "containers"."company_id"
+                AND trade.destination_company_id = ${companyId}
+                AND trade.state = 'active'
+            )`
+          )
+        : eq(schema.containers.companyId, companyId)
     )
     .orderBy(asc(schema.containers.containerNumber));
 }
 
 export async function getActiveContainers(companyId: number): Promise<Array<Container & { offloadingCost: string }>> {
+  const hasTradeTable = await hasIntercompanyTradesTable();
   const rows = await db
     .select({
       ...getTableColumns(schema.containers),
-      linkedParentCompanyName: sql<
-        string | null
-      >`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`,
+      linkedParentCompanyName: hasTradeTable
+        ? sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`
+        : sql<string | null>`NULL::text`,
     })
     .from(schema.containers)
     .where(
       and(
-        or(
-          eq(schema.containers.companyId, companyId),
-          sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
-        ),
+        hasTradeTable
+          ? or(
+              eq(schema.containers.companyId, companyId),
+              sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
+            )
+          : eq(schema.containers.companyId, companyId),
         ne(schema.containers.status, "SOLD")
       )
     )
