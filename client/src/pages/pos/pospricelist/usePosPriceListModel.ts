@@ -621,6 +621,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         return row;
       });
 
+      const dateStr = new Date().toISOString().slice(0, 10);
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
       const searchPart = search.trim() ? ` search ${search.trim()}` : "";
