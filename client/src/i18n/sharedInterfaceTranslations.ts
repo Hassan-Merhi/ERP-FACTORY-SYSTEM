@@ -427,6 +427,8 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  { en: "Loading settings…", ar: "جارٍ تحميل الإعدادات…", fr: "Chargement des paramètres…" },
+  { en: "Loading locations…", ar: "جارٍ تحميل المواقع…", fr: "Chargement des emplacements…" },
   // Default texts of the shared loading and error states (components/ui/page-state).
   {
     en: "Please wait while the latest information is loaded.",
