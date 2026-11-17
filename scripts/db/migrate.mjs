@@ -12,13 +12,17 @@
  *                                                 an isolated restore or a maintenance window)
  *   node scripts/db/migrate.mjs adopt --apply     adopt it (MIGRATION_CONFIRMATION=ADOPT_EXISTING_DATABASE)
  *   node scripts/db/migrate.mjs verify            read-only: history + catalog + tenant probes
+ *   node scripts/db/migrate.mjs deploy            release step run by `npm start` before the server:
+ *                                                 adopts a legacy database once, then applies pending
+ *                                                 migrations (SKIP_DEPLOY_MIGRATIONS=1 skips it)
  *   node scripts/db/migrate.mjs manifest --disposable [--check]
  *                                                 build an EMPTY database from migrations and write
  *                                                 (or --check) migrations/manifest/*.tsv
  *
- * The application never runs this. Server startup only verifies (see
- * server/schema/startupSchemaGate.mjs) and refuses to start on a database that
- * is behind, ahead, modified or never migrated.
+ * The application server never changes the schema. `npm start` runs the
+ * `deploy` release step first, as a separate process; the server itself only
+ * verifies (server/schema/startupSchemaGate.mjs) and refuses to start on a
+ * database that is behind, ahead, modified or never migrated.
  *
  * Guarantees:
  *   - one advisory lock: concurrent runners wait, then fail; never interleave;
@@ -364,6 +368,49 @@ async function cmdAdopt(apply, dryRun = false) {
   }
 }
 
+/**
+ * Release step: bring the database to this release's schema before the server
+ * starts. `npm start` runs it, so every deploy applies its own migrations.
+ *
+ *   - existing ERP database without migration history: adopt it once, through
+ *     exactly the same path as `adopt --apply` (one transaction, never drops,
+ *     lossless type changes only, NOT VALID constraints on populated tables;
+ *     any blocker or data violation refuses and rolls back, changing nothing);
+ *   - then apply pending migrations (each in its own transaction, under the
+ *     advisory lock); nothing pending is a no-op.
+ *
+ * Any failure exits non-zero, so the server is not started and the platform
+ * keeps the previous release running. SKIP_DEPLOY_MIGRATIONS=1 skips the step
+ * (the startup gate still refuses a database that does not match).
+ */
+async function cmdDeploy() {
+  if (process.env.SKIP_DEPLOY_MIGRATIONS === "1") {
+    log("Deploy migrations skipped (SKIP_DEPLOY_MIGRATIONS=1).");
+    return;
+  }
+  const client = await connect();
+  let needsAdoption;
+  try {
+    const history = await readHistory(client);
+    needsAdoption = !(history.exists && history.rows.length) && (await userRelationCount(client)) > 0;
+  } finally {
+    await client.end();
+  }
+  const previous = process.env.MIGRATION_CONFIRMATION;
+  try {
+    if (needsAdoption) {
+      log("Deploy: existing ERP database without migration history; adopting it (one time).");
+      process.env.MIGRATION_CONFIRMATION = ADOPT_CONFIRMATION;
+      await cmdAdopt(true);
+    }
+    process.env.MIGRATION_CONFIRMATION = APPLY_CONFIRMATION;
+    await cmdApply();
+  } finally {
+    if (previous === undefined) delete process.env.MIGRATION_CONFIRMATION;
+    else process.env.MIGRATION_CONFIRMATION = previous;
+  }
+}
+
 async function cmdVerify() {
   const client = await connect();
   try {
@@ -431,10 +478,14 @@ async function main() {
       return cmdAdopt(args.includes("--apply"), args.includes("--dry-run"));
     case "verify":
       return cmdVerify();
+    case "deploy":
+      return cmdDeploy();
     case "manifest":
       return cmdManifest(args);
     default:
-      throw new UsageError("Usage: migrate.mjs plan|status|apply|adopt [--dry-run|--apply]|verify|manifest --disposable [--check]");
+      throw new UsageError(
+        "Usage: migrate.mjs plan|status|apply|adopt [--dry-run|--apply]|verify|deploy|manifest --disposable [--check]"
+      );
   }
 }
 

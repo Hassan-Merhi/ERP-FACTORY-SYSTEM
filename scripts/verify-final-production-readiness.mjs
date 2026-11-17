@@ -250,8 +250,15 @@ if (packageSource) {
     if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-wave5-production-certification.mjs") {
       failures.push("package.json is missing the exact certify:performance-wave5 script");
     }
-    if (/migrate\.mjs|db:migrate|drizzle-kit/.test(String(packageJson.scripts?.start ?? ""))) {
-      failures.push("npm start must not invoke the migration runner or drizzle-kit");
+    // Owner decision (2026-11-17): every deploy applies its own migrations as a
+    // release step in a separate process before the server starts. The server
+    // itself never changes the schema; it only verifies it (startup gate).
+    const start = String(packageJson.scripts?.start ?? "");
+    if (!start.startsWith("node scripts/db/migrate.mjs deploy && ")) {
+      failures.push("npm start must run the migration release step (node scripts/db/migrate.mjs deploy &&) before the server");
+    }
+    if (/drizzle-kit|db:push/.test(start) || /migrate\.mjs (apply|adopt)/.test(start)) {
+      failures.push("npm start must not invoke drizzle-kit or the migration runner except through its deploy release step");
     }
     if (String(packageJson.scripts?.start ?? "").includes("historical-replay")) {
       failures.push("npm start must not invoke Historical Replay");
