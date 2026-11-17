@@ -1206,7 +1206,7 @@ column	public.employees.opening_balance_base_amount	{"type":"numeric(20,6)","not
 column	public.employees.opening_balance_currency	{"type":"character varying(10)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.employees.opening_balance_historical_rate	{"type":"numeric(20,10)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.employees.opening_balance_native_amount	{"type":"numeric(20,6)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.employees.opening_balance_side	{"type":"character varying(2)","notNull":false,"default":"'Dr'::character varying","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.employees.opening_balance_side	{"type":"character varying(2)","notNull":false,"default":"'Cr'::character varying","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.employees.phone	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.employees.sales_bonus_pct	{"type":"numeric(10,4)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.employees.sales_bonus_pct_location_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
