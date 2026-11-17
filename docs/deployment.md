@@ -110,17 +110,15 @@ Steps:
    toolchain, and script-inventory contracts.
 5. Run TypeScript, the production build, ESLint plus its warning ratchet, and
    the changed-file Prettier gate.
-6. Provision the disposable PostgreSQL schema with `drizzle-kit push --force`,
-   boot `dist/index.js`, and wait for `/api/health/db` so startup migrations
-   complete.
+6. Build the disposable PostgreSQL schema with `npm run db:migrate`, verify it
+   with `npm run db:verify`, boot `dist/index.js` through the production preload
+   and wait for `/api/health/db`.
 7. Run backend and frontend coverage suites, the API smoke sweep, and the
    coverage ratchet.
 
 CI provisions a PostgreSQL 16 service container and sets `DATABASE_URL`,
 `SESSION_SECRET`, `CSRF_ENFORCE=0`, and `ENABLE_SCHEDULERS=false`. The test
-suites need a migrated database — running them against a schema that has only
-had `drizzle-kit push` applied, without the startup migrations in step 6,
-produces spurious failures.
+suites need a database built by the migrations (step 6).
 
 A separate `.github/workflows/security.yml` runs the dependency audit gate
 (`npm run verify:dependency-audit`) and TruffleHog secret scanning on every
@@ -134,16 +132,21 @@ certification requirement.
 
 ## Database Migrations
 
-Persistent schema migrations are **not** managed via `drizzle-kit push`. Instead:
+The schema is owned by numbered SQL migrations in `migrations/` and applied
+**explicitly before** a release starts:
 
-- Runtime migrations are grouped in `server/startup-schema/` and registered in
-  `server/startup-schema/index.ts`.
-- Each migration is idempotent (uses `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, etc.).
-- Migrations run automatically on server startup before the app begins serving requests.
+```bash
+npm run db:migrate:status          # read-only review of pending migrations
+MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate
+npm run db:verify                  # read-only: history + catalog + tenant probes
+```
 
-To add a new column or table:
-1. Update `shared/schema/` with the new Drizzle definition.
-2. Add an idempotent migration module under `server/startup-schema/` and register
-   it in `server/startup-schema/index.ts`.
-3. Run `npm run verify:migrations`.
-4. Do **not** run `drizzle-kit push` against a persistent database.
+The server never changes the schema. At startup it verifies the database
+read-only and exits if migrations are pending or objects are missing, so Render
+keeps the previous instance serving. A database created by the former startup
+DDL is adopted once with `npm run db:adopt` (plan, dry run, apply).
+
+To add a column or table: write a new `migrations/NNNN_description.sql`, update
+`shared/schema/` types, regenerate `migrations/manifest/*.tsv` with
+`npm run db:manifest` on an empty disposable database, and let the "Database
+Migrations" workflow verify it. Full guide: [database-migrations.md](database-migrations.md).

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Container } from "@shared/schema";
 import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTotalCost";
+import { EmptyState } from "@/components/ui/page-state";
 
 interface ActiveContainersTableProps {
   containers: Array<Container & { linkedParentCompanyName?: string | null }>;
@@ -56,25 +57,25 @@ export function ActiveContainersTable({
 
   if (containers.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Package className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No containers found</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          {allContainers.length === 0
+      <EmptyState
+        icon={Package}
+        title="No containers found"
+        description={
+          allContainers.length === 0
             ? "Import your first purchase order to get started"
-            : "Try adjusting your search or filters"}
-        </p>
-        {allContainers.length === 0 && !propertiesMode && (
-          <Link href="/po-import">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Import PO
-            </Button>
-          </Link>
-        )}
-      </div>
+            : "Try adjusting your search or filters"
+        }
+        action={
+          allContainers.length === 0 && !propertiesMode ? (
+            <Link href="/po-import">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Import PO
+              </Button>
+            </Link>
+          ) : undefined
+        }
+      />
     );
   }
 

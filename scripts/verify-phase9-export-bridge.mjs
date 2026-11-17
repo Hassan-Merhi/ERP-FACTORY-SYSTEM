@@ -18,11 +18,11 @@ assert.match(packageJson.scripts.dev, /--import \.\/server\/startupPreload\.mjs/
 assert.match(packageJson.scripts.start, /--import \.\/server\/startupPreload\.mjs/);
 assert.match(
   await readFile(path.join(root, "server/startupPreload.mjs"), "utf8"),
-  /await import\("\.\/exportBufferBridge\.mjs"\);/
+  /await import\("\.\/runtime\/exportBuffer\.mjs"\);/
 );
 assert.match(packageJson.scripts.start, /--import \.\/server\/runtimeMemoryGuard\.mjs/);
 
-const bridgeSource = await readFile(path.join(root, "server", "exportBufferBridge.mjs"), "utf8");
+const bridgeSource = await readFile(path.join(root, "server", "runtime", "exportBuffer.mjs"), "utf8");
 assert.match(bridgeSource, /exportAwareWriteBuffer/);
 assert.match(bridgeSource, /bridgedBufferConcat/);
 assert.match(bridgeSource, /applicationOwnsConcatCall/);
@@ -33,7 +33,7 @@ assert.match(coordinatorSource, /erp\.heavy-export-coordinator\.state/);
 assert.match(coordinatorSource, /erp\.heavy-export-coordinator\.context/);
 assert.match(coordinatorSource, /isHeavyExportSlotActive/);
 
-await import(`../server/exportBufferBridge.mjs?verify=${Date.now()}`);
+await import(`../server/runtime/exportBuffer.mjs?verify=${Date.now()}`);
 const excelNamespace = await import("exceljs");
 const ExcelJS = excelNamespace.default || excelNamespace;
 

@@ -109,7 +109,7 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   it("reuses one paired payment posting service with transaction, FX, credits and reversal guards", () => {
     const service = readFileSync("server/services/intercompany/paymentSync.ts", "utf8");
     const routes = readFileSync("server/routes/import/intercompany-phase4.ts", "utf8");
-    const sql = readFileSync("migrations/20261105_004_intercompany_phase4_payments.sql", "utf8");
+    const sql = readFileSync("migrations/archive/legacy/20261105_004_intercompany_phase4_payments.sql", "utf8");
     expect(service).toContain("await requirePairedCashAuthorization(pair, actor)");
     expect(service).toContain("db.transaction(async (tx)");
     expect(service).toContain("postErpVoucherTx(tx,");

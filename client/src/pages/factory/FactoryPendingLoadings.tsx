@@ -1,4 +1,5 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { ErrorState } from "@/components/ui/page-state";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -154,7 +155,12 @@ export default function FactoryPendingLoadings() {
     };
   }, []);
 
-  const { data: loads = [], isLoading } = useQuery<PendingLoad[]>({
+  const {
+    data: loads = [],
+    isLoading,
+    isError: loadsError,
+    refetch: refetchLoads,
+  } = useQuery<PendingLoad[]>({
     queryKey: ["/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250"],
     refetchInterval: visibleTabInterval(60_000),
   });
@@ -666,6 +672,8 @@ export default function FactoryPendingLoadings() {
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
+      ) : loadsError && loads.length === 0 ? (
+        <ErrorState onAction={() => void refetchLoads()} actionLabel="Try again" />
       ) : loads.length === 0 && undoItems.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 py-16 text-center text-muted-foreground"

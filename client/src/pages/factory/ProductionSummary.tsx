@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ErrorState } from "@/components/ui/page-state";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { BarChart3, Package, Scale, Boxes, TrendingUp, Calendar } from "lucide-react";
@@ -52,17 +53,32 @@ function filterBalesByDate(bales: ProductionBaleRow[], startDate: Date) {
 
 export default function ProductionSummary() {
   const { selectedCompany } = useCompany();
-  const { data: balesData, isLoading: balesLoading } = useQuery<ProductionBaleRow[]>({
+  const {
+    data: balesData,
+    isLoading: balesLoading,
+    isError: balesError,
+    refetch: refetchBales,
+  } = useQuery<ProductionBaleRow[]>({
     queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
 
-  const { data: mixBatches, isLoading: batchesLoading } = useQuery<FactoryMixBatch[]>({
+  const {
+    data: mixBatches,
+    isLoading: batchesLoading,
+    isError: batchesError,
+    refetch: refetchBatches,
+  } = useQuery<FactoryMixBatch[]>({
     queryKey: companyQueryKey("/api/factory/mix-batches?profile=summary", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
 
-  const { data: rawStock, isLoading: rawStockLoading } = useQuery<RawStockRow[]>({
+  const {
+    data: rawStock,
+    isLoading: rawStockLoading,
+    isError: rawStockError,
+    refetch: refetchRawStock,
+  } = useQuery<RawStockRow[]>({
     queryKey: companyQueryKey("/api/factory/raw-stock", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -85,6 +101,19 @@ export default function ProductionSummary() {
         <Skeleton className="h-64 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
+    );
+  }
+
+  if ((balesError && !balesData) || (batchesError && !mixBatches) || (rawStockError && !rawStock)) {
+    return (
+      <ErrorState
+        onAction={() => {
+          void refetchBales();
+          void refetchBatches();
+          void refetchRawStock();
+        }}
+        actionLabel="Try again"
+      />
     );
   }
 

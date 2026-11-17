@@ -31,7 +31,6 @@ import {
   removeLinkedJournalTx,
 } from "../server/services/accounting/perpetualInventory/linkedJournal";
 import { isRetiredVoucherNumber, retiredVoucherNumber } from "../server/services/accounting/voucherRetirement";
-import { ensureSpSupplierVoucherSyncTrigger } from "../server/routes/sp/spSupplierVoucherSync";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -314,7 +313,6 @@ describe("insurance direction repair as a reviewed tool (decision 1)", () => {
 
 describe("SP supplier links: no rewrite of posted lines, listed, reviewed apply (decision 1)", () => {
   it("leaves a posted voucher's supplier when the container's changes, lists it and repairs it audited", async () => {
-    await ensureSpSupplierVoucherSyncTrigger();
     const supplier = async (name: string) =>
       (
         await pool.query<{ id: number }>(

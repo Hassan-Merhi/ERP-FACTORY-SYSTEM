@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Loader2, Plus, Trash2, TrendingUp } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
@@ -20,9 +21,12 @@ export function FxRatesCard() {
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const canEdit = canEditExchangeRates(currentUser?.role);
 
-  const { data: rates = [], isLoading } = useQuery<
-    { id: number; currencyCode: string; rateToUsd: string; effectiveDate: string }[]
-  >({
+  const {
+    data: rates = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<{ id: number; currencyCode: string; rateToUsd: string; effectiveDate: string }[]>({
     queryKey: ["/api/factory/fx-rates"],
   });
 
@@ -101,9 +105,11 @@ export function FxRatesCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <LoadingState />
+        ) : isError && rates.length === 0 ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : rates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No rates configured yet. Add one below.</p>
+          <EmptyState title="No rates configured yet. Add one below." />
         ) : (
           <Table>
             <TableHeader>

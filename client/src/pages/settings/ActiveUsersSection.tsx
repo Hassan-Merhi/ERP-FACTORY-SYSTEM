@@ -1,13 +1,14 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Loader2, Eye } from "lucide-react";
+import { Building2, Eye } from "lucide-react";
 import { userPresence } from "@shared/schema";
 
 import { getPageLabel } from "./WatchUserDialog";
@@ -22,7 +23,12 @@ export function ActiveUsersSection() {
 
   type PresenceRow = typeof userPresence.$inferSelect;
 
-  const { data: presenceData, isLoading } = useQuery<PresenceRow[]>({
+  const {
+    data: presenceData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<PresenceRow[]>({
     queryKey: ["/api/user-presence"],
     refetchInterval: visibleTabInterval(30_000),
   });
@@ -71,16 +77,11 @@ export function ActiveUsersSection() {
       <p className="text-muted-foreground">Monitor currently active users and their location in the application.</p>
 
       {isLoading ? (
-        <Card className="p-6">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading active users...</span>
-          </div>
-        </Card>
+        <LoadingState title="Loading active users..." className="p-6" />
+      ) : isError && !presenceData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="p-6" />
       ) : safePresenceData.length === 0 ? (
-        <Card className="p-6">
-          <p className="text-muted-foreground">No active users at the moment.</p>
-        </Card>
+        <EmptyState title="No active users at the moment." className="p-6" />
       ) : (
         <div className="space-y-4">
           {Object.entries(groupedUsers).map(([companyId, users]) => (

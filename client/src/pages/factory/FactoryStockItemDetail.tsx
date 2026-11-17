@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@/components/ui/page-state";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -204,7 +205,7 @@ export default function FactoryStockItemDetail() {
             </CardHeader>
             <CardContent>
               {data.pressed.length === 0 ? (
-                <div className="py-6 text-center text-muted-foreground text-sm">No stock entries yet</div>
+                <EmptyState title="No stock entries yet" className="min-h-0 py-6 sm:py-6" />
               ) : (
                 <div className="table-responsive">
                   <Table mobileLayout="cards">

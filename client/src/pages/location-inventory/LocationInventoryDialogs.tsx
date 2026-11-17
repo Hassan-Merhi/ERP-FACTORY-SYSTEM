@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { AlertCircle } from "lucide-react";
 import type { InventoryLocation as Location, NegativeInventoryRow } from "./locationInventoryTypes";
 import { SearchField } from "@/components/ui/search-field";
@@ -102,9 +103,9 @@ export function LocationInventoryDialogs({
           />
           <div className="flex-1 overflow-auto min-h-0">
             {negativeStockLoading ? (
-              <p className="text-sm text-muted-foreground p-4">Loading…</p>
+              <LoadingState className="rounded-none border-0 p-4" />
             ) : allNegativeStock.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4">No negative stock found.</p>
+              <EmptyState title="No negative stock found." className="rounded-none border-0 p-4" />
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background border-b">

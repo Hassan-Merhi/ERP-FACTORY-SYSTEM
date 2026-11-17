@@ -5,12 +5,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 import { PosCustomerSalesDialog, type PosAnalyticsCustomer } from "./PosCustomerSalesDialog";
+import { EmptyState } from "@/components/ui/page-state";
 
 export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
   const {
@@ -211,9 +212,13 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                             {factoryCustomerOrderAnalytics.rows.map((customerRow, customerIndex) => {
                               const customerKey = String(customerRow.customerId ?? `unknown-${customerIndex}`);
                               const expanded = expandedOrderCustomers.has(customerKey);
-                              const destinations = Array.from(new Set(
-                                customerRow.orders.map((order) => order.destination?.trim()).filter((value): value is string => !!value)
-                              ));
+                              const destinations = Array.from(
+                                new Set(
+                                  customerRow.orders
+                                    .map((order) => order.destination?.trim())
+                                    .filter((value): value is string => !!value)
+                                )
+                              );
                               return (
                                 <Fragment key={customerKey}>
                                   <TableRow className="bg-muted/20">
@@ -241,7 +246,11 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                       </button>
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                      {destinations.length === 0 ? "—" : destinations.length === 1 ? destinations[0] : "Multiple destinations"}
+                                      {destinations.length === 0
+                                        ? "—"
+                                        : destinations.length === 1
+                                          ? destinations[0]
+                                          : "Multiple destinations"}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
                                       {customerRow.totalWeightKg.toLocaleString(undefined, {
@@ -371,7 +380,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     ))}
                   </div>
                 ) : !factoryPosSummary || (factoryPosSummary.byCustomer ?? []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No factory POS sales data available</p>
+                  <EmptyState title="No factory POS sales data available" />
                 ) : (
                   <div className="table-responsive">
                     <Table>
@@ -472,23 +481,14 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                 <h3 className="text-lg font-medium">Sales by Location</h3>
                 <div className="flex flex-wrap items-center gap-2">
                   {selectedPeriod === "range" && (
-                    <>
-                      <Input
-                        type="date"
-                        className="w-auto"
-                        value={rangeStart}
-                        onChange={(e) => setRangeStart(e.target.value)}
-                        data-testid="input-range-start"
-                      />
-                      <span className="text-muted-foreground text-sm">to</span>
-                      <Input
-                        type="date"
-                        className="w-auto"
-                        value={rangeEnd}
-                        onChange={(e) => setRangeEnd(e.target.value)}
-                        data-testid="input-range-end"
-                      />
-                    </>
+                    <PeriodFilter
+                      value={{ fromDate: rangeStart, toDate: rangeEnd, preset: "custom" }}
+                      onChange={(v) => {
+                        setRangeStart(v.fromDate);
+                        setRangeEnd(v.toDate);
+                      }}
+                      data-testid="sales-location-range-filter"
+                    />
                   )}
                   <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                     <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-sales-period">
@@ -512,7 +512,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                   ))}
                 </div>
               ) : salesData.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No sales data available</p>
+                <EmptyState title="No sales data available" />
               ) : (
                 <>
                   <div className="hidden md:block">
@@ -665,7 +665,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                       ))}
                     </div>
                   ) : transactions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No transactions found</p>
+                    <EmptyState title="No transactions found" />
                   ) : (
                     <>
                       <div className="overflow-y-auto flex-1 min-h-0">

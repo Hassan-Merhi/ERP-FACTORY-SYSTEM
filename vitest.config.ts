@@ -39,7 +39,7 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     setupFiles: [
-      "./server/schemaPreload.mjs",
+      "./tests/supertestXlsxParser.mjs",
       "./tests/voucherRequestIdentityTestBridge.mjs",
       "./tests/vitestSequentialCompatibility.mjs",
     ],

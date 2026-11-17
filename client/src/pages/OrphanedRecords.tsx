@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -74,7 +75,12 @@ export default function OrphanedRecordsPage() {
   const [selectedVouchers, setSelectedVouchers] = useState<number[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>("");
 
-  const { data: recordsData, isLoading } = useQuery<OrphanedRecordsResponse>({
+  const {
+    data: recordsData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<OrphanedRecordsResponse>({
     queryKey: ["/api/orphaned-records"],
   });
 
@@ -85,7 +91,12 @@ export default function OrphanedRecordsPage() {
     queryKey: ["/api/locations"],
   });
 
-  const { data: stockGroupArchives = [], isLoading: archivesLoading } = useQuery<StockGroupArchive[]>({
+  const {
+    data: stockGroupArchives = [],
+    isLoading: archivesLoading,
+    isError: archivesError,
+    refetch: refetchArchives,
+  } = useQuery<StockGroupArchive[]>({
     queryKey: ["/api/stock-group-archives"],
   });
 
@@ -208,7 +219,9 @@ export default function OrphanedRecordsPage() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <LoadingState className="py-8" />
+        ) : isError && !recordsData ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
         ) : unbalancedRecords.length === 0 ? (
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
@@ -344,7 +357,9 @@ export default function OrphanedRecordsPage() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <LoadingState className="py-8" />
+        ) : isError && !recordsData ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
         ) : orphanedRecords.length === 0 ? (
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
@@ -450,15 +465,16 @@ export default function OrphanedRecordsPage() {
         </div>
 
         {archivesLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <LoadingState className="py-8" />
+        ) : archivesError && stockGroupArchives.length === 0 ? (
+          <ErrorState onAction={() => void refetchArchives()} actionLabel="Try again" className="py-8" />
         ) : stockGroupArchives.length === 0 ? (
-          <div className="text-center py-8">
-            <Archive className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium">No archived stock groups</p>
-            <p className="text-muted-foreground">
-              Archive stock groups from Location Inventory to clear and backup inventory data
-            </p>
-          </div>
+          <EmptyState
+            icon={Archive}
+            title="No archived stock groups"
+            description="Archive stock groups from Location Inventory to clear and backup inventory data"
+            className="py-8"
+          />
         ) : (
           <>
             <div className="hidden md:block phone-land:hidden">

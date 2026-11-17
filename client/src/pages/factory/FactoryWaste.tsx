@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { addDays, format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -312,10 +313,9 @@ export default function FactoryWaste() {
         </CardHeader>
         <CardContent>
           {wasteQuery.isLoading ? (
-            <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading waste entries...</span>
-            </div>
+            <LoadingState title="Loading waste entries..." data-testid="loading-spinner" />
+          ) : wasteQuery.isError && !wasteQuery.data ? (
+            <ErrorState onAction={() => void wasteQuery.refetch()} actionLabel="Try again" />
           ) : !Array.isArray(wasteQuery.data) || wasteQuery.data.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground" data-testid="text-no-data">

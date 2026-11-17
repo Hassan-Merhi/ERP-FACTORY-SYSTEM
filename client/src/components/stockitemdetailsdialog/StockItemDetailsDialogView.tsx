@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatNumber } from "@/lib/formatNumber";
@@ -142,9 +143,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                 </div>
 
                 {loadingItem ? (
-                  <div className="flex items-center justify-center py-8">
-                    <p className="text-muted-foreground">Loading...</p>
-                  </div>
+                  <LoadingState className="py-8" />
                 ) : stockItem ? (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -315,9 +314,9 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                 </Card>
 
                 {loadingLocationPrices ? (
-                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                  <LoadingState className="py-4" />
                 ) : locationPrices.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">No location prices added yet</div>
+                  <EmptyState title="No location prices added yet" className="py-4" />
                 ) : (
                   <div className="space-y-2">
                     {locationPrices.map((price) => (
@@ -449,9 +448,9 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                 </Card>
 
                 {loadingAliases ? (
-                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                  <LoadingState className="py-4" />
                 ) : codeAliases.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">No code aliases added yet</div>
+                  <EmptyState title="No code aliases added yet" className="py-4" />
                 ) : (
                   <div className="space-y-2">
                     {codeAliases.map((alias) => (
@@ -481,9 +480,9 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                 Voucher History
               </h3>
               {loadingTransactions ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                <LoadingState className="py-8" />
               ) : transactions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No transactions found</div>
+                <EmptyState title="No transactions found" className="py-8" />
               ) : (
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {transactions.map((transaction) => (

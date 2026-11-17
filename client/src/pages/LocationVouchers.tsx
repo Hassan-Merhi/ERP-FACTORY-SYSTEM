@@ -5,6 +5,7 @@ import { MapPin, Eye, ArrowDownToLine, ArrowUpFromLine, Layers } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
@@ -98,7 +99,12 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
   const [showAllMonths, setShowAllMonths] = useState(false);
 
   // Single-month query
-  const { data: monthData, isLoading: monthLoading } = useQuery<LocationVouchersData>({
+  const {
+    data: monthData,
+    isLoading: monthLoading,
+    isError: monthError,
+    refetch: refetchMonth,
+  } = useQuery<LocationVouchersData>({
     queryKey: [
       `/api/locations/${locationId}/stock-items/${stockItemId}/vouchers/${year}/${month}`,
       periodFilter.fromDate,
@@ -119,7 +125,12 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
   // All-months (date range) query
   const allMonthsStart = `${year}-01-01`;
   const allMonthsEnd = `${year}-12-31`;
-  const { data: rangeData, isLoading: rangeLoading } = useQuery<RangeVouchersData>({
+  const {
+    data: rangeData,
+    isLoading: rangeLoading,
+    isError: rangeError,
+    refetch: refetchRange,
+  } = useQuery<RangeVouchersData>({
     queryKey: [`/api/locations/${locationId}/stock-items/${stockItemId}/transactions`, allMonthsStart, allMonthsEnd],
     queryFn: async () => {
       const url = `/api/locations/${locationId}/stock-items/${stockItemId}/transactions?startDate=${allMonthsStart}&endDate=${allMonthsEnd}`;
@@ -132,6 +143,8 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
 
   const isLoading = showAllMonths ? rangeLoading : monthLoading;
   const data = showAllMonths ? rangeData : monthData;
+  const isError = showAllMonths ? rangeError : monthError;
+  const refetch = showAllMonths ? refetchRange : refetchMonth;
 
   const formatNumber = (num: number | null | undefined, decimals = 2) => {
     if (num == null || isNaN(num) || num === 0) return "";
@@ -309,6 +322,14 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
       <div className="container mx-auto p-6 space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-0 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }

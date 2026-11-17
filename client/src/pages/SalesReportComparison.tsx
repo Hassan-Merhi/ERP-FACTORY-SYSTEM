@@ -4,8 +4,10 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
@@ -126,6 +128,8 @@ export default function SalesReportComparison() {
     data: rawItems = [],
     isFetching,
     isLoading,
+    isError,
+    refetch,
   } = useQuery<SalesItem[]>({
     queryKey: ["/api/dashboard/sales-report-all", queryString],
     enabled,
@@ -273,23 +277,14 @@ export default function SalesReportComparison() {
         <ErpMobileFilters
           label="Company comparison filters"
           primary={
-            <div className="flex min-w-0 items-center gap-1">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-9 min-w-0 flex-1 text-sm"
-                data-testid="input-start-date"
-              />
-              <span className="text-muted-foreground text-sm">–</span>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-9 min-w-0 flex-1 text-sm"
-                data-testid="input-end-date"
-              />
-            </div>
+            <PeriodFilter
+              value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+              onChange={(v) => {
+                setStartDate(v.fromDate);
+                setEndDate(v.toDate);
+              }}
+              data-testid="input-start-date"
+            />
           }
           quick={
             <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
@@ -362,23 +357,14 @@ export default function SalesReportComparison() {
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2" data-erp-filter-bar="sales-report-comparison">
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-36 h-9 text-sm"
-                    data-testid="input-start-date"
-                  />
-                  <span className="text-muted-foreground text-sm">–</span>
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-36 h-9 text-sm"
-                    data-testid="input-end-date"
-                  />
-                </div>
+                <PeriodFilter
+                  value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+                  onChange={(v) => {
+                    setStartDate(v.fromDate);
+                    setEndDate(v.toDate);
+                  }}
+                  data-testid="input-start-date"
+                />
 
                 <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
                   <PopoverTrigger asChild>
@@ -493,9 +479,11 @@ export default function SalesReportComparison() {
             )}
 
             {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground">Loading comparison data…</div>
+              <LoadingState title="Loading comparison data…" className="py-16" />
+            ) : isError && rawItems.length === 0 ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
             ) : tableData.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">No data found for the selected filters</div>
+              <EmptyState title="No data found for the selected filters" className="py-16" />
             ) : (
               <div className="rounded-md border overflow-auto">
                 <Table>

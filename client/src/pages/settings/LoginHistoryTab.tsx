@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { SettingsLoginHistoryRow } from "./settingsTypes";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
@@ -11,7 +11,12 @@ import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 export function LoginHistoryTab() {
   const { tableProps } = useMobileCardTable();
   const { formatDisplayDate } = useDateFormat();
-  const { data: history, isLoading } = useQuery<SettingsLoginHistoryRow[]>({
+  const {
+    data: history,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<SettingsLoginHistoryRow[]>({
     queryKey: ["/api/login-history"],
   });
 
@@ -24,11 +29,11 @@ export function LoginHistoryTab() {
     }) || [];
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <LoadingState className="py-12" />;
+  }
+
+  if (isError && !history) {
+    return <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />;
   }
 
   return (
@@ -49,9 +54,7 @@ export function LoginHistoryTab() {
       </div>
 
       {filteredHistory.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">No login history found.</CardContent>
-        </Card>
+        <EmptyState title="No login history found." className="py-8" />
       ) : (
         <Card>
           <div className="table-responsive">

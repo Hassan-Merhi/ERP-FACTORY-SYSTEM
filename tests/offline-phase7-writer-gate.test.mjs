@@ -84,7 +84,6 @@ test("manual operator ACK without epoch and digest is refused", () => {
     SESSION_SECRET: "B".repeat(64),
     CSRF_ENFORCE: "1",
     ENABLE_SCHEDULERS: "false",
-    RUN_STARTUP_MIGRATIONS: "true",
     FACTORY_EDGE_WRITE_MODE: "lan-primary",
     FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
   };

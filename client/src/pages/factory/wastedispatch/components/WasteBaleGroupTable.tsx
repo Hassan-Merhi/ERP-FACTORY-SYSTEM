@@ -9,7 +9,8 @@
  */
 
 import { Fragment } from "react";
-import { Boxes, Loader2, ChevronDown, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Boxes, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -131,31 +132,14 @@ export function WasteBaleGroupTable({ model }: { model: WasteDispatchModel }) {
               </Table>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-1 pt-3 dark:border-slate-700">
-              <span className="text-xs text-muted-foreground">
-                Page {summaryPagination.page} of {summaryPagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={balePage <= 1}
-                  onClick={() => setBalePage((page) => Math.max(1, page - 1))}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={balePage >= summaryPagination.totalPages}
-                  onClick={() => setBalePage((page) => Math.min(summaryPagination.totalPages, page + 1))}
-                >
-                  Next <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={balePage}
+              totalPages={summaryPagination.totalPages}
+              total={summaryPagination.total}
+              pageSize={summaryPagination.limit}
+              onPageChange={setBalePage}
+              noun="products"
+            />
           </>
         )}
       </CardContent>

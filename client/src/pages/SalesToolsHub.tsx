@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Book, ArrowLeftRight, Tag, Replace } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { LoadingState } from "@/components/ui/page-state";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { AuthMe } from "@shared/apiTypes";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
@@ -71,7 +72,7 @@ export default function SalesToolsHub({ access }: { access?: ErpFeatureAccess })
       </div>
 
       <div className="flex-1 min-w-0 overflow-auto">
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading…</div>}>
+        <Suspense fallback={<LoadingState className="m-4" />}>
           <TabsContent value="daybook" className="m-0">
             <POSDaybook />
           </TabsContent>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, X, ExternalLink, Upload, Download, Plus, Save, Trash2 } from "lucide-react";
@@ -510,23 +511,18 @@ export default function FactoryCustomerStatement() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date From</label>
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-from"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date To</label>
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-to"
+                  <label className="text-xs text-muted-foreground font-medium">Period</label>
+                  <PeriodFilter
+                    value={{
+                      fromDate: filterDateFrom,
+                      toDate: filterDateTo,
+                      preset: filterDateFrom || filterDateTo ? "custom" : "all_time",
+                    }}
+                    onChange={(v) => {
+                      setFilterDateFrom(v.fromDate);
+                      setFilterDateTo(v.toDate);
+                    }}
+                    data-testid="customer-statement-period"
                   />
                 </div>
                 {hasFilters && (

@@ -1,6 +1,7 @@
 import { Plus, Pencil, Layers, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 
 import { TabsContent } from "@/components/ui/tabs";
 
@@ -40,11 +41,12 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
             </div>
 
             {categories.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-muted/20 py-16 text-center text-muted-foreground">
-                <Layers className="mx-auto h-8 w-8 mb-3 opacity-40" />
-                <p className="font-medium">No categories yet</p>
-                <p className="text-sm mt-1">Create a category to group workers for quick filtering</p>
-              </div>
+              <EmptyState
+                icon={Layers}
+                title="No categories yet"
+                description="Create a category to group workers for quick filtering"
+                className="rounded-xl bg-muted/20 py-16"
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {categories.map((cat) => {

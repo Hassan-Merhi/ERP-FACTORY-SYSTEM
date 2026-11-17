@@ -25,6 +25,7 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface Customer {
   id: number;
@@ -162,7 +163,12 @@ export default function FactoryDispatchBatches() {
   if (filterCustomer && filterCustomer !== "_all") qParams.set("customerId", filterCustomer);
   if (filterStatus && filterStatus !== "_all") qParams.set("status", filterStatus);
 
-  const { data: batches = [], isLoading } = useQuery<BatchRow[]>({
+  const {
+    data: batchesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<BatchRow[]>({
     queryKey: companyQueryKey("/api/factory/dispatch-batches", selectedCompany?.id, filterCustomer, filterStatus),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -174,6 +180,7 @@ export default function FactoryDispatchBatches() {
     refetchInterval: visibleTabInterval(60_000),
     refetchIntervalInBackground: false,
   });
+  const batches = batchesData ?? [];
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
@@ -503,16 +510,21 @@ export default function FactoryDispatchBatches() {
                       <Skeleton key={i} className="h-12 w-full" />
                     ))}
                   </div>
+                ) : isError && !batchesData ? (
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
                 ) : filtered.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <Truck className="w-10 h-10 opacity-40" />
-                    <p className="text-sm">No dispatch batches found</p>
-                    {canCreateBatch && (
-                      <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="w-4 h-4 mr-1" /> Create first batch
-                      </Button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Truck}
+                    title="No dispatch batches found"
+                    className="border-0"
+                    action={
+                      canCreateBatch ? (
+                        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                          <Plus className="w-4 h-4 mr-1" /> Create first batch
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <Table mobileLayout="cards">
                     <TableHeader>

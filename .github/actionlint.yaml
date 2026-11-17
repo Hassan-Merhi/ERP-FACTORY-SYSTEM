@@ -3,3 +3,11 @@
 self-hosted-runner:
   labels:
     - ubuntu-26.04
+
+# The pinned actionlint predates GitHub's self-repository reusable-workflow
+# syntax ("$/.github/workflows/x.yml"), which zizmor requires for immutable
+# self references. Ignore only that false positive, only where it is used.
+paths:
+  .github/workflows/nightly-training-audit.yml:
+    ignore:
+      - 'reusable workflow call "\$/\.github/workflows/[a-z0-9-]+\.yml" at "uses" is not following the format'

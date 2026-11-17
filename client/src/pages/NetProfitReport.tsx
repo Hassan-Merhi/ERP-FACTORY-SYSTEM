@@ -6,8 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { PageHeader } from "@/components/PageHeader";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useToast } from "@/hooks/use-toast";
@@ -429,28 +428,14 @@ export default function NetProfitReport() {
                 </>
               )}
               {period === "custom_range" && (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <Label className="text-sm text-muted-foreground whitespace-nowrap">From:</Label>
-                    <Input
-                      type="date"
-                      value={customFromDate}
-                      onChange={(e) => setCustomFromDate(e.target.value)}
-                      className="w-36 text-sm"
-                      data-testid="input-custom-from-date"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Label className="text-sm text-muted-foreground whitespace-nowrap">To:</Label>
-                    <Input
-                      type="date"
-                      value={customToDate}
-                      onChange={(e) => setCustomToDate(e.target.value)}
-                      className="w-36 text-sm"
-                      data-testid="input-custom-to-date"
-                    />
-                  </div>
-                </>
+                <PeriodFilter
+                  value={{ fromDate: customFromDate, toDate: customToDate, preset: "custom" }}
+                  onChange={(v) => {
+                    setCustomFromDate(v.fromDate);
+                    setCustomToDate(v.toDate);
+                  }}
+                  data-testid="net-profit-custom-period"
+                />
               )}
             </div>
           )}

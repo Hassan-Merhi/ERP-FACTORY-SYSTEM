@@ -1,7 +1,6 @@
 import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import fs from "fs";
 import path from "path";
-import type { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { buildSafeFilename } from "../lib/contentDisposition";
@@ -55,23 +54,6 @@ function isCanonicalSnapshot(value: unknown): value is CanonicalInvoiceDocument 
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<CanonicalInvoiceDocument>;
   return candidate.version === 1 && Number.isInteger(candidate.orderId) && Array.isArray(candidate.lines);
-}
-
-export async function ensureFactoryInvoiceDocumentSnapshotStore(pool: Pool): Promise<void> {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS factory_invoice_document_snapshots (
-      order_id INTEGER PRIMARY KEY REFERENCES customer_orders(id) ON DELETE CASCADE,
-      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      snapshot JSONB NOT NULL,
-      frozen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS factory_invoice_document_snapshots_company_idx
-      ON factory_invoice_document_snapshots(company_id, order_id)
-  `);
 }
 
 async function readUsableSnapshot(orderId: number, companyId: number): Promise<CanonicalInvoiceDocument | null> {
