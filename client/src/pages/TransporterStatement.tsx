@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -454,24 +454,14 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
               <>
                 {layout === "inline" && transporterControl}
                 <div className="flex w-full flex-col gap-1 sm:w-auto">
-                  <Label className="text-xs text-muted-foreground">From</Label>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full sm:w-[140px]"
-                    data-testid="input-date-from"
-                  />
-                </div>
-
-                <div className="flex w-full flex-col gap-1 sm:w-auto">
-                  <Label className="text-xs text-muted-foreground">To</Label>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full sm:w-[140px]"
-                    data-testid="input-date-to"
+                  <Label className="text-xs text-muted-foreground">Period</Label>
+                  <PeriodFilter
+                    value={{ fromDate: dateFrom, toDate: dateTo, preset: dateFrom || dateTo ? "custom" : "all_time" }}
+                    onChange={(v) => {
+                      setDateFrom(v.fromDate);
+                      setDateTo(v.toDate);
+                    }}
+                    data-testid="transporter-statement-period"
                   />
                 </div>
               </>

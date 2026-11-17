@@ -2,8 +2,7 @@ import { Upload, Package, FileText, FileImage, File, Trash2, Eye, Download } fro
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { EmptyState } from "@/components/ui/page-state";
 import { TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -169,32 +168,18 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
                   <Package className="h-3.5 w-3.5" /> Bale History
                 </CardTitle>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="baleStart" className="text-xs text-muted-foreground">
-                      From
-                    </Label>
-                    <Input
-                      id="baleStart"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-auto"
-                      data-testid="input-bale-start-date"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="baleEnd" className="text-xs text-muted-foreground">
-                      To
-                    </Label>
-                    <Input
-                      id="baleEnd"
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-auto"
-                      data-testid="input-bale-end-date"
-                    />
-                  </div>
+                  <PeriodFilter
+                    value={{
+                      fromDate: startDate,
+                      toDate: endDate,
+                      preset: startDate || endDate ? "custom" : "all_time",
+                    }}
+                    onChange={(v) => {
+                      setStartDate(v.fromDate);
+                      setEndDate(v.toDate);
+                    }}
+                    data-testid="bale-history-period"
+                  />
                   {(startDate || endDate) && (
                     <Button
                       variant="ghost"

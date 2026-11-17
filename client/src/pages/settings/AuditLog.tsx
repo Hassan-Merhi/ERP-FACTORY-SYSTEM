@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import { CalendarDays, RefreshCw, X } from "lucide-react";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/page-state";
@@ -526,28 +527,15 @@ export function AuditLog({
         </div>
       )}
 
-      {!activityLoading && !error && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page === 1 || isFetching}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-          </Button>
-          <span className="text-sm font-medium px-4">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            disabled={page === totalPages || isFetching}
-          >
-            Next <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+      {!activityLoading && !error && (
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          total={total ?? 0}
+          pageSize={50}
+          onPageChange={setPage}
+          noun="items"
+        />
       )}
 
       {selectedLog && <AuditLogDialog log={selectedLogDetail || selectedLog} onClose={() => setSelectedLog(null)} />}
