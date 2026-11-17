@@ -334,11 +334,29 @@ export function registerAccountCurrencyRoutes(app: Express) {
         return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
       }
       const asOf = asOfRaw;
+      const balanceBasis = req.query?.balanceBasis;
+      if (balanceBasis !== undefined && balanceBasis !== "book" && balanceBasis !== "current") {
+        return res.status(400).json({ message: "balanceBasis must be book or current" });
+      }
+      // Book balances are posted voucher debits/credits (rounded per line), not
+      // a live translation or a 6-decimal historical currency conversion.
+      const postedBookBalance = async (kind: "ledger" | "bank"): Promise<number | null> => {
+        const { getPartyBalance } = await import("../services/accounting/balances/ledgerBalanceEngine");
+        const party = await getPartyBalance(db, { companyId, kind, id, asOf });
+        return party ? Number(party.closing) : null;
+      };
 
       // The cash/bank currency summary has no date cut, so a dated balance is
       // the historical-base ledger balance below (the engine's basis).
       const cashSummary = asOf ? null : await getCashLedgerAccountSummary(companyId, id);
       if (cashSummary) {
+        if (balanceBasis === "book") {
+          const bookBalance = await postedBookBalance("ledger");
+          if (bookBalance === null) return res.status(404).json({ message: "Account not found" });
+          // Keep both USD figures available, but book is the primary number
+          // on voucher and statement screens; no journal or rate is changed.
+          return res.json({ balance: bookBalance, balanceBasis: "book", ...cashSummary });
+        }
         const displayBalance = cashSummary.currentTranslatedBaseBalance ?? cashSummary.historicalBaseBalance;
         // historicalBaseBalance only covers entries whose currency is fully resolved to a
         // USD base amount. Add back the two missing pieces so the returned balance equals
@@ -355,6 +373,12 @@ export function registerAccountCurrencyRoutes(app: Express) {
 
       const historical = await getHistoricalLedgerBalance(companyId, id, asOf);
       if (historical) {
+        if (balanceBasis === "book") {
+          const bookBalance = await postedBookBalance("ledger");
+          if (bookBalance !== null) {
+            return res.json({ balance: bookBalance, balanceBasis: "book", ...historical });
+          }
+        }
         // historicalBaseBalance = resolved-entry net (USD-denominated).
         // Add back: (1) unresolved OB, (2) unresolved legacy entry raw net.
         // Together these reproduce: OB_signed + total_debits − total_credits.
@@ -385,10 +409,15 @@ export function registerAccountCurrencyRoutes(app: Express) {
         // Loaded on demand: the engine is only needed for a dated bank balance.
         const { getPartyBalance } = await import("../services/accounting/balances/ledgerBalanceEngine");
         const party = await getPartyBalance(db, { companyId, kind: "bank", id, asOf });
-        return res.json({ balance: Number(party?.historicalBaseClosing ?? 0), asOf });
+        return res.json({ balance: Number(balanceBasis === "book" ? (party?.closing ?? 0) : (party?.historicalBaseClosing ?? 0)), asOf, balanceBasis: balanceBasis === "book" ? "book" : "current" });
       }
       const bankSummary = await getCashBankAccountSummary(companyId, "bank", id);
       if (!bankSummary) return res.status(404).json({ message: "Account not found" });
+      if (balanceBasis === "book") {
+        const bookBalance = await postedBookBalance("bank");
+        if (bookBalance === null) return res.status(404).json({ message: "Account not found" });
+        return res.json({ balance: bookBalance, balanceBasis: "book", ...bankSummary });
+      }
       const displayBalance = bankSummary.currentTranslatedBaseBalance ?? bankSummary.historicalBaseBalance;
       let bankBalance = Number(displayBalance);
       if (bankSummary.openingBalanceCurrencyUnresolved && bankSummary.unresolvedOpeningBalanceRaw != null) {
