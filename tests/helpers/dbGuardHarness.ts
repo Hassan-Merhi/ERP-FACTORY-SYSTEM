@@ -41,7 +41,7 @@ interface ForeignKey {
  * whenever the table is seeded, including as a stub parent, and a caller's own
  * values win. Add a table here when seeding it reports a check violation.
  */
-const CHECK_SATISFYING_VALUES: Record<string, Row> = {
+const CHECK_SATISFYING_VALUES: Record<string, Row | ((sequence: number) => Row)> = {
   accounting_fiscal_review_signoffs: { review_kind: "ACCOUNTING" },
   factory_edge_attachment_outbox: { operation_kind: "attachment.file.v1" },
   factory_edge_payment_outbox: { operation_kind: "voucher.payment-receipt.v1" },
@@ -50,6 +50,13 @@ const CHECK_SATISFYING_VALUES: Record<string, Row> = {
     effective_week: "2026-01-12",
     method: "per_extra_bale",
     flat_bonus_usd: "0",
+  },
+  // batch_number defaults to '' and is unique per company, so each seed needs its own.
+  factory_mix_batches: (sequence) => ({ batch_number: `guard-${sequence}` }),
+  stock_transfer_order_approval_batches: {
+    approval_group_chat_id: "120363000000000001@g.us",
+    authorized_phone_e164: "+243810000000",
+    status: "draft",
   },
 };
 
@@ -207,7 +214,11 @@ export async function seedRow(
   }
 
   seedSequence += 1;
-  const row: Row = { ...CHECK_SATISFYING_VALUES[table], ...values };
+  const checkValues = CHECK_SATISFYING_VALUES[table];
+  const row: Row = {
+    ...(typeof checkValues === "function" ? checkValues(seedSequence) : checkValues),
+    ...values,
+  };
   for (const column of columns) {
     if (column.required && !(column.name in row)) {
       row[column.name] = await placeholder(client, column, seedSequence);

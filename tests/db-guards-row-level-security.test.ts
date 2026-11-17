@@ -24,6 +24,11 @@ const PROBE_ROLE = "guard_rls_probe";
 const READ_AND_APPEND_ONLY = new Set(["factory_row_history"]);
 
 const ISOLATED_TABLES = [
+  "access_policy_change_audit",
+  "access_policy_versions",
+  "access_role_rules",
+  "access_role_templates",
+  "access_user_overrides",
   "accounting_cash_bank_matches",
   "accounting_cash_bank_statement_lines",
   "accounting_cash_bank_statements",
@@ -45,6 +50,14 @@ const ISOLATED_TABLES = [
   "cost_center_source_overrides",
   "cost_centers",
   "customers",
+  "factory_dispatch_erp_po_receipts",
+  "factory_dispatch_financial_events",
+  "factory_dispatch_order_consolidations",
+  "factory_dispatch_trip_charges",
+  "factory_dispatch_trip_exports",
+  "factory_dispatch_trip_financial_bales",
+  "factory_dispatch_trip_financials",
+  "factory_dispatch_trip_postings",
   "factory_row_history",
   "fixed_assets",
   "inventory",
@@ -62,6 +75,10 @@ const ISOLATED_TABLES = [
   "voucher_entries",
   "vouchers",
 ];
+
+/** Tables whose company column is not company_id; each has its own probe below. */
+const ERP_COMPANY_SCOPED = new Set(["factory_dispatch_erp_po_receipts"]);
+const COMPANY_ID_TABLES = ISOLATED_TABLES.filter((table) => !ERP_COMPANY_SCOPED.has(table));
 
 /**
  * Switches the transaction to an unprivileged role that owns nothing. Triggers
@@ -175,7 +192,7 @@ describe("the set of company-isolated tables", () => {
   });
 });
 
-describe.each(ISOLATED_TABLES)("company isolation on %s", (table) => {
+describe.each(COMPANY_ID_TABLES)("company isolation on %s", (table) => {
   it("shows nothing until a company is declared, then only that company's rows", async () => {
     await withRollback(async (client) => {
       const { mine, theirs, both } = await twoCompaniesWithRows(client, table);
@@ -222,6 +239,47 @@ describe.each(ISOLATED_TABLES)("company isolation on %s", (table) => {
       // Nothing moved: the other company's row is still there when that company looks.
       await declareCompany(client, theirs);
       expect(await visibleCompanies(client, table, both)).toEqual([theirs]);
+    });
+  });
+});
+
+describe("company isolation on factory_dispatch_erp_po_receipts", () => {
+  const table = "factory_dispatch_erp_po_receipts";
+
+  async function visibleErpCompanies(client: PoolClient, companies: number[]): Promise<number[]> {
+    const { rows } = await client.query(
+      `SELECT DISTINCT erp_company_id FROM factory_dispatch_erp_po_receipts
+        WHERE erp_company_id = ANY($1::int[]) ORDER BY erp_company_id`,
+      [companies]
+    );
+    return rows.map((row) => Number(row.erp_company_id));
+  }
+
+  it("is scoped by the ERP company the receipt was posted to", async () => {
+    await withRollback(async (client) => {
+      await dropCheckConstraints(client, table);
+      const mine = Number((await seedRow(client, "companies")).id);
+      const theirs = Number((await seedRow(client, "companies")).id);
+      await seedRow(client, table, { erp_company_id: mine });
+      await seedRow(client, table, { erp_company_id: theirs });
+      const both = [mine, theirs].sort((a, b) => a - b);
+      await becomeOrdinaryRole(client, table);
+
+      await declareCompany(client, mine);
+      expect(await visibleErpCompanies(client, both)).toEqual([mine]);
+      const removed = await client.query("DELETE FROM factory_dispatch_erp_po_receipts WHERE erp_company_id = $1", [
+        theirs,
+      ]);
+      expect(removed.rowCount).toBe(0);
+      await expectRefused(
+        client,
+        "UPDATE factory_dispatch_erp_po_receipts SET erp_company_id = $1 WHERE erp_company_id = $2",
+        [theirs, mine],
+        { code: POLICY_VIOLATION, message: "row-level security policy" }
+      );
+
+      await declareCompany(client, theirs);
+      expect(await visibleErpCompanies(client, both)).toEqual([theirs]);
     });
   });
 });

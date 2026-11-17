@@ -9,16 +9,11 @@
  * stored.
  */
 import type { PoolClient } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { pool } from "../server/db";
-import {
-  ensureVoucherBalanceGuard,
-  VOUCHER_BALANCE_GUARD_TRIGGERS,
-} from "../server/services/accounting/voucherBalanceGuard";
+import { VOUCHER_BALANCE_GUARD_TRIGGERS } from "../server/services/accounting/voucherBalanceGuard";
 
 import {
-  dropTriggers,
   expectAccepted,
   expectRefused,
   missingTriggers,
@@ -30,17 +25,9 @@ import { addLine, seedLedger, seedVoucher } from "./helpers/ledgerGuardFixtures"
 
 const CHECK_VIOLATION = "23514";
 
-// The history marker trigger is installed with the balance guard, which the
-// shared test database does not keep: install it and leave things as found.
-let installedHere: Awaited<ReturnType<typeof missingTriggers>> = [];
-
+// The balance guard and its history marker are part of the migrated schema.
 beforeAll(async () => {
-  installedHere = await missingTriggers(VOUCHER_BALANCE_GUARD_TRIGGERS);
-  expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
-}, 60000);
-
-afterAll(async () => {
-  await dropTriggers(installedHere);
+  expect(await missingTriggers(VOUCHER_BALANCE_GUARD_TRIGGERS)).toEqual([]);
 }, 60000);
 
 describe("voucher line amounts are normalised to base currency by the database", () => {

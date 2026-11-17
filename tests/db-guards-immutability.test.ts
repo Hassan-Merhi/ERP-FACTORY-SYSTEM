@@ -555,14 +555,14 @@ describe("Stock Transfer Order WhatsApp approval evidence", () => {
       await expectAccepted(
         client,
         `UPDATE stock_transfer_order_approval_workbooks
-            SET workbook_bytes = '\\x0102'::bytea, workbook_sha256 = 'file-hash', filename = 'orders.xlsx', rendered_at = now()
+            SET workbook_bytes = '\\x0102'::bytea, workbook_sha256 = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', filename = 'orders.xlsx', rendered_at = now()
           ${where} RETURNING batch_id`,
         key
       );
       // ...and is frozen from then on.
       for (const change of [
         "workbook_bytes = '\\x0304'::bytea",
-        "workbook_sha256 = 'other-hash'",
+        "workbook_sha256 = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'",
         "filename = 'renamed.xlsx'",
         "rendered_at = rendered_at + interval '1 hour'",
       ]) {

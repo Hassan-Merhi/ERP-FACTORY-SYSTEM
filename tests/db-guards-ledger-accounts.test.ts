@@ -8,17 +8,14 @@
  * forbidden write and reads the refusal, then shows the nearest allowed write.
  */
 import type { PoolClient } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { pool } from "../server/db";
 import {
-  ensureOpeningBalanceLock,
   OPENING_BALANCE_LOCK_TABLES,
   openingBalanceLockTriggerName,
 } from "../server/services/accounting/openingBalanceLock";
 
 import {
-  dropTriggers,
   expectAccepted,
   expectRefused,
   missingTriggers,
@@ -33,20 +30,14 @@ const DELETED = "2026-02-01T00:00:00Z";
 
 type Row = Record<string, unknown>;
 
-// Other suites remove the opening-balance lock when they finish, so it cannot
-// be assumed present: install it here and leave the database as it was found.
+// The opening-balance lock is part of the migrated schema; the suite attacks
+// it as installed and fails if a migration ever drops one of its triggers.
 const LOCK_TRIGGERS = OPENING_BALANCE_LOCK_TABLES.map(
   (table) => [table, openingBalanceLockTriggerName(table)] as const
 );
-let installedHere: Awaited<ReturnType<typeof missingTriggers>> = [];
 
 beforeAll(async () => {
-  installedHere = await missingTriggers(LOCK_TRIGGERS);
-  expect(await ensureOpeningBalanceLock(pool)).toBe(true);
-}, 60000);
-
-afterAll(async () => {
-  await dropTriggers(installedHere);
+  expect(await missingTriggers(LOCK_TRIGGERS)).toEqual([]);
 }, 60000);
 
 async function seedAccount(client: PoolClient, companyId: unknown, values: Row = {}): Promise<Row> {

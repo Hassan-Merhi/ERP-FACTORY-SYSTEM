@@ -14,7 +14,7 @@
  * and the LAN half on a site's. The test database has neither until a suite
  * installs it, so this one runs the same installers first.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // The site-side installers only act when the server is configured as a LAN site.
 vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
@@ -23,20 +23,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensureCloudEdgeStageSchema } from "../server/edge/edgeCloudStaging";
-import { ensureEdgeVoucherOutboxSchema } from "../server/edge/edgeVoucherOutbox";
-import { ensurePhase10SyncControlSchema } from "../server/edge/phase10SyncControl.mjs";
-import { ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
-import { ensurePhase9AttachmentOutboxSchema } from "../server/edge/phase9AttachmentOutbox";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
-import { ensurePhase9PaymentOutboxSchema } from "../server/edge/phase9PaymentOutbox";
-import { ensurePhase9PosOutboxSchema } from "../server/edge/phase9PosOutbox";
-import { ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
-import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/phase9ReceivingOutbox";
-import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
 
-import { dropTriggers, expectRefused, reread, seedRow, withRollback } from "./helpers/dbGuardHarness";
+import { expectRefused, reread, seedRow, withRollback } from "./helpers/dbGuardHarness";
 
 const CHECK_VIOLATION = "23514";
 
@@ -51,30 +39,10 @@ async function edgeTriggers(): Promise<TriggerName[]> {
   return rows.map((row) => [row.table_name, row.trigger_name] as const);
 }
 
-let presentBefore = new Set<string>();
-
-// Other offline suites clear these tables between tests and expect whatever
-// guards they did not install to be absent, so anything added here is removed.
-afterAll(async () => {
-  await dropTriggers((await edgeTriggers()).filter(([table, trigger]) => !presentBefore.has(`${table}.${trigger}`)));
-}, 60000);
-
+// The offline evidence guards are part of the migrated schema.
 beforeAll(async () => {
-  presentBefore = new Set((await edgeTriggers()).map(([table, trigger]) => `${table}.${trigger}`));
-  // The cloud half, then the LAN half, in the installer's own order.
-  await ensureCloudEdgeStageSchema(pool, true);
-  await ensurePhase8ApplySchema(pool);
-  await ensurePhase9CloudEventSchema(pool);
-  await ensurePhase9StockItemMapSchema(pool);
-  await ensureEdgeVoucherOutboxSchema(pool);
-  await ensurePhase9PressingOutboxSchema(pool);
-  await ensurePhase9StockOutboxSchema(pool);
-  await ensurePhase9PosOutboxSchema(pool);
-  await ensurePhase9ReceivingOutboxSchema(pool);
-  await ensurePhase9AttachmentOutboxSchema(pool);
-  await ensurePhase9PaymentOutboxSchema(pool);
-  await ensurePhase10SyncControlSchema(pool);
-}, 120000);
+  expect((await edgeTriggers()).length).toBeGreaterThan(0);
+}, 60000);
 
 const EVIDENCE_TABLES = [
   { table: "factory_edge_applied_events", message: "PHASE9_EVENT_EVIDENCE_IMMUTABLE" },
