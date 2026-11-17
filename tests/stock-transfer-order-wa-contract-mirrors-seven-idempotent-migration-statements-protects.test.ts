@@ -31,7 +31,7 @@ describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
 
   it("freezes final approved quantities in the SAME revision approval transaction", () => {
     expect(approval).toContain("freezeApprovedStockTransferOrderWorkbookTx(");
-    expect(approval).toContain("db.transaction(tx => executeWithinTransaction(tx, batchId))");
+    expect(approval).toMatch(/db\.transaction\(\s*\(?tx\)?\s*=>\s*executeWithinTransaction\(tx,\s*batchId\)\s*\)/);
     expect(snapshot).toContain("t.workflow_origin='stock_transfer_order'");
     expect(snapshot).toContain("SUM(ti.quantity)::text AS quantity");
     expect(snapshot).toContain("GROUP BY i.id,i.name,src.id,src.name");

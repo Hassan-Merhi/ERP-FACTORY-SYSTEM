@@ -33,7 +33,9 @@ describe("Stock Transfer Order WhatsApp Phase 4 atomic full-batch execution", ()
     expect(executor).toContain("rejectImmutableStockTransferRevision(");
     expect(executor).toContain("for (const transferId of snapshot.transferIds)");
     expect(executor).toContain("for (const revision of revisions)");
-    expect(executor).toContain("await db.transaction(tx => executeWithinTransaction(tx, batchId))");
+    expect(executor).toMatch(
+      /await db\.transaction\(\s*\(?tx\)?\s*=>\s*executeWithinTransaction\(tx,\s*batchId\)\s*\)/
+    );
     expect(executor).toContain("ensureNoPendingFrozenRevisions");
     expect(executor).toContain('new Set(["approved", "superseded"])');
     expect(executor).toContain('new Set(["rejected"])');
@@ -42,7 +44,7 @@ describe("Stock Transfer Order WhatsApp Phase 4 atomic full-batch execution", ()
 
   it("writes one audit entry for every frozen revision in the same database transaction", () => {
     expect(executor).toContain("for (const revision of summary.statuses)");
-    expect(executor).toContain("writeAuditEvent({");
+    expect(executor).toMatch(/writeAuditEvent\(\s*\{/);
     expect(executor).toContain("approvalMode:");
     expect(executor).toContain("reviewerPhone:");
     expect(executor).toContain("providerMessageId:");
