@@ -129,8 +129,7 @@ export async function downloadFromUrl(url: string, options: DownloadFromUrlOptio
   }
   if (fileName.toLowerCase().endsWith(".xlsx")) {
     const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-    if (header.length < 4 || header[0] !== 0x50 || header[1] !== 0x4b ||
-        header[2] !== 0x03 || header[3] !== 0x04) {
+    if (header.length < 4 || header[0] !== 0x50 || header[1] !== 0x4b || header[2] !== 0x03 || header[3] !== 0x04) {
       throw new Error("The server returned an invalid Excel file. Please retry or contact support.");
     }
   }

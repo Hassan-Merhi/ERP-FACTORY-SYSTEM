@@ -92,7 +92,7 @@ const compression = (await import("compression")).default;
 const app = express();
 app.use(compression({
   filter: (req, res) => {
-    if (/spreadsheet|zip|pdf|octet-stream|image\\//i.test(String(res.getHeader("Content-Type") || ""))) {
+    if (/spreadsheet|zip|pdf|octet-stream|image\//i.test(String(res.getHeader("Content-Type") || ""))) {
       return false;
     }
     return compression.filter(req, res);

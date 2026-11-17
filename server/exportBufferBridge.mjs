@@ -38,9 +38,7 @@ if (!globalThis[BRIDGE_FLAG]) {
   globalThis.__erpExportCoordinatorSnapshot = () => ({
     active: coordinatorState.active,
     queued: coordinatorState.queue.length,
-    oldestWaitMs: coordinatorState.queue.length
-      ? Math.max(0, Date.now() - coordinatorState.queue[0].enqueuedAt)
-      : 0,
+    oldestWaitMs: coordinatorState.queue.length ? Math.max(0, Date.now() - coordinatorState.queue[0].enqueuedAt) : 0,
     maxConcurrent: maxConcurrent(),
     maxQueue: maxQueue(),
   });
@@ -379,10 +377,8 @@ if (!globalThis[BRIDGE_FLAG]) {
       // it, yielding 0-byte XLSX downloads. Return the real serialized bytes in
       // that case; keep the temp-file bridge only for unwrapped responses.
       const responseBridge = store?.res?.[RESPONSE_STATE_KEY];
-      const responseWrapped = responseBridge && (
-        store.res.write !== responseBridge.rawWrite ||
-        store.res.end !== responseBridge.bridgedEnd
-      );
+      const responseWrapped =
+        responseBridge && (store.res.write !== responseBridge.rawWrite || store.res.end !== responseBridge.bridgedEnd);
       if (!looksLikeWorkbookDownload(store) || responseWrapped) {
         return withSharedExportSlot(label, () => originalWriteBuffer.call(this, options));
       }

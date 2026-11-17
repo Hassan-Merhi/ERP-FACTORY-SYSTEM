@@ -58,7 +58,9 @@ describe("iOS Safari file-download lifecycle", () => {
   });
 
   it("removes the anchor and schedules cleanup even when the browser rejects the click", () => {
-    click.mockImplementation(() => { throw new Error("blocked by browser"); });
+    click.mockImplementation(() => {
+      throw new Error("blocked by browser");
+    });
     expect(() => downloadBlob(new Blob(["report"]), "report.csv")).toThrow("blocked by browser");
     expect(document.querySelector('a[download="report.csv"]')).toBeNull();
     vi.advanceTimersByTime(BLOB_DOWNLOAD_GRACE_MS);
@@ -68,27 +70,42 @@ describe("iOS Safari file-download lifecycle", () => {
 
 describe("Excel export download validation", () => {
   it("rejects an empty success response instead of saving a 0-byte XLSX", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob([]), { status: 200 })));
-    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
-      fileName: "KOLWEZI_CASH_Statement.xlsx",
-    })).rejects.toThrow("0 bytes");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Uint8Array(0), { status: 200 }))
+    );
+    await expect(
+      downloadFromUrl("/api/accounts/statement/export-excel", {
+        fileName: "KOLWEZI_CASH_Statement.xlsx",
+      })
+    ).rejects.toThrow("0 bytes");
     expect(create).not.toHaveBeenCalled();
   });
 
   it("rejects a 200 HTML error page mislabeled as an XLSX download", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>error</html>", { status: 200 })));
-    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
-      fileName: "KOLWEZI_CASH_Statement.xlsx",
-    })).rejects.toThrow("invalid Excel file");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html>error</html>", { status: 200 }))
+    );
+    await expect(
+      downloadFromUrl("/api/accounts/statement/export-excel", {
+        fileName: "KOLWEZI_CASH_Statement.xlsx",
+      })
+    ).rejects.toThrow("invalid Excel file");
     expect(create).not.toHaveBeenCalled();
   });
 
   it("still downloads a nonempty ZIP-signature XLSX response", async () => {
     const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, { status: 200 })));
-    await expect(downloadFromUrl("/api/accounts/statement/export-excel", {
-      fileName: "KOLWEZI_CASH_Statement.xlsx",
-    })).resolves.toBe("KOLWEZI_CASH_Statement.xlsx");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(bytes, { status: 200 }))
+    );
+    await expect(
+      downloadFromUrl("/api/accounts/statement/export-excel", {
+        fileName: "KOLWEZI_CASH_Statement.xlsx",
+      })
+    ).resolves.toBe("KOLWEZI_CASH_Statement.xlsx");
     expect(create).toHaveBeenCalledTimes(1);
     expect(clickedAnchor?.download).toBe("KOLWEZI_CASH_Statement.xlsx");
   });
