@@ -7,10 +7,7 @@ import {
   getActiveCompanyPermissionContext,
 } from "../services/security/activeCompanyPermissionContext";
 import { getCompanyRequestRuntimeContext } from "../services/security/companyRequestRuntimeContext";
-import {
-  loadNamedPermissions,
-  SecuritySchemaUnavailableError,
-} from "../services/security/namedPermissionService";
+import { loadNamedPermissions, SecuritySchemaUnavailableError } from "../services/security/namedPermissionService";
 import {
   classifyPrivilegedMaintenanceRoute,
   decidePrivilegedMaintenanceAccess,
@@ -58,11 +55,13 @@ export async function enforcePrivilegedMaintenanceScope(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const match = classifyPrivilegedMaintenanceRoute(req.method, requestPath(req));
-  if (!match || !req.session?.userId) {
+  if (!req.session?.userId) {
     next();
     return;
   }
+  // Which routes are maintenance mutations is declared in
+  // config/route-access-manifest.json; the classifier only labels the log line.
+  const match = classifyPrivilegedMaintenanceRoute(req.method, requestPath(req)) ?? { operation: "maintenance" };
 
   try {
     const context = getCompanyRequestRuntimeContext() ?? (await getActiveCompanyPermissionContext(req));
@@ -76,30 +75,14 @@ export async function enforcePrivilegedMaintenanceScope(
     });
 
     if (!decision.allowed) {
-      deny(
-        req,
-        res,
-        403,
-        decision.code,
-        context.companyId,
-        context.role,
-        match.operation
-      );
+      deny(req, res, 403, decision.code, context.companyId, context.role, match.operation);
       return;
     }
 
     privilegedMutationRateLimit(req, res, next);
   } catch (error) {
     if (error instanceof ActiveCompanyPermissionContextError) {
-      deny(
-        req,
-        res,
-        error.status,
-        error.code,
-        null,
-        req.session.currentRole ?? null,
-        match.operation
-      );
+      deny(req, res, error.status, error.code, null, req.session.currentRole ?? null, match.operation);
       return;
     }
     if (error instanceof SecuritySchemaUnavailableError) {

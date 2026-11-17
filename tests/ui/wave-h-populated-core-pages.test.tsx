@@ -373,7 +373,8 @@ describe("Wave H populated core-page behavior", () => {
     renderWithProviders(<Agents />, {
       seedQueries: [
         [
-          ["/api/accounts/all", 1],
+          // Agent Ledger reads posted book USD balances under their own cache entry.
+          ["/api/accounts/all", 1, "book-balance"],
           [
             {
               id: "agent-1",
