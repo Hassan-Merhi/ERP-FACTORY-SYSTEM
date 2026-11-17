@@ -187,7 +187,7 @@ async function main(argv: string[]): Promise<unknown> {
   throw new Error("PHASE9_USAGE");
 }
 
-if (process.argv[1] && /phase9OperatorApply\.(?:ts|js)$/.test(process.argv[1])) {
+if (process.argv[1] && /(?:^|[/\\])eventStreamOperatorApply\.(?:ts|js)$/.test(process.argv[1])) {
   main(process.argv.slice(2))
     .then((result) => console.log(JSON.stringify({ phase: 9, result })))
     .catch((error: unknown) => {

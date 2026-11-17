@@ -59,7 +59,7 @@ export async function runPhase8OperatorApply(sequence: string) {
   });
 }
 
-if (process.argv[1] && /phase8OperatorApply\.(?:ts|js)$/.test(process.argv[1])) {
+if (process.argv[1] && /(?:^|[/\\])stagedVoucherOperatorApply\.(?:ts|js)$/.test(process.argv[1])) {
   const sequence = process.argv[2];
   if (!sequence || process.argv.length !== 3) {
     console.error("Usage: node --import tsx server/edge/stagedVoucherOperatorApply.ts <staged-sequence>");
