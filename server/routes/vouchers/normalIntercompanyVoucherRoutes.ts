@@ -12,6 +12,7 @@ import { intercompanyRelationshipPolicies, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { hasIntercompanyVoucherPoliciesTable } from "../../lib/intercompanyTradeAvailability";
 import { IntercompanyEditError, type EditIdentity } from "../../services/intercompany/tradeSync";
 import {
   matchNormalIntercompanyVoucher,
@@ -77,6 +78,12 @@ async function inspect(req: Request) {
   if (!req.body || typeof req.body !== "object" || !["Payment", "Receipt"].includes(req.body.voucherType)) {
     return { identity, match: null };
   }
+  // The optional policy table is absent in some production ERP databases.
+  // Do not turn unrelated Payment/Receipt vouchers into HTTP 500 responses.
+  // An explicitly mirrored posting is separately blocked until setup is complete.
+  if (!(await hasIntercompanyVoucherPoliciesTable())) {
+    return { identity, match: null, policyTableAvailable: false };
+  }
   // Fetch *only* relationships involving the signed-in company. Disabled
   // mappings are also detected, so they cannot bypass the paired posting
   // controls by falling through to an ordinary voucher.
@@ -110,7 +117,7 @@ async function inspect(req: Request) {
       : [],
     policies,
   });
-  return { identity, match };
+  return { identity, match, policyTableAvailable: true };
 }
 
 function fail(res: Response, error: unknown) {
@@ -161,7 +168,14 @@ export function registerNormalIntercompanyVoucherRoutes(app: Express): void {
   // This middleware must be registered before both ordinary create handlers.
   app.post("/api/vouchers/payment-receipt", requireAuth, requireNonPOS, async (req, res, next: NextFunction) => {
     try {
-      const { identity, match } = await inspect(req);
+      const { identity, match, policyTableAvailable } = await inspect(req);
+      if (!policyTableAvailable && req.body?.intercompanyMirror != null) {
+        throw new NormalVoucherMirrorError(
+          "IC_VOUCHER_SCHEMA_UNAVAILABLE",
+          "Intercompany voucher setup is not installed in this database. No paired transfer was posted.",
+          503
+        );
+      }
       if (!match) {
         if (req.body?.intercompanyMirror != null) {
           throw new NormalVoucherMirrorError(
