@@ -1,6 +1,5 @@
 // Extracted from ./DailyScan.tsx to keep that module under the source-size cap.
 import { getErrorDetails } from "@shared/errorUtils";
-import { exportFileName } from "@/lib/exportFile";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -174,7 +173,7 @@ export function useDailyScanState() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: exportFileName("daily scan", "xlsx", { date: selectedDate }),
+        fileName: "daily-scan-" + selectedDate + ".xlsx",
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },

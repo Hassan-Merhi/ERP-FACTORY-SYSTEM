@@ -5,10 +5,8 @@
  *     retention job alone may delete, and only non-financial rows.
  *   - A voucher edit is audited inside its transaction: when the audit insert
  *     fails, the edit rolls back. Delete audits keep every line (> 100).
- *   - Company delete: Owner or Admin only, and only once the company is
- *     inactive; refused (409) with history unless the exact company code
- *     confirms it, allowed and audited for an empty company; the company's
- *     audit rows survive.
+ *   - Company delete: Owner only, refused (409) with history, allowed and
+ *     audited for an empty company; the company's audit rows survive.
  *   - Permanent delete of an orphaned POS sale, an employee or a customer is
  *     refused while posted lines name it.
  *   - Salary advance, rental auto-transfer and employee balance sync are
@@ -34,7 +32,6 @@ let agent: ReturnType<typeof request.agent>;
 const extraCompanyIds: number[] = [];
 const deletedCompanyIds: number[] = [];
 let ownerUserId: string | null = null;
-let managerUserId: string | null = null;
 
 async function one<T>(text: string, params: unknown[] = []): Promise<T | undefined> {
   const result = await pool.query(text, params);
@@ -107,10 +104,6 @@ afterAll(async () => {
   await pool.query(`DELETE FROM salary_advances WHERE company_id = ANY($1)`, [ids]).catch(() => undefined);
   await deleteAuditLogRowsForTests(pool, "company_id = ANY($1::int[])", [[...ids, ...deletedCompanyIds]]);
   await cleanupTestData(PREFIX);
-  if (managerUserId) {
-    await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1`, [managerUserId]).catch(() => undefined);
-    await pool.query(`DELETE FROM users WHERE id = $1`, [managerUserId]).catch(() => undefined);
-  }
   if (ownerUserId) {
     await pool.query(`DELETE FROM user_security_permissions WHERE user_id = $1`, [ownerUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1`, [ownerUserId]).catch(() => undefined);
@@ -225,7 +218,6 @@ describe("voucher edits and deletes are audited in their transaction", () => {
 
 describe("company delete", () => {
   let ownerAgent: ReturnType<typeof request.agent>;
-  let managerAgent: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
     const owner = await one<{ id: string }>(
@@ -249,29 +241,13 @@ describe("company delete", () => {
         .status
     ).toBe(200);
     expect((await ownerAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
-
-    const manager = await one<{ id: string }>(
-      `INSERT INTO users (username, password) SELECT $1, password FROM users WHERE id = $2 RETURNING id`,
-      [`${PREFIX}_manager`, ctx.userId]
-    );
-    managerUserId = manager!.id;
-    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Manager')`, [
-      managerUserId,
-      ctx.companyId,
-    ]);
-    managerAgent = request.agent(ctx.app);
-    expect(
-      (await managerAgent.post("/api/auth/login").send({ username: `${PREFIX}_manager`, password: "testpassword123" }))
-        .status
-    ).toBe(200);
-    expect((await managerAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
   }, 60_000);
 
-  it("is refused below Admin, while active, and with 409 for a company that has vouchers", async () => {
+  it("is refused for an Owner, for an active company, and with 409 for a company that has vouchers", async () => {
     const companyId = await createCompany("HIST");
     await pool.query(
-      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin'), ($4, $2, 'Manager')`,
-      [ownerUserId, companyId, ctx.userId, managerUserId]
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin')`,
+      [ownerUserId, companyId, ctx.userId]
     );
     await pool.query(
       `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, optional)
@@ -279,31 +255,27 @@ describe("company delete", () => {
       [companyId, `${PREFIX}-HIST`]
     );
 
-    expect((await managerAgent.delete(`/api/companies/${companyId}`)).status).toBe(403);
-    const active = await ownerAgent.delete(`/api/companies/${companyId}`);
-    expect(active.status).toBe(409);
-    expect(active.body.code).toBe("COMPANY_MUST_BE_INACTIVE");
-
+    // #3255 moved company management to Admin/Developer and requires the
+    // company to be deactivated first; an Owner session is refused outright.
+    expect((await ownerAgent.delete(`/api/companies/${companyId}`)).status).toBe(403);
+    const stillActive = await agent.delete(`/api/companies/${companyId}`);
+    expect(stillActive.status).toBe(409);
+    expect(stillActive.body.code).toBe("COMPANY_MUST_BE_INACTIVE");
     await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
-    for (const actor of [ownerAgent, agent]) {
-      const refused = await actor.delete(`/api/companies/${companyId}`);
-      expect(refused.status).toBe(409);
-      expect(refused.body.code).toBe("COMPANY_HAS_HISTORY");
-      expect(refused.body.blockers).toContain("vouchers");
-    }
-    const wrongCode = await ownerAgent
-      .delete(`/api/companies/${companyId}`)
-      .send({ forceDeleteWithHistory: true, confirmedCompanyCode: "NOT-THE-CODE" });
-    expect(wrongCode.status).toBe(400);
+    const refused = await agent.delete(`/api/companies/${companyId}`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe("COMPANY_HAS_HISTORY");
+    expect(refused.body.blockers).toContain("vouchers");
     expect(await count(`SELECT COUNT(*) AS n FROM companies WHERE id = $1`, [companyId])).toBe(1);
   }, 60_000);
 
   it("deletes an empty company in one audited transaction and keeps its audit rows", async () => {
     const companyId = await createCompany("EMPTY");
-    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner')`, [
-      ownerUserId,
-      companyId,
-    ]);
+    await pool.query(
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin')`,
+      [ownerUserId, companyId, ctx.userId]
+    );
+    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
     await pool.query(
       `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance) VALUES ($1, $2, 'Cash', 'Cash', '0')`,
       [companyId, `${PREFIX}-EC`]
@@ -314,9 +286,7 @@ describe("company delete", () => {
       [companyId]
     );
 
-    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
-
-    const deleted = await ownerAgent.delete(`/api/companies/${companyId}`);
+    const deleted = await agent.delete(`/api/companies/${companyId}`);
     expect(deleted.status).toBe(200);
     deletedCompanyIds.push(companyId);
     expect(await count(`SELECT COUNT(*) AS n FROM companies WHERE id = $1`, [companyId])).toBe(0);
@@ -330,26 +300,6 @@ describe("company delete", () => {
     expect(
       await count(
         `SELECT COUNT(*) AS n FROM audit_log WHERE company_id = $1 AND record_identifier = 'w12b-before-delete'`,
-        [companyId]
-      )
-    ).toBe(1);
-  }, 60_000);
-
-  it("lets an Admin delete an empty inactive company", async () => {
-    const companyId = await createCompany("ADMIN");
-    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`, [
-      ctx.userId,
-      companyId,
-    ]);
-    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
-
-    const deleted = await agent.delete(`/api/companies/${companyId}`);
-    expect(deleted.status).toBe(200);
-    deletedCompanyIds.push(companyId);
-    expect(await count(`SELECT COUNT(*) AS n FROM companies WHERE id = $1`, [companyId])).toBe(0);
-    expect(
-      await count(
-        `SELECT COUNT(*) AS n FROM audit_log WHERE company_id = $1 AND table_name = 'companies' AND action = 'delete'`,
         [companyId]
       )
     ).toBe(1);

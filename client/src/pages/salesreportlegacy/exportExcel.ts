@@ -1,7 +1,7 @@
 import { writeFile } from "@/lib/excelHelper";
 import { buildUniversalExcelWorkbook, type UniversalExcelColumn } from "@shared/universal-excel/engine";
-import type { SalesReportItem } from "./types";
 import { format } from "date-fns";
+import type { SalesReportItem } from "./types";
 
 /**
  * Detailed ERP sales report. The shared engine owns its layout while original

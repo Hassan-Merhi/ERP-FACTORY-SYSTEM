@@ -594,6 +594,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
       const searchPart = search.trim() ? ` search ${search.trim()}` : "";
+      const dateStr = new Date().toLocaleDateString("en-CA");
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       const headers = [
@@ -609,7 +610,6 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
       // In All Locations mode these price lists are intentionally re-importable:
       // the parser expects Code and location names in the first worksheet row.
-      const dateStr = new Date().toLocaleDateString("en-CA");
       await exportOperationalWorkbook({
         title: "POS Price List",
         fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",

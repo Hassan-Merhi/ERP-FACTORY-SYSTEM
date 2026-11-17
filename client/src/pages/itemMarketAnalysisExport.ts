@@ -84,6 +84,15 @@ function printableStatus(status: MarketStatus): string {
 }
 
 /** Export the complete filtered data returned by the report; never use the UI's 250-row page slice. */
+function safeFilePart(value: string): string {
+  return (
+    value
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 36) || "all"
+  );
+}
+
 export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOptions): Promise<void> {
   // Load the large Excel library only when the user clicks Export.
   const { ExcelJS, writeFile } = await import("@/lib/excelHelper");
@@ -392,9 +401,4 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
   });
   await writeFile(workbook, filename);
-}
-
-/** File-name-safe form of a label: anything but letters, digits, "_" and "-" becomes "-". */
-function safeFilePart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
 }

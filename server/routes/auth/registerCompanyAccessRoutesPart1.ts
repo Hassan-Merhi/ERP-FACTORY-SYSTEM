@@ -238,10 +238,9 @@ export function registerCompanyAccessRoutesPart1(app: Express) {
     }
   });
 
-  // Only inactive companies are eligible for deletion. Owners, Admins and
-  // Developers (who pass every requireRole) may delete one; the storage layer
-  // still refuses protected history unless it is explicitly confirmed.
-  app.delete("/api/companies/:id", requireAuth, requireRole("Owner", "Admin"), async (req, res) => {
+  // Only inactive companies are eligible for deletion. Admins and Developers
+  // may manage companies, but the storage layer still refuses protected history.
+  app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
       const targetCompany = await storage.getCompanyById(companyId);

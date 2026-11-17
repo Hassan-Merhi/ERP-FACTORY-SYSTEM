@@ -5,15 +5,15 @@ import {
   pressingReportFiltersSchema,
   pressingSavedViewSchema,
 } from "../shared/pressingReportContracts";
-import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+import fs from "node:fs";
 
-const server = readModuleFamily("server/routes/factory/factoryPressingReportRoutes.ts");
-const client = readModuleFamily("client/src/pages/factory/pressing-scanner/pressingReportClient.ts");
-const page = readModuleFamily("client/src/pages/factory/PressingHistoryReport.tsx");
-const parent = readModuleFamily("client/src/pages/factory/PressingMachineManagement.tsx");
-const registration = readModuleFamily("server/routes/factoryRoutes.ts");
-const indexSql = readModuleFamily("migrations/20261027_002_factory_pressing_history_report_indexes.sql");
-const stage = readModuleFamily("server/startup-schema/038-factory-pressing-history-report.ts");
+const server = fs.readFileSync("server/routes/factory/factoryPressingReportRoutes.ts", "utf8");
+const client = fs.readFileSync("client/src/pages/factory/pressing-scanner/pressingReportClient.ts", "utf8");
+const page = fs.readFileSync("client/src/pages/factory/PressingHistoryReport.tsx", "utf8");
+const parent = fs.readFileSync("client/src/pages/factory/PressingMachineManagement.tsx", "utf8");
+const registration = fs.readFileSync("server/routes/factoryRoutes.ts", "utf8");
+const indexSql = fs.readFileSync("migrations/20261027_002_factory_pressing_history_report_indexes.sql", "utf8");
+const stage = fs.readFileSync("server/startup-schema/038-factory-pressing-history-report.ts", "utf8");
 
 describe("pressing machine Phase 6 reporting contracts", () => {
   it("rejects invalid dates, excessive pagination and unknown filter fields", () => {
@@ -152,7 +152,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("byOperatorSqlFor");
     expect(page).toContain("Export Excel");
     expect(page).toContain("queryClient.invalidateQueries");
-    expect(client).toContain("exportOperationalWorkbook(");
+    expect(client).toContain("exportOperationalWorkbook");
     expect(client).toContain("first.total > PRESSING_EXPORT_LIMIT");
     expect(client).toContain("asOf: first.asOf");
   });
