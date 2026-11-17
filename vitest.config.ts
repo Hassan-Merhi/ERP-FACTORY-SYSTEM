@@ -57,7 +57,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
+      reporter: ["text", "json-summary", "json"],
       reportsDirectory: "coverage/backend",
       include: ["server/**/*.ts", "shared/**/*.ts"],
       exclude: ["server/index.ts", "server/vite.ts", "server/**/*.d.ts", "shared/**/*.d.ts"],
@@ -66,10 +66,14 @@ export default defineConfig({
       // costing, and tenant isolation. Both come from the shared config so
       // `npm run audit:coverage-ratchet` can report drift against the same
       // numbers CI enforces.
-      thresholds: {
-        ...backend.global,
-        ...backend.perFile,
-      },
+      // Shard-local coverage cannot satisfy global floors independently.
+      // Enforce the same floors after merging all isolated shard reports.
+      thresholds: process.env.CI_BACKEND_SHARD
+        ? undefined
+        : {
+            ...backend.global,
+            ...backend.perFile,
+          },
     },
   },
   resolve: {
