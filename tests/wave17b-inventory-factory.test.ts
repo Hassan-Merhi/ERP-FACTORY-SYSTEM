@@ -47,7 +47,6 @@ import {
 import { perpetualReadinessReport } from "../server/services/accounting/perpetualInventory/readiness";
 import { syncContainerStockInTx } from "../server/services/accounting/perpetualInventory/stockReceipts";
 import { assertStockEntryHasCostedMixTx } from "../server/services/factory/baleCostBasis";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import { createPurchaseOrder } from "../server/storage/containers-store/purchase-orders";
 import { createStockAdjustment } from "../server/storage/stock-ops/transfers-create";
@@ -153,7 +152,6 @@ async function bale(values: {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureFactoryCostBasisSchema(pool);
   await query(`DELETE FROM inventory WHERE company_id = $1`, [ctx.companyId]);
   // The V3 load routes need a factory company.
   await query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);

@@ -38,7 +38,6 @@ import { createFakeRouteApp } from "./helpers/fakeRouteApp";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { syncFactoryStockJournalTx } from "../server/services/accounting/perpetualInventory/factoryStockJournal";
 import { cascadeContainerCostChange } from "../server/services/factory/rawStockCostCascade";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { stockEntryBaleCost } from "../server/services/factory/baleCostBasis";
 import { registerFactoryMixBatchCreateRoutes } from "../server/routes/factory/mix-batches/create";
 import { registerBalesFinalizeRoutes } from "../server/routes/factory/bales/balesFinalizeRoutes";
@@ -117,7 +116,6 @@ const baleCost = async (id: number) =>
   );
 
 beforeAll(async () => {
-  await ensureFactoryCostBasisSchema(pool);
   // A run that failed half-way leaves its company behind.
   for (const leftover of await all<{ id: number }>(`SELECT id FROM companies WHERE code = $1`, [
     PREFIX.toUpperCase(),
@@ -317,8 +315,8 @@ describe("bale cost from pressing and stock entry", () => {
   it("prices pressed bales at the mix's USD cost: WIP relieved = finished goods added; the ERP mirror at rate 0", async () => {
     const mixId = (
       await one(
-        `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
-         VALUES ($1, $2, 100, 0, 1.3, 130, 'ACTIVE') RETURNING id`,
+        `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
+         VALUES ($1, $2::varchar, $2::text, 100, 0, 1.3, 130, 'ACTIVE') RETURNING id`,
         [companyId, `${PREFIX}-PRESS`]
       )
     ).id;
@@ -431,8 +429,8 @@ describe("after the cut-over", () => {
   beforeAll(async () => {
     cascadeMix = (
       await one(
-        `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
-         VALUES ($1, $2, 20, 20, 1.0, 20, 'CLOSED') RETURNING id`,
+        `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
+         VALUES ($1, $2::varchar, $2::text, 20, 20, 1.0, 20, 'CLOSED') RETURNING id`,
         [companyId, `${PREFIX}-CASC`]
       )
     ).id;

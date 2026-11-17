@@ -51,14 +51,29 @@ async function signIn(ctx: TestContext, username: string, companyId = ctx.compan
 }
 
 async function clearPolicy(companyId: number): Promise<void> {
-  for (const table of [
-    "access_policy_change_audit",
-    "access_user_overrides",
-    "access_role_rules",
-    "access_role_templates",
-    "access_policy_versions",
-  ]) {
-    await pool.query(`DELETE FROM ${table} WHERE company_id = $1`, [companyId]);
+  // access_policy_change_audit is append-only in the real schema
+  // (access_policy_audit_append_only_trg). Test cleanup lifts that guard only
+  // inside its own transaction, for this test company's rows.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("ALTER TABLE access_policy_change_audit DISABLE TRIGGER access_policy_audit_append_only_trg");
+    for (const table of [
+      "access_policy_change_audit",
+      "access_user_overrides",
+      "access_role_rules",
+      "access_role_templates",
+      "access_policy_versions",
+    ]) {
+      await client.query(`DELETE FROM ${table} WHERE company_id = $1`, [companyId]);
+    }
+    await client.query("ALTER TABLE access_policy_change_audit ENABLE TRIGGER access_policy_audit_append_only_trg");
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

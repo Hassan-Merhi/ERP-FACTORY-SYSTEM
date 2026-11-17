@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  canonicalEdgeVoucherPayload,
-  captureEdgeVoucherTx,
-  ensureEdgeVoucherOutboxSchema,
-} from "../server/edge/edgeVoucherOutbox";
+import { canonicalEdgeVoucherPayload, captureEdgeVoucherTx } from "../server/edge/edgeVoucherOutbox";
+import { functionDefinition, hasTable, indexDefinition, triggerDefinition } from "./helpers/schemaManifest";
 
 const lan = {
   FACTORY_EDGE_MODE: "lan",
@@ -23,7 +20,6 @@ const lan = {
   PGSSLMODE: "disable",
   SESSION_SECRET: "test-only-key-".repeat(6),
   ENABLE_SCHEDULERS: "false",
-  RUN_STARTUP_MIGRATIONS: "true",
   CSRF_ENFORCE: "1",
 };
 
@@ -54,14 +50,17 @@ describe("Phase 4 voucher outbox durability policy", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("creates append-only schema on LAN, not in cloud", async () => {
-    setLan();
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-    await ensureEdgeVoucherOutboxSchema({ query } as never);
-    const ddl = query.mock.calls.map(([q]) => String(q)).join("\n");
-    expect(ddl).toContain("CREATE TABLE IF NOT EXISTS factory_edge_voucher_outbox");
-    expect(ddl).toContain("BEFORE UPDATE OR DELETE");
-    expect(ddl).toContain("UNIQUE (site_id, operation_id)");
+  it("migrations define the append-only voucher outbox", () => {
+    expect(hasTable("factory_edge_voucher_outbox")).toBe(true);
+    const trigger = triggerDefinition("factory_edge_voucher_outbox", "factory_edge_voucher_outbox_no_mutation");
+    expect(trigger).toContain("BEFORE DELETE OR UPDATE");
+    expect(trigger).toContain("FOR EACH ROW EXECUTE FUNCTION factory_edge_voucher_outbox_immutable()");
+    expect(functionDefinition("factory_edge_voucher_outbox_immutable")).toContain(
+      "RAISE EXCEPTION 'EDGE_OUTBOX_IMMUTABLE'"
+    );
+    expect(indexDefinition("factory_edge_voucher_outbox_id")).toMatch(
+      /^CREATE UNIQUE INDEX .* \(site_id, operation_id\)$/
+    );
   });
 
   it("canonicalizes equivalent JSONB payloads for reproducible SHA-256 fingerprints", () => {

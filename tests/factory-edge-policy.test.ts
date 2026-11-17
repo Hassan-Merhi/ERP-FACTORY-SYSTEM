@@ -20,7 +20,6 @@ const safe = {
   PGSSLMODE: "disable",
   SESSION_SECRET: "A".repeat(64),
   ENABLE_SCHEDULERS: "false",
-  RUN_STARTUP_MIGRATIONS: "true",
   CSRF_ENFORCE: "1",
 };
 describe("factory LAN edge deployment policy", () => {
@@ -43,7 +42,6 @@ describe("factory LAN edge deployment policy", () => {
     [{ PGPASSWORD: "short" }, "EDGE_DATABASE_PASSWORD_WEAK"],
     [{ CSRF_ENFORCE: "0" }, "EDGE_CSRF_REQUIRED"],
     [{ ENABLE_SCHEDULERS: "true" }, "EDGE_SCHEDULERS_MUST_BE_DISABLED"],
-    [{ RUN_STARTUP_MIGRATIONS: "false" }, "EDGE_MIGRATIONS_REQUIRED"],
     [{ NODE_ENV: "development" }, "EDGE_REQUIRES_PRODUCTION"],
     [{ CAPACITOR_ENABLED: "true" }, "EDGE_CROSS_ORIGIN_SESSIONS_DISABLED"],
     [{ FACTORY_EDGE_WRITE_MODE: "lan-primary" }, "EDGE_PRIMARY_CUTOVER_NOT_ACKNOWLEDGED"],

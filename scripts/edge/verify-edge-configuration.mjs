@@ -82,7 +82,6 @@ export function verifyEdgeInstallation(env, certPem, keyPem) {
     SESSION_SECRET: env.EDGE_SESSION_SECRET,
     CSRF_ENFORCE: "1",
     ENABLE_SCHEDULERS: "false",
-    RUN_STARTUP_MIGRATIONS: "true",
   });
   verifyEdgeTlsCertificate(certPem, keyPem, config.hostname);
   return config;

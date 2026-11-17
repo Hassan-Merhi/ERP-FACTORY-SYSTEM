@@ -46,8 +46,6 @@ type StoredOperationalRequest = {
   responseBody: unknown;
 };
 
-let ensureTablePromise: Promise<void> | null = null;
-
 function isRecord(value: unknown): value is JsonRecord {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -135,37 +133,6 @@ export function resolvePhase4OperationalVoucherCompanyId(req: Request): number |
     : req.session.currentCompanyId;
   const companyId = Number(selectedCompanyId);
   return Number.isSafeInteger(companyId) && companyId > 0 ? companyId : null;
-}
-
-async function ensureOperationalVoucherRequestTable(): Promise<void> {
-  if (!ensureTablePromise) {
-    ensureTablePromise = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS operational_voucher_requests (
-          id BIGSERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL,
-          idempotency_key VARCHAR(180) NOT NULL,
-          request_path TEXT NOT NULL,
-          request_fingerprint VARCHAR(64) NOT NULL,
-          state VARCHAR(20) NOT NULL DEFAULT 'processing',
-          response_status INTEGER,
-          response_body JSONB,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          completed_at TIMESTAMPTZ,
-          CONSTRAINT operational_voucher_requests_company_key_unique
-            UNIQUE (company_id, idempotency_key)
-        )
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS operational_voucher_requests_state_idx
-          ON operational_voucher_requests (company_id, state, created_at)
-      `);
-    })().catch((error) => {
-      ensureTablePromise = null;
-      throw error;
-    });
-  }
-  return ensureTablePromise;
 }
 
 async function loadStoredRequest(companyId: number, idempotencyKey: string): Promise<StoredOperationalRequest | null> {
@@ -265,7 +232,6 @@ async function operationalVoucherBoundary(req: Request, res: Response, next: Nex
     return;
   }
 
-  await ensureOperationalVoucherRequestTable();
   const fingerprint = requestFingerprint(req);
   const claimed = await claimRequest(companyId, idempotencyKey, req.path, fingerprint);
 

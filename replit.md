@@ -64,7 +64,7 @@ Testing: do not add new test files unless absolutely necessary; only update exis
 - **`tsc --noEmit` duration**: Typechecking can take longer than 2 minutes, making in-loop verification difficult.
 - **Orphaned data**: Several `NOT VALID` foreign key constraints exist due to historical orphaned rows. Applying these as `VALIDATE` would require data cleanup decisions.
 - **`console.log` usage**: Server-side code still contains many `console.log` calls; use `serverLog` for production logging.
-- **`drizzle-kit push`**: Currently blocked by schema drift; direct SQL in `server/index.ts` is the active migration method.
+- **Schema**: owned by numbered migrations in `migrations/`, applied with `npm run db:migrate`; the server only verifies it at startup. `drizzle-kit push` is not used (see `docs/database-migrations.md`).
 
 ## Pointers
 - **Shadcn UI Docs**: [https://ui.shadcn.com/docs](https://ui.shadcn.com/docs)

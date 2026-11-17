@@ -11,8 +11,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { pool } from "../server/db";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
-import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "brwsync";
@@ -47,8 +45,6 @@ async function quantity(stockItemId: number, locationId = ctx.locationId): Promi
 beforeAll(async () => {
   process.env.OFFLINE_BROWSER_SYNC_ENABLED = "1";
   ctx = await seedTestData(PREFIX);
-  await ensurePhase9CloudEventSchema(pool);
-  await ensurePhase9StockItemMapSchema(pool);
   const group = await pool.query("SELECT id FROM stock_groups WHERE company_id = $1 ORDER BY id LIMIT 1", [
     ctx.companyId,
   ]);
