@@ -3,15 +3,10 @@ import type { Pool, PoolClient } from "pg";
 import { pool } from "../../db";
 import { normalizeOpeningBalanceCurrency } from "./openingBalanceCurrency";
 import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
+import { ownKey } from "../../lib/sqlTextGuards";
 
 export type HistoricalRepairKind =
-  | "voucherEntry"
-  | "ledger"
-  | "bank"
-  | "customer"
-  | "supplier"
-  | "employee"
-  | "fixedAsset";
+  "voucherEntry" | "ledger" | "bank" | "customer" | "supplier" | "employee" | "fixedAsset";
 
 export interface HistoricalRepairInput {
   kind: HistoricalRepairKind;
@@ -230,6 +225,7 @@ async function loadOpeningCase(
   id: number,
   client: Pool | PoolClient = pool
 ): Promise<HistoricalRepairCase | null> {
+  if (!ownKey(OPENING_CONFIG, kind)) throw new Error("HISTORICAL_REPAIR_KIND_INVALID");
   const config = OPENING_CONFIG[kind];
   const clauses = ["target.id = $1"];
   if (config.companyColumn) clauses.push(`target.${config.companyColumn} = $2`);
@@ -438,6 +434,7 @@ async function applyPlanItem(client: PoolClient, companyId: number, item: Histor
     );
     return;
   }
+  if (!ownKey(OPENING_CONFIG, item.input.kind)) throw new Error("HISTORICAL_REPAIR_KIND_INVALID");
   const config = OPENING_CONFIG[item.input.kind];
   const assignments = [
     `${config.amountColumn} = $1`,

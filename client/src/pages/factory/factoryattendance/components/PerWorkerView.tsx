@@ -23,7 +23,12 @@ import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, Chevr
 
 import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
 import { AttendanceAdminApprovalDialog } from "./AttendanceAdminApprovalDialog";
-import { attendancePastDates, canSkipAttendanceApproval, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
+import {
+  attendancePastDates,
+  canSkipAttendanceApproval,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "../attendanceEditPolicy";
 import { generateDateRange } from "../utils";
 import { SummaryCard } from "./SummaryCard";
 
@@ -159,9 +164,10 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && !canEditPastWithoutPassword(attendancePastDates(generateDateRange(startDate, endDate))) && (
-        <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
-      )}
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 &&
+        !canEditPastWithoutPassword(attendancePastDates(generateDateRange(startDate, endDate))) && (
+          <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
+        )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
