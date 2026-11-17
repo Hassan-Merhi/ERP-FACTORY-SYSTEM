@@ -41,7 +41,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { SearchField } from "@/components/ui/search-field";
 import { ErrorState } from "@/components/ui/page-state";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface Employee {
   id: number;
@@ -669,8 +669,7 @@ export default function FactoryEmployees() {
             (() => {
               const liveEmp = employees.find((e) => e.id === endingContractEmployee.id) ?? endingContractEmployee;
               const balance = parseFloat(liveEmp.currentBalance || "0");
-              const fmtBal = (v: number) =>
-                formatMoneyDisplay(v, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              const fmtBal = (v: number) => formatUsd(v, 2);
               return (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">

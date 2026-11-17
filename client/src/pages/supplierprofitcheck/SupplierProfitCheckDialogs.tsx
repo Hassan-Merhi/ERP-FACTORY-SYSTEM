@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2, Package, Plus, Save, Upload } from "lucide-react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -298,17 +298,10 @@ function ConfirmProformaDialog({ model }: { model: ProfitModel }) {
           <div className="grid grid-cols-2 gap-2">
             <Summary label="Items Selected" value={summary.selectedCount} />
             <Summary label="Total Quantity" value={summary.totalQty.toLocaleString()} />
-            <Summary
-              label="Total Landing Cost"
-              value={formatMoneyDisplay(summary.totalLandingCost, {
-                currency: "USD",
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            />
+            <Summary label="Total Landing Cost" value={formatUsd(summary.totalLandingCost, 2)} />
             <Summary
               label="Cost Profit"
-              value={`${summary.totalCostProfit < 0 ? "-" : ""}${formatMoneyDisplay(Math.abs(summary.totalCostProfit), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              value={`${summary.totalCostProfit < 0 ? "-" : ""}${formatUsd(Math.abs(summary.totalCostProfit), 2)}`}
               danger={summary.totalCostProfit < 0}
             />
             <Summary label="Losing Items" value={summary.losingCount} danger={summary.losingCount > 0} />

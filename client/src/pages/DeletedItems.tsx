@@ -54,7 +54,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import type { LucideIcon } from "lucide-react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface DeletedItem {
   id: number;
@@ -496,22 +496,12 @@ export default function DeletedItems() {
                               )}
                               {item.type === "orphanedPosSale" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.locationName} |{" "}
-                                  {formatMoneyDisplay(item.amount ?? 0, {
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 3,
-                                  })}
+                                  {item.locationName} | {formatUsd(item.amount ?? 0, 0, 3)}
                                 </span>
                               )}
                               {item.type === "voucher" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.voucherType} |{" "}
-                                  {formatMoneyDisplay(item.amount ?? 0, {
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 3,
-                                  })}
+                                  {item.voucherType} | {formatUsd(item.amount ?? 0, 0, 3)}
                                 </span>
                               )}
                             </div>
@@ -767,13 +757,7 @@ export default function DeletedItems() {
               {detailItem.amount !== undefined && (
                 <div>
                   <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-medium">
-                    {formatMoneyDisplay(detailItem.amount ?? 0, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 3,
-                    })}
-                  </p>
+                  <p className="font-medium">{formatUsd(detailItem.amount ?? 0, 0, 3)}</p>
                 </div>
               )}
               {detailItem.date && (
@@ -822,20 +806,12 @@ export default function DeletedItems() {
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.debitAmount || "0") > 0
-                                    ? formatMoneyDisplay(parseFloat(entry.debitAmount || "0"), {
-                                        currency: "USD",
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      })
+                                    ? formatUsd(parseFloat(entry.debitAmount || "0"), 2)
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.creditAmount || "0") > 0
-                                    ? formatMoneyDisplay(parseFloat(entry.creditAmount || "0"), {
-                                        currency: "USD",
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      })
+                                    ? formatUsd(parseFloat(entry.creditAmount || "0"), 2)
                                     : "—"}
                                 </td>
                               </tr>
@@ -845,15 +821,15 @@ export default function DeletedItems() {
                             <tr className="bg-muted/50 font-semibold">
                               <td className="px-3 py-2 text-xs">Total</td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                {formatMoneyDisplay(
+                                {formatUsd(
                                   voucherEntries.reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0),
-                                  { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                                  2
                                 )}
                               </td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                {formatMoneyDisplay(
+                                {formatUsd(
                                   voucherEntries.reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0),
-                                  { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                                  2
                                 )}
                               </td>
                             </tr>

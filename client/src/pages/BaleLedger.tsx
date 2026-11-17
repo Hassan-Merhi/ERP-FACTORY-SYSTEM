@@ -19,7 +19,7 @@ import {
   Layers,
   Truck,
 } from "lucide-react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface BaleDetail {
   ref: string;
@@ -63,9 +63,9 @@ function fmtMoney(n: number): string {
   if (n === 0) return "$0";
   const rounded = Math.round(n * 100) / 100;
   if (rounded % 1 === 0) {
-    return formatMoneyDisplay(rounded, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return formatUsd(rounded, 0);
   }
-  return formatMoneyDisplay(rounded, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(rounded, 2);
 }
 
 function fmtKg(n: number) {

@@ -6,7 +6,7 @@
  * banners, and cache invalidation — lives here so no panel re-implements it.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
@@ -35,7 +35,7 @@ export function makeRequestId(prefix: string): string {
 export function money(value: unknown): string {
   const amount = Number(value ?? 0);
   const normalized = Number.isFinite(amount) ? amount : 0;
-  return formatMoneyDisplay(normalized, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(normalized, 2);
 }
 
 export function errorMessage(error: unknown): string {

@@ -24,7 +24,7 @@ import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SearchField } from "@/components/ui/search-field";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface ArticleRow {
   articleCode: string;
@@ -958,15 +958,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                     )}
                   </td>
                   <td className="px-2 py-3 text-center font-mono tabular-nums text-foreground" colSpan={2}>
-                    {totalValue > 0 ? (
-                      formatMoneyDisplay(totalValue, {
-                        currency: "USD",
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
+                    {totalValue > 0 ? formatUsd(totalValue, 2) : <span className="text-muted-foreground/40">—</span>}
                   </td>
                 </tr>
               </tfoot>

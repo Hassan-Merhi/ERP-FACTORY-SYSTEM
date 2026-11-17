@@ -2,7 +2,7 @@ import { BadgeCheck, Boxes, FileCheck2, FileText, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import type { CustomerOrder } from "./types";
 import { cn } from "@/lib/utils";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd as formatUsdAmount } from "@/lib/moneyDisplay";
 
 const fmtNum = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 1 });
 const num = (value: string | number | null | undefined) => {
@@ -78,7 +78,7 @@ function Card({
 
 const formatUsd = (orders: CustomerOrder[]) => {
   const amount = orders.reduce((sum, order) => sum + num(order.grandTotal), 0);
-  return formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsdAmount(amount, 2);
 };
 
 function caption(orders: CustomerOrder[]) {

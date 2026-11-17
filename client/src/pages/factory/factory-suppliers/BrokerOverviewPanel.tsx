@@ -18,12 +18,11 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { CurrencyBalance, SupplierWithBalance } from "./factorySupplierTypes";
 import { DirectContainer } from "./AssignContainersDialog";
 
-const usdText = (amount: number | string) =>
-  formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usdText = (amount: number | string) => formatUsd(amount, 2);
 
 interface BrokerOverviewLedgerSection {
   currencyCode: string;

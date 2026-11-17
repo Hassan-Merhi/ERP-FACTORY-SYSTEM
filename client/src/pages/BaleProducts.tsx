@@ -34,7 +34,7 @@ import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { BaleProductsDialog1 } from "./baleproducts/components/BaleProductsDialog1";
 import { BaleProductsDialog2 } from "./baleproducts/components/BaleProductsDialog2";
 import { BaleProductsView1 } from "./baleproducts/components/BaleProductsView1";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 /** Standalone route entry. Route components receive router props, so the hub uses `BaleProductsContent` directly. */
 export default function BaleProducts() {
@@ -389,11 +389,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                                     {!hideAvgRate && (
                                       <td className="px-4 py-1.5 text-right tabular-nums text-xs">
                                         {parseFloat(p.productionPrice || "0") > 0 ? (
-                                          formatMoneyDisplay(parseFloat(p.productionPrice!), {
-                                            currency: "USD",
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          })
+                                          formatUsd(parseFloat(p.productionPrice!), 2)
                                         ) : (
                                           <span className="text-muted-foreground">—</span>
                                         )}
@@ -402,11 +398,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                                     {!hideSellingPriceBP && (
                                       <td className="px-4 py-1.5 text-right tabular-nums text-xs">
                                         {parseFloat(p.sellingPrice || "0") > 0 ? (
-                                          formatMoneyDisplay(parseFloat(p.sellingPrice!), {
-                                            currency: "USD",
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          })
+                                          formatUsd(parseFloat(p.sellingPrice!), 2)
                                         ) : (
                                           <span className="text-muted-foreground">—</span>
                                         )}

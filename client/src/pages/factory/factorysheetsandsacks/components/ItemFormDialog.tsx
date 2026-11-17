@@ -22,14 +22,9 @@ import { Textarea } from "@/components/ui/textarea";
 import type { SheetsAndSacksItem } from "../types";
 import { TYPES } from "../utils";
 import { ColorPicker } from "./ColorPicker";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
-const usd = (value: string | number) =>
-  formatMoneyDisplay(parseFloat(String(value) || "0"), {
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const usd = (value: string | number) => formatUsd(parseFloat(String(value) || "0"), 2);
 
 export // ─── Item Form Dialog ─────────────────────────────────────────────────────────
 function ItemFormDialog({

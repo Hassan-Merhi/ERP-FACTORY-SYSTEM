@@ -1,5 +1,5 @@
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useState } from "react";
 import { ChevronUp, ChevronDown, ArrowUp, Filter, Truck } from "lucide-react";
 import { fmtD } from "./helpers";
@@ -60,9 +60,9 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
               <span className="ml-1 text-emerald-600 dark:text-emerald-400">({prepaidTransitRows.length} prepaid)</span>
             )}{" "}
             ·{" "}
-            {formatMoneyDisplay(
+            {formatUsd(
               remainingTransitRows.reduce((s, r) => s + r.dutyFee, 0),
-              { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }
+              0
             )}{" "}
             upcoming duty
           </span>
@@ -135,13 +135,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
                       <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
                       <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
                       <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-                      <td className="py-0.5 px-2 text-right">
-                        {formatMoneyDisplay(r.dutyFee, {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        })}
-                      </td>
+                      <td className="py-0.5 px-2 text-right">{formatUsd(r.dutyFee, 0)}</td>
                       <td className="py-0.5 px-1 text-center">
                         {canDesignate && (
                           <button

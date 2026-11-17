@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import type { AuthMe, ApiListRow } from "@shared/apiTypes";
 import type { LucideIcon } from "lucide-react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 type Period =
   "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
@@ -111,11 +111,7 @@ function getDateRange(
 }
 
 function formatAmount(n: number) {
-  return formatMoneyDisplay(Math.abs(Math.round(n)), {
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+  return formatUsd(Math.abs(Math.round(n)), 0);
 }
 
 function AmountCell({ value, alwaysGreen }: { value: number; alwaysGreen?: boolean }) {

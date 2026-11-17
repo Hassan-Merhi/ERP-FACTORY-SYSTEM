@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatNumber";
 import type { Location } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface OffloadDialogProps {
   open: boolean;
@@ -716,35 +716,19 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
                 {manualCharges > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Manual Charges</span>
-                    <span className="font-medium tabular-nums">
-                      {formatMoneyDisplay(manualCharges, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
+                    <span className="font-medium tabular-nums">{formatUsd(manualCharges, 0, 2)}</span>
                   </div>
                 )}
                 {poChargesTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">PO Charges (Freight, Docs, etc.)</span>
-                    <span className="font-medium tabular-nums">
-                      {formatMoneyDisplay(poChargesTotal, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
+                    <span className="font-medium tabular-nums">{formatUsd(poChargesTotal, 0, 2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                   <span>Total Charges</span>
                   <span className="tabular-nums" data-testid="text-total-charges">
-                    {formatMoneyDisplay(totalCharges, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatUsd(totalCharges, 0, 2)}
                   </span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
@@ -756,11 +740,7 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
                 <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                   <span>Cost Added per Bale</span>
                   <span className="tabular-nums" data-testid="text-cost-per-bale">
-                    {formatMoneyDisplay(additionalCostPerBale, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatUsd(additionalCostPerBale, 0, 2)}
                   </span>
                 </div>
               </div>

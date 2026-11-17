@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ExternalLink, Ship } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface InvoiceContainerRow {
   id: number;
@@ -138,11 +138,7 @@ export default function FactoryContainerTracking() {
                     data-testid={`text-cost-${row.id}`}
                   >
                     {row.grandTotal ? (
-                      formatMoneyDisplay(parseFloat(row.grandTotal), {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })
+                      formatUsd(parseFloat(row.grandTotal), 0, 2)
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

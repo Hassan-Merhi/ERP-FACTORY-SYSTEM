@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, type SpExcelImportContainer } from "@shared/spContainerExcelImport";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface SpExcelParseResponse {
   fileName: string;
@@ -21,7 +21,7 @@ interface SpContainerExcelImportProps {
 }
 
 function usd(value: number): string {
-  return formatMoneyDisplay(value, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(value, 2);
 }
 
 /**

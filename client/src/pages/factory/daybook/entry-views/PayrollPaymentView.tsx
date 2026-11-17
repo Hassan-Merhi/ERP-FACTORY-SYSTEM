@@ -10,10 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { BadgeVariant, DaybookEntry, DisplayDate, PayrollSummary } from "./types";
 import { apiNumber } from "./types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
-const usd = (value: number) =>
-  formatMoneyDisplay(value, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const usd = (value: number) => formatUsd(value, 0, 2);
 
 export function PayrollPaymentView({
   entry,

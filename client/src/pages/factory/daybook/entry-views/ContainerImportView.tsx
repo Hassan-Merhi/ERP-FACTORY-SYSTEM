@@ -12,7 +12,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { currencySymbol } from "../daybookUtils";
 import type { ContainerImportDetail, DaybookEntry, DisplayDate, Navigate, SupplierBalance } from "./types";
 import { apiNumber } from "./types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function ContainerImportView({
   entry,
@@ -63,13 +63,7 @@ export function ContainerImportView({
                   {balanceUsd !== null && (
                     <p className="text-sm text-muted-foreground mt-0.5">
                       Balance:{" "}
-                      <span className="font-mono font-medium text-foreground">
-                        {formatMoneyDisplay(balanceUsd, {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
+                      <span className="font-mono font-medium text-foreground">{formatUsd(balanceUsd, 0, 2)}</span>
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground mt-0.5">Container: {c.containerNumber}</p>
@@ -190,13 +184,7 @@ export function ContainerImportView({
                       {formatNumber(grandTotal)}
                     </div>
                     {c.currencyCode !== "USD" && grandTotalUsd > 0 && (
-                      <div className="text-xs text-muted-foreground font-normal">
-                        {formatMoneyDisplay(grandTotalUsd, {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        })}
-                      </div>
+                      <div className="text-xs text-muted-foreground font-normal">{formatUsd(grandTotalUsd, 0, 2)}</div>
                     )}
                   </td>
                 </tr>

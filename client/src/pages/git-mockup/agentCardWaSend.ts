@@ -1,5 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { fmtD, clientReallocate } from "./helpers";
 import type { AgentDutySummary, ApiAllocatedRow, ApiAllocStatus } from "./types";
 
@@ -20,8 +20,7 @@ export interface SendAgentDutyWaParams {
   setWaSending: (b: boolean) => void;
 }
 
-const usd0 = (amount: number) =>
-  formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const usd0 = (amount: number) => formatUsd(amount, 0);
 
 export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Promise<void> {
   const { agent, customOrder, dbPrepaidIds, adjustments, transitTransporterFilter, toast, setWaSending } = params;

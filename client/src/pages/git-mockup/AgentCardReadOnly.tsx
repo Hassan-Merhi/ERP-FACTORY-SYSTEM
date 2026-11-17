@@ -1,5 +1,5 @@
 import type { AgentDutySummary } from "./types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { fmt, fmtD } from "./helpers";
 import { Building2 } from "lucide-react";
 
@@ -40,15 +40,7 @@ export function AgentCardReadOnly({ agent }: { agent: AgentDutySummary }) {
       <div className="grid grid-cols-2 gap-2.5 border-b border-violet-200/50 bg-violet-50/40 p-3 text-sm dark:border-violet-500/15 dark:bg-slate-950/70 sm:grid-cols-4 [&>div]:rounded-xl [&>div]:border [&>div]:border-border/70 [&>div]:bg-background/90 [&>div]:p-3 dark:[&>div]:bg-violet-500/10">
         <div>
           <p className="text-xs text-muted-foreground">Ledger balance</p>
-          <strong>
-            {agent.ledgerBalance === null
-              ? "—"
-              : formatMoneyDisplay(agent.ledgerBalance, {
-                  currency: "USD",
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-          </strong>
+          <strong>{agent.ledgerBalance === null ? "—" : formatUsd(agent.ledgerBalance, 2)}</strong>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Container duty</p>
@@ -60,15 +52,7 @@ export function AgentCardReadOnly({ agent }: { agent: AgentDutySummary }) {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Open balance</p>
-          <strong>
-            {agent.openBalance === null
-              ? "—"
-              : formatMoneyDisplay(agent.openBalance, {
-                  currency: "USD",
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-          </strong>
+          <strong>{agent.openBalance === null ? "—" : formatUsd(agent.openBalance, 2)}</strong>
         </div>
       </div>
       <div className="mx-3 mb-3 overflow-x-auto rounded-xl border border-border/70 dark:border-violet-500/20">

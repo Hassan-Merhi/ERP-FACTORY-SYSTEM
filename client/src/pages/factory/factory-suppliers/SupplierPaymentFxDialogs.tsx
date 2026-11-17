@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowRightLeft, Globe, Info } from "lucide-react";
 import { SupplierWithBalance } from "./factorySupplierTypes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface SupplierPaymentFxDialogsProps {
   paymentDialogSupplier: SupplierWithBalance | null;
@@ -75,7 +75,7 @@ export function SupplierPaymentFxDialogs({
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
               {paymentDialogSupplier
-                ? `Pay to: ${paymentDialogSupplier.name} — Balance: ${formatMoneyDisplay(parseFloat(paymentDialogSupplier.totalValue), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                ? `Pay to: ${paymentDialogSupplier.name} — Balance: ${formatUsd(parseFloat(paymentDialogSupplier.totalValue), 2)}`
                 : ""}
             </DialogDescription>
           </DialogHeader>

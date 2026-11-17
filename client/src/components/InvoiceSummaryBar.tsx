@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface OrderLike {
   status: string;
@@ -171,9 +171,7 @@ export function InvoiceSummaryBar({
         </span>
         {!hideTotalsUsd && (
           <span>
-            <span className="font-medium text-foreground">
-              {formatMoneyDisplay(totalAmount, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-            </span>
+            <span className="font-medium text-foreground">{formatUsd(totalAmount, 0, 2)}</span>
           </span>
         )}
       </div>
@@ -204,13 +202,7 @@ export function InvoiceSummaryBar({
                   </span>
                   {!hideTotalsUsd && (
                     <span>
-                      <span className="font-medium text-foreground">
-                        {formatMoneyDisplay(amount, {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
+                      <span className="font-medium text-foreground">{formatUsd(amount, 0, 2)}</span>
                     </span>
                   )}
                 </div>
@@ -246,11 +238,7 @@ export function InvoiceSummaryBar({
                       <span className="text-muted-foreground/70">
                         est.{" "}
                         <span className="font-medium text-foreground">
-                          {formatMoneyDisplay(loadingStats.remainingPrice, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatUsd(loadingStats.remainingPrice, 0, 2)}
                         </span>
                       </span>
                     )}
@@ -278,11 +266,7 @@ export function InvoiceSummaryBar({
                       <span className="text-muted-foreground/70">
                         est.{" "}
                         <span className="font-medium text-foreground">
-                          {formatMoneyDisplay(loadingStats.overloadedPrice, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatUsd(loadingStats.overloadedPrice, 0, 2)}
                         </span>
                       </span>
                     )}
@@ -309,11 +293,7 @@ export function InvoiceSummaryBar({
                     {!hideTotalsUsd && (
                       <span>
                         <span className="font-medium text-foreground">
-                          {formatMoneyDisplay(loadingStats.underLoadedPrice, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatUsd(loadingStats.underLoadedPrice, 0, 2)}
                         </span>
                       </span>
                     )}
@@ -343,11 +323,7 @@ export function InvoiceSummaryBar({
                       <span className="text-muted-foreground/70">
                         est.{" "}
                         <span className="font-medium text-foreground">
-                          {formatMoneyDisplay(loadingStats.notRequestedPrice, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatUsd(loadingStats.notRequestedPrice, 0, 2)}
                         </span>
                       </span>
                     )}

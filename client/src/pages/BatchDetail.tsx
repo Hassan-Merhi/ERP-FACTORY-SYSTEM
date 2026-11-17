@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,8 +45,7 @@ interface BatchDetailProps {
   onDeleted?: () => void;
 }
 
-const costPerKgText = (value: number | string) =>
-  formatMoneyDisplay(value, { currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const costPerKgText = (value: number | string) => formatUsd(value, 4);
 
 export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailProps) {
   const { formatDisplayDate } = useDateFormat();

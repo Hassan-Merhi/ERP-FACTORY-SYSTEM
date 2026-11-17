@@ -1,5 +1,5 @@
 import type { CSSProperties, RefObject } from "react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { formatNumber } from "@/lib/formatNumber";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
@@ -20,11 +20,9 @@ interface MixBatchWhatsAppPreviewProps {
   allocations: Record<string, number> | null;
 }
 
-const formatMoney = (n: number): string =>
-  formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatMoney = (n: number): string => formatUsd(n, 2);
 const formatWeight = (n: number): string => formatNumber(n, 3);
-const formatRate = (n: number): string =>
-  formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const formatRate = (n: number): string => formatUsd(n, 4);
 const cell: CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #334155" };
 
 /**

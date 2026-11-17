@@ -17,7 +17,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchField } from "@/components/ui/search-field";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const AUTOSAVE_KEY = "proforma-autosave-enabled";
 const AUTOSAVE_DELAY_MS = 1500;
@@ -389,13 +389,7 @@ export default function ProformaAddLine() {
                     </p>
                   )}
                   {item.salePrice && parseFloat(item.salePrice) > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {formatMoneyDisplay(parseFloat(item.salePrice), {
-                        currency: "USD",
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{formatUsd(parseFloat(item.salePrice), 2)}</p>
                   )}
                   {item.stockGroup?.name && (
                     <Badge variant="secondary" className="text-xs mt-1 w-fit no-default-active-elevate">

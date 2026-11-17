@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Package } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export interface DirectContainer {
   id: number;
@@ -39,8 +39,7 @@ function fmtAmt(v: string | null, cc: string) {
   if (!v) return null;
   const n = parseFloat(v);
   if (isNaN(n)) return null;
-  if (cc === "USD")
-    return formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (cc === "USD") return formatUsd(n, 2);
   return `${cc} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 

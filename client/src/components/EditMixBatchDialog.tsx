@@ -27,7 +27,7 @@ import {
   type StoredMixBatchSource,
   type SourceEditReview,
 } from "./editMixBatchSources";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function EditMixBatchDialog({
   batch,
@@ -495,34 +495,19 @@ export function EditMixBatchDialog({
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Recorded total cost</p>
-                  <p className="font-mono font-semibold">
-                    {formatMoneyDisplay(recordedBatchCost.totalCost, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 4,
-                    })}
-                  </p>
+                  <p className="font-mono font-semibold">{formatUsd(recordedBatchCost.totalCost, 0, 4)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Recorded blended cost/kg</p>
                   <p className="font-mono font-semibold" data-testid="text-edit-recorded-blended-cost">
-                    {formatMoneyDisplay(recordedBatchCost.costPerKg, {
-                      currency: "USD",
-                      minimumFractionDigits: 4,
-                      maximumFractionDigits: 4,
-                    })}
+                    {formatUsd(recordedBatchCost.costPerKg, 4)}
                   </p>
                 </div>
               </div>
               {currentSources && savedSourceDifference > 0.02 && (
                 <p role="alert" className="text-xs text-destructive">
-                  Recorded source total differs from the saved batch header by{" "}
-                  {formatMoneyDisplay(savedSourceDifference, {
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  })}
-                  . Review before changing costs.
+                  Recorded source total differs from the saved batch header by {formatUsd(savedSourceDifference, 0, 2)}.
+                  Review before changing costs.
                 </p>
               )}
             </div>
@@ -609,11 +594,7 @@ export function EditMixBatchDialog({
                       {availableSuppliers?.map((stock) => (
                         <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
                           {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @{" "}
-                          {formatMoneyDisplay(parseFloat(stock.costPerKgUsd || stock.costPerKg || "0"), {
-                            currency: "USD",
-                            minimumFractionDigits: 4,
-                            maximumFractionDigits: 4,
-                          })}
+                          {formatUsd(parseFloat(stock.costPerKgUsd || stock.costPerKg || "0"), 4)}
                           /kg USD)
                         </SelectItem>
                       ))}
@@ -638,13 +619,8 @@ export function EditMixBatchDialog({
                         const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
                         return (
                           <SelectItem key={b.id} value={b.id.toString()}>
-                            {b.name || b.batchCode} ({formatNumber(remaining)} kg @{" "}
-                            {formatMoneyDisplay(parseFloat(b.costPerKg), {
-                              currency: "USD",
-                              minimumFractionDigits: 4,
-                              maximumFractionDigits: 4,
-                            })}
-                            /kg)
+                            {b.name || b.batchCode} (
+                            {`${formatNumber(remaining)} kg @ ${formatUsd(parseFloat(b.costPerKg), 4)}/kg`})
                           </SelectItem>
                         );
                       })}
@@ -727,23 +703,14 @@ export function EditMixBatchDialog({
                                     : "Current supplier rate, used only for an edit estimate"
                                 }
                               >
-                                {formatMoneyDisplay(sel.costPerKg, {
-                                  currency: "USD",
-                                  minimumFractionDigits: 4,
-                                  maximumFractionDigits: 4,
-                                })}
+                                {formatUsd(sel.costPerKg, 4)}
                               </span>
                               {!historicalSourcesLocked && originalSupplierRates.has(sel.sourceId) && (
                                 <div
                                   className="text-[11px] text-muted-foreground"
                                   title="Saved weighted-average supplier cost in this batch"
                                 >
-                                  Recorded:{" "}
-                                  {formatMoneyDisplay(originalSupplierRates.get(sel.sourceId)!, {
-                                    currency: "USD",
-                                    minimumFractionDigits: 4,
-                                    maximumFractionDigits: 4,
-                                  })}
+                                  Recorded: {formatUsd(originalSupplierRates.get(sel.sourceId)!, 4)}
                                 </div>
                               )}
                             </div>
@@ -753,21 +720,11 @@ export function EditMixBatchDialog({
                               title="Recorded cost of the upstream batch. Only its source/weight can be changed."
                               data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
                             >
-                              {formatMoneyDisplay(sel.costPerKg, {
-                                currency: "USD",
-                                minimumFractionDigits: 4,
-                                maximumFractionDigits: 4,
-                              })}
+                              {formatUsd(sel.costPerKg, 4)}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {formatMoneyDisplay(sel.totalCost, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 4,
-                          })}
-                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{formatUsd(sel.totalCost, 0, 4)}</TableCell>
                         <TableCell>
                           <Button
                             type="button"
@@ -805,11 +762,7 @@ export function EditMixBatchDialog({
                 <p className="text-2xl font-bold font-mono">
                   {hasMissingCurrentRates
                     ? "Unavailable"
-                    : formatMoneyDisplay(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 4,
-                      })}
+                    : formatUsd(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 0, 4)}
                 </p>
               </div>
               <div>
@@ -819,11 +772,7 @@ export function EditMixBatchDialog({
                 <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">
                   {hasMissingCurrentRates
                     ? "Unavailable"
-                    : formatMoneyDisplay(historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg, {
-                        currency: "USD",
-                        minimumFractionDigits: 4,
-                        maximumFractionDigits: 4,
-                      })}
+                    : formatUsd(historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg, 4)}
                 </p>
               </div>
             </div>
@@ -882,36 +831,21 @@ export function EditMixBatchDialog({
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Saved USD</p>
-                        <p className="font-mono">
-                          {formatMoneyDisplay(Number(sourceReview.recordedTotalCost), {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 4,
-                          })}
-                        </p>
+                        <p className="font-mono">{formatUsd(Number(sourceReview.recordedTotalCost), 0, 4)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Estimated USD</p>
                         <p className="font-mono">
                           {sourceReview.estimatedTotalCost == null
                             ? "Unavailable"
-                            : formatMoneyDisplay(Number(sourceReview.estimatedTotalCost), {
-                                currency: "USD",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 4,
-                              })}
+                            : formatUsd(Number(sourceReview.estimatedTotalCost), 0, 4)}
                         </p>
                       </div>
                     </div>
                     {sourceReview.estimatedDeltaUsd != null && (
                       <p className="text-xs text-muted-foreground">
-                        Estimated valuation difference:{" "}
-                        {formatMoneyDisplay(Number(sourceReview.estimatedDeltaUsd), {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 4,
-                        })}{" "}
-                        USD. The server recalculates the cost during the final transaction.
+                        Estimated valuation difference: {formatUsd(Number(sourceReview.estimatedDeltaUsd), 0, 4)} USD.
+                        The server recalculates the cost during the final transaction.
                       </p>
                     )}
                     {sourceReview.warnings.map((warning, i) => (

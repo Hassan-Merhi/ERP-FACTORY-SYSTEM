@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCheck, Coins, Filter, Loader2, LockKeyhole, SlidersHorizontal, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -70,8 +70,7 @@ interface BonusResponse {
 }
 const EMPTY_BONUS_ROWS: BonusRow[] = [];
 const rowKey = (row: BonusRow) => row.date + ":" + row.workerId;
-const money = (amount: number) =>
-  formatMoneyDisplay(amount, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (amount: number) => formatUsd(amount, 2);
 const count = (amount: number) => amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
 async function api<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const response = await factoryApiRequest(method, path, body);

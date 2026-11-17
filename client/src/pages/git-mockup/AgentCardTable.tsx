@@ -1,5 +1,5 @@
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronsUp, ArrowUp, ArrowDown, ArrowLeftRight, XIcon } from "lucide-react";
@@ -112,13 +112,9 @@ export function AgentCardTable(props: AgentCardTableProps) {
               <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
               <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
               <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-              <td className="py-0.5 px-2 text-right">
-                {formatMoneyDisplay(r.dutyFee, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </td>
+              <td className="py-0.5 px-2 text-right">{formatUsd(r.dutyFee, 0)}</td>
               <td className="py-0.5 px-2 text-center text-muted-foreground">—</td>
-              <td className="py-0.5 px-2 text-right font-semibold">
-                {formatMoneyDisplay(r.dutyFee, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </td>
+              <td className="py-0.5 px-2 text-right font-semibold">{formatUsd(r.dutyFee, 0)}</td>
               <td className="py-0.5 px-2 text-center">
                 <Badge
                   variant="outline"
@@ -184,29 +180,11 @@ export function AgentCardTable(props: AgentCardTableProps) {
                 <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
                 <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
                 <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-                <td className="py-0.5 px-2 text-right">
-                  {formatMoneyDisplay(r.dutyFee, {
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })}
-                </td>
+                <td className="py-0.5 px-2 text-right">{formatUsd(r.dutyFee, 0)}</td>
                 <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                  {r.clearedAmount > 0
-                    ? formatMoneyDisplay(r.clearedAmount, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })
-                    : "—"}
+                  {r.clearedAmount > 0 ? formatUsd(r.clearedAmount, 0) : "—"}
                 </td>
-                <td className="py-0.5 px-2 text-right font-semibold">
-                  {formatMoneyDisplay(r.remainingAmount, {
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })}
-                </td>
+                <td className="py-0.5 px-2 text-right font-semibold">{formatUsd(r.remainingAmount, 0)}</td>
                 <td className="py-0.5 px-2 text-center">
                   {r.allocationStatus === "Partially Cleared" ? (
                     <Badge
@@ -275,11 +253,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                         Account Balance
                       </td>
                       <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                        {formatMoneyDisplay(Math.abs(rawBal), {
-                          currency: "USD",
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        })}
+                        {formatUsd(Math.abs(rawBal), 0)}
                         {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                       </td>
                       <td colSpan={2} />
@@ -301,11 +275,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                       Account Balance
                     </td>
                     <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                      {formatMoneyDisplay(adjAbs, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
+                      {formatUsd(adjAbs, 0)}
                       <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({adjLabel})</span>
                     </td>
                     <td colSpan={2} />
@@ -318,11 +288,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     Account Balance
                   </td>
                   <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
-                    {formatMoneyDisplay(Math.abs(rawBal), {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })}
+                    {formatUsd(Math.abs(rawBal), 0)}
                     {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                   </td>
                   <td />
@@ -343,19 +309,9 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">
-                      {formatMoneyDisplay(r.dutyFee, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
+                    <td className="py-0.5 px-2 text-right text-muted-foreground">{formatUsd(r.dutyFee, 0)}</td>
                     <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                      {formatMoneyDisplay(r.dutyFee, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
+                      {formatUsd(r.dutyFee, 0)}
                     </td>
                     <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
                     <td className="py-0.5 px-2 text-center">
@@ -380,21 +336,9 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
                     <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">
-                      {formatMoneyDisplay(r.dutyFee, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </td>
+                    <td className="py-0.5 px-2 text-right text-muted-foreground">{formatUsd(r.dutyFee, 0)}</td>
                     <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                      {r.clearedAmount > 0
-                        ? formatMoneyDisplay(r.clearedAmount, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          })
-                        : "—"}
+                      {r.clearedAmount > 0 ? formatUsd(r.clearedAmount, 0) : "—"}
                     </td>
                     <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
                     <td className="py-0.5 px-2 text-center">

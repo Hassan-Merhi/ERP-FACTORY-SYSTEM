@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/ui/page-state";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface Employee {
   id: number;
@@ -72,7 +72,7 @@ function fmt(val: string | number | null | undefined) {
 
 function fmtUsd(val: string | number | null | undefined) {
   const n = parseFloat(String(val || 0));
-  return formatMoneyDisplay(isNaN(n) ? 0 : n, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(isNaN(n) ? 0 : n, 2);
 }
 
 const today = () => new Date().toLocaleDateString("en-CA");

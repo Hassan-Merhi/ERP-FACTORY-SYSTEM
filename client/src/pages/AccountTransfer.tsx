@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check, Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 type Account = { id: number; name: string; code: string; accountType: string };
 type Entry = {
@@ -43,7 +43,7 @@ const ENTRY_PAGE_SIZE = 100;
 
 function fmtMoney(v: string | number | null | undefined) {
   if (!v || v === "0" || v === "0.00") return null;
-  return formatMoneyDisplay(Number(v), { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(Number(v), 2);
 }
 
 function AccountCombobox({
@@ -499,26 +499,12 @@ export default function AccountTransfer() {
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   {totalDebit > 0 && (
                     <span>
-                      Debit:{" "}
-                      <span className="font-medium text-foreground">
-                        {formatMoneyDisplay(totalDebit, {
-                          currency: "USD",
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 3,
-                        })}
-                      </span>
+                      Debit: <span className="font-medium text-foreground">{formatUsd(totalDebit, 2, 3)}</span>
                     </span>
                   )}
                   {totalCredit > 0 && (
                     <span>
-                      Credit:{" "}
-                      <span className="font-medium text-foreground">
-                        {formatMoneyDisplay(totalCredit, {
-                          currency: "USD",
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 3,
-                        })}
-                      </span>
+                      Credit: <span className="font-medium text-foreground">{formatUsd(totalCredit, 2, 3)}</span>
                     </span>
                   )}
                 </div>

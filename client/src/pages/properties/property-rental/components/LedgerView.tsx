@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 /**
  * LedgerView — extracted sub-component.
  *
@@ -458,13 +458,7 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums">
-                    {formatMoneyDisplay(p.amount, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
-                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -509,13 +503,7 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">
-                    {formatMoneyDisplay(p.amount, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
-                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>
@@ -561,13 +549,7 @@ function LedgerView({
                   <td className="px-2 py-1">
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-medium">
-                    {formatMoneyDisplay(p.amount, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
-                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums font-medium">{formatUsd(p.amount, 0, 2)}</td>
                   <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
                     {p.notes || ""}
                   </td>

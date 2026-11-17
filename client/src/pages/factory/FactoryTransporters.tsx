@@ -23,13 +23,13 @@ import { Trash2, Plus, ArrowLeft, TruckIcon } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const API = "/api/factory/transporters";
 
 function fmtUsd(n: number | null | undefined) {
   const value = n == null || isNaN(n) ? 0 : n;
-  return formatMoneyDisplay(value, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(value, 2);
 }
 
 type LedgerAccount = { id: number; name: string; accountType: string };

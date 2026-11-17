@@ -11,7 +11,7 @@
  *   GETs bypass every cache.
  */
 import { normalizeRetailImageUrl, normalizeRetailImageUrls } from "@/lib/retailImageUrl";
-import { formatMoneyDisplay, formatMoneyNumber } from "@/lib/moneyDisplay";
+import { formatMoneyDisplay, formatMoneyNumber, formatUsd } from "@/lib/moneyDisplay";
 import { findScopedTestId, focusScopedTestId } from "@/lib/scopedFocus";
 import { installForcedApiRefresh } from "@/lib/forcedApiRefresh";
 
@@ -69,6 +69,20 @@ describe("money display", () => {
     expect(formatMoneyNumber(1234.567, 0)).toBe("1,235");
     expect(formatMoneyNumber(1.5, -3)).toBe("2");
     expect(formatMoneyNumber(1.5, 99)).toBe("1.5");
+  });
+});
+
+describe("formatUsd", () => {
+  it("formats USD with fixed or bounded decimals and keeps the placeholder", () => {
+    expect(formatUsd(1234.5)).toBe("$1,234.50");
+    expect(formatUsd(1234.5, 0, 2)).toBe("$1,234.5");
+    expect(formatUsd(0.12345, 4)).toBe("$0.1235");
+    expect(formatUsd(1200, 0)).toBe("$1,200");
+    expect(formatUsd(null)).toBe("—");
+    expect(formatUsd("not a number")).toBe("—");
+    expect(formatUsd(-5, 2)).toBe(
+      formatMoneyDisplay(-5, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
   });
 });
 

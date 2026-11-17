@@ -20,7 +20,7 @@ import { Bell, CheckCircle, XCircle, ArrowRight, ExternalLink, CheckCheck, Loade
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ function getNavPath(item: NotificationItem, isFactory: boolean): string | null {
 function formatAmount(amount: string) {
   const n = parseFloat(amount);
   const decimals = Number.isInteger(n) ? 0 : 2;
-  return formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return formatUsd(n, decimals);
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────

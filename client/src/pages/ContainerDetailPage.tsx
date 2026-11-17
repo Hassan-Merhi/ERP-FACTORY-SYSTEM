@@ -33,20 +33,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import ContainerDetailERP from "./ContainerDetail";
 import type { SpContainerDetailResponse } from "./containers/types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 function fmt2(v: number | string | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n)
-    ? "$0.00"
-    : formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return isNaN(n) ? "$0.00" : formatUsd(n, 2);
 }
 
 function fmt4(v: number | string | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n)
-    ? "$0.0000"
-    : formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  return isNaN(n) ? "$0.0000" : formatUsd(n, 4);
 }
 
 const editSchema = z.object({

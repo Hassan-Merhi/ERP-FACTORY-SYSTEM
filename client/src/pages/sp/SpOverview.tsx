@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { useState } from "react";
@@ -68,11 +68,7 @@ interface SpSale {
 
 function money(value: unknown): string {
   const amount = Number(value ?? 0);
-  return formatMoneyDisplay(Number.isFinite(amount) ? amount : 0, {
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatUsd(Number.isFinite(amount) ? amount : 0, 2);
 }
 
 export default function SpOverview() {

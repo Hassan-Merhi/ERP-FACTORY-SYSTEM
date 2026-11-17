@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -467,13 +467,7 @@ export function AgentCard({
               </span>
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-muted-foreground">Upcoming Duty</p>
-                <p className="truncate text-lg font-bold tabular-nums text-foreground">
-                  {formatMoneyDisplay(upcomingDuty, {
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })}
-                </p>
+                <p className="truncate text-lg font-bold tabular-nums text-foreground">{formatUsd(upcomingDuty, 0)}</p>
               </div>
             </div>
           </div>
@@ -560,11 +554,7 @@ export function AgentCard({
                       )}
                     >
                       {a.type === "debit" ? "+" : "−"}
-                      {formatMoneyDisplay(a.amount, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
+                      {formatUsd(a.amount, 0)}
                     </span>
                     <Badge
                       variant="outline"
@@ -769,12 +759,7 @@ export function AgentCard({
             <DialogDescription>
               Select an in-transit container to swap in place of{" "}
               <span className="font-mono font-semibold">{replaceTarget?.containerNumber}</span> (
-              {formatMoneyDisplay(replaceTarget?.dutyFee ?? 0, {
-                currency: "USD",
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })}{" "}
-              duty).
+              {formatUsd(replaceTarget?.dutyFee ?? 0, 0)} duty).
             </DialogDescription>
           </DialogHeader>
           {replaceAmountWarning && (
@@ -783,22 +768,8 @@ export function AgentCard({
               <div className="flex-1">
                 <p className="font-semibold mb-1">Duty amounts differ — click again to confirm</p>
                 <p>
-                  Old:{" "}
-                  <span className="font-mono font-semibold">
-                    {formatMoneyDisplay(replaceAmountWarning.oldAmount, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })}
-                  </span>{" "}
-                  → New:{" "}
-                  <span className="font-mono font-semibold">
-                    {formatMoneyDisplay(replaceAmountWarning.newAmount, {
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })}
-                  </span>
+                  Old: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.oldAmount, 0)}</span> →
+                  New: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.newAmount, 0)}</span>
                 </p>
               </div>
             </div>
@@ -839,13 +810,7 @@ export function AgentCard({
                     </span>
                     <span className="text-muted-foreground grow">{r.supplierCode ?? r.supplierName ?? "—"}</span>
                     <span className="font-mono text-muted-foreground shrink-0">{r.numberPlate ?? ""}</span>
-                    <span className="font-semibold text-right shrink-0 w-20">
-                      {formatMoneyDisplay(r.dutyFee, {
-                        currency: "USD",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </span>
+                    <span className="font-semibold text-right shrink-0 w-20">{formatUsd(r.dutyFee, 0)}</span>
                     {amountsDiffer && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
                   </button>
                 );

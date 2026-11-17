@@ -16,14 +16,9 @@ import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarC
 
 import type { LogEntry, SheetsAndSacksItem } from "../types";
 import { DATE_PRESETS, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
-const usd = (value: string | number) =>
-  formatMoneyDisplay(parseFloat(String(value) || "0"), {
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const usd = (value: string | number) => formatUsd(parseFloat(String(value) || "0"), 2);
 
 export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
   const [preset, setPreset] = useState("week");

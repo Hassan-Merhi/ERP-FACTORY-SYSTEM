@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { Package } from "lucide-react";
 import { ErpListTable } from "@/erp-core";
 import { Input } from "@/components/ui/input";
@@ -149,13 +149,7 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.extraPerBale && (
         <TableCell className="text-right text-sm py-2.5">
           {model.extraCostPerBale > 0 ? (
-            <span className="font-mono text-amber-500">
-              {formatMoneyDisplay(model.extraCostPerBale, {
-                currency: "USD",
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
+            <span className="font-mono text-amber-500">{formatUsd(model.extraCostPerBale, 2)}</span>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -164,13 +158,7 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.landingCost && (
         <TableCell className="text-right text-sm font-medium py-2.5 bg-blue-500/5">
           {row.landingCost != null ? (
-            <span className="text-blue-600 dark:text-blue-400 tabular-nums">
-              {formatMoneyDisplay(row.landingCost, {
-                currency: "USD",
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
+            <span className="text-blue-600 dark:text-blue-400 tabular-nums">{formatUsd(row.landingCost, 2)}</span>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -195,17 +183,13 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.qtyToOrder && <QuantityCell row={row} model={model} />}
       {visibility.inventoryAvgCost && (
         <TableCell className="text-right text-sm font-mono text-muted-foreground py-2.5">
-          {formatMoneyDisplay(row.inventoryAvgCost, {
-            currency: "USD",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatUsd(row.inventoryAvgCost, 2)}
         </TableCell>
       )}
       {visibility.hassanPrice && (
         <TableCell className="text-right text-sm font-mono py-2.5">
           {row.configPrice > 0 ? (
-            formatMoneyDisplay(row.configPrice, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            formatUsd(row.configPrice, 2)
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -305,13 +289,7 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
     return (
       <div className="text-right">
         {row.groupSellingPrice != null ? (
-          <span className="font-mono text-sm">
-            {formatMoneyDisplay(row.groupSellingPrice, {
-              currency: "USD",
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </span>
+          <span className="font-mono text-sm">{formatUsd(row.groupSellingPrice, 2)}</span>
         ) : (
           <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">No Price</span>
         )}
@@ -331,12 +309,7 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
       />
       {model.manualAvgPrices[row.stockItemId] && row.avgSellingPrice != null && (
         <span className="text-[11px] text-muted-foreground leading-tight">
-          auto{" "}
-          {formatMoneyDisplay(row.avgSellingPrice, {
-            currency: "USD",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          auto {formatUsd(row.avgSellingPrice, 2)}
         </span>
       )}
     </div>
@@ -356,9 +329,7 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
   if (row.unresolved) {
     return row.poPrice != null ? (
       <div className="flex flex-col items-end gap-0.5">
-        <span className="font-mono text-sm text-amber-600 dark:text-amber-400">
-          {formatMoneyDisplay(row.poPrice, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
+        <span className="font-mono text-sm text-amber-600 dark:text-amber-400">{formatUsd(row.poPrice, 2)}</span>
         <span className="text-[11px] text-muted-foreground leading-tight">proforma price</span>
       </div>
     ) : (
@@ -380,10 +351,7 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
         />
       </div>
       {model.manualPoPrices[row.stockItemId] && row.poPrice != null && (
-        <span className="text-[11px] text-muted-foreground leading-tight">
-          auto{" "}
-          {formatMoneyDisplay(row.poPrice, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
+        <span className="text-[11px] text-muted-foreground leading-tight">auto {formatUsd(row.poPrice, 2)}</span>
       )}
       {!model.manualPoPrices[row.stockItemId] && row.poPriceSource === "any_po_fallback" && (
         <span className="text-[11px] text-amber-500/80 leading-tight">any supplier</span>
@@ -447,13 +415,7 @@ function ProfitCard({ row, model }: { row: ComputedRow; model: ProfitModel }) {
       label: "Landing Cost",
       value:
         row.landingCost != null ? (
-          <span className="text-blue-600 dark:text-blue-400 tabular-nums">
-            {formatMoneyDisplay(row.landingCost, {
-              currency: "USD",
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </span>
+          <span className="text-blue-600 dark:text-blue-400 tabular-nums">{formatUsd(row.landingCost, 2)}</span>
         ) : (
           "—"
         ),
@@ -465,33 +427,19 @@ function ProfitCard({ row, model }: { row: ComputedRow; model: ProfitModel }) {
   if (visibility.extraPerBale)
     details.push({
       label: "Extra / Bale",
-      value:
-        model.extraCostPerBale > 0
-          ? formatMoneyDisplay(model.extraCostPerBale, {
-              currency: "USD",
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-          : "—",
+      value: model.extraCostPerBale > 0 ? formatUsd(model.extraCostPerBale, 2) : "—",
       numeric: true,
     });
   if (visibility.inventoryAvgCost)
     details.push({
       label: "Inv. Avg Cost",
-      value: formatMoneyDisplay(row.inventoryAvgCost, {
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }),
+      value: formatUsd(row.inventoryAvgCost, 2),
       numeric: true,
     });
   if (visibility.hassanPrice)
     details.push({
       label: "Hassan Price",
-      value:
-        row.configPrice > 0
-          ? formatMoneyDisplay(row.configPrice, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : "—",
+      value: row.configPrice > 0 ? formatUsd(row.configPrice, 2) : "—",
       numeric: true,
     });
   if (visibility.hassanProfit)

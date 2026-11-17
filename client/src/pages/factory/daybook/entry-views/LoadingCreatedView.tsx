@@ -19,7 +19,7 @@ import type {
   Navigate,
 } from "./types";
 import { apiNumber } from "./types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function LoadingCreatedView({
   entry,
@@ -164,22 +164,10 @@ export function LoadingCreatedView({
                             </td>
                             <td className="px-3 py-2 text-right font-mono">{qty}</td>
                             <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                              {price > 0
-                                ? formatMoneyDisplay(price, {
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                  })
-                                : "—"}
+                              {price > 0 ? formatUsd(price, 0, 2) : "—"}
                             </td>
                             <td className="px-3 py-2 text-right font-mono font-medium">
-                              {total > 0
-                                ? formatMoneyDisplay(total, {
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                  })
-                                : "—"}
+                              {total > 0 ? formatUsd(total, 0, 2) : "—"}
                             </td>
                           </tr>
                         );
@@ -192,13 +180,7 @@ export function LoadingCreatedView({
                           <td className="px-3 py-2 text-right font-mono">{expectedBalesTotal}</td>
                           <td />
                           <td className="px-3 py-2 text-right font-mono">
-                            {subtotalBales > 0
-                              ? formatMoneyDisplay(subtotalBales, {
-                                  currency: "USD",
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 2,
-                                })
-                              : "—"}
+                            {subtotalBales > 0 ? formatUsd(subtotalBales, 0, 2) : "—"}
                           </td>
                         </tr>
                       </tfoot>
@@ -274,37 +256,19 @@ export function LoadingCreatedView({
                     {subtotalBales > 0 && (
                       <tr className="border-b">
                         <td className="px-3 py-2 text-muted-foreground">Subtotal (bales)</td>
-                        <td className="px-3 py-2 text-right font-mono font-medium">
-                          {formatMoneyDisplay(subtotalBales, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-medium">{formatUsd(subtotalBales, 0, 2)}</td>
                       </tr>
                     )}
                     {freightAmount > 0 && (
                       <tr className="border-b">
                         <td className="px-3 py-2 text-muted-foreground">Freight</td>
-                        <td className="px-3 py-2 text-right font-mono font-medium">
-                          {formatMoneyDisplay(freightAmount, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-medium">{formatUsd(freightAmount, 0, 2)}</td>
                       </tr>
                     )}
                     {grandTotal > 0 && (
                       <tr className="bg-muted/50 font-bold">
                         <td className="px-3 py-2">Grand Total</td>
-                        <td className="px-3 py-2 text-right font-mono">
-                          {formatMoneyDisplay(grandTotal, {
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
+                        <td className="px-3 py-2 text-right font-mono">{formatUsd(grandTotal, 0, 2)}</td>
                       </tr>
                     )}
                   </tbody>

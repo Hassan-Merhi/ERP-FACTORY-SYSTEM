@@ -4,7 +4,7 @@
  * Extracted from DailyProductionReport.tsx during the Phase 4 god-file split.
  */
 import type { BucketRow } from "./types";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -56,16 +56,15 @@ export function fmtMoney(n: number | null | undefined) {
   if (n == null || isNaN(n)) return "$0";
   if (n === 0) return "$0";
   const r = Math.round(n * 100) / 100;
-  if (Math.abs(r - Math.round(r)) < 0.005)
-    return formatMoneyDisplay(Math.round(r), { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  return formatMoneyDisplay(r, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (Math.abs(r - Math.round(r)) < 0.005) return formatUsd(Math.round(r), 0);
+  return formatUsd(r, 2);
 }
 
 export function fmtRate(n: number | null | undefined) {
   if (n == null || isNaN(n)) return "$0.000";
   // Backend keeps up to 10 decimal places for calculations; the UI intentionally
   // shows at most 4 without mutating the underlying value.
-  return formatMoneyDisplay(n, { currency: "USD", minimumFractionDigits: 3, maximumFractionDigits: 4 });
+  return formatUsd(n, 3, 4);
 }
 
 export function fmtKg(n: number | null | undefined) {
@@ -228,9 +227,7 @@ export function fmtNL(n: number) {
 export function fmtML(n: number): string {
   if (n === 0) return "$0";
   const r = Math.round(n * 100) / 100;
-  return r % 1 === 0
-    ? formatMoneyDisplay(r, { currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    : formatMoneyDisplay(r, { currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return r % 1 === 0 ? formatUsd(r, 0) : formatUsd(r, 2);
 }
 
 export function groupByCategory(rows: BucketRow[]): { category: string; items: BucketRow[] }[] {

@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { formatUsd } from "@/lib/moneyDisplay";
 /**
  * BulkPaymentDialog — extracted sub-component.
  *
@@ -251,11 +251,7 @@ function BulkPaymentDialog({
                   Total Payment
                 </td>
                 <td className="px-3 py-2 text-right font-bold text-lg tabular-nums">
-                  {formatMoneyDisplay(totalSelected, {
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatUsd(totalSelected, 0, 2)}
                 </td>
               </tr>
             </tfoot>
