@@ -41,12 +41,22 @@ const BRACES_BUILD_ONLY = {
   reviewOn: "2026-11-03",
 };
 
+const PICOMATCH_BUILD_ONLY = {
+  advisories: ["GHSA-FC5Q-39XC-VJPF"],
+  reason:
+    "picomatch has no patched release (GHSA-fc5q-39xc-vjpf, a ReDoS through repeated extglobs, affects every version) and npm's only suggested fix is a major downgrade of vite to 6.2.7. It is reached only through vite and its tinyglobby dependency, which match this repository's own source globs while building the client and while serving it in development. Production runs the pre-built bundle: server/index.ts loads server/vite.ts (the only server import of vite) with a dynamic import only when the app runs in development, so no request or user-supplied glob reaches picomatch in production. Revisit when picomatch or vite ships a fix.",
+  reviewOn: "2026-11-17",
+};
+
 const ACCEPTED = {
   braces: BRACES_BUILD_ONLY,
   chokidar: BRACES_BUILD_ONLY,
   "fast-glob": BRACES_BUILD_ONLY,
   micromatch: BRACES_BUILD_ONLY,
   tailwindcss: BRACES_BUILD_ONLY,
+  picomatch: PICOMATCH_BUILD_ONLY,
+  tinyglobby: PICOMATCH_BUILD_ONLY,
+  vite: PICOMATCH_BUILD_ONLY,
 };
 
 const BLOCKING = new Set(["high", "critical"]);
