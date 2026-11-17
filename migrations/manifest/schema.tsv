@@ -1438,7 +1438,7 @@ column	public.factory_bales.category	{"type":"text","notNull":false,"default":nu
 column	public.factory_bales.category_ar	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.category_fr	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.factory_bales.cost_per_kg	{"type":"numeric(20,7)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_bales.cost_per_kg	{"type":"numeric(20,7)","notNull":false,"default":"'0'::numeric","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.created_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.deleted_at	{"type":"timestamp without time zone","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_bales.erp_location_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -4257,7 +4257,7 @@ column	public.pressing_batches.created_by	{"type":"character varying","notNull":
 column	public.pressing_batches.expected_count	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.pressing_batches.finalized_at	{"type":"timestamp without time zone","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.pressing_batches.finalized_location_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
-column	public.pressing_batches.id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.pressing_batches.id	{"type":"integer","notNull":true,"default":"nextval('pressing_batches_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.pressing_batches.mix_batch_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.pressing_batches.product_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.pressing_batches.status	{"type":"text","notNull":false,"default":"'PENDING'::text","identity":null,"generated":null,"collation":null,"comment":null}
