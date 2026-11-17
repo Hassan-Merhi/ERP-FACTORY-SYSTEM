@@ -533,10 +533,14 @@ jobs:
           retention-days: 1
 
   backend-coverage-merge:
+    # Also runs the coverage ratchet (when frontend tests were selected and
+    # passed), which used to be a separate job paying for its own runner and
+    # npm ci on the critical path.
     name: Backend Coverage Thresholds
     needs:
       - changes
       - backend-tests
+      - frontend-tests
     if: >-
       always() &&
       needs.changes.outputs.backend == 'true' &&
@@ -586,6 +590,16 @@ jobs:
           path: coverage/backend/coverage-summary.json
           if-no-files-found: error
           retention-days: 7
+      - name: Download frontend coverage summary
+        id: frontend_summary
+        if: needs.changes.outputs.frontend == 'true' && needs.frontend-tests.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-coverage-summary
+          path: coverage/frontend
+      - name: Coverage ratchet audit
+        if: steps.frontend_summary.outcome == 'success'
+        run: npm run audit:coverage-ratchet
 
   frontend-tests:
     name: Frontend Tests
@@ -638,52 +652,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  coverage-ratchet:
-    name: Coverage Ratchet
-    needs:
-      - changes
-      - backend-tests
-      - backend-coverage-merge
-      - frontend-tests
-    if: >-
-      always() &&
-      needs.changes.outputs.backend == 'true' &&
-      needs.changes.outputs.frontend == 'true' &&
-      needs.backend-coverage-merge.result == 'success' &&
-      needs.frontend-tests.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    steps:
-      - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
-        with:
-          egress-policy: audit
-      - name: Download repository source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.2
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: "24.22.2"
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --no-audit --bin-links=true
-      - name: Download backend coverage summary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: backend-coverage-summary
-          path: coverage/backend
-      - name: Download frontend coverage summary
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: frontend-coverage-summary
-          path: coverage/frontend
-      - name: Coverage ratchet audit
-        run: npm run audit:coverage-ratchet
-
   ci-gate:
     name: Check / Build / Lint / Test
     if: always()
@@ -696,7 +664,6 @@ jobs:
       - backend-tests
       - backend-coverage-merge
       - frontend-tests
-      - coverage-ratchet
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -716,7 +683,6 @@ jobs:
           BACKEND_COVERAGE_RESULT: ${{ needs.backend-coverage-merge.result }}
           FRONTEND_SELECTED: ${{ needs.changes.outputs.frontend }}
           FRONTEND_RESULT: ${{ needs.frontend-tests.result }}
-          COVERAGE_RESULT: ${{ needs.coverage-ratchet.result }}
         run: |
           set -euo pipefail
 
@@ -754,22 +720,6 @@ jobs:
           check_job "Backend / Database Tests" "$BACKEND_SELECTED" "$BACKEND_RESULT"
           check_job "Backend Coverage Thresholds" "$BACKEND_SELECTED" "$BACKEND_COVERAGE_RESULT"
           check_job "Frontend Tests" "$FRONTEND_SELECTED" "$FRONTEND_RESULT"
-
-          if [[ "$BACKEND_SELECTED" == "true" && "$FRONTEND_SELECTED" == "true" ]]; then
-            if [[ "$COVERAGE_RESULT" != "success" ]]; then
-              echo "::error::Coverage Ratchet was applicable but finished as '${COVERAGE_RESULT}'."
-              failed=1
-            else
-              echo "Coverage Ratchet: success"
-            fi
-          else
-            if [[ "$COVERAGE_RESULT" != "skipped" ]]; then
-              echo "::error::Coverage Ratchet was not applicable but finished as '${COVERAGE_RESULT}' instead of 'skipped'."
-              failed=1
-            else
-              echo "Coverage Ratchet: correctly skipped"
-            fi
-          fi
 
           if [[ "$failed" -ne 0 ]]; then
             echo "::error::CI Gate rejected this commit."
