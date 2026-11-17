@@ -3,6 +3,7 @@
  * This page never adjusts the general ledger; it records statement evidence
  * and lets accountants match one exact bank movement to one posted entry.
  */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -270,24 +271,27 @@ export default function CashBankReconciliation() {
         </CardHeader>
         <CardContent className="space-y-2">
           <Label htmlFor="cash-bank-account">Account</Label>
-          <select
-            id="cash-bank-account"
-            value={account}
-            className="h-10 w-full rounded-md border bg-background px-2"
-            onChange={(e) => {
-              setAccount(e.target.value);
+          <Select
+            value={account || "__none__"}
+            onValueChange={(value) => {
+              setAccount(value === "__none__" ? "" : value);
               setStatementId(null);
               setSelectedLine(null);
               setPreview(null);
             }}
           >
-            <option value="">Choose existing account...</option>
-            {(accounts.data ?? []).map((a) => (
-              <option key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
-                {a.accountKind === "bank" ? "Bank" : "Cash/Bank Ledger"} — {a.name} (#{a.accountId})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="cash-bank-account" className="h-10 w-full">
+              <SelectValue placeholder="Choose existing account..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Choose existing account...</SelectItem>
+              {(accounts.data ?? []).map((a) => (
+                <SelectItem key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
+                  {a.accountKind === "bank" ? "Bank" : "Cash/Bank Ledger"} — {a.name} (#{a.accountId})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {accounts.isError && <p className="text-sm text-destructive">{(accounts.error as Error).message}</p>}
         </CardContent>
       </Card>
@@ -536,19 +540,23 @@ export default function CashBankReconciliation() {
                 </div>
                 <div className="rounded-md border p-3 space-y-2">
                   <Label>Classify selected transaction (no accounting posting)</Label>
-                  <select
-                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    value={reviewCategory}
-                    onChange={(e) => setReviewCategory(e.target.value)}
+                  <Select
+                    value={reviewCategory || "__none__"}
+                    onValueChange={(value) => setReviewCategory(value === "__none__" ? "" : value)}
                     disabled={!selectedLine}
                   >
-                    <option value="">Not classified</option>
-                    <option value="bank_fee">Bank fee / charge</option>
-                    <option value="transfer">Bank / cash transfer</option>
-                    <option value="unidentified_receipt">Unidentified receipt</option>
-                    <option value="unidentified_payment">Unidentified payment</option>
-                    <option value="other">Other investigation</option>
-                  </select>
+                    <SelectTrigger className="h-9 w-full text-sm" aria-label="Review category">
+                      <SelectValue placeholder="Not classified" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Not classified</SelectItem>
+                      <SelectItem value="bank_fee">Bank fee / charge</SelectItem>
+                      <SelectItem value="transfer">Bank / cash transfer</SelectItem>
+                      <SelectItem value="unidentified_receipt">Unidentified receipt</SelectItem>
+                      <SelectItem value="unidentified_payment">Unidentified payment</SelectItem>
+                      <SelectItem value="other">Other investigation</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Input
                     placeholder="Investigation note"
                     disabled={!selectedLine}

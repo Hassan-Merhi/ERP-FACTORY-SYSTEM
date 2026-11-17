@@ -2,6 +2,7 @@
  * Phase 6 ERP inventory and COGS ledger bridge.
  * Read-only: a discrepancy is not a mandate to generate correction vouchers.
  */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -244,44 +245,46 @@ export default function ErpInventoryAccounting() {
             <div className="flex flex-wrap items-end gap-2">
               <div>
                 <Label>Document kind</Label>
-                <select
-                  className="block h-9 rounded-md border bg-background px-2 text-sm"
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as Kind | "all")}
-                >
-                  <option value="all">All kinds</option>
-                  {(
-                    [
-                      "sale",
-                      "purchase_order",
-                      "offload",
-                      "inventory_movement",
-                      "credit_debit_note",
-                      "transfer",
-                    ] as Kind[]
-                  ).map((k) => (
-                    <option key={k} value={k}>
-                      {sourceLabel(k)}
-                    </option>
-                  ))}
-                </select>
+                <Select value={kind} onValueChange={(value) => setKind(value as Kind | "all")}>
+                  <SelectTrigger className="h-9 w-auto text-sm" aria-label="Document kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All kinds</SelectItem>
+                    {(
+                      [
+                        "sale",
+                        "purchase_order",
+                        "offload",
+                        "inventory_movement",
+                        "credit_debit_note",
+                        "transfer",
+                      ] as Kind[]
+                    ).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {sourceLabel(k)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Status</Label>
-                <select
-                  className="block h-9 rounded-md border bg-background px-2 text-sm"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as Status | "all")}
-                >
-                  <option value="all">All statuses</option>
-                  {(
-                    ["posted", "review", "missing", "cost_mismatch", "date_mismatch", "expected_periodic"] as Status[]
-                  ).map((k) => (
-                    <option key={k} value={k}>
-                      {k.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
+                <Select value={status} onValueChange={(value) => setStatus(value as Status | "all")}>
+                  <SelectTrigger className="h-9 w-auto text-sm" aria-label="Status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {(
+                      ["posted", "review", "missing", "cost_mismatch", "date_mismatch", "expected_periodic"] as Status[]
+                    ).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {k.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             {current.summary.truncated && (

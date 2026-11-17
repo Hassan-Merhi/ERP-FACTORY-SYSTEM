@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Download, Languages, Pencil, Search, Upload } from "lucide-react";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -208,15 +209,16 @@ export function FactoryFrenchCatalogManager() {
               <Search /> Rechercher
             </Button>
           </div>
-          <select
-            className="rounded-md border bg-background px-3 text-sm"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as typeof status)}
-          >
-            <option value="all">Toutes</option>
-            <option value="missing">Traduction manquante</option>
-            <option value="complete">Traduction complète</option>
-          </select>
+          <Select value={status} onValueChange={(value) => setStatus(value as typeof status)}>
+            <SelectTrigger className="w-auto" aria-label="Statut de traduction">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes</SelectItem>
+              <SelectItem value="missing">Traduction manquante</SelectItem>
+              <SelectItem value="complete">Traduction complète</SelectItem>
+            </SelectContent>
+          </Select>
           <Button type="button" variant="outline" onClick={() => void downloadTemplate()}>
             <Download /> Modèle Excel
           </Button>

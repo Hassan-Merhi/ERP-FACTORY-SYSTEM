@@ -1,7 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
-import { Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 
 export function StockTransferSidebars({ model }: { model: StockTransferFormModel }) {
@@ -36,7 +35,13 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
   return (
     <>
       {showItemSidebar && (
-        <Card className={isPOS ? "pos-transfer-sidebar hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start" : "hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start"}>
+        <Card
+          className={
+            isPOS
+              ? "pos-transfer-sidebar hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start"
+              : "hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start"
+          }
+        >
           <div className="p-4 border-b">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-sm font-semibold">Search Items</h3>
@@ -53,19 +58,15 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
                 {locations.find((location) => location.id === transferInventorySource)?.name}
               </p>
             )}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or code..."
-                value={transferSearchTerm}
-                onChange={(event) => {
-                  setTransferSearchTerm(event.target.value);
-                  setTransferHighlightedIndex(0);
-                }}
-                className="pl-9"
-                data-testid="input-transfer-sidebar-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search by name or code..."
+              value={transferSearchTerm}
+              onValueChange={(value) => {
+                setTransferSearchTerm(value);
+                setTransferHighlightedIndex(0);
+              }}
+              data-testid="input-transfer-sidebar-search"
+            />
           </div>
           <div className="flex-1 overflow-y-auto p-2" ref={transferSidebarRef}>
             <div className="space-y-1">
@@ -164,19 +165,15 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
                 ✕
               </button>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search locations..."
-                value={transferSourceSearchTerm}
-                onChange={(event) => {
-                  setTransferSourceSearchTerm(event.target.value);
-                  setTransferSourceHighlightedIndex(0);
-                }}
-                className="pl-9"
-                data-testid="input-transfer-source-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search locations..."
+              value={transferSourceSearchTerm}
+              onValueChange={(value) => {
+                setTransferSourceSearchTerm(value);
+                setTransferSourceHighlightedIndex(0);
+              }}
+              data-testid="input-transfer-source-search"
+            />
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             <div className="space-y-1">

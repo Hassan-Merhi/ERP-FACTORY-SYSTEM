@@ -1,5 +1,6 @@
+import { SearchField } from "@/components/ui/search-field";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
-import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search, Layers3 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Layers3 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "../components/EmptyState";
@@ -195,31 +195,18 @@ export function BaleProductsView1({ model }: { model: Model }) {
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSelectedIds(new Set());
-              }}
-              placeholder="Search by name or code..."
-              className="h-9 w-56 rounded-xl border-slate-300 bg-white/90 pl-9 text-sm shadow-sm focus-visible:ring-blue-500 dark:border-blue-300/20 dark:bg-[#0d192c]"
-              data-testid="input-search-products"
-            />
-            {searchQuery && (
-              <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedIds(new Set());
-                }}
-                data-testid="button-clear-search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            value={searchQuery}
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              setSelectedIds(new Set());
+            }}
+            placeholder="Search by name or code..."
+            wrapperClassName="w-56"
+            className="h-9 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm focus-visible:ring-blue-500 dark:border-blue-300/20 dark:bg-[#0d192c]"
+            data-testid="input-search-products"
+            clearTestId="button-clear-search"
+          />
           {categories && categories.length > 0 && (
             <Select
               value={filterCategoryId === null ? "all" : String(filterCategoryId)}

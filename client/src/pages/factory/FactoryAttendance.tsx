@@ -54,6 +54,7 @@ import {
 import "./factoryTrackingModern.css";
 import "./factoryAttendanceRefresh.css";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { SearchField } from "@/components/ui/search-field";
 
 interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
@@ -557,16 +558,14 @@ export default function FactoryAttendance() {
 
                 {workers.length > 0 && (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="relative w-full sm:max-w-sm">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={workerSearch}
-                        onChange={(event) => setWorkerSearch(event.target.value)}
-                        placeholder="Search worker, code, position…"
-                        className="h-9 rounded-xl bg-background/70 pl-9"
-                        data-testid="input-attendance-worker-search"
-                      />
-                    </div>
+                    <SearchField
+                      value={workerSearch}
+                      onValueChange={setWorkerSearch}
+                      placeholder="Search worker, code, position…"
+                      wrapperClassName="w-full sm:max-w-sm"
+                      className="h-9 rounded-xl bg-background/70"
+                      data-testid="input-attendance-worker-search"
+                    />
                     <div className="flex flex-wrap items-center gap-2">
                       <Select
                         value={statusFilter}

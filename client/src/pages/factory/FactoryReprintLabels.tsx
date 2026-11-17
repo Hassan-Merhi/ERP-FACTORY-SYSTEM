@@ -37,6 +37,7 @@ import {
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Location {
   id: number;
@@ -306,25 +307,14 @@ export default function FactoryReprintLabels() {
         <>
           {/* Search bar + actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Filter by bale name or reference…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-bales"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  data-testid="button-clear-search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              placeholder="Filter by bale name or reference…"
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="flex-1 min-w-[200px]"
+              data-testid="input-search-bales"
+              clearTestId="button-clear-search"
+            />
 
             <Popover open={articlePickerOpen} onOpenChange={setArticlePickerOpen}>
               <PopoverTrigger asChild>

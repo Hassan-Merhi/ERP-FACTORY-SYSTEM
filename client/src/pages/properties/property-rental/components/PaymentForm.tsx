@@ -18,6 +18,7 @@ import type { CashAccount, Contract, LedgerRow } from "../types";
 import { CURRENCIES, MONTH_NAMES, buildPaymentAllocations, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
 import { AccountSearchSelect } from "./AccountSearchSelect";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function PaymentForm({
   contract,
@@ -124,24 +125,31 @@ export function PaymentForm({
         </div>
         <div>
           <Label>Currency</Label>
-          <select
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
+          <Select
             value={form.currency}
-            onChange={(e) =>
+            onValueChange={(v) =>
               setForm((f) => ({
                 ...f,
-                currency: e.target.value,
-                exchangeRate: e.target.value === "USD" ? "1" : f.exchangeRate,
+                currency: v,
+                exchangeRate: v === "USD" ? "1" : f.exchangeRate,
               }))
             }
-            data-testid={`select-${testIdPrefix}-payment-currency`}
           >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              className="h-9 w-full text-sm"
+              data-testid={`select-${testIdPrefix}-payment-currency`}
+              aria-label="Currency"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>Amount Received ({form.currency})</Label>
