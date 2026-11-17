@@ -30,7 +30,7 @@ jobs:
         run: |
           node scripts/verify-semantic-filename-policy.mjs --json > semantic-filename-policy.json || status=$?
           node -e "const r=require('./semantic-filename-policy.json');console.log('Scanned',r.scannedEntrypoints,'entrypoint manifests,',r.referencesChecked,'references; failures:',r.problems.length);for(const p of r.problems)console.error(p.code,(p.owner||'')+' -> '+p.path)"
-          exit ${status:-0}
+          exit "${status:-0}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
