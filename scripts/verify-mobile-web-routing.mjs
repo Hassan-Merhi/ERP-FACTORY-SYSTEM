@@ -59,7 +59,7 @@ if (!/const CACHE_VERSION = "erp-v\d+"/.test(serviceWorker)) {
   failures.push('Service-worker recovery contract missing: versioned CACHE_VERSION (for example "erp-v11")');
 }
 
-const deployedCacheVersion = Number(serviceWorker.match(/const CACHE_VERSION = "erp-v(\\d+)"/)?.[1]);
+const deployedCacheVersion = Number(serviceWorker.match(/const CACHE_VERSION = "erp-v(\d+)"/)?.[1]);
 if (!Number.isSafeInteger(deployedCacheVersion) || deployedCacheVersion < 15) {
   failures.push("One-time device refresh contract requires a versioned ERP cache at or above erp-v15");
 }
