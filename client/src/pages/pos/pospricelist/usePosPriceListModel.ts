@@ -301,7 +301,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       lastSavedRef.current = null;
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 

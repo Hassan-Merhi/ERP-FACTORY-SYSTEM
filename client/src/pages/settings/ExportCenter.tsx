@@ -134,7 +134,7 @@ export function ExportCenter() {
       setGmailPassword("");
       toast({ title: "Settings saved" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: getErrorDetails(e).message });
+      toast({ variant: "destructive", title: "Save failed", description: getErrorDetails(e).message });
     } finally {
       setSavingGmail(false);
     }

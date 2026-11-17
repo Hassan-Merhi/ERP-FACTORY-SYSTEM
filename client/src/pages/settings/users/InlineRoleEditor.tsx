@@ -246,7 +246,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       onSaved();
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

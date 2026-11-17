@@ -106,7 +106,7 @@ export function TransferWhatsAppSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/git/transfer-wa-settings"] });
       toast({ title: "Saved", description: `Transfer WA group updated for company.` });
     } catch (e) {
-      toast({ title: "Error", description: getErrorDetails(e).message, variant: "destructive" });
+      toast({ title: "Save failed", description: getErrorDetails(e).message, variant: "destructive" });
     } finally {
       setSavingCompany(null);
     }
@@ -130,7 +130,7 @@ export function TransferWhatsAppSection() {
       toast({ title: "Saved", description: `Transfer group updated for location.` });
       setLocDialogOpen(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   function openLocDialog(loc: LocationItem) {

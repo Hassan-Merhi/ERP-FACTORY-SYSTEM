@@ -103,7 +103,7 @@ export function EditPriceLineDialog({
               pending={editLineMutation.isPending}
               data-testid="button-confirm-edit-line"
             >
-              Save Changes
+              Save
             </FormSubmitButton>
           </div>
         </div>

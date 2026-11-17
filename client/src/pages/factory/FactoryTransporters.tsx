@@ -116,7 +116,7 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
       setDescription("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -228,7 +228,7 @@ function PaymentDialog({
       setDescription("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -329,7 +329,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
       queryClient.invalidateQueries({ queryKey: [API] });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
@@ -541,7 +541,7 @@ function AddTransporterDialog({ open, onClose }: { open: boolean; onClose: () =>
       setNotes("");
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (

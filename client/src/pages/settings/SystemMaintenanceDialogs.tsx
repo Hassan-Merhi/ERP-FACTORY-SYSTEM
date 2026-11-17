@@ -36,9 +36,9 @@ export function ResetCompanyDataDialog({ open, onOpenChange, companies }: ResetC
     },
     onSuccess: (data) => {
       setResult(data);
-      toast({ title: "Success", description: data.message });
+      toast({ title: "Deleted", description: data.message });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Reset failed", description: e.message, variant: "destructive" }),
   });
 
   return (

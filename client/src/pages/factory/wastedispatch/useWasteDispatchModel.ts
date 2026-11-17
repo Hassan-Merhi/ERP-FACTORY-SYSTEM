@@ -292,7 +292,7 @@ export function useWasteDispatchModel() {
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
-      toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+      toast({ title: "Save failed", description: errorMessage(error), variant: "destructive" });
       setConfirming(false);
     },
   });
@@ -315,7 +315,7 @@ export function useWasteDispatchModel() {
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
-      toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+      toast({ title: "Delete failed", description: errorMessage(error), variant: "destructive" });
       setDeleteDispatchId(null);
     },
   });

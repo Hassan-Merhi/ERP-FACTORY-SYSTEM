@@ -238,7 +238,7 @@ export function LocationDialogs({
               data-testid="button-confirm-rename"
             >
               {renameLocationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

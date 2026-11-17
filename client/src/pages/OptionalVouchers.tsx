@@ -82,7 +82,7 @@ export default function OptionalVouchers() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -97,7 +97,7 @@ export default function OptionalVouchers() {
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -205,7 +205,9 @@ export default function OptionalVouchers() {
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {voucherTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -227,7 +229,13 @@ export default function OptionalVouchers() {
         }
         actions={
           hasFilters ? (
-            <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters" className="gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+              className="gap-1.5"
+            >
               <X className="h-4 w-4" />
               Clear
             </Button>
@@ -292,98 +300,98 @@ export default function OptionalVouchers() {
             scrollLabel="Optional vouchers"
             wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
-              <TableHeader className="sticky top-0 z-30 bg-muted">
-                <TableRow className="h-11 bg-muted/40 border-b">
-                  <TableHead className="text-left px-4 font-medium">Date</TableHead>
-                  <TableHead className="text-left px-4 font-medium">Type</TableHead>
-                  <TableHead className="text-left px-4 font-medium">Description</TableHead>
-                  <TableHead className="text-right px-4 font-medium">Total</TableHead>
-                  <TableHead className="text-right px-4 font-medium">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orderedVouchers.map((v) => (
-                  <TableRow
-                    key={v.id}
-                    className="border-t hover:bg-muted/30 transition-colors"
-                    data-testid={`row-voucher-${v.id}`}
-                  >
-                    <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
-                    </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <Badge variant={getTypeBadgeVariant(v.voucherType)} className="text-xs">
-                        {v.voucherType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-muted-foreground text-sm">{v.description || "—"}</TableCell>
-                    <TableCell className="px-4 py-3 text-right tabular-nums font-medium">
-                      {parseFloat(v.totalAmount || "0").toLocaleString(undefined, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })}
-                    </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <ErpRecordAction
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setViewVoucher(v)}
-                          data-testid={`button-view-voucher-${v.id}`}
-                          className="h-8 w-8"
-                          title="View voucher details"
-                          aria-label="View voucher details"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </ErpRecordAction>
-                        <ErpRecordAction
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(v)}
-                          data-testid={`button-edit-voucher-${v.id}`}
-                          className="gap-1.5 h-8"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </ErpRecordAction>
-                        <ErpRecordAction
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setFinalizeVoucherId(v.id)}
-                          data-testid={`button-finalize-voucher-${v.id}`}
-                          className="gap-1.5 h-8 text-green-700 dark:text-green-400"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                          Finalize
-                        </ErpRecordAction>
-                        <ErpRecordAction
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteVoucherId(v.id)}
-                          data-testid={`button-delete-voucher-${v.id}`}
-                          className="h-8 w-8 text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </ErpRecordAction>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow className="border-t bg-muted/40">
-                  <TableCell colSpan={3} className="px-4 py-2 text-sm font-medium">
-                    Total ({vouchers.length} voucher{vouchers.length !== 1 ? "s" : ""})
+            <TableHeader className="sticky top-0 z-30 bg-muted">
+              <TableRow className="h-11 bg-muted/40 border-b">
+                <TableHead className="text-left px-4 font-medium">Date</TableHead>
+                <TableHead className="text-left px-4 font-medium">Type</TableHead>
+                <TableHead className="text-left px-4 font-medium">Description</TableHead>
+                <TableHead className="text-right px-4 font-medium">Total</TableHead>
+                <TableHead className="text-right px-4 font-medium">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orderedVouchers.map((v) => (
+                <TableRow
+                  key={v.id}
+                  className="border-t hover:bg-muted/30 transition-colors"
+                  data-testid={`row-voucher-${v.id}`}
+                >
+                  <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                    {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
                   </TableCell>
-                  <TableCell
-                    className="px-4 py-2 text-right tabular-nums font-semibold"
-                    data-testid="text-optional-grand-total-footer"
-                  >
-                    {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  <TableCell className="px-4 py-3">
+                    <Badge variant={getTypeBadgeVariant(v.voucherType)} className="text-xs">
+                      {v.voucherType}
+                    </Badge>
                   </TableCell>
-                  <TableCell />
+                  <TableCell className="px-4 py-3 text-muted-foreground text-sm">{v.description || "—"}</TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums font-medium">
+                    {parseFloat(v.totalAmount || "0").toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <ErpRecordAction
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setViewVoucher(v)}
+                        data-testid={`button-view-voucher-${v.id}`}
+                        className="h-8 w-8"
+                        title="View voucher details"
+                        aria-label="View voucher details"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </ErpRecordAction>
+                      <ErpRecordAction
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(v)}
+                        data-testid={`button-edit-voucher-${v.id}`}
+                        className="gap-1.5 h-8"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </ErpRecordAction>
+                      <ErpRecordAction
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setFinalizeVoucherId(v.id)}
+                        data-testid={`button-finalize-voucher-${v.id}`}
+                        className="gap-1.5 h-8 text-green-700 dark:text-green-400"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Finalize
+                      </ErpRecordAction>
+                      <ErpRecordAction
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setDeleteVoucherId(v.id)}
+                        data-testid={`button-delete-voucher-${v.id}`}
+                        className="h-8 w-8 text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </ErpRecordAction>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableFooter>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="border-t bg-muted/40">
+                <TableCell colSpan={3} className="px-4 py-2 text-sm font-medium">
+                  Total ({vouchers.length} voucher{vouchers.length !== 1 ? "s" : ""})
+                </TableCell>
+                <TableCell
+                  className="px-4 py-2 text-right tabular-nums font-semibold"
+                  data-testid="text-optional-grand-total-footer"
+                >
+                  {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            </TableFooter>
           </ErpListTable>
 
           {/* Mobile cards */}
@@ -392,9 +400,7 @@ export default function OptionalVouchers() {
               <div key={v.id} className="border rounded-xl p-4 space-y-2" data-testid={`card-voucher-${v.id}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="text-sm font-medium">
-                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
-                    </div>
+                    <div className="text-sm font-medium">{v.voucherDate ? formatShortDate(v.voucherDate) : "—"}</div>
                     {v.description && <div className="text-xs text-muted-foreground mt-0.5">{v.description}</div>}
                   </div>
                   <Badge variant={getTypeBadgeVariant(v.voucherType)} className="text-xs shrink-0">

@@ -259,7 +259,7 @@ describe("ERP payroll page behavior", () => {
       })
     );
     expect(harness.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Success", description: "Deposit recorded successfully" })
+      expect.objectContaining({ title: "Saved", description: "Deposit recorded successfully" })
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Withdraw Alice" }));

@@ -192,7 +192,7 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: error.message || "Failed to open shift",
         variant: "destructive",
       });
@@ -226,7 +226,7 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to close shift",
         variant: "destructive",
       });

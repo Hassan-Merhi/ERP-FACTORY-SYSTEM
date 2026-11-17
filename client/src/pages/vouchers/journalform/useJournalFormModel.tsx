@@ -525,7 +525,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     },
     onSuccess: async (data: unknown) => {
       const editing = !!voucherIdToEdit;
-      toast({ title: "Success", description: `Journal voucher ${editing ? "updated" : "created"} successfully` });
+      toast({ title: "Saved", description: `Journal voucher ${editing ? "updated" : "created"} successfully` });
       const prompt = resolveWhatsAppPrompt(data);
       if (prompt) setWaPendingPrompt(prompt);
       discardJournalDraft();
@@ -568,7 +568,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
       }
       if (isGloballyHandled(error)) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: errorMessage(error, `Failed to ${voucherIdToEdit ? "update" : "create"} journal voucher`),
         variant: "destructive",
       });

@@ -39,7 +39,7 @@ function CreateUnitDialog({
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   return (

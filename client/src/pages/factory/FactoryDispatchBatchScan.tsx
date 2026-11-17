@@ -189,7 +189,7 @@ export default function FactoryDispatchBatchScan() {
       setTimeout(() => scanRef.current?.focus(), 40);
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Remove failed", description: err.message, variant: "destructive" });
       setRemoveScanId(null);
     },
   });
@@ -208,7 +208,7 @@ export default function FactoryDispatchBatchScan() {
       navigate(`/factory/dispatch-batches/${batchId}`);
     },
     onError: (err) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
       setDispatchOpen(false);
     },
   });
@@ -356,25 +356,29 @@ export default function FactoryDispatchBatchScan() {
             {canScan && (
               <div className="flex min-w-0 items-center gap-2">
                 <div className="relative min-w-0 flex-1">
-                <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  ref={scanRef}
-                  value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
-                  onKeyDown={handleScanKey}
-                  placeholder="Scan barcode or type reference number and press Enter..."
-                  className="h-12 min-w-0 pl-10 font-mono text-base"
-                  disabled={scanMutation.isPending}
-                  autoFocus
-                  data-testid="input-scan-barcode"
-                />
-                {scanMutation.isPending && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">
-                    Scanning...
-                  </span>
-                )}
+                  <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    ref={scanRef}
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    onKeyDown={handleScanKey}
+                    placeholder="Scan barcode or type reference number and press Enter..."
+                    className="h-12 min-w-0 pl-10 font-mono text-base"
+                    disabled={scanMutation.isPending}
+                    autoFocus
+                    data-testid="input-scan-barcode"
+                  />
+                  {scanMutation.isPending && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">
+                      Scanning...
+                    </span>
+                  )}
                 </div>
-                <MobileBarcodeScanner onScan={(code) => scanMutation.mutate(code)} disabled={scanMutation.isPending} className="h-12 w-12 shrink-0" />
+                <MobileBarcodeScanner
+                  onScan={(code) => scanMutation.mutate(code)}
+                  disabled={scanMutation.isPending}
+                  className="h-12 w-12 shrink-0"
+                />
               </div>
             )}
 

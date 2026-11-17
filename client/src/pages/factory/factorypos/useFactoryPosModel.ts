@@ -92,8 +92,14 @@ export function useFactoryPosModel() {
   const [mobileRowTarget, setMobileRowTarget] = useState<number | null>(null);
 
   // Queries
-  const { data: locations } = useQuery<PosLocation[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
-  const { data: allCustomers } = useQuery<PosCustomer[]>({ queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: locations } = useQuery<PosLocation[]>({
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
+  const { data: allCustomers } = useQuery<PosCustomer[]>({
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
   const { data: inventory, isLoading: invLoading } = useQuery<InventoryItem[]>({
     queryKey: companyQueryKey("/api/factory/location-inventory", selectedCompany?.id, locationId),
     queryFn: async () => {
@@ -431,7 +437,7 @@ export function useFactoryPosModel() {
       setShowPrintDialog(true);
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message || "Failed to create sale", variant: "destructive" });
+      toast({ title: "Sale failed", description: err.message || "Failed to create sale", variant: "destructive" });
     },
   });
 
@@ -447,7 +453,7 @@ export function useFactoryPosModel() {
       navigate("/factory/daybook");
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message || "Failed to update sale", variant: "destructive" });
+      toast({ title: "Update failed", description: err.message || "Failed to update sale", variant: "destructive" });
     },
   });
 
@@ -460,7 +466,7 @@ export function useFactoryPosModel() {
       toast({ title: "Sale voided" });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Void failed", description: err.message, variant: "destructive" });
     },
   });
 
