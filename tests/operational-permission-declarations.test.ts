@@ -79,6 +79,12 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Stock Transfer Order WhatsApp Phase 6 delivery reconciliation: an Admin/Owner/Developer-only record of provider and chat evidence for an already approved batch's Excel delivery, with a capped manual retry. It posts no voucher and moves no stock; the route enforces the role and the active company itself. Recorded on 2026-11-11 so main can certify.",
   "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice.xlsx":
     "Per-trip Factory invoice workbook (#3100): a read-only, company-scoped REPEATABLE READ download of one posted trip's own invoice lines, gated by requireAuth and the Factory invoicing loadings tab access (factory/invoicing) like its order-overview JSON siblings. Recorded on 2026-11-11 so main can certify; it has no dedicated export permission today, which the owner should confirm is intended.",
+  "POST /api/intercompany-container-trading/import":
+    "Owner/Developer-only upload that creates a linked intercompany container trade (the route's own requireRole guard); it had no import permission before the access layer and is not a company data import.",
+  "GET /api/excel-export/appearance":
+    "Reads the company's workbook colours and logo so exports can be styled; it produces no export.",
+  "PUT /api/excel-export/appearance":
+    "Admin/Developer-only save of the workbook appearance settings (the route's own requireRole guard and effective-role check); it produces no export.",
   "GET /api/pos/shifts/current":
     "Registered before GET /api/pos/shifts/:id; any POS user reads their own open shift, so it must not inherit the shift-summary permission.",
   "POST /api/pos/send-stock-pdf-backend":

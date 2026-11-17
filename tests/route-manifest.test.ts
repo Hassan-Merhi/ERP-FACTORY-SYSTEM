@@ -80,9 +80,12 @@ const reviewedSpMounts: string[] = [];
 // POST /api/vouchers/bulk-delete and POST /api/voucher-entries ahead of their
 // handlers to refuse changes to correction voucher 16303, and calls next() for
 // every other request, so the later registrations stay reachable.
-// The manifest-driven access boundary removes 15 shadowed registrations from the original cap of 79.
-// Main also added one Payment/Receipt intercompany auto-mirror registration (79 - 15 + 1 = 65).
-const MAX_SHADOWED_REGISTRATIONS = 65;
+// The manifest-driven access layer removed the 14 action-permission prerequisite routes that
+// core/permissionBoundaryRoutes.ts registered ahead of their handlers, taking the live count from
+// 78 to 64. Main then added the Payment/Receipt intercompany auto-mirror, which registers both
+// POST /api/vouchers/payment-receipt and PATCH /api/vouchers/:id/payment-receipt ahead of the
+// ordinary handlers and calls next() for a voucher that is not an intercompany pair (64 + 2 = 66).
+const MAX_SHADOWED_REGISTRATIONS = 66;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

@@ -250,11 +250,10 @@ written and still name the files this layer replaced.
 
 ## Current numbers
 
-2,425 rules, none delegated: 2,407 `session`, 12 `public`, 3 `inherited`,
-2 `signed-token`, 1 `service-token`. 1,412 `active-company`, 988
-`pinned-company`, 9 `request-resolved`, 14 `context-optional`, 2 `none`.
-1,629 rules declare a permission key, 751 a session-role rule, 165 a
-company-role rule, 1,359 at least one policy, 25 a cross-company allowance.
+2459 rules, none delegated (2,425 at cutover; the rest are routes added on
+`main` since). 1631 declare a permission key, 763 a session-role rule, 165 a
+company-role rule, 1361 at least one policy and 25 a cross-company allowance.
+`npm run verify:route-access-coverage` reports the live figures.
 
 ## Tests
 
