@@ -1,10 +1,11 @@
 /**
  * Golden Coast Phase 12 — route and navigation wiring.
  *
- * Behavioural cover for the integration points the hub depends on: the
- * authenticated route guard admits /sp/golden-coast for Supplier Partner
- * companies and nobody else, the sidebar offers it without disturbing the
- * existing setup entries, and the router mounts the page lazily.
+ * The Golden Coast hub page is retired (owner decision 6, 2026-11-16). The old
+ * /sp/golden-coast URL stays admitted by the authenticated route guard for
+ * Supplier Partner companies and nobody else, the sidebar never offered it,
+ * and the top-level router now hands it to ERP routes, which redirect it to
+ * SP Reports.
  */
 import React, { Suspense } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -12,9 +13,6 @@ import { describe, expect, it, vi } from "vitest";
 import { resolveAuthenticatedAppRoute } from "@/app/authenticatedAppRouteGuard";
 import { SUPPLIER_PARTNER_DAILY_ITEMS, SUPPLIER_PARTNER_SECTIONS } from "@/lib/supplier-partner-navigation";
 
-vi.mock("@/pages/sp/SpGoldenCoast", () => ({
-  default: () => <div data-testid="golden-coast-page" />,
-}));
 vi.mock("@/routes/ErpRoutes", () => ({ ErpRoutes: () => <div data-testid="erp-routes" /> }));
 vi.mock("@/routes/PosRoutes", () => ({ PosRoutes: () => <div data-testid="pos-routes" /> }));
 
@@ -65,28 +63,17 @@ describe("Golden Coast route and navigation wiring", () => {
     expect(setupUrls).not.toContain("/sp/aliases");
   });
 
-  it("mounts the Golden Coast page lazily on its own route and ERP routes elsewhere", async () => {
+  it("hands the retired Golden Coast URL to ERP routes, which redirect it to SP Reports", async () => {
     const { Router } = await import("@/routes/AppRoutes");
-    window.history.replaceState({}, "", "/sp/golden-coast");
-
-    const { unmount } = render(
-      <Suspense fallback={<div data-testid="route-loading" />}>
-        <Router user={{ role: "Developer" }} />
-      </Suspense>
-    );
-
-    await waitFor(() => expect(screen.getByTestId("golden-coast-page")).toBeTruthy());
-    expect(screen.queryByTestId("erp-routes")).toBeNull();
-    unmount();
-
-    window.history.replaceState({}, "", "/sp");
-    render(
-      <Suspense fallback={<div data-testid="route-loading" />}>
-        <Router user={{ role: "Developer" }} />
-      </Suspense>
-    );
-
-    await waitFor(() => expect(screen.getByTestId("erp-routes")).toBeTruthy());
-    expect(screen.queryByTestId("golden-coast-page")).toBeNull();
+    for (const path of ["/sp/golden-coast", "/sp"]) {
+      window.history.replaceState({}, "", path);
+      const { unmount } = render(
+        <Suspense fallback={<div data-testid="route-loading" />}>
+          <Router user={{ role: "Developer" }} />
+        </Suspense>
+      );
+      await waitFor(() => expect(screen.getByTestId("erp-routes")).toBeTruthy());
+      unmount();
+    }
   });
 });

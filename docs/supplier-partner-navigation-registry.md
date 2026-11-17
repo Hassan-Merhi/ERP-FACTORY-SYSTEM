@@ -16,31 +16,28 @@ Any direct `/sp` or `/sp/*` request while another company type is selected redir
 
 ## Final route inventory
 
+SP Reports is the Supplier Partner home. The Overview, Opening Stock, Aliases and Golden Coast
+pages were removed on 2026-11-17 (owner decision 6, 2026-11-16); their URLs stay as replacement
+redirects so old links and bookmarks keep working. Their server APIs and stored data are unchanged.
+
 | Route | Screen | Access | Parent / compatibility behavior |
 |---|---|---|---|
-| `/sp` | Supplier Partner Overview | Supplier Partner companies | Namespace root |
-| `/sp/reports` | Supplier payable, profit and loss, sales-form exports | Supplier Partner companies | Back / Escape → `/sp` |
-| `/sp/opening-stock` | Supplier Partner opening-stock workflow | Supplier Partner companies | Back / Escape → `/sp` |
-| `/sp/aliases` | Stock-item alias management | Supplier Partner companies | Back / Escape → `/sp` |
-| `/sp/setup` | Supplier Partner Administration, Setup tab | Admin or Developer | Back / Escape → `/sp` |
-| `/sp/setup?tab=migration` | Supplier Partner Administration, Migration tab | Developer | Back / Escape → `/sp` |
-| `/sp/migration` | Historical compatibility path | Supplier Partner companies | Replacement redirect → `/sp/setup?tab=migration` |
-| `/sp/gc-migration` | Historical compatibility path | Supplier Partner companies | Replacement redirect → `/sp/setup?tab=migration` |
-| Unknown `/sp/*` | Invalid Supplier Partner route | Supplier Partner companies | Replacement redirect → `/sp` |
+| `/sp/reports` | Supplier payable, profit and loss, sales-form exports (SP home) | Supplier Partner companies | Top level |
+| `/sp/setup` | Supplier Partner Setup | Admin or Developer (others redirect to `/sp/reports`) | Back / Escape → `/sp/reports` |
+| `/sp` | Retired Overview | Supplier Partner companies | Replacement redirect → `/sp/reports` |
+| `/sp/opening-stock` | Retired Opening Stock | Supplier Partner companies | Replacement redirect → `/sp/reports` |
+| `/sp/aliases` | Retired Aliases | Supplier Partner companies | Replacement redirect → `/sp/reports` |
+| `/sp/golden-coast` | Retired Golden Coast operations | Supplier Partner companies | Replacement redirect → `/sp/reports` |
+| `/sp/migration` | Historical compatibility path | Supplier Partner companies | Replacement redirect → `/sp/setup` |
+| `/sp/gc-migration` | Historical compatibility path | Supplier Partner companies | Replacement redirect → `/sp/setup` |
+| Unknown `/sp/*` | Invalid Supplier Partner route | Supplier Partner companies | Replacement redirect → `/sp` → `/sp/reports` |
 
 ## Sidebar hierarchy
 
-### Daily work
-
-- Overview — `/sp`
-- Reports — `/sp/reports`
-- Opening Stock — `/sp/opening-stock`
-- Aliases — `/sp/aliases`
-
-### Administration
+One "Supplier Partner" section:
 
 - Setup — `/sp/setup`
-- Migration — `/sp/setup?tab=migration`
+- SP Reports — `/sp/reports`
 
 Supplier Partner pages are registered with Recent navigation from the same shared route source used by the sidebar.
 
@@ -51,19 +48,14 @@ Supplier Partner pages are registered with Recent navigation from the same share
 - Sales Form — `/sp/reports?tab=sales-form`
 
 Invalid report-tab values canonicalize to Supplier Payable using replacement history. Refresh restores the selected canonical tab.
-
-## Administration sub-navigation
-
-- Setup — `/sp/setup`
-- Migration — `/sp/setup?tab=migration`
-
-Invalid administration-tab values canonicalize to Setup. Admin users cannot open Migration; non-admin/non-developer users cannot open the administration hub.
+SP Reports also carries the monthly profit-split close (`QuickMonthlyClose`).
 
 ## Final decisions
 
-- `/sp` is the stable Supplier Partner landing page.
-- Setup and Migration are consolidated under one guarded administration hub.
-- Both historical migration URLs remain compatible but cannot bypass the administration permissions.
+- `/sp/reports` is the Supplier Partner home; `/sp` remains a compatibility URL that lands there.
+- The migration tab is retired; both historical migration URLs land on Setup and cannot bypass its permissions.
 - Back and Escape behavior is deterministic within the Supplier Partner hierarchy.
 - Unknown Supplier Partner URLs never fall through to the generic ERP 404.
-- No Supplier Partner business logic, APIs, calculations, exports, migrations, setup actions, balances, posting behavior, or historical data behavior changed.
+- Removed pages have no replacement screen: SP sale reversal (`POST /api/sp/sales/:id/reverse`), opening-stock entry,
+  alias management and the Golden Coast HADI / savings / sales-cash / settlement panels. Their APIs and data remain.
+- No Supplier Partner business logic, APIs, calculations, exports, setup actions, balances, posting behavior, or historical data behavior changed.

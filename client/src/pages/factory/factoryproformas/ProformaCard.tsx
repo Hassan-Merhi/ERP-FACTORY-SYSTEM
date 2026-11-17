@@ -20,7 +20,6 @@ import {
   RefreshCw,
   Star,
   Trash2,
-  Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,20 +221,6 @@ export function ProformaCard(props: ProformaCardProps) {
               }
             />
           </Button>
-          {!recordChanges.isCreateOnly && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
-              onClick={() =>
-                navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
-              }
-              data-testid={`button-create-dispatch-batch-${proforma.id}`}
-              title="Create dispatch batch"
-            >
-              <Truck className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          )}
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

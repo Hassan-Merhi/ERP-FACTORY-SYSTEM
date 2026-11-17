@@ -5,7 +5,6 @@ import { PosRoutes } from "./PosRoutes";
 import { ErpRoutes } from "./ErpRoutes";
 import type { AuthMe } from "@shared/apiTypes";
 
-const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
 const RetailDashboard = lazy(() => import("@/pages/retail/RetailDashboard"));
 const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
 const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
@@ -37,10 +36,6 @@ export function Router({ user, posImportEnabled }: RouterProps) {
 
   if (isPOS) {
     return <PosRoutes user={user} posImportEnabled={posImportEnabled} />;
-  }
-
-  if (location === "/sp/golden-coast") {
-    return <SpGoldenCoast />;
   }
 
   if (location === "/retail/pos") {

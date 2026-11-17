@@ -99,7 +99,6 @@ export const STATIC_ROUTES = [
 export const DIALOG_TRIGGERS = [
   { route: "/factory/contacts", selector: '[data-testid="button-add-contact"]' },
   { route: "/factory/sheets-sacks", selector: '[data-testid="button-add-item"]' },
-  { route: "/factory/dispatch-batches", selector: '[data-testid="button-new-dispatch-batch"]', exact: true },
   { route: "/factory/rental/shops", selector: '[data-testid="button-factory-rental-shops-add-unit"]' },
   { route: "/factory/daybook", selector: '[data-testid="factory-daybook-filters-open"]', phoneOnly: true },
   {

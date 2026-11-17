@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
@@ -110,7 +111,8 @@ export default function StockItemVouchers() {
     }
 
     if (vchType === "production" || vchType === "consumption") {
-      return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+      const voucherType = vchType === "production" ? "Production" : "Consumption";
+      return txn.voucherId ? voucherEditPath({ id: txn.voucherId, voucherType }) : null;
     }
 
     if (vchType.startsWith("pos") || vchType.includes("pos")) {
@@ -118,11 +120,11 @@ export default function StockItemVouchers() {
     }
 
     if (vchType.startsWith("stock transfer")) {
-      return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+      return txn.voucherId ? voucherEditPath({ id: txn.voucherId, voucherType: "Stock Transfer" }) : null;
     }
 
     if (vchType === "sales") {
-      return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+      return txn.voucherId ? voucherEditPath({ id: txn.voucherId, voucherType: "Sales" }) : null;
     }
 
     return null;
