@@ -6,7 +6,7 @@ on:
       - feat/offline-mode-integration
     paths:
       - 'server/edge/writerGate.mjs'
-      - 'server/edge/phase7WriterGate.d.mts'
+      - 'server/edge/writerGate.d.mts'
       - 'server/edge/edgeRuntimePolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'

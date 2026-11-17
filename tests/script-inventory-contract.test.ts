@@ -13,7 +13,7 @@ describe("verification script inventory contract", () => {
     expect(report.summary.orphan).toBe(0);
 
     const knownTranslationDebt = report.scripts.find(
-      (entry: { script: string }) => entry.script === "verify-phase9-final-i18n-baseline.mjs"
+      (entry: { script: string }) => entry.script === "verify-final-i18n-baseline.mjs"
     );
     expect(knownTranslationDebt?.bucket).toBe("manual");
 

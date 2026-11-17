@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { ErrorState } from "@/components/ui/page-state";
 import { getErrorDetails } from "@shared/errorUtils";
 import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState, useMemo } from "react";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Location {
   id: number;
@@ -87,7 +89,12 @@ export default function FactoryReprintLabels() {
     queryKey: ["/api/locations"],
   });
 
-  const { data: balesData = [], isLoading: balesLoading } = useQuery<BaleRow[]>({
+  const {
+    data: balesData = [],
+    isLoading: balesLoading,
+    isError: balesError,
+    refetch: refetchBales,
+  } = useQuery<BaleRow[]>({
     queryKey: ["/api/factory/bales", selectedLocationId],
     queryFn: async () => {
       if (!selectedLocationId) return [];
@@ -306,25 +313,14 @@ export default function FactoryReprintLabels() {
         <>
           {/* Search bar + actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Filter by bale name or reference…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-bales"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  data-testid="button-clear-search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              placeholder="Filter by bale name or reference…"
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="flex-1 min-w-[200px]"
+              data-testid="input-search-bales"
+              clearTestId="button-clear-search"
+            />
 
             <Popover open={articlePickerOpen} onOpenChange={setArticlePickerOpen}>
               <PopoverTrigger asChild>
@@ -466,6 +462,8 @@ export default function FactoryReprintLabels() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : balesError && balesData.length === 0 ? (
+            <ErrorState onAction={() => void refetchBales()} actionLabel="Try again" />
           ) : filteredBales.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground">
               <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />

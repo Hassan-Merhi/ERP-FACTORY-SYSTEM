@@ -51,7 +51,7 @@ Added `tests/universal-excel-specialized.test.ts`: expected sheets/ordering, hid
 Existing relevant tests:
 - `client/src/pages/factory/monthlyProductionExcelExport.test.ts` — production formulas/drilldowns and source totals.
 - `tests/export-excel-workbook-behavior.test.ts` and `tests/export-excel-sheets.test.ts` — dataset coverage, large exports and late-sparse keys.
-- `tests/stock-transfer-order-wa-phase5-workbook.test.ts` — no-cost columns and stored totals.
+- `tests/stock-transfer-order-wa-workbook.test.ts` — no-cost columns and stored totals.
 - `tests/ui/order-workbook-exports-behavior.test.ts` — sale/customer bale order and grouped truck-trip layouts.
 - `tests/factory-invoice-document-rendering.test.ts` — canonical invoice numeric and localized rendered output.
 - `tests/excel-export-v2.test.ts` — DB-backed SP sales form integration (requires a provisioned test database; not a pure workbook test).

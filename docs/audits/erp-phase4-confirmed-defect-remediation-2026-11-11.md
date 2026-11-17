@@ -44,7 +44,7 @@ One duplicate HADI company-role pair, 20 TEST company ERP page-grant rows withou
 
 ## Tests and certification
 
-New source tests: `tests/erp-phase4-stock-transfer-convergence.test.ts` covers movement-source pair query, full-edit and delta revision netting, paired-leg validation, posted false flag inclusion, missing evidence, and discrepancy reporting. Existing suites `tests/canonical-stock-transfer-journal.test.ts`, `tests/convergence-evidence-loaders.test.ts`, `tests/stock-transfer-lifecycle.test.ts` must pass on the exact final PR SHA.
+New source tests: `tests/erp-stock-transfer-convergence.test.ts` covers movement-source pair query, full-edit and delta revision netting, paired-leg validation, posted false flag inclusion, missing evidence, and discrepancy reporting. Existing suites `tests/canonical-stock-transfer-journal.test.ts`, `tests/convergence-evidence-loaders.test.ts`, `tests/stock-transfer-lifecycle.test.ts` must pass on the exact final PR SHA.
 
 **Exit criteria still open:** Run targeted tests/typecheck/full CI, validate document and item-level historical mismatches on a disposable fixture, approve any metadata-only update for transfer 866 after audit, resolve Phase 1/2/3 historical blockers with original evidence, and verify deployed SHA. Do not merge or deploy on simulated evidence alone.
 
@@ -64,6 +64,6 @@ HADI transfer 846 item 515 has a 350-unit *document-versus-journal* gap, but its
 
 **Nonposting preventive fix:** Both lifecycle boundaries now call `assertTransferNotAlreadyPostedTx` **before** an unapplied transfer is posted. The guard requires a valid transaction-owned company/transfer/voucher identity and a proven canonical state. It sums signed canonical quantity per item and location across all transfer, import and voucher-edit source identities. Any nonzero outstanding position causes a refusal `STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL`; unavailable or malformed evidence also fails closed. Fully reversed transfer history nets to zero per item/location and may be posted legitimately. The existing locking transaction ensures inspection precedes a write in the same operation.
 
-Regression tests: `tests/erp-phase4-stock-transfer-repost-guard.test.ts`. This guard **does not correct** transfer 866's metadata automatically. The reviewed repair is to update metadata only after a separate approved action; never duplicate physical stock.
+Regression tests: `tests/erp-stock-transfer-repost-guard.test.ts`. This guard **does not correct** transfer 866's metadata automatically. The reviewed repair is to update metadata only after a separate approved action; never duplicate physical stock.
 
 **Proof:** A read-only company 9 audit found exactly 58 matching source-item/location groups for transfer 866, zero quantity mismatches and zero per-group value differences above 0.01. The aggregate quantity and monetary value match exactly.

@@ -1,8 +1,10 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Package, XCircle, Loader2, Check, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StockAdjustmentDraft, VoucherSearchResult, StockItemDraft, PriceUpdateDraft } from "./chatWidgetTypes";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // ── Stock Adjustment Confirmation Card ───────────────────────────────
 export function StockAdjustmentConfirmCard({
@@ -63,11 +65,10 @@ export function StockAdjustmentConfirmCard({
         <div className="flex justify-between gap-2 text-muted-foreground items-center">
           <span className="shrink-0">Location</span>
           {hasLocChoice ? (
-            <select
-              className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 max-w-[180px]"
-              value={selectedLocationId}
-              onChange={(e) => {
-                const id = Number(e.target.value);
+            <Select
+              value={String(selectedLocationId)}
+              onValueChange={(value) => {
+                const id = Number(value);
                 const loc = locCandidates.find((l) => l.id === id);
                 if (loc) {
                   setSelectedLocationId(id);
@@ -75,12 +76,20 @@ export function StockAdjustmentConfirmCard({
                 }
               }}
             >
-              {locCandidates.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                className="h-7 max-w-[180px] px-1.5 text-xs font-medium text-foreground"
+                aria-label="Location"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {locCandidates.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <span className="font-medium text-foreground">{selectedLocationName}</span>
           )}
@@ -123,11 +132,10 @@ export function StockAdjustmentConfirmCard({
                     return (
                       <div key={i} className={`grid ${cols} gap-1 items-center`}>
                         {hasChoice ? (
-                          <select
-                            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
-                            value={selectedItems[i].id}
-                            onChange={(e) => {
-                              const id = Number(e.target.value);
+                          <Select
+                            value={String(selectedItems[i].id)}
+                            onValueChange={(value) => {
+                              const id = Number(value);
                               const c = candidates.find((c) => c.id === id);
                               if (c) {
                                 setSelectedItems((prev) =>
@@ -136,13 +144,21 @@ export function StockAdjustmentConfirmCard({
                               }
                             }}
                           >
-                            {candidates.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                                {c.code ? ` (${c.code})` : ""}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              className="h-7 w-full px-1.5 text-xs font-medium text-foreground"
+                              aria-label="Item"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {candidates.map((c) => (
+                                <SelectItem key={c.id} value={String(c.id)}>
+                                  {c.name}
+                                  {c.code ? ` (${c.code})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span className="truncate text-foreground">{selectedItems[i].name}</span>
                         )}
@@ -247,10 +263,7 @@ export function VoucherSearchResultsCard({
       <div className="divide-y">
         {results.map((v) => {
           const tab = VOUCHER_TYPE_TAB[v.voucherType] ?? "payment";
-          const amount = parseFloat(v.totalAmount).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
+          const amount = formatUsd(parseFloat(v.totalAmount), 2);
           return (
             <div key={v.id} className="px-3 py-2 flex items-start justify-between gap-2 hover-elevate">
               <div className="min-w-0 flex-1">
@@ -268,7 +281,7 @@ export function VoucherSearchResultsCard({
                 <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{v.description || "—"}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] text-muted-foreground">{v.voucherDate}</span>
-                  <span className="text-[11px] font-medium text-foreground">${amount}</span>
+                  <span className="text-[11px] font-medium text-foreground">{amount}</span>
                 </div>
               </div>
               <Button
@@ -363,19 +376,26 @@ export function StockItemConfirmCard({
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground font-medium">Stock Group</label>
             {draft.groupCandidates.length > 0 ? (
-              <select
-                className="w-full rounded-md border bg-background px-2 py-1 text-sm"
-                value={groupId ?? ""}
-                onChange={(e) => handleGroupChange(e.target.value)}
-                data-testid="select-stock-item-group"
+              <Select
+                value={String(groupId ?? "") || "__none__"}
+                onValueChange={(value) => handleGroupChange(value === "__none__" ? "" : value)}
               >
-                <option value="">— Select group —</option>
-                {draft.groupCandidates.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="h-8 w-full text-sm"
+                  data-testid="select-stock-item-group"
+                  aria-label="Stock Group"
+                >
+                  <SelectValue placeholder="— Select group —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Select group —</SelectItem>
+                  {draft.groupCandidates.map((g) => (
+                    <SelectItem key={g.id} value={String(g.id)}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <input
                 className="w-full rounded-md border bg-background px-2 py-1 text-sm"
@@ -469,18 +489,18 @@ export function PriceUpdateConfirmCard({
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground font-medium">Stock Item</label>
           {draft.itemCandidates.length > 1 ? (
-            <select
-              className="w-full rounded-md border bg-background px-2 py-1 text-sm"
-              value={itemId}
-              onChange={(e) => handleItemChange(e.target.value)}
-              data-testid="select-price-item"
-            >
-              {draft.itemCandidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
+            <Select value={String(itemId)} onValueChange={handleItemChange}>
+              <SelectTrigger className="h-8 w-full text-sm" data-testid="select-price-item" aria-label="Stock Item">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {draft.itemCandidates.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name} ({c.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <p className="text-sm font-medium">
               {itemName} <span className="text-xs text-muted-foreground">({itemCode})</span>
@@ -491,19 +511,26 @@ export function PriceUpdateConfirmCard({
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground font-medium">Price Group / Location</label>
             {draft.allLocations.length > 0 ? (
-              <select
-                className="w-full rounded-md border bg-background px-2 py-1 text-sm"
-                value={locationId ?? ""}
-                onChange={(e) => handleLocationChange(e.target.value)}
-                data-testid="select-price-location"
+              <Select
+                value={String(locationId ?? "") || "__none__"}
+                onValueChange={(value) => handleLocationChange(value === "__none__" ? "" : value)}
               >
-                <option value="">— Select —</option>
-                {draft.allLocations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="h-8 w-full text-sm"
+                  data-testid="select-price-location"
+                  aria-label="Price Group / Location"
+                >
+                  <SelectValue placeholder="— Select —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Select —</SelectItem>
+                  {draft.allLocations.map((l) => (
+                    <SelectItem key={l.id} value={String(l.id)}>
+                      {l.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <p className="text-sm font-medium">{locationName || "—"}</p>
             )}

@@ -69,7 +69,7 @@ requireMarkers(".github/workflows/remote-support-rollout-e2e.yml", [
   "pull_request:",
   "schedule:",
   "workflow_dispatch:",
-  "verify-remote-support-phase17-invariants.mjs",
+  "verify-remote-support-invariants.mjs",
   'REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS: "1500"',
   "REMOTE_SUPPORT_STAGING_BASE_URL",
 ]);

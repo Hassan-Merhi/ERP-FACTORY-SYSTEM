@@ -4,7 +4,6 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
 import { registerCostCenterRoutes } from "./costCenterRoutes";
-import { enforceCostCenterErpPageAccess } from "../middleware/costCenterErpPageAccess";
 import { registerCostCenterReportingRoutes } from "./costCenterReportingRoutes";
 import { registerCostCenterHistoricalRoutes } from "./costCenterHistoricalRoutes";
 import { registerCostCenterReleaseReadinessRoutes } from "./costCenterReleaseReadinessRoutes";
@@ -93,18 +92,14 @@ import { registerLabelBannersRoutes } from "./factory/labelBannersRoutes";
 import { registerErpWorkerDocumentRoutes } from "./employees/erpWorkerDocumentRoutes";
 import { registerSalaryAdvanceRoutes } from "./employees/salaryAdvanceRoutes";
 import { registerLegacyHealthRoutes } from "./core/healthRoutes";
-import { registerPermissionBoundaryRoutes } from "./core/permissionBoundaryRoutes";
+import { registerVoucherMutationBoundaries } from "./core/voucherMutationBoundaryRoutes";
 import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfigRoutes";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthFactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
-import { enforceSharedFactoryAccess } from "../middleware/sharedFactoryAccessBoundary";
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
-  registerPermissionBoundaryRoutes(app);
-  // Enforce Factory ownership before shared accounting routes.
-  app.use(enforceSharedFactoryAccess);
-  app.use("/api/cost-centers", requireAuth, enforceCostCenterErpPageAccess);
+  registerVoucherMutationBoundaries(app);
   // Unified-accounting metadata remains read-only until an Owner pilot.
   app.use(enforceUnifiedAccountingRollout);
   registerWhatsAppFastSendRoutes(app);

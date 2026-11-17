@@ -12,10 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
-import {
-  ensureInventoryCutoverSchema,
-  isPerpetualInventoryActive,
-} from "../server/services/accounting/perpetualInventory/cutover";
+import { isPerpetualInventoryActive } from "../server/services/accounting/perpetualInventory/cutover";
 import {
   applyOpeningInventoryJournal,
   planOpeningInventoryJournal,
@@ -42,7 +39,6 @@ async function maintenance(work: (q: (text: string, values?: unknown[]) => Promi
 }
 
 beforeAll(async () => {
-  expect(await ensureInventoryCutoverSchema(pool)).toBe(true);
   await maintenance(async (q) => {
     companyId = (
       await q(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [PREFIX.toUpperCase()])
@@ -62,8 +58,8 @@ beforeAll(async () => {
     );
     // Open mix batch: 120 kg left at 0.9 = 108.00; a closed one is ignored.
     await q(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
-       VALUES ($1, $2, 500, 380, 0.9, 450, 'ACTIVE'), ($1, $3, 100, 0, 0.9, 90, 'CLOSED')`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, used_kg, cost_per_kg, total_cost, status)
+       VALUES ($1, $2::varchar, $2::text, 500, 380, 0.9, 450, 'ACTIVE'), ($1, $3::varchar, $3::text, 100, 0, 0.9, 90, 'CLOSED')`,
       [companyId, `${PREFIX}-M1`, `${PREFIX}-M2`]
     );
     const bale = (code: string, status: string, cost: string) =>

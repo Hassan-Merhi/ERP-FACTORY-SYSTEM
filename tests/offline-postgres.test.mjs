@@ -3,10 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
-import { applyStagedVoucherOnce, ensurePhase8ApplySchema } from "../server/edge/applyStore.mjs";
+import { applyStagedVoucherOnce } from "../server/edge/applyStore.mjs";
+import { applyMigrations, databaseUrlFor } from "./helpers/migrateDisposableDatabase.mjs";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 
 const url = process.env.PHASE8_TEST_DATABASE_URL;
+// A dedicated database built from migrations/ (never from runtime DDL).
+const TEST_DB = "phase8_apply_test";
+const testUrl = url ? databaseUrlFor(url, TEST_DB) : undefined;
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
 const sha = "a".repeat(64);
 const base = {
@@ -16,9 +20,10 @@ const base = {
   baselineSha256: sha,
   operatorAck: "LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED",
 };
-const admin = new Client({ connectionString: url, ssl: false });
+const maintenance = new Client({ connectionString: url, ssl: false });
+const admin = new Client({ connectionString: testUrl, ssl: false });
 const app = new Client({
-  connectionString: url
+  connectionString: testUrl
     ?.replace("postgres:", "phase8_runtime:")
     .replace("phase8-test-admin-pass", "phase8-test-app-pass"),
   ssl: false,
@@ -75,10 +80,11 @@ async function writeStage(entry) {
 }
 async function postFakeJournal(sameClient, entry) {
   applied++;
-  const out = await sameClient.query("INSERT INTO vouchers(company_id,voucher_date) VALUES($1,$2::date) RETURNING id", [
-    entry.companyId,
-    entry.payload.voucher.voucherDate,
-  ]);
+  const out = await sameClient.query(
+    `INSERT INTO vouchers(company_id,voucher_date,voucher_number,voucher_type,total_amount)
+     VALUES($1,$2::date,$3,'Journal',$4) RETURNING id`,
+    [entry.companyId, entry.payload.voucher.voucherDate, `P8-${applied}`, entry.payload.voucher.totalAmount]
+  );
   return { cloudVoucherId: Number(out.rows[0].id), businessDate: "2026-10-30" };
 }
 
@@ -86,40 +92,36 @@ if (!url) {
   test("PostgreSQL 17 integration requires explicit disposable test DB", { skip: true }, () => {});
 } else {
   test("phase8 schema + restricted cloud writer, ACK loss, rollback, sequence order, revocation", async () => {
+    await maintenance.connect();
+    await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
+    await maintenance.query("DROP ROLE IF EXISTS phase8_runtime");
+    await maintenance.query(`CREATE DATABASE ${TEST_DB}`);
+    applyMigrations(testUrl);
     await admin.connect();
     try {
       await admin.query(`
         REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         CREATE ROLE phase8_runtime LOGIN PASSWORD 'phase8-test-app-pass'
           NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-        CREATE TABLE users(id text PRIMARY KEY, active boolean NOT NULL);
-        CREATE TABLE user_company_roles(user_id text, company_id integer, role text);
-        CREATE TABLE vouchers(id serial PRIMARY KEY, company_id integer, voucher_date date);
-        CREATE TABLE factory_edge_staged_vouchers(
-          site_id uuid, sequence bigint, operation_id uuid, company_id integer,
-          actor_user_id text, local_voucher_id integer, operation_kind text,
-          payload jsonb, payload_sha256 char(64),
-          staged_at timestamptz NOT NULL DEFAULT now(),
-          PRIMARY KEY (site_id, sequence));
-        INSERT INTO users(id,active) VALUES('actor-1',true);
-        INSERT INTO user_company_roles VALUES('actor-1',6,'Admin');
+        INSERT INTO companies(id,code,name) VALUES(6,'P8','Phase 8 company');
+        INSERT INTO users(id,username,password,active) VALUES('actor-1','actor-1','not-a-login',true);
+        INSERT INTO user_company_roles(user_id,company_id,role) VALUES('actor-1',6,'Admin');
       `);
-      await ensurePhase8ApplySchema(admin);
       const sql = await readFile(new URL("../deploy/lan/phase7-install-writer-fence.sql", import.meta.url), "utf8");
       await admin.query(sql);
       await admin.query(`
         UPDATE phase7_writer.state SET mode='cloud-primary',site_id='cloud',
           epoch=2, baseline_sha256=repeat('a',64) WHERE singleton;
-        GRANT CONNECT ON DATABASE postgres TO phase8_runtime;
+        GRANT CONNECT ON DATABASE ${TEST_DB} TO phase8_runtime;
         GRANT USAGE ON SCHEMA public TO phase8_runtime;
         GRANT USAGE ON SCHEMA phase7_writer TO phase8_runtime;
         GRANT SELECT ON phase7_writer.state TO phase8_runtime;
-        GRANT SELECT ON users,user_company_roles,factory_edge_staged_vouchers,
-          factory_edge_apply_approvals,vouchers,factory_edge_applied_vouchers,
-          factory_edge_apply_cursor TO phase8_runtime;
+        -- Read access as the runtime role has it; the real voucher triggers
+        -- (closed-period guard, audit) read reference tables.
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO phase8_runtime;
         GRANT INSERT,UPDATE ON factory_edge_apply_cursor TO phase8_runtime;
-        GRANT INSERT ON factory_edge_applied_vouchers,vouchers TO phase8_runtime;
-        GRANT USAGE,SELECT ON SEQUENCE vouchers_id_seq TO phase8_runtime;
+        GRANT INSERT ON factory_edge_applied_vouchers,vouchers,audit_log TO phase8_runtime;
+        GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO phase8_runtime;
       `);
       await admin.query(`
         SELECT set_config('phase7_writer.mode','cloud-primary',false),
@@ -128,7 +130,8 @@ if (!url) {
       `);
       await app.connect();
       await app.query(`
-        SELECT set_config('phase7_writer.mode','cloud-primary',false),
+        SELECT set_config('app.current_company_id','6',false),
+          set_config('phase7_writer.mode','cloud-primary',false),
           set_config('phase7_writer.site_id','cloud',false),
           set_config('phase7_writer.epoch','2',false);
       `);
@@ -205,6 +208,9 @@ if (!url) {
     } finally {
       await app.end().catch(() => undefined);
       await admin.end();
+      await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`).catch(() => undefined);
+      await maintenance.query("DROP ROLE IF EXISTS phase8_runtime").catch(() => undefined);
+      await maintenance.end();
     }
   });
 }

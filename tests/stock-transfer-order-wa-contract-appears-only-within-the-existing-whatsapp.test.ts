@@ -14,7 +14,7 @@ const dialog = read("client/src/pages/stock-transfer-order/SendStockTransferWhat
 const requestPanel = read("client/src/pages/stock-transfer-order/StockTransferOrderApprovalRequestPanel.tsx");
 const settings = read("client/src/pages/settings/StockTransferOrderApprovalSettings.tsx");
 const transferCreate = read("server/routes/fiscal-transfers/create.ts");
-const permissionBoundary = read("server/routes/core/permissionBoundaryRoutes.ts");
+const accessManifest = read("config/route-access-manifest.json");
 const routeManifest = JSON.parse(read("config/route-manifest.json")) as {
   routeCount: number;
   middlewareMountCount: number;
@@ -33,7 +33,7 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(requestPanel).toContain("pendingRevisions");
     expect(settings).toContain("authorizedPhoneE164");
     expect(settings).toContain("Destination WhatsApp recipients");
-    expect(registration).toContain("registerStockTransferOrderWaApprovalRoutes(app, { ensureGroupsTable })");
+    expect(registration).toContain("registerStockTransferOrderWaApprovalRoutes(app);");
   });
 
   it("preserves the ordinary stock-transfer create path and marks only the order route", () => {
@@ -41,8 +41,13 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(transferCreate).toContain('req.path === "/api/stock-transfer-orders"');
     expect(transferCreate).toContain("req.body?.workflowOrigin !== undefined");
     expect(transferCreate).toContain("RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED");
-    expect(permissionBoundary).toContain('"/api/stock-transfer-orders"');
-    expect(permissionBoundary).toContain('"/api/stock-transfer-order/wa-approval"');
+    // The inventory module permission is declared on every route of both surfaces.
+    const moduleRules = accessManifest
+      .split("\n")
+      .filter((line) => /"id":"[A-Z]+ \/api\/stock-transfer-(orders|order\/wa-approval)[/#]/.test(line))
+      .filter((line) => !line.includes("/wa-approval/webhook#"));
+    expect(moduleRules.length).toBeGreaterThan(1);
+    for (const rule of moduleRules) expect(rule).toContain('"mod_inventory"');
   });
 
   it("filters only saved, own-company, destination-matched orders", () => {
@@ -93,6 +98,9 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(routeManifest.routes).toContain(
       "POST /api/stock-transfer-order/wa-approval/requests [requireAuth > <anonymous> > <anonymous>]"
     );
-    expect(routeManifest.middlewareMounts).toContain("USE /api/stock-transfer-order/wa-approval [<anonymous>]");
+    expect(routeManifest.middlewareMounts).toContain("USE / [manifestAccessBoundary]");
+    expect(accessManifest).toContain(
+      '{"id":"POST /api/stock-transfer-order/wa-approval/webhook#1","guards":"stockTransferOrderWaWebhookHandler","auth":"service-token","companyScope":"none","roles":"any","permission":"none"}'
+    );
   });
 });

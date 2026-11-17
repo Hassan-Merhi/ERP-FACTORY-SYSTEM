@@ -81,11 +81,14 @@ and resilience checks retain their own authority for the guarantees they test.
 
 ## Database safety
 
-- Persistent databases advance through reviewed versioned SQL and idempotent
-  startup migrations.
-- Run `npm run verify:migrations` for migration changes.
-- Never run `drizzle-kit push` against production or another persistent
-  database; CI uses it only to create a disposable test schema.
+- Persistent databases advance only through reviewed numbered migrations in
+  `migrations/`, applied explicitly before deploying:
+  `npm run db:migrate:status`, then
+  `MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate`, then
+  `npm run db:verify`. The application never changes the schema and refuses to
+  start on a mismatch. The first release of the migrations-only system needs a
+  one-time adoption (`npm run db:adopt`) — see docs/database-migrations.md.
+- `drizzle-kit push` is not used against any database.
 - Never test restore by overwriting production. Follow
   `docs/operations/database-backup-rollback-recovery.md`.
 - Historical-replay or migration apply controls require their dedicated

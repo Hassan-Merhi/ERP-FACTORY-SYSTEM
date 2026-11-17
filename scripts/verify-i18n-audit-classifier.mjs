@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const auditScript = path.join(repositoryRoot, "scripts", "audit-i18n-phase14.mjs");
+const auditScript = path.join(repositoryRoot, "scripts", "audit-i18n.mjs");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "i18n-audit-classifier-"));
 
 try {

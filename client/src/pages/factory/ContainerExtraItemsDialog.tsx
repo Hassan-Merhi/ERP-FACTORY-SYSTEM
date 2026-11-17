@@ -22,6 +22,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { ContainerExtraExcelPanel } from "./ContainerExtraExcelPanel";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 type Product = { id: number; articleCode: string | null; name: string; active?: boolean; sellingPrice?: string | null };
 type ExtraItem = { articleCode: string; productName: string; expectedQty: number; pricePerBale: string };
@@ -277,7 +278,7 @@ export function ContainerExtraItemsDialog({
                 <p className="text-xs text-muted-foreground">
                   +{item.expectedQty} bales •{" "}
                   {Number(item.pricePerBale) > 0
-                    ? "$" + Number(item.pricePerBale).toFixed(2) + " / bale"
+                    ? formatUsd(Number(item.pricePerBale), 2) + " / bale"
                     : "Unpriced — edit to set price"}
                 </p>
               </div>

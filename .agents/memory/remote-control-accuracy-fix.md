@@ -41,5 +41,5 @@ Gotchas:
 - Wheel normalization MUST live on the controller (the event's units are a
   property of the controller's browser); the server just bounds ±1200.
 - The old `stale-frame-viewport` UI message was replaced by the
-  `frame-point-offscreen` message in `remoteSupportPhase5Translations.ts`
+  `frame-point-offscreen` message in `remoteSupportMouseTranslations.ts`
   (en/ar/fr).

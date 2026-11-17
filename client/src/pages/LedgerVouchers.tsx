@@ -12,6 +12,7 @@ import { useDateJump } from "@/hooks/use-date-jump";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { Badge } from "@/components/ui/badge";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
@@ -96,7 +97,7 @@ export default function LedgerVouchers() {
     }
   }, [year, month]);
 
-  const { data, isLoading } = useQuery<LedgerVouchersData>({
+  const { data, isLoading, isError, refetch } = useQuery<LedgerVouchersData>({
     queryKey: ["/api/reports/ledger-vouchers", accountId, year, month, periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const searchParams = new URLSearchParams({
@@ -142,6 +143,8 @@ export default function LedgerVouchers() {
           <div className="space-y-4">
             <Skeleton className="h-[400px] w-full" />
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : data ? (
           <>
             {/* Vouchers Table */}
@@ -161,8 +164,11 @@ export default function LedgerVouchers() {
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
                       {Array.isArray(data.vouchers)
-                        ? data.vouchers.filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date })).length
-                        : 0} voucher(s)
+                        ? data.vouchers.filter(
+                            (v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date })
+                          ).length
+                        : 0}{" "}
+                      voucher(s)
                     </p>
                   </div>
                 </div>
@@ -172,10 +178,12 @@ export default function LedgerVouchers() {
                   let runningBal = data.openingBalance;
                   // Preserve every posted line when calculating the running
                   // balance, then omit just the known internal catchup rows.
-                  const vouchersWithBal = (Array.isArray(data.vouchers) ? data.vouchers : []).map((v) => {
-                    runningBal = runningBal + v.credit - v.debit;
-                    return { ...v, runningBalance: runningBal };
-                  }).filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date }));
+                  const vouchersWithBal = (Array.isArray(data.vouchers) ? data.vouchers : [])
+                    .map((v) => {
+                      runningBal = runningBal + v.credit - v.debit;
+                      return { ...v, runningBalance: runningBal };
+                    })
+                    .filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date }));
                   const formatBal = (bal: number) =>
                     bal === 0 ? "—" : `${formatAmount(Math.abs(bal))} ${bal >= 0 ? "Cr" : "Dr"}`;
                   return (

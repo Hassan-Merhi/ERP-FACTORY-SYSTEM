@@ -6,12 +6,11 @@
  * Delivery is the generic Phase 9 event stream: the LAN relay
  * (scripts/edge/relay-event-outbox.mjs) stages these rows in the cloud and the
  * operator apply (server/edge/eventStreamOperatorApply.ts) replays each movement
- * exactly once as a quantity delta. The schema is installed by the reviewed
- * DBA step (server/edge/offlineSchemaInstall.ts), never at startup; without it
- * the LAN write guard refuses the route instead of failing mid-adjustment.
+ * exactly once as a quantity delta. The schema is defined by migrations/ and
+ * never created at runtime; without it the LAN write guard refuses the route
+ * instead of failing mid-adjustment.
  */
 import { sql } from "drizzle-orm";
-import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
 import { EdgeRefusal } from "./edgeRefusal";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
@@ -25,18 +24,13 @@ import {
 import { phase9StockItemEditEnvelope, type Phase9StockItemEditEvidence } from "./stockItemEditEnvelope.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,
-  PHASE9_STOCK_ITEM_CREATE_KIND,
-  PHASE9_STOCK_ITEM_DELETE_KIND,
   phase9StockItemCreateEnvelope,
   phase9StockItemDeleteEnvelope,
   type Phase9StockItemCreateEvidence,
   type Phase9StockItemDeleteEvidence,
 } from "./stockItemLifecycleEnvelope.mjs";
 import {
-  PHASE9_STOCK_TRANSFER_EDIT_KIND,
-  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
   PHASE9_STOCK_TRANSFER_REVISION_KIND,
-  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
   phase9StockTransferEditEnvelope,
   phase9StockTransferFinalizeEnvelope,
   phase9StockTransferRevisionEnvelope,
@@ -50,80 +44,6 @@ import {
   type Phase9TransferRef,
   type Phase9TransferSnapshot,
 } from "./stockTransferWorkflowEnvelope.mjs";
-
-/**
- * local_movement_id is the LAN source row: a canonical stock movement (quick
- * adjust), a stock transfer (transfer) or the edit's own stream sequence (item
- * edit); unique per kind.
- */
-const STOCK_OUTBOX_KINDS = [
-  "stock.quick-adjust.v1",
-  "stock.transfer.v1",
-  "stock.item-edit.v1",
-  PHASE9_STOCK_ITEM_CREATE_KIND,
-  PHASE9_STOCK_ITEM_DELETE_KIND,
-  PHASE9_STOCK_TRANSFER_EDIT_KIND,
-  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
-  PHASE9_STOCK_TRANSFER_REVISION_KIND,
-  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
-] as const;
-
-export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
-  if (readFactoryEdgeConfiguration().mode !== "lan") return;
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_stock_counter (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL CHECK(last_sequence > 0)
-    )
-  `);
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_stock_outbox (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
-      local_movement_id BIGINT NOT NULL CHECK(local_movement_id > 0 AND local_movement_id <= 2147483647),
-      operation_kind TEXT NOT NULL,
-      payload JSONB NOT NULL,
-      payload_sha256 CHAR(64) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, sequence),
-      UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, operation_kind, local_movement_id)
-    )
-  `);
-  // The allowed kinds are (re)set on every install, so an existing outbox
-  // learns new kinds without being rebuilt.
-  await queryable.query(
-    "ALTER TABLE factory_edge_stock_outbox DROP CONSTRAINT IF EXISTS factory_edge_stock_outbox_operation_kind_check"
-  );
-  await queryable.query(
-    `ALTER TABLE factory_edge_stock_outbox ADD CONSTRAINT factory_edge_stock_outbox_operation_kind_check
-       CHECK (operation_kind IN (${STOCK_OUTBOX_KINDS.map((kind) => `'${kind}'`).join(", ")}))`
-  );
-  // Plan batch 2: items created on this server take their id from a range the
-  // cloud never uses, so offline records naming them can be translated to the
-  // cloud's item (only the LAN create route draws from it).
-  await queryable.query(
-    `CREATE SEQUENCE IF NOT EXISTS factory_edge_lan_item_id_seq
-       AS integer START WITH ${PHASE9_LAN_ITEM_ID_BASE} MINVALUE ${PHASE9_LAN_ITEM_ID_BASE} MAXVALUE 2147483647`
-  );
-  // Shared with the pressing install; both are idempotent.
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_stock_outbox_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE9_STOCK_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query(`DROP TRIGGER IF EXISTS factory_edge_stock_outbox_no_mutation ON factory_edge_stock_outbox`);
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_stock_outbox_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_stock_outbox
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_stock_outbox_immutable()
-  `);
-}
 
 /** Record the committed movement in the SAME transaction; no-op off the LAN primary. */
 export async function capturePhase9StockAdjustTx(

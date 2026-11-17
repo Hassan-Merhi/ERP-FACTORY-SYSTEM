@@ -2,10 +2,9 @@
  * Phase 9: atomic LAN evidence for receiving containers against existing
  * purchase orders ("receiving" stream). Captured inside the offload
  * transaction on the factory LAN primary; replayed by the operator apply in
- * the cloud. Schema: reviewed DBA install only (offlineSchemaInstall.ts).
+ * the cloud. Schema: migrations/ (never created at runtime).
  */
 import { sql } from "drizzle-orm";
-import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
 import { resultRows } from "../lib/queryResult";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
@@ -15,50 +14,6 @@ import {
   phase9ReceivingLineDigest,
   type Phase9ReceivingEvidence,
 } from "./receivingEnvelope.mjs";
-
-export async function ensurePhase9ReceivingOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
-  if (readFactoryEdgeConfiguration().mode !== "lan") return;
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_receiving_counter (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL CHECK(last_sequence > 0)
-    )
-  `);
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_receiving_outbox (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
-      local_offload_id INTEGER NOT NULL CHECK(local_offload_id > 0),
-      operation_kind TEXT NOT NULL CHECK(operation_kind = 'receiving.container-offload.v1'),
-      payload JSONB NOT NULL,
-      payload_sha256 CHAR(64) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, sequence),
-      UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, local_offload_id),
-      CONSTRAINT factory_edge_receiving_source_fk
-        FOREIGN KEY (local_offload_id) REFERENCES container_offloads(id) ON DELETE RESTRICT
-    )
-  `);
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_receiving_outbox_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE9_RECEIVING_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query(
-    `DROP TRIGGER IF EXISTS factory_edge_receiving_outbox_no_mutation ON factory_edge_receiving_outbox`
-  );
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_receiving_outbox_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_receiving_outbox
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_receiving_outbox_immutable()
-  `);
-}
 
 /** Quantities (no prices) on the container's purchase orders, as one digest. */
 export async function phase9ReceivingLineDigestTx(

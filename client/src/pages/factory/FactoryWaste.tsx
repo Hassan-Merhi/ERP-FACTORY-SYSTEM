@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { addDays, format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ import {
 import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface WasteEntry {
   id: number;
@@ -229,18 +231,20 @@ export default function FactoryWaste() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="waste-type">Waste Type</Label>
-                  <select
-                    id="waste-type"
-                    value={formWasteType}
-                    onChange={(e) => setFormWasteType(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                    data-testid="select-waste-type"
+                  <Select
+                    value={formWasteType || "__none__"}
+                    onValueChange={(v) => setFormWasteType(v === "__none__" ? "" : v)}
                   >
-                    <option value="">— None —</option>
-                    <option value="GARBAGE">Garbage</option>
-                    <option value="WIPERS">Wipers</option>
-                    <option value="OTHER">Other</option>
-                  </select>
+                    <SelectTrigger id="waste-type" className="w-full" data-testid="select-waste-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      <SelectItem value="GARBAGE">Garbage</SelectItem>
+                      <SelectItem value="WIPERS">Wipers</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="waste-kg">KG Waste *</Label>
@@ -309,10 +313,9 @@ export default function FactoryWaste() {
         </CardHeader>
         <CardContent>
           {wasteQuery.isLoading ? (
-            <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading waste entries...</span>
-            </div>
+            <LoadingState title="Loading waste entries..." data-testid="loading-spinner" />
+          ) : wasteQuery.isError && !wasteQuery.data ? (
+            <ErrorState onAction={() => void wasteQuery.refetch()} actionLabel="Try again" />
           ) : !Array.isArray(wasteQuery.data) || wasteQuery.data.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground" data-testid="text-no-data">

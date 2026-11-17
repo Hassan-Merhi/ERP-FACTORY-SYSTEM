@@ -8,6 +8,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { summarizeRecordedMixBatches, recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
 import type { MixBatchSupplierCategory, MixBatchSupplierCategoryLink } from "./mixBatchCategoryTargets";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface MixBatchRow {
   id: number;
@@ -201,16 +203,19 @@ export function MixBatchList({
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={exportPeriod}
-              onChange={(event) => setExportPeriod(event.target.value as "month" | "all-time")}
-              aria-label="Excel cost report period"
-              className="h-10 min-w-0 rounded-xl border border-input bg-background px-3 text-sm font-semibold shadow-sm"
-              data-testid="select-mix-batch-export-period"
-            >
-              <option value="month">Selected Month</option>
-              <option value="all-time">All Time</option>
-            </select>
+            <Select value={exportPeriod} onValueChange={(v) => setExportPeriod(v as "month" | "all-time")}>
+              <SelectTrigger
+                aria-label="Excel cost report period"
+                className="h-10 min-w-0 rounded-xl text-sm font-semibold shadow-sm"
+                data-testid="select-mix-batch-export-period"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Selected Month</SelectItem>
+                <SelectItem value="all-time">All Time</SelectItem>
+              </SelectContent>
+            </Select>
             {exportPeriod === "month" && (
               <input
                 type="month"
@@ -499,11 +504,12 @@ export function MixBatchList({
             </div>
           </>
         ) : (
-          <div className="text-center py-10">
-            <Layers className="mx-auto h-10 w-10 text-muted-foreground" />
-            <h3 className="mt-3 text-base font-semibold">No mix batches</h3>
-            <p className="text-muted-foreground text-sm mt-1">No mix batches yet. Create one to get started.</p>
-          </div>
+          <EmptyState
+            icon={Layers}
+            title="No mix batches"
+            description="No mix batches yet. Create one to get started."
+            className="py-10"
+          />
         )}
       </CardContent>
     </Card>

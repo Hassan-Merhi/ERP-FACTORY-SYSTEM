@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, X, ExternalLink, Upload, Download, Plus, Save, Trash2 } from "lucide-react";
@@ -35,6 +36,7 @@ import {
   type StatementData,
 } from "./factorycustomerstatement/statementHelpers";
 import { confirmAction } from "@/components/ConfirmHost";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function FactoryCustomerStatement() {
   const { selectedCompany } = useCompany();
@@ -509,23 +511,18 @@ export default function FactoryCustomerStatement() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date From</label>
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-from"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground font-medium">Date To</label>
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-40"
-                    data-testid="input-filter-date-to"
+                  <label className="text-xs text-muted-foreground font-medium">Period</label>
+                  <PeriodFilter
+                    value={{
+                      fromDate: filterDateFrom,
+                      toDate: filterDateTo,
+                      preset: filterDateFrom || filterDateTo ? "custom" : "all_time",
+                    }}
+                    onChange={(v) => {
+                      setFilterDateFrom(v.fromDate);
+                      setFilterDateTo(v.toDate);
+                    }}
+                    data-testid="customer-statement-period"
                   />
                 </div>
                 {hasFilters && (
@@ -813,29 +810,32 @@ export default function FactoryCustomerStatement() {
                     <label htmlFor="customer-price-destination" className="mb-1 block text-xs font-semibold">
                       Price list destination
                     </label>
-                    <select
-                      id="customer-price-destination"
-                      data-testid="select-price-destination"
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                    <Select
                       value={priceDestination}
-                      onChange={(e) => void selectPriceDestination(e.target.value)}
+                      onValueChange={(v) => void selectPriceDestination(v)}
                       disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
                     >
-                      <option value="" disabled>
-                        Select destination
-                      </option>
-                      {(priceDestinationsQuery.data ?? []).map((destination) => (
-                        <option key={destination} value={destination}>
-                          {destination}
-                        </option>
-                      ))}
-                      {priceDestination &&
-                        priceDestination !== LEGACY_PRICE_DESTINATION &&
-                        !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
-                          <option value={priceDestination}>{priceDestination}</option>
-                        )}
-                      <option value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</option>
-                    </select>
+                      <SelectTrigger
+                        id="customer-price-destination"
+                        data-testid="select-price-destination"
+                        className="h-9 w-full"
+                      >
+                        <SelectValue placeholder="Select destination" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(priceDestinationsQuery.data ?? []).map((destination) => (
+                          <SelectItem key={destination} value={destination}>
+                            {destination}
+                          </SelectItem>
+                        ))}
+                        {priceDestination &&
+                          priceDestination !== LEGACY_PRICE_DESTINATION &&
+                          !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
+                            <SelectItem value={priceDestination}>{priceDestination}</SelectItem>
+                          )}
+                        <SelectItem value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   {recordChanges.allowed && (
                     <div className="flex min-w-[220px] flex-1 items-end gap-2">

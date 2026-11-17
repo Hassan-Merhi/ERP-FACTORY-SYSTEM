@@ -12,7 +12,7 @@ Spec: `docs/superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stoc
 - Stock counts never write inventory without a movement, and every movement references its session.
 - Finalization is atomic and idempotent; POS sales during an open count do not corrupt
   reconciliation.
-- New UI strings get EN/AR/FR entries in `client/src/i18n/retailWave2Translations.ts` (already
+- New UI strings get EN/AR/FR entries in `client/src/i18n/retailPosPricingTranslations.ts` (already
   registered in `ApplicationInterfaceTranslator.tsx`); no new translation module is needed.
 - Follow repo conventions: schema in `shared/schema`, migrations mirrored in
   `server/startup/ensureRuntimeSchema.ts` (production runs the guard, not `migrations/*.sql`),
@@ -27,7 +27,7 @@ Spec: `docs/superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stoc
 - [x] `retail_pos_settings`, `retail_promotions`, `retail_discount_approvals`.
 - [x] `retail_stock_count_sessions` / `_lines` / `_events`, `stock_count` movement type.
 - [x] Verify `ensureRuntimeSchema` mirrors every column/table and passes the runtime-schema test
-      (`tests/retail-wave2-contract.test.ts`, DescribeWithDatabase guard section).
+      (`tests/retail-pos-money-contract.test.ts`, DescribeWithDatabase guard section).
 
 ### 2. Pure services
 
@@ -58,10 +58,10 @@ Spec: `docs/superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stoc
 
 ### 5. PostgreSQL integration tests
 
-- [x] `tests/retail-wave2-customers-pricing-tax.test.ts` — customer quick create/search/history,
+- [x] `tests/retail-customers-pricing-tax.test.ts` — customer quick create/search/history,
       walk-in default, line/order discounts, override, approval required/approved/reused, tax
       exclusive + inclusive, tax-disabled parity, refund of discounted amount.
-- [x] `tests/retail-wave2-stock-count.test.ts` — snapshot/scan/unexpected/manual/recount/review/
+- [x] `tests/retail-stock-count.test.ts` — snapshot/scan/unexpected/manual/recount/review/
       finalize, movement references session, idempotent finalize, POS sale during count, uncounted
       guard, variance report. 3 passed.
 
@@ -71,12 +71,12 @@ Spec: `docs/superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stoc
       ladder (server-priced), manager approval dialog, receipt with customer + breakdown.
 - [x] Retail: stock-count screen (create/scan/table/review/recount/finalize/history+variance),
       settings screen (tax, discount limits, promotions CRUD), sales/customer history screen.
-- [x] Nav, routes, lazy imports, EN/AR/FR translations (`retailWave2Translations.ts`, +107 strings).
+- [x] Nav, routes, lazy imports, EN/AR/FR translations (`retailPosPricingTranslations.ts`, +107 strings).
 - Type-check: `node --max-old-space-size=3072 node_modules/.bin/tsc -p tsconfig.w2client.json`.
 
 ### 7. Contract tests + verification
 
-- [x] `tests/retail-wave2-contract.test.ts` — schema fields, route registration, service wiring,
+- [x] `tests/retail-pos-money-contract.test.ts` — schema fields, route registration, service wiring,
       UI markers, translations, plus the runtime-schema guard (13 passed).
 - [ ] Run retail suites, `npm run verify:migrations`, formatting.
 - [ ] Wider regression pass over suites touching shared files.

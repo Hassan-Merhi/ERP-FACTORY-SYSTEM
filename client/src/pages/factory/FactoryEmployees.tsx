@@ -6,7 +6,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   Plus,
-  Search,
   Pencil,
   Users,
   UserX,
@@ -40,6 +39,9 @@ import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { SearchField } from "@/components/ui/search-field";
+import { ErrorState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface Employee {
   id: number;
@@ -117,7 +119,12 @@ export default function FactoryEmployees() {
     employees: Array<{ id: number; name: string; oldBalance: number; newBalance: number }>;
   } | null>(null);
 
-  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -126,6 +133,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
   });
+  const employees = employeesData ?? [];
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -338,16 +346,14 @@ export default function FactoryEmployees() {
 
       {/* Filter row */}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11 rounded-xl border-border/70 bg-card/80 pl-10 shadow-sm focus-visible:ring-emerald-500/30"
-            data-testid="input-employee-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search employees..."
+          value={search}
+          onValueChange={setSearch}
+          wrapperClassName="min-w-[200px] flex-1"
+          className="h-11 rounded-xl border-border/70 bg-card/80 shadow-sm focus-visible:ring-emerald-500/30"
+          data-testid="input-employee-search"
+        />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger
             className="h-11 w-full rounded-xl border-border/70 bg-card/80 shadow-sm sm:w-36"
@@ -417,6 +423,12 @@ export default function FactoryEmployees() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : isError && !employeesData ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
+                </TableCell>
+              </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5}>
@@ -657,8 +669,7 @@ export default function FactoryEmployees() {
             (() => {
               const liveEmp = employees.find((e) => e.id === endingContractEmployee.id) ?? endingContractEmployee;
               const balance = parseFloat(liveEmp.currentBalance || "0");
-              const fmtBal = (v: number) =>
-                v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              const fmtBal = (v: number) => formatUsd(v, 2);
               return (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
@@ -672,11 +683,11 @@ export default function FactoryEmployees() {
                     <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 space-y-1.5">
                       <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium text-sm">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
-                        Outstanding balance: ${fmtBal(balance)}
+                        Outstanding balance: {fmtBal(balance)}
                       </div>
                       <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
                         Running payroll records salary as <em>earned</em> — it doesn't mean cash was handed out. To
-                        clear this balance, go to <strong>Withdrawals</strong> and record a cash payment of $
+                        clear this balance, go to <strong>Withdrawals</strong> and record a cash payment of{" "}
                         {fmtBal(balance)} before ending the contract.
                       </p>
                     </div>
@@ -684,11 +695,11 @@ export default function FactoryEmployees() {
                     <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700 p-3 space-y-1.5">
                       <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium text-sm">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
-                        Employee owes: ${fmtBal(Math.abs(balance))}
+                        Employee owes: {fmtBal(Math.abs(balance))}
                       </div>
                       <p className="text-xs text-red-700/80 dark:text-red-400/80">
-                        This employee has a negative balance — they owe the company ${fmtBal(Math.abs(balance))}.
-                        Collect this before ending the contract if needed.
+                        This employee has a negative balance — they owe the company {fmtBal(Math.abs(balance))}. Collect
+                        this before ending the contract if needed.
                       </p>
                     </div>
                   ) : (

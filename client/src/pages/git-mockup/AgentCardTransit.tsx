@@ -1,8 +1,10 @@
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useState } from "react";
 import { ChevronUp, ChevronDown, ArrowUp, Filter, Truck } from "lucide-react";
-import { fmt, fmtD } from "./helpers";
+import { fmtD } from "./helpers";
 import type { ApiPreviewRow } from "./types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AgentCardTransitProps {
   agentName: string;
@@ -57,8 +59,8 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
             {prepaidTransitRows.length > 0 && (
               <span className="ml-1 text-emerald-600 dark:text-emerald-400">({prepaidTransitRows.length} prepaid)</span>
             )}{" "}
-            · $
-            {fmt(
+            ·{" "}
+            {formatUsd(
               remainingTransitRows.reduce((s, r) => s + r.dutyFee, 0),
               0
             )}{" "}
@@ -73,19 +75,26 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
         {transitTransporters.length > 1 && (
           <div className="flex items-center gap-1 pr-2" onClick={(e) => e.stopPropagation()}>
             <Filter className="h-3 w-3 text-slate-400 shrink-0" />
-            <select
-              value={transitTransporterFilter ?? ""}
-              onChange={(e) => setTransitTransporterFilter(e.target.value || null)}
-              className="max-w-40 cursor-pointer rounded-lg border border-violet-300 bg-background px-2 py-1.5 text-[11px] text-foreground focus:outline-hidden focus:ring-2 focus:ring-violet-400 dark:border-violet-500/40"
-              data-testid={`select-transit-transporter-${agentName}`}
+            <Select
+              value={transitTransporterFilter || "__all__"}
+              onValueChange={(v) => setTransitTransporterFilter(v === "__all__" ? null : v)}
             >
-              <option value="">All transporters</option>
-              {transitTransporters.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                className="h-8 max-w-40 rounded-lg border-violet-300 px-2 text-[11px] focus:ring-2 focus:ring-violet-400 dark:border-violet-500/40"
+                data-testid={`select-transit-transporter-${agentName}`}
+                aria-label="Filter by transporter"
+              >
+                <SelectValue placeholder="All transporters" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All transporters</SelectItem>
+                {transitTransporters.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
@@ -96,7 +105,10 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
             <thead>
               <tr className="border-b border-violet-500/20 bg-slate-100 text-slate-700 dark:bg-violet-950/60 dark:text-violet-100">
                 {["CONTAINER", "SUPPLIER", "PLATE", "BORDER DATE", "TRANSPORTER", "LOCATION", "DUTY", ""].map((h) => (
-                  <th key={h} className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]">
+                  <th
+                    key={h}
+                    className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]"
+                  >
                     {h}
                   </th>
                 ))}
@@ -123,7 +135,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
                       <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
                       <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
                       <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
-                      <td className="py-0.5 px-2 text-right">${fmt(r.dutyFee, 0)}</td>
+                      <td className="py-0.5 px-2 text-right">{formatUsd(r.dutyFee, 0)}</td>
                       <td className="py-0.5 px-1 text-center">
                         {canDesignate && (
                           <button

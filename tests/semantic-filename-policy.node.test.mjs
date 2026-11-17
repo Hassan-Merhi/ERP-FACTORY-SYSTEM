@@ -8,6 +8,9 @@ import { test } from "node:test";
 const root = process.cwd();
 const original = fs.readFileSync(path.join(root, "scripts/verify-semantic-filename-policy.mjs"), "utf8");
 const mandatoryWorkflows = [
+  "intercompany-phase5-isolated.yml",
+  "universal-excel-phase10-database.yml",
+  "universal-excel-phase10-i18n.yml",
   "edge-phase3-validate-once.yml",
   "factory-blue-theme-phase5.yml",
   "offline-phase5-acceptance.yml",
@@ -95,13 +98,11 @@ test("nonexistent workflow entrypoint causes a failing check", () => {
 
 test("persisted environment and database identifiers remain stable after filename changes", () => {
   const read = p => fs.readFileSync(path.join(root, p), "utf8");
-  const inventory = read("server/inventoryValuationGuardedRepair.mjs");
-  const salesIndex = read("server/salesHotpathIndexRepair.mjs");
+  const inventory = read("server/startup/inventoryValuationGuardedRepair.mjs");
   const writerGate = read("server/edge/writerGate.mjs");
   assert.match(inventory, /INVENTORY_VALUATION_WAVE6_REPAIR/);
   assert.match(inventory, /erp\.inventory-valuation-wave6-repair\.applied/);
-  assert.match(salesIndex, /RUN_WAVE3_INDEX_REPAIR/);
   assert.match(writerGate, /phase7_writer\.state/);
-  assert.match(read("server/companyScopeRlsBridge.mjs"), /inventoryValuationGuardedRepair\.mjs/);
-  assert.match(read("server/startupPreload.mjs"), /salesHotpathIndexRepair\.mjs/);
+  assert.match(read("server/startup/startupDataOperations.mjs"), /inventoryValuationGuardedRepair\.mjs/);
+  assert.equal(fs.existsSync(path.join(root, "server/salesHotpathIndexRepair.mjs")), false);
 });

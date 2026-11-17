@@ -1,23 +1,14 @@
+import { SearchField } from "@/components/ui/search-field";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import {
-  ArrowLeftRight,
-  BarChart3,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  GitCompare,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { ArrowLeftRight, BarChart3, Check, ChevronDown, GitCompare, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -400,15 +391,12 @@ export default function StockInSalesReportComparison() {
             <SelectItem value="yearly">Yearly</SelectItem>
           </SelectContent>
         </Select>
-        <div className="relative col-span-2 min-w-0 flex-1 sm:min-w-52 sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search item, group, location..."
-            className="pl-9"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search item, group, location..."
+          wrapperClassName="col-span-2 flex-1 sm:min-w-52 sm:max-w-sm"
+        />
         {isFetching && !isLoading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
@@ -669,31 +657,14 @@ export default function StockInSalesReportComparison() {
                   </TableBody>
                 </Table>
               </div>
-              {data && data.itemRowCount > ITEM_PAGE_SIZE && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    Page {itemPage} of {itemTotalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.max(1, page - 1))}
-                      disabled={itemPage <= 1}
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))}
-                      disabled={itemPage >= itemTotalPages}
-                    >
-                      Next <ChevronRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <PaginationBar
+                page={itemPage}
+                totalPages={itemTotalPages}
+                total={data?.itemRows.length ?? 0}
+                pageSize={ITEM_PAGE_SIZE}
+                onPageChange={setItemPage}
+                noun="items"
+              />
             </div>
           </section>
         </>

@@ -8,6 +8,7 @@ import {
   X,
   Loader2,
   CalendarDays,
+  Download,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -22,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 function toLocalDateStr(d: Date): string {
   return d.toLocaleDateString("en-CA");
@@ -147,7 +149,12 @@ export default function DailyScan() {
   // One compact request replaces the old pair of 1,000-row produced + scan-log
   // requests. Local scan/remove mutations patch this cache directly, while a
   // slower visible-tab poll still picks up scans made by another workstation.
-  const { data: dayBales = [], isLoading } = useQuery<DayBale[]>({
+  const {
+    data: dayBalesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<DayBale[]>({
     queryKey: dailyQueryKey,
     queryFn: async () => {
       const params = new URLSearchParams({ date: selectedDate, profile: "day" });
@@ -161,6 +168,7 @@ export default function DailyScan() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+  const dayBales = dayBalesData ?? [];
 
   const scannedRefMap = new Map<string, { id: number; scanned_at: string }>();
   for (const bale of dayBales) {
@@ -423,11 +431,11 @@ export default function DailyScan() {
 
       {/* ── Body ── */}
       {isLoading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+        <LoadingState />
+      ) : isError && !dayBalesData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : totalBales === 0 ? (
-        <div className="py-14 text-center text-sm text-muted-foreground">
-          No bales produced on {formatDisplay(selectedDate)}
-        </div>
+        <EmptyState title={`No bales produced on ${formatDisplay(selectedDate)}`} />
       ) : (
         <div className="space-y-4">
           {/* ── All-done banner ── */}

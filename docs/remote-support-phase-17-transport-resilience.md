@@ -41,7 +41,7 @@ No attribute observer is needed: the observer remains `childList`-only, so the a
 
 `.github/workflows/remote-support-rollout-e2e.yml` has two different responsibilities:
 
-1. **Pull requests:** run the offline `verify-remote-support-phase17-invariants.mjs` gate. It needs no live URL or credentials and pins protocol/policy properties such as recovery endpoints, ETag/304 fallback, subtree annotation, and the workflow topology itself.
+1. **Pull requests:** run the offline `verify-remote-support-invariants.mjs` gate. It needs no live URL or credentials and pins protocol/policy properties such as recovery endpoints, ETag/304 fallback, subtree annotation, and the workflow topology itself.
 2. **Nightly/manual:** run the real two-user Playwright canary and rollout metric verifier against staging. Scheduled runs read `REMOTE_SUPPORT_STAGING_BASE_URL`; manual runs may override it with `base_url`. Controller and target credentials remain required secrets.
 
 The frame-interval and client→viewer p95 budgets are now **1500 ms** instead of 2500 ms. The prior 2500 ms budget allowed roughly 0.4 frames/second to pass and was too permissive for the live-support target. The nightly report remains the evidence used for future downward ratchets; thresholds should only be relaxed with an explicit documented reason.

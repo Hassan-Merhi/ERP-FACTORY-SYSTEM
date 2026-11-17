@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -37,7 +38,12 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const scannerRef = useRef<HTMLInputElement>(null);
 
-  const { data: detail, isLoading } = useQuery<LoadDetail>({
+  const {
+    data: detail,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<LoadDetail>({
     queryKey: ["/api/factory/v3/loads", load.id],
     queryFn: async () => {
       const r = await fetch(`/api/factory/v3/loads/${load.id}`, { credentials: "include" });
@@ -313,9 +319,16 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
             <CardTitle className="text-sm">Scanned Bales ({activeBales.length})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoading && <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>}
-            {!isLoading && activeBales.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No bales scanned yet</p>
+            {isLoading && <LoadingState className="min-h-0 rounded-none border-0 py-4" />}
+            {!isLoading && isError && !detail && (
+              <ErrorState
+                onAction={() => void refetch()}
+                actionLabel="Try again"
+                className="min-h-0 rounded-none border-0 py-4"
+              />
+            )}
+            {!isLoading && !(isError && !detail) && activeBales.length === 0 && (
+              <EmptyState title="No bales scanned yet" className="min-h-0 rounded-none border-0 py-4" />
             )}
             <Table>
               <TableBody>

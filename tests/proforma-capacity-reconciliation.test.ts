@@ -1,8 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
-import { ensureCanonicalStockMovementJournal } from "../server/services/inventory/ensureCanonicalStockMovementJournal";
-import { ensureFinancialOperationRequests } from "../server/services/accounting/ensureFinancialOperationRequests";
 import { syncProformaReservations } from "../server/routes/factory/_stockReservationHelper";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -30,10 +28,6 @@ async function addBale(orderId: number, code: string, suffix: string, status = "
 }
 
 beforeAll(async () => {
-  // cleanupTestData removes rows from runtime-managed tables that drizzle push
-  // does not create, so make those shared fixture teardown dependencies available.
-  await ensureCanonicalStockMovementJournal(pool);
-  await ensureFinancialOperationRequests(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });

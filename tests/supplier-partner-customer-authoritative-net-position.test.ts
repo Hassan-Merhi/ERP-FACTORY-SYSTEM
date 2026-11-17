@@ -50,6 +50,6 @@ describe("supplier partner customer Net Position", () => {
     expect(translations).toContain('en: "Opening Cash Account"');
     expect(translations).toContain('en: "GC Sales Cash"');
     expect(registry).toContain("phase3RemainingTranslationsPart25");
-    expect(audit).toContain("phase3RemainingTranslations.part25.ts");
+    expect(audit).toContain("remainingTranslations.part25.ts");
   });
 });

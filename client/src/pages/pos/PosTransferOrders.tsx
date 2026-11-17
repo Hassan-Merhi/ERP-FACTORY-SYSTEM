@@ -3,11 +3,25 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
-import { CheckCircle2, Search, X, ArrowRight, Clock, Package2, Eye, Pencil, CalendarIcon, Plus, ClipboardList, ShoppingCart, Store, MapPin } from "lucide-react";
+import {
+  CheckCircle2,
+  X,
+  ArrowRight,
+  Clock,
+  Package2,
+  Eye,
+  Pencil,
+  CalendarIcon,
+  Plus,
+  ClipboardList,
+  ShoppingCart,
+  Store,
+  MapPin,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import "@/styles/pos-orders-premium.css";
@@ -18,6 +32,7 @@ import { TransferOrderDetail } from "./postransferorders/components/TransferOrde
 import { CreateTransferDialog } from "./postransferorders/components/CreateTransferDialog";
 import { ViewTransferDialog } from "./postransferorders/components/ViewTransferDialog";
 import { PosTransferApprovalQueue } from "./postransferorders/components/PosTransferApprovalQueue";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
   const [editVoucherId, setEditVoucherId] = useState<number | null>(null);
@@ -33,7 +48,12 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
   });
   const myLocationIds = useMemo(() => new Set(myLocations.map((location) => location.id)), [myLocations]);
 
-  const { data: allTransfers = [], isLoading } = useQuery<TransferSummary[]>({
+  const {
+    data: allTransfers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<TransferSummary[]>({
     queryKey: ["/api/stock-transfers/list", dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -91,26 +111,50 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
   return (
     <section className="pos-orders-page min-w-0 max-w-full space-y-4" data-pos-transfer-orders="true">
       <div className="pos-orders-hero">
-      <PageHeader title="Orders" subtitle="Review and adjust quantities for your location" icon={<ClipboardList className="h-5 w-5" />} showBackButton={false}>
-        {myLocations.length > 1 && (
-          <Button className="pos-orders-new-button min-h-11 w-full gap-1.5 sm:w-auto" onClick={() => setCreateOpen(true)} data-testid="button-new-transfer">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Transfer
-          </Button>
-        )}
-      </PageHeader>
+        <PageHeader
+          title="Orders"
+          subtitle="Review and adjust quantities for your location"
+          icon={<ClipboardList className="h-5 w-5" />}
+          showBackButton={false}
+        >
+          {myLocations.length > 1 && (
+            <Button
+              className="pos-orders-new-button min-h-11 w-full gap-1.5 sm:w-auto"
+              onClick={() => setCreateOpen(true)}
+              data-testid="button-new-transfer"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Transfer
+            </Button>
+          )}
+        </PageHeader>
         <div className="pos-orders-stats" aria-label="Order summary">
           <div className="pos-orders-stat pos-orders-stat-total" data-testid="pos-orders-total">
-            <span className="pos-orders-stat-icon"><ShoppingCart className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="pos-orders-stat-copy"><span className="pos-orders-stat-label">Total orders</span><strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : transfers.length}</strong></span>
+            <span className="pos-orders-stat-icon">
+              <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="pos-orders-stat-copy">
+              <span className="pos-orders-stat-label">Total orders</span>
+              <strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : transfers.length}</strong>
+            </span>
           </div>
           <div className="pos-orders-stat pos-orders-stat-applied" data-testid="pos-orders-applied">
-            <span className="pos-orders-stat-icon"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="pos-orders-stat-copy"><span className="pos-orders-stat-label">Applied</span><strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : appliedCount}</strong></span>
+            <span className="pos-orders-stat-icon">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="pos-orders-stat-copy">
+              <span className="pos-orders-stat-label">Applied</span>
+              <strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : appliedCount}</strong>
+            </span>
           </div>
           <div className="pos-orders-stat pos-orders-stat-pending" data-testid="pos-orders-pending">
-            <span className="pos-orders-stat-icon"><Clock className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="pos-orders-stat-copy"><span className="pos-orders-stat-label">Pending</span><strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : pendingCount}</strong></span>
+            <span className="pos-orders-stat-icon">
+              <Clock className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="pos-orders-stat-copy">
+              <span className="pos-orders-stat-label">Pending</span>
+              <strong className="pos-orders-stat-value tabular-nums">{isLoading ? "—" : pendingCount}</strong>
+            </span>
           </div>
         </div>
       </div>
@@ -142,7 +186,10 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Status</label>
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
-            <SelectTrigger className="pos-orders-control min-h-11 w-full lg:min-h-10" data-testid="select-status-filter">
+            <SelectTrigger
+              className="pos-orders-control min-h-11 w-full lg:min-h-10"
+              data-testid="select-status-filter"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -157,17 +204,14 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
           <label htmlFor="pos-transfer-list-search" className="text-xs font-medium text-muted-foreground">
             Search
           </label>
-          <div className="relative min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="pos-transfer-list-search"
-              placeholder="Voucher number or item"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="pos-orders-control min-h-11 pl-10 text-base lg:min-h-10 lg:text-sm"
-              data-testid="input-list-search"
-            />
-          </div>
+          <SearchField
+            id="pos-transfer-list-search"
+            placeholder="Voucher number or item"
+            value={search}
+            onValueChange={setSearch}
+            className="pos-orders-control min-h-11 text-base sm:min-h-11 lg:min-h-10 lg:text-sm"
+            data-testid="input-list-search"
+          />
         </div>
 
         <Button
@@ -206,31 +250,41 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
             </div>
           ))}
         </div>
+      ) : isError && allTransfers.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="rounded-2xl py-14" />
       ) : transfers.length === 0 ? (
-        <div
-          className="pos-orders-empty rounded-2xl border border-dashed bg-card py-14 text-center text-muted-foreground"
+        <EmptyState
+          className="pos-orders-empty rounded-2xl py-14"
           data-testid="text-empty"
-        >
-          <Package2 className="mx-auto mb-3 h-10 w-10 opacity-20" />
-          <p className="text-sm font-medium">No transfer orders found</p>
-          {hasFilters && <p className="mt-1 text-xs opacity-70">Try clearing your filters.</p>}
-        </div>
+          icon={Package2}
+          title="No transfer orders found"
+          description={hasFilters ? "Try clearing your filters." : undefined}
+        />
       ) : (
         <div className="space-y-3">
           {transfers.map((transfer) => (
             <article
               key={transfer.voucherId}
-              className={cn("pos-orders-row group min-w-0 rounded-2xl border bg-card p-3 shadow-xs transition-all sm:p-4", transfer.inventoryApplied ? "pos-orders-row-applied" : "pos-orders-row-pending")}
+              className={cn(
+                "pos-orders-row group min-w-0 rounded-2xl border bg-card p-3 shadow-xs transition-all sm:p-4",
+                transfer.inventoryApplied ? "pos-orders-row-applied" : "pos-orders-row-pending"
+              )}
               data-testid={"row-transfer-" + transfer.voucherId}
             >
               <div className="pos-orders-row-main flex min-w-0 items-start gap-3">
                 <span
-                  className={cn("pos-orders-status-dot mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", transfer.inventoryApplied ? "bg-green-500 dark:bg-green-400" : "bg-amber-400")}
+                  className={cn(
+                    "pos-orders-status-dot mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                    transfer.inventoryApplied ? "bg-green-500 dark:bg-green-400" : "bg-amber-400"
+                  )}
                   aria-hidden="true"
                 />
                 <div className="pos-orders-row-info min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-                    <span className="break-all font-mono text-sm font-bold tracking-tight" data-testid={"text-voucher-" + transfer.voucherId}>
+                    <span
+                      className="break-all font-mono text-sm font-bold tracking-tight"
+                      data-testid={"text-voucher-" + transfer.voucherId}
+                    >
                       {transfer.voucherNumber}
                     </span>
                     <span className="text-xs text-muted-foreground">{formatDate(transfer.voucherDate)}</span>
@@ -253,9 +307,18 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
                     )}
                   </div>
                   <div className="pos-orders-route mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                    <span className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground"><Store className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="wrap-break-word">{transfer.sourceLocationName}</span></span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                      <Store className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span className="wrap-break-word">{transfer.sourceLocationName}</span>
+                    </span>
                     <ArrowRight className="h-4 w-4 shrink-0 text-violet-500 dark:text-violet-300" aria-hidden="true" />
-                    <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold"><MapPin className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" /><span className="wrap-break-word">{transfer.destinationLocationName}</span></span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
+                      <MapPin
+                        className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300"
+                        aria-hidden="true"
+                      />
+                      <span className="wrap-break-word">{transfer.destinationLocationName}</span>
+                    </span>
                   </div>
                 </div>
                 <div className="pos-orders-row-actions flex shrink-0 items-center gap-2">
@@ -265,7 +328,10 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                     <Button
-                      className={cn("pos-orders-view min-h-11 w-full gap-2 sm:w-auto", transfer.inventoryApplied && "col-span-2")}
+                      className={cn(
+                        "pos-orders-view min-h-11 w-full gap-2 sm:w-auto",
+                        transfer.inventoryApplied && "col-span-2"
+                      )}
                       variant="outline"
                       onClick={() => openView(transfer.voucherId)}
                       data-testid={"button-view-" + transfer.voucherId}

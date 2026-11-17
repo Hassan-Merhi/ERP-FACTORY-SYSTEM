@@ -6,11 +6,12 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound, Search } from "lucide-react";
+import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -34,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Employee {
   id: number;
@@ -304,45 +306,32 @@ export default function FactoryEmployeeBonusesTab() {
             </div>
           </div>
           {showFilters && (
-            <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 sm:grid-cols-[minmax(180px,1fr)_160px_160px_auto] sm:items-end">
+            <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 sm:grid-cols-[minmax(180px,1fr)_auto_auto] sm:items-end">
               <div>
                 <Label htmlFor="bonus-search" className="mb-1.5 block text-xs text-muted-foreground">
                   Name or notes
                 </Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="bonus-search"
-                    className="pl-9"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search bonuses..."
-                    data-testid="input-bonus-search"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="bonus-start-date" className="mb-1.5 block text-xs text-muted-foreground">
-                  From date
-                </Label>
-                <Input
-                  id="bonus-start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  data-testid="input-bonus-start-date"
+                <SearchField
+                  id="bonus-search"
+                  value={search}
+                  onValueChange={setSearch}
+                  placeholder="Search bonuses..."
+                  data-testid="input-bonus-search"
                 />
               </div>
               <div>
-                <Label htmlFor="bonus-end-date" className="mb-1.5 block text-xs text-muted-foreground">
-                  To date
-                </Label>
-                <Input
-                  id="bonus-end-date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  data-testid="input-bonus-end-date"
+                <Label className="mb-1.5 block text-xs text-muted-foreground">Period</Label>
+                <PeriodFilter
+                  value={{
+                    fromDate: startDate,
+                    toDate: endDate,
+                    preset: startDate || endDate ? "custom" : "all_time",
+                  }}
+                  onChange={(v) => {
+                    setStartDate(v.fromDate);
+                    setEndDate(v.toDate);
+                  }}
+                  data-testid="bonus-period-filter"
                 />
               </div>
               <Button

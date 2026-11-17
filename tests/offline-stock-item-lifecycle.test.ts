@@ -24,21 +24,16 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
-import {
-  ensurePhase9CloudEventSchema,
-  Phase9EventConflict,
-  stagePhase9Events,
-} from "../server/edge/cloudEventStore.mjs";
+import { Phase9EventConflict, stagePhase9Events } from "../server/edge/cloudEventStore.mjs";
 import { EDGE_EVENT_STAGE_PROTOCOL } from "../server/edge/eventProtocol.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,
   phase9StockItemCreateEnvelope,
   phase9StockItemDeleteEnvelope,
 } from "../server/edge/stockItemLifecycleEnvelope.mjs";
-import { ensurePhase9StockItemMapSchema, translatePhase9LanStockItems } from "../server/edge/stockItemMap.mjs";
+import { translatePhase9LanStockItems } from "../server/edge/stockItemMap.mjs";
 import {
   phase9StockItemCreateApplyHandler,
   phase9StockItemDeleteApplyHandler,
@@ -158,11 +153,7 @@ beforeAll(async () => {
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
   ).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
-  edge.config = LAN;
-  await ensurePhase9StockOutboxSchema(pool);
   edge.config = CLOUD;
-  await ensurePhase9StockItemMapSchema(pool);
-  await ensurePhase9CloudEventSchema(pool);
 }, 120_000);
 
 afterAll(async () => {

@@ -24,7 +24,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { getCompanyBusinessDate } from "../server/lib/dateUtils";
-import { ensureRetailLedgerSchema } from "../server/services/retail/retailLedgerSchema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "retailposinvwf";
@@ -136,7 +135,6 @@ async function sell(
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureRetailLedgerSchema(pool);
   await pool.query(`UPDATE companies SET company_type = 'retail' WHERE id = $1`, [ctx.companyId]);
   await pool.query(`UPDATE user_company_roles SET role = 'Owner' WHERE user_id = $1 AND company_id = $2`, [
     ctx.userId,

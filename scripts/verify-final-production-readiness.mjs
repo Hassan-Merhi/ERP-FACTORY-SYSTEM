@@ -52,7 +52,7 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "verify-database-backup.mjs",
   "Restore into fresh disposable database",
   "pg_restore",
-  "verify-ci-disposable-schema.mjs",
+  "scripts/db/migrate.mjs verify",
   "ENABLE_SCHEDULERS: \"false\"",
   "scheduler-tick-guard.test.ts",
   "schedule:",
@@ -60,7 +60,7 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "restore-critical-counts.tsv",
   "resilience-evidence.json",
   "DR_REHEARSAL_RTO_SECONDS",
-  "verify-phase11-12-observability-disaster-recovery.mjs",
+  "verify-observability-disaster-recovery.mjs",
 ]);
 
 // Main Certification is the single post-merge application certification. Keep
@@ -69,12 +69,12 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
 requireMarkers(".github/workflows/main-certification.yml", [
   "name: Main Certification",
   "Verify exact merged main SHA",
-  // test:backend:verify is --complete, which is the plain pass AND the coverage
-  // pass. The frontend pair below still needs both names because those are two
-  // separate commands; requiring test:backend:verify:coverage here as well only
-  // pinned a redundant third backend pass into the certification job.
-  "test:backend:verify",
-  "test:frontend",
+  // The backend suite runs once, under coverage, as parallel isolated-database
+  // shards; the merge step enforces the coverage floors on the combined map.
+  // A separate plain pass only repeated the same tests, and so does a separate
+  // plain frontend pass next to the frontend coverage run.
+  "test:backend:coverage",
+  "run-backend-verification.mjs --merge-only",
   "test:frontend:coverage",
   "test:smoke-sweep",
   "verify:server-bundle",
@@ -140,7 +140,7 @@ requireMarkers("docs/archive/program-3c-database-tenant-guards.md", [
   "explicit owner approval",
 ]);
 
-requireMarkers("migrations/0013_tenant_control_integrity_guards.sql", [
+requireMarkers("migrations/archive/legacy/0013_tenant_control_integrity_guards.sql", [
   "Foreign keys are NOT VALID",
   "No historical repair, DELETE, UPDATE, or backfill",
   "tenant-control-integrity-audit.mjs",
@@ -152,11 +152,16 @@ requireMarkers("scripts/tenant-control-integrity-audit.mjs", [
   "summary.ok = summary.errorCount === 0",
 ]);
 
-requireMarkers("scripts/run-versioned-migrations.mjs", [
-  'const APPLY_FLAG = "--apply"',
-  'const REQUIRED_CONFIRMATION = "APPLY_VERSIONED_MIGRATIONS"',
+// The single schema authority: explicit, confirmed, locked, checksummed.
+requireMarkers("scripts/db/migrate.mjs", [
+  'const APPLY_CONFIRMATION = "APPLY_SCHEMA_MIGRATIONS"',
+  'const ADOPT_CONFIRMATION = "ADOPT_EXISTING_DATABASE"',
   "pg_try_advisory_lock",
-  "Another versioned migration process already holds the migration lock",
+  "never rebuilt",
+]);
+requireMarkers("server/schema/startupSchemaGate.mjs", [
+  "never creates, alters or repairs anything",
+  "DatabaseSchemaMismatchError",
 ]);
 
 requireMarkers("docs/archive/sp-migration-phase-4-runbook.md", [
@@ -186,7 +191,7 @@ for (const forbidden of ["HISTORICAL_REPLAY_APPLY_MODE", "HISTORICAL_REPLAY_RELE
   }
 }
 
-const journalSource = read("migrations/meta/_journal.json");
+const journalSource = read("migrations/archive/legacy/meta/_journal.json");
 if (journalSource) {
   try {
     const journal = JSON.parse(journalSource);
@@ -245,8 +250,15 @@ if (packageSource) {
     if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-production-certification.mjs") {
       failures.push("package.json is missing the exact certify:performance-wave5 script");
     }
-    if (String(packageJson.scripts?.start ?? "").includes("run-versioned-migrations")) {
-      failures.push("npm start must not invoke the versioned migration runner");
+    // Owner decision (2026-11-17): every deploy applies its own migrations as a
+    // release step in a separate process before the server starts. The server
+    // itself never changes the schema; it only verifies it (startup gate).
+    const start = String(packageJson.scripts?.start ?? "");
+    if (!start.startsWith("node scripts/db/migrate.mjs deploy && ")) {
+      failures.push("npm start must run the migration release step (node scripts/db/migrate.mjs deploy &&) before the server");
+    }
+    if (/drizzle-kit|db:push/.test(start) || /migrate\.mjs (apply|adopt)/.test(start)) {
+      failures.push("npm start must not invoke drizzle-kit or the migration runner except through its deploy release step");
     }
     if (String(packageJson.scripts?.start ?? "").includes("historical-replay")) {
       failures.push("npm start must not invoke Historical Replay");

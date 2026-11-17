@@ -4,7 +4,7 @@
 
 ## Verified source architecture
 
-1. **Single ERP page registry:** `client/src/app/erpPageRegistry.ts` defines pinned desktop links, sections, utilities and mobile primary destination groups. A static inspection found **30 distinct desktop/utility navigation URLs and 30 corresponding literals** in `client/src/routes/ErpRoutes.tsx`. New regression test `tests/erp-phase3-navigation-parity.test.ts` checks that the registry cannot silently drift away from the route definitions.
+1. **Single ERP page registry:** `client/src/app/erpPageRegistry.ts` defines pinned desktop links, sections, utilities and mobile primary destination groups. A static inspection found **30 distinct desktop/utility navigation URLs and 30 corresponding literals** in `client/src/routes/ErpRoutes.tsx`. New regression test `tests/erp-navigation-parity.test.ts` checks that the registry cannot silently drift away from the route definitions.
 2. **Central role policy:** `shared/erpNavigationPolicy.ts` restricts Developer-only, Admin-only, Owner/Admin and POS role pages in menus and route guards, with granular feature keys from `shared/erpRouteAccess.ts`. `client/src/components/AppSidebar.tsx` and `ErpMobileNavSheet.tsx` reuse the policy.
 3. **Company-switch access boundary:** `client/src/app/ErpAccessBoundary.tsx` gates rendering of the entire ERP shell while page grants load and while the selected company differs from the synchronized permission-company ID. `erpPageAccessQueryOptions` uses a company-specific query key. Existing tests: `tests/ui/erp-access-boundary.test.ts`, `client/src/app/erpNavigationPolicy.test.ts`, `tests/ui/route-guards-render.test.tsx`.
 4. **No navigation duplication identified in reviewed routes.** Coverage of remaining optional/conditional pages, responsive and RTL layouts, access-denied recovery, print, accessibility and actual per-role browser journeys requires executable E2E validation.
@@ -33,7 +33,7 @@ This is a safer permission-management contract; it is **not a claim that the end
 
 ## Regression and sign-off requirements
 
-- [ ] Unit tests: `tests/erp-phase3-page-grant-input.test.ts`; `tests/erp-phase3-page-grants-contract.test.ts`; `tests/erp-phase3-navigation-parity.test.ts`.
+- [ ] Unit tests: `tests/erp-page-grant-input.test.ts`; `tests/erp-page-grants-contract.test.ts`; `tests/erp-navigation-parity.test.ts`.
 - [ ] Existing ERP access boundary, navigation, company-context and permission matrix suites pass on the exact branch SHA.
 - [ ] Integration tests in a disposable DB: admin GET/PUT membership rejection, valid granted features, invalid keys, concurrent role removal, failed insert rollback; verify no cross-company grants.
 - [ ] Manual signed-in browser checks for Admin, Owner, Manager, Normal User, View Only, Create Only, ERP Tester and POS on phone/tablet/desktop in HADI plus one subsidiary; verify navigation, Arabic/RTL, search, keyboard focus, denied routes and switching companies while grants load.

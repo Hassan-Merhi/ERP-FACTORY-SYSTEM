@@ -7,10 +7,11 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -211,19 +212,13 @@ export default function OptionalVouchers() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="w-40"
-              data-testid="input-start-date"
-            />
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-              className="w-40"
-              data-testid="input-end-date"
+            <PeriodFilter
+              value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+              onChange={(v) => {
+                setStartDate(v.fromDate);
+                setEndDate(v.toDate);
+              }}
+              data-testid="optional-voucher-period"
             />
           </>
         }
@@ -283,14 +278,13 @@ export default function OptionalVouchers() {
           <p className="text-xs text-muted-foreground">{error?.message}</p>
         </div>
       ) : vouchers.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground"
+        <EmptyState
+          icon={FileText}
+          title="No optional vouchers found"
+          description={hasFilters ? "Try adjusting your filters" : "All vouchers have been finalized"}
+          className="py-20"
           data-testid="text-no-optional-vouchers"
-        >
-          <FileText className="h-10 w-10 opacity-25" />
-          <p className="text-sm font-medium">No optional vouchers found</p>
-          <p className="text-xs">{hasFilters ? "Try adjusting your filters" : "All vouchers have been finalized"}</p>
-        </div>
+        />
       ) : (
         <>
           {/* Desktop table */}

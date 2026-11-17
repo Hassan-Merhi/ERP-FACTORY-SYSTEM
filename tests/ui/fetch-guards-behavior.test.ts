@@ -276,7 +276,7 @@ describe("supplierPurchaseOrderPaginationClient", () => {
   });
 });
 
-describe("bandwidthPhase2PayloadGuard", () => {
+describe("bandwidthPayloadGuard", () => {
   async function install() {
     const calls = installRecorder(() => jsonResponse([]));
     await import("@/lib/bandwidthPayloadGuard");

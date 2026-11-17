@@ -48,12 +48,12 @@ jobs:
           node scripts/verify-server-bundle.mjs
           node scripts/verify-runtime-dependencies.mjs
       - name: Set up isolated database
-        run: node node_modules/drizzle-kit/bin.cjs push --force
-      - name: Apply the production startup-schema bridges to the throwaway database
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
+      - name: Boot the server against the migrated throwaway database
         shell: bash
         run: |
           set -euo pipefail
-          node dist/index.js > "$RUNNER_TEMP/nightly-startup.log" 2>&1 &
+          node --import ./server/startupPreload.mjs dist/index.js > "$RUNNER_TEMP/nightly-startup.log" 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 180); do
@@ -62,7 +62,6 @@ jobs:
             if [ "$attempt" = 180 ]; then cat "$RUNNER_TEMP/nightly-startup.log"; exit 1; fi
             sleep 1
           done
-          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
       - name: Keep Postgres container logs readable
         # Negative-path suites deliberately provoke constraint errors. Without
         # this, tens of thousands of ERROR lines bury the vitest summary at the
@@ -162,7 +161,7 @@ jobs:
           # falsely treat an unreviewed template as validated classifications.
           node scripts/run-program6c-inventory-review.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json
           node scripts/generate-program6c-inventory-classifications.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json --output=artifacts/nightly-system-coverage/program6c-review-worksheet.json
-          npm run verify:migrations
+          npm run db:migrate:plan
       - name: Preserve test coverage inventory even on failures
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -260,7 +259,7 @@ jobs:
           npm run build
       - name: Seed fabricated ERP / Factory company with drill-down records
         run: |
-          node node_modules/drizzle-kit/bin.cjs push --force
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
           node scripts/prepare-browser-smoke-fixture.mjs
       - name: Visit ERP / Factory registered routes and inspect real layouts
         shell: bash

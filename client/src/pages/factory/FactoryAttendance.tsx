@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,6 +55,7 @@ import {
 import "./factoryTrackingModern.css";
 import "./factoryAttendanceRefresh.css";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { SearchField } from "@/components/ui/search-field";
 
 interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
@@ -481,26 +483,20 @@ export default function FactoryAttendance() {
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="space-y-1">
                         <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          From
+                          Period
                         </Label>
-                        <Input
-                          type="date"
-                          data-testid="input-range-start"
-                          value={rangeStart}
-                          onChange={(e) => setRangeStart(e.target.value)}
-                          className="w-40 rounded-xl bg-background/70"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          To
-                        </Label>
-                        <Input
-                          type="date"
-                          data-testid="input-range-end"
-                          value={rangeEnd}
-                          onChange={(e) => setRangeEnd(e.target.value)}
-                          className="w-40 rounded-xl bg-background/70"
+                        <PeriodFilter
+                          value={{
+                            fromDate: rangeStart,
+                            toDate: rangeEnd,
+                            preset: rangeStart || rangeEnd ? "custom" : "all_time",
+                          }}
+                          requireBoundedRange
+                          onChange={(v) => {
+                            setRangeStart(v.fromDate);
+                            setRangeEnd(v.toDate);
+                          }}
+                          data-testid="attendance-range-period"
                         />
                       </div>
                       <ExportButton
@@ -557,16 +553,14 @@ export default function FactoryAttendance() {
 
                 {workers.length > 0 && (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="relative w-full sm:max-w-sm">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={workerSearch}
-                        onChange={(event) => setWorkerSearch(event.target.value)}
-                        placeholder="Search worker, code, position…"
-                        className="h-9 rounded-xl bg-background/70 pl-9"
-                        data-testid="input-attendance-worker-search"
-                      />
-                    </div>
+                    <SearchField
+                      value={workerSearch}
+                      onValueChange={setWorkerSearch}
+                      placeholder="Search worker, code, position…"
+                      wrapperClassName="w-full sm:max-w-sm"
+                      className="h-9 rounded-xl bg-background/70"
+                      data-testid="input-attendance-worker-search"
+                    />
                     <div className="flex flex-wrap items-center gap-2">
                       <Select
                         value={statusFilter}

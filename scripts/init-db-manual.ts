@@ -42,7 +42,7 @@ async function init() {
       }
     } else {
       console.log('\n⚠️  No tables found in database.');
-      console.log('Run `npm run db:push` to create tables first.');
+      console.log('Run `MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate` to create the schema first.');
     }
     
   } catch (error: any) {

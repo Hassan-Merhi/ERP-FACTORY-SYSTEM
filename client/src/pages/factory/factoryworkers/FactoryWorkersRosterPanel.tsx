@@ -1,7 +1,6 @@
 import {
   Plus,
   Pencil,
-  Search,
   Users,
   UserX,
   UserCheck,
@@ -21,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl } from "@/lib/exportFile";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
@@ -38,6 +36,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 import { getAvatarColor, getInitials } from "./utils";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
+import { SearchField } from "@/components/ui/search-field";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface FactoryWorkersModelProps {
   model: ReturnType<typeof useFactoryWorkersModel>;
@@ -190,16 +190,14 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
 
         {/* Filter + actions row */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, code, position, nationality..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-lg border-border/70 bg-card/80 pl-9 shadow-sm focus-visible:ring-primary/40"
-              data-testid="input-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search by name, code, position, nationality..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            wrapperClassName="flex-1 min-w-[200px]"
+            className="h-10 rounded-lg border-border/70 bg-card/80 shadow-sm focus-visible:ring-primary/40"
+            data-testid="input-search"
+          />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-10 w-32 rounded-lg bg-card/80" data-testid="select-status-filter">
               <SelectValue />
@@ -677,14 +675,14 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                     </TableCell>
                     <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
                       {worker.baseSalary ? (
-                        `$${parseFloat(worker.baseSalary).toLocaleString()}`
+                        formatUsd(parseFloat(worker.baseSalary), 0, 3)
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
                     </TableCell>
                     <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
                       {parseFloat(worker.transportAllowance || "0") > 0 ? (
-                        `$${parseFloat(worker.transportAllowance || "0").toLocaleString()}`
+                        formatUsd(parseFloat(worker.transportAllowance || "0"), 0, 3)
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
@@ -692,7 +690,7 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                     <TableCell className="py-3 text-right font-mono text-sm">
                       {parseFloat(worker.pendingAdvanceBalance || "0") > 0 ? (
                         <span className="text-amber-600 dark:text-amber-400">
-                          ${parseFloat(worker.pendingAdvanceBalance || "0").toLocaleString()}
+                          {formatUsd(parseFloat(worker.pendingAdvanceBalance || "0"), 0, 3)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>

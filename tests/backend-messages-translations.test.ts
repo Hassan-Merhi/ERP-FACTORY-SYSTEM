@@ -21,10 +21,11 @@ describe("Phase 7 backend-message translations", () => {
     // plus 8 reviewed entries (with Arabic/French) merged on main by
     // 2026-10-30 (758), plus the 5 entries merged on main by 2026-11-03 (763),
     // plus the 25 reviewed Factory mix cost-integrity refusals (source-edit
-    // review, lifecycle, finalize/delete/restore and replay guards), for a
-    // total of 788.
-    expect(backendMessagesPhase7Translations).toHaveLength(788);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(788);
+    // review, lifecycle, finalize/delete/restore and replay guards) (788),
+    // plus the 4 refusals of the manifest access boundary (operational role,
+    // export center, unknown API route, account migration), for a total of 792.
+    expect(backendMessagesPhase7Translations).toHaveLength(792);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(792);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");

@@ -7,11 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 interface DailyProduction {
   date: string;
@@ -59,7 +59,8 @@ export default function FactoryKpis() {
   const [requestedTab, setRequestedTab] = useState<"daily" | "workers" | "mixes">("daily");
 
   const { data: settings } = useQuery({
-    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -67,10 +68,15 @@ export default function FactoryKpis() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_kpis_daily", "hide_tab_kpis_worker_performance", "hide_tab_kpis_mix_efficiency"];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_kpis_daily", "hide_tab_kpis_worker_performance", "hide_tab_kpis_mix_efficiency"];
 
   const showDaily = !hiddenTabs.includes("hide_tab_kpis_daily");
   const showWorkers =
@@ -180,16 +186,11 @@ export default function FactoryKpis() {
                 </CardHeader>
                 <CardContent>
                   {dailyQuery.isLoading ? (
-                    <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-muted-foreground">Loading daily production...</span>
-                    </div>
+                    <LoadingState title="Loading daily production..." data-testid="loading-spinner" />
+                  ) : dailyQuery.isError && !dailyQuery.data ? (
+                    <ErrorState onAction={() => void dailyQuery.refetch()} actionLabel="Try again" />
                   ) : !Array.isArray(dailyQuery.data) || dailyQuery.data.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground" data-testid="text-no-data">
-                        No daily production data for selected range
-                      </p>
-                    </div>
+                    <EmptyState title="No daily production data for selected range" data-testid="text-no-data" />
                   ) : (
                     <div className="table-responsive">
                       <Table mobileLayout="cards" data-testid="kpi-daily-table">
@@ -229,16 +230,11 @@ export default function FactoryKpis() {
                 </CardHeader>
                 <CardContent>
                   {workersQuery.isLoading ? (
-                    <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-muted-foreground">Loading worker performance...</span>
-                    </div>
+                    <LoadingState title="Loading worker performance..." data-testid="loading-spinner" />
+                  ) : workersQuery.isError && !workersQuery.data ? (
+                    <ErrorState onAction={() => void workersQuery.refetch()} actionLabel="Try again" />
                   ) : !Array.isArray(workersQuery.data) || workersQuery.data.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground" data-testid="text-no-data">
-                        No worker performance data for selected range
-                      </p>
-                    </div>
+                    <EmptyState title="No worker performance data for selected range" data-testid="text-no-data" />
                   ) : (
                     <div className="table-responsive">
                       <Table mobileLayout="cards" data-testid="kpi-workers-table">
@@ -279,16 +275,11 @@ export default function FactoryKpis() {
                 </CardHeader>
                 <CardContent>
                   {mixesQuery.isLoading ? (
-                    <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-muted-foreground">Loading mix efficiency...</span>
-                    </div>
+                    <LoadingState title="Loading mix efficiency..." data-testid="loading-spinner" />
+                  ) : mixesQuery.isError && !mixesQuery.data ? (
+                    <ErrorState onAction={() => void mixesQuery.refetch()} actionLabel="Try again" />
                   ) : !Array.isArray(mixesQuery.data) || mixesQuery.data.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground" data-testid="text-no-data">
-                        No mix efficiency data for selected range
-                      </p>
-                    </div>
+                    <EmptyState title="No mix efficiency data for selected range" data-testid="text-no-data" />
                   ) : (
                     <div className="table-responsive">
                       <Table mobileLayout="cards" data-testid="kpi-mix-batches-table">

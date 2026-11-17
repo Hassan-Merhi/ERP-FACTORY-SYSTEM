@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
 import { Package, Pencil } from "lucide-react";
@@ -50,7 +51,12 @@ export function FactoryBaleProductAllMonths() {
       ? (myAccess?.hiddenCostFields ?? [])
       : ["bale_history_cost_per_kg", "bale_history_total_cost"];
 
-  const { data: responseData, isLoading } = useQuery<{ bales: BaleItem[]; sellingPrice?: string }>({
+  const {
+    data: responseData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<{ bales: BaleItem[]; sellingPrice?: string }>({
     queryKey: companyQueryKey(
       "/api/factory/bale-product-history",
       selectedCompany?.id,
@@ -111,6 +117,14 @@ export function FactoryBaleProductAllMonths() {
       <div className="container mx-auto p-3 sm:p-6 space-y-6">
         <Skeleton className="h-8 w-64" data-testid="skeleton-title" />
         <Skeleton className="h-[400px] w-full" data-testid="skeleton-table" />
+      </div>
+    );
+  }
+
+  if (isError && !responseData) {
+    return (
+      <div className="container mx-auto p-3 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }
@@ -324,9 +338,7 @@ export function FactoryBaleProductAllMonths() {
               </div>
             ))}
             {(!data || data.length === 0) && (
-              <div className="text-center text-muted-foreground py-8" data-testid="text-no-data-mobile">
-                No bales found for {year}
-              </div>
+              <EmptyState title={`No bales found for ${year}`} data-testid="text-no-data-mobile" />
             )}
           </div>
         </CardContent>

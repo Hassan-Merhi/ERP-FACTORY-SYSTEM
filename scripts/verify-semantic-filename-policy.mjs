@@ -30,6 +30,9 @@ const allowedConfig = new Set([
   "deploy/lan/phase7-prepare-restricted-role.sql",
 ]);
 const legacyWorkflowNames = new Set([
+  ".github/workflows/intercompany-phase5-isolated.yml",
+  ".github/workflows/universal-excel-phase10-database.yml",
+  ".github/workflows/universal-excel-phase10-i18n.yml",
   ".github/workflows/edge-phase3-validate-once.yml",
   ".github/workflows/factory-blue-theme-phase5.yml",
   ".github/workflows/offline-phase5-acceptance.yml",

@@ -40,7 +40,6 @@ export interface Phase9AppliedReceipt {
   outcome: Phase9ApplyOutcome;
   replayed: boolean;
 }
-export function ensurePhase9CloudEventSchema(queryable: Queryable): Promise<void>;
 export function stagePhase9Events(
   pool: Pool,
   body: unknown,

@@ -12,6 +12,7 @@ import { BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import {
   Dialog,
   DialogContent,
@@ -81,16 +82,14 @@ export function PostAccountingPreviewDialog({
           </div>
 
           {unvoucheredLoading ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
+            <LoadingState className="py-6" />
           ) : !unvouchered?.length ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No unvouchered advances found</p>
-              <p className="text-xs mt-1">All advances already have accounting entries</p>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="No unvouchered advances found"
+              description="All advances already have accounting entries"
+              className="py-8"
+            />
           ) : (
             (() => {
               const selectedAcct = (cashAccounts || []).find((a) => String(a.id) === postCashAccountId);

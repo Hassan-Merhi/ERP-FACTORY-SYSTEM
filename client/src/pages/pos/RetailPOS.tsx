@@ -13,7 +13,12 @@ import { RetailErpPosSaleGrid, RetailErpPosItemPicker } from "./RetailErpPosWork
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
-import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
+import {
+  paymentAccountValue,
+  paymentFromAccount,
+  RetailPaymentAccountOptions,
+  type RetailPaymentAccounts,
+} from "./RetailPaymentAccountSelect";
 import { RetailLastSaleSummary } from "./RetailPOSPanels";
 import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
@@ -37,6 +42,7 @@ import {
   type RetailSale,
   type ScanOutcome,
 } from "./retailPosTypes";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function RetailPOS() {
   const { selectedCompany } = useCompany();
@@ -426,7 +432,9 @@ export default function RetailPOS() {
     if (!next?.id) {
       setPayments((current) =>
         current.map((payment) =>
-          payment.method === "credit" ? ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft) : payment
+          payment.method === "credit"
+            ? ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
+            : payment
         )
       );
     }
@@ -465,23 +473,26 @@ export default function RetailPOS() {
           <label htmlFor="retail-pos-location" className="text-xs text-muted-foreground">
             Location
           </label>
-          <select
-            id="retail-pos-location"
+          <Select
             disabled={isPosRole}
-            value={selectedLocation?.id ?? ""}
-            onChange={(event) => {
-              const location = locations.find((entry) => entry.id === Number(event.target.value)) ?? null;
+            value={selectedLocation ? String(selectedLocation.id) : "__none__"}
+            onValueChange={(v) => {
+              const location = locations.find((entry) => entry.id === Number(v === "__none__" ? "" : v)) ?? null;
               setSelectedLocation(location);
             }}
-            className="block h-9 min-w-[154px] max-w-[220px] rounded-md border bg-background px-3 text-sm"
           >
-            <option value="">Select location</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="retail-pos-location" className="h-9 min-w-[154px] max-w-[220px] text-sm">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select location</SelectItem>
+              {locations.map((location) => (
+                <SelectItem key={location.id} value={String(location.id)}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <label htmlFor="retail-pos-date" className="text-xs text-muted-foreground">
@@ -508,15 +519,23 @@ export default function RetailPOS() {
             onChange={(event) => {
               if (!paymentAccounts) return;
               const value = event.target.value;
-              setPayments((current) => current.map((payment, index) =>
-                index !== 0 ? payment : value
-                  ? paymentFromAccount(value, payment.amount, paymentAccounts)
-                  : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
-              ));
+              setPayments((current) =>
+                current.map((payment, index) =>
+                  index !== 0
+                    ? payment
+                    : value
+                      ? paymentFromAccount(value, payment.amount, paymentAccounts)
+                      : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
+                )
+              );
             }}
             data-testid="retail-pos-account"
           >
-            <RetailPaymentAccountOptions accounts={paymentAccounts} allowCredit={Boolean(customer?.id)} customerName={customer?.legalName} />
+            <RetailPaymentAccountOptions
+              accounts={paymentAccounts}
+              allowCredit={Boolean(customer?.id)}
+              customerName={customer?.legalName}
+            />
           </select>
         </div>
         <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
@@ -534,7 +553,7 @@ export default function RetailPOS() {
 
       <RetailShiftPanel
         locationId={selectedLocation?.id ?? null}
-        cashAccountId={payments[0]?.method === "cash" ? payments[0].ledgerAccountId ?? null : null}
+        cashAccountId={payments[0]?.method === "cash" ? (payments[0].ledgerAccountId ?? null) : null}
         onShiftChange={setCurrentShift}
       />
 
@@ -592,21 +611,28 @@ export default function RetailPOS() {
                 {orderDiscountOpen && (
                   <div className="mt-2 space-y-2">
                     <div className="flex gap-2">
-                      <select
-                        className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
+                      <Select
                         value={orderDiscount.type}
-                        onChange={(event) =>
+                        onValueChange={(v) =>
                           setOrderDiscount((current) => ({
                             ...current,
-                            type: event.target.value as "none" | "percent" | "fixed",
+                            type: v as "none" | "percent" | "fixed",
                           }))
                         }
-                        data-testid="retail-order-discount-type"
                       >
-                        <option value="none">No discount</option>
-                        <option value="percent">Percent</option>
-                        <option value="fixed">Fixed amount</option>
-                      </select>
+                        <SelectTrigger
+                          className="h-9 flex-1 text-sm"
+                          data-testid="retail-order-discount-type"
+                          aria-label="Order discount type"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No discount</SelectItem>
+                          <SelectItem value="percent">Percent</SelectItem>
+                          <SelectItem value="fixed">Fixed amount</SelectItem>
+                        </SelectContent>
+                      </Select>
                       {orderDiscount.type !== "none" && (
                         <Input
                           type="number"

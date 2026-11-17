@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 const service = readFileSync("server/services/intercompany/linkedTradePhysicalDelete.ts", "utf8");
 const daybook = readFileSync("client/src/pages/Daybook.tsx", "utf8");
-const routes = readFileSync("server/routes/import/intercompany-phase5.ts", "utf8");
+const routes = readFileSync("server/routes/import/intercompany-receiving.ts", "utf8");
 const importService = readFileSync("server/services/intercompany/containerTradingImport.ts", "utf8");
 const storage = readFileSync("server/storage/containers-store/containers.ts", "utf8");
 const pagination = readFileSync("server/routes/containers/containerListPaginationRoutes.ts", "utf8");

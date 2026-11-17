@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { pn } from "./spMigrationCommon";
 import { resolveTargetLedgerAccount, resolveTargetLocation } from "./spMigrationCutoverReadiness";
-import { ensurePhase4CutoverSchema } from "./spMigrationInventory";
+import { backfillLegacyCutoverStockDeltaKeys } from "./spMigrationInventory";
 import { resultRows, firstRow } from "../../lib/queryResult";
 import { asRecord, toFiniteNumber } from "@shared/typeGuards";
 
@@ -244,7 +244,7 @@ export async function moveUsersToTargetExact(
   targetId: number,
   targetCompanyName: string
 ) {
-  await ensurePhase4CutoverSchema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const sourceRolesResult = await db.execute(sql`
     SELECT * FROM user_company_roles
     WHERE company_id = ${sourceId}
@@ -367,7 +367,7 @@ export async function restoreUsersToSourceExact(
   sourceCompanyName: string,
   clearSnapshots = false
 ) {
-  await ensurePhase4CutoverSchema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const changesResult = await db.execute(sql`
     SELECT * FROM sp_migration_cutover_role_changes
     WHERE cutover_id = ${cutoverId}

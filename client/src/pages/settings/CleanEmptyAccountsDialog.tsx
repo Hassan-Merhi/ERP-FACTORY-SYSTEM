@@ -12,12 +12,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { LedgerAccount } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Search, Eraser } from "lucide-react";
+import { Eraser } from "lucide-react";
 
 interface CleanEmptyAccountsDialogProps {
   open: boolean;
@@ -72,15 +72,7 @@ export function CleanEmptyAccountsDialog({ open, onOpenChange, companyId }: Clea
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4 mt-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search empty accounts..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <SearchField placeholder="Search empty accounts..." value={filter} onValueChange={setFilter} />
 
           <div className="border rounded-md overflow-hidden flex-1 overflow-y-auto">
             <Table>

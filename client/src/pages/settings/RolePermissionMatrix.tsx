@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, RotateCcw, ShieldCheck } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -231,15 +232,12 @@ export function RolePermissionMatrix() {
           </label>
           <label className="space-y-1 text-sm font-medium">
             Search resources
-            <span className="flex items-center gap-2 rounded-md border px-2">
-              <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search module, page, action"
-                className="border-0 shadow-none"
-              />
-            </span>
+            <SearchField
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Search module, page, action"
+              aria-label="Search resources"
+            />
           </label>
         </div>
         {roles.data && companyMatches && (

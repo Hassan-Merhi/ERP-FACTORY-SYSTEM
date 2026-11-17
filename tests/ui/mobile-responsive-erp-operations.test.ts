@@ -53,7 +53,7 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
     // Voucher type, currency and status selects are full width on phones and
     // take a fixed width from sm up (#2973 restyled them; the contract is the same).
     for (const id of ["voucher-type-tj", "currency-tj", "status-tj"]) {
-      expect(filters).toMatch(new RegExp(`id="${id}" className="[^"]*\\bw-full\\b[^"]*\\bsm:w-\\[\\d+px\\]`));
+      expect(filters).toMatch(new RegExp(`id="${id}"\\s+className="[^"]*\\bw-full\\b[^"]*\\bsm:w-\\[\\d+px\\]`));
     }
     expect(filters).toContain('className="flex flex-col gap-2 sm:flex-row"');
   });

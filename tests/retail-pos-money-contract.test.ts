@@ -2,14 +2,14 @@
  * Retail Wave 2 contract tests.
  *
  * These lock the seams other teams rely on: the schema columns the money model needs, the
- * startup guard that production actually runs, route registration, the approval-token wiring,
+ * migrated schema that defines them, route registration, the approval-token wiring,
  * the client UI entry points, and the EN/AR/FR translations for the new screens.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { pool } from "../server/db";
-import { ensureRetailSellingSchema, ensureRetailStockCountSchema } from "../server/startup/ensureRuntimeSchema";
+import { hasColumn, hasTable } from "./helpers/schemaManifest";
 
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -66,10 +66,7 @@ describe("Retail Wave 2 — schema", () => {
     }
   });
 
-  it("mirrors every Wave 2 table in the always-on startup guard", () => {
-    const guard = read("server/startup/ensureRuntimeSchema.ts");
-    expect(guard).toContain("ensureRetailSellingSchema");
-    expect(guard).toContain("ensureRetailStockCountSchema");
+  it("migrations define every Wave 2 table and sale column", () => {
     for (const table of [
       "retail_pos_settings",
       "retail_promotions",
@@ -78,11 +75,13 @@ describe("Retail Wave 2 — schema", () => {
       "retail_stock_count_lines",
       "retail_stock_count_events",
     ]) {
-      expect(guard, `${table} must be created by the startup guard`).toContain(table);
+      expect(hasTable(table), `${table} must be defined by the migrations`).toBe(true);
     }
-    // The guard is what production runs, so the Wave 2 sale columns must be added there too.
-    for (const column of ["customer_id", "tax_amount", "line_discount_amount", "promotion_id", "gross_unit_price"]) {
-      expect(guard, `${column} must be ensured at startup`).toContain(column);
+    for (const column of ["customer_id", "tax_amount"]) {
+      expect(hasColumn("retail_pos_sales", column), `retail_pos_sales.${column}`).toBe(true);
+    }
+    for (const column of ["line_discount_amount", "promotion_id", "gross_unit_price"]) {
+      expect(hasColumn("retail_pos_sale_items", column), `retail_pos_sale_items.${column}`).toBe(true);
     }
   });
 });
@@ -278,13 +277,8 @@ describe("Retail Wave 2 — client UI", () => {
   });
 });
 
-describeWithDatabase("Retail Wave 2 — runtime schema guard", () => {
-  it("creates and keeps the Wave 2 tables without touching existing data", async () => {
-    await ensureRetailSellingSchema(pool);
-    await ensureRetailSellingSchema(pool);
-    await ensureRetailStockCountSchema(pool);
-    await ensureRetailStockCountSchema(pool);
-
+describeWithDatabase("Retail Wave 2 — migrated schema", () => {
+  it("has the Wave 2 tables and columns in the migrated database", async () => {
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = 'public' AND table_name = ANY($1::text[]) ORDER BY table_name`,

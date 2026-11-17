@@ -79,7 +79,7 @@ describe("Bandwidth Phase 2 payload contracts", () => {
 
   it("retains existing compact Bale Ledger and container detail profiles", () => {
     const ledger = read("server/routes/factory/employee-pos/employeeLedgerWasteRoutes.ts");
-    const bridge = read("server/apiPaginationBridge.mjs");
+    const bridge = read("server/runtime/apiPagination.mjs");
     expect(ledger).toContain("Strip baleDetails from the summary response");
     expect(ledger).toContain("/api/factory/bale-ledger/details");
     expect(bridge).toContain('profile === "otw-summary"');

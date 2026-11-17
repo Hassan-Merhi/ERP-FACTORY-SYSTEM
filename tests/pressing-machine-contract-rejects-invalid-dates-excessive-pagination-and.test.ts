@@ -7,13 +7,13 @@ import {
 } from "../shared/pressingReportContracts";
 import fs from "node:fs";
 
+import { indexDefinition } from "./helpers/schemaManifest";
+
 const server = fs.readFileSync("server/routes/factory/factoryPressingReportRoutes.ts", "utf8");
 const client = fs.readFileSync("client/src/pages/factory/pressing-scanner/pressingReportClient.ts", "utf8");
 const page = fs.readFileSync("client/src/pages/factory/PressingHistoryReport.tsx", "utf8");
 const parent = fs.readFileSync("client/src/pages/factory/PressingMachineManagement.tsx", "utf8");
 const registration = fs.readFileSync("server/routes/factoryRoutes.ts", "utf8");
-const indexSql = fs.readFileSync("migrations/20261027_002_factory_pressing_history_report_indexes.sql", "utf8");
-const stage = fs.readFileSync("server/startup-schema/038-factory-pressing-history-report.ts", "utf8");
 
 describe("pressing machine Phase 6 reporting contracts", () => {
   it("rejects invalid dates, excessive pagination and unknown filter fields", () => {
@@ -111,9 +111,9 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("p.machine_id = c.machine_id");
     expect(server).toContain("p.voided_at IS NULL");
     expect(server).toContain('AS "secondsSincePrevious"');
-    expect(indexSql).toContain("factory_pressing_confirmations_machine_time_idx");
-    expect(indexSql).toContain("confirmed_at DESC, id DESC");
-    expect(stage).toContain("factory_pressing_confirmations_machine_time_idx");
+    expect(indexDefinition("factory_pressing_confirmations_machine_time_idx")).toContain(
+      "(company_id, machine_id, confirmed_at DESC, id DESC) WHERE (voided_at IS NULL)"
+    );
   });
   it("has a company-scoped history UI, saved filters, paginated rows and export", () => {
     expect(parent).toContain("<PressingHistoryReport");
@@ -152,7 +152,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("byOperatorSqlFor");
     expect(page).toContain("Export Excel");
     expect(page).toContain("queryClient.invalidateQueries");
-    expect(client).toContain("XLSX.writeFile");
+    expect(client).toContain("exportOperationalWorkbook");
     expect(client).toContain("first.total > PRESSING_EXPORT_LIMIT");
     expect(client).toContain("asOf: first.asOf");
   });

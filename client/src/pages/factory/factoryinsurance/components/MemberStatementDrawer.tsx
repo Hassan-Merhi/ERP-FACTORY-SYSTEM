@@ -5,8 +5,9 @@
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Loader2, FileText } from "lucide-react";
+import { Shield, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -16,7 +17,12 @@ export // ─── Member Statement Drawer ────────────
 function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; onClose: () => void }) {
   const { formatDisplayDate } = useDateFormat();
 
-  const { data: entries = [], isLoading } = useQuery<LedgerEntry[]>({
+  const {
+    data: entries = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<LedgerEntry[]>({
     queryKey: ["/api/insurance/members", member.id, "entries"],
     queryFn: async () => {
       const res = await fetch(`/api/insurance/members/${member.id}/entries`, { credentials: "include" });
@@ -55,14 +61,11 @@ function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; o
 
         <div className="flex-1 overflow-auto p-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState className="py-12" />
+          ) : isError && entries.length === 0 ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
           ) : entries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <FileText className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">No entries posted yet for this member.</p>
-            </div>
+            <EmptyState icon={FileText} title="No entries posted yet for this member." className="py-12" />
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">

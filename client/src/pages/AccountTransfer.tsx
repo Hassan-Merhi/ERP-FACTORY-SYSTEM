@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useDeferredValue, useState, useMemo } from "react";
@@ -7,12 +8,14 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check, Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 type Account = { id: number; name: string; code: string; accountType: string };
 type Entry = {
@@ -40,7 +43,7 @@ const ENTRY_PAGE_SIZE = 100;
 
 function fmtMoney(v: string | number | null | undefined) {
   if (!v || v === "0" || v === "0.00") return null;
-  return Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatUsd(Number(v), 2);
 }
 
 function AccountCombobox({
@@ -65,10 +68,7 @@ function AccountCombobox({
     () =>
       accounts
         .filter((a) => a.id !== excludeId)
-        .filter(
-          (a) =>
-            searchAny(search, a.name, a.code)
-        )
+        .filter((a) => searchAny(search, a.name, a.code))
         .slice(0, 50),
     [accounts, search, excludeId]
   );
@@ -163,7 +163,12 @@ export default function AccountTransfer() {
     enabled: !!selectedCompany,
   });
 
-  const { data: entryData, isLoading: loadingEntries } = useQuery<EntryPage>({
+  const {
+    data: entryData,
+    isLoading: loadingEntries,
+    isError: entriesError,
+    refetch: refetchEntries,
+  } = useQuery<EntryPage>({
     queryKey: ["/api/voucher-entries/by-account", fromAccountId, entryPage, deferredEntrySearch],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -344,28 +349,28 @@ export default function AccountTransfer() {
                 <p className="text-sm text-muted-foreground mt-0.5">Select which entries to transfer</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="pl-8 h-8 text-sm w-52"
-                    placeholder="Filter entries…"
-                    value={searchEntries}
-                    onChange={(e) => {
-                      setSearchEntries(e.target.value);
-                      setEntryPage(1);
-                      setSelectedIds(new Set());
-                    }}
-                    data-testid="input-search-entries"
-                  />
-                </div>
+                <SearchField
+                  value={searchEntries}
+                  onValueChange={(value) => {
+                    setSearchEntries(value);
+                    setEntryPage(1);
+                    setSelectedIds(new Set());
+                  }}
+                  placeholder="Filter entries…"
+                  wrapperClassName="w-52"
+                  className="text-sm"
+                  data-testid="input-search-entries"
+                />
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {loadingEntries ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">Loading entries…</div>
+              <LoadingState title="Loading entries…" className="py-10" />
+            ) : entriesError && !entryData ? (
+              <ErrorState onAction={() => void refetchEntries()} actionLabel="Try again" className="py-10" />
             ) : entries.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">No entries found for this account</div>
+              <EmptyState title="No entries found for this account" className="py-10" />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -427,14 +432,14 @@ export default function AccountTransfer() {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {dr ? (
-                              <span className="font-medium">${dr}</span>
+                              <span className="font-medium">{dr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-xs">
                             {cr ? (
-                              <span className="font-medium">${cr}</span>
+                              <span className="font-medium">{cr}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -494,18 +499,12 @@ export default function AccountTransfer() {
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   {totalDebit > 0 && (
                     <span>
-                      Debit:{" "}
-                      <span className="font-medium text-foreground">
-                        ${totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
+                      Debit: <span className="font-medium text-foreground">{formatUsd(totalDebit, 2, 3)}</span>
                     </span>
                   )}
                   {totalCredit > 0 && (
                     <span>
-                      Credit:{" "}
-                      <span className="font-medium text-foreground">
-                        ${totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
+                      Credit: <span className="font-medium text-foreground">{formatUsd(totalCredit, 2, 3)}</span>
                     </span>
                   )}
                 </div>

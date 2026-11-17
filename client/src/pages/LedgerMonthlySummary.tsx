@@ -13,6 +13,7 @@ import { ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -81,7 +82,7 @@ export default function LedgerMonthlySummary() {
   const startDate = periodFilter.fromDate;
   const endDate = periodFilter.toDate;
 
-  const { data, isLoading } = useQuery<LedgerMonthlySummaryData>({
+  const { data, isLoading, isError, refetch } = useQuery<LedgerMonthlySummaryData>({
     queryKey: ["/api/reports/ledger-monthly-summary", accountId, startDate, endDate],
     queryFn: async () => {
       const response = await fetch(
@@ -141,6 +142,8 @@ export default function LedgerMonthlySummary() {
             <Skeleton className="h-[400px] w-full" />
             <Skeleton className="h-[300px] w-full" />
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : data ? (
           <>
             {/* Monthly Table */}
@@ -156,9 +159,9 @@ export default function LedgerMonthlySummary() {
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Closing Balance</p>
                     <p
-                      className={`text-xl font-bold font-mono ${
-                        creditPositiveBalanceClass(data.grandTotal.closingBalance)
-                      }`}
+                      className={`text-xl font-bold font-mono ${creditPositiveBalanceClass(
+                        data.grandTotal.closingBalance
+                      )}`}
                       data-testid="text-closing-balance"
                     >
                       {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
@@ -171,8 +174,8 @@ export default function LedgerMonthlySummary() {
               </CardHeader>
               <CardContent className="pt-4">
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Debit and credit show posted voucher movements. Net Movement shows the monthly result without
-                  changing vouchers, cash or other account balances.
+                  Debit and credit show posted voucher movements. Net Movement shows the monthly result without changing
+                  vouchers, cash or other account balances.
                 </p>
                 <div className="border rounded-lg overflow-hidden">
                   <Table mobileLayout="cards">
@@ -200,8 +203,11 @@ export default function LedgerMonthlySummary() {
                         <TableCell className="font-medium">Opening Balance</TableCell>
                         <TableCell className="hidden sm:table-cell"></TableCell>
                         <TableCell className="hidden sm:table-cell"></TableCell>
-                        <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(data.openingBalance)}`}>
-                          {formatAmount(Math.abs(data.openingBalance))} {data.openingBalance === 0 ? "—" : data.openingBalance > 0 ? "Cr" : "Dr"}
+                        <TableCell
+                          className={`text-right font-mono ${creditPositiveBalanceClass(data.openingBalance)}`}
+                        >
+                          {formatAmount(Math.abs(data.openingBalance))}{" "}
+                          {data.openingBalance === 0 ? "—" : data.openingBalance > 0 ? "Cr" : "Dr"}
                         </TableCell>
                         <TableCell></TableCell>
                       </TableRow>
@@ -226,11 +232,16 @@ export default function LedgerMonthlySummary() {
                               <TableCell className="text-right font-mono hidden sm:table-cell">
                                 {month.credit > 0 ? formatAmount(month.credit) : ""}
                               </TableCell>
-                              <TableCell className={`text-right font-mono font-semibold ${month.debit === month.credit ? "text-muted-foreground" : drCrClass(month.debit > month.credit ? "Dr" : "Cr")}`} data-testid={`net-month-${month.month}`}>
+                              <TableCell
+                                className={`text-right font-mono font-semibold ${month.debit === month.credit ? "text-muted-foreground" : drCrClass(month.debit > month.credit ? "Dr" : "Cr")}`}
+                                data-testid={`net-month-${month.month}`}
+                              >
                                 {formatAmount(Math.abs(month.debit - month.credit))}{" "}
                                 {month.debit === month.credit ? "—" : month.debit > month.credit ? "Dr" : "Cr"}
                               </TableCell>
-                              <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(month.closingBalance)}`}>
+                              <TableCell
+                                className={`text-right font-mono ${creditPositiveBalanceClass(month.closingBalance)}`}
+                              >
                                 {formatAmount(Math.abs(month.closingBalance))}{" "}
                                 <span className="font-semibold">
                                   {month.closingBalance === 0 ? "—" : month.closingBalance > 0 ? "Cr" : "Dr"}
@@ -253,14 +264,26 @@ export default function LedgerMonthlySummary() {
                         <TableCell className="text-right font-mono hidden sm:table-cell">
                           {formatAmount(data.grandTotal.credit)}
                         </TableCell>
-                        <TableCell className={`text-right font-mono ${data.grandTotal.debit === data.grandTotal.credit ? "text-muted-foreground" : drCrClass(data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr")}`}>
+                        <TableCell
+                          className={`text-right font-mono ${data.grandTotal.debit === data.grandTotal.credit ? "text-muted-foreground" : drCrClass(data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr")}`}
+                        >
                           {formatAmount(Math.abs(data.grandTotal.debit - data.grandTotal.credit))}{" "}
-                          {data.grandTotal.debit === data.grandTotal.credit ? "—" : data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr"}
+                          {data.grandTotal.debit === data.grandTotal.credit
+                            ? "—"
+                            : data.grandTotal.debit > data.grandTotal.credit
+                              ? "Dr"
+                              : "Cr"}
                         </TableCell>
-                        <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(data.grandTotal.closingBalance)}`}>
+                        <TableCell
+                          className={`text-right font-mono ${creditPositiveBalanceClass(data.grandTotal.closingBalance)}`}
+                        >
                           {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
                           <span className="font-semibold">
-                            {data.grandTotal.closingBalance === 0 ? "—" : data.grandTotal.closingBalance > 0 ? "Cr" : "Dr"}
+                            {data.grandTotal.closingBalance === 0
+                              ? "—"
+                              : data.grandTotal.closingBalance > 0
+                                ? "Cr"
+                                : "Dr"}
                           </span>
                         </TableCell>
                         <TableCell></TableCell>
@@ -278,9 +301,9 @@ export default function LedgerMonthlySummary() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Rent allocated by service month</CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Read-only reconciliation from the paid rental subledger. January's original
-                    cash payments remain dated January 1. This schedule is not a posted journal
-                    and does not replace the gross debit/credit ledger or financial statements.
+                    Read-only reconciliation from the paid rental subledger. January's original cash payments remain
+                    dated January 1. This schedule is not a posted journal and does not replace the gross debit/credit
+                    ledger or financial statements.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -372,9 +395,9 @@ export default function LedgerMonthlySummary() {
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">Closing Balance</p>
                   <p
-                    className={`text-lg font-bold font-mono ${
-                      creditPositiveBalanceClass(data.grandTotal.closingBalance)
-                    }`}
+                    className={`text-lg font-bold font-mono ${creditPositiveBalanceClass(
+                      data.grandTotal.closingBalance
+                    )}`}
                   >
                     {formatAmount(Math.abs(data.grandTotal.closingBalance))}
                   </p>

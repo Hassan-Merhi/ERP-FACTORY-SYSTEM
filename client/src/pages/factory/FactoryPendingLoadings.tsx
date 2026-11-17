@@ -1,4 +1,5 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { ErrorState } from "@/components/ui/page-state";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,9 +51,9 @@ import {
 import { apiRequest, keyStartsWith } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PriorityScanLoadingControl } from "./PriorityScanLoadingControl";
+import { SearchField } from "@/components/ui/search-field";
 
 const UNDO_TIMEOUT_MS = 8000;
 
@@ -154,7 +155,12 @@ export default function FactoryPendingLoadings() {
     };
   }, []);
 
-  const { data: loads = [], isLoading } = useQuery<PendingLoad[]>({
+  const {
+    data: loads = [],
+    isLoading,
+    isError: loadsError,
+    refetch: refetchLoads,
+  } = useQuery<PendingLoad[]>({
     queryKey: ["/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250"],
     refetchInterval: visibleTabInterval(60_000),
   });
@@ -604,17 +610,15 @@ export default function FactoryPendingLoadings() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card p-2 shadow-sm sm:gap-3">
-        <div className="relative min-w-44 flex-1 sm:max-w-xl">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search customer, loading #, proforma or note..."
-            className="h-10 rounded-xl border-border/80 bg-background pl-9"
-            aria-label="Search pending loadings"
-            data-testid="input-pending-loadings-search"
-          />
-        </div>
+        <SearchField
+          value={searchTerm}
+          onValueChange={setSearchTerm}
+          placeholder="Search customer, loading #, proforma or note..."
+          wrapperClassName="min-w-44 flex-1 sm:max-w-xl"
+          className="h-10 rounded-xl border-border/80 bg-background"
+          aria-label="Search pending loadings"
+          data-testid="input-pending-loadings-search"
+        />
         <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as "newest" | "oldest" | "bales")}>
           <SelectTrigger
             className="h-10 w-full rounded-xl sm:w-52"
@@ -668,6 +672,8 @@ export default function FactoryPendingLoadings() {
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
+      ) : loadsError && loads.length === 0 ? (
+        <ErrorState onAction={() => void refetchLoads()} actionLabel="Try again" />
       ) : loads.length === 0 && undoItems.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 py-16 text-center text-muted-foreground"

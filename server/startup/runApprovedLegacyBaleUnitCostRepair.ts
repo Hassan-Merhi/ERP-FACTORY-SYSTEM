@@ -19,7 +19,7 @@ const COMPANY_ID = 12;
 const RUN_TYPE = "legacy-bale-per-bale-price-repair-20261014-v1";
 const ENABLE_ENV = "FACTORY_LEGACY_BALE_UNIT_COST_REPAIR_20261014";
 const MAX_ROWS = 3312;
-const MAX_VALUE_CHANGE = 3996608.00;
+const MAX_VALUE_CHANGE = 3996608.0;
 
 type Totals = { total: string; difference: string };
 type ChangedRow = { id: number };
@@ -32,26 +32,25 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '20s'");
     await client.query("SET LOCAL statement_timeout = '180s'");
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtext('factory_bale_recost'), $1)",
-      [COMPANY_ID]
-    );
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('factory_bale_recost'), $1)", [COMPANY_ID]);
     await client.query("SELECT erp_assert_accounting_date_open($1, CURRENT_DATE)", [COMPANY_ID]);
 
-    const [existing] = (await client.query<{ id: number }>(
-      "SELECT id FROM factory_bale_recost_runs WHERE company_id=$1 AND plan->>'repairType'=$2 LIMIT 1",
-      [COMPANY_ID, RUN_TYPE]
-    )).rows;
+    const [existing] = (
+      await client.query<{ id: number }>(
+        "SELECT id FROM factory_bale_recost_runs WHERE company_id=$1 AND plan->>'repairType'=$2 LIMIT 1",
+        [COMPANY_ID, RUN_TYPE]
+      )
+    ).rows;
     if (existing) {
       await client.query("COMMIT");
       logger.info("[LegacyBaleUnitCost] Already applied; no repeat changes");
       return;
     }
-    const cutover = await client.query(
-      "SELECT 1 FROM gl_inventory_cutovers WHERE company_id=$1 LIMIT 1", [COMPANY_ID]
-    );
+    const cutover = await client.query("SELECT 1 FROM gl_inventory_cutovers WHERE company_id=$1 LIMIT 1", [COMPANY_ID]);
     if (cutover.rowCount) {
-      throw new Error("Legacy unit-cost repair refused: inventory GL cutover exists; use reviewed journal-posted recost");
+      throw new Error(
+        "Legacy unit-cost repair refused: inventory GL cutover exists; use reviewed journal-posted recost"
+      );
     }
 
     await client.query(`
@@ -83,11 +82,13 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
               AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD', 'INVOICED', 'COMPLETED')
          )
     `);
-    const [totals] = (await client.query<Totals>(`
+    const [totals] = (
+      await client.query<Totals>(`
       SELECT COUNT(*)::text AS total,
              COALESCE(SUM(old_total_cost - new_total_cost),0)::text AS difference
         FROM legacy_bale_cost_candidates
-    `)).rows;
+    `)
+    ).rows;
     const count = Number(totals.total);
     const delta = Number(totals.difference);
     if (count === 0) {
@@ -127,22 +128,6 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
       throw new Error("Legacy unit-cost repair refused: candidate was assigned to a completed order");
     }
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS factory_legacy_bale_cost_repairs (
-        bale_id INTEGER PRIMARY KEY,
-        company_id INTEGER NOT NULL,
-        article_code TEXT,
-        reference_number TEXT,
-        old_status TEXT NOT NULL,
-        weight_kg NUMERIC(20,7) NOT NULL,
-        old_cost_per_kg NUMERIC(20,7) NOT NULL,
-        new_cost_per_kg NUMERIC(20,7) NOT NULL,
-        old_total_cost NUMERIC(20,7) NOT NULL,
-        new_total_cost NUMERIC(20,7) NOT NULL,
-        repair_run_id INTEGER,
-        repaired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
     const duplicates = await client.query(`
       SELECT 1 FROM factory_legacy_bale_cost_repairs r
       JOIN legacy_bale_cost_candidates c ON c.bale_id=r.bale_id LIMIT 1
@@ -184,7 +169,9 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
     const fingerprint = createHash("sha256")
       .update(`${RUN_TYPE}:${count}:${delta.toFixed(2)}`)
       .digest("hex");
-    const [run] = (await client.query<{ id: number }>(`
+    const [run] = (
+      await client.query<{ id: number }>(
+        `
       INSERT INTO factory_bale_recost_runs (company_id,plan_hash,plan,applied_by)
       SELECT 12, $1,
         jsonb_build_object(
@@ -202,14 +189,19 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
         ),
         'owner-requested-2026-10-14'
       RETURNING id
-    `, [fingerprint,RUN_TYPE,count,delta])).rows;
+    `,
+        [fingerprint, RUN_TYPE, count, delta]
+      )
+    ).rows;
     await client.query(
       "UPDATE factory_legacy_bale_cost_repairs SET repair_run_id=$1 WHERE company_id=12 AND repair_run_id IS NULL AND bale_id IN (SELECT bale_id FROM legacy_bale_cost_candidates)",
       [run.id]
     );
 
     await client.query("COMMIT");
-    logger.info(`[LegacyBaleUnitCost] Applied audit run ${run.id}: ${count} unsold no-mix bales; stock cost corrected downward USD ${delta.toFixed(2)}; sold bales and posted invoices untouched`);
+    logger.info(
+      `[LegacyBaleUnitCost] Applied audit run ${run.id}: ${count} unsold no-mix bales; stock cost corrected downward USD ${delta.toFixed(2)}; sold bales and posted invoices untouched`
+    );
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error; // Do not replace production with an unreviewed partial accounting repair.

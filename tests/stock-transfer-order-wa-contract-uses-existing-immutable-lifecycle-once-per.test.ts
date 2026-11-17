@@ -1,6 +1,6 @@
 /**
  * Phase 4 source contracts. Unit scenarios for the deterministic order
- * selection policy are in stock-transfer-order-wa-phase4-policy.test.ts.
+ * selection policy are in stock-transfer-order-wa-policy.test.ts.
  * The database-backed approval transaction is integration-tested in Phase 7.
  */
 import fs from "node:fs";

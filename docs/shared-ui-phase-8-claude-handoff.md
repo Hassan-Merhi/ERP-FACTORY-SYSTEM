@@ -124,7 +124,7 @@ Test and verifier contracts updated to the new markup (not loosened):
 
 - Hub section selectors are tablists now: `tabs-employees-section` and
   `tabs-workers-section` landmarks replace the removed `select-*-section`
-  ids in `renders.test.tsx` and `wave4-remaining-pages.test.tsx`.
+  ids in `renders.test.tsx` and `remaining-pages.test.tsx`.
 - `ContainerListView` mount tests use the always-rendered
   `select-filter-status` landmark (the search box requires the parent's
   setter, which those harnesses do not pass).

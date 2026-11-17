@@ -6,7 +6,6 @@ import { db } from "../server/db";
 import {
   claimVoucherPathRequest,
   completeVoucherPathRequest,
-  ensureVoucherPathGuardTable,
   voucherPathRequestFingerprint,
 } from "../server/services/accounting/voucherPathTransitionBoundary";
 
@@ -31,7 +30,6 @@ function testKey(label: string): string {
 
 describePostgres("voucher path request boundary PostgreSQL regression", () => {
   beforeAll(async () => {
-    await ensureVoucherPathGuardTable();
     await cleanup();
   });
 

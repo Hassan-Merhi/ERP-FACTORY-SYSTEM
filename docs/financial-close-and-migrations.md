@@ -13,7 +13,7 @@
 
 1. Add migrations under `migrations/` using `YYYYMMDD_NNN_description.sql`.
 2. Never edit a migration after it has been applied to any shared environment.
-3. Run `node scripts/run-production-migrations.mjs` with `DATABASE_URL` set before starting the new application version.
+3. Run `MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate` with `DATABASE_URL` set before starting the new application version, then `npm run db:verify` (see database-migrations.md).
 4. The runner obtains a PostgreSQL advisory lock so only one deploy can migrate at a time.
 5. Each migration runs inside its own transaction.
 6. The SHA-256 checksum and execution metadata are stored in `schema_migration_history`.

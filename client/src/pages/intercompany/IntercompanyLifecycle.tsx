@@ -292,7 +292,7 @@ export function IntercompanyLifecycleContent({
   return (
     <div
       className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"}
-      data-testid="intercompany-phase5-lifecycle"
+      data-testid="intercompany-receiving-lifecycle"
     >
       {!embedded && (
         <PageHeader

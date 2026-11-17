@@ -122,14 +122,14 @@ requireMarkers(".github/workflows/main-certification.yml", [
   "name: Main Certification",
   "Verify exact merged main SHA",
   "verify:observability",
-  "verify-phase11-12-observability-disaster-recovery.mjs",
+  "verify-observability-disaster-recovery.mjs",
   "verify:stabilization",
   "context='Main Certification'",
 ]);
 
 requireMarkers("scripts/verify-final-production-readiness.mjs", [
   ".github/workflows/main-certification.yml",
-  "verify-phase11-12-observability-disaster-recovery.mjs",
+  "verify-observability-disaster-recovery.mjs",
   "source-critical-counts.tsv",
   "resilience-evidence.json",
   "DR_REHEARSAL_RTO_SECONDS",

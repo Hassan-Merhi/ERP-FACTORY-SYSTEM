@@ -6,7 +6,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => env,
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
+import { capturePhase9PressingTx } from "../server/edge/pressingOutbox";
+import { functionDefinition, hasTable, tableConstraints, triggerDefinition } from "./helpers/schemaManifest";
 import { Phase9PressingRefusal } from "../server/edge/pressingEnvelope.mjs";
 
 const evidence = {
@@ -60,23 +61,20 @@ describe("Phase 9 physical scan capture (not LAN write approval)", () => {
     expect(execute.mock.calls.every((args) => args.length === 1)).toBe(true);
   });
 
-  it("creates a separate immutable sequence and append-only receipt stream only on LAN", async () => {
-    const statements: string[] = [];
-    const query = vi.fn(async (queryText: string) => {
-      statements.push(queryText);
-      return { rows: [] };
-    });
-    await ensurePhase9PressingOutboxSchema({ query } as never);
-    expect(statements.join("\n")).toContain("factory_edge_pressing_counter");
-    expect(statements.join("\n")).toContain("factory_edge_pressing_outbox");
-    expect(statements.join("\n")).toContain("BEFORE UPDATE OR DELETE");
-    expect(statements.join("\n")).toContain("FOREIGN KEY (company_id, local_confirmation_id)");
-    expect(statements.join("\n")).toContain("ON DELETE RESTRICT");
-    expect(statements.join("\n")).not.toContain("factory_edge_outbox_counter");
-    statements.length = 0;
-    env.mode = "cloud";
-    await ensurePhase9PressingOutboxSchema({ query } as never);
-    expect(statements).toHaveLength(0);
+  it("migrations define a separate sequence and an append-only pressing stream", () => {
+    expect(hasTable("factory_edge_pressing_counter")).toBe(true);
+    expect(hasTable("factory_edge_pressing_outbox")).toBe(true);
+    const trigger = triggerDefinition("factory_edge_pressing_outbox", "factory_edge_pressing_outbox_no_mutation");
+    expect(trigger).toContain("BEFORE DELETE OR UPDATE");
+    expect(trigger).toContain("EXECUTE FUNCTION factory_edge_pressing_outbox_immutable()");
+    expect(functionDefinition("factory_edge_pressing_outbox_immutable")).toContain("RAISE EXCEPTION");
+    const constraints = tableConstraints("factory_edge_pressing_outbox");
+    expect(constraints).toContain(
+      "FOREIGN KEY (company_id, local_confirmation_id) REFERENCES factory_pressing_confirmations(company_id, id) ON DELETE RESTRICT"
+    );
+    expect(constraints).toContain("PRIMARY KEY (site_id, sequence)");
+    // Its own counter, never Phase 8's voucher-only counter.
+    expect(constraints.join("\n")).not.toContain("factory_edge_outbox_counter");
   });
 
   it("retains atomic scan rollback semantics when evidence insertion fails", async () => {

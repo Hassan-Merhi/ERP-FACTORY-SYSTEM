@@ -15,7 +15,7 @@
  *   8. under perpetual inventory an offload of non-USD purchase orders is
  *      refused (409); before the cut-over it still runs;
  *   9. the reviewed bale re-cost routes resolve to Factory Settings;
- * Follow-up 10 (factory stock value events) is in wave11-followups-factory.test.ts.
+ * Follow-up 10 (factory stock value events) is in followups-factory.test.ts.
  */
 import type { Request } from "express";
 import request from "supertest";

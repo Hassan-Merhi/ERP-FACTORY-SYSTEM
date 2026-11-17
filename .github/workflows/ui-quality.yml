@@ -269,7 +269,7 @@ jobs:
 
       - name: Prepare disposable browser fixture
         run: |
-          node node_modules/drizzle-kit/bin.cjs push --force
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
           node scripts/prepare-browser-smoke-fixture.mjs
 
       - name: Authenticated responsive and multilingual browser smoke

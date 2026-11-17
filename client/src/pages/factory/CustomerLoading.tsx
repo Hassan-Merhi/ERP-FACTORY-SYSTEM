@@ -2,19 +2,17 @@ import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronLeft,
-  ChevronRight,
   Columns3,
   History,
   Loader2,
   Package,
-  Search,
   ShoppingCart,
   SlidersHorizontal,
   UserRound,
   UsersRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,6 +44,7 @@ import {
   type LoadingFilter,
 } from "./customerLoadingTypes";
 import { COLUMN_PREFERENCE_KEY, initialVisibleColumns, PAGE_SIZE, readJson } from "./customerLoadingHelpers";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function CustomerLoading() {
   const mhd = useFactoryMhdView();
@@ -450,19 +449,17 @@ export default function CustomerLoading() {
                 <SlidersHorizontal className="h-3.5 w-3.5" /> Search & filters
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(16rem,1.6fr)_repeat(5,minmax(8rem,1fr))]">
-                <div className="relative sm:col-span-2 lg:col-span-3 2xl:col-span-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search name, Arabic, or code..."
-                    className="h-10 border-slate-300 bg-white pl-9 shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-                    data-testid="customer-loading-search"
-                  />
-                </div>
+                <SearchField
+                  value={search}
+                  onValueChange={(v) => {
+                    setSearch(v);
+                    setPage(1);
+                  }}
+                  placeholder="Search name, Arabic, or code..."
+                  wrapperClassName="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
+                  className="h-10 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+                  data-testid="customer-loading-search"
+                />
                 <Select
                   value={loadingFilter}
                   onValueChange={(v) => {
@@ -760,33 +757,14 @@ export default function CustomerLoading() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-[hsl(var(--factory-hue)_44%_16%)] sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-muted-foreground">
-                Showing {filteredProducts.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–
-                {Math.min(safePage * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" /> Previous
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  Page {safePage} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={safePage >= pageCount}
-                >
-                  Next <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={safePage}
+              totalPages={pageCount}
+              total={filteredProducts.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              noun="products"
+            />
           </Card>
         </>
       )}

@@ -18,7 +18,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
 import { pruneRemoteSupportAuditRows } from "../server/services/remoteSupportAuditRetention";
 import { syncEmployeeBalancesFromEntries } from "../server/routes/helpers/employeeHelpers";
 import { maybeRunAutoTransfer } from "../server/routes/rental/shared/auto-transfer";
@@ -84,7 +83,6 @@ async function createCompany(suffix: string): Promise<number> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureAuditLogAppendOnlyGuard(pool);
   agent = request.agent(ctx.app);
   const login = await agent
     .post("/api/auth/login")
@@ -243,7 +241,7 @@ describe("company delete", () => {
     expect((await ownerAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
   }, 60_000);
 
-  it("is refused for an Admin, and with 409 for a company that has vouchers", async () => {
+  it("is refused for an Owner, for an active company, and with 409 for a company that has vouchers", async () => {
     const companyId = await createCompany("HIST");
     await pool.query(
       `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin')`,
@@ -255,8 +253,14 @@ describe("company delete", () => {
       [companyId, `${PREFIX}-HIST`]
     );
 
-    expect((await agent.delete(`/api/companies/${companyId}`)).status).toBe(403);
-    const refused = await ownerAgent.delete(`/api/companies/${companyId}`);
+    // #3255 moved company management to Admin/Developer and requires the
+    // company to be deactivated first; an Owner session is refused outright.
+    expect((await ownerAgent.delete(`/api/companies/${companyId}`)).status).toBe(403);
+    const stillActive = await agent.delete(`/api/companies/${companyId}`);
+    expect(stillActive.status).toBe(409);
+    expect(stillActive.body.code).toBe("COMPANY_MUST_BE_INACTIVE");
+    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
+    const refused = await agent.delete(`/api/companies/${companyId}`);
     expect(refused.status).toBe(409);
     expect(refused.body.code).toBe("COMPANY_HAS_HISTORY");
     expect(refused.body.blockers).toContain("vouchers");
@@ -265,10 +269,11 @@ describe("company delete", () => {
 
   it("deletes an empty company in one audited transaction and keeps its audit rows", async () => {
     const companyId = await createCompany("EMPTY");
-    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner')`, [
-      ownerUserId,
-      companyId,
-    ]);
+    await pool.query(
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner'), ($3, $2, 'Admin')`,
+      [ownerUserId, companyId, ctx.userId]
+    );
+    await pool.query(`UPDATE companies SET active = false WHERE id = $1`, [companyId]);
     await pool.query(
       `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance) VALUES ($1, $2, 'Cash', 'Cash', '0')`,
       [companyId, `${PREFIX}-EC`]
@@ -279,7 +284,7 @@ describe("company delete", () => {
       [companyId]
     );
 
-    const deleted = await ownerAgent.delete(`/api/companies/${companyId}`);
+    const deleted = await agent.delete(`/api/companies/${companyId}`);
     expect(deleted.status).toBe(200);
     deletedCompanyIds.push(companyId);
     expect(await count(`SELECT COUNT(*) AS n FROM companies WHERE id = $1`, [companyId])).toBe(0);

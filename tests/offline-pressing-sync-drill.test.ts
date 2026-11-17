@@ -19,12 +19,10 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
   readFactoryEdgeConfiguration: () => ({ mode: "lan", primary: true, siteId: SITE }),
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
-import { ensurePhase8ApplySchema } from "../server/edge/applyStore.mjs";
+import { capturePhase9PressingTx } from "../server/edge/pressingOutbox";
 import {
   applyPendingStagedEvents,
   applyStagedEventOnce,
-  ensurePhase9CloudEventSchema,
   getPhase9AppliedReceipts,
   recordPhase9ConflictDecision,
   stagePhase9Events,
@@ -33,7 +31,8 @@ import {
 import { EDGE_EVENT_STAGE_PATH, validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { EVENT_STAGE_SIGNATURE_DOMAIN, verifyStageSignature } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { phase9PressingApplyHandler } from "../server/edge/pressingApply";
-import { ensurePhase10SyncControlSchema, recordPhase10SyncControl } from "../server/edge/syncControl.mjs";
+import { recordPhase10SyncControl } from "../server/edge/syncControl.mjs";
+import { applyMigrations } from "./helpers/migrateDisposableDatabase.mjs";
 import { summarizeLanEvidence } from "../scripts/edge/factory-handover-preflight.mjs";
 import {
   eventEnvelope,
@@ -71,52 +70,17 @@ function dbUrl(name: string, user?: string): string {
 const GUC = `SELECT set_config('phase7_writer.mode','cloud-primary',false),
   set_config('phase7_writer.site_id','cloud',false), set_config('phase7_writer.epoch','2',false)`;
 
-const CLOUD_DDL = `
-  CREATE TABLE users (id text PRIMARY KEY, username text NOT NULL, active boolean NOT NULL);
-  CREATE TABLE user_company_roles (id serial PRIMARY KEY, user_id text NOT NULL, company_id integer NOT NULL,
-    role text NOT NULL, pos_view_only boolean NOT NULL DEFAULT false);
-  CREATE TABLE vouchers (id serial PRIMARY KEY, company_id integer, voucher_date date);
-  CREATE TABLE factory_user_profiles (company_id integer, user_id text, display_name text);
-  CREATE TABLE factory_bales (id integer NOT NULL, company_id integer NOT NULL, reference_number text NOT NULL,
-    article_code text, product_name text, weight_kg numeric(15,3) NOT NULL, status text NOT NULL DEFAULT 'STOCKED',
-    deleted_at timestamp, PRIMARY KEY (company_id, id));
-  CREATE TABLE factory_pressing_machines (id integer NOT NULL, company_id integer NOT NULL, name text NOT NULL,
-    PRIMARY KEY (company_id, id));
-  CREATE TABLE factory_pressing_assignments (id integer NOT NULL, company_id integer NOT NULL,
-    machine_id integer NOT NULL, user_id text NOT NULL, unassigned_at timestamptz, PRIMARY KEY (company_id, id));
-  CREATE TABLE factory_pressing_sessions (id serial PRIMARY KEY, company_id integer NOT NULL,
-    machine_id integer NOT NULL, assignment_id integer NOT NULL, user_id text NOT NULL, shift_id integer,
-    started_at timestamptz NOT NULL, ended_at timestamptz,
-    UNIQUE (company_id, id, machine_id, assignment_id, user_id));
-  CREATE UNIQUE INDEX sessions_active_user ON factory_pressing_sessions (company_id, user_id) WHERE ended_at IS NULL;
-  CREATE TABLE factory_pressing_confirmations (id serial PRIMARY KEY, company_id integer NOT NULL,
-    bale_id integer NOT NULL, machine_id integer NOT NULL, assignment_id integer NOT NULL,
-    session_id integer NOT NULL, shift_id integer, user_id text NOT NULL, user_name_snapshot text,
-    machine_name_snapshot text NOT NULL, reference_number text NOT NULL, article_code text, product_name text,
-    weight_kg numeric(15,3) NOT NULL, request_id text NOT NULL, device_captured_at timestamptz,
-    confirmed_at timestamptz NOT NULL, production_date date NOT NULL, timezone_name text NOT NULL,
-    voided_at timestamptz, voided_by text,
-    FOREIGN KEY (company_id, bale_id) REFERENCES factory_bales (company_id, id),
-    FOREIGN KEY (company_id, session_id, machine_id, assignment_id, user_id)
-      REFERENCES factory_pressing_sessions (company_id, id, machine_id, assignment_id, user_id));
-  CREATE UNIQUE INDEX confirmations_request ON factory_pressing_confirmations (company_id, request_id);
-  CREATE UNIQUE INDEX confirmations_active_bale ON factory_pressing_confirmations (company_id, bale_id)
-    WHERE voided_at IS NULL;
-  CREATE TABLE factory_pressing_corrections (id serial PRIMARY KEY, company_id integer NOT NULL,
-    confirmation_id integer NOT NULL, replacement_confirmation_id integer, action text NOT NULL,
-    reason text NOT NULL, supervisor_user_id text NOT NULL);
-  CREATE TABLE audit_log (id serial PRIMARY KEY, user_id text NOT NULL, username text NOT NULL, company_id integer,
-    action text NOT NULL, table_name text NOT NULL, record_id integer, record_identifier text, changes jsonb,
-    created_at timestamp NOT NULL DEFAULT now(), request_id text, ip text, session_id text, reason text,
-    prev_hash text, row_hash text);
-
-  INSERT INTO users VALUES ('worker-1','w1',true), ('worker-2','w2',true), ('worker-3','w3',true);
+// Business fixture rows in the real tables of a database built from migrations/.
+const CLOUD_FIXTURE = `
+  INSERT INTO companies (id, code, name) VALUES (5, 'DRILL', 'Drill company');
+  INSERT INTO users (id, username, password, active) VALUES
+    ('worker-1','w1','not-a-login',true), ('worker-2','w2','not-a-login',true), ('worker-3','w3','not-a-login',true);
   INSERT INTO user_company_roles (user_id, company_id, role) VALUES
     ('worker-1',5,'Factory Worker'), ('worker-2',5,'Factory Worker'), ('worker-3',5,'Factory Worker');
-  INSERT INTO factory_user_profiles VALUES (5,'worker-1','Worker One');
-  INSERT INTO factory_pressing_machines VALUES (4,5,'Press A');
-  INSERT INTO factory_pressing_assignments VALUES (31,5,4,'worker-1',NULL), (32,5,4,'worker-2',NULL),
-    (33,5,4,'worker-3',NULL);
+  INSERT INTO factory_user_profiles (company_id, user_id, display_name) VALUES (5,'worker-1','Worker One');
+  INSERT INTO factory_pressing_machines (id, company_id, machine_code, name) VALUES (4,5,'PRESS-A','Press A');
+  INSERT INTO factory_pressing_assignments (id, company_id, machine_id, user_id, assigned_by, unassigned_at) VALUES
+    (31,5,4,'worker-1','worker-1',NULL), (32,5,4,'worker-2','worker-1',NULL), (33,5,4,'worker-3','worker-1',NULL);
   INSERT INTO factory_bales (id, company_id, reference_number, article_code, product_name, weight_kg)
     SELECT n, 5, 'BALE-' || n, 'ART-' || n, 'Product ' || n, 40 + n FROM generate_series(100, 111) AS n;
   -- Pre-outage cloud scan of BALE-109 by another request: a guaranteed conflict.
@@ -180,12 +144,28 @@ function uuidFor(n: number): string {
   return "e53cdbd1-7c4b-4b5c-9a60-" + String(n).padStart(12, "0");
 }
 
+/**
+ * The LAN scan row the evidence points at. Only its outbox FK matters here, so
+ * the row's own parents (bale, session, machine) are skipped while seeding it.
+ */
+async function insertLanScan(client: Client, id: number, companyId: number) {
+  await client.query("SET LOCAL session_replication_role = replica");
+  await client.query(
+    `INSERT INTO factory_pressing_confirmations
+       (id, company_id, bale_id, machine_id, assignment_id, session_id, user_id, machine_name_snapshot,
+        reference_number, weight_kg, request_id, production_date, timezone_name)
+     VALUES ($1, $2, $1, 4, 0, 0, 'lan-fixture', 'Press A', $3, 1, $4, '2026-10-30', 'Asia/Beirut')`,
+    [id, companyId, `LAN-${id}`, `lan-fixture-${id}`]
+  );
+  await client.query("SET LOCAL session_replication_role = origin");
+}
+
 async function captureScan(lanUrl: string, local: number, bale: number, worker: number, commit = true) {
   const client = new Client({ connectionString: lanUrl, ssl: false });
   await client.connect();
   try {
     await client.query("BEGIN");
-    await client.query("INSERT INTO factory_pressing_confirmations (id, company_id) VALUES ($1, 5)", [local]);
+    await insertLanScan(client, local, 5);
     await capturePhase9PressingTx(
       drizzle(client) as unknown as DbTransaction,
       evidence(local, bale, worker, uuidFor(local))
@@ -218,19 +198,16 @@ describe.skipIf(!adminUrl)("Phase 9 pressing sync drill (disposable PostgreSQL)"
     await admin.query(`CREATE ROLE phase9_drill_runtime LOGIN PASSWORD 'phase9-drill-runtime-pass'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
 
+    // Both databases are built from migrations/ only.
+    applyMigrations(lanUrl);
+    applyMigrations(dbUrl("phase9_drill_cloud"));
     lan = new Client({ connectionString: lanUrl, ssl: false });
     await lan.connect();
-    await lan.query(`CREATE TABLE factory_pressing_confirmations (id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL,
-      UNIQUE (company_id, id))`);
-    await ensurePhase9PressingOutboxSchema(lan as never);
-    await ensurePhase10SyncControlSchema(lan);
 
     cloudAdmin = new Client({ connectionString: dbUrl("phase9_drill_cloud"), ssl: false });
     await cloudAdmin.connect();
     await cloudAdmin.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-    await cloudAdmin.query(CLOUD_DDL);
-    await ensurePhase8ApplySchema(cloudAdmin);
-    await ensurePhase9CloudEventSchema(cloudAdmin);
+    await cloudAdmin.query(CLOUD_FIXTURE);
     await cloudAdmin.query(
       await readFile(new URL("../deploy/lan/phase7-install-writer-fence.sql", import.meta.url), "utf8")
     );
@@ -291,7 +268,9 @@ describe.skipIf(!adminUrl)("Phase 9 pressing sync drill (disposable PostgreSQL)"
   });
 
   it("keeps tenants isolated: no cross-company source, no relabelled evidence", async () => {
-    await lan.query("INSERT INTO factory_pressing_confirmations (id, company_id) VALUES (500, 6)");
+    await lan.query("BEGIN");
+    await insertLanScan(lan, 500, 6);
+    await lan.query("COMMIT");
     const client = new Client({ connectionString: lanUrl, ssl: false });
     await client.connect();
     try {

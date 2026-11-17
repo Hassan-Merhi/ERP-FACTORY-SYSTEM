@@ -10,7 +10,6 @@ import {
 } from "@shared/schema";
 import { getStableSupplierCost } from "./rawStockStableCost";
 import { db as sharedDb } from "../../db";
-import { FACTORY_HISTORICAL_REPLAY_V7_SCHEMA_SQL } from "./historicalReplayV7MigrationSql";
 import { calculateCostLine, calculateMovingAverageRate, formatFactoryLockedRate } from "./factoryCostingEngine";
 import type { DatabaseOrTransaction } from "../../db";
 import { toMoney } from "../../lib/money";
@@ -274,19 +273,6 @@ export async function applyOffloadMovingAverage(
 
   return { oldRemainingKg, oldLockedRate, newLockedRate: newLockedRate.toNumber() };
 }
-
-/**
- * Production startup migration hook. server/index.ts already executes this exact
- * constant before opening the HTTP port. The leading comment intentionally prevents
- * its single-ALTER optimization from treating the appended multi-statement V7 schema
- * as one ADD COLUMN expression.
- */
-export const FACTORY_SUPPLIER_LOCKED_RATE_ADD_COLUMN_SQL = `
-/* locked supplier rate + Historical Replay V7 schema */
-ALTER TABLE factory_suppliers
-  ADD COLUMN IF NOT EXISTS current_raw_material_cost_per_kg_usd NUMERIC(20,8);
-${FACTORY_HISTORICAL_REPLAY_V7_SCHEMA_SQL}
-`;
 
 export const FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_MIGRATION_KEY =
   "factory-supplier-locked-raw-material-rate-backfill-v1";

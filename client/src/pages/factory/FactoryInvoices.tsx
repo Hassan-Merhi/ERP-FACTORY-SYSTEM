@@ -26,8 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useLocation } from "wouter";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Eye, EyeOff, Package, Search, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Eye, EyeOff, Package, SlidersHorizontal, ChevronDown, Filter } from "lucide-react";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { cn } from "@/lib/utils";
 import { InvoiceDashboardMetrics } from "./factoryinvoices/InvoiceDashboardMetrics";
 import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/queryClient";
@@ -50,6 +50,7 @@ import { InvoiceOrderRow, type EditableShippingField, type InvoiceColumnKey } fr
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { downloadFromUrl } from "@/lib/exportFile";
+import { SearchField } from "@/components/ui/search-field";
 
 // All permitted invoice columns are visible unless the user chooses to hide them.
 const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
@@ -563,16 +564,14 @@ export default function FactoryInvoices() {
 
         {/* Search and column controls retain all existing invoice actions. */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2.5">
-          <div className="relative min-w-[210px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search customer, loading, container, destination..."
-              className="h-9 rounded-lg border-border/70 bg-background/80 pl-9 text-xs"
-              data-testid="input-invoice-search"
-            />
-          </div>
+          <SearchField
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+            placeholder="Search customer, loading, container, destination..."
+            wrapperClassName="min-w-[210px] flex-1"
+            className="h-9 rounded-lg border-border/70 bg-background/80 text-xs"
+            data-testid="input-invoice-search"
+          />
           <Button
             size="sm"
             variant={showMoreFilters || fromDate || toDate ? "secondary" : "outline"}
@@ -637,28 +636,17 @@ export default function FactoryInvoices() {
         </div>
         {showMoreFilters && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <CalendarDays className="h-3.5 w-3.5" /> From date
-              </span>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs"
-                data-testid="input-invoice-from-date"
+            <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span>Period</span>
+              <PeriodFilter
+                value={{ fromDate, toDate, preset: fromDate || toDate ? "custom" : "all_time" }}
+                onChange={(v) => {
+                  setFromDate(v.fromDate);
+                  setToDate(v.toDate);
+                }}
+                data-testid="invoice-period-filter"
               />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <span>To date</span>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs"
-                data-testid="input-invoice-to-date"
-              />
-            </label>
+            </div>
             <Button
               variant="ghost"
               size="sm"

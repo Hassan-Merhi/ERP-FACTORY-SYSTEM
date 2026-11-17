@@ -1,10 +1,10 @@
-import { Boxes, DollarSign, Gauge, Layers, Package, Search, Trash2 } from "lucide-react";
+import { Boxes, DollarSign, Gauge, Layers, Package, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InventoryTable } from "./InventoryTable";
 import type { InventoryItem, StockGroupSummary } from "./locationInventoryTypes";
 import type { AuthMe } from "@shared/apiTypes";
+import { SearchField } from "@/components/ui/search-field";
 
 interface StockGroupItemsViewProps {
   selectedGroup: StockGroupSummary;
@@ -149,16 +149,14 @@ export function StockGroupItemsView({
 
       {/* Search + category */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/80 p-3 shadow-sm sm:p-3.5">
-        <div className="relative min-w-[180px] flex-1 sm:max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search items by name..."
-            value={itemSearchTerm}
-            onChange={(e) => setItemSearchTerm(e.target.value)}
-            className="h-10 rounded-xl border-border/70 bg-background/80 pl-10 shadow-sm focus-visible:ring-violet-400/50"
-            data-testid="input-item-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search items by name..."
+          value={itemSearchTerm}
+          onValueChange={setItemSearchTerm}
+          wrapperClassName="min-w-[180px] flex-1 sm:max-w-md"
+          className="h-10 rounded-xl border-border/70 bg-background/80 shadow-sm focus-visible:ring-violet-400/50"
+          data-testid="input-item-search"
+        />
         <Select
           value={itemCategoryFilter[0] || "all"}
           onValueChange={(v) => setItemCategoryFilter(v === "all" ? [] : [v])}

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LoadingState } from "@/components/ui/page-state";
 import { Truck, Users, Calculator } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
@@ -61,7 +62,7 @@ export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
 
         {visibleTabs.map((t) => (
           <TabsContent key={t.key} value={t.key} className="flex-1 min-w-0 overflow-auto m-0 p-0">
-            <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading…</div>}>
+            <Suspense fallback={<LoadingState className="m-4" />}>
               {t.key === "suppliers" && <Suppliers />}
               {t.key === "customers" && <Customers />}
               {t.key === "profit-check" && <SupplierProfitCheck />}

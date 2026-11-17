@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
-import { ensurePhase2Schema, getSuspenseReview, pn, validateMigrationPair } from "./spMigrationCommon";
+import { getSuspenseReview, pn, validateMigrationPair } from "./spMigrationCommon";
 import { importHistoricalSales } from "./spMigrationSales";
 import { importContainers } from "./spMigrationContainers";
 import { resultRows, firstRow } from "../../lib/queryResult";
@@ -15,7 +15,6 @@ async function rollbackMigrationRun(req: Request, res: Response): Promise<unknow
     return res.status(400).json({ message: "Invalid rollback confirmation" });
   }
 
-  await ensurePhase2Schema();
   const runResult = await db.execute(sql`
     SELECT id, source_company_id, target_company_id, status
     FROM sp_migration_rehearsal_runs
@@ -175,7 +174,6 @@ export function registerSpMigrationPhase2Routes(app: Express): void {
       try {
         const pair = await validateMigrationPair(req, res, false);
         if (!pair) return;
-        await ensurePhase2Schema();
         const result = await db.execute(sql`
           SELECT m.*, a.code AS target_account_code, a.name AS target_account_name
           FROM sp_migration_container_charges m

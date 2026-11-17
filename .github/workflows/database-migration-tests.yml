@@ -1,51 +1,63 @@
-name: Database Migration Integration Tests
+name: Database Migrations
+
+# The schema is owned by numbered migrations in migrations/. This workflow
+# proves, on a disposable PostgreSQL 18 service container only:
+#   - no runtime code executes DDL (static audit);
+#   - the registry is valid (names, numbering, checksums, history rules);
+#   - an EMPTY database reaches the complete schema from migrations alone and
+#     matches the committed manifest exactly;
+#   - existing-database adoption, partial failure, concurrency and the startup
+#     gate behave as specified;
+#   - the built server boots and serves without executing any DDL, and refuses
+#     to start on an incomplete schema.
+# It never uses production credentials: every DATABASE_URL below is the local
+# service container, and a guard step fails the job otherwise.
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "migrations/controlled/**"
-      - "scripts/run-controlled-migrations.mjs"
-      - "scripts/test-controlled-migrations-postgres.mjs"
-      - "scripts/database-*.mjs"
-      - "scripts/verify-restore-target.mjs"
-      - "tests/*migration*.node.test.mjs"
-      - "tests/*database*.node.test.mjs"
-      - ".github/workflows/database-migration-tests.yml"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: database-migration-tests-${{ github.ref }}
+  group: database-migrations-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  integration:
-    name: Disposable PostgreSQL migration lifecycle
+  migrations:
+    name: Migrations (fresh install, adoption, no-DDL boot)
     runs-on: ubuntu-26.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: erp_phase8_harness
+          POSTGRES_DB: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d erp_phase8_harness"
+          --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
     env:
-      NODE_ENV: test
       PGSSLMODE: disable
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/erp_phase8_harness
-      PHASE8_TEST_CONFIRMATION: RUN_DISPOSABLE_PHASE8_MIGRATION_TESTS
+      ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      MIGRATION_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      SESSION_SECRET: ci-session-secret-for-boot-check-0123456789abcdef
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - name: Checkout reviewed branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,46 +69,63 @@ jobs:
           node-version: "24.22.2"
           cache: npm
 
-      - name: Normalize legacy internal npm registry URLs
-        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
-
       - name: Install locked dependencies
         env:
           SKIP_GIT_HOOKS: "1"
         run: npm ci --no-audit --bin-links=true
 
-      - name: Inventory remaining startup mutation candidates (report only)
-        run: npm run audit:startup-mutations > "$RUNNER_TEMP/startup-mutation-inventory.json"
-
-      - name: Upload startup mutation inventory
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: startup-mutation-inventory
-          path: ${{ runner.temp }}/startup-mutation-inventory.json
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Run migration and recovery unit tests
-        run: npm run test:db:migrations
-
-      - name: Verify Phase 9 production release is blocked without evidence
-        shell: bash
+      - name: Guard - only the local disposable database is reachable
         run: |
           set -euo pipefail
-          if node scripts/verify-database-release.mjs --commit="$GITHUB_SHA" > "$RUNNER_TEMP/phase9-preflight.json"; then
+          case "$ADMIN_URL" in
+            postgresql://postgres:postgres@127.0.0.1:5432/*) ;;
+            *) echo "::error::Migration CI must only target the local service container"; exit 1 ;;
+          esac
+
+      - name: Runtime DDL audit (server/ and shared/ must not change the schema)
+        run: npm run audit:runtime-ddl
+
+      - name: Migration plan (no database access)
+        run: npm run db:migrate:plan
+
+      - name: Registry, fresh install, adoption, concurrency and startup gate tests
+        run: npm run test:db:migrations
+
+      - name: Fresh install from migrations alone + manifest is current
+        run: |
+          set -euo pipefail
+          node scripts/db/ci-sql.mjs "$ADMIN_URL" "CREATE DATABASE erp_fresh" "CREATE DATABASE erp_manifest"
+          export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/erp_fresh
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate
+          npm run db:migrate:status
+          npm run db:verify
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/erp_manifest npm run db:manifest:check
+
+      - name: Build server
+        run: npm run build
+
+      - name: Server boots and serves without executing any DDL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/erp_fresh
+          NODE_ENV: production
+        run: npm run verify:boot-no-ddl
+
+      - name: Server refuses to start on an incomplete schema
+        env:
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          node scripts/db/ci-sql.mjs "$ADMIN_URL" "CREATE DATABASE erp_incomplete TEMPLATE erp_fresh"
+          node scripts/db/ci-sql.mjs postgresql://postgres:postgres@127.0.0.1:5432/erp_incomplete \
+            "ALTER TABLE vouchers DROP COLUMN currency CASCADE"
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/erp_incomplete \
+            node scripts/db/verify-boot-no-ddl.mjs --expect-refusal
+
+      - name: Production release preflight stays fail-closed without evidence
+        run: |
+          set -euo pipefail
+          if node scripts/verify-database-release.mjs --commit="$GITHUB_SHA" > "$RUNNER_TEMP/release-preflight.json"; then
             echo "::error::Missing production evidence must block the release."
             exit 1
           fi
-          grep -q '"ok": false' "$RUNNER_TEMP/phase9-preflight.json"
-          echo "Phase 9 fail-closed release preflight verified."
-
-      - name: Run migration PostgreSQL integration tests
-        run: npm run test:db:migrations:postgres
-
-      - name: Confirm production boot has no implicit controlled migration hook
-        run: |
-          if grep -E 'run-controlled-migrations|test-controlled-migrations-postgres' server/startupPreload.mjs render.yaml; then
-            echo "::error::Controlled migration execution must not occur during application boot."
-            exit 1
-          fi
+          grep -q '"ok": false' "$RUNNER_TEMP/release-preflight.json"

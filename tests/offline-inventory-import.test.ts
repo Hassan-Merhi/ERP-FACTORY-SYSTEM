@@ -20,7 +20,6 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { phase9StockApplyHandler } from "../server/edge/stockApply";
@@ -52,8 +51,6 @@ beforeAll(async () => {
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
   ).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
-  edge.config = LAN;
-  await ensurePhase9StockOutboxSchema(pool);
   edge.config = CLOUD;
 }, 120_000);
 

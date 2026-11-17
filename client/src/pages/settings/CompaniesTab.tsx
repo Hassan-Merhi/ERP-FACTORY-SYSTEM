@@ -3,11 +3,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
-import { Plus, Building2, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Building2, Edit, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
@@ -38,7 +40,12 @@ export function CompaniesTab() {
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
   const [forceDeleteWithHistory, setForceDeleteWithHistory] = useState(false);
 
-  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
+  const {
+    data: companies = [],
+    isLoading: isLoadingCompanies,
+    isError: isCompaniesError,
+    refetch: refetchCompanies,
+  } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
@@ -427,16 +434,13 @@ export function CompaniesTab() {
 
       <div className="flex flex-wrap items-center gap-4">
         {companies.length > 3 && (
-          <div className="relative max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search companies…"
-              value={companySearch}
-              onChange={(e) => setCompanySearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-company-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search companies…"
+            value={companySearch}
+            onValueChange={setCompanySearch}
+            wrapperClassName="max-w-xs"
+            data-testid="input-company-search"
+          />
         )}
 
         <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
@@ -455,14 +459,15 @@ export function CompaniesTab() {
             <div key={i} className="h-36 rounded-md border bg-muted/30 animate-pulse" />
           ))}
         </div>
+      ) : isCompaniesError && companies.length === 0 ? (
+        <ErrorState onAction={() => void refetchCompanies()} actionLabel="Try again" className="py-20" />
       ) : companies.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <Building2 className="h-12 w-12 text-muted-foreground/30" />
-          <div>
-            <p className="font-medium text-muted-foreground">No companies yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Click "Add Company" above to create your first one.</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={Building2}
+          title="No companies yet"
+          description='Click "Add Company" above to create your first one.'
+          className="py-20"
+        />
       ) : (
         (() => {
           const q = companySearch.toLowerCase();

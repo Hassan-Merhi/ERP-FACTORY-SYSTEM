@@ -21,10 +21,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool, type DbTransaction } from "../server/db";
-import { capturePhase9AttachmentTx, ensurePhase9AttachmentOutboxSchema } from "../server/edge/attachmentOutbox";
-import { ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
+import { capturePhase9AttachmentTx } from "../server/edge/attachmentOutbox";
 import {
-  ensurePhase9CloudEventSchema,
   getPhase9AppliedReceipts,
   Phase9ApplyRefusal,
   Phase9EventConflict,
@@ -149,11 +147,7 @@ async function code(promise: Promise<unknown>): Promise<string> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  edge.config = { mode: "lan", primary: true, siteId: SITE };
-  await ensurePhase9PressingOutboxSchema(pool);
-  await ensurePhase9AttachmentOutboxSchema(pool);
   edge.config = { mode: "cloud", primary: false, siteId: null };
-  await ensurePhase9CloudEventSchema(pool);
 }, 120_000);
 
 afterAll(async () => {

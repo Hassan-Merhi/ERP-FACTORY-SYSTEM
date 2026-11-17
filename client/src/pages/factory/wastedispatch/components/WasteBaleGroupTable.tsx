@@ -9,17 +9,18 @@
  */
 
 import { Fragment } from "react";
-import { Boxes, Loader2, Search, ChevronDown, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Boxes, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { baleMatchesSearch } from "../optimizedData";
 import { fmt, fmtKg } from "../utils";
 import type { useWasteDispatchModel } from "../useWasteDispatchModel";
 import type { WasteBale } from "../optimizedTypes";
+import { SearchField } from "@/components/ui/search-field";
 
 type WasteDispatchModel = ReturnType<typeof useWasteDispatchModel>;
 
@@ -46,22 +47,23 @@ export function WasteBaleGroupTable({ model }: { model: WasteDispatchModel }) {
             </div>
             <CardTitle className="text-base font-bold tracking-tight sm:text-lg">Available Waste Bales</CardTitle>
             {!summaryLoading && (
-              <Badge variant="outline" className="border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-300">
+              <Badge
+                variant="outline"
+                className="border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-300"
+              >
                 {summaryTotals.bales} bales · {summaryPagination.total} products
               </Badge>
             )}
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <div className="relative min-w-0 flex-1 sm:flex-none">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Filter bales or products..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-9 w-full rounded-lg border-slate-300 bg-slate-50 pl-8 text-xs focus-visible:ring-orange-500 dark:border-slate-600 dark:bg-slate-950/50 sm:w-56"
-                data-testid="input-search-bales"
-              />
-            </div>
+            <SearchField
+              placeholder="Filter bales or products..."
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="min-w-0 flex-1 sm:w-56 sm:flex-none"
+              className="h-9 rounded-lg border-slate-300 bg-slate-50 text-xs focus-visible:ring-orange-500 dark:border-slate-600 dark:bg-slate-950/50"
+              data-testid="input-search-bales"
+            />
             <Button
               variant="default"
               size="sm"
@@ -89,7 +91,11 @@ export function WasteBaleGroupTable({ model }: { model: WasteDispatchModel }) {
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl">
-              <Table mobileLayout="cards" wrapperClassName="rounded-xl border-slate-200 dark:border-slate-700/70" className="text-slate-900 dark:text-slate-100">
+              <Table
+                mobileLayout="cards"
+                wrapperClassName="rounded-xl border-slate-200 dark:border-slate-700/70"
+                className="text-slate-900 dark:text-slate-100"
+              >
                 <TableHeader className="bg-slate-100 dark:bg-slate-800/95">
                   <TableRow className="border-b border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/95">
                     <TableHead className="w-8 px-3 py-2" />
@@ -126,31 +132,14 @@ export function WasteBaleGroupTable({ model }: { model: WasteDispatchModel }) {
               </Table>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-1 pt-3 dark:border-slate-700">
-              <span className="text-xs text-muted-foreground">
-                Page {summaryPagination.page} of {summaryPagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={balePage <= 1}
-                  onClick={() => setBalePage((page) => Math.max(1, page - 1))}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={balePage >= summaryPagination.totalPages}
-                  onClick={() => setBalePage((page) => Math.min(summaryPagination.totalPages, page + 1))}
-                >
-                  Next <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={balePage}
+              totalPages={summaryPagination.totalPages}
+              total={summaryPagination.total}
+              pageSize={summaryPagination.limit}
+              onPageChange={setBalePage}
+              noun="products"
+            />
           </>
         )}
       </CardContent>
@@ -188,7 +177,15 @@ function WasteBaleGroupRow({
 
   return (
     <Fragment>
-      <TableRow className={allSelected ? "bg-orange-100/70 dark:bg-orange-500/15" : partiallySelected ? "bg-orange-50/70 dark:bg-orange-500/10" : "transition-colors hover:bg-orange-50/60 dark:hover:bg-slate-800/80"}>
+      <TableRow
+        className={
+          allSelected
+            ? "bg-orange-100/70 dark:bg-orange-500/15"
+            : partiallySelected
+              ? "bg-orange-50/70 dark:bg-orange-500/10"
+              : "transition-colors hover:bg-orange-50/60 dark:hover:bg-slate-800/80"
+        }
+      >
         <TableCell className="px-3 py-2">
           <Checkbox
             checked={groupCheckState}
@@ -208,7 +205,14 @@ function WasteBaleGroupRow({
           </div>
         </TableCell>
         <TableCell className="cursor-pointer px-3 py-2" onClick={() => toggleExpandGroup(group.productId)}>
-          <Badge variant="outline" className={group.categoryName.toUpperCase().includes("GARBAGE") ? "rounded-md border-orange-300 bg-orange-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-orange-900 dark:border-orange-500/40 dark:bg-orange-500/20 dark:text-orange-200" : "rounded-md border-blue-300 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-blue-900 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-200"}>
+          <Badge
+            variant="outline"
+            className={
+              group.categoryName.toUpperCase().includes("GARBAGE")
+                ? "rounded-md border-orange-300 bg-orange-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-orange-900 dark:border-orange-500/40 dark:bg-orange-500/20 dark:text-orange-200"
+                : "rounded-md border-blue-300 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-blue-900 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-200"
+            }
+          >
             {group.categoryName}
           </Badge>
         </TableCell>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarClock, Loader2, Search } from "lucide-react";
+import { CalendarClock, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { ProductionRow } from "../factoryProductionTargetsModel";
 import { ProductionWorkerLinkControl } from "./ProductionWorkerLinkControl";
+import { SearchField } from "@/components/ui/search-field";
 
 interface ProductionTargetDefaultsDialogProps {
   open: boolean;
@@ -76,10 +77,7 @@ export function ProductionTargetDefaultsDialog({
     enabled: open && Boolean(effectiveFrom),
   });
 
-  const defaultsById = useMemo(
-    () => new Map((data?.targets ?? []).map((entry) => [entry.workerId, entry])),
-    [data]
-  );
+  const defaultsById = useMemo(() => new Map((data?.targets ?? []).map((entry) => [entry.workerId, entry])), [data]);
 
   useEffect(() => {
     if (!open || !data) return;
@@ -134,10 +132,8 @@ export function ProductionTargetDefaultsDialog({
       .sort((left, right) => {
         // Keep the list visually stable while category text is being edited.
         // The new category grouping takes effect after Save + refetch.
-        const leftCategory =
-          defaultsById.get(left.personId)?.category ?? left.defaultCategory ?? left.category;
-        const rightCategory =
-          defaultsById.get(right.personId)?.category ?? right.defaultCategory ?? right.category;
+        const leftCategory = defaultsById.get(left.personId)?.category ?? left.defaultCategory ?? left.category;
+        const rightCategory = defaultsById.get(right.personId)?.category ?? right.defaultCategory ?? right.category;
         const categoryCompare = leftCategory.localeCompare(rightCategory, undefined, {
           sensitivity: "base",
           numeric: true,
@@ -214,16 +210,12 @@ export function ProductionTargetDefaultsDialog({
         </DialogHeader>
 
         <div className="shrink-0 border-b px-5 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={tr("searchNameCodeCategory")}
-              className="pl-9"
-              data-testid="input-production-default-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder={tr("searchNameCodeCategory")}
+            data-testid="input-production-default-search"
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">

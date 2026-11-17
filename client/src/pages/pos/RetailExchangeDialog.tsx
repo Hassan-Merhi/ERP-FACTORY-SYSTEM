@@ -22,6 +22,7 @@ import {
   type RetailPosItem,
   type RetailSale,
 } from "./retailPosTypes";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ExchangeResult {
   replayed: boolean;
@@ -174,7 +175,10 @@ export function RetailExchangeDialog({
       toast({ title: "Replacement price is still loading", variant: "destructive" });
       return;
     }
-    if (!accounts || payments.some((payment) => payment.method !== "credit" && !payment.ledgerAccountId && !payment.bankAccountId)) {
+    if (
+      !accounts ||
+      payments.some((payment) => payment.method !== "credit" && !payment.ledgerAccountId && !payment.bankAccountId)
+    ) {
       toast({ title: "Select an account for each replacement payment", variant: "destructive" });
       return;
     }
@@ -298,23 +302,23 @@ export function RetailExchangeDialog({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Customer takes</h3>
             <div className="flex items-center gap-2">
-            <form
-              className="relative min-w-0 flex-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void scan();
-              }}
-            >
-              <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                autoFocus
-                className="pl-9"
-                placeholder="Scan the replacement item"
-                value={scanText}
-                onChange={(event) => setScanText(event.target.value)}
-              />
-            </form>
-            <MobileBarcodeScanner onScan={(code) => void scan(code)} disabled={!locationId} />
+              <form
+                className="relative min-w-0 flex-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void scan();
+                }}
+              >
+                <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  className="pl-9"
+                  placeholder="Scan the replacement item"
+                  value={scanText}
+                  onChange={(event) => setScanText(event.target.value)}
+                />
+              </form>
+              <MobileBarcodeScanner onScan={(code) => void scan(code)} disabled={!locationId} />
             </div>
             {newItems.map((item) => (
               <div key={item.variantId} className="flex items-center gap-3 rounded-md border p-2">
@@ -355,24 +359,27 @@ export function RetailExchangeDialog({
           {canOverride && tenderRefund > 0.005 && (
             <label className="block space-y-1 text-sm">
               <span>Refund from account</span>
-              <select
-                className="h-9 w-full rounded-md border bg-background px-2"
-                value={refundAccount}
-                onChange={(event) => setRefundAccount(event.target.value)}
-                aria-label="Exchange refund account"
+              <Select
+                value={refundAccount || "__original__"}
+                onValueChange={(v) => setRefundAccount(v === "__original__" ? "" : v)}
               >
-                <option value="">Original payment accounts</option>
-                {accounts?.ledgers.map((entry) => (
-                  <option key={`ledger:${entry.id}`} value={`ledger:${entry.id}`}>
-                    {entry.code} · {entry.name}
-                  </option>
-                ))}
-                {accounts?.banks.map((entry) => (
-                  <option key={`bank:${entry.id}`} value={`bank:${entry.id}`}>
-                    {entry.code} · {entry.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 w-full" aria-label="Exchange refund account">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__original__">Original payment accounts</SelectItem>
+                  {accounts?.ledgers.map((entry) => (
+                    <SelectItem key={`ledger:${entry.id}`} value={`ledger:${entry.id}`}>
+                      {entry.code} · {entry.name}
+                    </SelectItem>
+                  ))}
+                  {accounts?.banks.map((entry) => (
+                    <SelectItem key={`bank:${entry.id}`} value={`bank:${entry.id}`}>
+                      {entry.code} · {entry.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           )}
           <Input

@@ -6,11 +6,15 @@
  * boundary rather than a behavioural change.
  */
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry, DisplayDate, MixBatchDetail, MixBatchSource, Navigate } from "./types";
 import { apiNumber } from "./types";
+import { formatUsd } from "@/lib/moneyDisplay";
+
+const usd = (value: number) => formatUsd(value, 0, 2);
 
 export function MixBatchView({
   entry,
@@ -49,7 +53,7 @@ export function MixBatchView({
         {/* Batch summary card */}
         <div className="rounded-md border p-4 space-y-3">
           {!mb ? (
-            <p className="text-sm text-muted-foreground">Loading batch details…</p>
+            <LoadingState title="Loading batch details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
           ) : (
             <>
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -85,11 +89,11 @@ export function MixBatchView({
                 </div>
                 <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Total Cost</p>
-                  <p className="font-semibold font-mono">${formatNumber(totalCost)}</p>
+                  <p className="font-semibold font-mono">{usd(totalCost)}</p>
                 </div>
                 <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Cost / kg</p>
-                  <p className="font-semibold font-mono">${formatNumber(costPerKg)}</p>
+                  <p className="font-semibold font-mono">{usd(costPerKg)}</p>
                 </div>
               </div>
             </>
@@ -103,7 +107,7 @@ export function MixBatchView({
             {sourcesTotalKg > 0 ? ` · ${formatNumber(sourcesTotalKg)} kg total` : ""})
           </p>
           {mixBatchSources.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4 rounded-md border">No source records found</p>
+            <EmptyState title="No source records found" className="min-h-0 py-4 sm:py-4" />
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-sm">
@@ -152,10 +156,8 @@ export function MixBatchView({
                           <p className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(1)}% of batch</p>
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono">{formatNumber(srcKg)} kg</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">
-                          ${formatNumber(srcCpk)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-medium">${formatNumber(srcTotal)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{usd(srcCpk)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono font-medium">{usd(srcTotal)}</td>
                       </tr>
                     );
                   })}
@@ -167,10 +169,7 @@ export function MixBatchView({
                       <td className="px-3 py-2 text-right font-mono font-medium">{formatNumber(sourcesTotalKg)} kg</td>
                       <td />
                       <td className="px-3 py-2 text-right font-mono font-medium">
-                        $
-                        {formatNumber(
-                          mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0)
-                        )}
+                        {usd(mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0))}
                       </td>
                     </tr>
                   </tfoot>

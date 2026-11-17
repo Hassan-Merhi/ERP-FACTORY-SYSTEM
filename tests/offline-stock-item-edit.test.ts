@@ -19,7 +19,6 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
@@ -139,8 +138,6 @@ beforeAll(async () => {
   ]);
   const byId = new Map(items.rows.map((row) => [Number(row.id), String(row.code)]));
   codes = ctx.stockItemIds.map((id) => byId.get(id)!);
-  edge.config = LAN;
-  await ensurePhase9StockOutboxSchema(pool);
   edge.config = CLOUD;
 }, 120_000);
 

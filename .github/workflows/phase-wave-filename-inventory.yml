@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24.22.2'
       - name: Create full-tree JSON inventory
         run: |
           node scripts/audit-phase-wave-filenames.mjs --json > phase-wave-inventory.json

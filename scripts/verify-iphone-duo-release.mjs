@@ -52,19 +52,19 @@ const requirements = [
   ["client/src/pages/SpPOImport.tsx", [
     'download="po-import-template.xlsx"', 'event.currentTarget.value = ""',
   ]],
-  ["server/services/security/operationalPermissionRoutePolicy.ts", [
-    '"GET /api/factory/monthly-production-matrix/export-bales"',
+  ["config/route-access-manifest.json", [
+    '"id":"GET /api/factory/monthly-production-matrix/export-bales#1"',
   ]],
   ["client/src/i18n/iphoneDuoMobileTranslations.ts", [
     "export function duoMobileText(", 'en: "Available balance"',
     'ar: "الرصيد المتاح"', 'fr: "Solde disponible"',
   ]],
   [".github/workflows/ui-quality.yml", [
-    "verify-iphone-duo-phase1-inventory.mjs",
-    "verify-iphone-duo-phase1-browser.mjs",
-    "iphone-duo-phase2-proforma.test.tsx",
-    "iphone-duo-phase2-bonus.test.tsx",
-    "iphone-duo-phase3-downloads.test.ts",
+    "verify-iphone-duo-inventory.mjs",
+    "verify-iphone-duo-browser.mjs",
+    "iphone-duo-proforma.test.tsx",
+    "iphone-duo-bonus.test.tsx",
+    "iphone-duo-downloads.test.ts",
   ]],
 ];
 const testFiles = [

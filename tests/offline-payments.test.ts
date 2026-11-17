@@ -18,7 +18,6 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9PaymentOutboxSchema } from "../server/edge/paymentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
@@ -81,8 +80,6 @@ beforeAll(async () => {
     [ctx.companyId, `${PREFIX}-BANK-${ctx.companyId}`]
   );
   bankId = Number(bank.rows[0].id);
-  edge.config = { mode: "lan", primary: true, siteId: SITE };
-  await ensurePhase9PaymentOutboxSchema(pool);
   edge.config = { mode: "cloud", primary: false, siteId: null };
   agent = request.agent(ctx.app);
   await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });

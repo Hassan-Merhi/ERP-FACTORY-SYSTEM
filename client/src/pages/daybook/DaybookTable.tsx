@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";
 import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { EmptyState } from "@/components/ui/page-state";
 
 interface DaybookTableProps {
   displayedRows: DaybookRow[];
@@ -105,9 +106,7 @@ export function DaybookTable({
       ))}
     </div>
   ) : visibleRows.length === 0 ? (
-    <p className="text-sm text-muted-foreground text-center py-12" data-testid="daybook-empty">
-      No transactions found for the selected period and filters.
-    </p>
+    <EmptyState title="No transactions found for the selected period and filters." data-testid="daybook-empty" />
   ) : null;
 
   if (statusMessage) return statusMessage;
@@ -155,7 +154,7 @@ export function DaybookTable({
       });
 
     return (
-      // build/vitePhase1PaginationPlugin.ts matches this opening tag on one line.
+      // build/vitePaginationPlugin.ts matches this opening tag on one line.
       // prettier-ignore
       <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
@@ -873,9 +872,7 @@ export function DaybookTable({
       {/* ── Mobile card list (hidden on sm+) ── */}
       <div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100dvh-260px)]">
         {mobileItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">
-            No transactions found. Create your first voucher to get started.
-          </p>
+          <EmptyState title="No transactions found. Create your first voucher to get started." className="mx-4" />
         ) : (
           mobileItems
         )}
@@ -884,7 +881,7 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        {/* build/vitePhase1PaginationPlugin.ts matches this opening tag on one line. */}
+        {/* build/vitePaginationPlugin.ts matches this opening tag on one line. */}
         {/* prettier-ignore */}
         <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">

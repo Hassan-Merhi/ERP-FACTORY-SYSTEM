@@ -1,9 +1,9 @@
+import { SearchField } from "@/components/ui/search-field";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { addDays, format } from "date-fns";
 import {
   Printer,
   Trash2,
-  Search,
   Package,
   CheckSquare,
   RefreshCw,
@@ -59,6 +59,7 @@ import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialo
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import type { RouteComponentProps } from "wouter";
+import { EmptyState } from "@/components/ui/page-state";
 
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
@@ -170,16 +171,14 @@ export default function BalesHistory({ embedded = false }: EmbeddablePageProps) 
       <div className="bales-modern-table-card">
         {/* Toolbar */}
         <div className="bales-modern-toolbar">
-          <div className="bales-modern-search relative flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search by ref #, code, product, batch..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-sm"
-              data-testid="input-bales-search"
-            />
-          </div>
+          <SearchField
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+            placeholder="Search by ref #, code, product, batch..."
+            wrapperClassName="bales-modern-search flex-1 min-w-[180px]"
+            className="text-sm"
+            data-testid="input-bales-search"
+          />
           <div className="flex items-center gap-1">
             <Button
               size="icon"
@@ -388,11 +387,11 @@ export default function BalesHistory({ embedded = false }: EmbeddablePageProps) 
         )}
 
         {filtered.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No bales found</p>
-            {searchTerm && <p className="text-xs mt-1">Try a different search term</p>}
-          </div>
+          <EmptyState
+            icon={Package}
+            title="No bales found"
+            description={searchTerm ? "Try a different search term" : undefined}
+          />
         ) : (
           <div>
             <Table>

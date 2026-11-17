@@ -4,7 +4,6 @@ export class Phase9StockItemNotYetSynced extends Error {
   constructor(lanItemIds: number[]);
   readonly lanItemIds: number[];
 }
-export function ensurePhase9StockItemMapSchema(queryable: Queryable): Promise<void>;
 export function isPhase9LanItemId(value: unknown): boolean;
 export function translatePhase9LanStockItems<T extends { payload: unknown }>(
   queryable: Queryable,
