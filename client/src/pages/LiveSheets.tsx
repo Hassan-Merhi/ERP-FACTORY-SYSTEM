@@ -28,6 +28,7 @@ import { ExternalLink, Plus, Pencil, Trash2, Sheet } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import type { AuthMe } from "@shared/apiTypes";
 
 interface LiveSpreadsheet {
@@ -192,7 +193,7 @@ export default function LiveSheets() {
   const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = me?.role === "Admin" || me?.role === "Owner" || me?.role === "Developer";
 
-  const { data: sheets = [], isLoading } = useQuery<LiveSpreadsheet[]>({
+  const { data: sheets = [], isLoading, isError, refetch } = useQuery<LiveSpreadsheet[]>({
     queryKey: ["/api/live-spreadsheets"],
   });
 
@@ -239,18 +240,15 @@ export default function LiveSheets() {
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
+      ) : isError && sheets.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
       ) : sheets.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Sheet className="w-8 h-8 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">No live sheets yet</p>
-            {isAdmin && (
-              <p className="text-sm mt-1">
-                Click <strong>Add Sheet</strong> to add a Google Sheet link
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Sheet}
+          title="No live sheets yet"
+          description={isAdmin ? "Click Add Sheet to add a Google Sheet link" : undefined}
+          className="py-12"
+        />
       ) : (
         <div className="space-y-3">
           {sheets.map((sheet) => (

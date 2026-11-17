@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,7 +60,7 @@ export default function IntercompanyRequests() {
   const [approveDescription, setApproveDescription] = useState<string>("");
   const [dismissNote, setDismissNote] = useState("");
 
-  const { data: requests = [], isLoading } = useQuery<ICRequest[]>({
+  const { data: requests = [], isLoading, isError, refetch } = useQuery<ICRequest[]>({
     queryKey: ["/api/intercompany-requests", statusFilter],
     queryFn: async () => {
       const r = await fetch(`/api/intercompany-requests?status=${statusFilter}`, { credentials: "include" });
@@ -161,7 +162,9 @@ export default function IntercompanyRequests() {
 
       {/* List */}
       {isLoading ? (
-        <div className="text-muted-foreground text-sm py-8 text-center">Loading…</div>
+        <LoadingState className="py-8" />
+      ) : isError && requests.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
       ) : requests.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">

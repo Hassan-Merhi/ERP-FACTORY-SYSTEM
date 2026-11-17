@@ -1,4 +1,5 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
@@ -78,7 +79,12 @@ export default function FactoryPriceList() {
     inputRef.current?.select();
   }, [editingCellKey]);
 
-  const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
+  const {
+    data: products = [],
+    isLoading,
+    isError: productsError,
+    refetch: refetchProducts,
+  } = useQuery<FactoryBaleProduct[]>({
     queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -384,6 +390,12 @@ export default function FactoryPriceList() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : productsError && products.length === 0 ? (
+            <ErrorState
+              onAction={() => void refetchProducts()}
+              actionLabel="Try again"
+              className="rounded-none border-0"
+            />
           ) : filteredProducts.length > 0 ? (
             <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
@@ -560,17 +572,18 @@ export default function FactoryPriceList() {
               </TableBody>
             </Table>
           ) : (
-            <div className="text-center py-12">
-              <Tag className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">No products found</h3>
-              <p className="text-muted-foreground mt-2 text-sm">
-                {showZeroOnly
+            <EmptyState
+              icon={Tag}
+              title="No products found"
+              description={
+                showZeroOnly
                   ? "All products have a selling price set."
                   : search || categoryFilter !== "all"
                     ? "Try adjusting your filters."
-                    : "Add bale products to see them here."}
-              </p>
-            </div>
+                    : "Add bale products to see them here."
+              }
+              className="rounded-none border-0"
+            />
           )}
         </CardContent>
       </Card>

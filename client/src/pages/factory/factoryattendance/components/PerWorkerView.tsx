@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
@@ -23,7 +24,12 @@ import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, Chevr
 
 import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
 import { AttendanceAdminApprovalDialog } from "./AttendanceAdminApprovalDialog";
-import { attendancePastDates, canSkipAttendanceApproval, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
+import {
+  attendancePastDates,
+  canSkipAttendanceApproval,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "../attendanceEditPolicy";
 import { generateDateRange } from "../utils";
 import { SummaryCard } from "./SummaryCard";
 
@@ -47,7 +53,12 @@ export function PerWorkerView() {
 
   const workerIdNum = selectedWorkerId ? parseInt(selectedWorkerId) : null;
 
-  const { data: attendanceRecords, isLoading: loadingAttendance } = useQuery<AttendanceRecord[]>({
+  const {
+    data: attendanceRecords,
+    isLoading: loadingAttendance,
+    isError: attendanceError,
+    refetch: refetchAttendance,
+  } = useQuery<AttendanceRecord[]>({
     queryKey: ["/api/factory/attendance/worker", workerIdNum, startDate, endDate],
     queryFn: async () => {
       if (!workerIdNum) return [];
@@ -159,9 +170,10 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && !canEditPastWithoutPassword(attendancePastDates(generateDateRange(startDate, endDate))) && (
-        <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
-      )}
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 &&
+        !canEditPastWithoutPassword(attendancePastDates(generateDateRange(startDate, endDate))) && (
+          <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
+        )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -338,6 +350,12 @@ export function PerWorkerView() {
                 <Skeleton key={i} className="h-10 w-full rounded-md" />
               ))}
             </div>
+          ) : attendanceError && !attendanceRecords ? (
+            <ErrorState
+              onAction={() => void refetchAttendance()}
+              actionLabel="Try again"
+              className="rounded-none border-0 py-12"
+            />
           ) : dates.length === 0 ? (
             <div className="text-center text-muted-foreground py-12 text-sm">No dates in the selected range.</div>
           ) : (

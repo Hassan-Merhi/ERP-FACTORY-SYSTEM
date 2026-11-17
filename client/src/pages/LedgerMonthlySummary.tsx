@@ -13,6 +13,7 @@ import { ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -81,7 +82,7 @@ export default function LedgerMonthlySummary() {
   const startDate = periodFilter.fromDate;
   const endDate = periodFilter.toDate;
 
-  const { data, isLoading } = useQuery<LedgerMonthlySummaryData>({
+  const { data, isLoading, isError, refetch } = useQuery<LedgerMonthlySummaryData>({
     queryKey: ["/api/reports/ledger-monthly-summary", accountId, startDate, endDate],
     queryFn: async () => {
       const response = await fetch(
@@ -141,6 +142,8 @@ export default function LedgerMonthlySummary() {
             <Skeleton className="h-[400px] w-full" />
             <Skeleton className="h-[300px] w-full" />
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : data ? (
           <>
             {/* Monthly Table */}

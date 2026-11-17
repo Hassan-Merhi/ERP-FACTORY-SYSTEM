@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MessageCircle, Copy, ExternalLink, Eye, Check, RefreshCw, Loader2 } from "lucide-react";
+import { MessageCircle, Copy, ExternalLink, Eye, Check, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -42,6 +43,7 @@ export function WhatsAppModal({
   const {
     data: preview,
     isLoading,
+    isError,
     refetch,
   } = useQuery<WhatsAppPreview>({
     queryKey: [previewUrl],
@@ -157,10 +159,10 @@ export function WhatsAppModal({
           </DialogTitle>
         </DialogHeader>
 
-        {isLoading || !initialised ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
-            <Loader2 className="h-5 w-5 animate-spin" /> Loading package data…
-          </div>
+        {isError && !preview ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
+        ) : isLoading || !initialised ? (
+          <LoadingState title="Loading package data…" className="py-12" />
         ) : (
           p && (
             <div className="space-y-4">

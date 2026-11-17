@@ -12,6 +12,7 @@ import { useDateJump } from "@/hooks/use-date-jump";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { Badge } from "@/components/ui/badge";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
@@ -96,7 +97,7 @@ export default function LedgerVouchers() {
     }
   }, [year, month]);
 
-  const { data, isLoading } = useQuery<LedgerVouchersData>({
+  const { data, isLoading, isError, refetch } = useQuery<LedgerVouchersData>({
     queryKey: ["/api/reports/ledger-vouchers", accountId, year, month, periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const searchParams = new URLSearchParams({
@@ -142,6 +143,8 @@ export default function LedgerVouchers() {
           <div className="space-y-4">
             <Skeleton className="h-[400px] w-full" />
           </div>
+        ) : isError && !data ? (
+          <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
         ) : data ? (
           <>
             {/* Vouchers Table */}

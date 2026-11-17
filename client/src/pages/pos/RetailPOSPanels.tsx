@@ -245,9 +245,7 @@ export function RetailRecentSalesCard({
             )}
           </div>
         ))}
-        {!isLoading && !sales.length && (
-          <EmptyState title="No retail sales at this location yet." />
-        )}
+        {!isLoading && !sales.length && <EmptyState title="No retail sales at this location yet." />}
       </CardContent>
     </Card>
   );

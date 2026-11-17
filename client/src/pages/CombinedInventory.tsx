@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Layers, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
@@ -111,6 +112,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     data: inventoryPage,
     isLoading: loadingInventory,
     isFetching: isFetchingInventory,
+    isError: isInventoryError,
     refetch: refetchInventory,
   } = useQuery<{ data: InventoryRow[]; total: number; page: number; pageSize: number; totalPages: number }>({
     // Include company ID so each company's data is cached separately and
@@ -382,6 +384,10 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     );
   }
 
+  if (isInventoryError && !inventoryPage) {
+    return <ErrorState onAction={() => void refetchInventory()} actionLabel="Try again" />;
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -549,13 +555,7 @@ function GroupsView({
 }) {
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock groups found</h2>
-        <p className="text-sm text-muted-foreground">Try adjusting your search.</p>
-      </div>
+      <EmptyState icon={Layers} title="No stock groups found" description="Try adjusting your search." className="py-16" />
     );
   }
 
@@ -686,13 +686,7 @@ function ItemsTable({
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock items found</h2>
-        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-      </div>
+      <EmptyState icon={Layers} title="No stock items found" description={emptyMessage} className="py-16" />
     );
   }
 

@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface Employee {
   id: number;
@@ -70,7 +71,11 @@ export default function FactoryEmployeeWithdrawalsTab() {
   });
   const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
 
-  const { data: employees = [] } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -79,6 +84,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
       return res.json();
     },
   });
+  const employees = employeesData ?? [];
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
     queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
@@ -183,13 +189,10 @@ export default function FactoryEmployeeWithdrawalsTab() {
         )}
       </div>
 
-      {employees.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>No active employees found.</p>
-          </CardContent>
-        </Card>
+      {isError && !employeesData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
+      ) : employees.length === 0 ? (
+        <EmptyState icon={Users} title="No active employees found." />
       ) : (
         <Card>
           <CardHeader className="pb-3">

@@ -173,7 +173,12 @@ export function DocumentsModal({
           ) : isError && docs.length === 0 ? (
             <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
           ) : docs.length === 0 ? (
-            <EmptyState icon={XCircle} iconClassName="text-red-400" title="No documents uploaded yet" className="py-8" />
+            <EmptyState
+              icon={XCircle}
+              iconClassName="text-red-400"
+              title="No documents uploaded yet"
+              className="py-8"
+            />
           ) : (
             <div className="border rounded-md overflow-hidden">
               <Table mobileLayout="cards">

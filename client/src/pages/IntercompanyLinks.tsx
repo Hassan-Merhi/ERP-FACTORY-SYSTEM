@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,7 +75,7 @@ export default function IntercompanyLinks() {
   const [recipientForm, setRecipientForm] = useState<string[]>([]);
 
   // Queries
-  const { data: links = [], isLoading } = useQuery<ICLink[]>({
+  const { data: links = [], isLoading, isError, refetch } = useQuery<ICLink[]>({
     queryKey: ["/api/intercompany-links"],
   });
 
@@ -301,11 +302,15 @@ export default function IntercompanyLinks() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">Loading…</div>
+            <LoadingState className="m-4 py-12" />
+          ) : isError && links.length === 0 ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4 py-12" />
           ) : links.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">
-              No intercompany links configured yet. Click <strong>New Link</strong> to add one.
-            </div>
+            <EmptyState
+              title="No intercompany links configured yet."
+              description="Click New Link to add one."
+              className="m-4 py-12"
+            />
           ) : (
             <Table>
               <TableHeader>

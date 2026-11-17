@@ -1,4 +1,5 @@
 import { StatementResponse, type StatementDisplayRow } from "./factorySupplierTypes";
+import { EmptyState } from "@/components/ui/page-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,13 +45,7 @@ export function SupplierStatementRows({
   statusColor,
   statusDisplayLabel,
 }: SupplierStatementRowsProps) {
-  if (displayedRows.length === 0)
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p className="text-lg font-medium">No activity yet</p>
-      </div>
-    );
+  if (displayedRows.length === 0) return <EmptyState icon={Package} title="No activity yet" />;
 
   const fmtCcAmt = (cc: string, amt: number) =>
     cc !== "USD"

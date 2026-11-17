@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -277,13 +278,12 @@ export function EmployeesTab({
         </div>
 
         {employeeStaff.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Users className="h-5 w-5" />
-            </div>
-            <p className="font-medium">No employees yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">Create your first employee to start managing payroll.</p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No employees yet"
+            description="Create your first employee to start managing payroll."
+            className="rounded-none border-0 bg-transparent px-6 py-16"
+          />
         ) : filteredEmployeeStaff.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="font-medium">No matching employees</p>

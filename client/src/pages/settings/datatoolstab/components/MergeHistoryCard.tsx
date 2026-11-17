@@ -21,6 +21,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -34,7 +35,12 @@ export function MergeHistoryCard({ embedded }: { embedded?: boolean }) {
   const [historicalRestoreTarget, setHistoricalRestoreTarget] = useState<MergeLogEntry | null>(null);
   const [isHistoricalRestoring, setIsHistoricalRestoring] = useState(false);
 
-  const { data: logs = [], isLoading } = useQuery<MergeLogEntry[]>({
+  const {
+    data: logs = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<MergeLogEntry[]>({
     queryKey: ["/api/stock-items/merge-logs"],
   });
 
@@ -94,8 +100,10 @@ export function MergeHistoryCard({ embedded }: { embedded?: boolean }) {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
+      ) : isError && allLogs.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : allLogs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No merges recorded for this company yet.</p>
+        <EmptyState title="No merges recorded for this company yet." />
       ) : (
         <>
           {historicalLogs.length > 0 && logs.length === 0 && (

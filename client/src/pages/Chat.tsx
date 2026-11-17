@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -59,7 +60,12 @@ export default function Chat() {
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
 
-  const { data: chatUsers = [], isLoading: usersLoading } = useQuery<ChatUser[]>({
+  const {
+    data: chatUsers = [],
+    isLoading: usersLoading,
+    isError: usersError,
+    refetch: refetchUsers,
+  } = useQuery<ChatUser[]>({
     queryKey: ["/api/chat/users"],
   });
 
@@ -363,12 +369,10 @@ export default function Chat() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : usersError && chatUsers.length === 0 ? (
+            <ErrorState onAction={() => void refetchUsers()} actionLabel="Try again" className="m-3" />
           ) : conversationUsers.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              No conversations yet.
-              <br />
-              Click <strong>+</strong> to start one.
-            </div>
+            <EmptyState title="No conversations yet." description="Click + to start one." className="m-3" />
           ) : (
             conversationUsers.map((user) => (
               <button
@@ -459,7 +463,7 @@ export default function Chat() {
                   ))}
                 </div>
               ) : messages.length === 0 ? (
-                <div className="text-center text-muted-foreground text-sm py-8">No messages yet. Say hello!</div>
+                <EmptyState title="No messages yet. Say hello!" className="py-8" />
               ) : (
                 messages.map((msg) => {
                   const isMine = msg.senderId !== selectedUserId;

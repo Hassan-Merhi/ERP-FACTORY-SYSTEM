@@ -7,6 +7,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { ErpPage, formatErpFixedQuantity } from "@/erp-core";
 import { erpCompanyDataKey } from "@/erp-core/erpData";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
+import { ErrorState } from "@/components/ui/page-state";
 import { financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export default function OpeningStockSummary() {
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
 
-  const { data, isLoading } = useQuery<OpeningStockData>({
+  const { data, isLoading, isError, refetch } = useQuery<OpeningStockData>({
     queryKey: erpCompanyDataKey("/api/reports/opening-stock-summary", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
@@ -93,6 +94,8 @@ export default function OpeningStockSummary() {
         <div className="divide-y">
           {isLoading ? (
             <LoadingRows />
+          ) : isError && !data ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4" />
           ) : data?.stockGroups?.length ? (
             data.stockGroups.map((group) => (
               <button

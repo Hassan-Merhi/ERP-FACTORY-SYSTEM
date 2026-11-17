@@ -12,15 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  History,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  TrendingDown,
-  TrendingUp,
-  BarChart3,
-  Calendar,
-} from "lucide-react";
+import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarChart3, Calendar } from "lucide-react";
 
 import type { LogEntry, SheetsAndSacksItem } from "../types";
 import { DATE_PRESETS, fmt, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";

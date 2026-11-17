@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { Users, ChevronRight, Shield } from "lucide-react";
 import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 import { FEATURE_KEYS } from "@shared/schema";
@@ -72,11 +73,12 @@ export function UserListTable({ users, isLoading, selectedUserId, onSelectUser }
 
   if (users.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-        <p className="font-medium">No users yet</p>
-        <p className="text-sm mt-1">Click "Add User" to create the first one</p>
-      </div>
+      <EmptyState
+        icon={Users}
+        title="No users yet"
+        description='Click "Add User" to create the first one'
+        className="py-12"
+      />
     );
   }
 

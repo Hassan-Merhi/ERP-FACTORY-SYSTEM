@@ -26,6 +26,7 @@ import {
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { useState } from "react";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
@@ -74,7 +75,7 @@ export default function StockItemHistory() {
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
   useEscapeToParent("/stock-items");
 
-  const { data, isLoading } = useQuery<StockItemSummary>({
+  const { data, isLoading, isError, refetch } = useQuery<StockItemSummary>({
     queryKey: [
       `/api/stock-items/${stockItemId}/monthly-summary`,
       { year: selectedYear, startDate: periodFilter.fromDate, endDate: periodFilter.toDate },
@@ -117,6 +118,14 @@ export default function StockItemHistory() {
       <CoreErpPage className="container mx-auto space-y-6 p-0 sm:p-4">
         <Skeleton className="h-8 w-64 max-w-full" />
         <Skeleton className="h-[400px] w-full" />
+      </CoreErpPage>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <CoreErpPage className="container mx-auto p-0 sm:p-4">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </CoreErpPage>
     );
   }

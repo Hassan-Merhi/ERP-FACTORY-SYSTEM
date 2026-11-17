@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/page-state";
 import { UserPlus } from "lucide-react";
 import { UserListTable } from "./UserListTable";
 import { UserManagementDrawer } from "./UserManagementDrawer";
@@ -18,7 +19,12 @@ export function UsersSection({ appMode }: UsersSectionProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const usersEndpoint = appMode === "factory" ? "/api/factory/users" : "/api/users";
-  const { data: rawUsers = [], isLoading } = useQuery<SettingsUserRow[]>({
+  const {
+    data: rawUsers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<SettingsUserRow[]>({
     queryKey: [usersEndpoint],
   });
   const users = [...rawUsers].sort((a, b) =>
@@ -52,7 +58,16 @@ export function UsersSection({ appMode }: UsersSectionProps) {
         </Button>
       </div>
 
-      <UserListTable users={users} isLoading={isLoading} selectedUserId={selectedUser?.id} onSelectUser={openDrawer} />
+      {isError && rawUsers.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
+      ) : (
+        <UserListTable
+          users={users}
+          isLoading={isLoading}
+          selectedUserId={selectedUser?.id}
+          onSelectUser={openDrawer}
+        />
+      )}
 
       <UserManagementDrawer
         // The drawer renders nothing until a user is selected; the assertion only
