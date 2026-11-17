@@ -1,4 +1,4 @@
-/* Scoped Daybook visual refresh. No shared page, navigation, or accounting styles are changed. */
+/* Shared Daybook frame (ERP, Factory, Properties and POS Daybooks). No shared page, navigation, or accounting styles are changed. */
 .daybook-premium {
   --daybook-stroke: rgba(112, 84, 178, 0.2);
   --daybook-panel: rgba(255, 255, 255, 0.87);

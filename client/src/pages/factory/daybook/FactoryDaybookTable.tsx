@@ -1,289 +1,235 @@
 /**
- * Condensed Factory Daybook table — matches the ERP Daybook layout:
- * Date/Type | Count | Total, with date separator rows, one collapsible row per
- * (date, txType, currency) group, and expanded entry sub-rows underneath.
+ * Condensed Factory Daybook table in the shared Daybook frame: the ERP Daybook's
+ * results bar, table shell, condensed Date/Type | Count | Total table, states
+ * and pagination. Factory keeps its own grouping — one date separator row, one
+ * collapsible row per (date, txType, currency) group and the expanded entry
+ * rows underneath — and its own per-entry actions.
  *
- * Split out of FactoryDaybook.tsx unchanged; the "Total" column disappears
- * entirely when ERP cost permissions hide daybook amounts.
+ * The "Total" figures disappear entirely when ERP cost permissions hide
+ * daybook amounts.
  */
-import { BookOpen, CalendarDays, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { useEffect } from "react";
+import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { DaybookResults, DaybookTableState } from "@/components/daybook/DaybookFrame";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErpListTable } from "@/erp-core";
+import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { formatNumber } from "@/lib/formatNumber";
-import { cn } from "@/lib/utils";
 import { currencySymbol, formatTxType, getFactoryTxTypeBadge, mergeBaleEntries } from "./daybookUtils";
 import type { DaybookEntry, DisplayEntry } from "./types";
 import { FactoryDaybookEntryRow } from "./FactoryDaybookEntryRow";
 import type { CondensedRow, FactoryDaybookModel } from "./useFactoryDaybookModel";
 
-/**
- * Date/Type | Count | Total columns. The desktop widths (100px / 180px) leave no room for the
- * type on a 320px phone, so phones get a narrow count and a capped total column instead.
- */
-export function daybookColumnsClass(showAmounts: boolean) {
-  return showAmounts
-    ? "grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,7.5rem)] sm:grid-cols-[minmax(0,1fr)_100px_180px]"
-    : "grid-cols-[minmax(0,1fr)_2.5rem] sm:grid-cols-[minmax(0,1fr)_100px]";
-}
+/** Groups shown per page; one group is one transaction type on one day. */
+const GROUPS_PER_PAGE = 100;
 
 function BaleSummaryRow({
   row,
-  colsClass,
   expandedEntries,
   model,
 }: {
   row: CondensedRow;
-  colsClass: string;
   expandedEntries: DisplayEntry[];
   model: FactoryDaybookModel;
 }) {
-  const hasEntries = expandedEntries.length > 0;
-  const mergedEntry = hasEntries
-    ? mergeBaleEntries(expandedEntries.map((e) => (e as DisplayEntry)._source ?? (e as DaybookEntry)))
-    : undefined;
-  const viewButton = mergedEntry && (
-    <Button
-      size="icon"
-      variant="ghost"
-      title="View details"
-      aria-label="View details"
-      onClick={(e) => {
-        e.stopPropagation();
-        model.setViewEntry(mergedEntry);
-      }}
-      data-testid="button-view-bale-summary"
-    >
-      <Eye className="h-3 w-3" />
-    </Button>
-  );
+  const mergedEntry =
+    expandedEntries.length > 0
+      ? mergeBaleEntries(expandedEntries.map((e) => (e as DisplayEntry)._source ?? (e as DaybookEntry)))
+      : undefined;
   return (
-    <div
-      className={cn(
-        "flex w-full flex-wrap items-center border-t border-border/50 bg-muted/25 dark:bg-slate-900/35 sm:grid",
-        colsClass
-      )}
-    >
-      <div className="min-w-0 flex-1 py-2 pl-8 pr-2 sm:pl-14">
-        <span className="text-sm text-foreground">
-          {row.count} bale{row.count !== 1 ? "s" : ""}
-        </span>
-      </div>
-      <div className="hidden sm:block" />
-      {model.showAmounts ? (
-        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">
-          <span className="text-sm font-mono font-medium">
-            {currencySymbol(row.currencyCode)}
-            {formatNumber(row.totalAmountCurrency)}
-          </span>
-          {viewButton}
+    <TableRow className="bg-muted/20">
+      <TableCell className="sticky left-0 z-10 bg-inherit pl-16 text-sm">
+        {row.count} bale{row.count !== 1 ? "s" : ""}
+      </TableCell>
+      <TableCell />
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          {model.showAmounts && (
+            <span className="whitespace-nowrap font-mono text-sm font-medium tabular-nums">
+              {currencySymbol(row.currencyCode)}
+              {formatNumber(row.totalAmountCurrency)}
+            </span>
+          )}
+          {mergedEntry && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              title="View details"
+              aria-label="View details"
+              onClick={(e) => {
+                e.stopPropagation();
+                model.setViewEntry(mergedEntry);
+              }}
+              data-testid="button-view-bale-summary"
+            >
+              <Eye className="h-3 w-3" />
+            </Button>
+          )}
         </div>
-      ) : (
-        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">{viewButton}</div>
-      )}
-    </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
-function CondensedGroupRow({
-  row,
-  colsClass,
-  model,
-}: {
-  row: CondensedRow;
-  colsClass: string;
-  model: FactoryDaybookModel;
-}) {
+function CondensedGroupRows({ row, model }: { row: CondensedRow; model: FactoryDaybookModel }) {
   const isExpanded = model.expandedRowKey === row.key;
   const expandedEntries = isExpanded ? model.getEntriesForCondensedRow(row.key) : [];
-  const { variant: bv, className: bc } = getFactoryTxTypeBadge(row.txType);
+  const { variant, className } = getFactoryTxTypeBadge(row.txType);
+  const toggle = () => model.setExpandedRowKey(isExpanded ? null : row.key);
   return (
-    <div className="w-full border-b border-border/50 last:border-b-0">
-      {/* Group type row */}
-      <div
+    <>
+      <TableRow
         data-testid={`row-condensed-${row.date}-${row.txType}`}
-        onClick={() => model.setExpandedRowKey(isExpanded ? null : row.key)}
+        onClick={toggle}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            model.setExpandedRowKey(isExpanded ? null : row.key);
+            toggle();
           }
         }}
-        role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
         aria-label={`${formatTxType(row.txType)} on ${row.date}`}
-        className={cn(
-          "grid w-full cursor-pointer items-center gap-x-2 py-3.5 pl-3 pr-3 transition-colors hover:bg-blue-50/70 focus-visible:bg-blue-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-blue-500/10 dark:focus-visible:bg-blue-500/10 sm:gap-x-0 sm:pl-6 sm:pr-4",
-          colsClass
-        )}
+        className="cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          {isExpanded ? (
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-          )}
-          <Badge variant={bv} className={cn(bc, "min-w-0 whitespace-normal wrap-break-word sm:whitespace-nowrap")}>
-            {formatTxType(row.txType)}
-          </Badge>
-        </div>
-        <div className="text-center text-muted-foreground text-sm font-mono tabular-nums">{row.count}</div>
-        {model.showAmounts && (
-          <div className="min-w-0 wrap-break-word text-right font-mono text-sm font-semibold tabular-nums">
-            {currencySymbol(row.currencyCode)}
-            {formatNumber(row.totalAmountCurrency)}
-            {row.currencyCode !== "USD" && (
-              <div className="text-xs text-muted-foreground font-mono">{row.currencyCode}</div>
+        <TableCell className="sticky left-0 z-10 bg-inherit pl-10">
+          <div className="flex min-w-0 items-center gap-2">
+            {isExpanded ? (
+              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
             )}
+            <Badge variant={variant} className={className}>
+              {formatTxType(row.txType)}
+            </Badge>
           </div>
-        )}
-      </div>
-
-      {/* Expanded entry sub-rows */}
+        </TableCell>
+        <TableCell className="text-right font-mono text-sm text-muted-foreground tabular-nums">{row.count}</TableCell>
+        <TableCell className="text-right font-mono font-medium tabular-nums">
+          {model.showAmounts && (
+            <>
+              {currencySymbol(row.currencyCode)}
+              {formatNumber(row.totalAmountCurrency)}
+              {row.currencyCode !== "USD" && <div className="text-xs text-muted-foreground">{row.currencyCode}</div>}
+            </>
+          )}
+        </TableCell>
+      </TableRow>
       {isExpanded && row.txType === "BALE_STOCK_ENTRY" && (
-        <BaleSummaryRow row={row} colsClass={colsClass} expandedEntries={expandedEntries} model={model} />
+        <BaleSummaryRow row={row} expandedEntries={expandedEntries} model={model} />
       )}
       {isExpanded &&
         row.txType !== "BALE_STOCK_ENTRY" &&
         expandedEntries.map((entry) => (
-          <FactoryDaybookEntryRow
-            key={(entry as DisplayEntry)._vKey ?? entry.id}
-            entry={entry}
-            colsClass={colsClass}
-            model={model}
-          />
+          <FactoryDaybookEntryRow key={(entry as DisplayEntry)._vKey ?? entry.id} entry={entry} model={model} />
         ))}
-    </div>
-  );
-}
-
-function CondensedRows({ model }: { model: FactoryDaybookModel }) {
-  const { condensedRows, showAmounts, formatDisplayDate } = model;
-  const dateMap = new Map<string, CondensedRow[]>();
-  for (const row of condensedRows) {
-    if (!dateMap.has(row.date)) dateMap.set(row.date, []);
-    dateMap.get(row.date)!.push(row);
-  }
-  const colsClass = daybookColumnsClass(showAmounts);
-  return (
-    <>
-      {Array.from(dateMap.entries()).map(([date, rows]) => {
-        const dayTotal = rows.reduce((s, r) => s + r.totalAmountCurrency, 0);
-        const dayCcy = rows[0]?.currencyCode ?? "USD";
-        return (
-          <div key={date} className="w-full">
-            {/* Date separator row */}
-            <div
-              className={cn(
-                "grid w-full items-center gap-x-2 border-b border-blue-200/60 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10 sm:gap-x-0 sm:px-4",
-                colsClass
-              )}
-            >
-              <span className="flex min-w-0 items-center gap-2 wrap-break-word text-sm font-bold text-slate-800 dark:text-slate-100">
-                <CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-sky-400" aria-hidden="true" />
-                {formatDisplayDate(date + "T00:00:00")}
-              </span>
-              <span />
-              {showAmounts && (
-                <span className="min-w-0 wrap-break-word text-right font-mono text-sm font-bold tabular-nums">
-                  {currencySymbol(dayCcy)}
-                  {formatNumber(dayTotal)}
-                </span>
-              )}
-            </div>
-
-            {/* Type rows under this date */}
-            {rows.map((row) => (
-              <CondensedGroupRow key={row.key} row={row} colsClass={colsClass} model={model} />
-            ))}
-          </div>
-        );
-      })}
     </>
   );
 }
 
 export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
   const { isLoading, isError, error, refetch, filteredEntries, condensedRows, hasActiveFilters, showAmounts } = model;
+  const { periodFilter, txTypeFilter, statusFilter, searchQuery, formatDisplayDate } = model;
+  const pagination = useClientTablePagination(condensedRows.length, GROUPS_PER_PAGE);
+  const { resetPage } = pagination;
+  useEffect(() => {
+    resetPage();
+  }, [resetPage, periodFilter.fromDate, periodFilter.toDate, txTypeFilter, statusFilter, searchQuery]);
+
+  const dateGroups = new Map<string, CondensedRow[]>();
+  for (const row of pagination.paginate(condensedRows)) {
+    if (!dateGroups.has(row.date)) dateGroups.set(row.date, []);
+    dateGroups.get(row.date)!.push(row);
+  }
+  const showState = isLoading || isError || filteredEntries.length === 0;
+
   return (
-    <Card className="overflow-hidden rounded-2xl border border-sky-200/60 bg-card shadow-sm dark:border-blue-500/20 dark:bg-slate-950/70">
-      <CardHeader className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-4 py-4 dark:from-slate-900 dark:to-slate-950 sm:px-6">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="flex items-center gap-3 text-base sm:text-lg">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200/80 bg-blue-100/70 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-sky-400">
-              <BookOpen className="h-5 w-5" aria-hidden="true" />
-            </span>
-            Transactions
-            {filteredEntries.length > 0 && (
-              <span className="text-sm font-normal text-muted-foreground">
-                ({`${condensedRows.length} group${condensedRows.length === 1 ? "" : "s"}`})
-              </span>
-            )}
-          </CardTitle>
-        </div>
-        <CardDescription className="pl-[3.25rem]">All factory transactions in one view</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        {isLoading ? (
-          <div className="space-y-2 p-6">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : isError ? (
-          <ErrorState
-            title="Could not load factory transactions"
-            description={error instanceof Error ? error.message : "The factory daybook could not be loaded."}
-            actionLabel="Try again"
-            onAction={() => void refetch()}
-            data-testid="factory-daybook-error"
+    <DaybookResults
+      description="All factory transactions in one view"
+      count={
+        filteredEntries.length > 0 ? `${condensedRows.length} group${condensedRows.length === 1 ? "" : "s"}` : undefined
+      }
+      footer={
+        !showState && (
+          <PaginationBar
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={condensedRows.length}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            noun="groups"
           />
-        ) : filteredEntries.length === 0 ? (
-          hasActiveFilters ? (
-            <EmptyState
-              title="No transactions found matching your filters."
-              className="rounded-none border-0"
-              action={
-                <Button variant="outline" onClick={model.clearFilters} data-testid="button-clear-filters-empty">
-                  Clear Filters
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={BookOpen}
-              title="No transactions found"
-              description="Factory transactions will appear here as you perform operations"
-              className="rounded-none border-0"
-            />
-          )
-        ) : (
-          /* ── CONDENSED VIEW — matches ERP Daybook: Date/Type | Count | Total ── */
-          <div className="w-full">
-            {/* Header */}
-            <div
-              className={cn(
-                "sticky top-0 z-30 grid w-full gap-x-2 border-b border-border/70 bg-slate-100/90 px-3 py-3 backdrop-blur-sm dark:bg-slate-900/95 sm:gap-x-0 sm:px-4",
-                daybookColumnsClass(showAmounts)
-              )}
-            >
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date / Type</span>
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">
-                Count
-              </span>
-              {showAmounts && (
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">
-                  Total
-                </span>
-              )}
-            </div>
-            <CondensedRows model={model} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        )
+      }
+    >
+      {showState ? (
+        <DaybookTableState
+          isLoading={isLoading}
+          errorMessage={
+            isError ? (error instanceof Error ? error.message : "The factory daybook could not be loaded.") : null
+          }
+          onRetry={() => void refetch()}
+          isEmpty={filteredEntries.length === 0}
+          emptyTitle={hasActiveFilters ? "No transactions found matching your filters." : "No transactions found"}
+          emptyDescription={
+            hasActiveFilters ? undefined : "Factory transactions will appear here as you perform operations"
+          }
+          emptyAction={
+            hasActiveFilters ? (
+              <Button variant="outline" onClick={model.clearFilters} data-testid="button-clear-filters-empty">
+                Clear Filters
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <ErpListTable
+          pageKey="factory-daybook-condensed"
+          scrollLabel="Condensed factory daybook"
+          wrapperClassName="max-h-[calc(100dvh-220px)]"
+        >
+          <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
+            <TableRow>
+              <TableHead className="sticky left-0 z-10 bg-muted pl-4">Date / Type</TableHead>
+              <TableHead className="text-right">Count</TableHead>
+              <TableHead className="text-right">
+                {showAmounts ? "Total" : <span className="sr-only">Actions</span>}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="text-foreground dark:[&_td]:border-border/70 dark:[&_tr]:border-border/70">
+            {Array.from(dateGroups.entries()).map(([date, rows]) => {
+              const dayTotal = rows.reduce((sum, row) => sum + row.totalAmountCurrency, 0);
+              const dayCurrency = rows[0]?.currencyCode ?? "USD";
+              return (
+                <div key={date} style={{ display: "contents" }}>
+                  <TableRow className="bg-muted/30 font-semibold hover:bg-muted/50" data-testid={`row-date-${date}`}>
+                    <TableCell className="sticky left-0 z-10 bg-inherit pl-4 text-sm font-semibold">
+                      {formatDisplayDate(date + "T00:00:00")}
+                    </TableCell>
+                    <TableCell />
+                    <TableCell className="text-right font-mono font-semibold tabular-nums">
+                      {showAmounts && (
+                        <>
+                          {currencySymbol(dayCurrency)}
+                          {formatNumber(dayTotal)}
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {rows.map((row) => (
+                    <CondensedGroupRows key={row.key} row={row} model={model} />
+                  ))}
+                </div>
+              );
+            })}
+          </TableBody>
+        </ErpListTable>
+      )}
+    </DaybookResults>
   );
 }

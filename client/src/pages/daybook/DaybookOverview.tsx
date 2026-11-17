@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock3, ReceiptText, Wallet } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { DaybookKpiStrip, type DaybookKpi } from "@/components/daybook/DaybookFrame";
 
 export interface DaybookOverviewStats {
   vouchers: number;
@@ -16,62 +16,47 @@ interface DaybookOverviewProps {
 }
 
 export function DaybookOverview({ stats, hideAmounts, formatAmount }: DaybookOverviewProps) {
-  return (
-    <section
-      className={cn("daybook-overview", hideAmounts && "daybook-overview--restricted")}
-      aria-label="Daybook overview"
-      data-testid="daybook-overview"
-    >
-      <div className="daybook-kpi daybook-kpi--count">
-        <span className="daybook-kpi__icon">
-          <ReceiptText className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <div className="daybook-kpi__label">Matching vouchers</div>
-          <div className="daybook-kpi__value" data-testid="daybook-kpi-count">
-            {stats.vouchers.toLocaleString()}
-          </div>
-          <div className="daybook-kpi__caption">Selected period</div>
-        </div>
-      </div>
-      {!hideAmounts && (
-        <div className="daybook-kpi daybook-kpi--value">
-          <span className="daybook-kpi__icon">
-            <Wallet className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="daybook-kpi__label">Voucher value</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-value">
-              {formatAmount(stats.value)}
-            </div>
-            <div className="daybook-kpi__caption">{stats.scope} · not account balance</div>
-          </div>
-        </div>
-      )}
-      <div className="daybook-kpi daybook-kpi--active">
-        <span className="daybook-kpi__icon">
-          <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <div className="daybook-kpi__label">Active vouchers</div>
-          <div className="daybook-kpi__value" data-testid="daybook-kpi-active">
-            {stats.active.toLocaleString()}
-          </div>
-          <div className="daybook-kpi__caption">{stats.scope}</div>
-        </div>
-      </div>
-      <div className="daybook-kpi daybook-kpi--optional">
-        <span className="daybook-kpi__icon">
-          <Clock3 className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <div className="daybook-kpi__label">Optional vouchers</div>
-          <div className="daybook-kpi__value" data-testid="daybook-kpi-optional">
-            {stats.optional.toLocaleString()}
-          </div>
-          <div className="daybook-kpi__caption">{stats.scope}</div>
-        </div>
-      </div>
-    </section>
-  );
+  const items: DaybookKpi[] = [
+    {
+      id: "count",
+      label: "Matching vouchers",
+      value: stats.vouchers.toLocaleString(),
+      caption: "Selected period",
+      icon: ReceiptText,
+      tone: "count",
+      testId: "daybook-kpi-count",
+    },
+    ...(hideAmounts
+      ? []
+      : [
+          {
+            id: "value",
+            label: "Voucher value",
+            value: formatAmount(stats.value),
+            caption: <>{stats.scope} · not account balance</>,
+            icon: Wallet,
+            tone: "value" as const,
+            testId: "daybook-kpi-value",
+          },
+        ]),
+    {
+      id: "active",
+      label: "Active vouchers",
+      value: stats.active.toLocaleString(),
+      caption: stats.scope,
+      icon: CheckCircle2,
+      tone: "active",
+      testId: "daybook-kpi-active",
+    },
+    {
+      id: "optional",
+      label: "Optional vouchers",
+      value: stats.optional.toLocaleString(),
+      caption: stats.scope,
+      icon: Clock3,
+      tone: "optional",
+      testId: "daybook-kpi-optional",
+    },
+  ];
+  return <DaybookKpiStrip items={items} />;
 }
