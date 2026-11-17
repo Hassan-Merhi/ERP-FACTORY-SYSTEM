@@ -709,8 +709,8 @@ export function registerCompanySettingsRoutes(app: Express) {
     (_req, res) => {
       res.status(410).json({
         success: false,
-        message:
-          "Schema changes are no longer applied by the server. The schema is defined by the numbered migrations in migrations/ (apply them with scripts/db/migrate.mjs).",
+        // Schema changes are applied only by scripts/db/migrate.mjs (docs/database-migrations.md).
+        code: "SCHEMA_MANAGED_BY_MIGRATIONS",
       });
     }
   );

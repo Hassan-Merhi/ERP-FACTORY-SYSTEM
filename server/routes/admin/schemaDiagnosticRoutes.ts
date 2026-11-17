@@ -179,8 +179,8 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
     }
     return res.status(410).json({
       ok: false,
-      message:
-        "Schema changes are no longer applied by the server. The schema is defined by the numbered migrations in migrations/ (apply them with scripts/db/migrate.mjs).",
+      // Schema changes are applied only by scripts/db/migrate.mjs (docs/database-migrations.md).
+      code: "SCHEMA_MANAGED_BY_MIGRATIONS",
     });
   });
 }
