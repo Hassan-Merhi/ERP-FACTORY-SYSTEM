@@ -3,13 +3,12 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertTriangle,
   FileX,
-  Search,
   CheckCircle2,
   XCircle,
   LayoutGrid,
@@ -25,6 +24,7 @@ import { fmt, fmtD, gitContainersUrl, parseNum, COMPANY_COLORS, getRealRowBg } f
 import { WorkbookLegend, RealWorkbookBlock } from "./WorkbookBlock";
 import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+import { SearchField } from "@/components/ui/search-field";
 
 export function TabDetail() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
@@ -215,23 +215,18 @@ export function TabDetail() {
       </div>
 
       {allContainers.length === 0 ? (
-        <div className="rounded-md border border-dashed px-6 py-10 text-center text-muted-foreground text-sm">
-          <FileX className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <div className="font-medium">No active containers found</div>
-        </div>
+        <EmptyState icon={FileX} title="No active containers found" className="rounded-md px-6 py-10" />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/80 p-3 shadow-sm">
-            <div className="relative flex-1 max-w-sm max-sm:basis-full max-sm:max-w-none">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search container, company, truck, agent…"
-                className="h-9 rounded-lg border-border/70 bg-background/80 pl-8 shadow-inner shadow-black/5"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-testid="input-git-detail-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search container, company, truck, agent…"
+              wrapperClassName="flex-1 max-w-sm max-sm:basis-full max-sm:max-w-none"
+              className="h-9 rounded-lg border-border/70 bg-background/80 shadow-inner shadow-black/5"
+              value={search}
+              onValueChange={setSearch}
+              data-testid="input-git-detail-search"
+            />
             <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums text-muted-foreground">
               {filtered.length} rows
             </span>

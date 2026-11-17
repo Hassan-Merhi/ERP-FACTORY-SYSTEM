@@ -1,16 +1,17 @@
+import { SearchField } from "@/components/ui/search-field";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2, Upload, Trash2, ImagePlus, Search, Images, ChevronLeft } from "lucide-react";
+import { Loader2, Upload, Trash2, ImagePlus, Images, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { FactoryBaleProductImage } from "@shared/schema";
 import { PageHeader } from "@/components/PageHeader";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import { confirmAction } from "@/components/ConfirmHost";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 interface BaleProduct {
   id: number;
@@ -120,25 +121,21 @@ export default function BaleProductImages() {
           <h2 className="mb-3 text-lg font-semibold" data-testid="text-product-list-title">
             Bale Products
           </h2>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-products"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search products..."
+            data-testid="input-search-products"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {productsQuery.isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState className="m-3" />
+          ) : productsQuery.isError && !productsQuery.data ? (
+            <ErrorState onAction={() => void productsQuery.refetch()} actionLabel="Try again" className="m-3" />
           ) : filteredProducts.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">No products found</p>
+            <EmptyState title="No products found" className="m-3" />
           ) : (
             <div className="divide-y">
               {filteredProducts.map((p) => (
@@ -233,13 +230,11 @@ export default function BaleProductImages() {
 
             {/* Image grid */}
             {imagesQuery.isLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
+              <LoadingState />
+            ) : imagesQuery.isError && !imagesQuery.data ? (
+              <ErrorState onAction={() => void imagesQuery.refetch()} actionLabel="Try again" />
             ) : images.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No images yet. Upload the first one above.
-              </div>
+              <EmptyState title="No images yet. Upload the first one above." />
             ) : (
               <div>
                 <div className="mb-3 flex items-center justify-between">

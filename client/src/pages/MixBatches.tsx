@@ -10,6 +10,7 @@ import { exportFileName } from "@/lib/exportFile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,7 +61,12 @@ export default function MixBatches() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
 
-  const { data: batches, isLoading } = useQuery<FactoryMixBatch[]>({
+  const {
+    data: batches,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<FactoryMixBatch[]>({
     queryKey: ["/api/factory/mix-batches"],
   });
 
@@ -267,6 +273,8 @@ export default function MixBatches() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
+          ) : isError && !batches ? (
+            <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
           ) : filteredBatches && filteredBatches.length > 0 ? (
             <div>
               <Table wrapperClassName="overflow-visible" mobileLayout="cards">
@@ -377,21 +385,24 @@ export default function MixBatches() {
               )}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No batches found</h3>
-              <p className="text-muted-foreground mb-4">
-                {statusFilter === "all" || statusFilter === "ACTIVE"
+            <EmptyState
+              icon={Package}
+              title="No batches found"
+              description={
+                statusFilter === "all" || statusFilter === "ACTIVE"
                   ? "Create your first mix batch to get started"
-                  : `No batches with status: ${statusFilter}`}
-              </p>
-              {canCreateBatch && (statusFilter === "all" || statusFilter === "ACTIVE") && (
-                <Button onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Batch
-                </Button>
-              )}
-            </div>
+                  : `No batches with status: ${statusFilter}`
+              }
+              action={
+                canCreateBatch && (statusFilter === "all" || statusFilter === "ACTIVE") ? (
+                  <Button onClick={() => setCreateDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Batch
+                  </Button>
+                ) : undefined
+              }
+              className="py-12"
+            />
           )}
         </CardContent>
       </Card>

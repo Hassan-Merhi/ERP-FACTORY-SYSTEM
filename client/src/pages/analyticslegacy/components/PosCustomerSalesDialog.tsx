@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface PosAnalyticsSale {
   id: number;
@@ -60,7 +61,12 @@ export function PosCustomerSalesDialog({
 }) {
   const [expandedPosSaleId, setExpandedPosSaleId] = useState<number | null>(null);
 
-  const { data: posSales = [], isLoading: loadingPosSales } = useQuery<PosAnalyticsSale[]>({
+  const {
+    data: posSalesData,
+    isLoading: loadingPosSales,
+    isError: posSalesError,
+    refetch: refetchPosSales,
+  } = useQuery<PosAnalyticsSale[]>({
     queryKey: ["/api/factory/pos/sales", "analytics-customer-detail"],
     queryFn: async () => {
       const res = await fetch("/api/factory/pos/sales", { credentials: "include" });
@@ -71,6 +77,7 @@ export function PosCustomerSalesDialog({
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
+  const posSales = posSalesData ?? [];
 
   const { data: expandedPosSale, isLoading: loadingExpandedPosSale } = useQuery<PosAnalyticsSaleDetail>({
     queryKey: ["/api/factory/pos/sales", expandedPosSaleId, "analytics-detail"],
@@ -122,10 +129,10 @@ export function PosCustomerSalesDialog({
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
+          ) : posSalesError && !posSalesData ? (
+            <ErrorState onAction={() => void refetchPosSales()} actionLabel="Try again" />
           ) : selectedPosSales.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No POS sales found for this customer in the selected date range.
-            </p>
+            <EmptyState title="No POS sales found for this customer in the selected date range." />
           ) : (
             <Table>
               <TableHeader className="sticky top-0 z-30 bg-background">

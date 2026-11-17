@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { History as HistoryIcon } from "lucide-react";
 
 interface StatusBuilderHistoryEntry {
@@ -19,9 +20,9 @@ export function StatusHistoryPanel({ historyLoading, historyLog }: StatusHistory
   return (
     <div className="flex-1 overflow-auto p-4">
       {historyLoading ? (
-        <div className="text-center text-sm text-muted-foreground py-8">Loading history…</div>
+        <LoadingState title="Loading history…" className="py-8" />
       ) : !historyLog || historyLog.length === 0 ? (
-        <div className="text-center text-sm text-muted-foreground py-8">No changes recorded yet for this page.</div>
+        <EmptyState title="No changes recorded yet for this page." className="py-8" />
       ) : (
         <div className="space-y-2 max-w-2xl mx-auto">
           {historyLog.map((entry) => (

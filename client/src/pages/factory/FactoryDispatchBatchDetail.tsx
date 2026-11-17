@@ -57,6 +57,7 @@ import type { AuditScan, BatchDetail, InvoicePreview } from "./factorydispatchba
 import { BATCH_STATUS_CONFIG, fmt } from "./factorydispatchbatchdetail/utils";
 import { RideStatusBadge } from "./factorydispatchbatchdetail/components/RideStatusBadge";
 import { BatchInfoCard } from "./factorydispatchbatchdetail/components/BatchInfoCard";
+import { EmptyState } from "@/components/ui/page-state";
 export default function FactoryDispatchBatchDetail() {
   const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
@@ -428,15 +429,18 @@ export default function FactoryDispatchBatchDetail() {
               </CardHeader>
               <CardContent className="p-0">
                 {rides.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-                    <Truck className="w-8 h-8 opacity-40" />
-                    <p className="text-sm">No truck rides yet</p>
-                    {canChangeBatch && (
-                      <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
-                        <Plus className="w-4 h-4 mr-1" /> Add first ride
-                      </Button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Truck}
+                    title="No truck rides yet"
+                    className="border-0"
+                    action={
+                      canChangeBatch ? (
+                        <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
+                          <Plus className="w-4 h-4 mr-1" /> Add first ride
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <Table mobileLayout="cards">
                     <TableHeader>
@@ -540,7 +544,7 @@ export default function FactoryDispatchBatchDetail() {
             {showBales && (
               <div className="mt-3 border-t pt-3">
                 {auditScans.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No active bale scans found.</p>
+                  <EmptyState title="No active bale scans found." />
                 ) : (
                   <div className="overflow-x-auto">
                     <Table mobileLayout="cards">

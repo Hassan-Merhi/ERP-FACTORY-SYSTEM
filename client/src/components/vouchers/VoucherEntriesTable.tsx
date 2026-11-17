@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { useState, useRef, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn } from "react-hook-form";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Plus, X, Search, Check } from "lucide-react";
+import { Plus, X, Check } from "lucide-react";
 import type { Account } from "@/components/AccountSidebar";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -303,7 +304,9 @@ export function VoucherEntriesTable({
               <th className="text-center px-2 py-2 font-semibold w-8">#</th>
               <th className="text-left px-2 py-2 font-semibold min-w-[10rem]">Account</th>
               <th className="text-left px-2 py-2 font-semibold w-24 hidden lg:table-cell">Type</th>
-              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">{amountCurrencyOverride === "EUR" ? "Amount (EUR)" : "Amount"}</th>
+              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">
+                {amountCurrencyOverride === "EUR" ? "Amount (EUR)" : "Amount"}
+              </th>
               <th className="text-left px-2 py-2 font-semibold w-[24%] hidden md:table-cell">Narration</th>
               <th className="text-right px-2 py-2 font-semibold w-28 hidden lg:table-cell">Running</th>
               <th className="w-10"></th>
@@ -570,20 +573,17 @@ export function VoucherEntriesTable({
                 Done
               </Button>
             </div>
-            <div className="relative mt-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                ref={mobileSearchInputRef}
-                placeholder="Search accounts..."
-                value={mobileSearch}
-                onChange={(event) => {
-                  setMobileSearch(event.target.value);
-                  setSidebarSearchValue(event.target.value);
-                }}
-                className="pl-9"
-                data-testid="input-mobile-account-search"
-              />
-            </div>
+            <SearchField
+              ref={mobileSearchInputRef}
+              value={mobileSearch}
+              onValueChange={(value) => {
+                setMobileSearch(value);
+                setSidebarSearchValue(value);
+              }}
+              placeholder="Search accounts..."
+              wrapperClassName="mt-2"
+              data-testid="input-mobile-account-search"
+            />
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto min-h-0">

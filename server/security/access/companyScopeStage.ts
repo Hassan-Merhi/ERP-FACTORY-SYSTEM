@@ -1,44 +1,50 @@
-import type { NextFunction, Request, Response } from "express";
-import { isCreateOnlyWriteBlocked } from "../services/security/createOnlyWritePolicy";
-import { isViewOnlyWriteBlocked } from "../services/security/viewOnlyWritePolicy";
+/**
+ * Company-scope stage of the manifest access boundary.
+ *
+ * Binds a signed-in request to its company before any handler runs: resolves
+ * the caller's role in that company from the database, refuses caller-supplied
+ * company IDs the route's declaration does not allow, and opens the tenant
+ * runtime context and database scope that row-level security reads.
+ *
+ * Which requests may reach beyond their bound company is not decided here. It
+ * is declared per route in config/route-access-manifest.json (`companyScope`
+ * and `crossCompany`) and arrives as the resolved EffectiveRouteAccess.
+ */
+import type { Request, Response } from "express";
+import { isCreateOnlyWriteBlocked } from "../../services/security/createOnlyWritePolicy";
+import { isViewOnlyWriteBlocked } from "../../services/security/viewOnlyWritePolicy";
 import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
 import { and, eq, or } from "drizzle-orm";
 import { companies, userCompanyRoles } from "@shared/schema";
 
-import { db } from "../db";
-import { logger } from "../lib/logger";
+import { db } from "../../db";
+import { logger } from "../../lib/logger";
 import {
   assertCompaniesAccess,
   CompanyAccessError,
   getAccessibleCompanyIds,
   isPrivilegedRole,
   sendCompanyAccessError,
-} from "../security/companyAccessBoundary";
+} from "../companyAccessBoundary";
 import {
   ActiveCompanyPermissionContextError,
   getActiveCompanyPermissionContext,
   type ActiveCompanyPermissionContext,
-} from "../services/security/activeCompanyPermissionContext";
-import { assertRequestCompanyMatchesSession, CompanyIsolationError } from "../services/security/companyIsolationPolicy";
-import { decideExplicitCompanyScope } from "../services/security/companyRequestScopePolicy";
-import { isPinnedCompanyRoute } from "../services/security/activeCompanyPermissionPolicy";
-import { chooseAuthorizedFactoryCompany } from "../services/security/factoryCompanyScopePolicy";
-import { classifyUserLocationConfigurationRoute } from "../services/security/userLocationConfigurationPolicy";
-import { runWithCompanyRequestRuntimeContext } from "../services/security/companyRequestRuntimeContext";
-import { isAccountMigrationSourceReadPath } from "../services/security/accountMigrationRequestPolicy";
+} from "../../services/security/activeCompanyPermissionContext";
+import {
+  assertRequestCompanyMatchesSession,
+  CompanyIsolationError,
+} from "../../services/security/companyIsolationPolicy";
+import { decideExplicitCompanyScope } from "../../services/security/companyRequestScopePolicy";
+import { isPinnedCompanyRoute } from "../../services/security/activeCompanyPermissionPolicy";
+import { chooseAuthorizedFactoryCompany } from "../../services/security/factoryCompanyScopePolicy";
+import { classifyUserLocationConfigurationRoute } from "../../services/security/userLocationConfigurationPolicy";
+import { runWithCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
-} from "../services/security/databaseScopeRuntimeContext";
-
-const CONTEXT_OPTIONAL_PATHS = new Set([
-  "/api/csrf-token",
-  "/api/build-info",
-  "/api/boot",
-  "/api/user/companies",
-  "/api/auth/session-company",
-  "/api/auth/set-company",
-]);
+} from "../../services/security/databaseScopeRuntimeContext";
+import type { EffectiveRouteAccess } from "./routeAccessManifest";
 
 // The abbreviated srcCompanyId/destCompanyId spellings belong to the
 // account-migration admin routes. Without them the destination company is
@@ -59,79 +65,40 @@ const SECONDARY_COMPANY_FIELDS = [
   "buyerCompanyId",
 ] as const;
 
-const CROSS_COMPANY_REFERENCE_READ_PATHS = new Set(["/api/locations", "/api/ledger-accounts"]);
-
 function positiveId(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function isContextOptionalPath(path: string): boolean {
-  if (CONTEXT_OPTIONAL_PATHS.has(path)) return true;
-  if (path === "/api/health" || path.startsWith("/api/health/")) return true;
-  if (path === "/api/auth" || path.startsWith("/api/auth/")) {
-    return path !== "/api/auth/set-company";
-  }
-  return false;
+function requestPathOf(req: Request): string {
+  return req.originalUrl.split("?", 1)[0] || req.path;
 }
 
 /**
- * Server-trusted cross-company read surfaces.
+ * Whether the request is bound to the pinned Factory/Properties company.
  *
- * Payroll bonuses are configured per source company: an employee of one company
- * earns on sales a sister company posted (GC-LSHI sells at locations owned by
- * another company). Those reads stay bounded by getAccessibleCompanyIds, never
- * by a client-supplied company ID, exactly like the global transactions view.
+ * The declaration is authoritative. resolvePermissionCompanyId, which handlers
+ * share, still derives the same answer from the URL; if the two ever disagree
+ * the request is refused rather than served under the wrong company.
  */
-const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", "/api/payroll/auto-calculate-bonuses"]);
-
-function isAuthorizedCrossCompanyPath(method: string, path: string): boolean {
-  if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
-  if (
-    method.toUpperCase() === "GET" &&
-    (path === "/api/cost-centers/reports/consolidated" ||
-      path === "/api/factory/cost-centers/reports/consolidated" ||
-      path === "/api/cost-centers/reports/consolidated/activity" ||
-      path === "/api/factory/cost-centers/reports/consolidated/activity" ||
-      path === "/api/cost-centers/reports/consolidated/export" ||
-      path === "/api/factory/cost-centers/reports/consolidated/export")
-  )
-    return true;
-  if (path === "/api/purchase-orders/parent-freight-accounts") return true;
-  if (/^\/api\/purchase-orders\/\d+\/sync-parent-voucher$/.test(path)) return true;
-  if (method.toUpperCase() === "PATCH" && /^\/api\/purchase-orders\/\d+$/.test(path)) return true;
-  return path === "/api/global/transactions" || path.startsWith("/api/global/transactions/");
+function resolvePinned(req: Request, access: EffectiveRouteAccess): boolean {
+  const pinnedByUrl = isPinnedCompanyRoute(requestPathOf(req));
+  if (access.companyScope === "request-resolved") return pinnedByUrl;
+  const declaredPinned = access.companyScope === "pinned-company";
+  if (declaredPinned !== pinnedByUrl) {
+    throw new CompanyAccessError(
+      403,
+      "Request company scope does not match its declaration",
+      "ROUTE_ACCESS_SCOPE_MISMATCH"
+    );
+  }
+  return declaredPinned;
 }
 
-/**
- * A small compatibility surface for legacy admin/configuration pickers that
- * intentionally read reference data from another assigned company. The actual
- * privileged-role and membership checks happen in tenantIsolationBoundary.
- */
-export function isCrossCompanyReferenceRead(method: string, path: string): boolean {
-  return method.toUpperCase() === "GET" && CROSS_COMPANY_REFERENCE_READ_PATHS.has(path);
-}
-
-/**
- * Settings -> Users is intentionally a global Developer administration surface.
- * Keep this exception narrowly limited to creating/updating company-role
- * assignments; ordinary tenant routes remain pinned to the active company.
- */
-export function isDeveloperCompanyRoleAdministrationRoute(method: string, path: string): boolean {
-  const normalizedMethod = method.toUpperCase();
-  return (
-    (normalizedMethod === "POST" && path === "/api/user-company-roles") ||
-    (normalizedMethod === "PATCH" && /^\/api\/user-company-roles\/\d+$/.test(path))
-  );
-}
-
-async function ensurePinnedFactoryCompany(req: Request): Promise<void> {
-  const path = req.originalUrl.split("?", 1)[0] || req.path;
+async function ensurePinnedFactoryCompany(req: Request, pinned: boolean): Promise<void> {
+  const path = requestPathOf(req);
   const normalizedPath = path.toLowerCase();
-  if (
-    !isPinnedCompanyRoute(path) ||
-    !(normalizedPath === "/api/factory" || normalizedPath.startsWith("/api/factory/"))
-  ) {
+  if (!pinned || !(normalizedPath === "/api/factory" || normalizedPath.startsWith("/api/factory/"))) {
     return;
   }
 
@@ -190,8 +157,8 @@ async function ensurePinnedFactoryCompany(req: Request): Promise<void> {
   session.factoryCompanyId = factoryCompanyId;
 }
 
-async function resolveCanonicalContext(req: Request): Promise<ActiveCompanyPermissionContext> {
-  await ensurePinnedFactoryCompany(req);
+async function resolveCanonicalContext(req: Request, pinned: boolean): Promise<ActiveCompanyPermissionContext> {
+  await ensurePinnedFactoryCompany(req, pinned);
 
   try {
     return await getActiveCompanyPermissionContext(req);
@@ -202,8 +169,7 @@ async function resolveCanonicalContext(req: Request): Promise<ActiveCompanyPermi
       req.session.currentRole === "Developer" &&
       req.session.userId
     ) {
-      const path = req.originalUrl.split("?", 1)[0] || req.path;
-      const companyId = isPinnedCompanyRoute(path)
+      const companyId = pinned
         ? (positiveId(req.session.factoryCompanyId) ?? positiveId(req.session.currentCompanyId))
         : positiveId(req.session.currentCompanyId);
       if (companyId) {
@@ -266,23 +232,110 @@ function logIsolationDenial(req: Request, context: ActiveCompanyPermissionContex
 }
 
 /**
- * Global tenant boundary installed before application routes.
+ * Refuse a `:companyId` URL parameter that names a company the declaration
+ * does not allow. Parameters are matched from the manifest, so this also
+ * covers routes mounted on lazily loaded routers.
+ */
+async function authorizePathCompanyId(
+  req: Request,
+  res: Response,
+  access: EffectiveRouteAccess,
+  context: ActiveCompanyPermissionContext,
+  raw: string
+): Promise<boolean> {
+  const companyId = positiveId(raw);
+  if (!companyId) {
+    res.status(400).json({ code: "COMPANY_ID_INVALID", message: "Invalid companyId in request path." });
+    return false;
+  }
+  // This read-only Admin tool intentionally chooses a *different* company
+  // before starting a migration. The route itself independently checks role
+  // and membership and binds an explicit transaction-local RLS scope.
+  if (access.crossCompany.has("account-migration-source")) {
+    if (context.role !== "Admin" && context.role !== "Developer") {
+      res.status(403).json({
+        code: "ACCOUNT_MIGRATION_ROLE_REQUIRED",
+        message: "Admin or Developer access required for account migration.",
+      });
+      return false;
+    }
+    await assertCompaniesAccess(context.userId, [companyId]);
+    return true;
+  }
+  if (access.crossCompany.has("developer-user-location") && context.role === "Developer") {
+    const userLocationRoute = classifyUserLocationConfigurationRoute(req.path);
+    if (userLocationRoute?.companyId === companyId) {
+      await assertCompaniesAccess(context.userId, [companyId]);
+      return true;
+    }
+  }
+  assertRequestCompanyMatchesSession(
+    { userId: context.userId, role: context.role, companyId: context.companyId },
+    companyId
+  );
+  return true;
+}
+
+/**
+ * Authorize every `:companyId` URL parameter of the matched route. Returns
+ * true when the request may continue; otherwise the refusal has been sent.
  *
- * Caller-supplied companyId values never grant authorization. Ordinary tenant
- * routes still require primary companyId to equal the active company. The two
- * legacy reference pickers (locations and ledger accounts) may target another
- * assigned company only for Admin/Owner/Developer callers and only after
- * canonical membership verification. Intercompany source/target fields remain
+ * The boundary calls this last, after the route's policies, which is where
+ * the Express parameter hook it replaces used to run: a policy that hides a
+ * foreign record with 404 still answers before this check's 403.
+ */
+export async function authorizePathCompanyIds(
+  req: Request,
+  res: Response,
+  access: EffectiveRouteAccess,
+  context: ActiveCompanyPermissionContext
+): Promise<boolean> {
+  try {
+    for (const raw of access.pathCompanyIds) {
+      if (!(await authorizePathCompanyId(req, res, access, context, raw))) return false;
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof CompanyIsolationError) {
+      logIsolationDenial(req, context, error.code);
+      res.status(403).json({ code: error.code, message: error.message });
+      return false;
+    }
+    if (error instanceof CompanyAccessError) {
+      logIsolationDenial(req, context, error.code);
+      sendCompanyAccessError(res, error);
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Bind the request to its company and run `proceed` inside the tenant runtime
+ * context and database scope. Sends the refusal itself when the request is not
+ * allowed; unexpected failures go to `fail`.
+ *
+ * Caller-supplied companyId values never grant authorization. Unless the
+ * route declares a `crossCompany` allowance, a companyId in the query, body or
+ * URL must equal the bound company. Intercompany source/target fields are
  * membership checked as well.
  */
-export async function tenantIsolationBoundary(req: Request, res: Response, next: NextFunction) {
-  if (!req.path.startsWith("/api")) return next();
-  if (!req.session?.userId) return next();
-  if (isContextOptionalPath(req.path)) return next();
-
+export async function establishCompanyScope(
+  req: Request,
+  res: Response,
+  access: EffectiveRouteAccess,
+  proceed: (context: ActiveCompanyPermissionContext) => void | Promise<void>,
+  fail: (error: unknown) => void,
+  /**
+   * Called instead of sending the 401/403 when the session has no usable
+   * company. Used for URLs that name no route, which answer 404 either way.
+   */
+  onCompanyUnavailable?: () => void
+): Promise<void> {
   let context: ActiveCompanyPermissionContext | null = null;
   try {
-    context = await resolveCanonicalContext(req);
+    context = await resolveCanonicalContext(req, resolvePinned(req, access));
+    const boundContext = context;
 
     // Second, canonical Create Only write check. The global guard reads the
     // session role; this one reads the current company membership, so a role
@@ -297,24 +350,27 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
     const sessionRoleIsStale = req.session?.currentRole !== context.role;
     if (sessionRoleIsStale && context.role === "ERP Tester" && isErpTesterForbiddenApiPath(req.path)) {
       logIsolationDenial(req, context, "ERP_TESTER_SETTINGS_DENIED");
-      return res.status(403).json({
+      res.status(403).json({
         code: "ERP_TESTER_SETTINGS_DENIED",
         message: "ERP Tester accounts cannot access system settings or user administration",
       });
+      return;
     }
     if (sessionRoleIsStale && isViewOnlyWriteBlocked(context.role, req.method, req.path)) {
       logIsolationDenial(req, context, "VIEW_ONLY_WRITE_DENIED");
-      return res.status(403).json({
+      res.status(403).json({
         code: "VIEW_ONLY_WRITE_DENIED",
         message: "View Only accounts cannot make changes",
       });
+      return;
     }
     if (isCreateOnlyWriteBlocked(context.role, req.method, req.path)) {
       logIsolationDenial(req, context, "CREATE_ONLY_WRITE_NOT_VERIFIED");
-      return res.status(403).json({
+      res.status(403).json({
         code: "BUSINESS_ACTION_NOT_VERIFIED",
         message: "This action is not available to Create Only users.",
       });
+      return;
     }
 
     const decision = decideExplicitCompanyScope({
@@ -323,26 +379,30 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
     });
 
     if (decision.kind === "invalid") {
-      return res.status(400).json({
+      res.status(400).json({
         code: "COMPANY_ID_INVALID",
         message: `Invalid companyId in request ${decision.source}.`,
       });
+      return;
     }
     if (decision.kind === "conflict") {
-      return res.status(400).json({
+      res.status(400).json({
         code: "COMPANY_ID_CONFLICT",
         message: "All companyId values in the request must match.",
       });
+      return;
     }
 
     let explicitAuthorizedCompanyId: number | null = null;
     if (decision.kind === "company") {
-      const crossCompanyReference =
-        decision.companyId !== context.companyId && isCrossCompanyReferenceRead(req.method, req.path);
+      const otherCompany = decision.companyId !== context.companyId;
+      // Legacy admin/configuration pickers that intentionally read reference
+      // data from another assigned company.
+      const crossCompanyReference = otherCompany && access.crossCompany.has("reference-read");
+      // Settings -> Users is intentionally a global Developer administration
+      // surface, narrowly limited to company-role assignments.
       const developerRoleAdministration =
-        decision.companyId !== context.companyId &&
-        context.role === "Developer" &&
-        isDeveloperCompanyRoleAdministrationRoute(req.method, req.path);
+        otherCompany && context.role === "Developer" && access.crossCompany.has("developer-role-administration");
       if (crossCompanyReference) {
         if (!isPrivilegedRole(context.role)) {
           throw new CompanyAccessError(
@@ -368,7 +428,10 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
     // the route path rather than query/body. Authorize only that explicit
     // company for Developer; the route-level user/location ownership guards
     // still validate the target user, locations, and cash accounts.
-    const userLocationRoute = context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
+    const userLocationRoute =
+      context.role === "Developer" && access.crossCompany.has("developer-user-location")
+        ? classifyUserLocationConfigurationRoute(req.path)
+        : null;
     if (userLocationRoute && userLocationRoute.companyId !== context.companyId) {
       await assertCompaniesAccess(context.userId, [userLocationRoute.companyId]);
       explicitAuthorizedCompanyId = userLocationRoute.companyId;
@@ -379,7 +442,9 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
       await assertCompaniesAccess(context.userId, secondaryCompanyIds);
     }
 
-    const useGlobalAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.method, req.path);
+    // Server-trusted cross-company surfaces stay bounded by the user's own
+    // memberships, never by a client-supplied company ID.
+    const useGlobalAuthorizedCompanyScope = access.crossCompany.has("authorized-companies");
     const useExplicitAuthorizedCompanyScope = explicitAuthorizedCompanyId !== null;
     const useAuthorizedCompanyScope = useGlobalAuthorizedCompanyScope || useExplicitAuthorizedCompanyScope;
     const databaseAuthorizedCompanyIds = useGlobalAuthorizedCompanyScope
@@ -403,76 +468,28 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
         method: req.method,
         path: req.path,
       },
-      () => runWithDatabaseScopeRuntimeContext(databaseScope, () => next())
+      () => runWithDatabaseScopeRuntimeContext(databaseScope, () => proceed(boundContext))
     );
   } catch (error) {
     if (error instanceof CompanyIsolationError) {
       logIsolationDenial(req, context, error.code);
-      return res.status(403).json({ code: error.code, message: error.message });
+      res.status(403).json({ code: error.code, message: error.message });
+      return;
     }
     if (error instanceof ActiveCompanyPermissionContextError) {
-      logIsolationDenial(req, context, error.code);
-      return res.status(error.status).json({ code: error.code, message: error.message });
-    }
-    if (error instanceof CompanyAccessError) {
-      logIsolationDenial(req, context, error.code);
-      return sendCompanyAccessError(res, error);
-    }
-    return next(error);
-  }
-}
-
-/**
- * Express parameter hook for routes that explicitly name `:companyId`.
- * Params are not populated yet when the global app middleware runs, so this
- * closes the remaining path-parameter gap after route matching.
- */
-export async function tenantCompanyParamBoundary(req: Request, res: Response, next: NextFunction, raw: string) {
-  if (!req.session?.userId) return next();
-  if (req.method === "POST" && req.path === "/api/auth/set-company") return next();
-
-  try {
-    const context = await resolveCanonicalContext(req);
-    const companyId = positiveId(raw);
-    if (!companyId) {
-      return res.status(400).json({ code: "COMPANY_ID_INVALID", message: "Invalid companyId in request path." });
-    }
-    // This read-only Admin tool intentionally chooses a *different* company
-    // before starting a migration. The route itself independently checks role
-    // and membership and binds an explicit transaction-local RLS scope.
-    // Keep all other :companyId routes pinned to the active company.
-    if (isAccountMigrationSourceReadPath(req.method, req.path)) {
-      if (context.role !== "Admin" && context.role !== "Developer") {
-        return res.status(403).json({
-          code: "ACCOUNT_MIGRATION_ROLE_REQUIRED",
-          message: "Admin or Developer access required for account migration.",
-        });
+      if (onCompanyUnavailable) {
+        onCompanyUnavailable();
+        return;
       }
-      await assertCompaniesAccess(context.userId, [companyId]);
-      return next();
-    }
-    const userLocationRoute = context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
-    if (userLocationRoute?.companyId === companyId) {
-      await assertCompaniesAccess(context.userId, [companyId]);
-      return next();
-    }
-
-    assertRequestCompanyMatchesSession(
-      { userId: context.userId, role: context.role, companyId: context.companyId },
-      companyId
-    );
-    return next();
-  } catch (error) {
-    if (error instanceof CompanyIsolationError) {
-      logIsolationDenial(req, null, error.code);
-      return res.status(403).json({ code: error.code, message: error.message });
-    }
-    if (error instanceof ActiveCompanyPermissionContextError) {
-      return res.status(error.status).json({ code: error.code, message: error.message });
+      logIsolationDenial(req, context, error.code);
+      res.status(error.status).json({ code: error.code, message: error.message });
+      return;
     }
     if (error instanceof CompanyAccessError) {
-      return sendCompanyAccessError(res, error);
+      logIsolationDenial(req, context, error.code);
+      sendCompanyAccessError(res, error);
+      return;
     }
-    return next(error);
+    fail(error);
   }
 }

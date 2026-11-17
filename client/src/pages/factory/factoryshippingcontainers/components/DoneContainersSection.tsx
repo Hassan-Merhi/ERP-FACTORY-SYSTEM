@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronDown, ChevronRight, Eye, RotateCcw, Trash2 } from "lucide-react";
 
@@ -53,7 +54,7 @@ export function DoneContainersSection({
 
       {expanded &&
         (done.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-muted-foreground">No done containers yet.</div>
+          <EmptyState title="No done containers yet." className="min-h-0 rounded-none border-0 px-4 py-6" />
         ) : (
           <div>
             <div className="overflow-x-auto">

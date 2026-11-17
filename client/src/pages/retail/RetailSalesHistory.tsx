@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
 import { getJson, money, type Location } from "./retailInventoryTypes";
@@ -277,26 +279,29 @@ export default function RetailSalesHistory() {
             </div>
             <div>
               <Label htmlFor="retail-history-location">Location</Label>
-              <select
-                id="retail-history-location"
-                className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-                value={filters.locationId}
-                onChange={(event) =>
+              <Select
+                value={filters.locationId === "" ? "__all__" : String(filters.locationId)}
+                onValueChange={(v) =>
                   setFilters((current) => ({
                     ...current,
-                    locationId: event.target.value ? Number(event.target.value) : "",
+                    locationId: v !== "__all__" ? Number(v) : "",
                   }))
                 }
               >
-                <option value="">All locations</option>
-                {(locationsQuery.data ?? [])
-                  .filter((location) => location.id > 0)
-                  .map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger id="retail-history-location" className="h-10 w-full px-2 text-sm">
+                  <SelectValue placeholder="All locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All locations</SelectItem>
+                  {(locationsQuery.data ?? [])
+                    .filter((location) => location.id > 0)
+                    .map((location) => (
+                      <SelectItem key={location.id} value={String(location.id)}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <Button onClick={() => setSubmittedFilters({ ...filters })} data-testid="retail-history-search">
@@ -326,10 +331,16 @@ export default function RetailSalesHistory() {
             </CardContent>
           </Card>
         ))}
-        {submittedFilters && !historyQuery.isLoading && !sales.length && (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground lg:col-span-2">
-            No sales match those filters.
-          </div>
+        {historyQuery.isError && !historyQuery.data ? (
+          <ErrorState
+            onAction={() => void historyQuery.refetch()}
+            actionLabel="Try again"
+            className="p-6 lg:col-span-2"
+          />
+        ) : (
+          submittedFilters &&
+          !historyQuery.isLoading &&
+          !sales.length && <EmptyState title="No sales match those filters." className="p-6 lg:col-span-2" />
         )}
       </div>
     </div>

@@ -18,12 +18,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Truck, Package, Filter, ChevronRight, Search, BarChart2 } from "lucide-react";
+import { Plus, Truck, Package, Filter, ChevronRight, BarChart2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface Customer {
   id: number;
@@ -161,7 +163,12 @@ export default function FactoryDispatchBatches() {
   if (filterCustomer && filterCustomer !== "_all") qParams.set("customerId", filterCustomer);
   if (filterStatus && filterStatus !== "_all") qParams.set("status", filterStatus);
 
-  const { data: batches = [], isLoading } = useQuery<BatchRow[]>({
+  const {
+    data: batchesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<BatchRow[]>({
     queryKey: companyQueryKey("/api/factory/dispatch-batches", selectedCompany?.id, filterCustomer, filterStatus),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -173,6 +180,7 @@ export default function FactoryDispatchBatches() {
     refetchInterval: visibleTabInterval(60_000),
     refetchIntervalInBackground: false,
   });
+  const batches = batchesData ?? [];
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
@@ -469,16 +477,13 @@ export default function FactoryDispatchBatches() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs text-muted-foreground">Search</Label>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <Input
-                        className="pl-8 w-52"
-                        placeholder="Batch #, customer, invoice..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        data-testid="input-search-batches"
-                      />
-                    </div>
+                    <SearchField
+                      wrapperClassName="w-52"
+                      placeholder="Batch #, customer, invoice..."
+                      value={search}
+                      onValueChange={setSearch}
+                      data-testid="input-search-batches"
+                    />
                   </div>
                   {(filterCustomer !== "_all" || filterStatus !== "_all" || search) && (
                     <Button
@@ -505,16 +510,21 @@ export default function FactoryDispatchBatches() {
                       <Skeleton key={i} className="h-12 w-full" />
                     ))}
                   </div>
+                ) : isError && !batchesData ? (
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
                 ) : filtered.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <Truck className="w-10 h-10 opacity-40" />
-                    <p className="text-sm">No dispatch batches found</p>
-                    {canCreateBatch && (
-                      <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="w-4 h-4 mr-1" /> Create first batch
-                      </Button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Truck}
+                    title="No dispatch batches found"
+                    className="border-0"
+                    action={
+                      canCreateBatch ? (
+                        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                          <Plus className="w-4 h-4 mr-1" /> Create first batch
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <Table mobileLayout="cards">
                     <TableHeader>

@@ -441,10 +441,13 @@ export function useAccountsLegacyModel() {
     accounts: Account[];
     asOfDate: string;
   }>({
-    queryKey: [accountsListUrl, selectedCompany?.id, periodFilter.toDate || null],
+    queryKey: [accountsListUrl, selectedCompany?.id, periodFilter.toDate || null, "book-balance", appMode],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (periodFilter.toDate) params.set("endDate", periodFilter.toDate);
+      // The Accounts page and its statements must reconcile with posted voucher
+      // USD amounts; current-rate FX values belong to the valuation report.
+      if (appMode !== "factory") params.set("balanceBasis", "book");
       const res = await fetch(`${accountsListUrl}?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);

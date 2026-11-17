@@ -1,6 +1,6 @@
+import { SearchField } from "@/components/ui/search-field";
 import {
   Users,
-  Search,
   ChevronDown,
   ChevronRight,
   DollarSign,
@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import {
   Dialog,
   DialogContent,
@@ -237,16 +238,13 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
           {step === 1 ? (
             <>
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <div className="relative flex-1 min-w-52">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by name, code, department..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search-workers"
-                  />
-                </div>
+                <SearchField
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  placeholder="Search by name, code, department..."
+                  wrapperClassName="flex-1 min-w-52"
+                  data-testid="input-search-workers"
+                />
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Label className="text-sm whitespace-nowrap">Payroll Date</Label>
@@ -275,12 +273,11 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
               </div>
 
               {!hasResults ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <Users className="mx-auto h-10 w-10 mb-3 opacity-40" />
-                  <p className="font-medium">
-                    {searchQuery ? "No workers match your search" : "No active workers found"}
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Users}
+                  title={searchQuery ? "No workers match your search" : "No active workers found"}
+                  className="py-20"
+                />
               ) : (
                 <div className="space-y-6">
                   {workerGroups.map((group) =>
@@ -444,11 +441,12 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
               ))}
             </div>
           ) : payrollRuns.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
-              <History className="mx-auto h-10 w-10 mb-3 opacity-40" />
-              <p className="font-medium">No payroll runs yet</p>
-              <p className="text-sm mt-1">Select workers and run a payroll to get started.</p>
-            </div>
+            <EmptyState
+              icon={History}
+              title="No payroll runs yet"
+              description="Select workers and run a payroll to get started."
+              className="py-20"
+            />
           ) : (
             <>
               <div className="border rounded-md overflow-x-auto">

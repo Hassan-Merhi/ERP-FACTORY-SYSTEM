@@ -4,11 +4,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MapPin, RefreshCw, Save, Search, Truck } from "lucide-react";
+import { Loader2, MapPin, RefreshCw, Save, Truck } from "lucide-react";
 
 interface TrackingDefaultSupplier {
   supplierId: number;
@@ -102,7 +104,12 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
   const backfillMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/tracking-defaults/backfill", {});
-      return (await res.json()) as { containersUpdated: number; shopsFilled: number; agentsFilled: number; dutiesFilled: number };
+      return (await res.json()) as {
+        containersUpdated: number;
+        shopsFilled: number;
+        agentsFilled: number;
+        dutiesFilled: number;
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
@@ -120,9 +127,11 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
   const hasChanged = (row: TrackingDefaultSupplier) => {
     const draft = drafts[row.supplierId] ?? toDraft(row);
     const original = toDraft(row);
-    return draft.shopName.trim() !== original.shopName.trim() ||
+    return (
+      draft.shopName.trim() !== original.shopName.trim() ||
       draft.agentName.trim() !== original.agentName.trim() ||
-      draft.dutyFee.trim() !== original.dutyFee.trim();
+      draft.dutyFee.trim() !== original.dutyFee.trim()
+    );
   };
 
   return (
@@ -133,8 +142,8 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
           <h2 className="text-lg font-semibold sm:text-xl">Supplier Tracking Defaults</h2>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Enter a default Shop Name, clearing agent and Duty Fee for each supplier. New containers get these
-          values in Tracking only when the corresponding field is blank; imported or manually entered values are kept.
+          Enter a default Shop Name, clearing agent and Duty Fee for each supplier. New containers get these values in
+          Tracking only when the corresponding field is blank; imported or manually entered values are kept.
         </p>
       </div>
 
@@ -147,27 +156,22 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
                 Mappings are company-specific and do not rewrite existing container history.
               </CardDescription>
             </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search suppliers..."
-                className="pl-9"
-                data-testid="input-search-supplier-tracking-defaults"
-              />
-            </div>
+            <SearchField
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Search suppliers..."
+              wrapperClassName="w-full sm:w-72"
+              data-testid="input-search-supplier-tracking-defaults"
+            />
           </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading supplier mappings…
-            </div>
+            <LoadingState title="Loading supplier mappings…" className="py-8" />
           ) : isError ? (
             <div className="py-8 text-sm text-destructive">Could not load supplier tracking defaults.</div>
           ) : filteredSuppliers.length === 0 ? (
-            <div className="py-8 text-sm text-muted-foreground">No matching suppliers found.</div>
+            <EmptyState title="No matching suppliers found." className="py-8" />
           ) : (
             <div className="space-y-3">
               {filteredSuppliers.map((row) => {

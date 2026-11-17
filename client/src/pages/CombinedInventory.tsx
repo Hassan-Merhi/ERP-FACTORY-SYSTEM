@@ -1,16 +1,17 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Search, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
+import { Layers, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
@@ -112,6 +113,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     data: inventoryPage,
     isLoading: loadingInventory,
     isFetching: isFetchingInventory,
+    isError: isInventoryError,
     refetch: refetchInventory,
   } = useQuery<{ data: InventoryRow[]; total: number; page: number; pageSize: number; totalPages: number }>({
     // Include company ID so each company's data is cached separately and
@@ -477,6 +479,10 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     );
   }
 
+  if (isInventoryError && !inventoryPage) {
+    return <ErrorState onAction={() => void refetchInventory()} actionLabel="Try again" />;
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -560,16 +566,13 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
 
       {/* Filter row */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={isDrillMode ? "Search items in this group..." : "Search stock items..."}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-combined"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder={isDrillMode ? "Search items in this group..." : "Search stock items..."}
+          wrapperClassName="flex-1 min-w-[200px]"
+          data-testid="input-search-combined"
+        />
         {!isDrillMode && (
           <div className="flex gap-1">
             <Button
@@ -647,13 +650,12 @@ function GroupsView({
 }) {
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock groups found</h2>
-        <p className="text-sm text-muted-foreground">Try adjusting your search.</p>
-      </div>
+      <EmptyState
+        icon={Layers}
+        title="No stock groups found"
+        description="Try adjusting your search."
+        className="py-16"
+      />
     );
   }
 
@@ -783,15 +785,7 @@ function ItemsTable({
   );
 
   if (rows.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Layers className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No stock items found</h2>
-        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-      </div>
-    );
+    return <EmptyState icon={Layers} title="No stock items found" description={emptyMessage} className="py-16" />;
   }
 
   return (

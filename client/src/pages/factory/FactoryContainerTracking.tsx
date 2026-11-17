@@ -1,11 +1,12 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ExternalLink, Search, Ship } from "lucide-react";
+import { ExternalLink, Ship } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
+import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface InvoiceContainerRow {
   id: number;
@@ -50,9 +51,15 @@ function InvoiceStatus({ status }: { status: string }) {
 export default function FactoryContainerTracking() {
   const [search, setSearch] = useState("");
 
-  const { data: allRows = [], isLoading } = useQuery<InvoiceContainerRow[]>({
+  const {
+    data: allRowsData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<InvoiceContainerRow[]>({
     queryKey: [LIST_KEY],
   });
+  const allRows = allRowsData ?? [];
 
   const filtered = search.trim()
     ? allRows.filter((r) => {
@@ -63,16 +70,13 @@ export default function FactoryContainerTracking() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search container, customer, invoice…"
-            className="pl-8"
-            data-testid="input-tracking-search"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search container, customer, invoice…"
+          wrapperClassName="flex-1 min-w-[200px] max-w-sm"
+          data-testid="input-tracking-search"
+        />
         <span className="text-xs text-muted-foreground">
           {filtered.length} container{filtered.length !== 1 ? "s" : ""}
         </span>
@@ -84,15 +88,17 @@ export default function FactoryContainerTracking() {
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
+      ) : isError && !allRowsData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-          <Ship className="h-10 w-10 opacity-30" />
-          <p className="text-sm">
-            {allRows.length === 0
+        <EmptyState
+          icon={Ship}
+          title={
+            allRows.length === 0
               ? "No verified or finalized invoices with a container number yet"
-              : "No containers match your search"}
-          </p>
-        </div>
+              : "No containers match your search"
+          }
+        />
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>

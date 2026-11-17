@@ -13,6 +13,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Plus, Building2, Pencil, Users, Wallet, TrendingUp, TrendingDown, EyeOff, Eye, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -110,7 +111,12 @@ function CompanyCustomers() {
     staleTime: 15_000,
   });
 
-  const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
+  const {
+    data: customers = [],
+    isLoading,
+    isError: customersError,
+    refetch: refetchCustomers,
+  } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
     queryKey: erpCompanyDataKey("/api/customers/stats", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
@@ -447,6 +453,12 @@ function CompanyCustomers() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : customersError && customers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4}>
+                  <ErrorState onAction={() => void refetchCustomers()} actionLabel="Try again" className="my-2" />
+                </TableCell>
+              </TableRow>
             ) : filteredCustomers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4}>
@@ -595,13 +607,12 @@ function CompanyCustomers() {
                 let running = openingBalance;
 
                 return sorted.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-center">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium">No transactions</p>
-                    <p className="text-xs text-muted-foreground">No ledger entries found for this customer</p>
-                  </div>
+                  <EmptyState
+                    icon={Building2}
+                    title="No transactions"
+                    description="No ledger entries found for this customer"
+                    className="py-10"
+                  />
                 ) : (
                   <div className="border rounded-xl overflow-hidden">
                     <Table>

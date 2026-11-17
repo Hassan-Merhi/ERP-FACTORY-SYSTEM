@@ -20,11 +20,12 @@ import {
   FilterX,
   MapPin,
   Package,
-  Search,
   ShoppingCart,
   TrendingUp,
   Warehouse,
 } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Option {
   id: number;
@@ -86,8 +87,6 @@ function exportCsv(rows: (string | number)[][]) {
     exportFileName("factory stock query sales", "csv")
   );
 }
-const baseSelect =
-  "h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 const cell = "whitespace-nowrap px-3 py-2.5 text-sm";
 const label = "block mb-1.5 text-xs font-semibold text-muted-foreground";
 
@@ -217,47 +216,67 @@ export default function FactoryStockQueryWorkspace() {
           </label>
           <label>
             <span className={label}>Category</span>
-            <select className={baseSelect} value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All categories</option>
-              {data?.categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select value={category || "__all__"} onValueChange={(v) => setCategory(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All categories</SelectItem>
+                {data?.categories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Location</span>
-            <select className={baseSelect} value={location} onChange={(e) => setLocation(e.target.value)}>
-              <option value="">All locations</option>
-              {data?.locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+            <Select value={location || "__all__"} onValueChange={(v) => setLocation(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Location">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All locations</SelectItem>
+                {data?.locations.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Customer (sales)</span>
-            <select className={baseSelect} value={customer} onChange={(e) => setCustomer(e.target.value)}>
-              <option value="">All customers</option>
-              {data?.customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select value={customer || "__all__"} onValueChange={(v) => setCustomer(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Customer (sales)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All customers</SelectItem>
+                {data?.customers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Container (sales)</span>
-            <select className={baseSelect} value={container} onChange={(e) => setContainer(e.target.value)}>
-              <option value="">All containers</option>
-              {data?.containers.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Select value={container || "__all__"} onValueChange={(v) => setContainer(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Container (sales)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All containers</SelectItem>
+                {data?.containers.map((c) => (
+                  <SelectItem key={c} value={String(c)}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -376,27 +395,24 @@ export default function FactoryStockQueryWorkspace() {
                 <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{products.length} items</span>
               </div>
               <div className="flex flex-wrap items-center gap-2 border-b p-3">
-                <div className="relative min-w-[190px] flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Search item or code..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    data-testid="input-stock-search"
-                  />
-                </div>
-                <select
-                  className={baseSelect + " !w-auto"}
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value)}
-                  aria-label="Sort products"
-                >
-                  <option value="name">Name A–Z</option>
-                  <option value="stock">Most stock</option>
-                  <option value="sold">Most sold</option>
-                  <option value="sales">Highest sales value</option>
-                </select>
+                <SearchField
+                  wrapperClassName="min-w-[190px] flex-1"
+                  placeholder="Search item or code..."
+                  value={search}
+                  onValueChange={setSearch}
+                  data-testid="input-stock-search"
+                />
+                <Select value={sort} onValueChange={setSort}>
+                  <SelectTrigger className="h-10 w-auto rounded-lg shadow-sm" aria-label="Sort products">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Name A–Z</SelectItem>
+                    <SelectItem value="stock">Most stock</SelectItem>
+                    <SelectItem value="sold">Most sold</SelectItem>
+                    <SelectItem value="sales">Highest sales value</SelectItem>
+                  </SelectContent>
+                </Select>
                 <details className="relative">
                   <summary className="cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold">
                     Columns

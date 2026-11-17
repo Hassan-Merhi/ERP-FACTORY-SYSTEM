@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -283,14 +284,13 @@ export default function OptionalVouchers() {
           <p className="text-xs text-muted-foreground">{error?.message}</p>
         </div>
       ) : vouchers.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground"
+        <EmptyState
+          icon={FileText}
+          title="No optional vouchers found"
+          description={hasFilters ? "Try adjusting your filters" : "All vouchers have been finalized"}
+          className="py-20"
           data-testid="text-no-optional-vouchers"
-        >
-          <FileText className="h-10 w-10 opacity-25" />
-          <p className="text-sm font-medium">No optional vouchers found</p>
-          <p className="text-xs">{hasFilters ? "Try adjusting your filters" : "All vouchers have been finalized"}</p>
-        </div>
+        />
       ) : (
         <>
           {/* Desktop table */}

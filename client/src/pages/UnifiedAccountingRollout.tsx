@@ -1,4 +1,5 @@
 /** Phase 15 — release evidence and Owner-governed metadata pilot. */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -358,17 +359,18 @@ export default function UnifiedAccountingRollout() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <Label>Review capacity</Label>
-                <select
-                  className="h-10 w-full rounded-md border bg-background px-2"
-                  value={reviewKind}
-                  onChange={(e) => setReviewKind(e.target.value as Kind)}
-                >
-                  {kinds.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
+                <Select value={reviewKind} onValueChange={(value) => setReviewKind(value as Kind)}>
+                  <SelectTrigger className="h-10 w-full" aria-label="Review capacity">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kinds.map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {k}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="sm:col-span-2">
                 <Label>Evidence reference (CI run, audit or PR)</Label>

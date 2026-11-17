@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   MessageCircle,
@@ -138,10 +139,7 @@ export function AgentDutyWhatsAppSection() {
       {expanded && (
         <div className="border-t p-4 space-y-5">
           {isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading settings…
-            </div>
+            <LoadingState title="Loading settings…" />
           ) : (
             <>
               <div className="flex items-center gap-2 text-sm">

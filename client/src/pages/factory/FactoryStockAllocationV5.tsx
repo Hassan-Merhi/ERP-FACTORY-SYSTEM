@@ -1,10 +1,9 @@
 import { Fragment } from "react";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useLocation } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Loader2,
   RefreshCw,
   AlertTriangle,
   Plus,
@@ -16,7 +15,6 @@ import {
   Link2,
   FileDown,
   RotateCcw,
-  Search,
   Package,
   Boxes,
   Truck,
@@ -26,7 +24,6 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { STATUS_LABELS } from "./factorystockallocationv5/utils";
 import { useFactoryStockAllocationV5Model } from "./factorystockallocationv5/useFactoryStockAllocationV5Model";
@@ -39,6 +36,7 @@ import { FactoryStockAllocationV5Dialog5 } from "./factorystockallocationv5/comp
 import { FactoryStockAllocationV5Dialog6 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog6";
 import { FactoryStockAllocationV5Dialog7 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog7";
 import { FactoryStockAllocationV5Dialog8 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog8";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function FactoryStockAllocationV5() {
   const model = useFactoryStockAllocationV5Model();
@@ -215,26 +213,15 @@ export default function FactoryStockAllocationV5() {
       <div className="mx-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-t-xl border bg-card/70 p-3 shadow-sm sm:mx-5">
         {/* Left: search + category */}
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 xl:w-auto">
-          <div className="relative min-w-[180px] flex-1 xl:flex-none">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search product name or code..."
-              className="h-10 w-full rounded-lg pl-8 text-sm xl:w-[320px]"
-              data-testid="input-v5-search"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm"
-                data-testid="button-v5-clear-search"
-                aria-label="Clear search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            placeholder="Search product name or code..."
+            wrapperClassName="min-w-[180px] flex-1 xl:w-[320px] xl:flex-none"
+            className="h-10 rounded-lg text-sm"
+            data-testid="input-v5-search"
+            clearTestId="button-v5-clear-search"
+          />
 
           {/* Category multi-select */}
           {allCategories.length > 0 && (
@@ -393,9 +380,7 @@ export default function FactoryStockAllocationV5() {
 
       {/* Content */}
       {query.isLoading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState className="m-3 sm:m-4" />
       ) : query.isError ? (
         <div className="p-6 flex flex-col items-center gap-4">
           <p className="text-muted-foreground text-sm">{(query.error as Error)?.message || "Failed to load."}</p>
@@ -406,11 +391,7 @@ export default function FactoryStockAllocationV5() {
         </div>
       ) : rows.length === 0 ? (
         <div className="p-3 sm:p-4">
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              No data found. Create a proforma with containers to use V5 stock allocation.
-            </CardContent>
-          </Card>
+          <EmptyState title="No data found. Create a proforma with containers to use V5 stock allocation." />
         </div>
       ) : (
         <>

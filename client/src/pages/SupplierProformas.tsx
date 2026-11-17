@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -106,7 +107,12 @@ export default function SupplierProformas() {
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: proformas, isLoading } = useQuery<Proforma[]>({
+  const {
+    data: proformas,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Proforma[]>({
     queryKey: ["/api/suppliers", supplierId, "proformas"],
     queryFn: async () => {
       const res = await fetch(`/api/suppliers/${supplierId}/proformas`, { credentials: "include" });
@@ -410,8 +416,12 @@ export default function SupplierProformas() {
               <CardTitle className="text-sm">Proformas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {(!proformas || proformas.length === 0) && (
-                <p className="text-sm text-muted-foreground">No proformas yet. Create one to get started.</p>
+              {isError && !proformas ? (
+                <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
+              ) : (
+                (!proformas || proformas.length === 0) && (
+                  <EmptyState title="No proformas yet. Create one to get started." />
+                )
               )}
               <div className="mb-3">
                 <Select value={filterDestinationId} onValueChange={setFilterDestinationId}>

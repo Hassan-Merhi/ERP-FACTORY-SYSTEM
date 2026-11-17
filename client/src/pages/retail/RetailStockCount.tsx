@@ -9,6 +9,7 @@ import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
@@ -274,20 +275,26 @@ export default function RetailStockCount() {
       <div className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-4 shadow-xs">
         <div className="w-56">
           <Label htmlFor="stock-count-location">Location</Label>
-          <select
-            id="stock-count-location"
-            value={locationId}
-            onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : "")}
-            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-            data-testid="stock-count-location"
+          <Select
+            value={locationId === "" ? "__none__" : String(locationId)}
+            onValueChange={(v) => setLocationId(v !== "__none__" ? Number(v) : "")}
           >
-            <option value="">Select location</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              id="stock-count-location"
+              className="mt-1 h-10 w-full text-sm"
+              data-testid="stock-count-location"
+            >
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select location</SelectItem>
+              {locations.map((location) => (
+                <SelectItem key={location.id} value={String(location.id)}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
           <input

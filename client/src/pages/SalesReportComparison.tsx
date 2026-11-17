@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
@@ -126,6 +127,8 @@ export default function SalesReportComparison() {
     data: rawItems = [],
     isFetching,
     isLoading,
+    isError,
+    refetch,
   } = useQuery<SalesItem[]>({
     queryKey: ["/api/dashboard/sales-report-all", queryString],
     enabled,
@@ -493,9 +496,11 @@ export default function SalesReportComparison() {
             )}
 
             {isLoading ? (
-              <div className="text-center py-16 text-muted-foreground">Loading comparison data…</div>
+              <LoadingState title="Loading comparison data…" className="py-16" />
+            ) : isError && rawItems.length === 0 ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
             ) : tableData.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">No data found for the selected filters</div>
+              <EmptyState title="No data found for the selected filters" className="py-16" />
             ) : (
               <div className="rounded-md border overflow-auto">
                 <Table>

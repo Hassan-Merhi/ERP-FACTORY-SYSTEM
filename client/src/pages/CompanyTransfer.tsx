@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -109,7 +110,12 @@ export default function CompanyTransfer() {
   });
 
   const transferKey = companyKeys.simpleTransfers(fromCompanyId);
-  const { data: transfers = [], isLoading } = useQuery<Transfer[]>({
+  const {
+    data: transfers = [],
+    isLoading,
+    isError: transfersError,
+    refetch: refetchTransfers,
+  } = useQuery<Transfer[]>({
     queryKey: transferKey,
     enabled: !!fromCompanyId,
   });
@@ -430,9 +436,11 @@ export default function CompanyTransfer() {
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
-              <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+              <LoadingState className="m-4" />
+            ) : transfersError && transfers.length === 0 ? (
+              <ErrorState onAction={() => void refetchTransfers()} actionLabel="Try again" className="m-4" />
             ) : transfers.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No transfers yet.</p>
+              <EmptyState title="No transfers yet." className="m-4" />
             ) : (
               <Table>
                 <TableHeader className="sticky top-0 z-30 bg-background">

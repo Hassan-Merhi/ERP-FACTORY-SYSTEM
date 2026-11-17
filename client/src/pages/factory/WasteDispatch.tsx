@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -14,19 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Trash2,
-  Search,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Weight,
-  DollarSign,
-  History,
-  CheckSquare,
-  ScanLine,
-  X,
-} from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, Weight, DollarSign, History, CheckSquare, ScanLine, X } from "lucide-react";
 
 import type {
   Bale,
@@ -38,6 +27,7 @@ import type {
 import { fmt, fmtKg, today } from "./wastedispatch/utils";
 import { WasteDispatchDialogs } from "./wastedispatch/components/WasteDispatchDialogs";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { SearchField } from "@/components/ui/search-field";
 export default function WasteDispatch() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -57,7 +47,7 @@ export default function WasteDispatch() {
   const [deleteDispatchId, setDeleteDispatchId] = useState<number | null>(null);
 
   // ── Dispatch queries ───────────────────────────────────────────
-  const { data, isLoading } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
     queryKey: companyQueryKey("/api/factory/waste-dispatch/bales", selectedCompany?.id, search),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -389,16 +379,14 @@ export default function WasteDispatch() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Filter products..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8 w-48 h-8 text-xs"
-                    data-testid="input-search-bales"
-                  />
-                </div>
+                <SearchField
+                  placeholder="Filter products..."
+                  value={search}
+                  onValueChange={setSearch}
+                  wrapperClassName="w-48"
+                  className="h-8 text-xs"
+                  data-testid="input-search-bales"
+                />
                 {bales.length > 0 && (
                   <Button variant="outline" size="sm" onClick={toggleAll} className="text-xs h-8 px-3">
                     {selected.size === bales.length ? "Deselect All" : "Select All"}
@@ -409,9 +397,9 @@ export default function WasteDispatch() {
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <LoadingState className="rounded-none border-0" />
+            ) : isError && !data ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="rounded-none border-0" />
             ) : productGroups.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Trash2 className="w-10 h-10 mx-auto mb-3 opacity-25" />
@@ -626,7 +614,7 @@ export default function WasteDispatch() {
           </CardHeader>
           <CardContent className="p-0">
             {history.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4">No dispatches yet.</p>
+              <EmptyState title="No dispatches yet." className="rounded-none border-0" />
             ) : (
               <div className="divide-y">
                 {(showAllHistory ? history : history.slice(0, 10)).map((d) => {

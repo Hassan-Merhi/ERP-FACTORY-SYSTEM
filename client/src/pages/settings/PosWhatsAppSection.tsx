@@ -3,11 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -19,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   MessageCircle,
-  Search,
   Check,
   X,
   Loader2,
@@ -209,7 +210,12 @@ export function PosWhatsAppSection() {
     }
   }, [posSettings, credsDirty]);
 
-  const { data: locations = [], isLoading: locLoading } = useQuery<Location[]>({
+  const {
+    data: locations = [],
+    isLoading: locLoading,
+    isError: locError,
+    refetch: refetchLocations,
+  } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
   });
 
@@ -470,12 +476,11 @@ export function PosWhatsAppSection() {
         </p>
 
         {locLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading locations…
-          </div>
+          <LoadingState title="Loading locations…" className="py-8" />
+        ) : locError && locations.length === 0 ? (
+          <ErrorState onAction={() => void refetchLocations()} actionLabel="Try again" className="py-8" />
         ) : locations.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-8">No POS locations found.</p>
+          <EmptyState title="No POS locations found." className="py-8" />
         ) : (
           <div className="space-y-2">
             {locations.map((loc) => {
@@ -558,16 +563,13 @@ export function PosWhatsAppSection() {
           </DialogHeader>
 
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Search groups…"
-                value={chatSearch}
-                onChange={(e) => setChatSearch(e.target.value)}
-                className="pl-8"
-                data-testid="input-chat-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search groups…"
+              value={chatSearch}
+              onValueChange={setChatSearch}
+              wrapperClassName="flex-1"
+              data-testid="input-chat-search"
+            />
             <Button
               size="icon"
               variant="ghost"
