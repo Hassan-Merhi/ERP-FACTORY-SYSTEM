@@ -9125,6 +9125,741 @@
         }
       ],
       "reason": "Schema identifier at :119 is derived only from code constants and the process pid. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "id": "6cf382fdc37033749e0c",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_delete_probe_\" plus process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "807a7429963e90d2381d",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_delete_probe_\" plus process.pid at tests/intercompany-linked-physical-delete-postgres.test.ts:25",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "f75ceb9bbf8c6177b1fd",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "migration",
+          "source": "migration is one of six intercompany migration files (lines 6-12) read with readFileSync from fixed repo paths under migrations/ at tests/intercompany-linked-physical-delete-postgres.test.ts:13",
+          "validation": "Repo-committed migration files named by literal filenames in this test; no caller- or env-supplied path or content."
+        }
+      ],
+      "reason": "Executes repo-committed intercompany migration SQL files, loaded from literal filenames under migrations/, to build the probe schema; no external content. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "7c20bf71cec974a7f0b7",
+      "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "table comes from the literal tuple array at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144 (intercompany_trades, purchase_orders, vouchers, voucher_entries, accounting_posting_requests, containers)",
+          "validation": "Fixed in-file literal table names; iteration is over a hard-coded array, no test input."
+        },
+        {
+          "expression": "where",
+          "source": "where comes from the literal tuple array at tests/intercompany-linked-physical-delete-postgres.test.ts:137-144 (e.g. \"id=1\", \"voucher_id IN (51,52,53,54)\")",
+          "validation": "Fixed in-file literal predicates with numeric constants only; literal only, no test input."
+        }
+      ],
+      "reason": "Count assertion over a hard-coded list of (table, predicate) literal pairs; neither part can carry anything but the in-file constants. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "13d2452a2feab1dce46d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "name comes from the literal expected table-name array at tests/intercompany-phase1-foundation.test.ts:28-38",
+          "validation": "Fixed string literals; the assembled text is only used in expect(MIGRATION).toContain and is never executed as SQL."
+        }
+      ],
+      "reason": "Assembled string is a substring assertion against the migration text, not a query; the table name is an in-file literal. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "732bb87b1761dc8b13de",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "probe built from the constant prefix \"intercompany_phase1_probe_\" plus process.pid at tests/intercompany-phase1-foundation.test.ts:60",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "b9e9fb1df43e85df85e8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "probe",
+          "source": "probe built from the constant prefix \"intercompany_phase1_probe_\" plus process.pid at tests/intercompany-phase1-foundation.test.ts:60",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "93fe56cdfc4f14183bc8",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "savepoint name savepoint built from the literal \"probe_\" plus an in-function integer counter at tests/intercompany-phase1-foundation.test.ts:88",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "61032fce13b2bcc3b34d",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "statement parameter of the local rejects helper; every caller at tests/intercompany-phase1-foundation.test.ts:105-230 passes a string literal or literals concatenated with the in-file constant hash (\"a\".repeat(64), line 149)",
+          "validation": "All call sites are hard-coded SQL literals (or literal + in-file constant strings); no runtime, env or external data is concatenated."
+        }
+      ],
+      "reason": "Executes negative-test statements passed to the local rejects helper; every caller passes hard-coded SQL literals defined in this test file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "f8d3f1d89e37322cab2b",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "savepoint name savepoint built from the literal \"probe_\" plus an in-function integer counter at tests/intercompany-phase1-foundation.test.ts:88",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "39f706b243bdc5de480f",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "savepoint",
+          "source": "savepoint name savepoint built from the literal \"probe_\" plus an in-function integer counter at tests/intercompany-phase1-foundation.test.ts:88",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "9f21029ad4c70ca1d946",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "hash",
+          "source": "hash is \"a\".repeat(64) assigned at tests/intercompany-phase1-foundation.test.ts:149",
+          "validation": "Constant 64-character string of the letter a; literal only, no quote characters possible."
+        }
+      ],
+      "reason": "Duplicate-batch negative test splices a constant 64x'a' hash into a quoted literal; the value is a compile-time constant. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "b5a62e35eae6f121cf97",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "inline expression \"b\".repeat(64) at tests/intercompany-phase1-foundation.test.ts:214",
+          "validation": "Constant 64-character string of the letter b; literal only, cannot contain a quote."
+        }
+      ],
+      "reason": "Fixture insert splices a constant 64x'b' fingerprint into a quoted literal; value is fixed in source. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "1ae215aaf4e7cadc8927",
+      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"c\".repeat(64)",
+          "source": "inline expression \"c\".repeat(64) at tests/intercompany-phase1-foundation.test.ts:219",
+          "validation": "Constant 64-character string of the letter c; literal only, cannot contain a quote."
+        }
+      ],
+      "reason": "Fixture insert splices a constant 64x'c' evidence fingerprint into a quoted literal; value is fixed in source. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "7c934988134a0d36bbd6",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"intercompany_phase2_probe_\" plus process.pid at tests/intercompany-phase2-database-guards.test.ts:17",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "1c87d68b7f915972fe18",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"intercompany_phase2_probe_\" plus process.pid at tests/intercompany-phase2-database-guards.test.ts:17",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "758cbd7f636b0315af84",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "savepoint name marker built from the literal \"phase2_savepoint_\" plus an in-function integer counter at tests/intercompany-phase2-database-guards.test.ts:53",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "e23dafa56e9602dc37c3",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "statement",
+          "source": "statement parameter of the local rejects helper; every caller at tests/intercompany-phase2-database-guards.test.ts:68 onward passes a string literal or literals concatenated with in-file constant column lists",
+          "validation": "All call sites are hard-coded SQL literals (or literal + in-file constant strings); no runtime, env or external data is concatenated."
+        }
+      ],
+      "reason": "Executes negative-test statements passed to the local rejects helper; every caller passes hard-coded SQL literals defined in this test file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "337f5b630bb126102a97",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "savepoint name marker built from the literal \"phase2_savepoint_\" plus an in-function integer counter at tests/intercompany-phase2-database-guards.test.ts:53",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "16847fb1c0529156be11",
+      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "marker",
+          "source": "savepoint name marker built from the literal \"phase2_savepoint_\" plus an in-function integer counter at tests/intercompany-phase2-database-guards.test.ts:53",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "ff6f08eeb000acf8f69b",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "name",
+          "source": "name comes from the literal [table, name] array at tests/intercompany-phase3-database-guards.test.ts:22-28",
+          "validation": "Fixed string literals; the assembled text is only used in expect(scripts[2]).toContain and never executed as SQL."
+        }
+      ],
+      "reason": "Assembled string is a substring assertion against the phase 3 migration text, not a query; the table name is an in-file literal. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "24e3a253fabf255210e6",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase3_probe_\" plus process.pid at tests/intercompany-phase3-database-guards.test.ts:45",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "97ed3c75a344bb1f2efe",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase3_probe_\" plus process.pid at tests/intercompany-phase3-database-guards.test.ts:45",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "b6a9a27a41e4834034ac",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "script is one of three intercompany phase 1-3 migration files (lines 14-18) read with readFileSync from fixed repo paths under migrations/ at tests/intercompany-phase3-database-guards.test.ts:18",
+          "validation": "Repo-committed migration files named by literal filenames in this test; no caller- or env-supplied path or content."
+        }
+      ],
+      "reason": "Executes repo-committed intercompany migration SQL files, loaded from literal filenames under migrations/, to build the probe schema; no external content. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "d60d758b73b75b085d21",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_save_\" plus an in-function integer counter at tests/intercompany-phase3-database-guards.test.ts:98",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "fce9b70a8bab02ac06e7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "query parameter of the local rejects helper; every caller at tests/intercompany-phase3-database-guards.test.ts:113 onward passes a string literal or literals concatenated with in-file constant column lists",
+          "validation": "All call sites are hard-coded SQL literals (or literal + in-file constant strings); no runtime, env or external data is concatenated."
+        }
+      ],
+      "reason": "Executes negative-test statements passed to the local rejects helper; every caller passes hard-coded SQL literals defined in this test file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "9bb2fb27535ae779fae3",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_save_\" plus an in-function integer counter at tests/intercompany-phase3-database-guards.test.ts:98",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "29dc810057bf8c93f4b7",
+      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_save_\" plus an in-function integer counter at tests/intercompany-phase3-database-guards.test.ts:98",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "d6717b869f725c7834fb",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase4_probe_\" plus process.pid at tests/intercompany-phase4-database-guards.test.ts:36",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "8f9b31877b712e1aab53",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase4_probe_\" plus process.pid at tests/intercompany-phase4-database-guards.test.ts:36",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "6da1f31b793064c95ad5",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "script",
+          "source": "script is one of four intercompany phase 1-4 migration files (lines 8-16) read with readFileSync from fixed repo paths under migrations/ at tests/intercompany-phase4-database-guards.test.ts:15",
+          "validation": "Repo-committed migration files named by literal filenames in this test; no caller- or env-supplied path or content."
+        }
+      ],
+      "reason": "Executes repo-committed intercompany migration SQL files, loaded from literal filenames under migrations/, to build the probe schema; no external content. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "043cf3b671066c9190f1",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "\"a\".repeat(64)",
+          "source": "inline expression \"a\".repeat(64) at tests/intercompany-phase4-database-guards.test.ts:93",
+          "validation": "Constant 64-character string of the letter a; literal only, cannot contain a quote."
+        },
+        {
+          "expression": "\"b\".repeat(64)",
+          "source": "inline expression \"b\".repeat(64) at tests/intercompany-phase4-database-guards.test.ts:95",
+          "validation": "Constant 64-character string of the letter b; literal only, cannot contain a quote."
+        }
+      ],
+      "reason": "Import-batch fixture splices two constant 64-character hashes into quoted literals; values are fixed in source. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "2aa2fb161e0c797620f0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_payment_probe_\" plus an in-function integer counter at tests/intercompany-phase4-database-guards.test.ts:103",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "a7e5b80cf4f5aa7b89d2",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "query parameter of the local rejects helper; every caller at tests/intercompany-phase4-database-guards.test.ts:122 onward passes a string literal or literals concatenated with in-file constant column lists",
+          "validation": "All call sites are hard-coded SQL literals (or literal + in-file constant strings); no runtime, env or external data is concatenated."
+        }
+      ],
+      "reason": "Executes negative-test statements passed to the local rejects helper; every caller passes hard-coded SQL literals defined in this test file. Column/value lists paymentColumns and goodValues are literal constants at lines 118-121. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "7e123d0e02edf9d6dbe0",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_payment_probe_\" plus an in-function integer counter at tests/intercompany-phase4-database-guards.test.ts:103",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "3da2b963e8c3bb26d9ce",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"ic_payment_probe_\" plus an in-function integer counter at tests/intercompany-phase4-database-guards.test.ts:103",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "94ca47b3c5e0d83a9971",
+      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "paymentColumns.slice(1)",
+          "source": "paymentColumns is a string literal column list assigned at tests/intercompany-phase4-database-guards.test.ts:118-119",
+          "validation": "Hard-coded column list; slice(1) only drops the leading parenthesis. Literal only, no test input."
+        },
+        {
+          "expression": "goodValues.slice(1)",
+          "source": "goodValues is a string literal VALUES tuple assigned at tests/intercompany-phase4-database-guards.test.ts:120-121",
+          "validation": "Hard-coded constant values tuple; slice(1) only drops the leading parenthesis. Literal only, no test input."
+        }
+      ],
+      "reason": "Pins fixture payment id 1 by reusing the in-file constant column list and values tuple; both are fixed string literals. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "e9ca647bd69b027ad7f8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase5_probe_\" plus process.pid at tests/intercompany-phase5-database-guards.test.ts:44",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "ecf6a9abd0be525824b8",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "schema",
+          "source": "schema built from the constant prefix \"ic_phase5_probe_\" plus process.pid at tests/intercompany-phase5-database-guards.test.ts:44",
+          "validation": "Literal lowercase prefix concatenated with the OS integer process id, so the identifier is always [a-z0-9_]+ and needs no quoting; no test input reaches it."
+        }
+      ],
+      "reason": "Creates/selects a throwaway probe schema whose name is a fixed literal prefix plus the numeric process id, so only [a-z0-9_] characters can reach the DDL. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "4a4cf63194313c345ddc",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "ddl",
+          "source": "ddl is one of five intercompany phase 1-5 migration files (lines 12-18) read with readFileSync from fixed repo paths under migrations/ at tests/intercompany-phase5-database-guards.test.ts:19",
+          "validation": "Repo-committed migration files named by literal filenames in this test; no caller- or env-supplied path or content."
+        }
+      ],
+      "reason": "Executes repo-committed intercompany migration SQL files, loaded from literal filenames under migrations/, to build the probe schema; no external content. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "52c3e3eefe40a4f129cd",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"phase5_reject_\" plus an in-function integer counter at tests/intercompany-phase5-database-guards.test.ts:112",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "cfe35b8434253b721732",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "indirect-query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "query parameter of the local rejects helper; every caller at tests/intercompany-phase5-database-guards.test.ts:153 onward passes a string literal or literals concatenated with in-file constant column lists",
+          "validation": "All call sites are hard-coded SQL literals (or literal + in-file constant strings); no runtime, env or external data is concatenated."
+        }
+      ],
+      "reason": "Executes negative-test statements passed to the local rejects helper; every caller passes hard-coded SQL literals defined in this test file. Column lists cancelColumns and receiveColumns are literal constants at lines 151-152 and 230-231. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "facbb9e4d2e50ad25b60",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"phase5_reject_\" plus an in-function integer counter at tests/intercompany-phase5-database-guards.test.ts:112",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "6a054cac7b7f175c0731",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "rejects",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "save",
+          "source": "savepoint name save built from the literal \"phase5_reject_\" plus an in-function integer counter at tests/intercompany-phase5-database-guards.test.ts:112",
+          "validation": "Literal prefix plus a local incrementing number, always [a-z0-9_]+; literal only, no test input."
+        }
+      ],
+      "reason": "Savepoint identifier is a literal prefix plus a local integer counter inside the rejects helper; no SQL syntax can come from outside the file. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
+    },
+    {
+      "id": "67ff7d686f6952cd8b56",
+      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "receiveColumns.slice(1)",
+          "source": "receiveColumns is a string literal column list assigned at tests/intercompany-phase5-database-guards.test.ts:230-231",
+          "validation": "Hard-coded column list; slice(1) only drops the leading parenthesis. Literal only, no test input."
+        }
+      ],
+      "reason": "Pins fixture receipt id 1 by reusing the in-file constant column list; values are hard-coded literals. Test-only code run by vitest inside a rolled-back transaction in a throwaway probe schema; no HTTP request, file import, env var or external service data reaches this value."
     }
   ]
 }
