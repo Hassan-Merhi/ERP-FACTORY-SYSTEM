@@ -266,6 +266,8 @@ export const applicationEnglishTranslations = {
   "offline.coldStart.banner":
     "Offline: entries that work offline are saved on this laptop and sent when the connection is back",
   "offline.coldStart.until": "Cached data stays viewable until",
+  "export.download.empty": "The server returned an empty export (0 bytes). Please retry or contact support.",
+  "export.download.invalidExcel": "The server returned an invalid Excel file. Please retry or contact support.",
   "offline.coldStart.unlockTitle": "No connection to the cloud or the factory server",
   "offline.coldStart.unlockBody":
     "Enter the offline data passphrase set on this laptop to view the data prepared at your last sign-in. Nothing can be changed until you are connected again.",
