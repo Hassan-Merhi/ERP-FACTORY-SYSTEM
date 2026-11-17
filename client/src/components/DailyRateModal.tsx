@@ -15,7 +15,7 @@ import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateRe
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
-import { canSetDailyExchangeRate } from "@/lib/exchangeRateEditors";
+import { canSetDailyExchangeRate, OPEN_DAILY_RATE_EDITOR_EVENT } from "@/lib/exchangeRateEditors";
 import { queryClient } from "@/lib/queryClient";
 
 const rateFormSchema = z.object({
@@ -75,6 +75,8 @@ function markDoneToday(companyId: number, date: string): void {
 export function DailyRateModal({ companyId }: DailyRateModalProps) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  // Opened from the "change today's rate" button rather than the daily check.
+  const [changeMode, setChangeMode] = useState(false);
   // Every writing user is prompted until someone sets today's rate; the first
   // save applies to the whole company and closes the prompt for everyone.
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
@@ -136,7 +138,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   // successful save).
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!canEditRate || isCheckingRate || !todayRateCheck || !company) return;
+    if (!canEditRate || isCheckingRate || !todayRateCheck || !company || changeMode) return;
 
     const today = todayRateCheck.today;
 
@@ -158,7 +160,25 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       }
       setIsOpen(true);
     }
-  }, [canEditRate, todayRateCheck, isCheckingRate, company, companyId, previousRateValue, form]);
+  }, [canEditRate, todayRateCheck, isCheckingRate, company, companyId, previousRateValue, form, changeMode]);
+
+  // Any writing user may change today's rate after it is set; the latest save
+  // is the company rate for everyone.
+  useEffect(() => {
+    if (!canEditRate) return;
+    const open = () => {
+      form.setValue("rate", previousRateValue ? String(previousRateValue) : "");
+      setChangeMode(true);
+      setIsOpen(true);
+    };
+    window.addEventListener(OPEN_DAILY_RATE_EDITOR_EVENT, open);
+    return () => window.removeEventListener(OPEN_DAILY_RATE_EDITOR_EVENT, open);
+  }, [canEditRate, previousRateValue, form]);
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) setChangeMode(false);
+  };
 
   const createRateMutation = useMutation({
     mutationFn: async (data: RateFormData) => {
@@ -180,10 +200,11 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       // Only mark today's date after an acknowledged successful server save.
       markDoneToday(savedCompanyId, savedDate);
       toast({
-        title: "Today's exchange rate has been set",
-        description: "Current USD valuation views are refreshing.",
+        title: "Today's exchange rate has been saved",
+        description: "It now applies to every user of the company. Current USD valuation views are refreshing.",
       });
       setIsOpen(false);
+      setChangeMode(false);
       await invalidateExchangeRateReadModels(savedCompanyId);
     },
     onError: (error: ClientErrorLike) => {
@@ -223,15 +244,17 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            Set Today's Exchange Rate
+            {changeMode ? "Change Today's Exchange Rate" : "Set Today's Exchange Rate"}
           </DialogTitle>
           <DialogDescription>
-            No exchange rate has been set for today (
+            {changeMode
+              ? "The new rate applies to every user from now on. Sales already posted keep their rate. ("
+              : "No exchange rate has been set for today ("}
             {todayRateCheck?.today
               ? format(new Date(`${todayRateCheck.today}T00:00:00`), "MMM d, yyyy")
               : "business date unavailable"}
@@ -243,11 +266,11 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
           <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
             <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-muted-foreground">
-              Last rate ({previousRateDate}):{" "}
+              {changeMode ? "Current rate" : "Last rate"} ({previousRateDate}):{" "}
               <strong className="text-foreground">
                 1 {company?.baseCurrency} = {previousRateValue.toLocaleString()} {company?.displayCurrency}
               </strong>
-              {" — "}still being used for display
+              {changeMode ? "" : " — still being used for display"}
             </span>
           </div>
         )}
@@ -277,22 +300,34 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
               )}
             />
             <div className="flex gap-2 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleUsePrevious}
-                disabled={createRateMutation.isPending || !todayRateCheck?.today}
-                data-testid="button-skip-rate"
-              >
-                {previousRateValue ? "Use Previous Rate" : "Skip for Now"}
-              </Button>
+              {changeMode ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleOpenChange(false)}
+                  disabled={createRateMutation.isPending}
+                  data-testid="button-cancel-rate-change"
+                >
+                  Cancel
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUsePrevious}
+                  disabled={createRateMutation.isPending || !todayRateCheck?.today}
+                  data-testid="button-skip-rate"
+                >
+                  {previousRateValue ? "Use Previous Rate" : "Skip for Now"}
+                </Button>
+              )}
               <Button
                 type="submit"
                 disabled={createRateMutation.isPending || !todayRateCheck?.today}
                 data-testid="button-save-daily-rate"
               >
                 {createRateMutation.isPending && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
-                Set Today's Rate
+                {changeMode ? "Save Rate" : "Set Today's Rate"}
               </Button>
             </div>
           </form>
