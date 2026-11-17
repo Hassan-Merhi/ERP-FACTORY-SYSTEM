@@ -80,7 +80,12 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
 
-  const { data: containerData, isLoading } = useQuery<ContainerDetailData>({
+  const {
+    data: containerData,
+    isLoading,
+    error: containerError,
+    refetch: retryContainer,
+  } = useQuery<ContainerDetailData>({
     queryKey: [`/api/containers/${containerId}`],
     enabled: !!containerId && !isSupplierPartner,
   });
@@ -688,6 +693,8 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     isDeveloper,
     containerData,
     isLoading,
+    containerError,
+    retryContainer,
     spContainerData,
     spDetailLoading,
     showSpOffloadDialog,
