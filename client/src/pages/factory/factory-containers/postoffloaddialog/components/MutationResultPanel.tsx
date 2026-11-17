@@ -6,6 +6,7 @@
 import { CheckCircle2 } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import type { MutationResult } from "../types";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function MutationResultPanel({ result }: { result: MutationResult }) {
   const oldRate = result.supplierLockedRateBefore || result.supplierLockedRateOldExact;
@@ -55,9 +56,7 @@ export function MutationResultPanel({ result }: { result: MutationResult }) {
             </div>
             <div className="flex justify-between">
               <span>Inventory value applied</span>
-              <span className="font-mono">
-                ${parseFloat(supDelta).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              <span className="font-mono">{formatUsd(parseFloat(supDelta), 2)}</span>
             </div>
             {fraction != null && fraction < 0.9999 && result.fullContainerValueDeltaUsd && (
               <div className="mt-1 text-amber-700 dark:text-amber-400">

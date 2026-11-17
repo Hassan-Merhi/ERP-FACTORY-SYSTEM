@@ -727,6 +727,80 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
   });
 });
 
+describe("deploy release step (npm start)", { skip: pgSkip }, () => {
+  /** A legacy ERP database: the baseline schema without migration history. */
+  async function legacyDatabase() {
+    const db = await createDatabase("deploy");
+    await withClient(db, async (c) => {
+      await c.query("BEGIN");
+      await c.query(loadMigrations()[0].sql);
+      await c.query("COMMIT");
+    });
+    return db;
+  }
+
+  it("adopts a legacy database once, applies every migration, then is a no-op", async () => {
+    const db = await legacyDatabase();
+    await withClient(db, async (c) => {
+      // As production created it: the CHECK in source-SQL form, plus kept legacy data.
+      await c.query("ALTER TABLE account_display_layout DROP CONSTRAINT account_display_layout_node_type_check");
+      await c.query(
+        "ALTER TABLE account_display_layout ADD CONSTRAINT account_display_layout_node_type_check CHECK (node_type IN ('group','ledger'))"
+      );
+      await c.query("CREATE TABLE legacy_archive_deploy (id int PRIMARY KEY)");
+      await c.query("INSERT INTO legacy_archive_deploy VALUES (1)");
+    });
+    // No confirmation variable: the release step supplies its own.
+    const first = runner(["deploy"], { db });
+    assert.equal(first.status, 0, first.out);
+    assert.match(first.out, /adopting it \(one time\)/);
+    assert.match(first.out, /Applied 000[2-9]_/);
+    const verify = runner(["verify"], { db });
+    assert.equal(verify.status, 0, verify.out);
+    await withClient(db, async (c) => {
+      const { rows } = await c.query("SELECT id, mode FROM schema_migrations ORDER BY id");
+      assert.equal(rows[0].mode, "adopted");
+      assert.equal(rows.length, loadMigrations().length);
+      assert.equal((await c.query("SELECT count(*)::int AS n FROM legacy_archive_deploy")).rows[0].n, 1);
+    });
+    const second = runner(["deploy"], { db });
+    assert.equal(second.status, 0, second.out);
+    assert.doesNotMatch(second.out, /adopting/);
+    assert.match(second.out, /up to date; nothing applied/);
+  });
+
+  it("builds an empty database from the migrations", async () => {
+    const db = await createDatabase("deployempty");
+    const result = runner(["deploy"], { db });
+    assert.equal(result.status, 0, result.out);
+    assert.doesNotMatch(result.out, /adopting/);
+    assert.equal(runner(["verify"], { db }).status, 0);
+  });
+
+  it("refuses, changing nothing, when adoption is blocked; the server is then not started", async () => {
+    const db = await legacyDatabase();
+    await withClient(db, (c) =>
+      c.query("ALTER TABLE factory_settings ALTER COLUMN labor_cost_per_kg TYPE numeric(10,8)")
+    );
+    const before = await withClient(db, (c) => takeCatalogSnapshot(c));
+    const result = runner(["deploy"], { db });
+    assert.notEqual(result.status, 0);
+    assert.match(result.out, /Adoption blocked/);
+    assert.deepEqual(await withClient(db, (c) => takeCatalogSnapshot(c)), before);
+  });
+
+  it("can be skipped explicitly", async () => {
+    const db = await legacyDatabase();
+    const result = runner(["deploy"], { db, env: { SKIP_DEPLOY_MIGRATIONS: "1" } });
+    assert.equal(result.status, 0, result.out);
+    assert.match(result.out, /skipped/);
+    await withClient(db, async (c) => {
+      const { rows } = await c.query("SELECT to_regclass('schema_migrations') IS NULL AS absent");
+      assert.equal(rows[0].absent, true);
+    });
+  });
+});
+
 describe("startup schema gate", { skip: pgSkip }, () => {
   it("passes on a migrated database and refuses on a missing, incomplete or behind database", async () => {
     const { verifyStartupSchema, DatabaseSchemaMismatchError } =

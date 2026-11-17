@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -75,9 +76,7 @@ function extractAccounts(payload: AccountsResponse | CashAccount[] | undefined):
 
 function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n)
-    ? `$0.${"0".repeat(dec)}`
-    : `$${n.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+  return isNaN(n) ? `$0.${"0".repeat(dec)}` : formatUsd(n, dec);
 }
 
 function toLocalDateInputValue(date: Date) {

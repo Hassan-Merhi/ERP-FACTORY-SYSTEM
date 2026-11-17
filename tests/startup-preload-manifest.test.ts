@@ -25,8 +25,10 @@ function awaitedImports(file: string): string[] {
 describe("startup preload manifest", () => {
   it("is what production and development start with", () => {
     const scripts = JSON.parse(read("package.json")).scripts as Record<string, string>;
+    // The migration release step runs in its own process first; the server
+    // process itself only verifies the schema.
     expect(scripts.start).toBe(
-      "node --expose-gc --import ./server/startupPreload.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js"
+      "node scripts/db/migrate.mjs deploy && node --expose-gc --import ./server/startupPreload.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js"
     );
     expect(scripts.dev).toContain("--import ./server/startupPreload.mjs ");
     expect(read(".github/workflows/ui-quality.yml")).toContain("--import ./server/startupPreload.mjs");
