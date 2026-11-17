@@ -39,6 +39,7 @@ const legacyWorkflowNames = new Set([
   ".github/workflows/offline-phase8-contract.yml",
   ".github/workflows/offline-phase9-contract.yml",
 ]);
+const approvedServerTests = new Set(JSON.parse(read("config/semantic-filename-exceptions.json")).serverTestPaths);
 const exceptions = [];
 const problems = [];
 const categories = { historical:0, test:0, workflow:0, persistedConfig:0 };
@@ -47,8 +48,7 @@ for (const p of tracked) {
   if (historicalPrefixes.some(prefix=>p.startsWith(prefix))) {
     categories.historical++; exceptions.push({path:p,decision:"historical-preserve"});continue;
   }
-  if ((p.startsWith("server/") && (/\.test\.[cm]?[jt]sx?$/.test(p)||p.includes("/__tests__/"))) ||
-      (p.startsWith("tests/") && /\.test\.[cm]?[jt]sx?$/.test(p))) {
+  if (approvedServerTests.has(p)) {
     categories.test++; exceptions.push({path:p,decision:"server-test-suite-identity"});continue;
   }
   if (legacyWorkflowNames.has(p)) {
@@ -58,6 +58,9 @@ for (const p of tracked) {
     categories.persistedConfig++; exceptions.push({path:p,decision:"deployed-or-frozen-config-path"});continue;
   }
   problems.push({code:"NUMBERED_ACTIVE_FILENAME",path:p});
+}
+for (const expected of approvedServerTests) if (!present.has(expected)) {
+  problems.push({code:"MISSING_BACKEND_TEST_EXCEPTION",path:expected});
 }
 for (const expected of legacyWorkflowNames) if (!present.has(expected)) {
   problems.push({code:"MISSING_WORKFLOW_COMPATIBILITY_NAME",path:expected});
