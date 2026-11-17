@@ -9,8 +9,9 @@ import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTo
 import { EmptyState } from "@/components/ui/page-state";
 
 interface ActiveContainersTableProps {
-  containers: Container[];
-  allContainers: Container[];
+  containers: Array<Container & { linkedParentCompanyName?: string | null }>;
+  allContainers: Array<Container & { linkedParentCompanyName?: string | null }>;
+  propertiesMode?: boolean;
   isLoading: boolean;
   hideContainerCosts: boolean;
   formatDisplayDate: (d: string) => string;
@@ -29,6 +30,7 @@ interface ActiveContainersTableProps {
 export function ActiveContainersTable({
   containers,
   allContainers,
+  propertiesMode = false,
   isLoading,
   hideContainerCosts,
   formatDisplayDate,
@@ -64,7 +66,7 @@ export function ActiveContainersTable({
             : "Try adjusting your search or filters"
         }
         action={
-          allContainers.length === 0 ? (
+          allContainers.length === 0 && !propertiesMode ? (
             <Link href="/po-import">
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
@@ -156,9 +158,15 @@ export function ActiveContainersTable({
                     {container.status}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
-                  {getSupplierName(container.supplierId)}
-                </p>
+                {container.linkedParentCompanyName ? (
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">
+                    Linked to parent company: {container.linkedParentCompanyName}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
+                    {getSupplierName(container.supplierId)}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:gap-4">
@@ -187,7 +195,10 @@ export function ActiveContainersTable({
                   )}
                 </div>
               )}
-              <Link href={`/containers/${container.id}`} className="w-full sm:w-auto">
+              <Link
+                href={`${propertiesMode ? "/properties" : ""}/containers/${container.id}`}
+                className="w-full sm:w-auto"
+              >
                 <Button
                   size="sm"
                   variant="outline"

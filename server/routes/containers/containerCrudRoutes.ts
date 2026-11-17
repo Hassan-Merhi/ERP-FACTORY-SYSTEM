@@ -24,6 +24,8 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireNonSP } from "./containerHelpers";
+import { hasIntercompanyTradesTable } from "../../lib/intercompanyTradeAvailability";
+import { containerDetailVisibilityCondition } from "../../lib/containerDetailVisibilityCondition";
 
 export function registerContainerCrudRoutes(app: Express) {
   app.get("/api/containers", requireAuth, requireNonPOS, async (req, res) => {
@@ -256,13 +258,23 @@ export function registerContainerCrudRoutes(app: Express) {
     try {
       const containerId = parseId(req.params.id);
       if (containerId === null) return res.status(400).json({ message: "Invalid id" });
-      const container = await storage.getContainerByIdForCompany(containerId, req.session.currentCompanyId!);
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // The production ERP may not have the optional intercompany tables.
+      // Build owner-only SQL in that case, without referencing a missing table.
+      const hasTradeTable = await hasIntercompanyTradesTable();
+      const [container] = await db
+        .select()
+        .from(containers)
+        .where(containerDetailVisibilityCondition(containerId, companyId, hasTradeTable))
+        .limit(1);
 
       if (!container) {
         return res.status(404).json({ message: "Container not found" });
       }
 
-      const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
+      const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, companyId);
       const charges = await storage.getChargesByContainer(containerId);
 
       // Get line items for all POs

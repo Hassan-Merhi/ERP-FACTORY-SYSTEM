@@ -5,6 +5,8 @@
  * Supplier Partner feed are stubbed.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 const h = vi.hoisted(() => ({
   accessible: vi.fn(),
@@ -12,6 +14,9 @@ const h = vi.hoisted(() => ({
   nameRows: [] as unknown[],
   selects: 0,
   spCalls: [] as unknown[][],
+  hasTradeTable: true,
+  selections: [] as Array<Record<string, SQL>>,
+  conditions: [] as SQL[],
 }));
 
 vi.mock("../server/security/companyAccessBoundary", async (importOriginal) => ({
@@ -20,18 +25,25 @@ vi.mock("../server/security/companyAccessBoundary", async (importOriginal) => ({
 }));
 vi.mock("../server/db", () => ({
   db: {
-    select: () => {
+    select: (selection: Record<string, SQL>) => {
       h.selects += 1;
+      h.selections.push(selection);
       const chain = {
         from: () => chain,
         leftJoin: () => chain,
-        where: () => chain,
+        where: (condition: SQL) => {
+          h.conditions.push(condition);
+          return chain;
+        },
         orderBy: async () => h.erpRows,
         then: (resolve: (v: unknown) => unknown) => resolve(h.nameRows),
       };
       return chain;
     },
   },
+}));
+vi.mock("../server/lib/intercompanyTradeAvailability", () => ({
+  hasIntercompanyTradesTable: async () => h.hasTradeTable,
 }));
 vi.mock("../server/lib/spGitTracking", () => ({
   fetchSpGitContainers: async (...a: unknown[]) => {
@@ -61,6 +73,9 @@ beforeEach(() => {
   h.nameRows = [];
   h.selects = 0;
   h.spCalls = [];
+  h.hasTradeTable = true;
+  h.selections = [];
+  h.conditions = [];
 });
 
 afterEach(() => {
@@ -318,6 +333,25 @@ describe("database helpers", () => {
     expect(h.selects).toBe(0);
     await fetchActiveContainers([1], { containerId: 5 });
     expect(h.selects).toBe(1);
+  });
+
+  it("does not reference missing intercompany tables when the optional schema is absent", async () => {
+    h.hasTradeTable = false;
+    h.erpRows = [{ id: 5, companyId: 1, containerNumber: "OWN-ONLY" }];
+    const out = await fetchActiveContainers([1], { includeOffloaded: true });
+    expect(out.map((row) => row.containerNumber)).toEqual(["OWN-ONLY", "SP-1"]);
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(h.conditions[0]).sql).not.toContain("intercompany_trades");
+    expect(dialect.sqlToQuery(h.selections[0].linkedDestinationCompanyIds).sql).toContain("ARRAY[]::integer[]");
+    expect(dialect.sqlToQuery(h.selections[0].grandTotal).sql).not.toContain("intercompany_trades");
+  });
+
+  it("keeps destination-linked visibility when the intercompany schema exists", async () => {
+    await fetchActiveContainers([1], { includeOffloaded: true });
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(h.conditions[0]).sql).toContain("intercompany_trades");
+    expect(dialect.sqlToQuery(h.selections[0].linkedDestinationCompanyIds).sql).toContain("intercompany_trades");
+    expect(dialect.sqlToQuery(h.selections[0].grandTotal).sql).toContain("intercompany_trades");
   });
 
   it("maps company ids to names", async () => {

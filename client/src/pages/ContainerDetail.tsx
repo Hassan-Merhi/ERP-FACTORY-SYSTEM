@@ -22,7 +22,7 @@ export default function ContainerDetail({ id: idProp, forceErp }: { id?: string;
     },
     enabled: Boolean(selectedCompany?.id) && !model.isSupplierPartner,
   });
-  const { isSupplierPartner, containerData, isLoading, backUrl } = model;
+  const { isSupplierPartner, containerData, isLoading, containerError, retryContainer, backUrl } = model;
 
   if (isLoading) {
     return (
@@ -38,7 +38,19 @@ export default function ContainerDetail({ id: idProp, forceErp }: { id?: string;
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Package className="w-16 h-16 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Container not found</h2>
+        <h2 className="text-xl font-semibold mb-2">
+          {containerError ? "Unable to load container" : "Container not found"}
+        </h2>
+        {containerError && (
+          <>
+            <p className="text-sm text-muted-foreground mb-4 text-center">
+              The container details request failed. Please retry.
+            </p>
+            <Button variant="outline" className="mb-3" onClick={() => void retryContainer()}>
+              Retry
+            </Button>
+          </>
+        )}
         <Link href={backUrl}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />

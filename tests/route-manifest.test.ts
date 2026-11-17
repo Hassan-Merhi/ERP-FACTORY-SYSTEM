@@ -80,7 +80,11 @@ const reviewedSpMounts: string[] = [];
 // POST /api/vouchers/bulk-delete and POST /api/voucher-entries ahead of their
 // handlers to refuse changes to correction voucher 16303, and calls next() for
 // every other request, so the later registrations stay reachable.
-const MAX_SHADOWED_REGISTRATIONS = 79;
+// Raised from 79 to 80 for the normal Payment/Receipt intercompany auto-mirror:
+// normalIntercompanyVoucherRoutes registers POST /api/vouchers/payment-receipt and
+// PATCH /api/vouchers/:id/payment-receipt ahead of the standard handlers and calls
+// next() unless the voucher touches a linked intercompany account.
+const MAX_SHADOWED_REGISTRATIONS = 80;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

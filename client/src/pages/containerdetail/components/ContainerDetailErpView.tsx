@@ -38,11 +38,16 @@ import { ContainerDetailDialog1 } from "./ContainerDetailDialog1";
 import { ContainerDetailPriceImportDialog } from "./ContainerDetailPriceImportDialog";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
 import { compareItemNamesAZ } from "@/lib/itemNameSort";
+import PropertiesIntercompanyContainerWorkflow from "../PropertiesIntercompanyContainerWorkflow";
+import LinkedDestinationContainerEditor from "../LinkedDestinationContainerEditor";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
   // prettier-ignore
   const { formatDisplayDate, containerId, showOffloadDialog, setShowOffloadDialog, showSellDialog, setShowSellDialog, pendingDelete, setPendingDelete, setLocation, formatAmount, isDeveloper, containerData, suppliers, customers, incomeAccounts, containerSale, docsData, showUploadDialog, setShowUploadDialog, showFreightDialog, setShowFreightDialog, uploadDocTypeId, setUploadDocTypeId, uploadFile, setUploadFile, fileInputRef, setShowPriceImportDialog, setPriceImportPreview, setPriceImportError, uploadDocMutation, freightForm, addFreightMutation, handleExportContainer, handleExportContainerNoCost, backUrl, form, deletePOMutation, deleteContainerMutation, syncVoucherMutation, reverseOffloadMutation, sellContainerMutation, handleDeletePO, handleDeleteContainer, handleSellSubmit, handlePrint, saleCustomer, canChangeExistingRecords, canCreate } = model;
+  // Properties owns the canonical physical container; receiving and sale are
+  // intercompany workflows, not legacy ERP offload/sell/delete actions.
+  const isPropertiesContainer = backUrl.startsWith("/properties");
   // Defensive guard: by this point isSupplierPartner is false (handled above) and the
   // earlier `!containerData && !isSupplierPartner` check already returned if missing,
   // but TS can't infer that across the two branches — this re-confirms it for display only.
@@ -105,7 +110,11 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           <Button
             variant="outline"
             className="gap-2"
-            onClick={() => setLocation(`/offloads/${containerData.offloadId}`)}
+            onClick={() =>
+              setLocation(
+                `${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`
+              )
+            }
             data-testid="button-view-offload"
           >
             <ExternalLink className="w-4 h-4" />
@@ -121,7 +130,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {isDeveloper && canChangeExistingRecords && (
+            {!isPropertiesContainer && isDeveloper && canChangeExistingRecords && (
               <>
                 <DropdownMenuItem
                   onClick={() => syncVoucherMutation.mutate()}
@@ -135,25 +144,29 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               </>
             )}
             <DropdownMenuItem
-              onClick={() => setLocation(`/containers/${containerId}/verification`)}
+              onClick={() =>
+                setLocation(
+                  `${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`
+                )
+              }
               data-testid="button-verify-container"
             >
               <FileText className="w-4 h-4 mr-2" />
               Verify
             </DropdownMenuItem>
-            {!containerSale && canCreate("POST", "/api/container-sales") && (
+            {!isPropertiesContainer && !containerSale && canCreate("POST", "/api/container-sales") && (
               <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
                 <HandCoins className="w-4 h-4 mr-2" />
                 Sell Container
               </DropdownMenuItem>
             )}
-            {canChangeExistingRecords && container.status !== "OFFLOADED" && (
+            {!isPropertiesContainer && canChangeExistingRecords && container.status !== "OFFLOADED" && (
               <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
                 <Truck className="w-4 h-4 mr-2" />
                 Offload Container
               </DropdownMenuItem>
             )}
-            {canChangeExistingRecords && container.status === "OFFLOADED" && (
+            {!isPropertiesContainer && canChangeExistingRecords && container.status === "OFFLOADED" && (
               <>
                 <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
                   <Edit className="w-4 h-4 mr-2" />
@@ -194,8 +207,8 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <Printer className="w-4 h-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
-            {canChangeExistingRecords && <DropdownMenuSeparator />}
-            {canChangeExistingRecords && (
+            {!isPropertiesContainer && canChangeExistingRecords && <DropdownMenuSeparator />}
+            {!isPropertiesContainer && canChangeExistingRecords && (
               <DropdownMenuItem
                 onClick={() => {
                   setPriceImportPreview(null);
@@ -211,7 +224,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {canChangeExistingRecords && (
+        {!isPropertiesContainer && canChangeExistingRecords && (
           <Button
             variant="destructive"
             onClick={handleDeleteContainer}
@@ -225,6 +238,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           </Button>
         )}
       </PageHeader>
+
+      {isPropertiesContainer && <PropertiesIntercompanyContainerWorkflow containerId={container.id} />}
+      {!isPropertiesContainer && <LinkedDestinationContainerEditor containerId={container.id} />}
 
       {containerSale && (
         <Card className="border-green-500">
@@ -332,12 +348,16 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold tabular-nums">{formatAmount(po.itemsTotal)}</span>
-                  {canChangeExistingRecords && (
+                  {!isPropertiesContainer && canChangeExistingRecords && (
                     <>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setLocation(`/purchase-orders/${po.id}/edit`)}
+                        onClick={() =>
+                          setLocation(
+                            `${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`
+                          )
+                        }
                         data-testid={`button-edit-po-${po.id}`}
                       >
                         <Edit className="h-4 w-4" />
@@ -481,13 +501,15 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </div>
       </div>
 
-      <OffloadDialog
-        open={showOffloadDialog}
-        onOpenChange={setShowOffloadDialog}
-        containerId={parseInt(containerId!)}
-        containerNumber={container.containerNumber}
-        totalBales={totalBales}
-      />
+      {!isPropertiesContainer && (
+        <OffloadDialog
+          open={showOffloadDialog}
+          onOpenChange={setShowOffloadDialog}
+          containerId={parseInt(containerId!)}
+          containerNumber={container.containerNumber}
+          totalBales={totalBales}
+        />
+      )}
 
       <Dialog open={showSellDialog} onOpenChange={setShowSellDialog}>
         <DialogContent data-testid="dialog-sell-container">
@@ -654,7 +676,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showFreightDialog} onOpenChange={setShowFreightDialog}>
+      <Dialog open={!isPropertiesContainer && showFreightDialog} onOpenChange={setShowFreightDialog}>
         <DialogContent data-testid="dialog-add-freight">
           <DialogHeader>
             <DialogTitle>Add Freight Charge</DialogTitle>

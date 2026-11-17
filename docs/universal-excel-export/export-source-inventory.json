@@ -1,0 +1,2351 @@
+{
+  "project": "Dakzo Systems Universal Excel Export",
+  "phase": 1,
+  "as_of": "2026-11-13",
+  "repository": "Hassan-Merhi/ERP-FACTORY-SYSTEM",
+  "branch": "feature/universal-excel-export-system",
+  "method": "GitHub indexed code search of main/feature branch plus direct source inspection of representative exporters, importers, tests and previous audits",
+  "limitations": "Search candidates are not a guaranteed exhaustive runtime inventory. Search-hit signals do not establish that a file has a working Excel export; inspect and verify each candidate when migrating. No live database or browser test in phase 1.",
+  "counts": {
+    "unique_non_test_non_i18n_candidates": 225,
+    "strong_code_signal_candidates": 130,
+    "related_only_candidates": 95,
+    "by_area": {
+      "erp": 73,
+      "factory": 104,
+      "finance": 12,
+      "infrastructure": 16,
+      "pos-retail": 19,
+      "properties": 1
+    },
+    "representative_files_read": 45
+  },
+  "queries": [
+    {
+      "query": "XLSX.writeFile",
+      "returned_paths": 24
+    },
+    {
+      "query": "await writeFile",
+      "returned_paths": 100
+    },
+    {
+      "query": "writeWorkbookToResponse",
+      "returned_paths": 7
+    },
+    {
+      "query": "xlsx.writeBuffer",
+      "returned_paths": 80
+    },
+    {
+      "query": "json_to_sheet",
+      "returned_paths": 39
+    },
+    {
+      "query": "new ExcelJS.Workbook",
+      "returned_paths": 100
+    },
+    {
+      "query": "export excel",
+      "returned_paths": 100
+    },
+    {
+      "query": "downloadBlob",
+      "returned_paths": 17
+    },
+    {
+      "query": "exportErpReportRowsExcel",
+      "returned_paths": 5
+    },
+    {
+      "query": "Content-Disposition",
+      "returned_paths": 93
+    },
+    {
+      "query": "text/csv",
+      "returned_paths": 26
+    }
+  ],
+  "directly_inspected_paths": [
+    "client/src/lib/excelHelper.ts",
+    "client/src/erp-core/erpReportExports.ts",
+    "client/src/pages/stockitems/useStockItems.ts",
+    "client/src/pages/stockitems/stockItemsExport.ts",
+    "client/src/pages/containers/useContainerImportExport.ts",
+    "client/src/pages/stockotw/exportStockOtwExcel.ts",
+    "client/src/pages/factory/daybook/factoryDaybookExports.ts",
+    "client/src/pages/factory/monthlyProductionExcelExport.ts",
+    "client/src/pages/factory/monthlyProductionWorkbookDrilldown.ts",
+    "client/src/pages/pos/hooks/usePosInvoiceActions.ts",
+    "client/src/pages/agents/agentStatementExcel.ts",
+    "client/src/pages/factory/FactorySupplierReturns.tsx",
+    "client/src/pages/factory/FinalizedSaleReturnImport.tsx",
+    "client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts",
+    "client/src/pages/factory/finalizedSaleReturnImportFile.ts",
+    "client/src/pages/factory/factorycustomerstatement/statementHelpers.ts",
+    "client/src/pages/factory/factorybalerelabeling/utils.tsx",
+    "client/src/pages/stock-transfer-order/exportStockTransferOrderWorkbook.ts",
+    "client/src/pages/salesreportlegacy/exportExcel.ts",
+    "client/src/pages/factory/productiontargets/productionWeeklyExcel.ts",
+    "server/excelHelper.ts",
+    "server/services/export-excel/sheet-helpers.ts",
+    "server/services/export-excel/workbook.ts",
+    "server/helpers/exportVisibility.ts",
+    "server/exportBufferBridge.mjs",
+    "server/routes/factory/customer-orders/orderExcelExportRoutes.ts",
+    "server/routes/factory/customer-orders/loadingDispatchReportRoutes.ts",
+    "server/routes/factory/customer-orders/loadingDispatchReportWorkbook.ts",
+    "server/routes/factory/customer-orders/loadingDispatchOrderOverviewWorkbook.ts",
+    "server/routes/factory/stock/locationInventoryExportRoutes.ts",
+    "server/routes/factory/bale-exports/monthly-production-excel-details.ts",
+    "server/routes/factory/customers-core/statement-excel.ts",
+    "server/routes/rental/units-contracts/statement-export.ts",
+    "server/routes/git/gitImportRoutes.ts",
+    "server/routes/netProfitExcelRoute.ts",
+    "server/services/spSalesFormExportV2.ts",
+    "server/routes/factory/containers/import-excel.ts",
+    "server/routes/factory/bales/balesImportRoutes.ts",
+    "tests/xlsx-import.test.ts",
+    "tests/excel-export.test.ts",
+    "tests/location-inventory-export-exact.test.ts",
+    "tests/ui/excel-roundtrip-behavior.test.ts",
+    "docs/archive/engineering/phase9-large-export-audit.md",
+    "docs/archive/engineering/phase11-heavy-api-pagination.md",
+    "docs/permissions-control-center-phase6.md"
+  ],
+  "candidate_source_files": [
+    {
+      "path": "client/src/components/CombinedImportDialog.tsx",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/components/erprunpayroll/ERPRunPayrollView.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/components/erprunpayroll/useERPRunPayrollModel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/components/FactoryArabicTranslationActions.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/components/FactoryBilingualDocumentActions.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/components/StockNameUpdateImport.tsx",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/Agents.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/agents/agentStatementExcel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/agents/AgentStatementPanel.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/BaleProducts.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/CombinedInventory.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/containerdetail/useContainerDetailModel.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/ContainerDetailPage.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/Containers.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/containers/containerExcel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/containers/ContainerSpView.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/containers/ContainerToolbar.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/containers/useContainerImportExport.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/import-stock-items/UpdateCategoriesTab.tsx",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/ImportStockItems.tsx",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/ItemMarketAnalysis.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/itemMarketAnalysisExport.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/MixBatches.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/SalesReportLegacy.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/salesreportlegacy/exportExcel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/settings/datatoolstab/components/BulkMergeStockItemsCard.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/settings/datatoolstab/components/LocationCostPriceOverride.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/settings/datatoolstab/useDataToolsModel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/settings/ExportAccountsSection.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/sp/SpReports.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/SpreadsheetEditor.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "downloadBlob"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stock-transfer-order/exportStockTransferOrderWorkbook.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stock-transfer-order/useStockTransferOrderWorkflows.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stockentryhistory/reports.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stockentryhistory/reportsLegacy.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/StockInSalesReport.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/StockInSalesReportDetail.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stockitems/useStockItems.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/stockotw/exportStockOtwExcel.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/SupplierProformas.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/Suppliers.tsx",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "exportErpReportRowsExcel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/UnifiedAccountingDashboard.tsx",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/helpers/temporaryExportArchive.ts",
+      "area": "erp",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/admin/import-export/files.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/chatbot/patches.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/container-loaded-items/reports.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/container-loaded-items/summary.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/containers/containerDocumentsRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/costCenterReportingRoutes.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "text/csv",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/creditSalesImportRoutes.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/employees/erpWorkerDocumentRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/git/gitImportRoutes.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/import/silent-transfer.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/import/templates.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/location/locationInventoryRoutes.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/payroll/core/payment-summary-pdf.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/payroll/core/preview.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/payroll/worker-statement/statement.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/sp/spExportRoutes.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/sp/spFullReconciliationRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/stock/groups-items/lookups.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/stockTransferImportRoutes.ts",
+      "area": "erp",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/supplierProformaRoutes.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/ticketReportingRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/ticketRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/whatsappFastSendRoutes.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/services/scheduler/daily-export.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/services/security/protectedAssetDownloadAdapter.ts",
+      "area": "erp",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/services/sp-sales-form-v2/buildEntrySheet.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/sp-sales-form-v2/buildSummarySheet.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/sp-sales-form/generate.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/spSalesFormExportV2.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/stockTransferNoCostWorkbook.ts",
+      "area": "erp",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/baleproducts/baleOrderSheetExport.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/baleproducts/useBaleProductsModel.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "export excel",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/bale-stock-entry/ImportBalesTab.tsx",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/containerExtraExcel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/DailyScan.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/daybook/factoryDaybookExports.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factory-containers/ContainerDialogs.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factory-location-inventory/dialogs/FinalizeProformaDialog.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factory-suppliers/LinkedSupplierExposure.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factoryattendance/components/AttendanceActionsMenu.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factoryattendance/utils.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factorybalerelabeling/utils.tsx",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factorycontainerloadingscan/loadedBales.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryCustomers.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorycustomerstatement/CustomerStatementExports.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorycustomerstatement/statementHelpers.ts",
+      "area": "factory",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryEmployeeBonusesTab.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryInvoiceDetail.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factoryinvoicedetail/useFactoryInvoiceDetailModel.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryInvoiceDetailBilingual.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryInvoices.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryLoadingDispatchPoExport.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryLoadingDispatchReport.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryLocationInventoryModel.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryLocationInventoryProductView.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryMonthlyProductionMatrix.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "export excel",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factoryotwtrackingtab/hooks/useOtwCsvTools.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorypayrolltab/components/PayrollRunDialogs.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryPendingInvoiceVerify.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorypendinginvoiceverify/useFactoryPendingInvoiceVerifyModel.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryPriceList.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factoryproformas/useFactoryProformasModel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factorysettings/MhdViewManager.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/FactorySheetsAndSacks.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factoryshippingcontainers/components/WhatsAppModal.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorystatusbuilder/components/StatusBuilderToolbar.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryStockAllocationV5.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryStockQueryWorkspace.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactorySupplierReport.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/FactorySupplierReturns.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/factoryworkers/useFactoryWorkersModel.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/FinalizedSaleReturnImport.tsx",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/GroundScan.tsx",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/monthlyProductionExcelExport.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/monthlyProductionWorkbookDrilldown.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/pressing-scanner/pressingReportClient.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/PressingHistoryReport.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/production-raw-stock/mixBatchCostExport.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/production-raw-stock/MixBatchList.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/ProductionComparison.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/productiontargets/productionBonusHistoryExcel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/productiontargets/ProductionBonusHistoryPanel.tsx",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/factory/productiontargets/productionWeeklyExcel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/productiontargets/weeklyBonusPaymentsExcel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/factory/wipersreentry/exportWorkbook.ts",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "export excel",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory-payroll/exports.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory-reports/_helpers.ts",
+      "area": "factory",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory-workers/documents.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory-workers/import-export.ts",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bale-exports/_helpers.ts",
+      "area": "factory",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bale-exports/daily-report.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bale-exports/index.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/bale-exports/monthly-production-excel-details.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/bale-exports/weekly-report.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bales/balesExportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bales/balesImportRoutes.ts",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/bales/balesReimportRoutes.ts",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/bales/balesReportRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/containers/import-excel.ts",
+      "area": "factory",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/loadingDispatchOrderOverviewRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "writeWorkbookToResponse"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/loadingDispatchOrderOverviewWorkbook.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/loadingDispatchPoExportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/loadingDispatchReportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "writeWorkbookToResponse"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/loadingDispatchReportWorkbook.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/orderExcelExportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/pdf-export/loading-status.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/pdf-export/order-pdf.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/customer-orders/pdf-export/pending.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customer-proformas/exports.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customers-core/statement-excel.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/customers-core/statement-pdf.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/docs-users/companyExportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/docs-users/docsRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/factoryArabicTranslationRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/factoryBilingualDocumentRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/factoryFrenchTranslationRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/factoryInsuranceRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/factorySheetsRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/factoryStatusBuilderSheetsRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/fxAgentWalletStatementRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/invoice-loading/invoice-reports.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/invoice-loading/session-reports.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/mix-batches/reads.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/shipping-containers/_helpers.ts",
+      "area": "factory",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/shipping-containers/documents.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "await writeFile"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/shipping-containers/zip-package.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/factory/stock/locationInventoryExportRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/stock/locationInventoryRoutes.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factory/suppliers/broker/statement.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/factoryAttendanceRoutes.ts",
+      "area": "factory",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/services/factoryArabicTranslationWorkbook.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/factoryInvoiceDocumentService.ts",
+      "area": "factory",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/accounts/AccountStatementView.tsx",
+      "area": "finance",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/daybook/exportDaybook.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "exportErpReportRowsExcel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/supplierprofitcheck/useSupplierProfitCheckSafeModel.tsx",
+      "area": "finance",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "downloadBlob"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/vouchers/journalform/useJournalFormModel.tsx",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/vouchers/stock-adjustment-form/useStockAdjustmentFormModel.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/vouchers/stock-transfer-form/PosStockTransferImportDialog.tsx",
+      "area": "finance",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/vouchers/stock-transfer-form/useStockTransferFormModel.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/vouchers/voucherActions.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/accountStatementRoutes.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/netPositionMonthlyExcelRoute.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/netProfitExcelRoute.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/supplier-profit-check/export.ts",
+      "area": "finance",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/erp-core/erpReportExports.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "await writeFile",
+        "downloadBlob",
+        "exportErpReportRowsExcel",
+        "json_to_sheet",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/erp-core/index.ts",
+      "area": "infrastructure",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "exportErpReportRowsExcel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/erp-core/README.md",
+      "area": "infrastructure",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "exportErpReportRowsExcel"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/lib/containerExportEnhancements.ts",
+      "area": "infrastructure",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/lib/downloadBlob.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "downloadBlob"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/lib/excelHelper.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "await writeFile",
+        "downloadBlob",
+        "json_to_sheet",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/lib/excelSync.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/excelHelper.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "writeWorkbookToResponse",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/exportBufferBridge.mjs",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/lib/contentDisposition.ts",
+      "area": "infrastructure",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/lib/excelCellValue.ts",
+      "area": "infrastructure",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/scheduledAttachmentBridge.mjs",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/export-excel/index.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/services/export-excel/sheet-helpers.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/export-excel/summary-sheet.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "new ExcelJS.Workbook"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/services/export-excel/workbook.ts",
+      "area": "infrastructure",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/pos/hooks/usePosInvoiceActions.ts",
+      "area": "pos-retail",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/pos/pos-components/POSHeader.tsx",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/pos/POS.tsx",
+      "area": "pos-retail",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/pos/POSContainerDetail.tsx",
+      "area": "pos-retail",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "downloadBlob",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/pos/pospricelist/usePosPriceListModel.ts",
+      "area": "pos-retail",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "XLSX.writeFile",
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/retail/RetailImportDialog.tsx",
+      "area": "pos-retail",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/retail/RetailSupplierImportPreview.tsx",
+      "area": "pos-retail",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "downloadBlob",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "client/src/pages/retail/retailSupplierImportSpreadsheet.ts",
+      "area": "pos-retail",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "await writeFile",
+        "json_to_sheet"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "client/src/pages/settings/GroupNetPositionPage.tsx",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "export excel"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/helpers/generateAllCompaniesNetPositionExcel.ts",
+      "area": "pos-retail",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/helpers/generateGroupNetPositionExcel.ts",
+      "area": "pos-retail",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/helpers/generateNetPositionExcel.ts",
+      "area": "pos-retail",
+      "kind": "infrastructure",
+      "evidence_signals": [
+        "export excel",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/pos/posPrintRoutes.ts",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/pos/retailStockCountRoutes.ts",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/posImportRoutes.ts",
+      "area": "pos-retail",
+      "kind": "import-or-template-mixed",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/retailCatalogRoutes.ts",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/retailReportingRoutes.ts",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "text/csv"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/stats/groupNetPositionRoutes.ts",
+      "area": "pos-retail",
+      "kind": "caller-or-related-candidate",
+      "evidence_signals": [
+        "Content-Disposition"
+      ],
+      "evidence_level": "search-hit-related-only"
+    },
+    {
+      "path": "server/routes/stats/statsNetPositionRoutes.ts",
+      "area": "pos-retail",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    },
+    {
+      "path": "server/routes/rental/units-contracts/statement-export.ts",
+      "area": "properties",
+      "kind": "exporter-or-builder-candidate",
+      "evidence_signals": [
+        "Content-Disposition",
+        "export excel",
+        "new ExcelJS.Workbook",
+        "xlsx.writeBuffer"
+      ],
+      "evidence_level": "search-hit-writing-or-building-xlsx"
+    }
+  ]
+}
