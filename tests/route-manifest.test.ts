@@ -80,12 +80,9 @@ const reviewedSpMounts: string[] = [];
 // POST /api/vouchers/bulk-delete and POST /api/voucher-entries ahead of their
 // handlers to refuse changes to correction voucher 16303, and calls next() for
 // every other request, so the later registrations stay reachable.
-// Lowered from 79 to 64 by the manifest-driven access layer (the live count was 78): the 14 action-permission
-// prerequisite routes that core/permissionBoundaryRoutes.ts registered ahead of their handlers
-// (POST /api/vouchers, the import and bulk-operation routes) are gone. Their permission keys are
-// now declared on the handlers' own rules in config/route-access-manifest.json and enforced by
-// the access boundary.
-const MAX_SHADOWED_REGISTRATIONS = 64;
+// The manifest-driven access boundary removes 15 shadowed registrations from the original cap of 79.
+// Main also added one Payment/Receipt intercompany auto-mirror registration (79 - 15 + 1 = 65).
+const MAX_SHADOWED_REGISTRATIONS = 65;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

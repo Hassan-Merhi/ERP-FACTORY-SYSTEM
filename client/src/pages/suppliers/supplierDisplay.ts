@@ -26,6 +26,8 @@ export interface SupplierLedgerRow {
   date: string | null;
   companyId: number | null;
   companyName: string;
+  destinationCompanyId?: number | null;
+  destinationCompanyName?: string | null;
   docNumber: string;
   voucherId: number | null;
   description: string;
@@ -54,6 +56,8 @@ export interface SupplierPurchaseOrder {
   containerId: number | null;
   containerNumber: string | null;
   companyName: string;
+  destinationCompanyId?: number | null;
+  destinationCompanyName?: string | null;
   importDate: string | null;
   createdAt: string;
   itemsTotal: number | string | null;

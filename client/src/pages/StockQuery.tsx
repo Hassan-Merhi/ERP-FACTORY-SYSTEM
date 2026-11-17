@@ -45,7 +45,12 @@ export default function StockQuery() {
   const initialQ = new URLSearchParams(search).get("q") || "";
   const [searchTerm, setSearchTerm] = useState(initialQ);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
-  const { page: currentPage, pageSize, onPageChange: setCurrentPage, resetPage } = useErpServerPagination({
+  const {
+    page: currentPage,
+    pageSize,
+    onPageChange: setCurrentPage,
+    resetPage,
+  } = useErpServerPagination({
     companyId: selectedCompany?.id,
     filterKey: debouncedSearch,
     pageSize: 100,
@@ -94,7 +99,13 @@ export default function StockQuery() {
     : (pagedStockItems?.data ?? []).map((p) => ({ id: p.id, code: p.code, name: p.name, active: p.active }));
 
   const handleItemClick = (item: { id: number }) => {
-    navigate(isFactory ? `/factory/stock-query/${item.id}` : `/stock-query/${item.id}`);
+    navigate(
+      isFactory
+        ? `/factory/stock-query/${item.id}`
+        : selectedCompany?.companyType === "properties"
+          ? `/properties/stock-query/${item.id}`
+          : `/stock-query/${item.id}`
+    );
   };
 
   const hasSearch = debouncedSearch.trim().length > 0;
@@ -155,38 +166,41 @@ export default function StockQuery() {
             scrollLabel="Stock query results"
             wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
-              <TableHeader className="sticky top-0 z-30 bg-muted">
-                <TableRow className="h-11 bg-muted/40 border-b">
-                  <TableHead className="text-left px-4 font-medium w-32">Code</TableHead>
-                  <TableHead className="text-left px-4 font-medium">Name</TableHead>
-                  <TableHead className="text-left px-4 font-medium w-24">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => handleItemClick(item)}
-                    data-testid={`row-stock-item-${item.id}`}
+            <TableHeader className="sticky top-0 z-30 bg-muted">
+              <TableRow className="h-11 bg-muted/40 border-b">
+                <TableHead className="text-left px-4 font-medium w-32">Code</TableHead>
+                <TableHead className="text-left px-4 font-medium">Name</TableHead>
+                <TableHead className="text-left px-4 font-medium w-24">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow
+                  key={item.id}
+                  className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => handleItemClick(item)}
+                  data-testid={`row-stock-item-${item.id}`}
+                >
+                  <TableCell
+                    className="px-4 py-3 text-muted-foreground font-mono text-xs"
+                    data-testid={`code-${item.id}`}
                   >
-                    <TableCell className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`code-${item.id}`}>
-                      {item.code}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
-                      <div className="flex items-center gap-2">
-                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        {item.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-3" data-testid={`status-${item.id}`}>
-                      <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
-                        {item.active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
+                    {item.code}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
+                    <div className="flex items-center gap-2">
+                      <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {item.name}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3" data-testid={`status-${item.id}`}>
+                    <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
+                      {item.active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
           </ErpListTable>
 
           {/* Mobile list */}

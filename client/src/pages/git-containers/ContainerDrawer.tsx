@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
+import { EnrichedContainerRow, DrawerForm, seedForm, canEditTrackedContainer } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
 import { gitTrackingPatchUrl } from "./gitTrackingPatchUrl";
 
@@ -37,7 +37,7 @@ export function ContainerDrawer({
   const set = <K extends keyof DrawerForm>(field: K, val: DrawerForm[K]) =>
     setForm((prev) => (prev ? { ...prev, [field]: val } : prev));
 
-  const canEdit = !readOnly && (sessionCompanyId === null || !container || container.companyId === sessionCompanyId);
+  const canEdit = canEditTrackedContainer(container, sessionCompanyId, readOnly);
 
   const maxOffload = (() => {
     if (!form?.borderDate) return null;
