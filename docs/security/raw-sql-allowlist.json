@@ -9332,7 +9332,7 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
-          "expression": "\\\"b\\\".repeat(64)",
+          "expression": "\"b\".repeat(64)",
           "source": "In tests/intercompany-phase1-foundation.test.ts:212, \\\"b\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
           "validation": "Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
         }
@@ -9348,7 +9348,7 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
-          "expression": "\\\"c\\\".repeat(64)",
+          "expression": "\"c\".repeat(64)",
           "source": "In tests/intercompany-phase1-foundation.test.ts:217, \\\"c\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
           "validation": "Review of the immediate test call chain: the interpolation \\\"c\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
         }
@@ -9636,12 +9636,12 @@
       "userControlled": "no",
       "dynamicInputs": [
         {
-          "expression": "\\\"a\\\".repeat(64)",
+          "expression": "\"a\".repeat(64)",
           "source": "In tests/intercompany-phase4-database-guards.test.ts:91, \\\"a\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
           "validation": "Review of the immediate test call chain: the interpolation \\\"a\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
         },
         {
-          "expression": "\\\"b\\\".repeat(64)",
+          "expression": "\"b\".repeat(64)",
           "source": "In tests/intercompany-phase4-database-guards.test.ts:91, \\\"b\\\".repeat(64) comes from a fixed in-test SQL fixture, a repository-committed migration, or a test-local identifier generated from a constant prefix and numeric PID/savepoint index.",
           "validation": "Review of the immediate test call chain: the interpolation \\\"b\\\".repeat(64) is not populated by an HTTP request, import file or stored application field. The test uses fixed migration/SQL sources and rolls back its transaction."
         }
