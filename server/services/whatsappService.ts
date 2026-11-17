@@ -21,7 +21,7 @@ import {
   type WaSettings,
   type WhatsAppSendResult,
 } from "./whatsappServiceGetGreenApiHost";
-import { sendGreenApiFileUpload } from "./sendStockTransferOrderApprovalRequest";
+import { sendGreenApiFileUpload } from "./whatsappServiceApprovalRequest";
 export {
   getActiveRecipients,
   getGreenApiHost,
@@ -44,8 +44,8 @@ export {
   getStrictGreenMainInstanceState,
   getStrictGreenMainWebhookReadiness,
   sendStockTransferOrderApprovalRequest,
-} from "./sendStockTransferOrderApprovalRequest";
-export type { StoWaMainWebhookReadiness } from "./sendStockTransferOrderApprovalRequest";
+} from "./whatsappServiceApprovalRequest";
+export type { StoWaMainWebhookReadiness } from "./whatsappServiceApprovalRequest";
 
 export * from "./whatsappGroupSettings";
 
