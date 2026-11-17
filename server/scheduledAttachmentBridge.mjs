@@ -162,7 +162,6 @@ if (!globalThis[INSTALL_KEY]) {
   const probeWorkbook = new Workbook();
   const xlsxPrototype = Object.getPrototypeOf(probeWorkbook.xlsx);
   const previousWriteBuffer = xlsxPrototype.writeBuffer;
-  const directWrite = xlsxPrototype.write;
 
   if (!previousWriteBuffer[PATCH_KEY]) {
     const scheduledWriteBuffer = async function scheduledAttachmentWriteBuffer(options) {
@@ -172,8 +171,22 @@ if (!globalThis[INSTALL_KEY]) {
       const filePath = path.join(tempRoot, `${Date.now()}-${randomUUID()}.xlsx`);
       const output = createWriteStream(filePath, { flags: "wx" });
       try {
-        const writing = directWrite.call(this, output, options);
-        await Promise.all([writing, finished(output)]);
+        // ExcelJS 3.x write(stream) can throw or produce an empty XLSX.
+        // Serialize with the supported writeBuffer() path, then spill the
+        // verified bytes to the managed attachment file.
+        const serialized = await previousWriteBuffer.call(this, options);
+        const bytes = Buffer.isBuffer(serialized)
+          ? serialized
+          : serialized instanceof Uint8Array
+            ? Buffer.from(serialized.buffer, serialized.byteOffset, serialized.byteLength)
+            : serialized instanceof ArrayBuffer
+              ? Buffer.from(serialized)
+              : null;
+        if (!bytes || bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+          throw new Error("Scheduled workbook serialization returned an empty or invalid XLSX");
+        }
+        output.end(bytes);
+        await finished(output);
         const info = await stat(filePath);
         if (!info.isFile() || info.size <= 0) throw new Error("Scheduled workbook attachment is empty");
         return createFileMarker(filePath, info.size, "scheduled-workbook");
