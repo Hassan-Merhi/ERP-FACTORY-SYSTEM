@@ -409,7 +409,8 @@ export function registerAccountCurrencyRoutes(app: Express) {
         // Loaded on demand: the engine is only needed for a dated bank balance.
         const { getPartyBalance } = await import("../services/accounting/balances/ledgerBalanceEngine");
         const party = await getPartyBalance(db, { companyId, kind: "bank", id, asOf });
-        if (balanceBasis === "book") return res.json({ balance: Number(party?.closing ?? 0), asOf, balanceBasis: "book" });
+        if (balanceBasis === "book")
+          return res.json({ balance: Number(party?.closing ?? 0), asOf, balanceBasis: "book" });
         return res.json({ balance: Number(party?.historicalBaseClosing ?? 0), asOf });
       }
       const bankSummary = await getCashBankAccountSummary(companyId, "bank", id);

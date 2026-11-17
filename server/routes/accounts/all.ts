@@ -33,7 +33,12 @@ import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValu
 import { applyCurrentAccountsFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
 import { isArchivedHadiRentExpenseLedger } from "../../services/rental/hadiRentExpenseConsolidation";
 
-export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0): Promise<unknown> {
+export async function serveAccountListForCompany(
+  req: Request,
+  res: Response,
+  companyId: number,
+  attempt = 0
+): Promise<unknown> {
   try {
     const analyticsProfile = req.query.profile === "analytics";
     // Operational ledgers/statement screens need the posted USD book balance.
@@ -53,8 +58,11 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       analyticsProfile ? Promise.resolve([]) : storage.getAllSuppliers(),
     ]);
     const ledgers = ledgersAll.filter(
-      (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a) &&
-        !isExcludedFromCompany12ManagementReports(companyId, a) && !isArchivedHadiRentExpenseLedger(a)
+      (a) =>
+        !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") &&
+        !isSystemOnlyLedgerAccount(a) &&
+        !isExcludedFromCompany12ManagementReports(companyId, a) &&
+        !isArchivedHadiRentExpenseLedger(a)
     );
     const isFactoryCompany = currentCompany?.companyType === "factory";
     const isPropertiesCompany = currentCompany?.companyType === "properties";
@@ -388,7 +396,12 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     // A Factory-pinned secondary tenant is a separate authorized scope, so
     // this overlay runs only when it matches the active session company.
     let currentUsdAccounts = accounts;
-    if (!bookBalanceRequested && !balStartDate && !effectiveEndDate && Number(req.session?.currentCompanyId) === companyId) {
+    if (
+      !bookBalanceRequested &&
+      !balStartDate &&
+      !effectiveEndDate &&
+      Number(req.session?.currentCompanyId) === companyId
+    ) {
       try {
         const valuation = await getMonetaryFxValuation(companyId);
         currentUsdAccounts = applyCurrentAccountsFxOverlay(accounts, valuation);
@@ -445,7 +458,9 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       return serveAccountListForCompany(req, res, companyId, 1);
     }
     if (!res.headersSent) {
-      res.status(500).json({ message: "Accounts could not be loaded. Please try again.", code: "ACCOUNT_LIST_READ_FAILED" });
+      res
+        .status(500)
+        .json({ message: "Accounts could not be loaded. Please try again.", code: "ACCOUNT_LIST_READ_FAILED" });
     }
   }
 }

@@ -274,14 +274,19 @@ describe("account currency and historical opening behavior", () => {
     );
 
     expect(harness.getPartyBalance).toHaveBeenCalledWith(expect.anything(), {
-      companyId: 9, kind: "ledger", id: 380, asOf: undefined,
+      companyId: 9,
+      kind: "ledger",
+      id: 380,
+      asOf: undefined,
     });
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      balance: 20458,
-      balanceBasis: "book",
-      historicalBaseBalance: "20457.99",
-      currentTranslatedBaseBalance: "17937.16",
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        balance: 20458,
+        balanceBasis: "book",
+        historicalBaseBalance: "20457.99",
+        currentTranslatedBaseBalance: "17937.16",
+      })
+    );
   });
 
   it("rejects an invalid balance basis rather than silently changing the accounting view", async () => {
