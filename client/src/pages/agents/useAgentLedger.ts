@@ -32,7 +32,9 @@ export function useAgentLedger(
   // Factory routes resolve their own pinned company; shared ERP routes follow
   // currentCompanyId, which may differ when another browser tab switches ERP.
   const isFactory = useAppMode() === "factory";
-  const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all";
+  // Agent Ledger is a posted-transaction statement. Use book USD rather than
+  // the current-rate FX display, which cannot reconcile with journal rows.
+  const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all?balanceBasis=book";
   const pinnedUrl = isFactory ? "/api/factory/agents/pinned" : "/api/agent-accounts";
   const statementPrefix = isFactory ? "/api/factory/agents" : "/api/accounts";
 
