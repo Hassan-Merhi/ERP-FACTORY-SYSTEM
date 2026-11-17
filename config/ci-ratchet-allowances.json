@@ -21,7 +21,7 @@
     "client/src/pages/factory/FactoryWorkerAttendanceReport.tsx": 953,
     "client/src/pages/factory/ProductionComparison.tsx": 1061,
     "client/src/pages/factory/WipersReEntry.tsx": 936,
-    "client/src/pages/properties/PropertyRentalPage.tsx": 1225,
+    "client/src/pages/properties/PropertyRentalPage.tsx": 1185,
     "server/middleware/factoryBackendAccessBoundary.ts": 926,
     "server/routes/factory/employee-pos/employeeNetPositionRoutes.ts": 976,
     "server/routes/import/po-import.ts": 994,

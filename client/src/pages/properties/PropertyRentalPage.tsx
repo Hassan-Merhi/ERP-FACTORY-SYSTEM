@@ -19,7 +19,6 @@ import {
   BookCheck,
   MapPin,
   Building2,
-  Store,
   UserRound,
   CalendarDays,
   Pencil,
@@ -35,7 +34,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
-import { useAppMode } from "@/contexts/AppModeContext";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
+import { RENTAL_SECTION_DEFINITIONS, rentalSectionHref, rentalUnitSection } from "@/properties/config/rentalSections";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import "./property-rental/propertiesRentalsPremium.css";
@@ -60,20 +60,12 @@ import {
   PaymentsReconciliation,
   type ReconciliationSnapshot,
 } from "./property-rental/components/PaymentsReconciliation";
-export default function PropertyRentalPage({
-  rentalModule,
-  unitType,
-  pageTitle,
-  pageIcon,
-  testIdPrefix,
-  paymentsLogUrl,
-}: Props) {
+export default function PropertyRentalPage({ rentalModule, unitType, testIdPrefix }: Props) {
   const { selectedCompany } = useCompany();
   const rentalPolicy = getRentalModulePolicy(rentalModule);
   const apiBase = rentalPolicy.apiBase;
   const isPropertiesRental = rentalPolicy.usesPropertiesReconciliation;
   const { toast } = useToast();
-  const appMode = useAppMode();
   const [, navigate] = useLocation();
   const [openUnitId, setOpenUnitId] = useState<number | null>(null);
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
@@ -222,12 +214,11 @@ export default function PropertyRentalPage({
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const currentRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canPostDue = currentRole === "Admin" || currentRole === "Owner" || currentRole === "Developer";
+  const paymentsLogUrl = rentalSectionHref(rentalModule, "payments");
   // Factory Payments Log is an admin page. Do not show a link that the
   // central Factory route guard will immediately reject for other roles.
   const showPaymentsLog = Boolean(
-    paymentsLogUrl &&
-    !isPropertiesRental &&
-    (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
+    !isPropertiesRental && (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
   );
   const postDue = useMutation({
     mutationFn: async () => {
@@ -319,7 +310,6 @@ export default function PropertyRentalPage({
     [units, selectedContractIds]
   );
 
-  const isErp = appMode === "erp" || appMode === "properties";
   const isFactoryShopTable = testIdPrefix === "factory-rental-shops";
   const isPhoneLayout = useErpPhoneLayout();
   // Phones in every mode: cards instead of the twelve-column table, and one primary action plus
@@ -343,9 +333,7 @@ export default function PropertyRentalPage({
           showPaymentsLog && {
             label: "Payments Log",
             icon: ClipboardList,
-            onSelect: () => {
-              if (paymentsLogUrl) navigate(paymentsLogUrl);
-            },
+            onSelect: () => navigate(paymentsLogUrl),
             testId: `button-${testIdPrefix}-payments-log`,
           },
           {
@@ -385,9 +373,7 @@ export default function PropertyRentalPage({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            if (paymentsLogUrl) navigate(paymentsLogUrl);
-          }}
+          onClick={() => navigate(paymentsLogUrl)}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -423,18 +409,27 @@ export default function PropertyRentalPage({
     </>
   );
 
-  // One header contract for every module: the module prefix ("ERP —", "Factory —", "Properties —")
-  // is already carried by the app mode / Properties eyebrow, so every branch shows the same title.
-  const headerTitle = pageTitle.replace(/^(?:ERP|Factory|Properties)\s*[—-]\s*/, "");
+  // One header for every module; the title and icon come from the shared rental sections.
+  const section = RENTAL_SECTION_DEFINITIONS[rentalUnitSection(unitType)];
+  const SectionIcon = section.icon;
   const headerSubtitle = "Click any unit to manage payments, modify rent, post guarantee, or end the contract.";
   const headerActionsForWidth = phoneCards ? phoneHeaderActions : headerActions;
+  const unitsLoadingState = <LoadingState title="Loading units…" />;
+  const unitsEmptyState = (
+    <EmptyState
+      icon={SectionIcon}
+      title={
+        unitType === "WAREHOUSE"
+          ? "No warehouses yet. Add your first unit above."
+          : "No shops yet. Add your first unit above."
+      }
+    />
+  );
 
   return (
     <ApiBaseCtx.Provider value={apiBase}>
       <div
-        className={
-          isPropertiesRental ? "properties-rentals-premium space-y-5" : isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"
-        }
+        className={isPropertiesRental ? "properties-rentals-premium space-y-4" : "space-y-4"}
         data-testid={`page-${testIdPrefix}`}
       >
         {showHistoricalPaid && (
@@ -446,34 +441,13 @@ export default function PropertyRentalPage({
             onReconciliationChange={setHistoryReconciliation}
           />
         )}
-        {isPropertiesRental ? (
-          // The Properties module keeps its hero design (docs/properties-unification-*.md) but
-          // renders the same title, subtitle and actions as the shared PageHeader below.
-          <section
-            className="properties-rentals-hero"
-            aria-label={unitType === "SHOP" ? "Shop rentals overview" : "Warehouse rentals overview"}
-          >
-            <div className="properties-rentals-hero-copy">
-              <span className="properties-rentals-hero-icon" aria-hidden="true">
-                {unitType === "SHOP" ? <Store className="h-7 w-7" /> : <Building2 className="h-7 w-7" />}
-              </span>
-              <div className="properties-rentals-hero-text">
-                <span className="properties-rentals-eyebrow">PROPERTIES</span>
-                <h1 className="properties-rentals-heading" data-testid="text-page-title">
-                  {headerTitle}
-                </h1>
-                <p className="properties-rentals-subheading" data-testid="text-page-subtitle">
-                  {headerSubtitle}
-                </p>
-              </div>
-            </div>
-            <div className="properties-rentals-hero-actions">{headerActionsForWidth}</div>
-          </section>
-        ) : (
-          <PageHeader title={headerTitle} subtitle={headerSubtitle} icon={pageIcon}>
-            {headerActionsForWidth}
-          </PageHeader>
-        )}
+        <PageHeader
+          title={section.title}
+          subtitle={headerSubtitle}
+          icon={<SectionIcon className="h-6 w-6 text-primary" aria-hidden="true" />}
+        >
+          {headerActionsForWidth}
+        </PageHeader>
 
         {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (
           <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
@@ -692,13 +666,9 @@ export default function PropertyRentalPage({
 
         {phoneCards ? (
           isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+            unitsLoadingState
           ) : grouped.length === 0 ? (
-            <div className="rounded-lg border p-8 text-center text-muted-foreground">
-              {unitType === "WAREHOUSE"
-                ? "No warehouses yet. Add your first unit above."
-                : "No shops yet. Add your first unit above."}
-            </div>
+            unitsEmptyState
           ) : (
             <RentalUnitCards
               landlordView={isPropertiesRental}
@@ -727,13 +697,9 @@ export default function PropertyRentalPage({
             <CardContent className={isFactoryShopTable ? "p-2 sm:p-3" : isPropertiesRental ? "p-2 sm:p-4" : "p-0"}>
               <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
-                  <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+                  unitsLoadingState
                 ) : grouped.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    {unitType === "WAREHOUSE"
-                      ? "No warehouses yet. Add your first unit above."
-                      : "No shops yet. Add your first unit above."}
-                  </div>
+                  unitsEmptyState
                 ) : (
                   <table
                     className={
