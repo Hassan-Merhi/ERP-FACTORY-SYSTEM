@@ -568,7 +568,7 @@ export function PosMobileLayout({
             data-testid="button-mobile-checkout"
             pending={Boolean(saveMutation?.isPending)}
             pendingLabel="Saving…"
-            label="Checkout"
+            label={editVoucherId ? "Update Sale" : "Checkout"}
             showIcon={false}
           />
         </div>
