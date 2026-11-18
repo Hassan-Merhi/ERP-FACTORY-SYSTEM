@@ -46,6 +46,8 @@ export interface PosSaleLinesInput {
   exchangeRate?: MoneyInput;
 }
 
+const ZMW_SPLIT_ACCOUNTING_ERROR = "Native Kwacha supplier-partner allocation requires explicit split accounting";
+
 export class PosSaleDeductionError extends Error {
   constructor(deduction: Decimal, total: Decimal) {
     super(
@@ -82,7 +84,7 @@ export function posSaleLines(input: PosSaleLinesInput): ErpVoucherLine[] {
     ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2)
     : null;
   if (exactZmw && input.supplierPartner) {
-    throw new Error("Native Kwacha supplier-partner allocation requires explicit split accounting");
+    throw new Error(ZMW_SPLIT_ACCOUNTING_ERROR);
   }
 
   const line = (target: PosLineTarget, amount: Decimal, debitSide: boolean, narration: string): ErpVoucherLine => {
