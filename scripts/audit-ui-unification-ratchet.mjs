@@ -183,10 +183,6 @@ function openingTag(source, start) {
   return source.slice(start, start + 2000);
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function countComponentStateTabs(source, relativePath, scan) {
   if (!relativePath.startsWith(scan.pagesRoot)) return 0;
   if (!/<Tabs\b/.test(source)) return 0;
@@ -208,7 +204,8 @@ function countComponentStateTabs(source, relativePath, scan) {
     const setter = stateSetters.get(value[1]);
     if (!setter) continue;
     const onChange = tag.match(/\bonValueChange=\{([\s\S]*?)\}\s*(?:\w+=|\/?>)/);
-    if (onChange && new RegExp(`\\b${escapeRegExp(setter)}\\b`).test(onChange[1])) hits += 1;
+    // Setters are plain identifiers, so a whole-word match is a lookup in the handler's word tokens.
+    if (onChange && (onChange[1].match(/\w+/g) ?? []).includes(setter)) hits += 1;
   }
   return hits;
 }
