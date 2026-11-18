@@ -193,3 +193,22 @@ No files in the existing web app (`client/`, `server/`, `shared/`) were changed.
 | Partner Center rejects the package | Make sure `identityName` and `publisher` match exactly what Partner Center shows |
 | App shows "No Connection" screen | The Electron process reached `offline.html` — check internet and server availability |
 | `sharp` install fails | Run `npm install --ignore-scripts` then rebuild: `npx sharp-cli rebuild` |
+
+---
+
+## Offline copy (full offline mode, off by default)
+
+The app can keep a read-only copy of your companies on the PC and open it when
+the internet is down. It is off unless `offline-pc.json` in the app's user-data
+folder contains `{ "enabled": true }`, and the build must include the staged
+server:
+
+```
+npm run build                # repository root
+cd desktop
+npm run stage:offline        # on the same operating system as the build
+npm run build:all            # Windows, or: npm run build:mac
+```
+
+Then use **Offline copy → Connect this PC…** once. Details and limits are in
+`docs/operations/factory-offline-operations-runbook.md` (Full offline mode).

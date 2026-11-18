@@ -5,7 +5,7 @@
  * All network calls are intercepted; real DB is never hit.
  */
 import React from "react";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { renderWithProviders, stubFetch } from "./helpers";
 import { FACTORY_MY_ACCESS_URL, factoryFullAccess } from "./pageMocks";
 
@@ -205,6 +205,63 @@ describe("Settings", () => {
     });
     expect(screen.queryByRole("button", { name: "Preferences" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Appearance & Seasonal" })).not.toBeInTheDocument();
+  });
+
+  it.each(["Admin", "Owner", "User", "POS", "View Only"])(
+    "hides internal Settings pages and empty category headings for %s",
+    async (role) => {
+      const { default: Settings } = await import("@/pages/Settings");
+      renderWithProviders(<Settings />, {
+        seedQueries: [[["/api/auth/me"], { id: "test-user", role, currentRole: role }]],
+      });
+      const nav = screen.getByRole("navigation");
+      for (const name of [
+        "Sessions & Users",
+        "Supplier Defaults",
+        "Scheduled Messages",
+        "Recurring Journals",
+        "Excel Export Appearance",
+        "System Tools",
+      ]) {
+        expect(within(nav).queryByRole("button", { name })).not.toBeInTheDocument();
+      }
+      for (const heading of ["Tracking", "WhatsApp", "Accounting", "POS", "Factory", "System"]) {
+        expect(within(nav).queryByText(heading, { exact: true })).not.toBeInTheDocument();
+      }
+      expect(within(nav).getByRole("button", { name: "Users & Permissions" })).toBeInTheDocument();
+    }
+  );
+
+  it("keeps internal Settings sections and headings visible in Developer mode", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-dev", role: "Developer", currentRole: "Developer" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    for (const name of [
+      "Sessions & Users",
+      "Supplier Defaults",
+      "Scheduled Messages",
+      "Recurring Journals",
+      "Excel Export Appearance",
+      "System Tools",
+    ]) {
+      expect(within(nav).getByRole("button", { name })).toBeInTheDocument();
+    }
+    for (const heading of ["POS", "Factory", "System"]) {
+      expect(within(nav).getByText(heading, { exact: true })).toBeInTheDocument();
+    }
+  });
+
+  it("respects the active company role instead of a Developer base role", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-dev", role: "Developer", currentRole: "Admin" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).queryByRole("button", { name: "Sessions & Users" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "Excel Export Appearance" })).not.toBeInTheDocument();
+    expect(within(nav).queryByText("System", { exact: true })).not.toBeInTheDocument();
   });
 
   it("renders settings shell with non-empty content", async () => {

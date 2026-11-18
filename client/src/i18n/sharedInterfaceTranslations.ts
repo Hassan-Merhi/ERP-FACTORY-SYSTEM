@@ -471,6 +471,10 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Pressing Worker Totals", ar: "إجماليات عمال الكبس", fr: "Totaux des ouvriers de pressage" },
   { en: "Production Overview", ar: "نظرة عامة على الإنتاج", fr: "Aperçu de la production" },
   { en: "Sheets and Sacks Movements", ar: "حركات الأغطية والأكياس", fr: "Mouvements des bâches et sacs" },
+  // Phase 9f: shared rental section titles (properties/config/rentalSections).
+  { en: "Warehouse Rentals", ar: "تأجير المستودعات", fr: "Locations d'entrepôts" },
+  { en: "Shop Rentals", ar: "تأجير المحلات", fr: "Locations de magasins" },
+  { en: "Rental Payments Log", ar: "سجل دفعات الإيجار", fr: "Journal des paiements de location" },
   // Phase 9c: shared Workers / Employees people screens.
   { en: "Add Employee", ar: "إضافة موظف", fr: "Ajouter un employé" },
   { en: "Remove filter", ar: "إزالة عامل التصفية", fr: "Retirer le filtre" },
@@ -532,10 +536,6 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
     ar: "أظهر أو أخفِ الأدوات العائمة التي تظهر في كل صفحة من حسابك.",
     fr: "Affichez ou masquez les outils flottants présents sur chaque page de votre compte.",
   },
-  // Phase 9f: shared rental section titles (properties/config/rentalSections).
-  { en: "Warehouse Rentals", ar: "تأجير المستودعات", fr: "Locations d'entrepôts" },
-  { en: "Shop Rentals", ar: "تأجير المحلات", fr: "Locations de magasins" },
-  { en: "Rental Payments Log", ar: "سجل دفعات الإيجار", fr: "Journal des paiements de location" },
   // Phase 9b: shared Daybook frame (ERP, Factory, POS).
   { en: "Avg per Sale", ar: "متوسط البيع", fr: "Moyenne par vente" },
   { en: "Search factory transactions", ar: "البحث في معاملات المصنع", fr: "Rechercher les transactions de l’usine" },
