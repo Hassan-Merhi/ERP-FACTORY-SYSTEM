@@ -152,6 +152,7 @@ export type PosEditVoucher = {
   description?: string | null;
   voucherDate?: string;
   voucherNumber?: string;
+  isCreditSale?: boolean | null;
   salesItems?: PosEditSalesItem[];
   entries?: PosEditVoucherEntry[];
 };
