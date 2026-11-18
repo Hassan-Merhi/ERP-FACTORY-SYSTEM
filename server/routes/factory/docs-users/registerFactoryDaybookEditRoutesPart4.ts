@@ -1,5 +1,9 @@
 // Extracted from ./daybookEditRoutes.ts to keep that module under the source-size cap.
 import type { Express, Request, Response } from "express";
+import {
+  isProductionBonusVoucher,
+  sendProductionBonusVoucherLocked,
+} from "../../../middleware/productionBonusVoucherBoundary";
 import { getClientDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -104,6 +108,10 @@ export function registerFactoryDaybookEditRoutesPart4(app: Express) {
         });
         return res.json({ success: true, retainedAudit: true, ...result });
       }
+      // Manual production bonuses are reversed from the Production Bonus page,
+      // which records the reversal on the bonus too; a generic void here would
+      // leave the bonus POSTED against a retired voucher.
+      if (await isProductionBonusVoucher(voucherId)) return sendProductionBonusVoucherLocked(res);
       const vNum = voucher.voucherNumber || "";
       const voucherTxTypeMap: Record<string, string> = { Payment: "PAYMENT", Receipt: "RECEIPT", Journal: "JOURNAL" };
       const txTypeVal = voucherTxTypeMap[voucher.voucherType] || "JOURNAL";

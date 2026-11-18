@@ -108,6 +108,7 @@ describe("Golden Coast POS Phase 6 frontend contract", () => {
 
   it("shows accounting blockers without requiring a cutover", () => {
     expect(posSource).toContain("goldenCoastPosBlocked");
+    // The Zambia POS receipt editor (#3323) also holds Save until the receipt being edited has loaded.
     expect(posSource).toContain("disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}");
     expect(readinessAlertSource).toContain('data-testid="golden-coast-pos-readiness-alert"');
     expect(readinessAlertSource).toContain("current inventory cost");
