@@ -168,11 +168,14 @@ export function PaymentReceiptTab({
 
   const isPayment = activeTab === "payment";
   const isFxPayment = isPayment && !!fxWallet && !isEditMode;
-  useEffect(() => {
-    if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
-  }, [isFxPayment, form]);
-  const fxRateValue = Number(fxPaymentRate);
   const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
+  const fxOptionalDraft = directEurPayment && form.watch("optional");
+  // A USD FX draft needs a durable negotiated rate. EUR supplier drafts can use
+  // the wallet's native currency and are finalized through the atomic FX path.
+  useEffect(() => {
+    if (isFxPayment && !directEurPayment && form.getValues("optional")) form.setValue("optional", false);
+  }, [isFxPayment, directEurPayment, form]);
+  const fxRateValue = Number(fxPaymentRate);
   const fxEurRequired =
     isFxPayment && total > 0 ? (directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0) : 0;
   const fxUnsupportedEntries =
@@ -232,15 +235,20 @@ export function PaymentReceiptTab({
     paymentAccountId === 0 ||
     total === 0 ||
     !!fxWalletsLoading ||
+    (isFxPayment && fxUnsupportedEntries) ||
+    (fxOptionalDraft &&
+      (!fxWallet?.synchronized ||
+        Number(fxWallet.state.eur) <= 0 ||
+        Number(fxWallet.state.totalBookUsd) <= 0)) ||
     (isFxPayment &&
+      !fxOptionalDraft &&
       (!fxWallet?.synchronized ||
         fxSupplierBalanceLoading ||
         (!directEurPayment && fxRateValue <= 0) ||
         (directEurPayment &&
           (fxSupplierEurBalance === null || fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
         !Number.isFinite(fxEurRequired) ||
-        fxEurRequired > Number(fxWallet!.state.eur) ||
-        fxUnsupportedEntries));
+        fxEurRequired > Number(fxWallet!.state.eur)));
   // An FX wallet payment pays out in the payout currency, so its total says which one.
   const totalLabel = total > 0 ? (isFxPayment ? `${fxPayoutCurrency} ${total.toFixed(2)}` : formatAmount(total)) : "—";
 
@@ -663,6 +671,13 @@ export function PaymentReceiptTab({
                 </Collapsible>
               </div>
 
+              {fxOptionalDraft && (
+                <p className="text-xs text-muted-foreground px-1" data-testid="text-fx-optional-draft">
+                  Optional EUR draft: no wallet or supplier balance changes now. Finalizing later settles
+                  both balances atomically after validating the live EUR payable.
+                </p>
+              )}
+
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <VoucherActionBar
                 isEditing={!!isEditMode}
@@ -704,8 +719,8 @@ export function PaymentReceiptTab({
                     name="optional"
                     render={({ field }) => (
                       <VoucherOptionalSwitch
-                        checked={isFxPayment ? false : field.value}
-                        disabled={isFxPayment}
+                        checked={isFxPayment && !directEurPayment ? false : field.value}
+                        disabled={isFxPayment && !directEurPayment}
                         onCheckedChange={field.onChange}
                         data-testid="checkbox-optional"
                       />
