@@ -1,23 +1,34 @@
-// Extracted from ./ViewEntryModal.tsx: the voucher-backed entry view.
+// Extracted from ./ViewEntryModal.tsx: the voucher-backed view.
 import { EmptyState } from "@/components/ui/page-state";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
+import type { DaybookEntry } from "./types";
 import { apiNumber } from "./entry-views/types";
 import { formatDaybookDescription } from "./daybookUtils";
-import type { ViewEntryModalProps } from "./ViewEntryModal";
+
 import type { ViewEntryModalModel } from "./ViewEntryModalModel";
 
-export function renderVoucherBackedEntry({
-  entry,
+export function ViewEntryVoucherView({
   m,
+  entry,
   formatDisplayDate,
 }: {
-  entry: ViewEntryModalProps["entry"];
   m: ViewEntryModalModel;
-  formatDisplayDate: ViewEntryModalProps["formatDisplayDate"];
+  entry: DaybookEntry;
+  formatDisplayDate: (d: string) => string;
 }) {
-  // Determine voucher type from txType: PAYMENT → Payment, RECEIPT → Receipt, JOURNAL → Journal
+  const {
+    viewEntries,
+    totalDebit,
+    totalCredit,
+    badgeVariant,
+    badgeClass,
+    displayCurrentBalance,
+    sourceBalance,
+    sym,
+    entryBalances,
+  } = m;
   const voucherType =
     entry.txType === "PAYMENT"
       ? "Payment"
@@ -26,7 +37,6 @@ export function renderVoucherBackedEntry({
         : entry.txType === "JOURNAL"
           ? "Journal"
           : entry.txType;
-
   const isPayment = voucherType === "Payment";
   const isReceipt = voucherType === "Receipt";
   const isJournal = voucherType === "Journal";
@@ -34,24 +44,24 @@ export function renderVoucherBackedEntry({
 
   // Source account: For Payment = credit entry (cash going OUT), For Receipt = debit entry (cash coming IN)
   const sourceEntry = isPayment
-    ? m.viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
+    ? viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
     : isReceipt
-      ? m.viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
+      ? viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
       : null;
 
   // Total = opposite side of source for Payment/Receipt
   const totalAmount = isPayment
-    ? m.viewEntries.reduce((s: number, e) => s + apiNumber(e.debitAmount), 0)
+    ? viewEntries.reduce((s: number, e) => s + apiNumber(e.debitAmount), 0)
     : isReceipt
-      ? m.viewEntries.reduce((s: number, e) => s + apiNumber(e.creditAmount), 0)
-      : Math.max(m.totalDebit, m.totalCredit);
+      ? viewEntries.reduce((s: number, e) => s + apiNumber(e.creditAmount), 0)
+      : Math.max(totalDebit, totalCredit);
 
   // Display entries: Payment = debit side only, Receipt = credit side only, Journal = all
   const displayEntries = isPayment
-    ? m.viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
+    ? viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
     : isReceipt
-      ? m.viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
-      : m.viewEntries;
+      ? viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
+      : viewEntries;
 
   return (
     <>
@@ -68,7 +78,7 @@ export function renderVoucherBackedEntry({
           <div>
             <p className="text-sm text-muted-foreground">Type</p>
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant={m.badgeVariant} className={m.badgeClass}>
+              <Badge variant={badgeVariant} className={badgeClass}>
                 {voucherType}
               </Badge>
               {entry.optional && <span className="text-sm text-muted-foreground">Optional</span>}
@@ -91,13 +101,13 @@ export function renderVoucherBackedEntry({
                   className="text-sm font-mono mt-2 text-muted-foreground"
                   data-testid="factory-voucher-source-balance"
                 >
-                  Current balance: {m.displayCurrentBalance(m.sourceBalance)}
+                  Current balance: {displayCurrentBalance(sourceBalance)}
                 </p>
               </div>
               <div className="sm:text-right">
                 <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
                 <p className="text-xl md:text-2xl font-bold font-mono">
-                  {m.sym} {formatNumber(totalAmount)}
+                  {sym} {formatNumber(totalAmount)}
                 </p>
               </div>
             </div>
@@ -107,7 +117,7 @@ export function renderVoucherBackedEntry({
         {/* Entries table */}
         <div>
           <h3 className="font-semibold mb-3">Entries</h3>
-          {m.viewEntries.length === 0 ? (
+          {viewEntries.length === 0 ? (
             <EmptyState title="No entries found" className="min-h-0 py-4 sm:py-4" />
           ) : (
             <div className="rounded-md border overflow-x-auto">
@@ -143,22 +153,22 @@ export function renderVoucherBackedEntry({
                             className="text-xs text-muted-foreground mt-0.5"
                             data-testid={`factory-voucher-current-balance-${e.id}`}
                           >
-                            Current balance: {m.displayCurrentBalance(m.entryBalances[e.id])}
+                            Current balance: {displayCurrentBalance(entryBalances[e.id])}
                           </p>
                         )}
                       </td>
                       {isPaymentOrReceipt || isJournal ? (
                         <td className="px-3 py-2 text-right font-mono">
-                          {m.sym}
+                          {sym}
                           {formatNumber(Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount)))}
                         </td>
                       ) : (
                         <>
                           <td className="px-3 py-2 text-right font-mono">
-                            {apiNumber(e.debitAmount) > 0 ? `${m.sym}${formatNumber(apiNumber(e.debitAmount))}` : "-"}
+                            {apiNumber(e.debitAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.debitAmount))}` : "-"}
                           </td>
                           <td className="px-3 py-2 text-right font-mono">
-                            {apiNumber(e.creditAmount) > 0 ? `${m.sym}${formatNumber(apiNumber(e.creditAmount))}` : "-"}
+                            {apiNumber(e.creditAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.creditAmount))}` : "-"}
                           </td>
                         </>
                       )}
@@ -170,18 +180,18 @@ export function renderVoucherBackedEntry({
                     <td className="px-3 py-2">Total</td>
                     {isPaymentOrReceipt || isJournal ? (
                       <td className="px-3 py-2 text-right font-mono">
-                        {m.sym}
+                        {sym}
                         {formatNumber(totalAmount)}
                       </td>
                     ) : (
                       <>
                         <td className="px-3 py-2 text-right font-mono">
-                          {m.sym}
-                          {formatNumber(m.totalDebit)}
+                          {sym}
+                          {formatNumber(totalDebit)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
-                          {m.sym}
-                          {formatNumber(m.totalCredit)}
+                          {sym}
+                          {formatNumber(totalCredit)}
                         </td>
                       </>
                     )}

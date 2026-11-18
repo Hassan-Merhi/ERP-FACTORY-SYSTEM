@@ -8,6 +8,7 @@ import {
   fetchFactoryVoucherCurrentBalances,
   type FactoryVoucherCurrentBalances,
 } from "./entry-views/voucherBalances";
+import type { DaybookEntry } from "./types";
 import type {
   ContainerDetail,
   ContainerImportDetail,
@@ -20,10 +21,21 @@ import type {
 } from "./entry-views/types";
 import { apiNumber } from "./entry-views/types";
 import { parseBalesMeta, currencySymbol, getFactoryTxTypeBadge } from "./daybookUtils";
-import type { ViewEntryModalProps } from "./ViewEntryModal";
-import { NO_VIEW_ENTRIES } from "./ViewEntryModal";
 
-export function useViewEntryModalModel({ entry }: { entry: ViewEntryModalProps["entry"] }) {
+// Stable empty default: `= []` is a new array each render while the query is disabled (not voucher-backed),
+// and the balance effect below depends on it and resets state with a new {} — an endless re-render loop.
+const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
+
+export function useViewEntryModalModel({
+  entry,
+}: {
+  entry: {
+    entry: DaybookEntry;
+    onClose: () => void;
+    onNavigate: (path: string) => void;
+    formatDisplayDate: (d: string) => string;
+  }["entry"];
+}) {
   const { selectedCompany } = useCompany();
   const { formatHistoricalBaseAmount: formatCurrentLedgerBalance } = useCurrencyContext();
   const isVoucherBacked = entry.referenceTable === "vouchers" && !!entry.referenceId;
@@ -49,12 +61,9 @@ export function useViewEntryModalModel({ entry }: { entry: ViewEntryModalProps["
   })();
   const metaContainerId: number | undefined = entryMeta.containerId;
 
+  const viewEntriesPath = `/api/vouchers/${entry.referenceId}/view-entries`;
   const { data: rawViewEntries } = useQuery<VoucherViewEntry[] | { entries?: VoucherViewEntry[] }>({
-    queryKey: companyDataKey(
-      `/api/vouchers/${entry.referenceId}/view-entries`,
-      selectedCompany?.id,
-      "factory-daybook-view"
-    ),
+    queryKey: companyDataKey(viewEntriesPath, selectedCompany?.id, "factory-daybook-view"),
     enabled: isVoucherBacked && !!entry.referenceId && !!selectedCompany?.id,
     // A voucher may have been revised since it was last viewed.
     staleTime: 0,
@@ -106,9 +115,8 @@ export function useViewEntryModalModel({ entry }: { entry: ViewEntryModalProps["
     enabled: isOtherCharge && !!entry.referenceId,
   });
 
-  // Current posted account balances, shared with ERP Daybook's book-balance basis.
-  // The company and voucher IDs are part of the query identity so switching
-  // companies or vouchers never displays a balance from another selection.
+  // Current posted account balances, shared with ERP Daybook's book-balance basis. Company and voucher IDs are
+  // in the query identity so switching companies or vouchers never displays a balance from another selection.
   const isBalanceVoucher = FACTORY_BALANCE_VOUCHER_TYPES.has(entry.txType);
   const {
     data: currentBalances,

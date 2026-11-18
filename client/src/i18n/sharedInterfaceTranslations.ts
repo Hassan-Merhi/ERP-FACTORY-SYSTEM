@@ -427,6 +427,10 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Phase 9f: shared rental section titles (properties/config/rentalSections).
+  { en: "Warehouse Rentals", ar: "تأجير المستودعات", fr: "Locations d'entrepôts" },
+  { en: "Shop Rentals", ar: "تأجير المحلات", fr: "Locations de magasins" },
+  { en: "Rental Payments Log", ar: "سجل دفعات الإيجار", fr: "Journal des paiements de location" },
   // Phase 9c: shared Workers / Employees people screens.
   { en: "Add Employee", ar: "إضافة موظف", fr: "Ajouter un employé" },
   { en: "Remove filter", ar: "إزالة عامل التصفية", fr: "Retirer le filtre" },

@@ -9,7 +9,6 @@ import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/di
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry } from "./types";
-import type { VoucherViewEntry } from "./entry-views/types";
 import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
@@ -18,34 +17,60 @@ import { OpenContainerButton } from "./entry-views/OpenContainerButton";
 import { formatDaybookDescription, formatTxType } from "./daybookUtils";
 import { formatUsd } from "@/lib/moneyDisplay";
 import { useViewEntryModalModel } from "./ViewEntryModalModel";
-import { renderVoucherBackedEntry } from "./viewEntryVoucherBacked";
+import { ViewEntryVoucherView } from "./ViewEntryVoucherView";
 
-// Stable empty default: `= []` is a new array each render while the query is
-// disabled (entries that are not voucher-backed), and the balance effect below
-// depends on it and resets state with a new {} — an endless re-render loop.
-export const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
-
-export interface ViewEntryModalProps {
+export function ViewEntryModal({
+  entry,
+  onClose,
+  onNavigate,
+  formatDisplayDate,
+}: {
   entry: DaybookEntry;
   onClose: () => void;
   onNavigate: (path: string) => void;
   formatDisplayDate: (d: string) => string;
-}
-
-export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }: ViewEntryModalProps) {
+}) {
   const m = useViewEntryModalModel({ entry });
+  const {
+    isVoucherBacked,
+    isContainerImport,
+    containerDetail,
+    supplierBalance,
+    isPayrollPayment,
+    payrollSummary,
+    badgeVariant,
+    badgeClass,
+    isMixBatchCreated,
+    mixBatchDetail,
+    mixBatchSources,
+    isLoadingCreated,
+    loadingOrder,
+    isBaleStockEntry,
+    bales,
+    amt,
+    sym,
+    isOffloadRawStock,
+    metaContainerDetail,
+    metaContainerId,
+    isCommission,
+    isWasteDisposal,
+    isOtherCharge,
+    otherChargeContainerDetail,
+    isBaleRemoval,
+    hasBalesMeta,
+  } = m;
 
-  if (m.isVoucherBacked) {
-    return renderVoucherBackedEntry({ entry, m, formatDisplayDate });
+  if (isVoucherBacked) {
+    return <ViewEntryVoucherView m={m} entry={entry} formatDisplayDate={formatDisplayDate} />;
   }
 
   // ── CONTAINER_IMPORT enriched view ──────────────────────────────────────
-  if (m.isContainerImport) {
+  if (isContainerImport) {
     return (
       <ContainerImportView
         entry={entry}
-        containerDetail={m.containerDetail}
-        supplierBalance={m.supplierBalance}
+        containerDetail={containerDetail}
+        supplierBalance={supplierBalance}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
         onNavigate={onNavigate}
@@ -54,52 +79,52 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
   }
 
   // ── PAYROLL_PAYMENT enriched view ────────────────────────────────────────
-  if (m.isPayrollPayment) {
+  if (isPayrollPayment) {
     return (
       <PayrollPaymentView
         entry={entry}
-        payrollSummary={m.payrollSummary}
+        payrollSummary={payrollSummary}
         formatDisplayDate={formatDisplayDate}
-        badgeVariant={m.badgeVariant}
-        badgeClass={m.badgeClass}
+        badgeVariant={badgeVariant}
+        badgeClass={badgeClass}
       />
     );
   }
 
   // ── MIX_BATCH_CREATED / MIX_BATCH_TOPUP enriched view ────────────────────
-  if (m.isMixBatchCreated) {
+  if (isMixBatchCreated) {
     return (
       <MixBatchView
         entry={entry}
-        mixBatchDetail={m.mixBatchDetail}
+        mixBatchDetail={mixBatchDetail}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
-        mixBatchSources={m.mixBatchSources}
+        mixBatchSources={mixBatchSources}
         onNavigate={onNavigate}
       />
     );
   }
 
   // ── LOADING_CREATED enriched view ───────────────────────────────────────
-  if (m.isLoadingCreated) {
+  if (isLoadingCreated) {
     return (
       <LoadingCreatedView
         entry={entry}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
-        loadingOrder={m.loadingOrder}
-        badgeVariant={m.badgeVariant}
-        badgeClass={m.badgeClass}
+        loadingOrder={loadingOrder}
+        badgeVariant={badgeVariant}
+        badgeClass={badgeClass}
         onNavigate={onNavigate}
       />
     );
   }
 
   // ── BALE_STOCK_ENTRY enriched view ────────────────────────────────────────
-  if (m.isBaleStockEntry && m.bales.length > 0) {
-    const totalAmt = m.amt;
-    const amtPerBale = m.bales.length > 0 ? totalAmt / m.bales.length : 0;
-    const groups = m.bales.reduce((acc: Record<string, { count: number; totalAmount: number }>, b) => {
+  if (isBaleStockEntry && bales.length > 0) {
+    const totalAmt = amt;
+    const amtPerBale = bales.length > 0 ? totalAmt / bales.length : 0;
+    const groups = bales.reduce((acc: Record<string, { count: number; totalAmount: number }>, b) => {
       const key = b.productName || b.ref || "Unknown";
       if (!acc[key]) acc[key] = { count: 0, totalAmount: 0 };
       acc[key].count += 1;
@@ -112,7 +137,7 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Bale Stock Entry</DialogTitle>
-            <Badge variant={m.badgeVariant} className={m.badgeClass}>
+            <Badge variant={badgeVariant} className={badgeClass}>
               Bale Stock Entry
             </Badge>
           </div>
@@ -140,7 +165,7 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
                     <td className="px-3 py-2 font-medium">{name}</td>
                     <td className="px-3 py-2 text-right font-mono">{stats.count}</td>
                     <td className="px-3 py-2 text-right font-mono">
-                      {m.sym}
+                      {sym}
                       {formatNumber(stats.totalAmount)}
                     </td>
                   </tr>
@@ -149,9 +174,9 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
               <tfoot>
                 <tr className="bg-muted/50 border-t font-semibold">
                   <td className="px-3 py-2 text-xs">Total</td>
-                  <td className="px-3 py-2 text-right font-mono">{m.bales.length}</td>
+                  <td className="px-3 py-2 text-right font-mono">{bales.length}</td>
                   <td className="px-3 py-2 text-right font-mono">
-                    {m.sym}
+                    {sym}
                     {formatNumber(totalAmt)}
                   </td>
                 </tr>
@@ -164,14 +189,14 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
   }
 
   // ── OFFLOAD_RAW_STOCK enriched view ────────────────────────────────────────
-  if (m.isOffloadRawStock) {
-    const c = m.metaContainerDetail;
+  if (isOffloadRawStock) {
+    const c = metaContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Offload Raw Stock</DialogTitle>
-            <Badge variant={m.badgeVariant} className={m.badgeClass}>
+            <Badge variant={badgeVariant} className={badgeClass}>
               Offload Raw Stock
             </Badge>
           </div>
@@ -179,7 +204,7 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
-            {!c && m.metaContainerId ? (
+            {!c && metaContainerId ? (
               <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -190,15 +215,15 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
                   </p>
                   {c.origin && <p className="text-xs text-muted-foreground">Origin: {c.origin}</p>}
                 </div>
-                <OpenContainerButton containerId={m.metaContainerId} onClose={onClose} onNavigate={onNavigate} />
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {m.sym}
-              {formatNumber(m.amt)}
+              {sym}
+              {formatNumber(amt)}
             </p>
             {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd || "1") !== 1 && (
               <p className="text-xs font-mono text-muted-foreground">
@@ -213,14 +238,14 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
   }
 
   // ── COMMISSION enriched view ───────────────────────────────────────────────
-  if (m.isCommission) {
-    const c = m.metaContainerDetail;
+  if (isCommission) {
+    const c = metaContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Commission</DialogTitle>
-            <Badge variant={m.badgeVariant} className={m.badgeClass}>
+            <Badge variant={badgeVariant} className={badgeClass}>
               Commission
             </Badge>
           </div>
@@ -228,7 +253,7 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
-            {!c && m.metaContainerId ? (
+            {!c && metaContainerId ? (
               <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -236,15 +261,15 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
                   <p className="font-semibold text-base">{c.containerNumber}</p>
                   {c.supplierName && <p className="text-xs text-muted-foreground">Supplier: {c.supplierName}</p>}
                 </div>
-                <OpenContainerButton containerId={m.metaContainerId} onClose={onClose} onNavigate={onNavigate} />
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Commission Amount</p>
             <p className="text-lg font-bold font-mono">
-              {m.sym}
-              {formatNumber(m.amt)}
+              {sym}
+              {formatNumber(amt)}
             </p>
             {entry.description && <p className="text-sm text-muted-foreground mt-1">{entry.description}</p>}
           </div>
@@ -254,13 +279,13 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
   }
 
   // ── WASTE_DISPOSAL enriched view ───────────────────────────────────────────
-  if (m.isWasteDisposal) {
+  if (isWasteDisposal) {
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Waste Disposal</DialogTitle>
-            <Badge variant={m.badgeVariant} className={m.badgeClass}>
+            <Badge variant={badgeVariant} className={badgeClass}>
               Waste Disposal
             </Badge>
           </div>
@@ -275,8 +300,8 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
           <div className="rounded-md border px-4 py-3">
             <p className="text-xs text-muted-foreground">Written Off Value</p>
             <p className="text-lg font-bold font-mono">
-              {m.sym}
-              {formatNumber(m.amt)}
+              {sym}
+              {formatNumber(amt)}
             </p>
           </div>
         </div>
@@ -285,14 +310,14 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
   }
 
   // ── OTHER_CHARGE enriched view ─────────────────────────────────────────────
-  if (m.isOtherCharge) {
-    const c = m.otherChargeContainerDetail;
+  if (isOtherCharge) {
+    const c = otherChargeContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Other Charge</DialogTitle>
-            <Badge variant={m.badgeVariant} className={m.badgeClass}>
+            <Badge variant={badgeVariant} className={badgeClass}>
               Other Charge
             </Badge>
           </div>
@@ -315,8 +340,8 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {m.sym}
-              {formatNumber(m.amt)}
+              {sym}
+              {formatNumber(amt)}
             </p>
             {entry.description && <p className="text-sm text-muted-foreground mt-1">{entry.description}</p>}
           </div>
@@ -330,7 +355,7 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
       <DialogHeader>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <DialogTitle>Transaction Details</DialogTitle>
-          <Badge variant={m.badgeVariant} className={m.badgeClass}>
+          <Badge variant={badgeVariant} className={badgeClass}>
             {formatTxType(entry.txType)}
           </Badge>
         </div>
@@ -345,8 +370,8 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
           <div>
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {m.sym}
-              {formatNumber(m.amt)}
+              {sym}
+              {formatNumber(amt)}
             </p>
           </div>
           {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd) !== 1 && (
@@ -356,18 +381,18 @@ export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }
             </div>
           )}
         </div>
-        {m.isBaleRemoval && m.bales.length === 0 && (
+        {isBaleRemoval && bales.length === 0 && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
             Bale details were not recorded for this entry (created before bale tracking was enabled).
           </div>
         )}
-        {m.hasBalesMeta && m.bales.length > 0 && (
+        {hasBalesMeta && bales.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-              {m.isBaleRemoval ? "Removed Bales" : "Bales"} ({m.bales.length})
+              {isBaleRemoval ? "Removed Bales" : "Bales"} ({bales.length})
             </p>
             <div className="max-h-64 overflow-y-auto space-y-1">
-              {m.bales.map((bale) => (
+              {bales.map((bale) => (
                 <div
                   key={bale.ref}
                   className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover-elevate cursor-pointer"

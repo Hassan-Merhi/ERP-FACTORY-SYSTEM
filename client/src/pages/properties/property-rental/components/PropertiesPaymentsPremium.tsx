@@ -4,18 +4,16 @@ import {
   CalendarDays,
   CheckCircle2,
   Coins,
-  Copy,
   Ellipsis,
   ReceiptText,
-  Search,
   Trash2,
   UsersRound,
-  Wallet,
 } from "lucide-react";
 import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { MoneyAmount } from "@/components/MoneyAmount";
 import {
   DropdownMenu,
@@ -33,10 +31,8 @@ export type PaymentsPeriod = "all" | "30days" | "month" | "year";
 
 type Option = { value: string; label: string };
 
+/** Properties Payments Log body; the page header and export menu are the shared ones in RentalPaymentsLog. */
 type Props = {
-  /** Same title/subtitle as the shared PageHeader branch of RentalPaymentsLog. */
-  title: string;
-  subtitle: string;
   payments: PaymentRow[];
   totalRecords: number;
   isLoading: boolean;
@@ -53,80 +49,11 @@ type Props = {
   tenantOptions: Option[];
   totalAmount: string;
   amountLabel: string;
-  canCopy: boolean;
-  fullHistory: boolean;
-  onCopy: () => void;
   /** Omitted for read-only roles: the delete action is hidden. */
   onDelete?: (payment: PaymentRow) => void;
 };
 
-function WarehouseArtwork() {
-  return (
-    <svg
-      className="properties-payments-warehouse-art"
-      viewBox="0 0 730 245"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="property-warehouse-roof" x1="0" x2="0.9" y1="0" y2="1">
-          <stop offset="0" stopColor="#35436e" />
-          <stop offset="1" stopColor="#111a34" />
-        </linearGradient>
-        <linearGradient id="property-warehouse-door" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stopColor="#222e4d" />
-          <stop offset="1" stopColor="#090f21" />
-        </linearGradient>
-        <radialGradient id="property-warehouse-lamp">
-          <stop offset="0" stopColor="#ffe4ad" stopOpacity=".9" />
-          <stop offset=".35" stopColor="#ffd08c" stopOpacity=".3" />
-          <stop offset="1" stopColor="#ffd08c" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <path
-        d="M140 107 382 17 719 70 719 245 140 245Z"
-        fill="url(#property-warehouse-roof)"
-        stroke="#56608d"
-        strokeOpacity=".32"
-        strokeWidth="2"
-      />
-      <path d="M122 108 380 8 733 65 730 77 382 26 125 119Z" fill="#202e54" />
-      {Array.from({ length: 17 }, (_, i) => (
-        <path
-          key={i}
-          d={`M${165 + i * 32} 102 L${165 + i * 32} 245`}
-          stroke="#8592c0"
-          strokeOpacity=".11"
-          strokeWidth="3"
-        />
-      ))}
-      {[210, 352, 497, 634].map((x) => (
-        <g key={x}>
-          <rect x={x} y="115" width="94" height="136" rx="2" fill="#0b142c" stroke="#525b7b" strokeWidth="3" />
-          <rect
-            x={x + 7}
-            y="124"
-            width="80"
-            height="122"
-            fill="url(#property-warehouse-door)"
-            stroke="#506184"
-            strokeWidth="2"
-          />
-          {Array.from({ length: 8 }, (_, i) => (
-            <path key={i} d={`M${x + 8} ${132 + i * 14} h78`} stroke="#5c698e" strokeOpacity=".3" strokeWidth="2" />
-          ))}
-          <ellipse cx={x + 44} cy="115" rx="48" ry="63" fill="url(#property-warehouse-lamp)" />
-          <rect x={x + 41} y="101" width="8" height="5" rx="2" fill="#ffcf83" />
-        </g>
-      ))}
-      <path d="M0 242 H730" stroke="#7469e8" strokeOpacity=".6" strokeWidth="3" />
-    </svg>
-  );
-}
-
 export function PropertiesPaymentsPremium({
-  title,
-  subtitle,
   payments,
   totalRecords,
   isLoading,
@@ -143,9 +70,6 @@ export function PropertiesPaymentsPremium({
   tenantOptions,
   totalAmount,
   amountLabel,
-  canCopy,
-  fullHistory,
-  onCopy,
   onDelete,
 }: Props) {
   const uniqueTenants = new Set(payments.map((p) => p.tenantName).filter(Boolean)).size;
@@ -153,20 +77,6 @@ export function PropertiesPaymentsPremium({
 
   return (
     <div className="properties-payments-premium" data-testid="properties-payments-premium">
-      <header className="properties-payments-hero">
-        <WarehouseArtwork />
-        <div className="properties-payments-hero-content">
-          <div className="properties-payments-hero-icon">
-            <Wallet className="h-7 w-7" aria-hidden="true" />
-          </div>
-          <div>
-            <span className="properties-payments-eyebrow">PROPERTIES</span>
-            <h1 data-testid="text-page-title">{title}</h1>
-            <p data-testid="text-page-subtitle">{subtitle}</p>
-          </div>
-        </div>
-      </header>
-
       <div className="properties-payments-summary" aria-label="Payment overview">
         <div className="properties-payments-stat properties-payments-stat--purple">
           <div className="properties-payments-stat-icon">
@@ -198,16 +108,14 @@ export function PropertiesPaymentsPremium({
       </div>
 
       <div className="properties-payments-toolbar" role="search" aria-label="Filter payment history">
-        <div className="properties-payments-search">
-          <Search className="h-4 w-4" aria-hidden="true" />
-          <Input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search tenant, unit, notes, voucher…"
-            aria-label="Search payment history"
-            data-testid="input-prop-rental-payments-search"
-          />
-        </div>
+        <SearchField
+          wrapperClassName="properties-payments-search"
+          value={search}
+          onValueChange={onSearchChange}
+          placeholder="Search tenant, unit, notes, voucher…"
+          aria-label="Search payment history"
+          data-testid="input-prop-rental-payments-search"
+        />
         <div className="properties-payments-select">
           <CalendarDays className="h-4 w-4" aria-hidden="true" />
           <Select value={period} onValueChange={(value) => onPeriodChange(value as PaymentsPeriod)}>
@@ -254,17 +162,6 @@ export function PropertiesPaymentsPremium({
             </SelectContent>
           </Select>
         </div>
-        <Button
-          className="properties-payments-copy"
-          disabled={!canCopy}
-          onClick={onCopy}
-          data-testid={
-            fullHistory ? "button-properties-copy-reconciled-history" : "button-properties-copy-payment-history"
-          }
-        >
-          <Copy className="h-4 w-4" aria-hidden="true" />
-          {fullHistory ? "Copy Full History" : "Copy Results"}
-        </Button>
       </div>
 
       {isError && (
@@ -276,13 +173,14 @@ export function PropertiesPaymentsPremium({
       <div className="properties-payments-table-shell">
         <div className="properties-payments-table-scroll" data-horizontal-scroll="true">
           {isLoading ? (
-            <p className="properties-payments-table-message">Loading payments…</p>
+            <LoadingState title="Loading payments…" />
           ) : isError ? (
-            <p className="properties-payments-table-message">Payment history could not be loaded. Please retry.</p>
+            <ErrorState title="Payment history could not be loaded. Please retry." />
           ) : payments.length === 0 ? (
-            <p className="properties-payments-table-message">
-              {totalRecords === 0 ? "No payments recorded yet." : "No payments match the current filters."}
-            </p>
+            <EmptyState
+              icon={ReceiptText}
+              title={totalRecords === 0 ? "No payments recorded yet." : "No payments match the current filters."}
+            />
           ) : (
             <table className="properties-payments-table" data-testid="table-prop-rental-payments">
               <thead>

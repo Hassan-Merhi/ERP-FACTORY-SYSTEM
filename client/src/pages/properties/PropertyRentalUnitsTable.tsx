@@ -1,4 +1,4 @@
-// Extracted from ./PropertyRentalPage.tsx
+// Extracted from ./PropertyRentalPage.tsx: the units table.
 import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,42 +9,61 @@ import { format } from "date-fns";
 import type { Unit } from "./property-rental/types";
 import { fmtMoneyCurrency } from "./property-rental/utils";
 import { NoteCell } from "./property-rental/components/NoteCell";
-import type { PropertyRentalPageModel } from "./PropertyRentalPageModel";
+import type { PropertyRentalPageState } from "./usePropertyRentalPageState";
 
-export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) {
+export function PropertyRentalUnitsTable({
+  m,
+  unitsLoadingState,
+  unitsEmptyState,
+}: {
+  m: PropertyRentalPageState;
+  unitsLoadingState: React.ReactNode;
+  unitsEmptyState: React.ReactNode;
+}) {
+  const {
+    isFactoryShopTable,
+    isPropertiesRental,
+    isLoading,
+    grouped,
+    contractedUnits,
+    selectedContractIds,
+    toggleSelectAll,
+    testIdPrefix,
+    editableUnitInGroup,
+    openRenameGroup,
+    setOpenUnitId,
+    toggleSelect,
+    setConfirmDeleteUnitId,
+  } = m;
   return (
     <Card
       className={
-        m.isFactoryShopTable
+        isFactoryShopTable
           ? "factory-rentals-table-shell"
-          : m.isPropertiesRental
+          : isPropertiesRental
             ? "properties-rentals-table-shell"
             : undefined
       }
     >
-      <CardContent className={m.isFactoryShopTable ? "p-2 sm:p-3" : m.isPropertiesRental ? "p-2 sm:p-4" : "p-0"}>
+      <CardContent className={isFactoryShopTable ? "p-2 sm:p-3" : isPropertiesRental ? "p-2 sm:p-4" : "p-0"}>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
-          {m.isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading units…</div>
-          ) : m.grouped.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              {m.unitType === "WAREHOUSE"
-                ? "No warehouses yet. Add your first unit above."
-                : "No shops yet. Add your first unit above."}
-            </div>
+          {isLoading ? (
+            unitsLoadingState
+          ) : grouped.length === 0 ? (
+            unitsEmptyState
           ) : (
             <table
               className={
-                m.isFactoryShopTable
+                isFactoryShopTable
                   ? "factory-rentals-table w-full text-sm"
-                  : m.isPropertiesRental
+                  : isPropertiesRental
                     ? "properties-rentals-data-table w-full min-w-[1170px] text-sm"
                     : "w-full text-sm"
               }
             >
               <thead
                 className={
-                  m.isPropertiesRental
+                  isPropertiesRental
                     ? "properties-rentals-table-head sticky top-0 z-30"
                     : "bg-muted border-b sticky top-0 z-30"
                 }
@@ -52,9 +71,9 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                 <tr>
                   <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
-                      checked={m.contractedUnits.length > 0 && m.selectedContractIds.size === m.contractedUnits.length}
-                      onCheckedChange={m.toggleSelectAll}
-                      data-testid={`checkbox-${m.testIdPrefix}-select-all`}
+                      checked={contractedUnits.length > 0 && selectedContractIds.size === contractedUnits.length}
+                      onCheckedChange={toggleSelectAll}
+                      data-testid={`checkbox-${testIdPrefix}-select-all`}
                       aria-label="Select all"
                     />
                   </th>
@@ -65,7 +84,7 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                   <th className="text-right px-3 py-2 font-semibold">Monthly Rent</th>
                   <th className="text-right px-3 py-2 font-semibold">Guarantee</th>
                   <th className="text-right px-3 py-2 font-semibold">
-                    {m.isPropertiesRental ? "Tenant Balance" : "Outstanding"}
+                    {isPropertiesRental ? "Tenant Balance" : "Outstanding"}
                   </th>
                   <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Scheduled</th>
                   <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Next Billing</th>
@@ -74,7 +93,7 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                 </tr>
               </thead>
               <tbody>
-                {m.grouped.map(([group, groupUnits], gIdx) => {
+                {grouped.map(([group, groupUnits], gIdx) => {
                   const GROUP_PALETTE = [
                     { headerBg: "#1d4ed8", headerText: "#fff", r: 29, g: 78, b: 216 },
                     { headerBg: "#047857", headerText: "#fff", r: 4, g: 120, b: 87 },
@@ -95,9 +114,9 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                       <tr
                         key={`grp-${group}`}
                         className={
-                          m.isFactoryShopTable
+                          isFactoryShopTable
                             ? "factory-rentals-location-row"
-                            : m.isPropertiesRental
+                            : isPropertiesRental
                               ? "properties-rentals-group-row"
                               : "border-t"
                         }
@@ -105,19 +124,19 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                         <td
                           colSpan={12}
                           className={
-                            m.isFactoryShopTable
+                            isFactoryShopTable
                               ? "factory-rentals-location-cell"
-                              : m.isPropertiesRental
+                              : isPropertiesRental
                                 ? "properties-rentals-group-cell px-4 py-3 text-xs font-bold uppercase tracking-wider"
                                 : "px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
                           }
                           style={
-                            m.isFactoryShopTable || m.isPropertiesRental
+                            isFactoryShopTable || isPropertiesRental
                               ? undefined
                               : { backgroundColor: p.headerBg, color: p.headerText }
                           }
                         >
-                          {m.isFactoryShopTable ? (
+                          {isFactoryShopTable ? (
                             <div
                               className="factory-rentals-location-bar"
                               style={{ background: `linear-gradient(110deg, ${p.headerBg}, ${p.headerBg}df)` }}
@@ -130,19 +149,19 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                             </div>
                           ) : (
                             <span className="inline-flex items-center gap-2">
-                              {m.isPropertiesRental && <Building2 className="h-4 w-4" aria-hidden="true" />}
+                              {isPropertiesRental && <Building2 className="h-4 w-4" aria-hidden="true" />}
                               <span>{group}</span>
-                              {m.isPropertiesRental && m.editableUnitInGroup(groupUnits) && (
+                              {isPropertiesRental && editableUnitInGroup(groupUnits) && (
                                 <button
                                   type="button"
                                   className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    m.openRenameGroup(group, groupUnits);
+                                    openRenameGroup(group, groupUnits);
                                   }}
                                   title={`Rename ${group}`}
                                   aria-label={`Rename location group ${group}`}
-                                  data-testid={`button-${m.testIdPrefix}-rename-group-${gIdx}`}
+                                  data-testid={`button-${testIdPrefix}-rename-group-${gIdx}`}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
@@ -155,37 +174,38 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                         <tr
                           key={u.id}
                           className={
-                            m.isFactoryShopTable
-                              ? `factory-rentals-unit-row cursor-pointer${u.contract && m.selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}`
-                              : m.isPropertiesRental
+                            isFactoryShopTable
+                              ? `factory-rentals-unit-row cursor-pointer${u.contract && selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}`
+                              : isPropertiesRental
                                 ? "properties-rentals-unit-row cursor-pointer transition-colors"
                                 : "border-t cursor-pointer transition-colors"
                           }
                           style={
-                            m.isFactoryShopTable
+                            isFactoryShopTable
                               ? ({ "--factory-rentals-rgb": `${p.r}, ${p.g}, ${p.b}` } as React.CSSProperties)
-                              : m.isPropertiesRental
+                              : isPropertiesRental
                                 ? undefined
                                 : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }
                           }
                           onMouseEnter={(e) => {
-                            if (!m.isFactoryShopTable && !m.isPropertiesRental)
+                            if (!isFactoryShopTable && !isPropertiesRental)
                               e.currentTarget.style.filter = "brightness(0.93)";
                           }}
                           onMouseLeave={(e) => {
-                            if (!m.isFactoryShopTable && !m.isPropertiesRental) e.currentTarget.style.filter = "";
+                            if (!isFactoryShopTable && !isPropertiesRental) e.currentTarget.style.filter = "";
                           }}
-                          onClick={() => m.setOpenUnitId(u.id)}
+                          onClick={() => setOpenUnitId(u.id)}
                           data-testid={`row-unit-${u.id}`}
                         >
                           <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
                             {u.contract && !u.isShared && !u.isInternalLeaseProjection && (
                               <Checkbox
-                                checked={m.selectedContractIds.has(u.contract.id)}
+                                checked={selectedContractIds.has(u.contract.id)}
                                 onCheckedChange={() =>
-                                  m.toggleSelect(u.contract!.id, {
-                                    stopPropagation: () => {},
-                                  } as React.MouseEvent<Element, MouseEvent>)
+                                  toggleSelect(u.contract!.id, { stopPropagation: () => {} } as React.MouseEvent<
+                                    Element,
+                                    MouseEvent
+                                  >)
                                 }
                                 onClick={(e) => e.stopPropagation()}
                                 data-testid={`checkbox-unit-${u.id}`}
@@ -194,20 +214,20 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                             )}
                           </td>
                           <td
-                            className={m.isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
+                            className={isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
                             style={
-                              m.isFactoryShopTable || m.isPropertiesRental
+                              isFactoryShopTable || isPropertiesRental
                                 ? undefined
                                 : { backgroundColor: unitNumBg, color: unitNumColor }
                             }
                           >
-                            {m.isFactoryShopTable || m.isPropertiesRental ? (
+                            {isFactoryShopTable || isPropertiesRental ? (
                               <span
                                 className={
-                                  m.isPropertiesRental ? "properties-rentals-unit-pill" : "factory-rentals-unit-pill"
+                                  isPropertiesRental ? "properties-rentals-unit-pill" : "factory-rentals-unit-pill"
                                 }
                                 style={
-                                  m.isFactoryShopTable
+                                  isFactoryShopTable
                                     ? { color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` }
                                     : undefined
                                 }
@@ -231,7 +251,7 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                           <td className="px-3 py-2">
                             {u.contract ? (
                               <span className="font-medium flex items-center gap-1.5 flex-wrap">
-                                {m.isFactoryShopTable && (
+                                {isFactoryShopTable && (
                                   <UserRound
                                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                                     aria-hidden="true"
@@ -273,7 +293,7 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                             )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
-                            <span className={m.isPropertiesRental ? "properties-rentals-money-pill" : undefined}>
+                            <span className={isPropertiesRental ? "properties-rentals-money-pill" : undefined}>
                               {u.contract ? fmtMoneyCurrency(u.contract.rentalAmount, u.contract.currency) : "—"}
                             </span>
                           </td>
@@ -281,10 +301,10 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                             className={`px-3 py-2 text-right tabular-nums font-semibold ${
                               u.contract && Number(u.contract.guaranteeAmount) > 0
                                 ? u.contract.guaranteePostedToStatement
-                                  ? m.isPropertiesRental
+                                  ? isPropertiesRental
                                     ? "text-red-600 dark:text-red-400"
                                     : "text-green-600 dark:text-green-400"
-                                  : m.isPropertiesRental
+                                  : isPropertiesRental
                                     ? "text-amber-600 dark:text-amber-400"
                                     : "text-red-600 dark:text-red-400"
                                 : "text-muted-foreground"
@@ -292,9 +312,9 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                           >
                             <span
                               className={
-                                m.isFactoryShopTable
+                                isFactoryShopTable
                                   ? "factory-rentals-money-pill"
-                                  : m.isPropertiesRental
+                                  : isPropertiesRental
                                     ? "properties-rentals-money-pill"
                                     : undefined
                               }
@@ -312,13 +332,13 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                             </span>
                           </td>
                           <td
-                            className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? (m.isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : (u.prepaidCredit ?? 0) > 0 ? (m.isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}
+                            className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? (isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : (u.prepaidCredit ?? 0) > 0 ? (isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}
                           >
                             <span
                               className={
-                                m.isFactoryShopTable
+                                isFactoryShopTable
                                   ? "factory-rentals-money-pill"
-                                  : m.isPropertiesRental
+                                  : isPropertiesRental
                                     ? "properties-rentals-money-pill"
                                     : undefined
                               }
@@ -341,16 +361,16 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                               : "—"}
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            <span className={m.isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
-                              {(m.isFactoryShopTable || m.isPropertiesRental) && (
+                            <span className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
+                              {(isFactoryShopTable || isPropertiesRental) && (
                                 <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                               )}
                               {u.nextBillingDate ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM") : "—"}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">
-                            <span className={m.isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
-                              {(m.isFactoryShopTable || m.isPropertiesRental) && (
+                            <span className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
+                              {(isFactoryShopTable || isPropertiesRental) && (
                                 <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                               )}
                               {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
@@ -365,7 +385,7 @@ export function PropertyRentalUnitsTable({ m }: { m: PropertyRentalPageModel }) 
                                   className="text-muted-foreground hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    m.setConfirmDeleteUnitId(u.id);
+                                    setConfirmDeleteUnitId(u.id);
                                   }}
                                   data-testid={`button-delete-unit-${u.id}`}
                                 >
