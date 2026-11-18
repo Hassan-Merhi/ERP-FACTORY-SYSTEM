@@ -119,7 +119,6 @@ export default function Settings() {
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
-  const canManageChristmasMode = currentUser?.role === "Developer";
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
   const isDeveloperMode = effectiveRole === "Developer";
 
@@ -148,7 +147,7 @@ export default function Settings() {
     },
     {
       label: "WhatsApp",
-      items: ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "")
+      items: isDeveloperMode
         ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText, devOnly: true }]
         : [],
     },
@@ -293,7 +292,7 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
-          {activeSection === "appearance-seasonal" && canManageChristmasMode && <ChristmasModeSettingsCard />}
+          {activeSection === "appearance-seasonal" && isDeveloperMode && <ChristmasModeSettingsCard />}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
               <div>
@@ -320,9 +319,9 @@ export default function Settings() {
           {activeSection === "recurring-journals" && isDeveloperMode && <RecurringJournalsTab />}
           {activeSection === "scheduled-whatsapp-messages" && isDeveloperMode && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
-          {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
-          {activeSection === "pos-setup" && currentUser?.role === "Developer" && (
-            <PosSetupHub userRole={currentUser?.role} />
+          {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
+          {activeSection === "pos-setup" && isDeveloperMode && (
+            <PosSetupHub userRole={effectiveRole} />
           )}
           {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
