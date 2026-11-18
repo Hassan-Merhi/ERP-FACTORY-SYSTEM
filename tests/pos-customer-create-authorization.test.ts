@@ -62,7 +62,6 @@ describe("Phase 2 Zambia POS customer creation", () => {
       phone: "+260999000123",
       openingBalance: "0",
       openingBalanceSide: "Dr",
-      companyId: ctx.companyId + 100_000,
       active: false,
     });
     expect(created.status, created.text).toBe(201);
@@ -94,6 +93,15 @@ describe("Phase 2 Zambia POS customer creation", () => {
     );
     expect(linked.rows[0]).toEqual({ company_id: ctx.companyId, opening_balance: "0.00" });
     expect((await agent.get(`/api/pos/customers/${createdCustomerId}/transactions`)).status).toBe(200);
+  });
+
+  it("rejects attempts to create a customer in a different company", async () => {
+    const foreign = await agent.post("/api/pos/customers").send({
+      legalName: "Wrong company customer",
+      companyId: ctx.companyId + 100_000,
+    });
+    expect(foreign.status).toBe(403);
+    expect(foreign.body.code).toBe("COMPANY_SCOPE_DENIED");
   });
 
   it("prevents forged opening balances and arbitrary ledger links", async () => {
