@@ -77,7 +77,9 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
     notes,
     paymentAccountId,
     paymentAccountType,
-    posAssignedLocations,
+    // Always bind a concrete array before rendering the POS location picker.
+    // This also covers initial query hydration for cashier sessions.
+    posAssignedLocations: assignedPosLocations = [],
     posLocationsLoading,
     posSelectedLocation,
     posUser,
@@ -231,7 +233,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       </div>
     );
   }
-  if (posUser && !posLocationsLoading && posAssignedLocations.length === 0) {
+  if (posUser && !posLocationsLoading && assignedPosLocations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 gap-2">
         <p className="font-semibold">No location assigned</p>
@@ -302,7 +304,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
@@ -406,7 +408,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
