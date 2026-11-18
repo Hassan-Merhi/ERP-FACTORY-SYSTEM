@@ -5,6 +5,7 @@ import { ALT_FILL, HDR_FILL, HDR_FONT } from "./sheet-helpers";
 import { qStream, EXPORT_DATE_INVALID_MESSAGE, assertExportDate } from "./workbookHelpers";
 import { workbookStep } from "./workbookStep";
 import { workbookStep2 } from "./workbookStep2";
+export { EXPORT_DATE_INVALID_MESSAGE, assertExportDate } from "./workbookHelpers";
 export { buildCompanyWorkbook } from "./buildCompanyWorkbook";
 
 /** Request-boundary check: returns an error message for a malformed optional date range, else null. */

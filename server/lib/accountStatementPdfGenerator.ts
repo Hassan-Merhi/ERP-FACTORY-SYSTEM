@@ -10,6 +10,7 @@ import { storage } from "../storage";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "./money";
 import { accountStatementPdfGeneratorStep } from "./accountStatementPdfGeneratorStep";
+export { StatementAccountNotFoundError } from "./accountStatementPdfGeneratorHelpers";
 
 export interface StatementPdfOptions {
   accountType: string;

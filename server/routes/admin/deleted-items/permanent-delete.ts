@@ -11,6 +11,15 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { PermanentDeleteRefused } from "./permanent-deleteHelpers";
 import { permanentDeleteStep } from "./permanentDeleteStep";
 import { permanentDeleteStep2 } from "./permanentDeleteStep2";
+export {
+  ACCOUNT_HAS_HISTORY_MESSAGE,
+  CUSTOMER_HAS_HISTORY_MESSAGE,
+  CUSTOMER_HAS_OPENING_MESSAGE,
+  EMPLOYEE_HAS_HISTORY_MESSAGE,
+  LOCATION_HAS_STOCK_MESSAGE,
+  ORPHANED_POS_POSTED_MESSAGE,
+  RETIRED_VOUCHER_NOT_DELETABLE_MESSAGE,
+} from "./permanent-deleteHelpers";
 
 export type DeletedItemRow = { id: AnyPgColumn; companyId: AnyPgColumn | null; deletedAt: AnyPgColumn };
 
