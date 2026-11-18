@@ -138,6 +138,16 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
       page("factory/settings"),
     ];
 
+    // Factory Daybook's voucher details show current account balances. Allow
+    // only the single READ-ONLY ledger-balance endpoint from its Transactions
+    // tab; do not grant Daybook account catalogs, statements or write actions.
+    if (
+      ["GET", "HEAD"].includes(method) &&
+      /^\/api\/accounts\/ledger\/\d+\/balance$/.test(path)
+    ) {
+      accountRequirements.push(page(DAYBOOK_PAGE, "hide_tab_daybook_transactions"));
+    }
+
     // The Factory Account Groups page is a separate admin/owner/developer
     // surface built on ledger accounts. Grant only its actual group operations,
     // not arbitrary account deletion, balance changes, bank APIs, or voucher APIs.

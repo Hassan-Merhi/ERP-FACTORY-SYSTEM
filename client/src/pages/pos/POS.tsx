@@ -3,9 +3,7 @@ import { exportFileName } from "@/lib/exportFile";
 import { getErrorDetails } from "@shared/errorUtils";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
-import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, NotebookPen } from "lucide-react";
-import "@/styles/pos-workspace-premium.css";
+import { ShoppingCart } from "lucide-react";
 import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
 import type { AuthMe } from "@shared/apiTypes";
@@ -15,6 +13,7 @@ import { POSHeader } from "./pos-components/POSHeader";
 import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
 import { PosMobileLayout } from "./pos-components/PosMobileLayout";
 import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
+import { PosSaleGridWrap, PosSaleNotes, PosSalePanel, PosSaleScreen } from "./pos-components/PosSaleLayout";
 
 import { POS_COLUMNS } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
@@ -277,7 +276,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div data-pos-modern-workspace="true" className="flex flex-col h-full bg-background overflow-hidden relative">
+    <PosSaleScreen variant="erp">
       <POSHeader
         posUser={posUser}
         editVoucherId={editVoucherId}
@@ -334,8 +333,8 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
       {/* ── Desktop layout ── */}
       <PosWorkspaceColumns layout="erp">
-        <div data-pos-sale-panel="true" className="flex-1 flex flex-col overflow-y-auto min-w-0">
-          <div data-pos-grid-wrap="true">
+        <PosSalePanel className="flex-1 overflow-y-auto">
+          <PosSaleGridWrap>
             {inventoryLoading ? (
               <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground" aria-busy="true">
                 Loading inventory…
@@ -366,21 +365,16 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
                 isEditMode={!!editVoucherId}
               />
             )}
-          </div>
-          <div data-pos-notes-wrap="true" className="mt-2 px-1 pb-2">
-            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium">
-              <NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")}{" "}
-              <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span>
-            </label>
-            <Textarea
-              id="pos-desktop-notes"
-              placeholder={t("pos.modern.notesPlaceholder")}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="resize-none h-12 min-h-[48px] text-sm"
-              data-testid="input-notes"
-            />
-          </div>
+          </PosSaleGridWrap>
+          <PosSaleNotes
+            id="pos-desktop-notes"
+            label={t("pos.modern.notes")}
+            optionalLabel={t("pos.modern.optional")}
+            placeholder={t("pos.modern.notesPlaceholder")}
+            value={notes}
+            onChange={setNotes}
+            testId="input-notes"
+          />
           {!rows.some((row) => row.stockItemId || row.itemName?.trim()) && (
             <div
               data-pos-empty-state="true"
@@ -393,7 +387,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("pos.modern.addItemsHint")}</p>
             </div>
           )}
-        </div>
+        </PosSalePanel>
         <InventoryPicker
           inventory={inventory}
           // Preserve the row the cashier was typing into. The item-name input
@@ -502,6 +496,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         fmtPrint={(v) => String(v)}
         fmtPrintCurrency={(v) => String(v)}
       />
-    </div>
+    </PosSaleScreen>
   );
 }
