@@ -3,7 +3,7 @@
  * voucher header location (which may be a different source or destination).
  * Every call resolves live company membership and location ownership.
  */
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { locations, stockTransferItems, stockTransferVouchers, userLocations, vouchers } from "@shared/schema";
 import { db } from "../../db";
 import type { ActiveCompanyPermissionContext } from "../security/activeCompanyPermissionContext";
@@ -19,7 +19,7 @@ export interface PosTransferScope {
 }
 
 export function isStockTransferVoucherType(voucherType: string): boolean {
-  return ["stocktransfer", "transfer"].includes(voucherType.toLowerCase().replace(/\\s+/g, ""));
+  return ["stocktransfer", "transfer"].includes(voucherType.toLowerCase().replace(/\s+/g, ""));
 }
 
 export async function getPosDaybookLocations(
