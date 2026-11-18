@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import type { AuthMe } from "@shared/apiTypes";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, invalidateCustomerBalances, keyStartsWith } from "@/lib/queryClient";
 import { invalidateLocationInventoryQueries } from "@/api/inventoryApi";
@@ -36,6 +37,7 @@ interface Phase6PosSaleData {
 
 interface UsePosMutationsParams {
   activeLocation: Location | null;
+  posUser?: AuthMe | null;
   editVoucherId?: string;
   editVoucher?: PosEditVoucher | null;
   isSpCompany?: boolean;
@@ -111,6 +113,7 @@ function phase6PosResult(
 
 export function usePosMutations({
   activeLocation,
+  posUser,
   editVoucherId,
   editVoucher,
   isSpCompany,
