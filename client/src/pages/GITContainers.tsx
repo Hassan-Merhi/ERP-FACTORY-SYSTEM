@@ -1,210 +1,106 @@
-import { SearchField } from "@/components/ui/search-field";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { ChangeEvent } from "react";
 import { Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Ship,
-  Truck,
-  Package,
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  Filter,
-  CheckCircle2,
-  ChevronDown,
-  Building2,
-  Globe,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import { Ship, AlertTriangle, Filter, ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { isBlockingQueryError } from "@/lib/abortError";
-import { useToast } from "@/hooks/use-toast";
-import { useCompany } from "@/contexts/CompanyContext";
-import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
-
-// Sub-component imports
-import {
-  EnrichedContainerRow,
-  OTW_COLS,
-  OtwColId,
-  DEFAULT_OTW_COL_VIS,
-  fmt,
-  type EtaFilterValue,
-} from "./git-containers/gitContainerTypes";
-import { SummaryCard } from "./git-containers/InlineCells";
 import { ContainerDrawer } from "./git-containers/ContainerDrawer";
 import { ContainerTable } from "./git-containers/ContainerTable";
 import { ContainerBulkActions } from "./git-containers/ContainerBulkActions";
 import { FilterBar, countGitContainerFilters } from "./git-containers/FilterBar";
 import { ErpFilterSheet } from "@/components/ui/erp-mobile-filters";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ImportResultBanner } from "./git-containers/ImportResultBanner";
-import { useContainerSummaryStats } from "./git-containers/containerHelpers";
-import { useGITContainersData } from "./git-containers/useGITContainersData";
-import { usePaginatedGITContainers } from "./git-containers/usePaginatedGITContainers";
-import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+import { useGITContainersState } from "./useGITContainersState";
+import { GITContainersPopoverSection, GITContainersSection, GITContainersSection2 } from "./GITContainersSection";
+import { SearchField } from "@/components/ui/search-field";
 
-export default function GITContainers({ embedded = false }: { embedded?: boolean } = {}) {
-  const { data: user, isLoading: userLoading } = useQuery(authenticatedUserQueryOptions());
-  const { selectedCompany } = useCompany();
-  const isProperties = selectedCompany?.companyType === "properties";
-  const { toast } = useToast();
-
-  const [allCompanies, setAllCompanies] = useState(false);
-  const [companyFilter, setCompanyFilter] = useState("ALL");
-  const [containerFilters, setContainerFilters] = useState<string[]>([]);
-  const [supplierFilters, setSupplierFilters] = useState<string[]>([]);
-  const [transporterFilters, setTransporterFilters] = useState<string[]>([]);
-  const [agentFilters, setAgentFilters] = useState<string[]>([]);
-  const [truckFilters, setTruckFilters] = useState<string[]>([]);
-  const [locationFilters, setLocationFilters] = useState<string[]>([]);
-  const [docsFilter, setDocsFilter] = useState("ALL");
-  const [delayedFilter, setDelayedFilter] = useState("ALL");
-  const [freightFilter, setFreightFilter] = useState("ALL");
-  const [etaFilter, setEtaFilter] = useState<EtaFilterValue>("ALL");
-  const [notesFilter, setNotesFilter] = useState("ALL");
-  const [sortOrder, setSortOrder] = useState("DEFAULT");
-  const [search, setSearch] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const isPhoneLayout = useErpPhoneLayout();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerContainer, setDrawerContainer] = useState<EnrichedContainerRow | null>(null);
-  const [importResult, setImportResult] = useState<{
-    updated: number;
-    skipped: number;
-    notFound: number;
-    errors: string[];
-    importId: string | null;
-  } | null>(null);
-  const [waSending, setWaSending] = useState(false);
-  const CONTAINER_CHUNK_SIZE = 50;
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const printRef = useRef<HTMLDivElement>(null);
-
-  // ── Column visibility (per-user, persisted to localStorage) ──────────────────
-  const [colVis, setColVis] = useState<Record<OtwColId, boolean>>(DEFAULT_OTW_COL_VIS);
-  useEffect(() => {
-    if (!user?.id) return;
-    try {
-      const saved = localStorage.getItem(`otw_col_vis_${user.id}`);
-      if (saved) setColVis({ ...DEFAULT_OTW_COL_VIS, ...JSON.parse(saved) });
-    } catch {
-      // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
-    }
-  }, [user?.id]);
-  function toggleOtwCol(id: OtwColId) {
-    setColVis((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      try {
-        if (user?.id) localStorage.setItem(`otw_col_vis_${user.id}`, JSON.stringify(next));
-      } catch {
-        // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
-      }
-      return next;
-    });
-  }
-  const otwHiddenCount = OTW_COLS.filter((c) => !colVis[c.id]).length;
-
-  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester", "View Only", "Create Only"];
-  const effectiveRole = user?.currentRole ?? user?.role ?? "";
-  const isAllowed = allowedRoles.includes(effectiveRole);
-  const isTester = effectiveRole === "ERP Tester";
-  const isViewOnly = isExistingRecordReadOnlyRole(effectiveRole);
-  const restrictedToCurrentCompany = isTester || isViewOnly || isProperties;
-
-  const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
-    companyIdentity:
-      !isProperties && allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
-    allCompanies: isProperties ? false : allCompanies,
-    pageSize: CONTAINER_CHUNK_SIZE,
+export default function GITContainers(props: { embedded?: boolean }) {
+  const {
+    agentFilters,
+    agents,
+    allCompanies,
+    allContainers,
+    allEtaDates,
+    arrived,
+    atPort,
+    atSea,
+    colVis,
+    companies,
     companyFilter,
     containerFilters,
-    supplierFilters,
-    transporterFilters,
-    agentFilters,
-    truckFilters,
-    locationFilters,
-    docsFilter,
+    containerNumbers,
+    data,
+    delayed,
     delayedFilter,
-    freightFilter,
+    docsFilter,
+    drawerContainer,
+    drawerOpen,
+    embedded,
+    error,
     etaFilter,
+    fileInputRef,
+    filteredContainers,
+    freightFilter,
+    hasContainersWithNoEta,
+    importMutation,
+    importResult,
+    inTransit,
+    isAllowed,
+    isError,
+    isLoading,
+    isPhoneLayout,
+    isProperties,
+    isViewOnly,
+    leftDar,
+    locationFilters,
+    locations,
     notesFilter,
-    sortOrder,
-    search,
-    enabled: !!isAllowed && !!selectedCompany,
-  });
-
-  const allContainers = data?.containers ?? [];
-
-  const { importMutation, undoImportMutation } = useGITContainersData({
-    isSupplierPartner: selectedCompany?.companyType === "supplier_partner",
+    offloadOverdue,
+    openDrawer,
+    otwHiddenCount,
+    printRef,
     refetch,
-    toast,
+    restrictedToCurrentCompany,
+    search,
+    setAgentFilters,
+    setAllCompanies,
+    setCompanyFilter,
+    setContainerFilters,
+    setDelayedFilter,
+    setDocsFilter,
+    setDrawerOpen,
+    setEtaFilter,
+    setFreightFilter,
     setImportResult,
-  });
-
-  const filteredContainers = allContainers;
-
-  const localSummary = useContainerSummaryStats({ filteredContainers });
-  const atSea = data?.summary?.atSea ?? localSummary.atSea;
-  const atPort = data?.summary?.atPort ?? localSummary.atPort;
-  const leftDar = data?.summary?.leftDar ?? localSummary.leftDar;
-  const inTransit = data?.summary?.inTransit ?? localSummary.inTransit;
-  const arrived = data?.summary?.arrived ?? localSummary.arrived;
-  const delayed = data?.summary?.delayed ?? localSummary.delayed;
-  const offloadOverdue = data?.summary?.overdue ?? localSummary.offloadOverdue;
-  const totalCost = data?.summary ? `$${fmt(data.summary.totalCost)}` : localSummary.totalCost;
-  const totalTransportDuty = data?.summary
-    ? `$${fmt(data.summary.totalTransportDuty)}`
-    : localSummary.totalTransportDuty;
-
-  const companies = data?.facets?.companies ?? [...new Set(allContainers.map((c) => c.companyName))].sort();
-  const containerNumbers =
-    data?.facets?.containerNumbers ?? [...new Set(allContainers.map((c) => c.containerNumber))].sort();
-  const suppliers =
-    data?.facets?.suppliers ??
-    ([...new Set(allContainers.map((c) => c.supplierCode).filter(Boolean))].sort() as string[]);
-  const transporters =
-    data?.facets?.transporters ??
-    ([...new Set(allContainers.map((c) => c.transporter).filter(Boolean))].sort() as string[]);
-  const agents =
-    data?.facets?.agents ?? ([...new Set(allContainers.map((c) => c.agent).filter(Boolean))].sort() as string[]);
-  const trucks =
-    data?.facets?.trucks ?? ([...new Set(allContainers.map((c) => c.numberPlate).filter(Boolean))].sort() as string[]);
-  const locations =
-    data?.facets?.locations ??
-    ([...new Set(allContainers.map((c) => c.trackingLocation).filter(Boolean))].sort() as string[]);
-  const allEtaDates =
-    data?.facets?.etaDates ?? ([...new Set(allContainers.map((c) => c.eta).filter(Boolean))].sort() as string[]);
-  const hasContainersWithNoEta = data?.facets?.hasContainersWithNoEta ?? allContainers.some((c) => !c.eta);
-
-  async function openDrawer(c: EnrichedContainerRow) {
-    setDrawerContainer(c);
-    setDrawerOpen(true);
-    try {
-      const detail = await loadContainerDetail(
-        c.id,
-        data?.mode === "single" && data.companyId ? data.companyId : c.companyId,
-        data?.mode === "all"
-      );
-      setDrawerContainer((current) => (current?.id === c.id ? detail : current));
-    } catch (detailError) {
-      toast({
-        title: "Failed to load container details",
-        description: getErrorDetails(detailError).message,
-        variant: "destructive",
-      });
-    }
-  }
+    setLocationFilters,
+    setNotesFilter,
+    setSearch,
+    setShowFilters,
+    setSortOrder,
+    setSupplierFilters,
+    setTransporterFilters,
+    setTruckFilters,
+    setWaSending,
+    showFilters,
+    sortOrder,
+    supplierFilters,
+    suppliers,
+    toast,
+    toggleOtwCol,
+    totalCost,
+    totalTransportDuty,
+    transporterFilters,
+    transporters,
+    truckFilters,
+    trucks,
+    undoImportMutation,
+    user,
+    userLoading,
+    waSending,
+  } = useGITContainersState(props);
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -368,125 +264,28 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           </div>
         )}
         {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}
-        <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
-          <button
-            onClick={() => {
-              setAllCompanies(false);
-              setCompanyFilter("ALL");
-            }}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
-              !allCompanies
-                ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
-                : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            data-testid="button-my-company"
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            My Company
-          </button>
-          {!restrictedToCurrentCompany && (
-            <button
-              onClick={() => {
-                setAllCompanies(true);
-                setCompanyFilter("ALL");
-              }}
-              className={cn(
-                "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
-                allCompanies
-                  ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
-                  : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-              data-testid="button-all-companies"
-            >
-              <Globe className="h-3.5 w-3.5" />
-              All Accessible Companies
-            </button>
-          )}
-          {data && (
-            <span className="text-xs text-muted-foreground ml-1 max-sm:col-span-2 max-sm:ml-0">
-              {data.total} active container{data.total !== 1 ? "s" : ""}
-              {data.mode === "single" && data.companyName ? ` — ${data.companyName}` : ""}
-            </span>
-          )}
-        </div>
+        <GITContainersSection2
+          allCompanies={allCompanies}
+          data={data}
+          restrictedToCurrentCompany={restrictedToCurrentCompany}
+          setAllCompanies={setAllCompanies}
+          setCompanyFilter={setCompanyFilter}
+        />
 
         {/* ── Summary Cards ── (narrow phones: two columns; landscape keeps the wrapping row) */}
-        <div className="grid shrink-0 grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <SummaryCard
-            label="Active"
-            value={data?.summary?.total ?? data?.total ?? filteredContainers.length}
-            icon={<Package className="h-4 w-4 text-primary" />}
-            accent="bg-primary/10"
-          />
-          {atSea > 0 && (
-            <SummaryCard
-              label="At Sea / OTW"
-              value={atSea}
-              icon={<Ship className="h-4 w-4 text-blue-600" />}
-              accent="bg-blue-100 dark:bg-blue-900/30"
-            />
-          )}
-          {atPort > 0 && (
-            <SummaryCard
-              label="At Port"
-              value={atPort}
-              icon={<Package className="h-4 w-4 text-amber-600" />}
-              accent="bg-amber-100 dark:bg-amber-900/30"
-            />
-          )}
-          {leftDar > 0 && (
-            <SummaryCard
-              label="Left Dar"
-              value={leftDar}
-              icon={<Truck className="h-4 w-4 text-violet-600" />}
-              accent="bg-violet-100 dark:bg-violet-900/30"
-            />
-          )}
-          {inTransit > 0 && (
-            <SummaryCard
-              label="In Transit"
-              value={inTransit}
-              icon={<Truck className="h-4 w-4 text-indigo-600" />}
-              accent="bg-indigo-100 dark:bg-indigo-900/30"
-            />
-          )}
-          {arrived > 0 && (
-            <SummaryCard
-              label="Arrived"
-              value={arrived}
-              icon={<CheckCircle2 className="h-4 w-4 text-green-600" />}
-              accent="bg-green-100 dark:bg-green-900/30"
-            />
-          )}
-          {delayed > 0 && (
-            <SummaryCard
-              label="Delayed"
-              value={delayed}
-              icon={<Clock className="h-4 w-4 text-red-600" />}
-              accent="bg-red-100 dark:bg-red-900/30"
-            />
-          )}
-          {offloadOverdue > 0 && (
-            <SummaryCard
-              label="Offload Overdue"
-              value={offloadOverdue}
-              icon={<AlertTriangle className="h-4 w-4 text-red-600" />}
-              accent="bg-red-100 dark:bg-red-900/30"
-            />
-          )}
-          <SummaryCard
-            label="Container Cost"
-            value={totalCost}
-            icon={<DollarSign className="h-4 w-4 text-green-600" />}
-            accent="bg-green-100 dark:bg-green-900/30"
-          />
-          <SummaryCard
-            label="Transport + Duty"
-            value={totalTransportDuty}
-            icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          />
-        </div>
+        <GITContainersSection
+          arrived={arrived}
+          atPort={atPort}
+          atSea={atSea}
+          data={data}
+          delayed={delayed}
+          filteredContainers={filteredContainers}
+          inTransit={inTransit}
+          leftDar={leftDar}
+          offloadOverdue={offloadOverdue}
+          totalCost={totalCost}
+          totalTransportDuty={totalTransportDuty}
+        />
 
         {/* ── Search + Filters Toggle ── (narrow phones: search row, then paired controls) */}
         <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
@@ -527,41 +326,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             )}
           </Button>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="default"
-                className="h-10 rounded-xl sm:h-11"
-                data-testid="button-otw-columns"
-              >
-                <SlidersHorizontal className="h-4 w-4 mr-1" />
-                Columns
-                {otwHiddenCount > 0 && (
-                  <span className="ml-1 text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
-                    {otwHiddenCount}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-52 p-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
-                Show / Hide Columns
-              </p>
-              <div className="space-y-0.5">
-                {OTW_COLS.map((col) => (
-                  <label
-                    key={col.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md hover-elevate cursor-pointer text-sm"
-                    data-testid={`col-toggle-otw-${col.id}`}
-                  >
-                    <Checkbox checked={colVis[col.id]} onCheckedChange={() => toggleOtwCol(col.id)} />
-                    {col.label}
-                  </label>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
+          <GITContainersPopoverSection colVis={colVis} otwHiddenCount={otwHiddenCount} toggleOtwCol={toggleOtwCol} />
 
           <ContainerBulkActions
             allowPrivilegedActions={!restrictedToCurrentCompany}

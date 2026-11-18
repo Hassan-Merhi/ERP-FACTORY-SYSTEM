@@ -12,9 +12,9 @@ if (process.env.PHASE10_VERIFY_CHILD !== "1") {
     process.execPath,
     [
       "--import",
-      "./server/exportBufferBridge.mjs",
+      "./server/runtime/exportBuffer.mjs",
       "--import",
-      "./server/scheduledAttachmentBridge.mjs",
+      "./server/runtime/scheduledAttachment.mjs",
       scriptPath,
     ],
     {

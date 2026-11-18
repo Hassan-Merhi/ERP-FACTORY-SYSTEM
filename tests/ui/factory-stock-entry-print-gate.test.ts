@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 function source(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
+  return readModuleFamily(resolve(process.cwd(), path));
 }
 
 describe("Factory stock-entry two-item limit", () => {
@@ -14,7 +14,9 @@ describe("Factory stock-entry two-item limit", () => {
     expect(tab).toContain("prev.length >= MAX_ITEMS_PER_ENTRY");
     expect(tab).toContain("cart.length > MAX_ITEMS_PER_ENTRY");
     expect(tab).toContain("Math.max(0, item.qty + delta)");
-    expect(tab).toContain("setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)))");
+    expect(tab).toContain(
+      "setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)))"
+    );
     expect(tab).not.toContain("MAX_BALES_PER_ENTRY");
     expect(tab).not.toContain("countCartBales");
     expect(tab).not.toContain("maxForProduct");

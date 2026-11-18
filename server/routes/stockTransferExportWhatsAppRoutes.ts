@@ -13,29 +13,6 @@ import { registerStockTransferOrderWaApprovalRoutes } from "./stockTransferOrder
 import { getWaSettings, sendWhatsAppFileToChatId } from "../services/whatsappService";
 
 const groupIdPattern = /^\d{5,25}@g\.us$/;
-let tableSetup: Promise<void> | null = null;
-async function ensureGroupsTable() {
-  if (!tableSetup) {
-    tableSetup = pool
-      .query(
-        `CREATE TABLE IF NOT EXISTS stock_transfer_export_wa_groups (
-          id SERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-          name TEXT NOT NULL,
-          chat_id TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          UNIQUE(company_id, chat_id)
-        )`
-      )
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        tableSetup = null;
-        throw error;
-      });
-  }
-  await tableSetup;
-}
-
 function companyId(req: Request) {
   const id = req.session.currentCompanyId;
   return Number.isInteger(id) && Number(id) > 0 ? Number(id) : null;
@@ -75,7 +52,6 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
       try {
         const id = companyId(req);
         if (!id) return res.status(400).json({ message: "Select a company" });
-        await ensureGroupsTable();
         const [groups, wa] = await Promise.all([
           pool.query(
             'SELECT id, name, chat_id AS "chatId" FROM stock_transfer_export_wa_groups WHERE company_id = $1 ORDER BY name',
@@ -105,7 +81,6 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
         const chatId = req.body?.chatId;
         if (!name || invalidGroupId(chatId))
           return res.status(400).json({ message: "A group name and valid WhatsApp group ID are required." });
-        await ensureGroupsTable();
         const count = await pool.query(
           "SELECT count(*)::int AS n FROM stock_transfer_export_wa_groups WHERE company_id=$1",
           [id]
@@ -133,7 +108,6 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
         const groupId = Number(req.params.groupId);
         if (!id || !Number.isSafeInteger(groupId) || groupId <= 0)
           return res.status(400).json({ message: "Invalid group." });
-        await ensureGroupsTable();
         await pool.query("DELETE FROM stock_transfer_export_wa_groups WHERE company_id=$1 AND id=$2", [id, groupId]);
         res.json({ ok: true });
       } catch {
@@ -171,7 +145,6 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
         ) {
           return res.status(400).json({ message: "Invalid transfer order, date or destination." });
         }
-        await ensureGroupsTable();
         const [selected, company, wa] = await Promise.all([
           pool.query(
             'SELECT id, name, chat_id AS "chatId" FROM stock_transfer_export_wa_groups WHERE company_id=$1 AND id=ANY($2::int[])',
@@ -233,6 +206,6 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
       }
     }
   );
-  registerPosTransferDelegatedApprovalRoutes(app, { ensureGroupsTable, createNoCostExcel });
-  registerStockTransferOrderWaApprovalRoutes(app, { ensureGroupsTable });
+  registerPosTransferDelegatedApprovalRoutes(app, { createNoCostExcel });
+  registerStockTransferOrderWaApprovalRoutes(app);
 }

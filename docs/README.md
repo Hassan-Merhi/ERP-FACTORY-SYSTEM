@@ -16,7 +16,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Repository file length warning and hard cap |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | ERP file-upload and Excel-export size limits |
 | [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
 | [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
 | [erp-supplier-returns-phase4-stock-integrity.md](erp-supplier-returns-phase4-stock-integrity.md) | Return stock deduction, rollback and audit-integrity contract |
@@ -57,7 +57,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Current source file size warning and hard cap policy |
+| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning and 500-line source-code cap |
 
 ## How the business logic works
 
@@ -160,7 +160,6 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [render-production-logging.md](render-production-logging.md) | Logging configuration on Render |
 | [program-1-incident-response-runbook.md](program-1-incident-response-runbook.md) | Incident response |
 | [troubleshooting.md](troubleshooting.md) | Common failures and fixes |
-| [fresh-db-bootstrap.md](fresh-db-bootstrap.md) | Known gap bootstrapping an empty database |
 
 ## Building and testing
 
@@ -395,14 +394,10 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
-| [database-migration-modernization-2026-11-11.md](database-migration-modernization-2026-11-11.md) | Database and migrations modernization — baseline and rollout |
-| [database-phase3-continued-inventory.md](database-phase3-continued-inventory.md) | Phase 3 continued — Startup mutation inventory and safe extraction |
-| [database-phase3-startup-cutover.md](database-phase3-startup-cutover.md) | Phase 3 — Startup DDL extraction and verification-only cutover |
+| [database-migrations.md](database-migrations.md) | **Database migrations: the single schema authority — fresh install, adoption, authoring, deployment, recovery** |
 | [database-phase4-integrity-hardening.md](database-phase4-integrity-hardening.md) | Phase 4 — Database constraints and integrity |
-| [database-phase5-schema-drift.md](database-phase5-schema-drift.md) | Phase 5 — Schema drift detection and reference certification |
 | [database-phase6-performance.md](database-phase6-performance.md) | Phase 6 — Database performance and index optimization |
 | [database-phase7-disaster-recovery.md](database-phase7-disaster-recovery.md) | Phase 7 — Backup and disaster recovery verification |
-| [database-phase8-migration-testing.md](database-phase8-migration-testing.md) | Phase 8 — Automated database migration testing |
 | [database-phase9-production-rollout.md](database-phase9-production-rollout.md) | Phase 9 — Production rollout and certification gate |
 | [factory-unification/phase-2-2026-11-10-continuation.md](factory-unification/phase-2-2026-11-10-continuation.md) | Factory Unification Phase 2 continuation handoff (2026-11-10) |
 | [audits/erp-phase3-navigation-permissions-ux-2026-11-11.md](audits/erp-phase3-navigation-permissions-ux-2026-11-11.md) | ERP Phase 3 navigation, permissions and company page grant audit |

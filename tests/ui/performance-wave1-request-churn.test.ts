@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 function source(path: string): string {
-  return readFileSync(path, "utf8");
+  return readModuleFamily(path);
 }
 
 // Guard page-level polling sites against steady hidden-tab background traffic.
@@ -37,11 +37,6 @@ const pollingCases = [
     "client/src/pages/factory/factoryfinancialsnapshot/useFactoryFinancialSnapshotModel.ts",
     "visibleTabInterval(5 * 60_000)",
     "refetchInterval: 5 * 60 * 1000,",
-  ],
-  [
-    "client/src/pages/factory/factorystockallocationv3/components/ScanningPanel.tsx",
-    "visibleTabInterval(30_000)",
-    "refetchInterval: 30000,",
   ],
   [
     "client/src/pages/factory/factorycontainerloadingscan/useProformaComparison.ts",

@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   sanitizeScreenFeedCapture,
   sanitizeScreenFeedFailure,
   sanitizeScreenFeedFailureReason,
 } from "../server/services/screenFeedService";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readModuleFamily(path);
 
 const controlRoutes = read("server/routes/remoteControlSessionRoutes.ts");
 const keyboardRoutes = read("server/routes/remoteKeyboardControlRoutes.ts");

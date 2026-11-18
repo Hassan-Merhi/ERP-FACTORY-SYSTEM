@@ -11,10 +11,11 @@ import { createWorkbook, jsonToSheet, writeWorkbook } from "../../excelHelper";
 import { registerCreditSalesImportRoutes } from "../creditSalesImportRoutes";
 import { registerPosImportRoutes } from "../posImportRoutes";
 import { registerStockTransferImportRoutes } from "../stockTransferImportRoutes";
+import { requireAuth } from "../../auth";
 
 export function registerImportTemplateRoutes(app: Express) {
   // Download sample PO import template
-  app.get("/api/po-import/template", async (_req, res) => {
+  app.get("/api/po-import/template", requireAuth, async (_req, res) => {
     try {
       // Sample data for the template
       const sampleData = [

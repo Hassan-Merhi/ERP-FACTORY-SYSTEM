@@ -10,7 +10,8 @@ const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
 const core = await read("client/src/components/ui/core-erp-mobile.tsx");
 const tabs = await read("client/src/components/ui/tabs.tsx");
 const periodFilter = await read("client/src/components/ui/period-filter.tsx");
-const daybookFilters = await read("client/src/pages/daybook/DaybookFilters.tsx");
+// The ERP Daybook filters render through the shared Daybook filter bar.
+const daybookFilters = `${await read("client/src/pages/daybook/DaybookFilters.tsx")}\n${await read("client/src/components/daybook/DaybookFilterBar.tsx")}`;
 const stockHistory = await read("client/src/pages/StockItemHistory.tsx");
 const browserCompat = await read("client/src/mobile-browser-compat.css");
 const failures = [];
@@ -61,7 +62,7 @@ for (const token of [
   'label="Daybook filters"',
   'data-testid="select-voucher-type"',
   'data-testid="select-status-filter"',
-  'data-testid="input-search"',
+  'searchTestId = "input-search"',
   "overflow-x-auto overscroll-x-contain",
 ]) {
   if (!daybookFilters.includes(token)) failures.push(`Daybook mobile contract missing: ${token}`);

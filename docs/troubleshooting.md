@@ -118,8 +118,12 @@ Fix: try setting `PGSSLMODE=disable` in Render's env vars if the PostgreSQL inst
 **D — Build timeout from `npm run check`**
 `tsc --noEmit` can take 2–5 minutes on this codebase. If Render's build command includes `npm run check` and times out, either increase the timeout or run type-checking in CI only.
 
-**E — `drizzle-kit push` fails**
-Do not run `drizzle-kit push` in the deploy command. It fails due to schema drift. Runtime migrations run automatically at server startup.
+**E — Startup refuses: "Database schema does not match this release"**
+The schema gate found pending migrations, missing/changed objects or no
+migration history. Run `npm run db:migrate:status` and `npm run db:verify`
+against the database, apply migrations with `npm run db:migrate` (or adopt a
+legacy database with `npm run db:adopt`). See docs/database-migrations.md.
+`drizzle-kit push` is not used.
 
 ---
 

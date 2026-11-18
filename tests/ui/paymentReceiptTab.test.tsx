@@ -257,14 +257,16 @@ describe("PaymentReceiptTab — receipt, edit and pending states", () => {
     renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={{ activeTab: "receipt" }} />);
     expect(await screen.findByText("Receipt Voucher")).toBeInTheDocument();
     expect(screen.getByTestId("card-selected-source")).toHaveTextContent("Receive Into");
-    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Save Voucher · $100.00");
+    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Save Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("$100.00");
   });
 
   it("offers Update in edit mode and says so while it is pending", async () => {
     const { rerender } = renderWithProviders(
       <Harness paymentAccountId={13} entries={[LINE]} extra={{ isEditMode: true, originalTotal: 40 }} />
     );
-    expect(await screen.findByTestId("button-save-voucher")).toHaveTextContent("Update Voucher · $100.00");
+    expect(await screen.findByTestId("button-save-voucher")).toHaveTextContent("Update Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("$100.00");
     rerender(
       <Harness
         paymentAccountId={13}
@@ -301,7 +303,9 @@ describe("PaymentReceiptTab — FX agent payments", () => {
   it("posts a USD payout from the wallet at the agreed rate", async () => {
     renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={fxProps()} />);
     const save = await screen.findByTestId("button-save-voucher");
-    expect(save).toHaveTextContent("Post Payment · USD 100.00");
+    // One save label everywhere; the FX payout currency shows in the action bar total.
+    expect(save).toHaveTextContent("Save Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("USD 100.00");
     expect(save).toBeEnabled();
   });
 
@@ -333,7 +337,9 @@ describe("PaymentReceiptTab — FX agent payments", () => {
 
     let view = renderWithProviders(<Harness paymentAccountId={13} entries={[SUPPLIER_LINE]} extra={direct(250)} />);
     const save = await screen.findByTestId("button-save-voucher");
-    expect(save).toHaveTextContent("Post Payment · EUR 100.00");
+    // One save label everywhere; the FX payout currency shows in the action bar total.
+    expect(save).toHaveTextContent("Save Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("EUR 100.00");
     expect(save).toBeEnabled();
     view.unmount();
 

@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpField, ErpNativeSelect } from "@/erp-core";
 
 type Options = {
@@ -214,7 +215,9 @@ export default function SupplierProfitReconciliation() {
                   >
                     <option value="">Select supplier</option>
                     {options?.suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
                     ))}
                   </ErpNativeSelect>
                 )}
@@ -224,14 +227,20 @@ export default function SupplierProfitReconciliation() {
                   <ErpNativeSelect {...control} value={groupId} onChange={(event) => setGroupId(event.target.value)}>
                     <option value="">All groups (items received from supplier)</option>
                     {options?.groups.map((group) => (
-                      <option key={group.id} value={group.id}>{group.name}</option>
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
                     ))}
                   </ErpNativeSelect>
                 )}
               </ErpField>
               <ErpField id="profit-period" label="Date selection">
                 {(control) => (
-                  <ErpNativeSelect {...control} value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
+                  <ErpNativeSelect
+                    {...control}
+                    value={period}
+                    onChange={(event) => setPeriod(event.target.value as Period)}
+                  >
                     <option value="all">All time</option>
                     <option value="day">Specific day</option>
                     <option value="month">Specific month</option>
@@ -242,12 +251,16 @@ export default function SupplierProfitReconciliation() {
               </ErpField>
               {period === "day" && (
                 <ErpField id="profit-day" label="Day">
-                  {(control) => <Input {...control} type="date" value={day} onChange={(event) => setDay(event.target.value)} />}
+                  {(control) => (
+                    <Input {...control} type="date" value={day} onChange={(event) => setDay(event.target.value)} />
+                  )}
                 </ErpField>
               )}
               {period === "month" && (
                 <ErpField id="profit-month" label="Month">
-                  {(control) => <Input {...control} type="month" value={month} onChange={(event) => setMonth(event.target.value)} />}
+                  {(control) => (
+                    <Input {...control} type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+                  )}
                 </ErpField>
               )}
               {period === "year" && (
@@ -265,14 +278,16 @@ export default function SupplierProfitReconciliation() {
                 </ErpField>
               )}
               {period === "custom" && (
-                <>
-                  <ErpField id="profit-from" label="From">
-                    {(control) => <Input {...control} type="date" value={from} onChange={(event) => setFrom(event.target.value)} />}
-                  </ErpField>
-                  <ErpField id="profit-to" label="To">
-                    {(control) => <Input {...control} type="date" value={to} onChange={(event) => setTo(event.target.value)} />}
-                  </ErpField>
-                </>
+                <div className="flex items-end">
+                  <PeriodFilter
+                    value={{ fromDate: from, toDate: to, preset: "custom" }}
+                    onChange={(v) => {
+                      setFrom(v.fromDate);
+                      setTo(v.toDate);
+                    }}
+                    data-testid="profit-custom-period"
+                  />
+                </div>
               )}
             </CardContent>
           </Card>

@@ -34,20 +34,20 @@ npm ci
 cp .env.example .env
 # then edit .env and set DATABASE_URL and SESSION_SECRET
 
-# 3. Restore an approved development database snapshot (see docs/fresh-db-bootstrap.md)
-# Runtime startup migrations will bring that schema forward automatically.
+# 3. Build the schema in an EMPTY database from the numbered migrations
+#    (see docs/database-migrations.md); the server never creates tables itself.
+MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate
 
 # 4. Start the dev server (client + API on http://localhost:5000)
 npm run dev
 ```
 
-Do not run `db:push` against a persistent or production database. The command is
-reserved for disposable CI/test databases while schema drift is being retired:
-many tables are still created by runtime startup DDL rather than declared in
-`shared/schema` (listed in `config/runtime-only-tables.json`), and drizzle-kit
-would drop them. `npm run db:push` therefore refuses any database that already
-holds companies (override with `DB_PUSH_ALLOW_NONEMPTY=1` only if you are
-certain), and `drizzle.config.ts` limits drizzle-kit to declared tables.
+The schema is owned by the numbered SQL files in `migrations/` and changed only
+by `npm run db:migrate` (explicit confirmation required). Server startup verifies
+the schema read-only and refuses to start on a mismatch; it never creates or
+alters tables. Existing databases created by the old startup DDL are adopted
+once with `npm run db:adopt`. `drizzle-kit push` is not used anywhere. See
+[docs/database-migrations.md](docs/database-migrations.md).
 
 ### Environment variables
 
@@ -77,7 +77,8 @@ documenting it.
 | `npm run format` | Prettier write |
 | `npm test` | Backend + frontend test suites (Vitest) |
 | `npm run test:backend` / `npm run test:frontend` | Run one suite |
-| `npm run db:push` | Provision a disposable CI/test database only |
+| `npm run db:migrate` / `db:migrate:status` / `db:verify` | Apply / inspect / verify schema migrations (see docs/database-migrations.md) |
+| `npm run db:adopt` | Read-only adoption plan for an existing database without migration history |
 | `npm run verify:env-docs` | Check `.env.example` covers every env var the server reads |
 | `npm run verify:dependency-audit` | Fail on unreviewed high/critical production vulnerabilities |
 | `npm run audit:coverage-ratchet` | Report coverage floors that measured coverage has outgrown |

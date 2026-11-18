@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastSetupRoutes.ts", import.meta.url), "utf8");
-const spSetupSource = readFileSync(new URL("./spSetupRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+const routeSource = readModuleFamily(new URL("./spGoldenCoastSetupRoutes.ts", import.meta.url));
+const spSetupSource = readModuleFamily(new URL("./spSetupRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
 
 describe("Golden Coast setup route surface hardened by Phase 13", () => {
   it("keeps provisioning and status inside the Supplier Partner setup area", () => {

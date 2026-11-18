@@ -15,7 +15,6 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: unknown, _res: unknown, n
 
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
-import { ensureCustomerOrderBaleScanAudit } from "../server/customerOrderBaleScanAuditBridge.mjs";
 import { registerEmployeeNetPositionRoutes } from "../server/routes/factory/employee-pos/employeeNetPositionRoutes";
 import { registerEmployeeAttendanceRoutes } from "../server/routes/factory/employee-pos/employeeAttendanceRoutes";
 
@@ -121,10 +120,6 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
 
   beforeAll(async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-23T09:00:00Z") });
-    // The scan-audit columns come from the startup preload, which CI's
-    // migration boot does not run. Same idempotent DDL as production.
-    await ensureCustomerOrderBaleScanAudit();
-
     companyId = await one(sql`INSERT INTO companies (code, name, company_type, created_at)
       VALUES (${"NPH" + suffix}, ${"NP history " + suffix}, 'factory', '2026-10-01 00:00') RETURNING id`);
     await db.execute(sql`INSERT INTO company_settings (company_id, timezone) VALUES (${companyId}, 'Asia/Beirut')`);

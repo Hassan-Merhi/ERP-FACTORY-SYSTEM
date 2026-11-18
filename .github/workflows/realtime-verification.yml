@@ -102,7 +102,7 @@ jobs:
             tests/ui/realtime-wave6-hardening.test.ts
 
       - name: Prepare disposable database schema
-        run: node node_modules/drizzle-kit/bin.cjs push --force
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
 
       - name: Verify Wave 6 server freshness contract
         run: node node_modules/vitest/vitest.mjs run server/routes/performance/realtimeReadFreshness.test.ts

@@ -1,128 +1,19 @@
-import { SearchField } from "@/components/ui/search-field";
-import { formatMoneyDisplay } from "@/lib/moneyDisplay";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
-import {
-  ArrowLeftRight,
-  BarChart3,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  GitCompare,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowLeftRight, BarChart3, Check, ChevronDown, GitCompare, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { formatNumber } from "@/lib/formatNumber";
-
-interface LocationOption {
-  id: number;
-  name: string;
-}
-
-interface StockGroupOption {
-  id: number;
-  name: string;
-}
-
-type GroupingType = "daily" | "monthly" | "yearly";
-
-type MetricKey =
-  | "stockInQty"
-  | "stockInValue"
-  | "stockInAvgRate"
-  | "stockOutQty"
-  | "totalSales"
-  | "costOfSales"
-  | "costProfit"
-  | "avgProfitPerBale";
-
-interface Metrics {
-  stockInQty: number;
-  stockInValue: number;
-  stockInAvgRate: number;
-  stockOutQty: number;
-  totalSales: number;
-  costOfSales: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-}
-
-interface ComparisonSet {
-  sideA: Metrics;
-  sideB: Metrics;
-  difference: Metrics;
-}
-
-interface ComparisonRow extends ComparisonSet {
-  periodKey: string;
-  periodStart: string;
-  periodEnd: string;
-}
-
-interface ItemComparisonRow extends ComparisonSet {
-  stockItemId: number;
-  stockItemCode: string;
-  stockItemName: string;
-  stockGroupId: number | null;
-  stockGroupName: string;
-}
-
-interface ComparisonResponse {
-  generatedAt: string;
-  summary: ComparisonSet;
-  rows: ComparisonRow[];
-  rowCount: number;
-  itemRows: ItemComparisonRow[];
-  itemRowCount: number;
-}
-
-const EMPTY_METRICS: Metrics = {
-  stockInQty: 0,
-  stockInValue: 0,
-  stockInAvgRate: 0,
-  stockOutQty: 0,
-  totalSales: 0,
-  costOfSales: 0,
-  costProfit: 0,
-  avgProfitPerBale: 0,
-};
-
-const METRICS: Array<{ key: MetricKey; label: string; kind: "qty" | "money" | "rate" }> = [
-  { key: "stockInQty", label: "Stock In Qty", kind: "qty" },
-  { key: "stockInValue", label: "Stock In Value", kind: "money" },
-  { key: "stockInAvgRate", label: "Average In Rate", kind: "rate" },
-  { key: "stockOutQty", label: "Stock Out Qty", kind: "qty" },
-  { key: "totalSales", label: "Total Sales", kind: "money" },
-  { key: "costOfSales", label: "Cost of Sales", kind: "money" },
-  { key: "costProfit", label: "Cost Profit", kind: "money" },
-  { key: "avgProfitPerBale", label: "Average Profit / Bale", kind: "rate" },
-];
-
-const ITEM_PAGE_SIZE = 50;
-
-function initialParams() {
-  return new URLSearchParams(window.location.search);
-}
-
-function initialPeriodValue(params: URLSearchParams): PeriodFilterValue {
-  const fromDate = params.get("startDate") || "";
-  const toDate = params.get("endDate") || "";
-  if (fromDate || toDate) return { fromDate, toDate, preset: "custom" };
-  return getDefaultPeriodValue("all_time");
-}
+import {
+  useStockInSalesReportComparisonState,
+  type GroupingType,
+  type LocationOption,
+  type StockGroupOption,
+} from "./useStockInSalesReportComparisonState";
+import { StockInSalesReportComparisonSection } from "./StockInSalesReportComparisonSection";
+import { SearchField } from "@/components/ui/search-field";
 
 function GroupMultiSelect({
   groups,
@@ -231,148 +122,45 @@ function SidePanel({
 }
 
 export default function StockInSalesReportComparison() {
-  const params = useMemo(initialParams, []);
-  const { selectedCompany } = useCompany();
-  const { formatAmount, selectedCurrency, convertToDisplay, displayCurrency } = useCurrencyContext();
-  const { formatDisplayDate } = useDateFormat();
-
-  const [period, setPeriod] = useState<PeriodFilterValue>(() => initialPeriodValue(params));
-  const [grouping, setGrouping] = useState<GroupingType>(() => {
-    const value = params.get("grouping");
-    return value === "daily" || value === "monthly" || value === "yearly" ? value : "yearly";
-  });
-  const [search, setSearch] = useState(() => params.get("search") || "");
-  const [sideALocationId, setSideALocationId] = useState(() => params.get("sideALocationId") || "");
-  const [sideBLocationId, setSideBLocationId] = useState(() => params.get("sideBLocationId") || "");
-  const [sideAGroupIds, setSideAGroupIds] = useState<string[]>(() =>
-    (params.get("sideAStockGroupIds") || "").split(",").filter(Boolean)
-  );
-  const [sideBGroupIds, setSideBGroupIds] = useState<string[]>(() =>
-    (params.get("sideBStockGroupIds") || "").split(",").filter(Boolean)
-  );
-  const [itemMetric, setItemMetric] = useState<MetricKey>("costProfit");
-  const [itemPage, setItemPage] = useState(1);
-
-  const { data: locations = [] } = useQuery<LocationOption[]>({
-    queryKey: ["/api/locations", selectedCompany?.id],
-    enabled: !!selectedCompany?.id,
-    staleTime: 5 * 60 * 1000,
-  });
-  const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
-    queryKey: ["/api/stock-groups", selectedCompany?.id],
-    enabled: !!selectedCompany?.id,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const sortedLocations = useMemo(() => [...locations].sort((a, b) => a.name.localeCompare(b.name)), [locations]);
-  const sortedGroups = useMemo(() => [...stockGroups].sort((a, b) => a.name.localeCompare(b.name)), [stockGroups]);
-
-  const sideALabel = sortedLocations.find((location) => String(location.id) === sideALocationId)?.name || "Side A";
-  const sideBLabel = sortedLocations.find((location) => String(location.id) === sideBLocationId)?.name || "Side B";
-
-  const queryUrl = useMemo(() => {
-    if (!sideALocationId || !sideBLocationId) return "";
-    const query = new URLSearchParams({
-      grouping,
-      sideALocationId,
-      sideBLocationId,
-    });
-    if (period.fromDate) query.set("startDate", period.fromDate);
-    if (period.toDate) query.set("endDate", period.toDate);
-    if (sideAGroupIds.length > 0) query.set("sideAStockGroupIds", sideAGroupIds.join(","));
-    if (sideBGroupIds.length > 0) query.set("sideBStockGroupIds", sideBGroupIds.join(","));
-    if (search.trim()) query.set("search", search.trim());
-    return `/api/reports/stock-in-sales/comparison?${query.toString()}`;
-  }, [period, grouping, search, sideALocationId, sideBLocationId, sideAGroupIds, sideBGroupIds]);
-
-  useEffect(() => setItemPage(1), [queryUrl, itemMetric]);
-
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery<ComparisonResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id],
-    enabled: !!selectedCompany?.id && !!queryUrl,
-    staleTime: 30_000,
-  });
-
-  const summary = data?.summary ?? {
-    sideA: EMPTY_METRICS,
-    sideB: EMPTY_METRICS,
-    difference: EMPTY_METRICS,
-  };
-
-  const selectedItemMetric = METRICS.find((metric) => metric.key === itemMetric) ?? METRICS[0];
-  const itemTotalPages = Math.max(1, Math.ceil((data?.itemRows.length || 0) / ITEM_PAGE_SIZE));
-  const pagedItemRows = (data?.itemRows || []).slice((itemPage - 1) * ITEM_PAGE_SIZE, itemPage * ITEM_PAGE_SIZE);
-
-  const formatMetric = (key: MetricKey, kind: "qty" | "money" | "rate", value: number): string => {
-    if (kind === "qty") return formatNumber(value, 3);
-    if (kind === "money") return value < 0 ? `-${formatAmount(Math.abs(value))}` : formatAmount(value);
-    if (displayCurrency && selectedCurrency === displayCurrency) {
-      const converted = convertToDisplay(value);
-      if (Number.isFinite(converted)) {
-        const label =
-          displayCurrency === "CFA"
-            ? `CFA ${formatNumber(Math.abs(converted), 2)}`
-            : formatMoneyDisplay(Math.abs(converted), { currency: displayCurrency });
-        return `${value < 0 ? "-" : ""}${label}`;
-      }
-    }
-    return `${value < 0 ? "-" : ""}$ ${formatNumber(Math.abs(value), key === "avgProfitPerBale" ? 2 : 6)}`;
-  };
-
-  const differenceClass = (value: number) =>
-    value > 0
-      ? "text-emerald-600 dark:text-emerald-400"
-      : value < 0
-        ? "text-red-600 dark:text-red-400"
-        : "text-muted-foreground";
-
-  const formatPeriod = (row: ComparisonRow) => {
-    if (grouping === "yearly") return row.periodKey;
-    if (grouping === "monthly") {
-      try {
-        return format(parseISO(`${row.periodKey}-01`), "MMMM yyyy");
-      } catch {
-        return row.periodKey;
-      }
-    }
-    try {
-      return formatDisplayDate(parseISO(row.periodKey));
-    } catch {
-      return row.periodKey;
-    }
-  };
-
-  const swapSides = () => {
-    const oldLocationA = sideALocationId;
-    const oldGroupsA = sideAGroupIds;
-    setSideALocationId(sideBLocationId);
-    setSideAGroupIds(sideBGroupIds);
-    setSideBLocationId(oldLocationA);
-    setSideBGroupIds(oldGroupsA);
-  };
-
-  const clearComparison = () => {
-    setPeriod(getDefaultPeriodValue("all_time"));
-    setGrouping("yearly");
-    setSearch("");
-    setSideALocationId("");
-    setSideBLocationId("");
-    setSideAGroupIds([]);
-    setSideBGroupIds([]);
-    setItemMetric("costProfit");
-  };
-
-  const renderValue = (
-    key: MetricKey,
-    kind: "qty" | "money" | "rate",
-    value: number,
-    difference = false
-  ): ReactNode => (
-    <span className={`font-mono text-sm ${difference ? differenceClass(value) : ""}`}>
-      {difference && value > 0 ? "+" : ""}
-      {formatMetric(key, kind, value)}
-    </span>
-  );
+  const {
+    clearComparison,
+    data,
+    error,
+    formatPeriod,
+    grouping,
+    isError,
+    isFetching,
+    isLoading,
+    itemMetric,
+    itemPage,
+    itemTotalPages,
+    pagedItemRows,
+    period,
+    refetch,
+    renderValue,
+    search,
+    selectedCompany,
+    selectedItemMetric,
+    setGrouping,
+    setItemMetric,
+    setItemPage,
+    setPeriod,
+    setSearch,
+    setSideAGroupIds,
+    setSideALocationId,
+    setSideBGroupIds,
+    setSideBLocationId,
+    sideAGroupIds,
+    sideALabel,
+    sideALocationId,
+    sideBGroupIds,
+    sideBLabel,
+    sideBLocationId,
+    sortedGroups,
+    sortedLocations,
+    summary,
+    swapSides,
+  } = useStockInSalesReportComparisonState();
 
   return (
     <div className="container mx-auto space-y-6 p-0 sm:p-6">
@@ -464,235 +252,22 @@ export default function StockInSalesReportComparison() {
           </Button>
         </div>
       ) : (
-        <>
-          <section className="space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold">Overall comparison</h2>
-              <p className="text-xs text-muted-foreground">
-                All metrics use the same date range and active search filter.
-              </p>
-            </div>
-            <div className="overflow-hidden rounded-xl border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead>Metric</TableHead>
-                    <TableHead className="text-right">{sideALabel}</TableHead>
-                    <TableHead className="text-right">{sideBLabel}</TableHead>
-                    <TableHead className="text-right">Difference (A − B)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading
-                    ? METRICS.map((metric) => (
-                        <TableRow key={metric.key}>
-                          <TableCell>{metric.label}</TableCell>
-                          {[0, 1, 2].map((cell) => (
-                            <TableCell key={cell}>
-                              <Skeleton className="ml-auto h-4 w-24" />
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    : METRICS.map((metric) => (
-                        <TableRow key={metric.key}>
-                          <TableCell className="font-medium">{metric.label}</TableCell>
-                          <TableCell className="text-right">
-                            {renderValue(metric.key, metric.kind, summary.sideA[metric.key])}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {renderValue(metric.key, metric.kind, summary.sideB[metric.key])}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {renderValue(metric.key, metric.kind, summary.difference[metric.key], true)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                </TableBody>
-              </Table>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold">Period comparison</h2>
-                <p className="text-xs text-muted-foreground">
-                  Each period shows Side A, Side B, and the difference for every report metric.
-                </p>
-              </div>
-              {data && (
-                <p className="text-xs text-muted-foreground">
-                  {data.rowCount} period{data.rowCount === 1 ? "" : "s"}
-                </p>
-              )}
-            </div>
-            <div className="overflow-hidden rounded-xl border">
-              <div className="overflow-x-auto">
-                <Table className="min-w-[850px]">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40">
-                      <TableHead>Period</TableHead>
-                      <TableHead>Metric</TableHead>
-                      <TableHead className="text-right">{sideALabel}</TableHead>
-                      <TableHead className="text-right">{sideBLabel}</TableHead>
-                      <TableHead className="text-right">Difference (A − B)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      Array.from({ length: 8 }).map((_, index) => (
-                        <TableRow key={index}>
-                          {Array.from({ length: 5 }).map((__, cell) => (
-                            <TableCell key={cell}>
-                              <Skeleton className="h-4 w-full max-w-28" />
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : !data || data.rows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-12 text-center text-sm text-muted-foreground">
-                          No activity was found for either side with the selected filters.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      data.rows.flatMap((row) =>
-                        METRICS.map((metric, metricIndex) => (
-                          <TableRow key={`${row.periodKey}-${metric.key}`}>
-                            {metricIndex === 0 && (
-                              <TableCell rowSpan={METRICS.length} className="align-top font-semibold">
-                                {formatPeriod(row)}
-                              </TableCell>
-                            )}
-                            <TableCell className="font-medium text-muted-foreground">{metric.label}</TableCell>
-                            <TableCell className="text-right">
-                              {renderValue(metric.key, metric.kind, row.sideA[metric.key])}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {renderValue(metric.key, metric.kind, row.sideB[metric.key])}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {renderValue(metric.key, metric.kind, row.difference[metric.key], true)}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Item comparison</h2>
-                <p className="text-xs text-muted-foreground">
-                  Choose any report metric to compare every matching stock item across the two sides.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select value={itemMetric} onValueChange={(value) => setItemMetric(value as MetricKey)}>
-                  <SelectTrigger className="w-52" data-testid="select-item-comparison-metric">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {METRICS.map((metric) => (
-                      <SelectItem key={metric.key} value={metric.key}>
-                        {metric.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {data && (
-                  <span className="text-xs text-muted-foreground">
-                    {data.itemRowCount} item{data.itemRowCount === 1 ? "" : "s"}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-xl border">
-              <div className="overflow-x-auto">
-                <Table className="min-w-[820px]">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40">
-                      <TableHead>Item</TableHead>
-                      <TableHead>Stock Group</TableHead>
-                      <TableHead className="text-right">{sideALabel}</TableHead>
-                      <TableHead className="text-right">{sideBLabel}</TableHead>
-                      <TableHead className="text-right">Difference (A − B)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      Array.from({ length: 8 }).map((_, index) => (
-                        <TableRow key={index}>
-                          {Array.from({ length: 5 }).map((__, cell) => (
-                            <TableCell key={cell}>
-                              <Skeleton className="h-4 w-full max-w-28" />
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : pagedItemRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                          No matching stock items found.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      pagedItemRows.map((row) => (
-                        <TableRow key={row.stockItemId}>
-                          <TableCell>
-                            <div className="font-medium">{row.stockItemName}</div>
-                            <div className="text-xs text-muted-foreground">{row.stockItemCode}</div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{row.stockGroupName}</TableCell>
-                          <TableCell className="text-right">
-                            {renderValue(itemMetric, selectedItemMetric.kind, row.sideA[itemMetric])}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {renderValue(itemMetric, selectedItemMetric.kind, row.sideB[itemMetric])}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {renderValue(itemMetric, selectedItemMetric.kind, row.difference[itemMetric], true)}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              {data && data.itemRowCount > ITEM_PAGE_SIZE && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    Page {itemPage} of {itemTotalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.max(1, page - 1))}
-                      disabled={itemPage <= 1}
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))}
-                      disabled={itemPage >= itemTotalPages}
-                    >
-                      Next <ChevronRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        </>
+        <StockInSalesReportComparisonSection
+          data={data}
+          formatPeriod={formatPeriod}
+          isLoading={isLoading}
+          itemMetric={itemMetric}
+          itemPage={itemPage}
+          itemTotalPages={itemTotalPages}
+          pagedItemRows={pagedItemRows}
+          renderValue={renderValue}
+          selectedItemMetric={selectedItemMetric}
+          setItemMetric={setItemMetric}
+          setItemPage={setItemPage}
+          sideALabel={sideALabel}
+          sideBLabel={sideBLabel}
+          summary={summary}
+        />
       )}
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">

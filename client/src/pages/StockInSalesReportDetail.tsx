@@ -14,37 +14,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatNumber";
-
-interface Metrics {
-  openingStockQty: number;
-  openingStockValue: number;
-  stockInQty: number;
-  stockInValue: number;
-  stockInAvgRate: number;
-  stockAdjustmentQty: number;
-  stockAdjustmentValue: number;
-  totalAvailableQty: number;
-  stockOutQty: number;
-  stockOutValue: number;
-  closingStockQty: number;
-  closingStockValue: number;
-  totalSales: number;
-  costOfSales: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-}
-
-interface StockInRow {
-  id: number;
-  activityDate: string;
-  containerNumber: string;
-  locationName: string;
-  stockItemId?: number;
-  stockItemName: string;
-  quantity: number;
-  avgRate: number;
-  totalValue: number;
-}
+import type { Metrics, StockInRow } from "./StockInSalesReportDetailTypes";
 
 interface StockOutRow {
   id: number;

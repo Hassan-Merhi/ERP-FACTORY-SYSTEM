@@ -5,8 +5,8 @@
  * incompatible. Every database call runs in one rolled-back transaction.
  */
 import type { PoolClient } from "pg";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { db, pool } from "../server/db";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { db } from "../server/db";
 import {
   currentPilotEligibilityTx,
   deployedUnifiedReleaseSha,
@@ -19,7 +19,6 @@ import {
   unifiedReleaseReadinessTx,
   UNIFIED_PHASES,
 } from "../server/services/accounting/unifiedRolloutService";
-import { applyCostCenterMigrations } from "./helpers/costCenterMigrations";
 import { withRolledBackPool } from "./helpers/routedPoolClient";
 
 const SHA = "a".repeat(40);
@@ -60,12 +59,6 @@ const review = (companyId: number, kind: "TECHNICAL" | "SECURITY" | "FINANCE", b
     })
   );
 const readiness = (companyId: number) => db.transaction((tx) => unifiedReleaseReadinessTx(tx, companyId));
-
-// Readiness expects the cost-center tables with forced RLS. Install them here
-// rather than relying on another test file having run first.
-beforeAll(async () => {
-  await applyCostCenterMigrations(pool);
-});
 
 beforeEach(() => {
   delete process.env.RENDER_GIT_COMMIT;

@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, type SpExcelImportContainer } from "@shared/spContainerExcelImport";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface SpExcelParseResponse {
   fileName: string;
@@ -20,7 +20,7 @@ interface SpContainerExcelImportProps {
 }
 
 function usd(value: number): string {
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatUsd(value, 2);
 }
 
 /**
@@ -208,11 +208,8 @@ export function SpContainerExcelImport({ onApply }: SpContainerExcelImportProps)
             <p className="text-xs text-amber-600" data-testid="text-sp-excel-unmatched">
               {applied.unmatchedArticleCodes.length} article code(s) matched no stock item or alias:{" "}
               {applied.unmatchedArticleCodes.slice(0, 5).join(", ")}
-              {applied.unmatchedArticleCodes.length > 5 ? "…" : ""}. The lines are kept by code; map them under{" "}
-              <Link href="/sp/aliases" className="underline">
-                Aliases
-              </Link>{" "}
-              before offloading.
+              {applied.unmatchedArticleCodes.length > 5 ? "…" : ""}. The lines are kept by code; correct the article
+              codes or the stock item codes before offloading.
             </p>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { Package } from "lucide-react";
 import { ErpListTable } from "@/erp-core";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { ProfitCell } from "./components/ProfitCell";
 import { StatusBadge } from "./components/StatusBadge";
 import { fmt } from "./utils";
+import { QuantityCell, QuantityInput } from "./SupplierProfitCheckTableQuantity";
 import type { ComputedRow } from "./types";
 import type { useSupplierProfitCheckModel } from "./useSupplierProfitCheckModel";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -148,7 +150,7 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.extraPerBale && (
         <TableCell className="text-right text-sm py-2.5">
           {model.extraCostPerBale > 0 ? (
-            <span className="font-mono text-amber-500">${fmt(model.extraCostPerBale)}</span>
+            <span className="font-mono text-amber-500">{formatUsd(model.extraCostPerBale, 2)}</span>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -157,7 +159,7 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.landingCost && (
         <TableCell className="text-right text-sm font-medium py-2.5 bg-blue-500/5">
           {row.landingCost != null ? (
-            <span className="text-blue-600 dark:text-blue-400 tabular-nums">${fmt(row.landingCost)}</span>
+            <span className="text-blue-600 dark:text-blue-400 tabular-nums">{formatUsd(row.landingCost, 2)}</span>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -182,12 +184,16 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.qtyToOrder && <QuantityCell row={row} model={model} />}
       {visibility.inventoryAvgCost && (
         <TableCell className="text-right text-sm font-mono text-muted-foreground py-2.5">
-          ${fmt(row.inventoryAvgCost)}
+          {formatUsd(row.inventoryAvgCost, 2)}
         </TableCell>
       )}
       {visibility.hassanPrice && (
         <TableCell className="text-right text-sm font-mono py-2.5">
-          {row.configPrice > 0 ? `$${fmt(row.configPrice)}` : <span className="text-muted-foreground text-xs">—</span>}
+          {row.configPrice > 0 ? (
+            formatUsd(row.configPrice, 2)
+          ) : (
+            <span className="text-muted-foreground text-xs">—</span>
+          )}
         </TableCell>
       )}
       {visibility.hassanProfit && (
@@ -284,7 +290,7 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
     return (
       <div className="text-right">
         {row.groupSellingPrice != null ? (
-          <span className="font-mono text-sm">${fmt(row.groupSellingPrice)}</span>
+          <span className="font-mono text-sm">{formatUsd(row.groupSellingPrice, 2)}</span>
         ) : (
           <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">No Price</span>
         )}
@@ -303,7 +309,9 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
         testId={`input-manual-avg-price-${row.stockItemId}`}
       />
       {model.manualAvgPrices[row.stockItemId] && row.avgSellingPrice != null && (
-        <span className="text-[11px] text-muted-foreground leading-tight">auto ${fmt(row.avgSellingPrice)}</span>
+        <span className="text-[11px] text-muted-foreground leading-tight">
+          auto {formatUsd(row.avgSellingPrice, 2)}
+        </span>
       )}
     </div>
   );
@@ -322,7 +330,7 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
   if (row.unresolved) {
     return row.poPrice != null ? (
       <div className="flex flex-col items-end gap-0.5">
-        <span className="font-mono text-sm text-amber-600 dark:text-amber-400">${fmt(row.poPrice)}</span>
+        <span className="font-mono text-sm text-amber-600 dark:text-amber-400">{formatUsd(row.poPrice, 2)}</span>
         <span className="text-[11px] text-muted-foreground leading-tight">proforma price</span>
       </div>
     ) : (
@@ -344,40 +352,12 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
         />
       </div>
       {model.manualPoPrices[row.stockItemId] && row.poPrice != null && (
-        <span className="text-[11px] text-muted-foreground leading-tight">auto ${fmt(row.poPrice)}</span>
+        <span className="text-[11px] text-muted-foreground leading-tight">auto {formatUsd(row.poPrice, 2)}</span>
       )}
       {!model.manualPoPrices[row.stockItemId] && row.poPriceSource === "any_po_fallback" && (
         <span className="text-[11px] text-amber-500/80 leading-tight">any supplier</span>
       )}
     </div>
-  );
-}
-
-function QuantityCell({ row, model }: { row: ComputedRow; model: ProfitModel }) {
-  return (
-    <TableCell className="py-2.5">
-      <QuantityInput row={row} model={model} className="w-24 h-7 text-right ml-auto font-mono" />
-    </TableCell>
-  );
-}
-
-function QuantityInput({ row, model, className }: { row: ComputedRow; model: ProfitModel; className: string }) {
-  return (
-    <Input
-      type="number"
-      min="0"
-      step="1"
-      placeholder="0"
-      value={model.qtyMap[row.stockItemId] ?? ""}
-      onChange={(event) => {
-        model.setQtyMap((previous) => ({ ...previous, [row.stockItemId]: event.target.value }));
-        model.setQtyVersion((version) => version + 1);
-      }}
-      onKeyDown={(event) => model.handleArrowNav(event, "data-qty-input")}
-      className={`${className} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
-      data-testid={`input-qty-${row.stockItemId}`}
-      data-qty-input="true"
-    />
   );
 }
 
@@ -408,7 +388,7 @@ function ProfitCard({ row, model }: { row: ComputedRow; model: ProfitModel }) {
       label: "Landing Cost",
       value:
         row.landingCost != null ? (
-          <span className="text-blue-600 dark:text-blue-400 tabular-nums">${fmt(row.landingCost)}</span>
+          <span className="text-blue-600 dark:text-blue-400 tabular-nums">{formatUsd(row.landingCost, 2)}</span>
         ) : (
           "—"
         ),
@@ -420,15 +400,19 @@ function ProfitCard({ row, model }: { row: ComputedRow; model: ProfitModel }) {
   if (visibility.extraPerBale)
     details.push({
       label: "Extra / Bale",
-      value: model.extraCostPerBale > 0 ? `$${fmt(model.extraCostPerBale)}` : "—",
+      value: model.extraCostPerBale > 0 ? formatUsd(model.extraCostPerBale, 2) : "—",
       numeric: true,
     });
   if (visibility.inventoryAvgCost)
-    details.push({ label: "Inv. Avg Cost", value: `$${fmt(row.inventoryAvgCost)}`, numeric: true });
+    details.push({
+      label: "Inv. Avg Cost",
+      value: formatUsd(row.inventoryAvgCost, 2),
+      numeric: true,
+    });
   if (visibility.hassanPrice)
     details.push({
       label: "Hassan Price",
-      value: row.configPrice > 0 ? `$${fmt(row.configPrice)}` : "—",
+      value: row.configPrice > 0 ? formatUsd(row.configPrice, 2) : "—",
       numeric: true,
     });
   if (visibility.hassanProfit)

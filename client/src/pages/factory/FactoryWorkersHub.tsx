@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { PeopleHubTabStrip } from "@/pages/factory/people/PeopleHubTabStrip";
 import { HardHat, DollarSign, CalendarDays, Banknote, Gift, BarChart3 } from "lucide-react";
 import FactoryWorkers from "@/pages/factory/FactoryWorkers";
 import FactoryPayrollTab from "@/pages/factory/FactoryPayrollTab";
@@ -109,20 +110,7 @@ export default function FactoryWorkersHub() {
 
   return (
     <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
-      <div className="erp-mobile-scroll-tabs mb-4 pb-1">
-        <TabsList
-          className="w-max min-w-full sm:min-w-0 sm:w-fit"
-          aria-label="Worker sections"
-          data-testid="tabs-workers-section"
-        >
-          {visibleOptions.map(({ value, label, icon: ItemIcon }) => (
-            <TabsTrigger key={value} value={value} data-testid={`tab-workers-${value}`}>
-              <ItemIcon className="h-4 w-4 shrink-0" />
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </div>
+      <PeopleHubTabStrip tabs={visibleOptions} ariaLabel="Worker sections" testIdPrefix="workers" />
 
       {visibleValues.includes("workers") && (
         <TabsContent value="workers" className="mt-0">

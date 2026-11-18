@@ -1,9 +1,9 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file: string) => readModuleFamily(path.join(root, file));
 
 describe("Bandwidth Phase 2 payload contracts", () => {
   it("returns compact proforma summaries and preserves a detail route", () => {
@@ -79,7 +79,7 @@ describe("Bandwidth Phase 2 payload contracts", () => {
 
   it("retains existing compact Bale Ledger and container detail profiles", () => {
     const ledger = read("server/routes/factory/employee-pos/employeeLedgerWasteRoutes.ts");
-    const bridge = read("server/apiPaginationBridge.mjs");
+    const bridge = read("server/runtime/apiPagination.mjs");
     expect(ledger).toContain("Strip baleDetails from the summary response");
     expect(ledger).toContain("/api/factory/bale-ledger/details");
     expect(bridge).toContain('profile === "otw-summary"');

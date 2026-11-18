@@ -6,12 +6,12 @@ import {
   integer,
   decimal,
   date,
-  boolean,
   timestamp,
   uniqueIndex,
   unique,
   index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { locations } from "../common";
@@ -34,7 +34,7 @@ export const factoryRawStock = pgTable(
     // a multi-dollar swing on the total landed cost, and disagrees with suppliers' own
     // Excel reconciliations computed at full precision. Every cost-per-KG column in the
     // Factory module is 7dp; rates and prices that a user types in stay at 6.
-    costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull(),
+    costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull().default("0"),
     costPerKgUsd: decimal("cost_per_kg_usd", { precision: 20, scale: 7 }),
     commissionPersonName: text("commission_person_name"),
     commissionAmount: decimal("commission_amount", { precision: 20, scale: 4 }),
@@ -202,9 +202,9 @@ export const factoryMixBatches = pgTable(
     id: serial("id").primaryKey(),
     companyId: integer("company_id").notNull(),
     batchCode: varchar("batch_code", { length: 50 }).notNull(),
-    batchNumber: text("batch_number"),
+    batchNumber: text("batch_number").default(""),
     name: text("name"),
-    totalWeightKg: decimal("total_weight_kg", { precision: 15, scale: 3 }).notNull(),
+    totalWeightKg: decimal("total_weight_kg", { precision: 15, scale: 3 }).notNull().default("0"),
     usedKg: decimal("used_kg", { precision: 15, scale: 3 }).notNull().default("0"),
     // 7dp, matching factory_mix_batch_sources and factory_bales. The July 2026
     // precision migration ALTERs all three tables to NUMERIC(20,7), but this
@@ -212,10 +212,10 @@ export const factoryMixBatches = pgTable(
     // the column, and `drizzle-kit push` and application boot disagreed about
     // the same database. The migration is the intended value; this now agrees
     // with it. Widening only, so no existing value can be truncated.
-    costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull(),
-    totalCost: decimal("total_cost", { precision: 20, scale: 7 }).notNull(),
+    costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull().default("0"),
+    totalCost: decimal("total_cost", { precision: 20, scale: 7 }).notNull().default("0"),
     notes: text("notes"),
-    status: text("status").notNull().default("ACTIVE"),
+    status: text("status").notNull().default("OPEN"),
     operatorUser: text("operator_user"),
     batchDate: date("batch_date"),
     carryForwardFromId: integer("carry_forward_from_id"),
@@ -259,10 +259,10 @@ export const factoryMixBatchSources = pgTable("factory_mix_batch_sources", {
   containerId: integer("container_id").references(() => factoryContainers.id, { onDelete: "restrict" }),
   supplierId: integer("supplier_id").references(() => factorySuppliers.id, { onDelete: "restrict" }),
   sourceBatchId: integer("source_batch_id"),
-  sourceType: text("source_type"),
+  sourceType: text("source_type").default("SUPPLIER"),
   sourceId: integer("source_id"),
   weightKg: decimal("weight_kg", { precision: 15, scale: 3 }).notNull(),
-  quantityKg: decimal("quantity_kg", { precision: 15, scale: 3 }),
+  quantityKg: decimal("quantity_kg", { precision: 15, scale: 3 }).default("0"),
   costPerKg: decimal("cost_per_kg", { precision: 20, scale: 7 }).notNull(),
   totalCost: decimal("total_cost", { precision: 20, scale: 7 }).notNull(),
   notes: text("notes"),
@@ -300,7 +300,9 @@ export const factoryDailyUsages = pgTable(
     mixBatchId: integer("mix_batch_id").notNull(),
     kgUsed: decimal("kg_used", { precision: 15, scale: 3 }).notNull(),
     operatorUser: text("operator_user"),
-    usedDate: date("used_date").notNull(),
+    usedDate: date("used_date")
+      .notNull()
+      .default(sql`CURRENT_DATE`),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -325,7 +327,7 @@ export const factoryPressingBatches = pgTable(
     companyId: integer("company_id").notNull(),
     mixBatchId: integer("mix_batch_id"),
     productId: integer("product_id"),
-    expectedCount: integer("expected_count").notNull(),
+    expectedCount: integer("expected_count").notNull().default(0),
     status: text("status").notNull().default("PENDING"),
     notes: text("notes"),
     // users.id is a varchar, and startup migration 002 converts this column to
@@ -470,54 +472,5 @@ export const insertFactoryBaleImportBatchSchema = createInsertSchema(factoryBale
 export type InsertFactoryBaleImportBatch = z.infer<typeof insertFactoryBaleImportBatchSchema>;
 export type FactoryBaleImportBatch = typeof factoryBaleImportBatches.$inferSelect;
 
-// ─── Factory Container Commissions ───────────────────────────────────────────
-export const factoryContainerCommissions = pgTable(
-  "factory_container_commissions",
-  {
-    id: serial("id").primaryKey(),
-    companyId: integer("company_id").notNull(),
-    containerId: integer("container_id")
-      .notNull()
-      .references(() => factoryContainers.id, { onDelete: "restrict" }),
-    personName: text("person_name").notNull(),
-    commissionType: text("commission_type").notNull().default("PER_KG"),
-    commissionRate: decimal("commission_rate", { precision: 20, scale: 6 }).notNull(),
-    commissionTotal: decimal("commission_total", { precision: 20, scale: 4 }).notNull(),
-    currencyCode: varchar("currency_code", { length: 10 }).notNull().default("USD"),
-    fxRateToUsd: decimal("fx_rate_to_usd", { precision: 20, scale: 8 }).notNull().default("1"),
-    fxRateConfirmed: boolean("fx_rate_confirmed").notNull().default(false),
-    commissionTotalUsd: decimal("commission_total_usd", { precision: 20, scale: 4 }),
-    ledgerAccountId: integer("ledger_account_id"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (t) => ({
-    containerIdx: index("factory_container_commissions_container_idx").on(t.containerId),
-    companyIdx: index("factory_container_commissions_company_idx").on(t.companyId),
-  })
-);
-
-export type FactoryContainerCommission = typeof factoryContainerCommissions.$inferSelect;
-
-// ─── Factory Duty Audit Log ───────────────────────────────────────────────────
-export const factoryDutyAuditLog = pgTable(
-  "factory_duty_audit_log",
-  {
-    id: serial("id").primaryKey(),
-    companyId: integer("company_id").notNull(),
-    containerId: integer("container_id")
-      .notNull()
-      .references(() => factoryContainers.id, { onDelete: "restrict" }),
-    oldDutyAmount: decimal("old_duty_amount", { precision: 20, scale: 2 }),
-    newDutyAmount: decimal("new_duty_amount", { precision: 20, scale: 2 }).notNull(),
-    oldDutyStatus: text("old_duty_status"),
-    newDutyStatus: text("new_duty_status").notNull(),
-    notes: text("notes"),
-    updatedByUserId: text("updated_by_user_id").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (t) => ({
-    companyIdx: index("factory_duty_audit_log_company_idx").on(t.companyId),
-  })
-);
-
-export type FactoryDutyAuditLog = typeof factoryDutyAuditLog.$inferSelect;
+export { factoryContainerCommissions, factoryDutyAuditLog } from "./raw-stock-commissions";
+export type { FactoryContainerCommission, FactoryDutyAuditLog } from "./raw-stock-commissions";

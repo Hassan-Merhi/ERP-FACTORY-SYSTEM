@@ -1,5 +1,3 @@
-import type { ComponentType } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
@@ -11,12 +9,7 @@ const ErpHelpTraining = lazy(() =>
 );
 const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 const ErpSupplierReturns = lazy(() => import("@/pages/factory/FactorySupplierReturns"));
-import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
-import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
-import { useCompany } from "@/contexts/CompanyContext";
-import { canEnterErpGuardedRoute, effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
-import type { FeatureKey } from "@shared/schema";
-import SpOverview from "@/pages/sp/SpOverview";
+import { useErpRouteGuards, type ErpRouteUser, type RouteComponent } from "./useErpRouteGuards";
 import {
   AICommandCenter,
   AccountGroups,
@@ -99,8 +92,6 @@ import {
   SalesReportDetail,
   SalesToolsHub,
   Settings,
-  SpAliases,
-  SpOpeningStock,
   SpReports,
   SpSetup,
   SpreadsheetEditor,
@@ -116,51 +107,20 @@ import {
   TrackingHub,
   TransactionJournal,
   VoucherDetail,
-  VoucherEdit,
+  LegacyVoucherEditRedirect,
   Vouchers,
 } from "@/lazyPages";
-
-interface ErpRouteUser {
-  role?: string | null;
-  currentRole?: string | null;
-}
 
 interface ErpRoutesProps {
   user: ErpRouteUser;
 }
-
-type RouteComponent = ComponentType;
 
 function LegacyIntercompanyPaymentRedirect() {
   return <Redirect replace to={legacyErpIntercompanyPaymentDestination()} />;
 }
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
-  const { selectedCompany } = useCompany();
-  const { data: erpAccess } = useQuery<ErpFeatureAccess>({
-    ...erpPageAccessQueryOptions(selectedCompany?.id, Boolean(user)),
-  });
-
-  const effectiveRole = effectiveErpRole(user);
-  const roleAllowed = (path: string) => isErpRouteRoleAllowed(path, effectiveRole);
-  const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
-  const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
-  const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
-    canAccess(key) && roleAllowed(path) ? (
-      <Route path={path} component={Comp} />
-    ) : (
-      <Route path={path}>
-        <Redirect replace to="/tracking" />
-      </Route>
-    );
-  const R = (path: string, allowed: boolean, Comp: RouteComponent) =>
-    allowed && canEnterErpGuardedRoute(path, effectiveRole) ? (
-      <Route path={path} component={Comp} />
-    ) : (
-      <Route path={path}>
-        <Redirect replace to="/tracking" />
-      </Route>
-    );
+  const { erpAccess, effectiveRole, roleAllowed, canAccess, canAccessAny, G, R } = useErpRouteGuards(user);
 
   return (
     <Switch>
@@ -347,7 +307,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {G("/vouchers/:id/edit", "vouchers", VoucherEdit)}
+      {/* Retired separate edit page: old links redirect to the editor Daybook opens. */}
+      {G("/vouchers/:id/edit", "vouchers", LegacyVoucherEditRedirect)}
       {G("/purchase-orders/:id/edit", "vouchers", PurchaseOrderEdit)}
       {canAccess("vouchers") ? (
         <Route path="/voucher-detail/:voucherId" component={VoucherDetail} />
@@ -500,11 +461,20 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/account-migration", true, AccountMigration)}
       {R("/account-transfer", true, AccountTransfer)}
       {R("/my-settings", true, MySettings)}
-
-      <Route path="/sp" component={SpOverview} />
-      <Route path="/sp/opening-stock" component={SpOpeningStock} />
+      {/* Retired Supplier Partner pages (Overview, Opening Stock, Aliases, Golden Coast): old links land on SP Reports. */}
+      <Route path="/sp">
+        <Redirect replace to="/sp/reports" />
+      </Route>
+      <Route path="/sp/opening-stock">
+        <Redirect replace to="/sp/reports" />
+      </Route>
       <Route path="/sp/reports" component={SpReports} />
-      <Route path="/sp/aliases" component={SpAliases} />
+      <Route path="/sp/aliases">
+        <Redirect replace to="/sp/reports" />
+      </Route>
+      <Route path="/sp/golden-coast">
+        <Redirect replace to="/sp/reports" />
+      </Route>
       <Route path="/sp/migration">
         <Redirect to="/sp/setup" />
       </Route>

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { assertTransferNotAlreadyPostedTx } from "../server/services/inventory/transferCanonicalAlreadyPostedGuard";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const dialect = new PgDialect();
 const input = { companyId: 9, transferId: 866, voucherId: 15358 };
@@ -47,7 +47,7 @@ describe("ERP Phase 4 fail-closed transfer repost guard", () => {
   });
 
   it("protects BOTH draft-to-post and finalize flows before applying inventory", () => {
-    const code = readFileSync(new URL("../server/services/stockTransferLifecycle.ts", import.meta.url), "utf8");
+    const code = readModuleFamily(new URL("../server/services/stockTransferLifecycle.ts", import.meta.url));
     const save = code.slice(code.indexOf("export async function saveStockTransferLifecycleTx"));
     const finalize = code.slice(code.indexOf("export async function finalizeOptionalStockTransferTx"));
     expect(save).toContain("if (!wasApplied && !willBeOptional)");

@@ -20,8 +20,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 
 import type { SheetsAndSacksItem } from "../types";
-import { TYPES, fmt } from "../utils";
+import { TYPES } from "../utils";
 import { ColorPicker } from "./ColorPicker";
+import { formatUsd } from "@/lib/moneyDisplay";
+
+const usd = (value: string | number) => formatUsd(parseFloat(String(value) || "0"), 2);
 
 export // ─── Item Form Dialog ─────────────────────────────────────────────────────────
 function ItemFormDialog({
@@ -173,7 +176,7 @@ function ItemFormDialog({
           </div>
           <div className="rounded-md bg-muted/50 px-3 py-2 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total value</span>
-            <span className="font-mono font-semibold">${fmt(totalValue)}</span>
+            <span className="font-mono font-semibold">{usd(totalValue)}</span>
           </div>
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Row Color</p>

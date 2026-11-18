@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
-const read = (path) => fs.readFileSync(path, "utf8");
+const read = (path) => readModuleFamily(path);
 const migration = read("server/startup-schema/011-stock-transfer-revision-integrity.ts");
 const startupIndex = read("server/startup-schema/index.ts");
 const schema = read("shared/schema/erp/stock-movements.ts");

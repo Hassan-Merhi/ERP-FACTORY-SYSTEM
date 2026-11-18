@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/page-state";
 import { BatchRow } from "./BatchRow";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
   const {
@@ -145,9 +146,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                 data-testid="stat-projection-total"
                 aria-live="polite"
               >
-                {projectionRows === undefined
-                  ? "—"
-                  : `$${projectionTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                {projectionRows === undefined ? "—" : formatUsd(projectionTotal, 2)}
               </p>
             </div>
           </>

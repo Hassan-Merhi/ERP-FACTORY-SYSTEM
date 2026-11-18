@@ -1,8 +1,5 @@
 /** Append a contract's tenant name without changing the original voucher accounting. */
-export function appendRentalTenantName(
-  narration: string | null,
-  tenantName: string | null | undefined,
-): string | null {
+export function appendRentalTenantName(narration: string | null, tenantName: string | null | undefined): string | null {
   const name = tenantName?.trim();
   if (!name) return narration;
   const current = narration?.trim() ?? "";

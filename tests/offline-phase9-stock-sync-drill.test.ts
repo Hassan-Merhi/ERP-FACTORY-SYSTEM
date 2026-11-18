@@ -26,12 +26,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
   readFactoryEdgeConfiguration: () => ({ mode: "lan", primary: true, siteId: SITE }),
 }));
 
-import { capturePhase9StockAdjustTx, ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
-import { ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
-import { ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
+import { capturePhase9StockAdjustTx } from "../server/edge/phase9StockOutbox";
 import {
   applyPendingStagedEvents,
-  ensurePhase9CloudEventSchema,
   getPhase9AppliedReceipts,
   Phase9EventConflict,
   recordPhase9ConflictDecision,
@@ -44,6 +41,7 @@ import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_NEGATIVE_CONFLICT } from "../ser
 import { assertPhase9Reviewer } from "../server/edge/phase9OperatorApply";
 import { summarizeLanEvidence } from "../scripts/edge/factory-handover-preflight.mjs";
 import { relayEventStreamOnce } from "../scripts/edge/relay-event-outbox.mjs";
+import { applyMigrations } from "./helpers/migrateDisposableDatabase.mjs";
 
 const adminUrl = process.env.PHASE8_TEST_DATABASE_URL;
 const approval = {
@@ -74,16 +72,16 @@ function dbUrl(name: string, user?: string): string {
 const GUC = `SELECT set_config('phase7_writer.mode','cloud-primary',false),
   set_config('phase7_writer.site_id','cloud',false), set_config('phase7_writer.epoch','2',false)`;
 
-const CLOUD_DDL = `
-  CREATE TABLE users (id text PRIMARY KEY, username text NOT NULL UNIQUE, active boolean NOT NULL);
-  CREATE TABLE user_company_roles (id serial PRIMARY KEY, user_id text NOT NULL, company_id integer NOT NULL,
-    role text NOT NULL, pos_view_only boolean NOT NULL DEFAULT false);
-  CREATE TABLE vouchers (id serial PRIMARY KEY, company_id integer, voucher_date date);
+// The cloud database is built from migrations/; only the stand-in handler's two
+// drill tables below are test-owned (created before the fence, so it covers them).
+const CLOUD_FIXTURE = `
   CREATE TABLE drill_balance (company_id integer NOT NULL, stock_item_id integer NOT NULL,
     quantity numeric(18,6) NOT NULL, PRIMARY KEY (company_id, stock_item_id));
   CREATE TABLE drill_movement (id serial PRIMARY KEY, company_id integer NOT NULL, operation_id uuid NOT NULL UNIQUE,
     stock_item_id integer NOT NULL, delta numeric(18,6) NOT NULL);
-  INSERT INTO users VALUES ('worker-1','storekeeper',true), ('admin-1','factory.admin',true), ('dev-1','developer',true);
+  INSERT INTO companies (id, code, name) VALUES (5, 'DRILL', 'Drill company');
+  INSERT INTO users (id, username, password, active) VALUES ('worker-1','storekeeper','not-a-login',true),
+    ('admin-1','factory.admin','not-a-login',true), ('dev-1','developer','not-a-login',true);
   INSERT INTO user_company_roles (user_id, company_id, role) VALUES
     ('worker-1',5,'Manager'), ('admin-1',5,'Admin'), ('dev-1',5,'Developer');
   INSERT INTO drill_balance VALUES (5, 1, 25), (5, 2, 8);
@@ -159,7 +157,16 @@ async function captureMovement(
   await client.connect();
   try {
     await client.query("BEGIN");
-    await client.query("INSERT INTO canonical_stock_movements (id) VALUES ($1)", [local]);
+    // The LAN source movement; its own parents (item, location) are skipped while seeding.
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query(
+      `INSERT INTO canonical_stock_movements
+         (id, company_id, stock_item_id, location_id, movement_kind, quantity_delta, unit_cost,
+          occurred_at, source_type, source_id, idempotency_key)
+       VALUES ($1, 5, $2, 3, 'quick_adjust', $3, 0, '2026-10-31T09:00:00Z', 'drill', $4, $5)`,
+      [local, stockItemId, (direction === "add" ? 1 : -1) * Number(quantity), String(local), `drill-${local}`]
+    );
+    await client.query("SET LOCAL session_replication_role = origin");
     await capturePhase9StockAdjustTx(drizzle(client) as unknown as DbTransaction, {
       companyId: 5,
       localMovementId: local,
@@ -200,21 +207,16 @@ describe.skipIf(!adminUrl)("Phase 9 stock movement sync drill (disposable Postgr
     await admin.query(`CREATE ROLE phase9_stock_drill_runtime LOGIN PASSWORD 'stock-drill-runtime-pass'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
 
+    // Both databases are built from migrations/ only.
+    applyMigrations(lanUrl);
+    applyMigrations(dbUrl("phase9_stock_drill_cloud"));
     lan = new Client({ connectionString: lanUrl, ssl: false });
     await lan.connect();
-    await lan.query("CREATE TABLE canonical_stock_movements (id BIGINT PRIMARY KEY)");
-    // The pressing install owns the shared LAN receipt logs.
-    await lan.query(`CREATE TABLE factory_pressing_confirmations (id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL,
-      UNIQUE (company_id, id))`);
-    await ensurePhase9PressingOutboxSchema(lan as never);
-    await ensurePhase9StockOutboxSchema(lan as never);
 
     cloudAdmin = new Client({ connectionString: dbUrl("phase9_stock_drill_cloud"), ssl: false });
     await cloudAdmin.connect();
     await cloudAdmin.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-    await cloudAdmin.query(CLOUD_DDL);
-    await ensurePhase8ApplySchema(cloudAdmin);
-    await ensurePhase9CloudEventSchema(cloudAdmin);
+    await cloudAdmin.query(CLOUD_FIXTURE);
     await cloudAdmin.query(
       await readFile(new URL("../deploy/lan/phase7-install-writer-fence.sql", import.meta.url), "utf8")
     );

@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { formatUsd } from "@/lib/moneyDisplay";
 /**
  * BulkPaymentDialog — extracted sub-component.
  *
@@ -15,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CreditCard } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { CashAccount, Unit } from "../types";
-import { fmtMoney, fmtMoneyCurrency } from "../utils";
+import { fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
 import { AccountSearchSelect } from "./AccountSearchSelect";
 
@@ -249,7 +250,9 @@ function BulkPaymentDialog({
                 <td colSpan={4} className="px-3 py-2 font-semibold text-right">
                   Total Payment
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-lg tabular-nums">${fmtMoney(totalSelected)}</td>
+                <td className="px-3 py-2 text-right font-bold text-lg tabular-nums">
+                  {formatUsd(totalSelected, 0, 2)}
+                </td>
               </tr>
             </tfoot>
           </table>

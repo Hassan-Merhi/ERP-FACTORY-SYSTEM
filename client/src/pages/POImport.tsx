@@ -1,477 +1,59 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import SpPOImport from "./SpPOImport";
 import PropertiesIntercompanyPOImport from "./poimport/PropertiesIntercompanyPOImport";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, RefreshCw } from "lucide-react";
-import type { Supplier } from "@shared/schema";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CheckCircle, XCircle, Download, RefreshCw } from "lucide-react";
 
-import {
-  formatCurrency,
-  draftStorageKey,
-  withResolvedStockItems,
-  SupplierCombobox,
-  type POImportItem,
-  type POImportContainer,
-  type POImportPreview,
-  type POValidationResult,
-  type POImportDraft,
-  type POImportPayload,
-} from "./poimport/poImportShared";
+import { formatCurrency, type POImportItem, type POImportContainer } from "./poimport/poImportShared";
+import { ErpPOImportSection, useErpPOImportState } from "./useErpPOImportState";
+import { ErpPOImportCardSection } from "./ErpPOImportCardSection";
 
 function ErpPOImport() {
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<POImportPreview | null>(null);
-  const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
-  const [validationResult, setValidationResult] = useState<POValidationResult | null>(null);
-  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
-  const [containerNumber, setContainerNumber] = useState<string>("");
-  const [importDate, setImportDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
-  const [freightPaidBy, setFreightPaidBy] = useState<"supplier" | "parent">("supplier");
-  const [freightParentAccountId, setFreightParentAccountId] = useState<string>("");
-  // A USD-base / ZMW-display company must state its invoice currency; a sheet
-  // without a Currency column is otherwise read as USD and Kwacha prices would
-  // be posted as dollars. Mali and other companies keep the sheet's labels.
-  const requiresImportCurrency = selectedCompany?.displayCurrency?.toUpperCase() === "ZMW";
-  const [importCurrency, setImportCurrency] = useState<"" | "USD" | "ZMW">("");
-  useEffect(() => {
-    setImportCurrency("");
-    setValidationResult(null);
-  }, [selectedCompany?.id]);
-
-  // Keep the parsed PO draft across navigation to Stock and back (and a tab
-  // refresh). The uploaded Excel bytes are no longer needed after parsing.
-  // Only restore a draft for the active company, never another company's data.
-  useEffect(() => {
-    const companyId = selectedCompany?.id;
-    if (!companyId) return;
-    setFile(null);
-    setValidationResult(null);
-    try {
-      const saved = window.sessionStorage.getItem(draftStorageKey(companyId));
-      if (saved) {
-        const draft = JSON.parse(saved) as POImportDraft;
-        if (draft.preview && Array.isArray(draft.preview.preview)) {
-          setPreview(draft.preview);
-          setPreviewCompanyId(companyId);
-          setSelectedSupplier(draft.selectedSupplier || "");
-          setContainerNumber(draft.containerNumber || "");
-          setImportDate(draft.importDate || new Date().toLocaleDateString("en-CA"));
-          setFreightPaidBy(draft.freightPaidBy === "parent" ? "parent" : "supplier");
-          setFreightParentAccountId(draft.freightParentAccountId || "");
-          setImportCurrency(draft.importCurrency || "");
-          return;
-        }
-      }
-    } catch {
-      // Storage can be unavailable (private browsing or quota); regular
-      // in-memory imports still work.
-    }
-    setPreview(null);
-    setPreviewCompanyId(companyId);
-    setSelectedSupplier("");
-    setContainerNumber("");
-    setFreightParentAccountId("");
-    setImportCurrency("");
-  }, [selectedCompany?.id]);
-
-  useEffect(() => {
-    const companyId = selectedCompany?.id;
-    if (!companyId || previewCompanyId !== companyId || !preview) return;
-    const draft: POImportDraft = {
-      preview,
-      selectedSupplier,
-      containerNumber,
-      importDate,
-      freightPaidBy,
-      freightParentAccountId,
-      importCurrency,
-    };
-    try {
-      window.sessionStorage.setItem(draftStorageKey(companyId), JSON.stringify(draft));
-    } catch {
-      // Browser storage is optional; the active preview remains intact.
-    }
-  }, [
-    selectedCompany?.id,
-    previewCompanyId,
-    preview,
-    selectedSupplier,
+  const {
     containerNumber,
-    importDate,
+    file,
     freightPaidBy,
     freightParentAccountId,
+    handleCancel,
+    handleFileChange,
+    handleImport,
+    handleParse,
+    handleValidate,
+    hasValidationErrors,
     importCurrency,
-  ]);
-
-  const {
-    data: suppliers = [],
-    isLoading: suppliersLoading,
-    isError: suppliersError,
-  } = useQuery<Supplier[]>({
-    queryKey: companyQueryKey("/api/suppliers?allowParentFallback=true", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    // Parent-company assignment can change while this page's company-scoped
-    // supplier cache is still inside the normal 30-minute reference-data
-    // stale window. PO Import must always re-check the server relationship on
-    // entry so a newly created/linked child immediately inherits its parent's
-    // suppliers instead of reusing an old empty list.
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-
-  const { data: parentFreightAccounts = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: companyQueryKey("/api/purchase-orders/parent-freight-accounts", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    retry: false,
-  });
-
-  // Keep the parsed preview usable while a stock item is created elsewhere in
-  // the app. StockItemCreateDialog invalidates this shared query key, which
-  // gives the import screen a signal to re-check missing item references.
-  const { dataUpdatedAt: stockItemsUpdatedAt } = useQuery({
-    queryKey: ["/api/stock-items"],
-    enabled: Boolean(selectedCompany?.id),
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-  });
-  const [validatedAgainstStockItemsAt, setValidatedAgainstStockItemsAt] = useState(0);
-  const refreshInFlight = useRef(false);
-
-  const parseMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const res = await fetch("/api/po-import/parse", { method: "POST", body: formData });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to parse file");
-      }
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      setPreview(data);
-      setPreviewCompanyId(selectedCompany?.id ?? null);
-      setValidationResult(null);
-      if (data.preview.length > 0) setContainerNumber(data.preview[0].containerNumber || "");
-      toast({
-        title: "File parsed successfully",
-        description: `Found ${data.preview.length} container(s) with ${data.preview.reduce(
-          (sum: number, p: POImportContainer) => sum + p.itemsCount,
-          0
-        )} items. Click Validate to check the data.`,
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Parse error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const validateMutation = useMutation({
-    mutationFn: async (data: POImportPayload) => {
-      const res = await apiRequest("POST", "/api/po-import/validate", data);
-      return await res.json();
-    },
-    onSuccess: (data: POValidationResult, payload: POImportPayload) => {
-      setPreview((current) => withResolvedStockItems(current, payload, data));
-      setValidationResult(data);
-      const errorCount = data.errors?.length || 0;
-      toast({
-        title: errorCount === 0 ? "Validation passed" : "Validation failed",
-        description:
-          errorCount === 0
-            ? "All items validated successfully. You can now import the data."
-            : `Found ${errorCount} error(s). Please fix them before importing.`,
-        variant: errorCount === 0 ? "default" : "destructive",
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Validation error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Silent refresh: the already-parsed spreadsheet stays in memory while newly
-  // created stock items are resolved against current server data.
-  const refreshStockItemsMutation = useMutation({
-    mutationFn: async (payload: POImportPayload): Promise<POValidationResult> => {
-      const res = await apiRequest("POST", "/api/po-import/validate", payload);
-      return await res.json();
-    },
-    onSuccess: (data, payload) => {
-      setPreview((current) => withResolvedStockItems(current, payload, data));
-      // Don't turn a background lookup into an explicit user validation.
-      setValidationResult((previous) => (previous === null ? null : data));
-    },
-    onSettled: () => {
-      refreshInFlight.current = false;
-    },
-  });
-
-  const importMutation = useMutation({
-    mutationFn: async (data: POImportPayload) => {
-      const res = await apiRequest("POST", "/api/po-import/import", data);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      if (selectedCompany?.id) {
-        try {
-          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
-        } catch {
-          // The successful server import is authoritative.
-        }
-      }
-      toast({
-        title: data.factoryDispatchReceipt ? "Factory truck PO imported" : "Import successful",
-        description: data.factoryDispatchReceipt
-          ? `Factory dispatch ${data.factoryDispatchReceipt.origin.factoryDispatchId} linked to ERP container ${data.containerNumber}. Supplier purchase recorded through the existing ERP workflow.`
-          : `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
-      navigate("/containers");
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Import error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      // Safari will not fire a second change event for the same Excel file
-      // unless the native file input is reset. The File object is retained
-      // independently in React state, including while parsing asynchronously.
-      e.currentTarget.value = "";
-      setPreview(null);
-      setValidationResult(null);
-      if (selectedCompany?.id) {
-        try {
-          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
-        } catch {
-          // Continue parsing if session storage is unavailable.
-        }
-      }
-    }
-  };
-
-  const handleParse = () => {
-    if (!file) {
-      toast({
-        title: "No file selected",
-        description: "Please select an Excel file to upload",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!navigator.onLine) {
-      toast({
-        title: "Not available offline",
-        description: "File imports require a connection",
-        variant: "destructive",
-      });
-      return;
-    }
-    const formData = new FormData();
-    formData.append("file", file);
-    parseMutation.mutate(formData);
-  };
-
-  const selectedContainer = preview?.preview?.find((c: POImportContainer) => c.containerNumber === containerNumber);
-  const isNativeZmw = requiresImportCurrency
-    ? importCurrency === "ZMW"
-    : Boolean(selectedContainer?.items.some((item) => item.currency?.toUpperCase() === "ZMW"));
-  const priceSymbol = isNativeZmw ? "K" : "$";
-  const { data: approvedRate, isLoading: rateLoading } = useQuery<{ rate: string } | null>({
-    queryKey: ["/api/exchange-rates/latest", selectedCompany?.id, "USD", "ZMW", importDate],
-    enabled: isNativeZmw && Boolean(selectedCompany?.id) && Boolean(importDate),
-    queryFn: async () => {
-      const response = await fetch(`/api/exchange-rates/latest?fromCurrency=USD&toCurrency=ZMW&asOf=${importDate}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Unable to load the approved historical USD/ZMW rate");
-      return response.json();
-    },
-  });
-  useEffect(() => setValidationResult(null), [approvedRate?.rate, isNativeZmw]);
-  const lockedRate = isNativeZmw ? (approvedRate?.rate ?? "") : undefined;
-  const hasValidationErrors = Boolean(validationResult?.errors?.length);
-  const isValidated = validationResult !== null;
-
-  const buildPayload = useCallback(
-    () => ({
-      fileHash: preview!.fileHash,
-      fileName: preview!.fileName,
-      containerNumber,
-      supplierId: Number.parseInt(selectedSupplier, 10),
-      importDate,
-      exchangeRate: lockedRate,
-      currency: requiresImportCurrency ? importCurrency || undefined : undefined,
-      preview: preview!.preview,
-      freightPaidBy,
-      freightParentAccountId: freightParentAccountId ? Number.parseInt(freightParentAccountId, 10) : null,
-    }),
-    [
-      preview,
-      containerNumber,
-      selectedSupplier,
-      importDate,
-      lockedRate,
-      requiresImportCurrency,
-      importCurrency,
-      freightPaidBy,
-      freightParentAccountId,
-    ]
-  );
-
-  const refreshStockItemsMutate = refreshStockItemsMutation.mutate;
-  const refreshStockItems = useCallback(() => {
-    if (!preview || refreshInFlight.current) return;
-    refreshInFlight.current = true;
-    refreshStockItemsMutate(buildPayload());
-  }, [preview, refreshStockItemsMutate, buildPayload]);
-
-  const hasUnresolvedItems = Boolean(
-    preview?.preview.some((container) => container.items.some((item) => !item.stockItemId || !item.itemName))
-  );
-
-  // A stock item may have been added by a different tab, where React Query
-  // invalidation in this tab is not delivered. Recheck on return to the tab.
-  useEffect(() => {
-    if (!hasUnresolvedItems) return;
-    const onReturn = () => {
-      if (!document.hidden) refreshStockItems();
-    };
-    window.addEventListener("focus", onReturn);
-    document.addEventListener("visibilitychange", onReturn);
-    return () => {
-      window.removeEventListener("focus", onReturn);
-      document.removeEventListener("visibilitychange", onReturn);
-    };
-  }, [hasUnresolvedItems, refreshStockItems]);
-
-  // StockItemCreateDialog invalidates this key when an item is saved within
-  // the current tab. Handle that signal even before the user first validates.
-  useEffect(() => {
-    if (
-      !preview ||
-      !hasUnresolvedItems ||
-      !stockItemsUpdatedAt ||
-      stockItemsUpdatedAt <= validatedAgainstStockItemsAt
-    ) {
-      return;
-    }
-    setValidatedAgainstStockItemsAt(stockItemsUpdatedAt);
-    refreshStockItems();
-  }, [preview, hasUnresolvedItems, stockItemsUpdatedAt, validatedAgainstStockItemsAt, refreshStockItems]);
-
-  const checkRequiredFields = () => {
-    if (requiresImportCurrency && !importCurrency) {
-      toast({
-        title: "Invoice currency required",
-        description: "Choose whether this purchase invoice is in USD or Kwacha (ZMW) before validating.",
-        variant: "destructive",
-      });
-      return false;
-    }
-    if (isNativeZmw && !lockedRate) {
-      toast({
-        title: "Historical rate required",
-        description: "Approve the USD/ZMW company rate for the import date before validating.",
-        variant: "destructive",
-      });
-      return false;
-    }
-    if (!selectedCompany?.id) {
-      toast({ title: "Company required", description: "Please select a company first", variant: "destructive" });
-      return false;
-    }
-    if (!selectedSupplier) {
-      toast({ title: "Supplier required", description: "Please select a supplier", variant: "destructive" });
-      return false;
-    }
-    if (!containerNumber) {
-      toast({
-        title: "Container number required",
-        description: "Please enter a container number",
-        variant: "destructive",
-      });
-      return false;
-    }
-    if (!preview) {
-      toast({ title: "No preview data", description: "Please parse the file first", variant: "destructive" });
-      return false;
-    }
-    return true;
-  };
-
-  const handleValidate = () => {
-    if (!checkRequiredFields()) return;
-    setValidatedAgainstStockItemsAt(stockItemsUpdatedAt);
-    validateMutation.mutate(buildPayload());
-  };
-
-  const handleImport = () => {
-    if (!checkRequiredFields()) return;
-    if (!isValidated) {
-      toast({
-        title: "Validation required",
-        description: "Please validate the data before importing",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (hasValidationErrors) {
-      toast({
-        title: "Validation errors present",
-        description: "Please fix validation errors before importing",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (freightPaidBy === "parent" && Number(selectedContainer?.charges?.freight || 0) > 0 && !freightParentAccountId) {
-      toast({
-        title: "Parent freight account required",
-        description: "Please select a parent company account to book the freight against",
-        variant: "destructive",
-      });
-      return;
-    }
-    importMutation.mutate(buildPayload());
-  };
-
-  const handleCancel = () => {
-    if (selectedCompany?.id) {
-      try {
-        window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
-      } catch {
-        // In-memory cancellation still succeeds.
-      }
-    }
-    setFile(null);
-    setPreview(null);
-    setValidationResult(null);
-    setContainerNumber("");
-    setSelectedSupplier("");
-    setFreightPaidBy("supplier");
-    setFreightParentAccountId("");
-  };
+    importDate,
+    importMutation,
+    isNativeZmw,
+    isValidated,
+    lockedRate,
+    parentFreightAccounts,
+    parseMutation,
+    preview,
+    priceSymbol,
+    rateLoading,
+    refreshStockItems,
+    refreshStockItemsMutation,
+    requiresImportCurrency,
+    selectedCompany,
+    selectedContainer,
+    selectedSupplier,
+    setContainerNumber,
+    setFreightPaidBy,
+    setFreightParentAccountId,
+    setImportCurrency,
+    setImportDate,
+    setSelectedSupplier,
+    setValidationResult,
+    suppliers,
+    suppliersError,
+    suppliersLoading,
+    validateMutation,
+    validationResult,
+  } = useErpPOImportState();
 
   return (
     <div className="space-y-4">
@@ -484,201 +66,35 @@ function ErpPOImport() {
         </Button>
       </PageHeader>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Upload Purchase Order Excel File</CardTitle>
-          <CardDescription>
-            Three-step process: Parse → Validate → Import. Need help? Download the template above to see the required
-            format.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="file-upload">Step 1: Select & Parse Excel File (.xlsx)</Label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                id="file-upload"
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileChange}
-                data-testid="input-file-upload"
-              />
-              <Button onClick={handleParse} disabled={!file || parseMutation.isPending} data-testid="button-parse">
-                {parseMutation.isPending ? (
-                  "Parsing..."
-                ) : (
-                  <>
-                    <FileSpreadsheet className="w-4 h-4 mr-2" />
-                    Parse
-                  </>
-                )}
-              </Button>
-            </div>
-            {file && <p className="text-sm text-muted-foreground">Selected: {file.name}</p>}
-          </div>
-
-          {preview && (
-            <div className="space-y-4">
-              {selectedContainer &&
-                (/^FD-/i.test(selectedContainer.containerNumber) ||
-                  selectedContainer.items.some((i) => /^FDPO-/i.test(i.poNumber))) && (
-                  <div
-                    className="rounded-lg border border-blue-300 bg-blue-50/70 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/20"
-                    data-testid="factory-trip-po-import-notice"
-                  >
-                    <p className="font-semibold">Factory Dispatch — manual truck PO import</p>
-                    <p className="mt-1">
-                      This Excel file represents one financially finalized Factory truck. You must select the exact ERP
-                      supplier code{" "}
-                      {selectedContainer.supplierCode ? (
-                        <strong className="font-mono">{selectedContainer.supplierCode}</strong>
-                      ) : (
-                        "(shown in the file)"
-                      )}{" "}
-                      and validate every article code before importing.
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      ERP articles are matched by exact code or alias, not a similar item name. If any code is missing,
-                      create the correct ERP article/alias first and validate again. Purchase rates and charges are
-                      independently valued for ERP; re-importing the same truck is blocked, even if its file name or
-                      rates change.
-                    </p>
-                  </div>
-                )}
-              <Label>Step 2: Configure Import Details</Label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="supplier">Supplier *</Label>
-                  <SupplierCombobox
-                    value={selectedSupplier}
-                    onValueChange={(supplierId) => {
-                      setSelectedSupplier(supplierId);
-                      setValidationResult(null);
-                    }}
-                    suppliers={suppliers}
-                    placeholder="Select supplier"
-                    testId="select-supplier"
-                    isLoading={suppliersLoading}
-                    hasError={suppliersError}
-                  />
-                  {suppliersError && (
-                    <p className="text-sm text-destructive">Suppliers could not be loaded for the active company.</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="container-number">Container Number *</Label>
-                  <Input
-                    id="container-number"
-                    value={containerNumber}
-                    onChange={(e) => {
-                      setContainerNumber(e.target.value);
-                      setValidationResult(null);
-                    }}
-                    placeholder="CNTR-001"
-                    data-testid="input-container-number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="import-date">Import Date</Label>
-                  <Input
-                    id="import-date"
-                    type="date"
-                    value={importDate}
-                    onChange={(e) => {
-                      setImportDate(e.target.value);
-                      setValidationResult(null);
-                    }}
-                    data-testid="input-import-date"
-                  />
-                </div>
-                {requiresImportCurrency && (
-                  <div className="space-y-2">
-                    <Label htmlFor="import-currency">Invoice Currency *</Label>
-                    <Select
-                      value={importCurrency}
-                      onValueChange={(value) => {
-                        setImportCurrency(value === "ZMW" ? "ZMW" : "USD");
-                        setValidationResult(null);
-                      }}
-                    >
-                      <SelectTrigger id="import-currency" data-testid="select-import-currency">
-                        <SelectValue placeholder="Select USD or ZMW" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="USD">USD — invoice prices in dollars</SelectItem>
-                        <SelectItem value="ZMW">ZMW — invoice prices in Kwacha (K)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Applies to every line of this import. The spreadsheet must not state a different currency.
-                    </p>
-                  </div>
-                )}
-                {isNativeZmw && (
-                  <div className="space-y-2">
-                    <Label>Historical USD/ZMW rate (ZMW per USD)</Label>
-                    <Input
-                      readOnly
-                      value={rateLoading ? "Loading approved rate..." : lockedRate || "No approved rate"}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Original invoice prices remain ZMW; inventory, freight, goods-in-transit and parent postings use
-                      the locked USD base.
-                      {!lockedRate && !rateLoading ? " An approved company rate for the import date is required." : ""}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {Number(selectedContainer?.charges?.freight || 0) > 0 && parentFreightAccounts.length > 0 && (
-                <div className="space-y-3 pt-1">
-                  <Label>Freight Paid By</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={freightPaidBy === "supplier" ? "default" : "outline"}
-                      onClick={() => {
-                        setFreightPaidBy("supplier");
-                        setFreightParentAccountId("");
-                      }}
-                      data-testid="button-freight-by-supplier"
-                    >
-                      By Supplier
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={freightPaidBy === "parent" ? "default" : "outline"}
-                      onClick={() => setFreightPaidBy("parent")}
-                      data-testid="button-freight-by-parent"
-                    >
-                      Parent Co.
-                    </Button>
-                  </div>
-                  {freightPaidBy === "parent" && (
-                    <div className="space-y-1">
-                      <Label>Parent Freight Account *</Label>
-                      <Select value={freightParentAccountId} onValueChange={setFreightParentAccountId}>
-                        <SelectTrigger data-testid="select-freight-parent-account">
-                          <SelectValue placeholder="Select account..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {parentFreightAccounts.map((acc) => (
-                            <SelectItem key={acc.id} value={String(acc.id)}>
-                              {acc.name} {acc.code ? `(${acc.code})` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ErpPOImportCardSection
+        containerNumber={containerNumber}
+        file={file}
+        freightPaidBy={freightPaidBy}
+        freightParentAccountId={freightParentAccountId}
+        handleFileChange={handleFileChange}
+        handleParse={handleParse}
+        importCurrency={importCurrency}
+        importDate={importDate}
+        isNativeZmw={isNativeZmw}
+        lockedRate={lockedRate}
+        parentFreightAccounts={parentFreightAccounts}
+        parseMutation={parseMutation}
+        preview={preview}
+        rateLoading={rateLoading}
+        requiresImportCurrency={requiresImportCurrency}
+        selectedContainer={selectedContainer}
+        selectedSupplier={selectedSupplier}
+        setContainerNumber={setContainerNumber}
+        setFreightPaidBy={setFreightPaidBy}
+        setFreightParentAccountId={setFreightParentAccountId}
+        setImportCurrency={setImportCurrency}
+        setImportDate={setImportDate}
+        setSelectedSupplier={setSelectedSupplier}
+        setValidationResult={setValidationResult}
+        suppliers={suppliers}
+        suppliersError={suppliersError}
+        suppliersLoading={suppliersLoading}
+      />
 
       {preview && preview.preview.length > 0 && (
         <Card>
@@ -839,51 +255,21 @@ function ErpPOImport() {
               </div>
             ))}
 
-            <div className="flex flex-wrap gap-2 justify-end mt-4">
-              <Button variant="outline" onClick={handleCancel} data-testid="button-cancel">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleValidate}
-                disabled={
-                  validateMutation.isPending ||
-                  suppliersLoading ||
-                  suppliersError ||
-                  !selectedSupplier ||
-                  !containerNumber ||
-                  (requiresImportCurrency && !importCurrency)
-                }
-                variant={isValidated && !hasValidationErrors ? "secondary" : "default"}
-                data-testid="button-validate"
-              >
-                {validateMutation.isPending ? (
-                  "Validating..."
-                ) : (
-                  <>
-                    {isValidated && !hasValidationErrors ? (
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                    ) : (
-                      <FileSpreadsheet className="w-4 h-4 mr-2" />
-                    )}
-                    {isValidated ? "Re-validate" : "Validate"}
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleImport}
-                disabled={importMutation.isPending || !isValidated || hasValidationErrors}
-                data-testid="button-import"
-              >
-                {importMutation.isPending ? (
-                  "Importing..."
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import
-                  </>
-                )}
-              </Button>
-            </div>
+            <ErpPOImportSection
+              containerNumber={containerNumber}
+              handleCancel={handleCancel}
+              handleImport={handleImport}
+              handleValidate={handleValidate}
+              hasValidationErrors={hasValidationErrors}
+              importCurrency={importCurrency}
+              importMutation={importMutation}
+              isValidated={isValidated}
+              requiresImportCurrency={requiresImportCurrency}
+              selectedSupplier={selectedSupplier}
+              suppliersError={suppliersError}
+              suppliersLoading={suppliersLoading}
+              validateMutation={validateMutation}
+            />
           </CardContent>
         </Card>
       )}

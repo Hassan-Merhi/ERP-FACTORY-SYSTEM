@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { hasTable, tableConstraints } from "../../../tests/helpers/schemaManifest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
@@ -12,20 +14,20 @@ const normalizeCode = (code: string) =>
     .replace(/,([}\])])/g, "$1");
 const expectCode = (code: string, expected: string) => expect(normalizeCode(code)).toContain(normalizeCode(expected));
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 /** Static wiring safety gate; real SQL and voucher-posting integration must run separately. */
 describe("Phase 16 weekly bonus end-to-end source wiring", () => {
-  it("ensures unconditional startup installs weekly review before one-time payment claims", () => {
-    const index = source("server/index.ts");
-    const staff = source("server/startup/factoryStaffTrackingSchema.ts");
-    const payment = source("server/startup/ensureFactoryTargetBonusPaymentSchema.ts");
-    expect(index.indexOf("await ensureFactoryStaffTrackingSchema(pool)")).toBeLessThan(
-      index.indexOf("await ensureFactoryTargetBonusPaymentSchema(pool)")
+  it("migrations define the weekly review table that one-time payment claims reference", () => {
+    // The schema is created only by migrations (no startup DDL); the payment
+    // claim's foreign key proves the review table exists first.
+    expect(hasTable("factory_target_bonus_weekly_reviews")).toBe(true);
+    expect(hasTable("factory_target_bonus_weekly_payments")).toBe(true);
+    const payment = tableConstraints("factory_target_bonus_weekly_payments");
+    expect(payment).toContain(
+      "FOREIGN KEY (review_id) REFERENCES factory_target_bonus_weekly_reviews(id) ON DELETE RESTRICT"
     );
-    expectCode(staff, "await database.query(FACTORY_BONUS_WEEKLY_REVIEW_SQL)");
-    expectCode(payment, "factory_target_bonus_weekly_payments");
-    expectCode(payment, "UNIQUE (company_id, week_start, worker_id)");
+    expect(payment).toContain("UNIQUE (company_id, week_start, worker_id)");
   });
   it("routes approvals, payments and reconciliation behind company and role checks", () => {
     const routes = source("server/routes/factory/factoryStaffTrackingRoutes.ts");

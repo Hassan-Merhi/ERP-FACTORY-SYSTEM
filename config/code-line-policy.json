@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "purpose": "Phase 1 source-size ratchet: warning above 300 physical lines, hard cap above 500. Legacy oversized application paths are frozen at the measured count in the main commit immediately preceding Phase 1 (2026-11-14); any later growth above those counts is blocked.",
+  "referenceCommit": "b5d5fea32ab435861ea77a38905eefdd42e64846",
+  "warningAbove": 300,
+  "hardCapAbove": 500,
+  "extensions": [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".mts",
+    ".cjs",
+    ".css",
+    ".scss"
+  ],
+  "applicationRoots": [
+    "client/src/",
+    "server/",
+    "shared/",
+    "desktop/",
+    "build/"
+  ],
+  "excludedCategories": [
+    "test",
+    "translation",
+    "tooling",
+    "schema_migration",
+    "generated",
+    "other"
+  ],
+  "note": "Physical lines include comments and blank lines. Exclusions are reported but not blocked. Architecture-specific rules in config/god-file-boundaries.json remain independent and may be stricter."
+}

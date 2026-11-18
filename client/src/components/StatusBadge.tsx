@@ -47,6 +47,15 @@ export type StatusKind =
   | "partial"
   | "hold"
   | "superseded"
+  | "pending_pressing"
+  | "pressed"
+  | "reserved"
+  | "pending_verification"
+  | "otw"
+  | "in_transit"
+  | "arrived"
+  | "offloaded"
+  | "closed"
   | "neutral";
 
 interface StatusMeta {
@@ -101,6 +110,16 @@ const STATUS_MAP: Record<StatusKind, StatusMeta> = {
   partial: { label: "Partial", variant: "warning", icon: Clock },
   hold: { label: "Hold", variant: "warning", icon: Clock },
   superseded: { label: "Superseded", variant: "muted", icon: CircleDot },
+  pending_pressing: { label: "Pending Pressing", variant: "warning", icon: Clock },
+  pressed: { label: "Pressed", variant: "info", icon: CheckCircle2 },
+  reserved: { label: "Reserved", variant: "info", icon: Clock },
+  pending_verification: { label: "Pending Verification", variant: "warning", icon: Clock },
+  // Container transport: on the way -> arrived (awaiting offload) -> offloaded.
+  otw: { label: "On the Way", variant: "info", icon: Clock },
+  in_transit: { label: "In Transit", variant: "info", icon: Clock },
+  arrived: { label: "Arrived", variant: "warning", icon: CircleDot },
+  offloaded: { label: "Offloaded", variant: "success", icon: CheckCircle2 },
+  closed: { label: "Closed", variant: "success", icon: CheckCircle2 },
   neutral: { label: "—", variant: "muted", icon: CircleDot },
 };
 

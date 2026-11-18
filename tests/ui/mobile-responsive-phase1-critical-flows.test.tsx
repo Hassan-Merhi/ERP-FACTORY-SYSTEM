@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { WorkspaceConsistencyBoundary } from "@/components/ui/workspace-route-boundary";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 /**
  * Phase 1 contract for the critical legacy master/detail flows (Agents, Account Groups, Chat):
@@ -12,7 +12,7 @@ import { WorkspaceConsistencyBoundary } from "@/components/ui/workspace-route-bo
  * is what is checked, and the shared stylesheet is checked only for what it must not contain.
  */
 function source(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
+  return readModuleFamily(resolve(process.cwd(), path));
 }
 
 afterEach(cleanup);

@@ -35,8 +35,11 @@ describe("downloadFromUrl", () => {
     downloadBlob.mockReset();
   });
 
+  // A real XLSX is a ZIP archive, so it starts with the "PK\x03\x04" signature.
+  const xlsxBytes = () => new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+
   it("downloads with the server file name when one is sent", async () => {
-    const blob = new Blob(["x"]);
+    const blob = new Blob([xlsxBytes()]);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -54,7 +57,7 @@ describe("downloadFromUrl", () => {
   it("falls back to the local name and posts JSON bodies", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, blob: async () => new Blob(["x"]), headers: new Headers() }))
+      vi.fn(async () => ({ ok: true, status: 200, blob: async () => new Blob([xlsxBytes()]), headers: new Headers() }))
     );
     await expect(
       downloadFromUrl("/api/x", { fileName: "fallback.xlsx", method: "POST", body: { a: 1 } })

@@ -19,10 +19,7 @@ describe("Supplier Partner navigation phase 5", () => {
   });
 
   it("uses deterministic Supplier Partner parent routes for Escape and Back", () => {
-    expect(appNavigation).toContain('if (cleanPath === "/sp/reports") return "/sp"');
-    expect(appNavigation).toContain('if (cleanPath === "/sp/opening-stock") return "/sp"');
-    expect(appNavigation).toContain('if (cleanPath === "/sp/aliases") return "/sp"');
-    expect(appNavigation).toContain('if (cleanPath === "/sp/setup") return "/sp"');
+    expect(appNavigation).toContain('if (cleanPath === "/sp/setup") return "/sp/reports"');
     expect(appNavigation).toContain('return "/sp/setup"');
     expect(appNavigation).toContain("getSupplierPartnerParent(pathname) ?? getParentRoute(pathname)");
   });

@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { requireAuth } from "../auth";
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { ensureScheduledWhatsAppMessageSchema, parseWeeklyTimes } from "../services/scheduledWhatsAppMessages";
+import { parseWeeklyTimes } from "../services/scheduledWhatsAppMessages";
 
 const managerRoles = new Set(["Admin", "Owner", "Developer"]);
 
@@ -60,7 +60,6 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
     const companyId = companyForManager(req, res);
     if (!companyId) return;
     try {
-      await ensureScheduledWhatsAppMessageSchema();
       const result = await pool.query(
         "SELECT s.id::text, s.title, s.message, s.timezone, s.weekly_times, " +
           "s.start_date::text, s.end_date::text, s.enabled, s.created_at, s.updated_at, " +
@@ -93,7 +92,6 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
     const companyId = companyForManager(req, res);
     if (!companyId) return;
     try {
-      await ensureScheduledWhatsAppMessageSchema();
       const result = await pool.query(
         "SELECT d.id::text, s.title, d.recipient_name, d.local_date::text, " +
           "d.status, d.error, d.sent_at, d.created_at " +
@@ -130,7 +128,6 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
     }
     let client;
     try {
-      await ensureScheduledWhatsAppMessageSchema();
       client = await pool.connect();
       await client.query("BEGIN");
       const validRecipients = await client.query(
@@ -202,7 +199,6 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
     const id = Number(req.params.id);
     if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid schedule" });
     try {
-      await ensureScheduledWhatsAppMessageSchema();
       const deleted = await pool.query(
         "DELETE FROM whatsapp_message_schedules WHERE id=$1 AND company_id=$2 RETURNING id",
         [id, companyId]
