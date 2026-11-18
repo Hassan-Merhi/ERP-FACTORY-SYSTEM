@@ -22,6 +22,7 @@ import {
 } from "../../security/companyAccessBoundary";
 import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
+import { withPosZmwNativeTotals } from "../../services/pos/posVoucherNativeTotals";
 import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
 import {
@@ -116,7 +117,7 @@ export function registerVoucherQueryRoutes(app: Express) {
         }
       }
 
-      const filteredVouchers = filterAndSortVouchers(sanitizedVouchers, listQuery);
+      const filteredVouchers = await withPosZmwNativeTotals(filterAndSortVouchers(sanitizedVouchers, listQuery));
       res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=30");
       if (!listQuery.paginated) return res.json(filteredVouchers);
       return res.json(buildVoucherPage(filteredVouchers, listQuery.page, listQuery.pageSize));
