@@ -84,6 +84,17 @@ export async function generateInvoicePdfMeta(
     configuredPrice: toMoney(r.configured_price).toNumber(),
   }));
 
+  // The ZMW payment entry is the source of truth for what the cashier charged.
+  // Do not revalue the USD voucher amount at any current or rounded rate.
+  const nativeZmwTotal = v.currency === "ZMW"
+    ? (await pool.query<{ native_amount: string | null }>(
+        `SELECT MAX(transaction_debit_amount)::text AS native_amount
+         FROM voucher_entries WHERE voucher_id = $1
+         AND transaction_currency = 'ZMW' AND transaction_debit_amount > 0`,
+        [voucherId]
+      )).rows[0]?.native_amount ?? null
+    : null;
+
   let customerName: string | null = null;
   if (v.is_credit_sale) {
     const cRes = await pool.query<{ customer_name: string }>(
@@ -126,6 +137,7 @@ export async function generateInvoicePdfMeta(
     userName,
     customerName,
     items,
+    nativeZmwTotal: nativeZmwTotal === null ? null : Number(nativeZmwTotal),
     hideProfitCols,
     compactMode,
   });
