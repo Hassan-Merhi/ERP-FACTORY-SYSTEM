@@ -31,7 +31,7 @@ import type {
   PriceListRow,
 } from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
-import { buildPosPriceListExportRow } from "./posPriceListExportRow";
+import { buildPosPriceListExportRow, posPriceListExportColumns } from "./posPriceListExportRow";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
 
@@ -597,17 +597,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const dateStr = new Date().toLocaleDateString("en-CA");
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-      const headers = [
-        "Code",
-        "Item Name",
-        "Group",
-        ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
-        ...(isAllMode
-          ? ["Total Qty", ...masters.map((master) => master.name)]
-          : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
-      ];
-      const types: Record<string, "auto" | "money" | "decimal"> = {};
-      for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
+      const { headers, types } = posPriceListExportColumns({ showCostPrice, isAllMode, masters });
       // In All Locations mode these price lists are intentionally re-importable:
       // the parser expects Code and location names in the first worksheet row.
       await exportOperationalWorkbook({
@@ -625,6 +615,12 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
             }),
           },
         ],
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unable to export",
+        variant: "destructive",
       });
     } finally {
       setExporting(false);

@@ -94,7 +94,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-amber-700 dark:text-amber-400"
                   data-testid="stat-pending"
                 >
-                  ${stats.pending.toFixed(2)}
+                  {formatUsd(stats.pending, 2)}
                 </p>
               </div>
             </div>
@@ -109,7 +109,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400"
                   data-testid="stat-paid"
                 >
-                  ${stats.paid.toFixed(2)}
+                  {formatUsd(stats.paid, 2)}
                 </p>
               </div>
             </div>
