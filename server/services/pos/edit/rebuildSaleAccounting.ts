@@ -41,6 +41,7 @@ export async function rebuildSaleAccountingEntries(
     voucherId: number;
     oldEntries: VoucherEntryRow[];
     grandTotal: number;
+    nativeZmwTotal?: string;
     paymentAccountType: unknown;
     paymentAccountId: unknown;
     isSpCompanyEdit: boolean;
@@ -92,6 +93,7 @@ export async function rebuildSaleAccountingEntries(
 
   const lines = posSaleLines({
     grandTotal,
+    nativeZmwTotal: params.nativeZmwTotal,
     payment,
     paymentNarration: paymentEntry.narration || "",
     revenue: params.isSpCompanyEdit
