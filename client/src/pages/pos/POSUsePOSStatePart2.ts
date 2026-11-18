@@ -210,6 +210,7 @@ export function usePOSStatePart2({
 
   const { saveMutation, deleteDraftMutation, saveDraftMutation } = usePosMutations({
     activeLocation,
+    posUser,
     editVoucherId,
     editVoucher,
     isSpCompany,
