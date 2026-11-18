@@ -4,7 +4,6 @@
  * (server/routes/factory/suppliers/balance/settlementPools.ts) and one formula,
  * USD + Σ(native pool × Factory Settings rate). No per-supplier special cases.
  */
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { factoryContainers } from "@shared/schema";
@@ -13,8 +12,9 @@ import {
   computeSettlementCurrencyGroups,
 } from "../server/routes/factory/suppliers/balance/settlementPools";
 import { supplierUsdEquivalent } from "../server/routes/factory/suppliers/balance/supplierUsdEquivalent";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const read = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 type Container = typeof factoryContainers.$inferSelect;
 const container = (overrides: Partial<Container>): Container =>

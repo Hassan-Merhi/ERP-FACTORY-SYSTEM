@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+
+import { columnDefinition, hasIndex } from "./helpers/schemaManifest";
 
 const root = process.cwd();
-const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const read = (relativePath: string) => readModuleFamily(path.join(root, relativePath));
 
 describe("Retail Wave 3 reporting and reconciliation", () => {
   it("uses stable sale-time cost snapshots for COGS and profit", () => {
-    const migration = read("migrations/0019_retail_reporting_audit.sql");
     const schema = read("shared/schema/retailPos.ts");
     const reporting = read("server/services/retail/retailReporting.ts");
+    const sale = read("server/services/retail/retailSaleService.ts");
 
-    expect(migration).toContain("ADD COLUMN IF NOT EXISTS unit_cost");
-    expect(migration).toContain("retail_snapshot_sale_item_cost");
+    expect(columnDefinition("retail_pos_sale_items", "unit_cost")).toMatchObject({ notNull: true, default: "0" });
+    // The sale service stores the sale-time (moving-average) cost on each line.
+    expect(sale).toContain("unitCost: String(stock.averageCost > 0 ? stock.averageCost : toNumber(variant.cost))");
     expect(schema).toContain('unitCost: decimal("unit_cost"');
     expect(reporting).toContain("* si.unit_cost END AS cogs");
     expect(reporting).toContain("SUM(revenue - cogs)");
@@ -63,7 +66,6 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
   });
 
   it("keeps large-catalog paths bounded and images lazy", () => {
-    const migration = read("migrations/0019_retail_reporting_audit.sql");
     const reporting = read("server/services/retail/retailReporting.ts");
     const catalog = read("server/routes/retailCatalogRoutes.ts");
     // Inventory images render through the shared RetailProductImage gallery.
@@ -81,8 +83,8 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     expect(inventory).toContain('decoding="async"');
     expect(pos).toContain('loading="lazy"');
     expect(pos).toContain('decoding="async"');
-    expect(migration).toContain("retail_stock_movements_company_variant_location_created_idx");
-    expect(migration).toContain("retail_pos_sales_company_location_created_idx");
+    expect(hasIndex("retail_stock_movements_company_variant_location_created_idx")).toBe(true);
+    expect(hasIndex("retail_pos_sales_company_location_created_idx")).toBe(true);
   });
 
   it("keeps the retail POS responsive for phone, tablet and desktop layouts", () => {

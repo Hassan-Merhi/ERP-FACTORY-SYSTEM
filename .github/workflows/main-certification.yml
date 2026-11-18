@@ -13,51 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  certify:
-    name: Application Certification
+  # Main Certification used to run every gate one after another in a single
+  # 180-minute job, including the whole backend suite twice (a plain pass and
+  # then a coverage pass of the same tests). The gates now run as parallel
+  # jobs: the backend suite once, under coverage, across eight shards that each
+  # own a PostgreSQL service (files stay serial within a shard, shards share
+  # nothing), and the coverage floors are enforced on the merged map. Target
+  # wall clock is 10-20 minutes. "certify" keeps the old job's name and
+  # aggregates every component, and "publish" is unchanged.
+  verify:
+    name: Verify exact main SHA
     runs-on: ubuntu-26.04
-    # Status publication lives in a separate, minimal-privilege job.
+    timeout-minutes: 5
     permissions:
       contents: read
-    # The full sequential suite is the long pole: twelve backend shards plain,
-    # then twelve under coverage, then the frontend passes and the remaining
-    # gates. 120 left no margin once the shard budget stopped aborting the run
-    # at six minutes and the whole suite actually ran.
-    timeout-minutes: 180
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: heliumdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d heliumdb"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 12
-    env:
-      NODE_ENV: test
-      SESSION_SECRET: main-certification-secret
-      CSRF_ENFORCE: "0"
-      ENABLE_SCHEDULERS: "false"
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGSSLMODE: disable
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
-      PORT: "5000"
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The changed-file format check compares the merged commit to its
-          # first parent, so retain both commits while keeping checkout shallow.
-          fetch-depth: 2
 
       - name: Verify exact merged main SHA
         id: exact_sha
@@ -93,7 +67,6 @@ jobs:
           echo "Exact merged main SHA verified: ${GITHUB_SHA}"
 
       - name: Mark certification pending
-        if: always() && steps.exact_sha.outcome == 'success'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,37 +79,46 @@ jobs:
             -f description='Main certification is running' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
+  static:
+    name: Static and build checks
+    needs: verify
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: main-certification-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PORT: "5000"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The changed-file format check compares the merged commit to its
+          # first parent, so retain both commits while keeping checkout shallow.
+          fetch-depth: 2
       - name: Set up Node
-        id: node_setup
-        if: always() && steps.exact_sha.outcome == 'success'
-        continue-on-error: true
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.22.2"
           cache: npm
-
       - name: Normalize package registry URLs
-        id: registry
-        if: always() && steps.exact_sha.outcome == 'success' && steps.node_setup.outcome == 'success'
-        continue-on-error: true
         run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
-
       - name: Install dependencies
-        id: install
-        if: >-
-          always() &&
-          steps.exact_sha.outcome == 'success' &&
-          steps.node_setup.outcome == 'success' &&
-          steps.registry.outcome == 'success'
-        continue-on-error: true
         env:
           SKIP_GIT_HOOKS: "1"
         run: npm ci --no-audit --bin-links=true
-
       - name: Static and build checks
         id: static
-        if: always() && steps.install.outcome == 'success'
-        continue-on-error: true
         run: |
           set -euo pipefail
           npm run verify:lockfile
@@ -146,21 +128,96 @@ jobs:
           npm run audit:lint-ratchet
           npm run check
           npm run build
-
-      - name: Prepare PostgreSQL and run startup migrations
-        id: schema
-        if: always() && steps.install.outcome == 'success' && steps.static.outcome == 'success'
-        continue-on-error: true
+      - name: Verify server bundle
+        if: always() && steps.static.outcome == 'success'
+        run: npm run verify:server-bundle
+      - name: Verify production readiness
+        if: always()
+        run: npm run verify:final-production-readiness
+      - name: Verify observability and stabilization
+        if: always()
         run: |
           set -euo pipefail
-          node scripts/verify-migration-registry.mjs --json
-          node node_modules/drizzle-kit/bin.cjs push --force
-          node scripts/verify-ci-disposable-schema.mjs
+          npm run verify:observability
+          node scripts/verify-phase11-12-observability-disaster-recovery.mjs
+          npm run verify:stabilization
+      - name: Verify bandwidth and mobile-routing contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          npm run verify:mobile-web-routing
+          npm run verify:bandwidth
+          npm run verify:performance-wave5
+          node scripts/verify-program7d-accessibility-responsive.mjs
 
-          # drizzle-kit creates the declared schema. The application's startup
-          # migrations add runtime-managed tables/columns, so boot the compiled
-          # server once and prove the database health endpoint becomes ready.
-          node dist/index.js > "$RUNNER_TEMP/startup-migrations.txt" 2>&1 &
+  backend:
+    # Raise the shard count here and BACKEND_TEST_SHARDS in backend-coverage
+    # together as the suite grows; a shard took 7-9 minutes at ~1,500 files.
+    name: Backend verification (${{ matrix.shard }}/8)
+    needs: verify
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: main-certification-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PORT: "5000"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install dependencies
+        env:
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+      - name: Build
+        run: npm run build
+      - name: Build PostgreSQL schema from migrations and boot
+        run: |
+          set -euo pipefail
+          npm run audit:runtime-ddl
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
+          node scripts/db/migrate.mjs verify
+
+          # The migrations own the whole schema. Boot the compiled server through
+          # the production preload (read-only schema gate) and prove the database
+          # health endpoint becomes ready.
+          node --import ./server/startupPreload.mjs dist/index.js > "$RUNNER_TEMP/startup-migrations.txt" 2>&1 &
           app_pid=$!
           # shellcheck disable=SC2317,SC2329  # reached through the EXIT trap below
           cleanup() {
@@ -176,98 +233,222 @@ jobs:
               exit 0
             fi
             if ! kill -0 "$app_pid" 2>/dev/null; then
-              echo "Application exited before startup migrations became ready."
+              echo "Application exited before becoming ready."
               cat "$RUNNER_TEMP/startup-migrations.txt"
               exit 1
             fi
             sleep 1
           done
 
-          echo "Timed out waiting for application startup migrations."
+          echo "Timed out waiting for the application to become ready."
           cat "$RUNNER_TEMP/startup-migrations.txt"
           exit 1
 
-      # test:backend:verify is --complete: a plain pass and then a coverage pass,
-      # the same pair the frontend step below spells out as two commands. The
-      # standalone coverage script used to run after it, repeating that coverage
-      # pass a third time for no added signal at a cost of ~40 minutes.
-      - name: Backend verification and coverage
-        id: backend
-        if: always() && steps.schema.outcome == 'success'
-        continue-on-error: true
+      - name: Backend tests and shard coverage
+        env:
+          BACKEND_COVERAGE_SHARD: "1"
+          SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          # Production boots through server/startupPreload.mjs, whose scan-audit
-          # bridge skips itself under NODE_ENV=test. Install the same schema the
-          # PR CI backend job installs so historical Net Position tests can read
-          # customer_order_bales.scanned_at.
-          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
-          npm run test:backend:verify
+          npm run test:backend:coverage -- "--shard=${SHARD}/8"
+      - name: Upload backend shard coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: main-backend-coverage-shard-${{ matrix.shard }}
+          path: coverage/backend/coverage-final.json
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Frontend verification and coverage
-        id: frontend
-        if: always() && steps.install.outcome == 'success'
-        continue-on-error: true
+  backend-coverage:
+    name: Backend coverage floors
+    needs: backend
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install dependencies
+        env:
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+      - name: Download shard coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: main-backend-coverage-shard-*
+          path: coverage/shard-artifacts
+      - name: Merge shard coverage and enforce backend floors
+        env:
+          BACKEND_TEST_SHARDS: "8"
         run: |
           set -euo pipefail
-          npm run test:frontend
-          npm run test:frontend:coverage
+          # run-backend-verification.mjs reads coverage/backend-shards/shard-<0-based>/.
+          for shard in $(seq 1 "$BACKEND_TEST_SHARDS"); do
+            source_file="coverage/shard-artifacts/main-backend-coverage-shard-${shard}/coverage-final.json"
+            if [[ ! -s "$source_file" ]]; then echo "::error::Missing coverage for backend shard ${shard}"; exit 1; fi
+            mkdir -p "coverage/backend-shards/shard-$((shard - 1))"
+            cp "$source_file" "coverage/backend-shards/shard-$((shard - 1))/coverage-final.json"
+          done
+          node scripts/run-backend-verification.mjs --merge-only
+
+  smoke:
+    name: API smoke sweep
+    needs: verify
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: main-certification-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PORT: "5000"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install dependencies
+        env:
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+      - name: Build
+        run: npm run build
+      - name: Build PostgreSQL schema from migrations and boot
+        run: |
+          set -euo pipefail
+          npm run audit:runtime-ddl
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
+          node scripts/db/migrate.mjs verify
+
+          # The migrations own the whole schema. Boot the compiled server through
+          # the production preload (read-only schema gate) and prove the database
+          # health endpoint becomes ready.
+          node --import ./server/startupPreload.mjs dist/index.js > "$RUNNER_TEMP/startup-migrations.txt" 2>&1 &
+          app_pid=$!
+          # shellcheck disable=SC2317,SC2329  # reached through the EXIT trap below
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for _attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > "$RUNNER_TEMP/health-db.json"; then
+              cat "$RUNNER_TEMP/health-db.json"
+              echo
+              exit 0
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Application exited before becoming ready."
+              cat "$RUNNER_TEMP/startup-migrations.txt"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Timed out waiting for the application to become ready."
+          cat "$RUNNER_TEMP/startup-migrations.txt"
+          exit 1
 
       - name: API smoke sweep
-        id: smoke
-        if: always() && steps.schema.outcome == 'success'
-        continue-on-error: true
         run: npm run test:smoke-sweep
 
-      - name: Verify server bundle
-        id: server_bundle
-        if: always() && steps.static.outcome == 'success'
-        continue-on-error: true
-        run: npm run verify:server-bundle
-
-      - name: Verify production readiness
-        id: readiness
-        if: always() && steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run verify:final-production-readiness
-
-      - name: Verify observability and stabilization
-        id: observability
-        if: always() && steps.install.outcome == 'success'
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          npm run verify:observability
-          node scripts/verify-phase11-12-observability-disaster-recovery.mjs
-          npm run verify:stabilization
-
-      - name: Verify bandwidth and mobile-routing contracts
-        id: routing
-        if: always() && steps.install.outcome == 'success'
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          npm run verify:mobile-web-routing
-          npm run verify:bandwidth
-          npm run verify:performance-wave5
-          node scripts/verify-program7d-accessibility-responsive.mjs
-
-      - name: Evaluate certification components
-        if: always()
+  frontend:
+    name: Frontend verification and coverage
+    needs: verify
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: main-certification-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PORT: "5000"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install dependencies
         env:
-          EXACT_SHA: ${{ steps.exact_sha.outcome }}
-          NODE_SETUP: ${{ steps.node_setup.outcome }}
-          REGISTRY: ${{ steps.registry.outcome }}
-          INSTALL: ${{ steps.install.outcome }}
-          STATIC: ${{ steps.static.outcome }}
-          SCHEMA: ${{ steps.schema.outcome }}
-          BACKEND: ${{ steps.backend.outcome }}
-          FRONTEND: ${{ steps.frontend.outcome }}
-          SMOKE: ${{ steps.smoke.outcome }}
-          SERVER_BUNDLE: ${{ steps.server_bundle.outcome }}
-          READINESS: ${{ steps.readiness.outcome }}
-          OBSERVABILITY: ${{ steps.observability.outcome }}
-          ROUTING: ${{ steps.routing.outcome }}
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+      # The coverage run executes the full frontend suite; a separate plain
+      # pass would only repeat the same tests.
+      - name: Frontend tests and coverage floors
+        run: npm run test:frontend:coverage
+
+  certify:
+    name: Application Certification
+    needs: [verify, static, backend, backend-coverage, smoke, frontend]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Evaluate certification components
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          STATIC: ${{ needs.static.result }}
+          BACKEND: ${{ needs.backend.result }}
+          BACKEND_COVERAGE: ${{ needs.backend-coverage.result }}
+          SMOKE: ${{ needs.smoke.result }}
+          FRONTEND: ${{ needs.frontend.result }}
         run: |
           set -euo pipefail
 
@@ -281,19 +462,12 @@ jobs:
             fi
           }
 
-          check_result exact_sha "$EXACT_SHA"
-          check_result node_setup "$NODE_SETUP"
-          check_result registry "$REGISTRY"
-          check_result install "$INSTALL"
+          check_result verify "$VERIFY"
           check_result static "$STATIC"
-          check_result schema "$SCHEMA"
           check_result backend "$BACKEND"
-          check_result frontend "$FRONTEND"
+          check_result backend_coverage "$BACKEND_COVERAGE"
           check_result smoke "$SMOKE"
-          check_result server_bundle "$SERVER_BUNDLE"
-          check_result readiness "$READINESS"
-          check_result observability "$OBSERVABILITY"
-          check_result routing "$ROUTING"
+          check_result frontend "$FRONTEND"
 
           {
             echo '## Main Certification application suite'

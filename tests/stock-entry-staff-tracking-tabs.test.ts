@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
 import { resolve } from "path";
 
 import { FACTORY_TABS } from "../client/src/pages/settings/users/UserManagementConstants";
+import { columnDefinition, hasTable } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const ROOT = resolve(__dirname, "..");
-const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
+const src = (path: string) => readModuleFamily(resolve(ROOT, path));
 
 // FactoryAttendance.tsx is covered by rendering it in
 // tests/ui/factory-attendance-behavior.test.tsx rather than by reading its source.
@@ -74,7 +75,6 @@ describe("Stock Entry staff tracking tabs", () => {
     const dayEditor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
     const targetDefaultsService = src("server/services/factory/productionTargetDefaults.ts");
-    const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
     expect(production).toContain("button-edit-production-default-targets");
     expect(production).toContain("<ProductionTargetDefaultsDialog");
@@ -103,11 +103,19 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("targetBalesOverridden");
     expect(route).toContain("savedRow?.categoryOverridden === true");
     expect(route).toContain("savedRow?.targetBalesOverridden === true");
-    expect(startup).toContain("factory_worker_production_target_defaults");
-    expect(startup).toContain("ADD COLUMN IF NOT EXISTS category varchar(150)");
-    expect(startup).toContain("category_overridden boolean NOT NULL DEFAULT true");
-    expect(startup).toContain("ALTER COLUMN category_overridden SET DEFAULT false");
-    expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
+    // Schema now comes from migrations (was server/startup/factoryStaffTrackingSchema.ts).
+    expect(hasTable("factory_worker_production_target_defaults")).toBe(true);
+    expect(columnDefinition("factory_staff_tracking_entries", "category")?.type).toBe("character varying(150)");
+    expect(columnDefinition("factory_staff_tracking_entries", "category_overridden")).toMatchObject({
+      type: "boolean",
+      notNull: true,
+      default: "false",
+    });
+    expect(columnDefinition("factory_staff_tracking_entries", "target_overridden")).toMatchObject({
+      type: "boolean",
+      notNull: true,
+      default: "false",
+    });
   });
 
   it("keeps effective-dated linked production workers with individual targets", () => {
@@ -119,7 +127,6 @@ describe("Stock Entry staff tracking tabs", () => {
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
     const linkRoute = src("server/routes/factory/factoryProductionWorkerLinkRoutes.ts");
     const linkService = src("server/services/factory/productionWorkerLinks.ts");
-    const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
     expect(editor).toContain("<ProductionWorkerLinkControl");
     expect(editor).toContain("linkGroupId");
@@ -149,9 +156,9 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(linkRoute).toContain("finalized production history");
     expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links");
     expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
-    expect(startup).toContain("factory_worker_production_links");
-    expect(startup).toContain("factory_worker_production_link_members");
-    expect(startup).toContain("factory_worker_production_link_target_defaults");
+    expect(hasTable("factory_worker_production_links")).toBe(true);
+    expect(hasTable("factory_worker_production_link_members")).toBe(true);
+    expect(hasTable("factory_worker_production_link_target_defaults")).toBe(true);
     expect(linkService).toContain("w.position");
     expect(linkService).toContain("w.department");
     expect(linkService).toContain("pg_advisory_xact_lock");

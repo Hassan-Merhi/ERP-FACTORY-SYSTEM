@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const read = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("post-offload impact preview", () => {
   it("computes a read-only canonical cost and inventory impact preview", () => {

@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
 
 async function read(relativePath) {
-  return fs.readFile(path.join(ROOT, relativePath), "utf8");
+  return readModuleFamily(path.join(ROOT, relativePath));
 }
 
 const [

@@ -80,21 +80,6 @@
       ]
     },
     {
-      "id": "startupMigrationFailureCeiling",
-      "description": "Startup migrations that fail on a freshly provisioned database; frozen and may only fall.",
-      "source": {
-        "kind": "jsonValue",
-        "file": "config/startup-migration-baseline.json",
-        "path": "totals.failureCeiling"
-      },
-      "claims": [
-        {
-          "doc": "docs/system-quality-program.md",
-          "pattern": "Startup migration failures \\| ([\\d,]+) "
-        }
-      ]
-    },
-    {
       "id": "backendCoverageLinesFloor",
       "description": "Global backend line-coverage floor enforced by vitest.config.ts.",
       "source": {
@@ -163,14 +148,9 @@
     "docs/erp-supplier-returns-phase6-excel-history.md": "reference",
     "docs/file-size-limits-20261113.md": "reference",
     "docs/database-phase9-production-rollout.md": "reference",
-    "docs/database-phase8-migration-testing.md": "reference",
     "docs/database-phase7-disaster-recovery.md": "reference",
     "docs/database-phase6-performance.md": "reference",
-    "docs/database-phase5-schema-drift.md": "reference",
     "docs/database-phase4-integrity-hardening.md": "reference",
-    "docs/database-phase3-startup-cutover.md": "reference",
-    "docs/database-phase3-continued-inventory.md": "reference",
-    "docs/database-migration-modernization-2026-11-11.md": "reference",
     "docs/factory-unification/phase-2-2026-11-10-continuation.md": "reference",
     "docs/audits/erp-phase3-navigation-permissions-ux-2026-11-11.md": "reference",
     "docs/accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md": "reference",
@@ -468,7 +448,6 @@
     "docs/factory-net-position-historical.md": "reference",
     "docs/faq.md": "reference",
     "docs/financial-close-and-migrations.md": "reference",
-    "docs/fresh-db-bootstrap.md": "reference",
     "docs/fx-monetary-valuation/phase-1-source-audit.md": "reference",
     "docs/fx-monetary-valuation/phase-2-implementation.md": "reference",
     "docs/fx-monetary-valuation/phase-3-rate-save-refresh.md": "reference",
@@ -664,6 +643,20 @@
     "docs/properties-unification-phase11-verification.md": "reference",
     "docs/properties-unification-phases-12-15-tracker.md": "reference",
     "docs/properties-unification-phases-7-11-tracker.md": "reference",
+    "docs/archive/database-migration-only-phase1-inventory.md": "record",
+    "docs/archive/database-migration-only-phase2-baseline.md": "record",
+    "docs/archive/database-phase2-authorized-dump-baselines-2026-11-16.md": "record",
+    "docs/archive/database-phase2-render-catalog-2026-11-16.md": "record",
+    "docs/archive/database-phase3-startup-schema-conversion.md": "record",
+    "docs/archive/database-phase3-startup-cutover.md": "record",
+    "docs/archive/database-phase3-continued-inventory.md": "record",
+    "docs/archive/database-migration-modernization-2026-11-11.md": "record",
+    "docs/archive/database-phase5-schema-drift.md": "record",
+    "docs/archive/database-phase8-migration-testing.md": "record",
+    "docs/archive/fresh-db-bootstrap.md": "record",
+    "docs/database-migrations.md": "reference",
+    "docs/archive/database-migrations-only-cutover-2026-11-16.md": "record",
+    "docs/manifest-driven-access-consolidation.md": "reference",
     "docs/universal-excel-export/phase-1-audit.md": "reference",
     "docs/universal-excel-export/phase-2-engine.md": "reference",
     "docs/universal-excel-export/phase-3-design.md": "reference",
@@ -673,6 +666,12 @@
     "docs/universal-excel-export/phase-7-financial.md": "reference",
     "docs/universal-excel-export/phase-8-specialized.md": "reference",
     "docs/universal-excel-export/phase-9-appearance.md": "reference",
-    "docs/universal-excel-export/phase-10-release-certification.md": "reference"
+    "docs/universal-excel-export/phase-10-release-certification.md": "reference",
+    "docs/archive/engineering/code-line-phase2-dead-code-re-audit-20261114.md": "record",
+    "docs/engineering/code-file-line-policy-phase1.md": "reference",
+    "docs/archive/type-env-phase1-inventory.md": "record",
+    "docs/archive/type-env-phase2-progress.md": "record",
+    "docs/archive/type-env-phase3-cleanup.md": "record",
+    "docs/archive/type-env-phase4-guards.md": "record"
   }
 }

@@ -1,14 +1,15 @@
-import fs from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { auditToolchainCoherence } from "../scripts/audit-toolchain-coherence.mjs";
 import { auditScriptInventory } from "../scripts/audit-script-inventory.mjs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const inventoryConfig = JSON.parse(
-  fs.readFileSync(path.join(process.cwd(), "config/script-inventory.json"), "utf8")
-) as { orphanCeiling: number; knownFailing: Record<string, string> };
+const inventoryConfig = JSON.parse(readModuleFamily(path.join(process.cwd(), "config/script-inventory.json"))) as {
+  orphanCeiling: number;
+  knownFailing: Record<string, string>;
+};
 
 describe("toolchain coherence", () => {
   it("states one Node version everywhere", () => {

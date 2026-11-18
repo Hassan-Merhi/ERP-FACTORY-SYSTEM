@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 // Read with call arguments joined onto one line, so the assertions hold however
 // the formatter wraps a long companyQueryKey(...) call.
 const src = (name: string) =>
-  readFileSync(resolve(process.cwd(), "client/src/pages/factory", name), "utf8")
+  readModuleFamily(resolve(process.cwd(), "client/src/pages/factory", name))
     .replace(/\(\s*\n\s*/g, "(")
     .replace(/,\s*\n\s*(?=\S)/g, ", ");
 

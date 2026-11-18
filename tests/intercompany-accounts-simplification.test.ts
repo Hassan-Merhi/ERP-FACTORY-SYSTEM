@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import { technicalProfitNettingLines } from "../server/services/intercompany/technicalProfitNetting";
 import {
@@ -72,7 +72,7 @@ describe("cent-exact technical profit normalization", () => {
       "server/services/intercompany/phase5Cancel.ts",
       "server/services/intercompany/legacyProfitNetting.ts",
       "server/routes/import/intercompany-phase5.ts",
-    ].map((path) => readFileSync(path, "utf8"));
+    ].map((path) => readModuleFamily(path));
     expect(files[0]).toContain("technicalProfitNetting: true");
     expect(files[0]).toContain("technicalProfitNettingLines(");
     expect(files[1]).toContain("isNettedIntercompanyTradeTx");

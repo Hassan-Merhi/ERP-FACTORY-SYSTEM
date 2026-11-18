@@ -16,12 +16,10 @@ type VoucherRow = {
 
 export async function withPropertiesRentalTenantNames<T extends VoucherRow>(
   companyId: number,
-  rows: T[],
+  rows: T[]
 ): Promise<T[]> {
   const cashVouchers = rows.filter((row) => row.voucherType === "Payment" || row.voucherType === "Receipt");
-  const rentVoucherIds = cashVouchers
-    .filter((row) => row.voucherNumber.startsWith("RENT-"))
-    .map((row) => row.id);
+  const rentVoucherIds = cashVouchers.filter((row) => row.voucherNumber.startsWith("RENT-")).map((row) => row.id);
   const guaranteeContractByVoucher = new Map<number, number>();
   for (const voucher of cashVouchers) {
     const match = /^GUAR(?:-(?:CASH|RENT|REFUND))?-\d+-(\d+)$/.exec(voucher.voucherNumber);
@@ -42,8 +40,8 @@ export async function withPropertiesRentalTenantNames<T extends VoucherRow>(
           // Shared external contracts can belong to a linked company, while
           // their actual payment voucher belongs to the selected Properties company.
           or(eq(propertyContracts.companyId, companyId), eq(propertyContracts.linkedCompanyId, companyId)),
-          inArray(propertyPayments.voucherId, rentVoucherIds),
-        ),
+          inArray(propertyPayments.voucherId, rentVoucherIds)
+        )
       );
     for (const match of matches) {
       if (match.voucherId != null) namesByVoucher.set(match.voucherId, match.tenantName);
@@ -57,8 +55,8 @@ export async function withPropertiesRentalTenantNames<T extends VoucherRow>(
         and(
           eq(propertyContracts.companyId, companyId),
           eq(propertyContracts.module, "PROPERTIES"),
-          inArray(propertyContracts.id, [...new Set(guaranteeContractByVoucher.values())]),
-        ),
+          inArray(propertyContracts.id, [...new Set(guaranteeContractByVoucher.values())])
+        )
       );
     const nameByContractId = new Map(contracts.map((contract) => [contract.id, contract.tenantName]));
     for (const [voucherId, contractId] of guaranteeContractByVoucher) {

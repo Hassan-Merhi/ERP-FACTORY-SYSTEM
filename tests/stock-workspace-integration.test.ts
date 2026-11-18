@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import { getErpRouteFeatureKeys } from "../shared/erpRouteAccess";
 
-const source = (path: string) => readFileSync(path, "utf8");
+const source = (path: string) => readModuleFamily(path);
 
 describe("ERP Stock workspace keeps the existing operational tools", () => {
   it("exposes the company-authorized OTW feature alongside Stock Items, Query and Offload Search", () => {

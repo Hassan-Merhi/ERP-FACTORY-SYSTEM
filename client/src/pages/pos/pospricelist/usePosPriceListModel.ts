@@ -31,6 +31,7 @@ import type {
   PriceListRow,
 } from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
+import { buildPosPriceListExportRow } from "./posPriceListExportRow";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
 
@@ -586,40 +587,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (filteredItems.length === 0) return;
     setExporting(true);
     try {
-      const rows = filteredItems.map((item) => {
-        const row: Record<string, unknown> = {
-          Code: item.code || "",
-          "Item Name": item.name,
-          Group: item.stockGroupName || "",
-        };
-
-        if (showCostPrice) {
-          row["Cost Price"] = item.costPrice && parseFloat(item.costPrice) > 0 ? parseFloat(item.costPrice) : "";
-          const offloadTotal = parseFloat(item.costPrice ?? "0") + parseFloat(item.offloadingCost ?? "0");
-          row["Cost + Offloading"] = offloadTotal > 0 ? offloadTotal : "";
-        }
-
-        if (isAllMode) {
-          row["Total Qty"] = parseFloat(item.totalQuantity ?? "0");
-          for (const m of masters) {
-            const price = masterPriceFor(item, m.id);
-            row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
-          }
-        } else {
-          row["Highest Price Sold"] = item.highestPriceSold == null ? "" : Number(item.highestPriceSold);
-          row["Lowest Price Sold"] = item.lowestPriceSold == null ? "" : Number(item.lowestPriceSold);
-          row["Qty Sold"] = Number(item.qtySold ?? 0);
-          row["Selling Price"] =
-            item.sellingPrice && parseFloat(item.sellingPrice) > 0
-              ? parseFloat(item.sellingPrice)
-              : item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0
-                ? parseFloat(item.baseSellingPrice)
-                : "";
-          row["Qty in Stock"] = item.quantity && parseFloat(item.quantity) > 0 ? parseFloat(item.quantity) : "";
-        }
-
-        return row;
-      });
+      const rows = filteredItems.map((item) =>
+        buildPosPriceListExportRow(item, { showCostPrice, isAllMode, masters, masterPriceFor })
+      );
 
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";

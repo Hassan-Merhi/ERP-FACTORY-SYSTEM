@@ -1,0 +1,21 @@
+-- 0005_employee_opening_side_default_credit.sql
+--
+-- Employees are credit-normal parties: the application reads a missing or
+-- unknown employees.opening_balance_side as 'Cr'
+-- (server/routes/helpers/partyOpeningSide.ts, server/helpers/employeeNetPosition.ts),
+-- and the repository has always declared the column with DEFAULT 'Cr'.
+--
+-- The deployed databases, however, carry DEFAULT 'Dr' (the column predates the
+-- 'Cr' declaration, and the former ADD COLUMN IF NOT EXISTS never changed an
+-- existing default). The employee create route does not set the side, so every
+-- new employee is stored as 'Dr' and an opening balance entered for them is
+-- booked on the wrong side. The owner-approved startup repairs
+-- (applyApprovedEmployeeOpeningCredits, applyApprovedZakariaOpeningCredit)
+-- exist to flip such records back to 'Cr'.
+--
+-- This changes ONLY the default for rows inserted from now on. No existing
+-- employee row, voucher or balance is modified; historical records keep the
+-- side they have, and any correction of those remains an owner-approved,
+-- audited repair.
+
+ALTER TABLE public.employees ALTER COLUMN opening_balance_side SET DEFAULT 'Cr';

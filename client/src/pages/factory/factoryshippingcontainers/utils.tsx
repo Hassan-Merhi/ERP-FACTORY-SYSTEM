@@ -4,7 +4,8 @@
  * Extracted from FactoryShippingContainers.tsx during the Phase 4 god-file split.
  */
 
-import type {ShippingColId} from "./types";
+import type { ShippingColId } from "./types";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export const LIST_KEY = "/api/factory/shipping-container-rows";
 
@@ -100,3 +101,18 @@ export const CTR_LEFT = 130 + 144; // 274
 // ─── Document count indicator ──────────────────────────────────────────────────
 
 export const AVAIL_KEY = "/api/factory/shipping-availability";
+
+/** Shipping grand total in USD (up to 3 decimals). */
+export function shippingCostUsd(value: string | number | null): string {
+  return formatUsd(Number(value), 0, 3);
+}
+
+/** Today's date in the browser's local time zone as YYYY-MM-DD. */
+export function localIsoDate(): string {
+  const date = new Date();
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}

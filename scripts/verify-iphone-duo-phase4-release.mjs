@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { discoverDuoRouteInventory } from "./lib/iphone-duo-route-inventory.mjs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const requirements = [
@@ -52,8 +53,8 @@ const requirements = [
   ["client/src/pages/SpPOImport.tsx", [
     'download="po-import-template.xlsx"', 'event.currentTarget.value = ""',
   ]],
-  ["server/services/security/operationalPermissionRoutePolicy.ts", [
-    '"GET /api/factory/monthly-production-matrix/export-bales"',
+  ["config/route-access-manifest.json", [
+    '"id":"GET /api/factory/monthly-production-matrix/export-bales#1"',
   ]],
   ["client/src/i18n/iphoneDuoMobileTranslations.ts", [
     "export function duoMobileText(", 'en: "Available balance"',
@@ -77,7 +78,7 @@ const testFiles = [
 ];
 const violations = [];
 for (const [relative, snippets] of requirements) {
-  const source = await fs.readFile(path.join(root, relative), "utf8");
+  const source = await readModuleFamily(path.join(root, relative));
   for (const snippet of snippets) {
     if (!source.includes(snippet)) violations.push(relative + ": missing " + snippet);
   }

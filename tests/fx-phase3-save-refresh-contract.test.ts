@@ -4,10 +4,10 @@
  * no FX-REVAL posting is introduced by saving a rate.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 const exchangeRoutes = source("server/routes/exchangeRateRoutes.ts");
 const settings = source("client/src/components/ExchangeRateSettings.tsx");
 const popup = source("client/src/components/DailyRateModal.tsx");
@@ -43,10 +43,10 @@ describe("Phase 3 rate-change propagation", () => {
   });
 
   it("invalidates other tabs without indiscriminately refreshing stable financial reports", () => {
-    expect(realtimeServer).toContain('broadcast(');
+    expect(realtimeServer).toContain("broadcast(");
     expect(realtimeClient).toContain('invalidation.topics.has("fx") && isFxRateDependentQuery(query.queryKey)');
     expect(realtimeClient).toContain('if (topic === "fx") return isFxRateDependentQuery(query.queryKey)');
-    expect(realtimeClient).toContain('if (isStableQueryKey(key) &&');
+    expect(realtimeClient).toContain("if (isStableQueryKey(key) &&");
   });
 
   it("prevents a live group snapshot being held at a stale company FX rate", () => {
@@ -55,17 +55,17 @@ describe("Phase 3 rate-change propagation", () => {
   });
 
   it("clears both server microcache and browser response cache dependencies", () => {
-    expect(readMicrocache).toContain('isFxRateDependentPath(req.path)');
+    expect(readMicrocache).toContain("isFxRateDependentPath(req.path)");
     expect(readMicrocache).toContain('[...(baseTopics ?? []), "fx"]');
-    expect(serverCacheReset).toContain('net-profit:${companyId}:');
-    expect(serverCacheReset).toContain('group-net-position:');
+    expect(serverCacheReset).toContain("net-profit:${companyId}:");
+    expect(serverCacheReset).toContain("group-net-position:");
     expect(refresh).toContain('invalidateBandwidthReadCaches("all")');
     expect(realtimeClient).toContain('invalidation.topics.has("fx") ? "all" : "live"');
   });
 
   it("retains report-only monetary valuation and no policy parameter shadowing", () => {
-    expect(monetaryService).toContain('const eligibility = monetaryFxEligibility({');
-    expect(monetaryService).not.toContain('const policy = monetaryFxEligibility(');
+    expect(monetaryService).toContain("const eligibility = monetaryFxEligibility({");
+    expect(monetaryService).not.toContain("const policy = monetaryFxEligibility(");
     expect(monetaryService).toContain("bookBalancesModified: false, fxVouchersPosted: false");
   });
 });

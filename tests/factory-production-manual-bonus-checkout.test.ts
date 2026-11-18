@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const source = (file: string) => readFileSync(resolve(process.cwd(), file), "utf8");
+import { manifestEntry, tableConstraints } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+
+const source = (file: string) => readModuleFamily(resolve(process.cwd(), file));
 const service = () => source("server/services/factory/manualProductionBonusPaymentService.ts");
 const route = () => source("server/routes/factory/productionBonusCheckoutRoutes.ts");
 
@@ -13,7 +15,7 @@ describe("Manual Production Bonuses", () => {
     const payment = source("client/src/pages/factory/productiontargets/ProductionBonusManualPaymentPanel.tsx");
     expect(page).toContain("const [manualMode, setManualMode] = useState(true);");
     expect(sheet).toContain("manualMode || member.readyDays > 0");
-    expect(sheet).toContain("onToggle(member.workerId,!selected.includes(member.workerId))");
+    expect(sheet).toContain("onToggle(member.workerId, !selected.includes(member.workerId))");
     expect(sheet).toContain("onAmountChange?.(member.workerId, event.target.value)");
     expect(page).toMatch(/selected=\{manualSelected\}\s+amounts=\{manualAmounts\}/);
     expect(payment).toContain("selections: chosen.map((item) => ({ workerId: item.workerId, amount: item.amount }))");
@@ -38,9 +40,18 @@ describe("Manual Production Bonuses", () => {
     expect(s).toContain("priorManual");
     expect(s).toContain("SELECT 1 FROM factory_target_bonus_weekly_payments");
     expect(s).toContain("SELECT 1 FROM factory_target_bonus_payments");
-    const startup = source("server/startup/ensureFactoryTargetBonusPaymentSchema.ts");
-    expect(startup).toContain("factory_manual_bonus_request_worker_unique");
-    expect(startup).toContain("factory_manual_bonus_voucher_unique");
+    const constraints = tableConstraints("factory_target_bonus_manual_payments");
+    expect(constraints).toContain("UNIQUE (company_id, request_key, worker_id)");
+    expect(constraints).toContain("UNIQUE (payment_voucher_id)");
+    expect(
+      manifestEntry(
+        "constraint",
+        "public.factory_target_bonus_manual_payments.factory_manual_bonus_request_worker_unique"
+      )
+    ).toBeDefined();
+    expect(
+      manifestEntry("constraint", "public.factory_target_bonus_manual_payments.factory_manual_bonus_voucher_unique")
+    ).toBeDefined();
     for (const target of ["targetBonusPaymentService.ts", "weeklyBonusPaymentService.ts"]) {
       expect(source("server/services/factory/" + target)).toContain("factory_target_bonus_manual_payments");
     }

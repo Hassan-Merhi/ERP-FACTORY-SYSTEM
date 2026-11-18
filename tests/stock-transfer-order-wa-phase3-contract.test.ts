@@ -3,9 +3,11 @@
  * immutable first-decision writes, and zero stock approval side effects.
  */
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
-const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+
+import { indexDefinition } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (p: string) => readModuleFamily(path.join(process.cwd(), p));
 
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");
 const parser = read("server/services/stockTransferOrderWhatsAppReplyParser.ts");
@@ -13,11 +15,12 @@ const consumer = read("server/services/stockTransferOrderWhatsAppInbound.ts");
 const batch = read("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
 const entry = read("server/routes.ts");
 const origin = read("server/security/originGuard.ts");
-const stage = read("server/startup-schema/040-stock-transfer-order-wa-webhook.ts");
-const boot = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
 const settings = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as {
-  routeCount: number; routes: string[]; middlewareMountCount: number; middlewareMounts: string[];
+  routeCount: number;
+  routes: string[];
+  middlewareMountCount: number;
+  middlewareMounts: string[];
 };
 
 describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
@@ -40,8 +43,8 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(parser).toContain('root.typeWebhook !== "incomingMessageReceived"');
     expect(parser).toContain('message.typeMessage === "quotedMessage"');
     expect(parser).toContain('message.typeMessage === "textMessage"');
-    expect(parser).toContain('record(message.quotedMessage)?.stanzaId');
-    expect(parser).toContain('textData?.stanzaId');
+    expect(parser).toContain("record(message.quotedMessage)?.stanzaId");
+    expect(parser).toContain("textData?.stanzaId");
     expect(parser).toContain('normalized !== "DONE" && normalized !== "DECLINE"');
   });
 
@@ -52,7 +55,7 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(consumer).toContain("reply.senderE164 !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_phone !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_group !== matched.approval_group_chat_id");
-    expect(consumer).toContain("matched.status !== \"requested\"");
+    expect(consumer).toContain('matched.status !== "requested"');
     expect(consumer).toContain("runWithDatabaseMaintenanceScope");
   });
 
@@ -80,15 +83,15 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
   });
 
   it("atomically stages one and only one accepted decision per batch", () => {
-    expect(stage).toContain("sto_wa_batch_decision_once_uk");
-    expect(stage).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
-    expect(stage).toContain("event_type IN ('done_received','decline_received')");
+    // The partial unique index is defined by migrations (was startup-schema/040).
+    expect(indexDefinition("sto_wa_batch_decision_once_uk")).toBe(
+      "CREATE UNIQUE INDEX sto_wa_batch_decision_once_uk ON public.stock_transfer_order_approval_events USING btree (company_id, batch_id) WHERE (event_type = ANY (ARRAY['done_received'::text, 'decline_received'::text]))"
+    );
     expect(consumer).toContain("'done_received','decline_received'");
     expect(consumer).toContain("ON CONFLICT DO NOTHING");
     expect(consumer).toContain("FOR UPDATE OF b");
     expect(consumer).toContain("decline_received");
     expect(consumer).toContain("done_received");
-    expect(boot).toContain("stockTransferOrderWaWebhookIntegrity");
   });
 
   it("reports staged decisions in the existing Stock Transfer Order approval area", () => {

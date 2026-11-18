@@ -1,5 +1,3 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
   CalendarDays,
@@ -13,280 +11,63 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { useToast } from "@/hooks/use-toast";
-import {
-  FACTORY_TRACKING_STATUSES,
-  translateFactoryStaffTrackingText,
-  type FactoryStaffTrackingTranslationKey,
-} from "@/i18n/factoryStaffTrackingTranslations";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
-import { queryClient } from "@/lib/queryClient";
-import {
-  addIsoDays,
-  collapseLinkedProductionRows,
-  differenceClass,
-  differenceText,
-  fetchProduction,
-  groupProductionRows,
-  localDateStr,
-  periodFor,
-  statusTranslationKey,
-  summarizeProductionRows,
-  waitForReportPaint,
-  type PeriodType,
-  type ProductionGroup,
-  type ProductionResponse,
-  type ProductionRow,
-} from "./factoryProductionTargetsModel";
+import { type PeriodType } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
-import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import {
-  ProductionTargetsDateRangeDialog,
-  type ProductionTargetsDateRange,
-} from "./productiontargets/ProductionTargetsDateRangeDialog";
-import { ChevronDown } from "lucide-react";
+import { ProductionExcelRangeDialog } from "./productiontargets/ProductionExcelRangeDialog";
+import { ProductionTargetsDateRangeDialog } from "./productiontargets/ProductionTargetsDateRangeDialog";
 import "./productiontargets/productionTargetsPremium.css";
-import { useLocation } from "wouter";
-import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-
-import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 import { ProductionTargetKpiGrid } from "./productiontargets/ProductionTargetKpiGrid";
 import { ProductionBonusesLauncher } from "./productiontargets/ProductionBonusesLauncher";
 import { ProductionTargetNotices } from "./productiontargets/ProductionTargetNotices";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useFactoryProductionTargetsState } from "./useFactoryProductionTargetsState";
+import { FactoryProductionTargetsSection } from "./FactoryProductionTargetsSection";
+import { FactoryProductionTargetsSection2 } from "./FactoryProductionTargetsSection2";
 
 export default function FactoryProductionTargets() {
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const { selectedCompany } = useCompany();
-  const { data: access } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
-  const bonusRole = session?.currentRole ?? session?.role;
-  const canManageBonuses = factoryActionCapabilities({
-    role: bonusRole,
-    hasFactoryAccess: access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true,
-  })["production.manage-bonuses"];
-  const { language } = useApplicationLanguage();
-  const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
-  const [periodType, setPeriodType] = useState<PeriodType>("daily");
-  const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
-  const [customRange, setCustomRange] = useState<ProductionTargetsDateRange | null>(null);
-  const [dateRangeOpen, setDateRangeOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
-  const [rows, setRows] = useState<ProductionRow[]>([]);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
-  const [excelRangeOpen, setExcelRangeOpen] = useState(false);
-  const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(
-    () =>
-      periodType === "daily"
-        ? periodFor("daily", referenceDate)
-        : (customRange ?? periodFor(periodType, referenceDate)),
-    [periodType, referenceDate, customRange]
-  );
-
-  const { data, isLoading } = useQuery<ProductionResponse>({
-    queryKey: companyQueryKey(
-      "/api/factory/staff-tracking",
-      selectedCompany?.id,
-      "production",
-      periodType,
-      period.start,
-      period.end
-    ),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: () => fetchProduction(periodType, period.start, period.end),
-  });
-
-  useEffect(() => {
-    setRows([]);
-    setEditorOpen(false);
-    setDefaultsEditorOpen(false);
-  }, [selectedCompany?.id, periodType, period.start, period.end]);
-
-  useEffect(() => {
-    if (data) setRows(data.rows);
-  }, [data]);
-
-  const finalized = Boolean(data?.finalized);
-
-  const buildRecords = (sourceRows: ProductionRow[] = rows) =>
-    sourceRows.map((row) => ({
-      personType: row.personType,
-      personId: row.personId,
-      groupName: row.groupName || "",
-      category: row.category,
-      categoryOverridden: row.categoryOverridden === true,
-      targetBales: row.targetBales,
-      targetBalesOverridden: row.targetBalesOverridden === true,
-      producedBales: null,
-      status: row.status,
-      notes: "",
-    }));
-
-  const sendProductionWhatsappImage = async (reportDate: string) => {
-    // Always refresh first so each manual send reflects the latest available production
-    // counts, targets/categories, and Attendance Register-driven statuses for that day.
-    const latestSnapshot = await fetchProduction("daily", reportDate, reportDate);
-    setRows(latestSnapshot.rows);
-    await waitForReportPaint();
-
-    if (!productionReportRef.current) throw new Error(tr("productionWhatsappImageFailed"));
-
-    const html2canvas = (await import("html2canvas")).default;
-    const canvas = await html2canvas(productionReportRef.current, {
-      backgroundColor: "#111315",
-      scale: 2,
-      logging: false,
-    });
-    const title = `${tr("productionTargets")} — ${reportDate}`;
-    const response = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
-      imageBase64: canvas.toDataURL("image/png"),
-      date: reportDate,
-      fileName: `Production_${reportDate}.png`,
-      caption: title,
-      reportLabel: title,
-      recipient: "production",
-    });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.message || tr("productionWhatsappImageFailed"));
-    }
-  };
-
-  const sendWhatsappMutation = useMutation({
-    mutationFn: () => sendProductionWhatsappImage(referenceDate),
-    onSuccess: () => {
-      toast({ title: tr("productionWhatsappImageSent") });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: tr("productionWhatsappImageFailed"),
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const endProductionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
-        page: "production",
-        periodType: "daily",
-        periodStart: referenceDate,
-        periodEnd: referenceDate,
-        finalize: true,
-        records: buildRecords(),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || tr("endProductionFailed"));
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      const endedDate = referenceDate;
-      toast({ title: tr("productionEnded") });
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/factory/staff-tracking"],
-        refetchType: "active",
-      });
-      setReferenceDate(addIsoDays(endedDate, 1));
-    },
-    onError: (error: Error) => {
-      toast({ title: tr("endProductionFailed"), description: error.message, variant: "destructive" });
-    },
-  });
-
-  const exportWeeklyMutation = useMutation({
-    mutationFn: (dates: ProductionExportDates) => exportWeeklyProductionExcel(dates.start, dates.end),
-    onSuccess: ({ start, end }) => {
-      setExcelRangeOpen(false);
-      toast({
-        title: tr("weeklyExcelExported"),
-        description: tr("weeklyExcelRange") + " " + start + " — " + end,
-      });
-    },
-    onError: (error: Error) => {
-      const description =
-        error instanceof ProductionDateRangeError
-          ? error.code === "tooLong"
-            ? tr("exportRangeTooLong")
-            : error.code === "future"
-              ? tr("exportFutureDate")
-              : tr("exportInvalidRange")
-          : error.message;
-      toast({ title: tr("weeklyExcelExportFailed"), description, variant: "destructive" });
-    },
-  });
-
-  const collapsedRows = useMemo(() => collapseLinkedProductionRows(rows), [rows]);
-
-  const categoryOptions = useMemo(
-    () => Array.from(new Set(collapsedRows.map((row) => row.category || "—"))).sort((a, b) => a.localeCompare(b)),
-    [collapsedRows]
-  );
-
-  const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
-    const needle = search.trim().toLowerCase();
-    const visibleRows = collapsedRows.filter((row) => {
-      if (categoryFilter !== "all" && (row.category || "—") !== categoryFilter) return false;
-      const absent =
-        periodType === "daily"
-          ? (row.displayMembers ?? [row]).some((member) => member.status === FACTORY_TRACKING_STATUSES.absent)
-          : (row.absentDays ?? 0) > 0;
-      if (statusFilter === "absent" && !absent) return false;
-      if (statusFilter === "present" && absent) return false;
-      const memberMatch = (row.displayMembers ?? []).some(
-        (member) => member.name.toLowerCase().includes(needle) || (member.code || "").toLowerCase().includes(needle)
-      );
-      return (
-        !needle ||
-        memberMatch ||
-        row.name.toLowerCase().includes(needle) ||
-        row.category.toLowerCase().includes(needle) ||
-        (row.groupName || "").toLowerCase().includes(needle) ||
-        (row.code || "").toLowerCase().includes(needle)
-      );
-    });
-    return groupProductionRows(visibleRows);
-  }, [collapsedRows, search, categoryFilter, statusFilter, periodType]);
-
-  const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
-
-  const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
-  const missingTargetDays = useMemo(
-    () => (periodType === "daily" ? 0 : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0)),
-    [rows, periodType]
-  );
-  const workerTotals = useMemo(
-    () => ({
-      total: rows.length,
-      present: rows.filter((row) =>
-        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.present : (row.absentDays ?? 0) === 0
-      ).length,
-      absent: rows.filter((row) =>
-        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.absent : (row.absentDays ?? 0) > 0
-      ).length,
-    }),
-    [rows, periodType]
-  );
-
-  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending || exportWeeklyMutation.isPending;
+  const {
+    busy,
+    canManageBonuses,
+    categoryFilter,
+    categoryOptions,
+    collapsedGroups,
+    customRange,
+    dateRangeOpen,
+    defaultsEditorOpen,
+    editorOpen,
+    endProductionMutation,
+    excelRangeOpen,
+    exportWeeklyMutation,
+    finalized,
+    groupedVisibleRows,
+    isLoading,
+    missingTargetDays,
+    navigate,
+    period,
+    periodType,
+    productionReportGroups,
+    productionReportRef,
+    referenceDate,
+    rows,
+    search,
+    sendWhatsappMutation,
+    setCategoryFilter,
+    setCollapsedGroups,
+    setCustomRange,
+    setDateRangeOpen,
+    setDefaultsEditorOpen,
+    setEditorOpen,
+    setExcelRangeOpen,
+    setPeriodType,
+    setReferenceDate,
+    setSearch,
+    setStatusFilter,
+    statusFilter,
+    totals,
+    tr,
+    workerTotals,
+  } = useFactoryProductionTargetsState();
 
   return (
     <div className="production-targets-modern space-y-4">
@@ -515,164 +296,14 @@ export default function FactoryProductionTargets() {
         </div>
       </div>
 
-      <div className="pt-staff-table">
-        <Table mobileLayout="cards">
-          <TableHeader>
-            <TableRow className="border-b border-border/80 bg-muted/60 hover:bg-muted/60">
-              <TableHead className="min-w-[240px] border-r border-border/70 text-sm font-semibold">
-                {tr("person")}
-              </TableHead>
-              <TableHead className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-sm font-semibold">
-                {tr("category")}
-              </TableHead>
-              <TableHead className="w-[125px] border-r border-border/70 text-right text-sm font-semibold">
-                {tr("target")}
-              </TableHead>
-              <TableHead className="w-[120px] border-r border-border/70 text-right text-sm font-semibold">
-                {tr("produced")}
-              </TableHead>
-              <TableHead className="w-[120px] border-r border-border/70 text-right text-sm font-semibold">
-                {tr("difference")}
-              </TableHead>
-              <TableHead className="w-[155px] text-sm font-semibold">{tr("status")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-base text-muted-foreground">
-                  {tr("loadingStaff")}
-                </TableCell>
-              </TableRow>
-            ) : groupedVisibleRows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-base text-muted-foreground">
-                  {tr("noMatchingStaff")}
-                </TableCell>
-              </TableRow>
-            ) : (
-              groupedVisibleRows.map((group, groupIndex) => (
-                <Fragment key={group.label.toLocaleLowerCase() || "__blank-group__"}>
-                  <TableRow className={`pt-category-row pt-category-row--${groupIndex % 4}`}>
-                    <TableCell colSpan={6} className="py-2">
-                      <button
-                        type="button"
-                        className="pt-category-toggle"
-                        aria-expanded={!collapsedGroups.has(group.label)}
-                        aria-label={`${collapsedGroups.has(group.label) ? "Expand" : "Collapse"} ${group.label || "Uncategorized"}`}
-                        onClick={() =>
-                          setCollapsedGroups((previous) => {
-                            const next = new Set(previous);
-                            if (next.has(group.label)) next.delete(group.label);
-                            else next.add(group.label);
-                            return next;
-                          })
-                        }
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${collapsedGroups.has(group.label) ? "-rotate-90" : ""}`}
-                          />
-                          <span className="text-sm font-bold">{group.label || "—"}</span>
-                        </span>
-                        <span className="pt-category-count">{group.rows.length}</span>
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                  {!collapsedGroups.has(group.label) &&
-                    group.rows.map((row) => {
-                      const members = row.displayMembers ?? [
-                        {
-                          personId: row.personId,
-                          name: row.name,
-                          code: row.code,
-                          status: row.status,
-                          active: row.active,
-                        },
-                      ];
-                      const isAbsent =
-                        periodType !== "daily"
-                          ? (row.absentDays ?? 0) > 0
-                          : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
-                      const comparisonTarget =
-                        periodType === "daily"
-                          ? row.targetBales
-                          : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
-                            ? null
-                            : row.targetBales - (row.absentTargetBales ?? 0);
-                      return (
-                        <TableRow
-                          key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
-                          className={`pt-worker-row border-b ${
-                            isAbsent ? "bg-red-500/5 hover:bg-red-500/10" : ""
-                          } ${!row.active ? "opacity-60" : ""}`}
-                        >
-                          <TableCell className="border-r border-border/70 py-3">
-                            <div className="space-y-1" dir="auto">
-                              {members.map((member) => (
-                                <div
-                                  key={member.personId}
-                                  className={`text-base font-semibold leading-6 ${!member.active ? "opacity-60" : ""}`}
-                                >
-                                  {member.name}
-                                </div>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70">
-                            <span className="pt-category-pill">{row.category || "—"}</span>
-                          </TableCell>
-                          <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
-                            {row.targetBales ?? "—"}
-                          </TableCell>
-                          <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
-                            {row.producedBales ?? 0}
-                          </TableCell>
-                          <TableCell
-                            className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(comparisonTarget, row.producedBales)}`}
-                          >
-                            {differenceText(comparisonTarget, row.producedBales)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1.5">
-                              {members.map((member) => {
-                                const memberAbsent =
-                                  periodType !== "daily"
-                                    ? (row.absentDays ?? 0) > 0
-                                    : member.status === FACTORY_TRACKING_STATUSES.absent;
-                                return (
-                                  <div
-                                    key={member.personId}
-                                    className={`pt-status-pill ${memberAbsent ? "pt-status-pill--absent" : ""}`}
-                                    aria-disabled="true"
-                                    title={
-                                      periodType === "daily"
-                                        ? `${member.name}: ${tr("statusControlledFromAttendance")}`
-                                        : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`
-                                    }
-                                  >
-                                    <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
-                                    <span>
-                                      {periodType === "daily"
-                                        ? tr(statusTranslationKey(member.status))
-                                        : (row.absentDays ?? 0) > 0
-                                          ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
-                                          : tr("present")}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                </Fragment>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <FactoryProductionTargetsSection
+        collapsedGroups={collapsedGroups}
+        groupedVisibleRows={groupedVisibleRows}
+        isLoading={isLoading}
+        periodType={periodType}
+        setCollapsedGroups={setCollapsedGroups}
+        tr={tr}
+      />
 
       {periodType !== "daily" && (
         <ProductionTargetsDateRangeDialog
@@ -710,201 +341,14 @@ export default function FactoryProductionTargets() {
         finalized={finalized}
       />
 
-      <div
-        ref={productionReportRef}
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          left: "-12000px",
-          top: 0,
-          width: "1280px",
-          background: "#111315",
-          color: "#f4f4f5",
-          padding: "30px",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-          <div>
-            <div style={{ fontSize: "28px", fontWeight: 700 }}>{tr("productionTargets")}</div>
-            <div style={{ marginTop: "6px", color: "#a1a1aa", fontSize: "16px" }}>{referenceDate}</div>
-          </div>
-          <div style={{ color: "#a1a1aa", fontSize: "15px" }}>
-            {rows.length} {tr("people")}
-          </div>
-        </div>
-
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "15px" }}>
-          <thead>
-            <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
-              <th style={{ width: "360px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
-                {tr("worker")}
-              </th>
-              <th style={{ width: "260px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
-                {tr("category")}
-              </th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
-                {tr("target")}
-              </th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
-                {tr("produced")}
-              </th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
-                {tr("difference")}
-              </th>
-              <th style={{ width: "130px", padding: "13px 10px", textAlign: "center", border: "1px solid #3f444b" }}>
-                {tr("status")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {productionReportGroups.map((group) => (
-              <Fragment key={`report-${group.label.toLocaleLowerCase() || "blank"}`}>
-                <tr style={{ background: "#202328" }}>
-                  <td colSpan={6} style={{ padding: "11px 12px", border: "1px solid #3f444b", fontWeight: 700 }}>
-                    {group.label || "—"}{" "}
-                    <span style={{ marginLeft: "8px", color: "#a1a1aa", fontWeight: 400 }}>({group.rows.length})</span>
-                  </td>
-                </tr>
-                {group.rows.map((row, index) => {
-                  const members = row.displayMembers ?? [
-                    {
-                      personId: row.personId,
-                      name: row.name,
-                      code: row.code,
-                      status: row.status,
-                      active: row.active,
-                    },
-                  ];
-                  return (
-                    <tr
-                      key={
-                        row.linkGroupId != null
-                          ? `production-report-link-${row.linkGroupId}`
-                          : `production-report-worker-${row.personId}`
-                      }
-                      style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
-                    >
-                      <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>
-                        {members.map((member) => (
-                          <div key={member.personId}>{member.name}</div>
-                        ))}
-                      </td>
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
-                        {row.category || "—"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 10px",
-                          textAlign: "right",
-                          border: "1px solid #34383e",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {row.targetBales ?? "—"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 10px",
-                          textAlign: "right",
-                          border: "1px solid #34383e",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {row.producedBales ?? 0}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 10px",
-                          textAlign: "right",
-                          border: "1px solid #34383e",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {differenceText(row.targetBales, row.producedBales)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 10px",
-                          textAlign: "center",
-                          border: "1px solid #34383e",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {members.map((member) => {
-                          const statusColor =
-                            member.status === FACTORY_TRACKING_STATUSES.absent
-                              ? "#f87171"
-                              : member.status === FACTORY_TRACKING_STATUSES.new
-                                ? "#fbbf24"
-                                : "#34d399";
-                          return (
-                            <div key={member.personId} style={{ color: statusColor }}>
-                              {tr(statusTranslationKey(member.status))}
-                            </div>
-                          );
-                        })}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </Fragment>
-            ))}
-            <tr style={{ background: "#292c31" }}>
-              <td
-                colSpan={2}
-                style={{ padding: "16px 12px", border: "1px solid #3f444b", fontWeight: 800, fontSize: "17px" }}
-              >
-                {tr("dailyTotal")}
-              </td>
-              <td
-                style={{
-                  padding: "14px 10px",
-                  textAlign: "right",
-                  border: "1px solid #3f444b",
-                  fontWeight: 800,
-                  fontSize: "18px",
-                }}
-              >
-                {totals.target}
-              </td>
-              <td
-                style={{
-                  padding: "14px 10px",
-                  textAlign: "right",
-                  border: "1px solid #3f444b",
-                  fontWeight: 800,
-                  fontSize: "18px",
-                }}
-              >
-                {totals.produced}
-              </td>
-              <td
-                style={{
-                  padding: "14px 10px",
-                  textAlign: "right",
-                  border: "1px solid #3f444b",
-                  fontWeight: 800,
-                  fontSize: "18px",
-                }}
-              >
-                {totals.difference > 0 ? `+${totals.difference}` : totals.difference}
-              </td>
-              <td
-                style={{
-                  padding: "14px 10px",
-                  textAlign: "center",
-                  border: "1px solid #3f444b",
-                  fontWeight: 800,
-                  fontSize: "18px",
-                }}
-              >
-                {rows.length}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <FactoryProductionTargetsSection2
+        productionReportGroups={productionReportGroups}
+        productionReportRef={productionReportRef}
+        referenceDate={referenceDate}
+        rows={rows}
+        totals={totals}
+        tr={tr}
+      />
     </div>
   );
 }

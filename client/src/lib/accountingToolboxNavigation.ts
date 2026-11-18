@@ -64,6 +64,11 @@ export function getDeveloperMaintenanceLinks(mode: AccountingToolboxMode): Accou
       item("Orphaned Records", "Inspect records with missing references", "/orphaned-records"),
       item("Inventory Repair", "Review inventory discrepancies", "/inventory-repair"),
       item("Balance Repair", "Review ledger reconciliation and repair", "/balance-repair"),
+      item(
+        "Historical Opening Values",
+        "Record the currency of opening balances saved without one",
+        "/accounts/historical-openings"
+      ),
       item("Convergence Reconciliation", "Review source evidence and reconciliations", "/convergence-reconciliation"),
       item("Import Cycle Diagnostics", "Investigate import-cycle problems", "/import-cycle-diagnostics"),
       item("Account Migration", "Restricted ledger migration tool", "/account-migration"),

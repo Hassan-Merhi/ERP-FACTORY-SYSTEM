@@ -1,11 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveRequestCompanyId } from "../server/services/security/requestCompanyScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(
-  new URL("../server/routes/factory/factoryInsuranceRoutes.ts", import.meta.url),
-  "utf8"
-);
+const routeSource = readModuleFamily(new URL("../server/routes/factory/factoryInsuranceRoutes.ts", import.meta.url));
 
 describe("factory insurance company isolation", () => {
   const request = {

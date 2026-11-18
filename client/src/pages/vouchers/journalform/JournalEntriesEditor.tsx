@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react";
-import { AlertTriangle, CheckCircle, ChevronDown, FileDown, Plus, X } from "lucide-react";
+import { AlertTriangle, CheckCircle, ChevronDown, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -9,540 +8,99 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
-import type { useJournalFormModel } from "./useJournalFormModel";
+import { VoucherPhoneActionBar } from "../VoucherPhoneActionBar";
+import { useJournalEntriesEditorState, type Model } from "./useJournalEntriesEditorState";
+import { JournalEntriesEditorSection } from "./JournalEntriesEditorSection";
+import { JournalEntriesEditorSection2 } from "./JournalEntriesEditorSection2";
 
-type Model = ReturnType<typeof useJournalFormModel>;
-
-function focusInput(selector: string, select = false, delay = 50) {
-  setTimeout(() => {
-    if (typeof document === "undefined") return;
-    const element = document.querySelector(selector) as HTMLInputElement | null;
-    element?.focus();
-    if (select) element?.select();
-  }, delay);
-}
-
-export function JournalEntriesEditor({ model }: { model: Model }) {
+export function JournalEntriesEditor(props: { model: Model }) {
   const {
-    journalForm,
-    journalFields,
-    journalEntries,
-    appendJournal,
-    removeJournal,
-    getAccountBalance,
-    handleJournalTypeChange,
     activeJournalRow,
-    setActiveJournalRow,
-    journalAccountSearchTerm,
-    setJournalAccountSearchTerm,
-    setJournalAccountHighlightedIndex,
-    filteredJournalAccounts,
-    handleJournalAccountSelect,
-    setShowAccountSidebar,
-    setAccountPickersNeeded,
-    journalAccountHighlightedIndex,
-    handleJournalKeyDown,
-    selectedCurrency,
+    appendJournal,
+    cancelEdit,
     convertToUSD,
+    filteredJournalAccounts,
     formatAmount,
-    totalDebit,
-    totalCredit,
+    getAccountBalance,
     handleExportJournalVoucher,
+    handleJournalAccountSelect,
+    handleJournalKeyDown,
+    handleJournalTypeChange,
+    isBalanced,
+    isPhone,
+    journalAccountHighlightedIndex,
+    journalAccountSearchTerm,
+    journalEntries,
+    journalFields,
+    journalForm,
     journalMutation,
-    voucherIdToEdit,
-  } = model;
-  const isPhone = useErpPhoneLayout();
-  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
-  const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
-
-  const pendingBlurTimeouts = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
-
-  useEffect(
-    () => () => {
-      for (const timeout of pendingBlurTimeouts.current) clearTimeout(timeout);
-      pendingBlurTimeouts.current.clear();
-    },
-    []
-  );
-
-  const scheduleAccountBlur = (index: number) => {
-    const timeout = setTimeout(() => {
-      pendingBlurTimeouts.current.delete(timeout);
-      if (activeJournalRow === index) {
-        setJournalAccountSearchTerm("");
-        setActiveJournalRow(null);
-      }
-    }, 200);
-    pendingBlurTimeouts.current.add(timeout);
-  };
+    model,
+    removeJournal,
+    scheduleAccountBlur,
+    selectedCurrency,
+    setAccountPickersNeeded,
+    setActiveJournalRow,
+    setJournalAccountHighlightedIndex,
+    setJournalAccountSearchTerm,
+    setShowAccountSidebar,
+    totalCredit,
+    totalDebit,
+  } = useJournalEntriesEditorState(props);
 
   return (
     <>
-      <div className="sm:hidden space-y-2">
-        {journalFields.map((field, index) => {
-          const entry = journalEntries[index];
-          const currentBalance = entry?.accountId > 0 ? getAccountBalance(entry.accountType, entry.accountId) : 0;
-          const entryAmount = parseFloat(entry?.amount || "0");
-          const projectedBalance = entry?.type === "DR" ? currentBalance + entryAmount : currentBalance - entryAmount;
-          return (
-            <div
-              key={field.id}
-              className="border rounded-md p-3 space-y-2 bg-card"
-              data-testid={`journal-entry-card-${index}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-muted-foreground">Entry {index + 1}</p>
-                {journalFields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeJournal(index)}
-                    data-testid={`button-journal-remove-mobile-${index}`}
-                    className="-my-2 -me-2 shrink-0"
-                    aria-label={`Remove entry ${index + 1}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-start gap-2">
-                <FormField
-                  control={journalForm.control}
-                  name={`entries.${index}.type`}
-                  render={({ field: typeField }) => (
-                    <FormItem className="shrink-0">
-                      <Select
-                        value={typeField.value}
-                        onValueChange={(value) => {
-                          if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger
-                            className="w-16 text-center font-medium"
-                            data-testid={`input-journal-type-mobile-${index}`}
-                          >
-                            <SelectValue placeholder="DR" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="DR">DR</SelectItem>
-                          <SelectItem value="CR">CR</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                <div className="flex-1 min-w-0">
-                  <Input
-                    value={activeJournalRow === index ? journalAccountSearchTerm : entry?.accountName || ""}
-                    onChange={(event) => {
-                      setJournalAccountSearchTerm(event.target.value);
-                      setJournalAccountHighlightedIndex(0);
-                    }}
-                    onFocus={() => {
-                      setAccountPickersNeeded(true);
-                      setActiveJournalRow(index);
-                      setShowAccountSidebar(true);
-                      setJournalAccountSearchTerm("");
-                    }}
-                    onBlur={() => scheduleAccountBlur(index)}
-                    placeholder="Type to search account..."
-                    data-testid={`input-journal-account-mobile-${index}`}
-                    className="text-sm"
-                  />
-                  {activeJournalRow === index && filteredJournalAccounts.length > 0 && (
-                    <div className="mt-1 border rounded-md bg-popover shadow-md max-h-44 overflow-y-auto z-20 relative">
-                      {filteredJournalAccounts.slice(0, 10).map((account) => (
-                        <button
-                          key={`${account.type}-${account.id}`}
-                          type="button"
-                          className="w-full text-left px-3 py-2.5 text-sm hover-elevate border-b last:border-b-0"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            handleJournalAccountSelect(account);
-                            setShowAccountSidebar(false);
-                          }}
-                        >
-                          <div className="font-medium truncate">{account.name}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {entry?.accountId > 0 && (
-                    <div className="text-xs text-muted-foreground pl-1 mt-0.5">
-                      New Bal:{" "}
-                      <span
-                        className={cn(
-                          "font-mono",
-                          projectedBalance >= 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
-                        )}
-                      >
-                        {formatAmount(Math.abs(projectedBalance))} {projectedBalance >= 0 ? "Dr" : "Cr"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
+      <JournalEntriesEditorSection2
+        activeJournalRow={activeJournalRow}
+        appendJournal={appendJournal}
+        convertToUSD={convertToUSD}
+        filteredJournalAccounts={filteredJournalAccounts}
+        formatAmount={formatAmount}
+        getAccountBalance={getAccountBalance}
+        handleJournalAccountSelect={handleJournalAccountSelect}
+        handleJournalTypeChange={handleJournalTypeChange}
+        journalAccountSearchTerm={journalAccountSearchTerm}
+        journalEntries={journalEntries}
+        journalFields={journalFields}
+        journalForm={journalForm}
+        removeJournal={removeJournal}
+        scheduleAccountBlur={scheduleAccountBlur}
+        selectedCurrency={selectedCurrency}
+        setAccountPickersNeeded={setAccountPickersNeeded}
+        setActiveJournalRow={setActiveJournalRow}
+        setJournalAccountHighlightedIndex={setJournalAccountHighlightedIndex}
+        setJournalAccountSearchTerm={setJournalAccountSearchTerm}
+        setShowAccountSidebar={setShowAccountSidebar}
+        totalCredit={totalCredit}
+        totalDebit={totalDebit}
+      />
 
-              <FormField
-                control={journalForm.control}
-                name={`entries.${index}.amount`}
-                render={({ field: amountField }) => (
-                  <FormItem>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-14 shrink-0">Amount</span>
-                      <FormControl>
-                        <Input
-                          {...amountField}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          className="font-mono text-right"
-                          data-testid={`input-journal-amount-mobile-${index}`}
-                          onBlur={(event) => {
-                            const value = Number(event.target.value);
-                            if (!isNaN(value) && value > 0 && selectedCurrency !== "USD") {
-                              journalForm.setValue(`entries.${index}.amount`, convertToUSD(value).toFixed(2));
-                            }
-                          }}
-                        />
-                      </FormControl>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={journalForm.control}
-                name={`entries.${index}.narration`}
-                render={({ field: narrationField }) => (
-                  <FormItem>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-14 shrink-0">Narration</span>
-                      <FormControl>
-                        <Input
-                          {...narrationField}
-                          value={narrationField.value ?? ""}
-                          placeholder="Optional note for this entry"
-                          className="text-sm"
-                          data-testid={`input-journal-narration-mobile-${index}`}
-                        />
-                      </FormControl>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            </div>
-          );
-        })}
-
-        <div className="flex items-center justify-between pt-1 px-0.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              appendJournal({
-                type: "DR",
-                accountType: "ledger",
-                accountId: 0,
-                accountName: "",
-                amount: "",
-                narration: "",
-              })
-            }
-            data-testid="button-journal-add-row-mobile"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Row
-          </Button>
-          <div className="text-right text-xs space-y-0.5">
-            <div className="text-muted-foreground">
-              DR: {formatAmount(totalDebit)} | CR: {formatAmount(totalCredit)}
-            </div>
-          </div>
-        </div>
-        {Math.abs(totalDebit - totalCredit) > 0.01 && (
-          <div className="text-center text-sm text-destructive p-2 bg-destructive/10 rounded-md">
-            DR/CR mismatch: {formatAmount(Math.abs(totalDebit - totalCredit))}
-          </div>
-        )}
-      </div>
-
-      <div className="voucher-journal-table hidden sm:block border rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full min-w-[500px]">
-          <thead className="bg-muted/40">
-            <tr className="h-9">
-              <th className="text-left px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[10%]">
-                DR/CR
-              </th>
-              <th className="text-left px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[35%]">
-                Account
-              </th>
-              <th className="text-right px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[20%]">
-                Amount
-              </th>
-              <th className="text-left px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[28%]">
-                Narration
-              </th>
-              <th className="w-[7%]"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {journalFields.map((field, index) => {
-              const entry = journalEntries[index];
-              const currentBalance = entry?.accountId > 0 ? getAccountBalance(entry.accountType, entry.accountId) : 0;
-              const entryAmount = parseFloat(entry?.amount || "0");
-              const displayBalance = entry?.type === "DR" ? currentBalance + entryAmount : currentBalance - entryAmount;
-              return (
-                <tr key={field.id} className="border-t hover:bg-muted/20 transition-colors">
-                  <td className="p-2">
-                    <FormField
-                      control={journalForm.control}
-                      name={`entries.${index}.type`}
-                      render={({ field: typeField }) => (
-                        <FormItem>
-                          <Select
-                            value={typeField.value}
-                            onValueChange={(value) => {
-                              if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
-                            }}
-                          >
-                            <FormControl>
-                              <SelectTrigger
-                                className={cn(
-                                  "w-20 text-center font-semibold border",
-                                  typeField.value === "DR"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800"
-                                    : "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
-                                )}
-                                data-testid={`input-journal-type-${index}`}
-                                onKeyDown={(event) => {
-                                  if ((event.key === "Tab" && !event.shiftKey) || event.key === "ArrowRight") {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-account-${index}"]`);
-                                  } else if (event.key === "ArrowLeft") {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-amount-${index}"]`, true);
-                                  } else if (event.key === "ArrowUp" && index > 0) {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-type-${index - 1}"]`);
-                                  } else if (event.key === "ArrowDown" && index < journalFields.length - 1) {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-type-${index + 1}"]`);
-                                  }
-                                }}
-                              >
-                                <SelectValue placeholder="DR" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="DR">DR</SelectItem>
-                              <SelectItem value="CR">CR</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <FormField
-                      control={journalForm.control}
-                      name={`entries.${index}.accountId`}
-                      render={() => (
-                        <FormItem>
-                          <FormControl>
-                            <div className="space-y-1">
-                              <Input
-                                value={activeJournalRow === index ? journalAccountSearchTerm : entry?.accountName || ""}
-                                onChange={(event) => {
-                                  setJournalAccountSearchTerm(event.target.value);
-                                  setJournalAccountHighlightedIndex(0);
-                                }}
-                                onFocus={() => {
-                                  setAccountPickersNeeded(true);
-                                  setActiveJournalRow(index);
-                                  setShowAccountSidebar(true);
-                                  setJournalAccountSearchTerm("");
-                                }}
-                                onBlur={() => scheduleAccountBlur(index)}
-                                placeholder="Type to search..."
-                                data-testid={`input-journal-account-${index}`}
-                                onKeyDown={(event) => {
-                                  if (model.showAccountSidebar) {
-                                    if (event.key === "ArrowUp") {
-                                      event.preventDefault();
-                                      setJournalAccountHighlightedIndex((previous) =>
-                                        previous > 0 ? previous - 1 : Math.max(0, filteredJournalAccounts.length - 1)
-                                      );
-                                      return;
-                                    }
-                                    if (event.key === "ArrowDown") {
-                                      event.preventDefault();
-                                      setJournalAccountHighlightedIndex((previous) =>
-                                        previous < filteredJournalAccounts.length - 1 ? previous + 1 : 0
-                                      );
-                                      return;
-                                    }
-                                    if (event.key === "Enter") {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      const selected = filteredJournalAccounts[journalAccountHighlightedIndex];
-                                      if (selected) {
-                                        handleJournalAccountSelect(selected);
-                                        setShowAccountSidebar(false);
-                                      }
-                                      return;
-                                    }
-                                  }
-                                  if (event.key === "Tab" && !event.shiftKey) {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-amount-${index}"]`, true);
-                                  } else if (event.key === "ArrowUp" && index > 0) {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-account-${index - 1}"]`);
-                                  } else if (event.key === "ArrowDown" && index < journalFields.length - 1) {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-account-${index + 1}"]`);
-                                  } else if (event.key === "ArrowRight") {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-amount-${index}"]`, true);
-                                  } else if (event.key === "ArrowLeft") {
-                                    event.preventDefault();
-                                    focusInput(`[data-testid="input-journal-type-${index}"]`);
-                                  }
-                                }}
-                              />
-                              {entry?.accountId > 0 && (
-                                <div className="text-xs text-muted-foreground pl-1">
-                                  New Bal:{" "}
-                                  <span
-                                    className={cn(
-                                      "font-mono",
-                                      displayBalance >= 0
-                                        ? "text-emerald-600 dark:text-emerald-400"
-                                        : "text-red-600 dark:text-red-400"
-                                    )}
-                                  >
-                                    {formatAmount(Math.abs(displayBalance))} {displayBalance >= 0 ? "Dr" : "Cr"}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <FormField
-                      control={journalForm.control}
-                      name={`entries.${index}.amount`}
-                      render={({ field: amountField }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              {...amountField}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              className="font-mono text-right"
-                              data-testid={`input-journal-amount-${index}`}
-                              onKeyDown={(event) => handleJournalKeyDown(event, index, "amount")}
-                              onBlur={(event) => {
-                                const value = Number(event.target.value);
-                                if (!isNaN(value) && value > 0 && selectedCurrency !== "USD") {
-                                  journalForm.setValue(`entries.${index}.amount`, convertToUSD(value).toFixed(2));
-                                }
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <FormField
-                      control={journalForm.control}
-                      name={`entries.${index}.narration`}
-                      render={({ field: narrationField }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              {...narrationField}
-                              value={narrationField.value ?? ""}
-                              placeholder="Optional note…"
-                              className="text-sm h-8"
-                              data-testid={`input-journal-narration-${index}`}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {journalFields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeJournal(index)}
-                        data-testid={`button-journal-remove-${index}`}
-                      >
-                        <X className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="bg-muted/40 border-t">
-            <tr>
-              <td colSpan={5} className="px-3 py-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    appendJournal({
-                      type: "DR",
-                      accountType: "ledger",
-                      accountId: 0,
-                      accountName: "",
-                      amount: "",
-                      narration: "",
-                    })
-                  }
-                  data-testid="button-journal-add-row"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Row
-                </Button>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <JournalEntriesEditorSection
+        activeJournalRow={activeJournalRow}
+        appendJournal={appendJournal}
+        convertToUSD={convertToUSD}
+        filteredJournalAccounts={filteredJournalAccounts}
+        formatAmount={formatAmount}
+        getAccountBalance={getAccountBalance}
+        handleJournalAccountSelect={handleJournalAccountSelect}
+        handleJournalKeyDown={handleJournalKeyDown}
+        handleJournalTypeChange={handleJournalTypeChange}
+        journalAccountHighlightedIndex={journalAccountHighlightedIndex}
+        journalAccountSearchTerm={journalAccountSearchTerm}
+        journalEntries={journalEntries}
+        journalFields={journalFields}
+        journalForm={journalForm}
+        model={model}
+        removeJournal={removeJournal}
+        scheduleAccountBlur={scheduleAccountBlur}
+        selectedCurrency={selectedCurrency}
+        setAccountPickersNeeded={setAccountPickersNeeded}
+        setActiveJournalRow={setActiveJournalRow}
+        setJournalAccountHighlightedIndex={setJournalAccountHighlightedIndex}
+        setJournalAccountSearchTerm={setJournalAccountSearchTerm}
+        setShowAccountSidebar={setShowAccountSidebar}
+      />
 
       <div className="voucher-journal-summary flex flex-wrap gap-3">
         <div className="rounded-lg border bg-muted/40 px-4 py-2 flex flex-col gap-0.5">

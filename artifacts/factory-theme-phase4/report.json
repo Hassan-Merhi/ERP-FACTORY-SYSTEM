@@ -1,0 +1,241 @@
+{
+  "baseline": "compiled CSS",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "viewports": [
+    {
+      "name": "phone-320",
+      "width": 320,
+      "height": 700
+    },
+    {
+      "name": "phone-390",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "tablet",
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "screenshotFolder": "/home/user/p9/artifacts/factory-theme-phase4",
+  "cases": [
+    {
+      "mode": "light",
+      "viewport": "phone-320",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(248, 249, 252)",
+      "card": "linear-gradient(to right bottom, rgb(245, 249, 255) 0%, rgb(255, 255, 255) 50%, oklab(0.95083 -0.00388068 -0.022108 / 0.8) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(27, 31, 34)"
+    },
+    {
+      "mode": "light",
+      "viewport": "phone-390",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(248, 249, 252)",
+      "card": "linear-gradient(to right bottom, rgb(245, 249, 255) 0%, rgb(255, 255, 255) 50%, oklab(0.95083 -0.00388068 -0.022108 / 0.8) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(27, 31, 34)"
+    },
+    {
+      "mode": "light",
+      "viewport": "tablet",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(248, 249, 252)",
+      "card": "linear-gradient(to right bottom, rgb(245, 249, 255) 0%, rgb(255, 255, 255) 50%, oklab(0.95083 -0.00388068 -0.022108 / 0.8) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(27, 31, 34)"
+    },
+    {
+      "mode": "light",
+      "viewport": "desktop",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(248, 249, 252)",
+      "card": "linear-gradient(to right bottom, rgb(245, 249, 255) 0%, rgb(255, 255, 255) 50%, oklab(0.95083 -0.00388068 -0.022108 / 0.8) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(27, 31, 34)"
+    },
+    {
+      "mode": "dark",
+      "viewport": "phone-320",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(19, 22, 27)",
+      "card": "linear-gradient(to right bottom in oklab, rgb(42, 68, 111) 0%, rgb(36, 53, 82) 50%, rgb(28, 42, 63) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(233, 235, 236)"
+    },
+    {
+      "mode": "dark",
+      "viewport": "phone-390",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(19, 22, 27)",
+      "card": "linear-gradient(to right bottom in oklab, rgb(42, 68, 111) 0%, rgb(36, 53, 82) 50%, rgb(28, 42, 63) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(233, 235, 236)"
+    },
+    {
+      "mode": "dark",
+      "viewport": "tablet",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(19, 22, 27)",
+      "card": "linear-gradient(to right bottom in oklab, rgb(42, 68, 111) 0%, rgb(36, 53, 82) 50%, rgb(28, 42, 63) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(233, 235, 236)"
+    },
+    {
+      "mode": "dark",
+      "viewport": "desktop",
+      "hue": "217",
+      "colors": [
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)",
+        "rgb(68, 133, 238)"
+      ],
+      "statuses": [
+        "oklch(0.723 0.219 149.579)",
+        "oklch(0.637 0.237 25.331)",
+        "oklch(0.769 0.188 70.08)"
+      ],
+      "portal": "rgb(68, 133, 238)",
+      "background": "rgb(19, 22, 27)",
+      "card": "linear-gradient(to right bottom in oklab, rgb(42, 68, 111) 0%, rgb(36, 53, 82) 50%, rgb(28, 42, 63) 100%)",
+      "stripes": "repeating-linear-gradient(90deg, rgb(13, 60, 135), rgb(28, 89, 186) 9px, rgb(21, 69, 147) 14px, rgb(9, 47, 109) 17px)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(13, 97, 231, 0.5) 0px 12px 30px -22px",
+      "tap": 44,
+      "overflow": 0,
+      "foreground": "rgb(233, 235, 236)"
+    }
+  ],
+  "failures": []
+}

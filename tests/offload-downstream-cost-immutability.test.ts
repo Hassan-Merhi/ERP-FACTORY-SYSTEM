@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { offloadEconomicBasisChanged } from "../server/services/containers/offload-lifecycle/offloadCostBasisGuard";
 
 const posted = [
@@ -66,9 +66,8 @@ describe("offloaded stock cost basis with downstream movements", () => {
     ).toBe(false);
   });
   it("rejects repricing before reversing stock and covers sales/transfers/adjustments", () => {
-    const source = readFileSync(
-      new URL("../server/services/containers/offload-lifecycle/execute.ts", import.meta.url),
-      "utf8"
+    const source = readModuleFamily(
+      new URL("../server/services/containers/offload-lifecycle/execute.ts", import.meta.url)
     );
     expect(source).toContain("CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED");
     expect(source).toContain("schema.salesItems");

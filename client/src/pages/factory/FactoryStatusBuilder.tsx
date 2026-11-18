@@ -1,538 +1,80 @@
-import { TabsList } from "@/components/ui/tabs";
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { useToast } from "@/hooks/use-toast";
-import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Input } from "@/components/ui/input";
 import {} from "@/components/ui/dialog";
 import { LayoutGrid, Plus, X, Link2, Link2Off } from "lucide-react";
 
-import type {
-  ApiSheet,
-  CellValue,
-  LinkDialogState,
-  PendingDelete,
-  StatusBuilderSheet,
-} from "./factorystatusbuilder/types";
+import type { CellValue } from "./factorystatusbuilder/types";
 import {
   calcDiff,
   computeDiffValue,
   computeTotalValue,
   fmt,
-  fromApiSheet,
   getEffectiveValue,
   isDiffColumn,
   isTotalColumn,
-  makeId,
-  parseCellValue,
   resolveCellValue,
 } from "./factorystatusbuilder/utils";
-import { TabLabel } from "./factorystatusbuilder/components/TabLabel";
 import { LinkDialog } from "./factorystatusbuilder/components/LinkDialog";
 import { StatusHistoryPanel } from "./factorystatusbuilder/components/StatusHistoryPanel";
 import { DeleteConfirmationDialog } from "./factorystatusbuilder/components/DeleteConfirmationDialog";
 import { StatusViewToggle } from "./factorystatusbuilder/components/StatusViewToggle";
 import { StatusBuilderToolbar } from "./factorystatusbuilder/components/StatusBuilderToolbar";
-import { StatusColumnsMenu } from "./factorystatusbuilder/components/StatusColumnsMenu";
 import { StatusAddRow } from "./factorystatusbuilder/components/StatusAddRow";
 import { StatusCellLinkMenu } from "./factorystatusbuilder/components/StatusCellLinkMenu";
 import { StatusDiffFooterRow } from "./factorystatusbuilder/components/StatusDiffFooterRow";
+import { FactoryStatusBuilderSection, useFactoryStatusBuilderState } from "./useFactoryStatusBuilderState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
-  const { selectedCompany } = useCompany();
-  // Sheets are shared company records: read-only roles can browse, switch pages, view history and export.
-  const recordChanges = useExistingRecordChangeAccess();
-  const canEdit = recordChanges.allowed;
-  const canCreateSheet = recordChanges.canCreate("POST", "/api/factory/status-builder/sheets");
-  const { toast } = useToast();
-  const { formatDisplayDate } = useDateFormat();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [localSheets, setLocalSheets] = useState<StatusBuilderSheet[]>([]);
-  const [initialised, setInitialised] = useState(false);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silentSaveRef = useRef(false);
-  const priorCompanyRef = useRef(selectedCompany?.id);
-  useEffect(() => {
-    if (priorCompanyRef.current === selectedCompany?.id) return;
-    priorCompanyRef.current = selectedCompany?.id;
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = null;
-    silentSaveRef.current = false;
-    setLocalSheets([]);
-    setInitialised(false);
-    setActiveIdx(0);
-    setSavedAt(null);
-  }, [selectedCompany?.id]);
-
-  const [linkDialog, setLinkDialog] = useState<LinkDialogState>({
-    open: false,
-    targetRowIdx: 0,
-    targetColIdx: 0,
-    sourceSheetId: "",
-    sourceRowId: "",
-    sourceColId: "",
-  });
-
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
-
-  const [viewMode, setViewMode] = useState<"sheet" | "history">("sheet");
-
-  // Display-only preferences: hiding a column never removes cells, changes formulas,
-  // or alters the saved sheet. Preferences are local to this browser and sheet.
-  const [hiddenColumnsBySheet, setHiddenColumnsBySheet] = useState<Record<string, string[]>>(() => {
-    try {
-      const stored = window.localStorage.getItem("factory-status-builder:hidden-columns:v1");
-      const parsed: unknown = stored ? JSON.parse(stored) : {};
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-      return Object.fromEntries(
-        Object.entries(parsed).filter(
-          (entry): entry is [string, string[]] =>
-            Array.isArray(entry[1]) && entry[1].every((id: unknown) => typeof id === "string")
-        )
-      );
-    } catch {
-      return {};
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("factory-status-builder:hidden-columns:v1", JSON.stringify(hiddenColumnsBySheet));
-    } catch {
-      // Browser storage may be disabled; column visibility still works for this session.
-    }
-  }, [hiddenColumnsBySheet]);
-
-  const setColumnHidden = (sheetId: string, columnId: string, hidden: boolean) => {
-    setHiddenColumnsBySheet((prev) => {
-      const ids = prev[sheetId] ?? [];
-      return {
-        ...prev,
-        [sheetId]: hidden ? Array.from(new Set([...ids, columnId])) : ids.filter((id) => id !== columnId),
-      };
-    });
-  };
-
-  const fmtLabel = useCallback(
-    (label: string): string => {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return formatDisplayDate(label);
-      return label;
-    },
-    [formatDisplayDate]
-  );
-
-  // ── Load ───────────────────────────────────────────────────────────────────
   const {
-    data: apiSheets,
-    isLoading,
-    isError,
+    apiSheets,
     refetch,
-  } = useQuery<ApiSheet[]>({
-    queryKey: companyQueryKey("/api/factory/status-builder/sheets", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-
-  useEffect(() => {
-    if (apiSheets && !initialised) {
-      setLocalSheets(apiSheets.map(fromApiSheet));
-      setInitialised(true);
-    }
-  }, [apiSheets, initialised]);
-
-  const activeSheet = localSheets[activeIdx] ?? null;
-  const hiddenColIds = activeSheet ? (hiddenColumnsBySheet[activeSheet.stableId] ?? []) : [];
-  const isDirty = localSheets.some((s) => s.dirty);
-
-  // ── History log ────────────────────────────────────────────────────────────
-  const { data: historyLog, isLoading: historyLoading } = useQuery<
-    Array<{
-      id: number;
-      sheetId: number;
-      sheetName: string;
-      rowLabel: string;
-      columnLabel: string;
-      oldValue: string | null;
-      newValue: string | null;
-      changedBy: string | null;
-      createdAt: string;
-    }>
-  >({
-    queryKey: companyQueryKey("/api/factory/status-builder/log", selectedCompany?.id, activeSheet?.id),
-    queryFn: () =>
-      apiRequest("GET", `/api/factory/status-builder/log?sheetId=${activeSheet?.id}&limit=200`).then((r) => r.json()),
-    enabled: Boolean(selectedCompany?.id) && viewMode === "history" && !!activeSheet?.id,
-  });
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const updateSheet = useCallback(
-    (fn: (s: StatusBuilderSheet) => StatusBuilderSheet) => {
-      setLocalSheets((prev) => {
-        const next = [...prev];
-        next[activeIdx] = { ...fn(next[activeIdx]), dirty: true };
-        return next;
-      });
-    },
-    [activeIdx]
-  );
-
-  // ── Link operations ────────────────────────────────────────────────────────
-  const openLinkDialog = useCallback(
-    (rowIdx: number, colIdx: number) => {
-      const cell = activeSheet?.rows[rowIdx]?.cells[colIdx] ?? { value: null };
-      setLinkDialog({
-        open: true,
-        targetRowIdx: rowIdx,
-        targetColIdx: colIdx,
-        sourceSheetId: cell.link?.sourceSheetId ?? "",
-        sourceRowId: cell.link?.sourceRowId ?? "",
-        sourceColId: cell.link?.sourceColumnId ?? "",
-      });
-    },
-    [activeSheet]
-  );
-
-  const handleSaveLink = useCallback(
-    (sourceSheetId: string, sourceRowId: string, sourceColId: string) => {
-      const { targetRowIdx, targetColIdx } = linkDialog;
-      updateSheet((s) => {
-        const rows = s.rows.map((r, ri) => {
-          if (ri !== targetRowIdx) return r;
-          const cells = [...r.cells];
-          const existing = cells[targetColIdx] ?? { value: null };
-          cells[targetColIdx] = {
-            ...existing,
-            link: { type: "status_builder_cell", sourceSheetId, sourceRowId, sourceColumnId: sourceColId },
-          };
-          return { ...r, cells };
-        });
-        return { ...s, rows };
-      });
-      setLinkDialog((prev) => ({ ...prev, open: false }));
-    },
-    [linkDialog, updateSheet]
-  );
-
-  const unlinkCell = useCallback(
-    (rowIdx: number, colIdx: number) => {
-      updateSheet((s) => {
-        const rows = s.rows.map((r, ri) => {
-          if (ri !== rowIdx) return r;
-          const cells = [...r.cells];
-          const existing = cells[colIdx] ?? { value: null };
-          cells[colIdx] = { value: existing.value, link: null };
-          return { ...r, cells };
-        });
-        return { ...s, rows };
-      });
-    },
-    [updateSheet]
-  );
-
-  const copyLinkValueAsManual = useCallback(
-    (rowIdx: number, colIdx: number) => {
-      const sheet = localSheets[activeIdx];
-      if (!sheet) return;
-      const cell = sheet.rows[rowIdx]?.cells[colIdx];
-      if (!cell?.link) return;
-      const resolved = resolveCellValue(
-        localSheets,
-        cell.link.sourceSheetId,
-        cell.link.sourceRowId,
-        cell.link.sourceColumnId
-      );
-      updateSheet((s) => {
-        const rows = s.rows.map((r, ri) => {
-          if (ri !== rowIdx) return r;
-          const cells = [...r.cells];
-          cells[colIdx] = {
-            value: resolved.broken || resolved.circular ? null : (resolved.value as CellValue),
-            link: null,
-          };
-          return { ...r, cells };
-        });
-        return { ...s, rows };
-      });
-    },
-    [localSheets, activeIdx, updateSheet]
-  );
-
-  // ── Mutations ──────────────────────────────────────────────────────────────
-  const createMutation = useMutation({
-    mutationFn: (name: string) =>
-      apiRequest("POST", "/api/factory/status-builder/sheets", { name }).then((r) => r.json()),
-    onSuccess: (created: ApiSheet) => {
-      setLocalSheets((prev) => [...prev, fromApiSheet(created)]);
-      setActiveIdx((prev) => prev + 1);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async (sheets: StatusBuilderSheet[]) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const dirty = sheets.filter((s) => s.dirty && s.id !== null);
-      await Promise.all(
-        dirty.map((s) =>
-          apiRequest("PUT", `/api/factory/status-builder/sheets/${s.id}`, {
-            name: s.name,
-            columns: s.columns,
-            rows: s.rows.map((r) => ({
-              id: r.id,
-              label: r.label,
-              cells: r.cells.map((c) => (c.link ? { value: c.value, link: c.link } : c.value)),
-            })),
-          })
-        )
-      );
-    },
-    onSuccess: () => {
-      setLocalSheets((prev) => prev.map((s) => ({ ...s, dirty: false })));
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
-      setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      if (!silentSaveRef.current) toast({ title: "Saved", description: "All pages saved." });
-      silentSaveRef.current = false;
-    },
-    onError: (e: ClientErrorLike) => {
-      silentSaveRef.current = false;
-      toast({ title: "Save failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  useEffect(() => {
-    const hasSaveable = localSheets.some((s) => s.dirty && s.id !== null);
-    if (!hasSaveable || !canEdit) return;
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(() => {
-      silentSaveRef.current = true;
-      saveMutation.mutate(localSheets);
-    }, 2000);
-    return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    };
-  }, [localSheets, saveMutation, canEdit]);
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return apiRequest("DELETE", `/api/factory/status-builder/sheets/${id}`);
-    },
-    onSuccess: (_data, id) => {
-      setLocalSheets((prev) => prev.filter((s) => s.id !== id));
-      setActiveIdx((prev) => Math.max(0, prev - 1));
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
-      toast({ title: "Page deleted" });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
-  });
-
-  const importMutation = useMutation({
-    mutationFn: (file: File) => {
-      if (!recordChanges.allowed) return Promise.reject(new Error(recordChanges.reason ?? ""));
-      const fd = new FormData();
-      fd.append("file", file);
-      return fetch("/api/factory/status-builder/sheets/import", {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      }).then(async (r) => {
-        if (!r.ok) {
-          const t = await r.text();
-          try {
-            throw new Error(JSON.parse(t).message);
-          } catch {
-            throw new Error(t);
-          }
-        }
-        return r.json() as Promise<ApiSheet[]>;
-      });
-    },
-    onSuccess: (sheets: ApiSheet[]) => {
-      setLocalSheets(sheets.map(fromApiSheet));
-      setActiveIdx(0);
-      setInitialised(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
-      toast({ title: "Imported", description: `${sheets.length} page(s) imported.` });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Import failed", description: e.message, variant: "destructive" }),
-  });
-
-  const handleExport = async () => {
-    try {
-      await downloadFromUrl("/api/factory/status-builder/sheets/export", {
-        fileName: exportFileName("factory sheets", "xlsx"),
-      });
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ── Tab operations ─────────────────────────────────────────────────────────
-  const addTab = () => canCreateSheet && createMutation.mutate(`Page ${localSheets.length + 1}`);
-
-  const renameTab = (idx: number, newName: string) => {
-    setLocalSheets((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], name: newName, dirty: true };
-      return next;
-    });
-  };
-
-  const deleteTab = (idx: number) => {
-    const s = localSheets[idx];
-    if (!s) return;
-    setPendingDelete({ type: "page", idx, label: s.name });
-  };
-
-  // ── Column operations ──────────────────────────────────────────────────────
-  const addColumn = useCallback(() => {
-    updateSheet((s) => ({
-      ...s,
-      columns: [...s.columns, { id: `col_${makeId()}`, label: `Col ${s.columns.length + 1}` }],
-      rows: s.rows.map((r) => ({ ...r, cells: [...r.cells, { value: null }] })),
-    }));
-  }, [updateSheet]);
-
-  const removeColumn = (colIdx: number) => {
-    updateSheet((s) => ({
-      ...s,
-      columns: s.columns.filter((_, i) => i !== colIdx),
-      rows: s.rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => i !== colIdx) })),
-      lockedColumns: s.lockedColumns.filter((i) => i !== colIdx).map((i) => (i > colIdx ? i - 1 : i)),
-    }));
-  };
-
-  const setColumnHeader = (colIdx: number, val: string) => {
-    updateSheet((s) => {
-      const columns = [...s.columns];
-      columns[colIdx] = { ...columns[colIdx], label: val };
-      return { ...s, columns };
-    });
-  };
-
-  // ── Row operations ─────────────────────────────────────────────────────────
-  const addRow = () => {
-    updateSheet((s) => ({
-      ...s,
-      rows: [...s.rows, { id: `row_${makeId()}`, label: "", cells: Array(s.columns.length).fill({ value: null }) }],
-    }));
-  };
-
-  const removeRow = (rowIdx: number) => {
-    updateSheet((s) => ({ ...s, rows: s.rows.filter((_, i) => i !== rowIdx) }));
-  };
-
-  const setRowLabel = (rowIdx: number, val: string) => {
-    updateSheet((s) => ({
-      ...s,
-      rows: s.rows.map((r, i) => (i === rowIdx ? { ...r, label: val } : r)),
-    }));
-  };
-
-  const setCellDirect = (rowIdx: number, colIdx: number, val: string) => {
-    updateSheet((s) => ({
-      ...s,
-      rows: s.rows.map((r, i) => {
-        if (i !== rowIdx) return r;
-        const cells = [...r.cells];
-        cells[colIdx] = { value: parseCellValue(val), link: null };
-        return { ...r, cells };
-      }),
-    }));
-  };
-
-  // ── Keyboard navigation ────────────────────────────────────────────────────
-  const focusCell = useCallback((ri: number, ci: number) => {
-    const el = document.querySelector(`[data-testid="sb-input-cell-${ri}-${ci}"]`) as HTMLInputElement | null;
-    if (el) {
-      el.focus();
-      el.select();
-    }
-  }, []);
-
-  const handleCellKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>, ri: number, ci: number) => {
-      const sheet = localSheets[activeIdx];
-      if (!sheet) return;
-      const rowCount = sheet.rows.length;
-      const hiddenIds = hiddenColumnsBySheet[sheet.stableId] ?? [];
-      const visibleCols = sheet.columns
-        .map((col, index) => (hiddenIds.includes(col.id) ? -1 : index))
-        .filter((index) => index !== -1);
-      const visiblePosition = visibleCols.indexOf(ci);
-      const previousCol = visiblePosition > 0 ? visibleCols[visiblePosition - 1] : null;
-      const nextCol =
-        visiblePosition >= 0 && visiblePosition < visibleCols.length - 1 ? visibleCols[visiblePosition + 1] : null;
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (ri >= rowCount - 1) {
-          if (!canEdit) return;
-          updateSheet((s) => ({
-            ...s,
-            rows: [
-              ...s.rows,
-              { id: `row_${makeId()}`, label: "", cells: Array(s.columns.length).fill({ value: null }) },
-            ],
-          }));
-          setTimeout(() => focusCell(rowCount, ci), 30);
-        } else focusCell(ri + 1, ci);
-      } else if (e.key === "Tab") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          if (previousCol !== null) focusCell(ri, previousCol);
-          else if (ri > 0 && visibleCols.length > 0) focusCell(ri - 1, visibleCols[visibleCols.length - 1]);
-        } else {
-          if (nextCol !== null) focusCell(ri, nextCol);
-          else if (ri < rowCount - 1 && visibleCols.length > 0) focusCell(ri + 1, visibleCols[0]);
-        }
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (ri > 0) focusCell(ri - 1, ci);
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (ri < rowCount - 1) focusCell(ri + 1, ci);
-      } else if (e.key === "ArrowLeft") {
-        const input = e.currentTarget;
-        if (input.selectionStart === 0 && input.selectionEnd === 0 && previousCol !== null) {
-          e.preventDefault();
-          focusCell(ri, previousCol);
-        }
-      } else if (e.key === "ArrowRight") {
-        const input = e.currentTarget;
-        if (input.selectionStart === input.value.length && nextCol !== null) {
-          e.preventDefault();
-          focusCell(ri, nextCol);
-        }
-      }
-    },
-    [localSheets, activeIdx, focusCell, updateSheet, hiddenColumnsBySheet, canEdit]
-  );
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (canEdit && (e.ctrlKey || e.metaKey) && e.key === "i") {
-        e.preventDefault();
-        addColumn();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeIdx, addColumn, localSheets, canEdit]);
+    isError,
+    activeIdx,
+    activeSheet,
+    addColumn,
+    addRow,
+    addTab,
+    canCreateSheet,
+    canEdit,
+    copyLinkValueAsManual,
+    deleteMutation,
+    deleteTab,
+    fileInputRef,
+    fmtLabel,
+    handleCellKeyDown,
+    handleExport,
+    handleSaveLink,
+    hiddenColIds,
+    historyLoading,
+    historyLog,
+    importMutation,
+    isDirty,
+    isLoading,
+    linkDialog,
+    localSheets,
+    openLinkDialog,
+    pendingDelete,
+    removeColumn,
+    removeRow,
+    renameTab,
+    saveMutation,
+    savedAt,
+    setActiveIdx,
+    setCellDirect,
+    setColumnHeader,
+    setColumnHidden,
+    setHiddenColumnsBySheet,
+    setLinkDialog,
+    setLocalSheets,
+    setPendingDelete,
+    setRowLabel,
+    setViewMode,
+    silentSaveRef,
+    unlinkCell,
+    viewMode,
+  } = useFactoryStatusBuilderState();
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (isLoading) {
@@ -575,45 +117,21 @@ export default function FactoryStatusBuilder() {
 
         <StatusViewToggle viewMode={viewMode} onChange={setViewMode} />
 
-        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-2">
-          <div className="erp-mobile-scroll-tabs min-w-0 flex-1">
-            <div className="flex w-max items-center gap-1">
-              <TabsList className="w-max" aria-label="Status sheet pages">
-                {localSheets.map((s, idx) => (
-                  <TabLabel
-                    key={s.id ?? `new-${idx}`}
-                    name={s.name}
-                    active={idx === activeIdx}
-                    onActivate={() => setActiveIdx(idx)}
-                    onRename={(v) => renameTab(idx, v)}
-                    onDelete={() => deleteTab(idx)}
-                    canDelete={canEdit && localSheets.length > 1}
-                    canRename={canEdit}
-                  />
-                ))}
-              </TabsList>
-              {canCreateSheet && (
-                <button
-                  type="button"
-                  data-testid="sb-button-add-tab"
-                  onClick={addTab}
-                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add page
-                </button>
-              )}
-            </div>
-          </div>
-          {activeSheet && viewMode === "sheet" && (
-            <StatusColumnsMenu
-              columns={activeSheet.columns}
-              hiddenColumnIds={hiddenColIds}
-              onSetHidden={(columnId, hidden) => setColumnHidden(activeSheet.stableId, columnId, hidden)}
-              onShowAll={() => setHiddenColumnsBySheet((prev) => ({ ...prev, [activeSheet.stableId]: [] }))}
-            />
-          )}
-        </div>
+        <FactoryStatusBuilderSection
+          activeIdx={activeIdx}
+          activeSheet={activeSheet}
+          addTab={addTab}
+          canCreateSheet={canCreateSheet}
+          canEdit={canEdit}
+          deleteTab={deleteTab}
+          hiddenColIds={hiddenColIds}
+          localSheets={localSheets}
+          renameTab={renameTab}
+          setActiveIdx={setActiveIdx}
+          setColumnHidden={setColumnHidden}
+          setHiddenColumnsBySheet={setHiddenColumnsBySheet}
+          viewMode={viewMode}
+        />
 
         {/* Content */}
         {!activeSheet ? (

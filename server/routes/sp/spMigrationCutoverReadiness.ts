@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
-import { ensurePhase2Schema, getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
-import { ensureCutoverSchema } from "./spMigrationCutoverState";
+import { getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
 const REQUIRED_SP_SUBTYPES = [
@@ -203,7 +202,6 @@ export type CutoverReadiness = {
 };
 
 export async function buildCutoverReadiness(sourceId: number, targetId: number): Promise<CutoverReadiness> {
-  await Promise.all([ensurePhase2Schema(), ensureCutoverSchema()]);
   const blockers: Array<{ code: string; message: string; count?: number }> = [];
   const deltas: Array<{ code: string; message: string; count: number }> = [];
 

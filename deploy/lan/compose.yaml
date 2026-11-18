@@ -50,7 +50,6 @@ services:
       PG_POOL_MIN: "1"
       CSRF_ENFORCE: "1"
       ENABLE_SCHEDULERS: "false"
-      RUN_STARTUP_MIGRATIONS: "true"
       PUPPETEER_PREWARM: "false"
     depends_on:
       postgres:

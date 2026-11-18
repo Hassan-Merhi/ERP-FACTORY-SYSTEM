@@ -1,17 +1,12 @@
 import { confirmAction } from "@/components/ConfirmHost";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Plus,
   Pencil,
   Trash2,
   ArrowDownCircle,
@@ -22,254 +17,60 @@ import {
   TrendingDown,
   Activity,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@/lib/form-resolver";
-import { format } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { queryClient } from "@/lib/queryClient";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
-import type { Employee } from "@shared/schema";
-import type { AccountOption } from "./payrollTypes";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  salaryAdvanceSchema,
-  deductionSchema,
-  type SalaryAdvanceFormData,
-  type DeductionFormData,
-  type SalaryAdvance,
-} from "./payrollSchemas";
-import { calculateAdvanceStats } from "./advanceStats";
+import { type SalaryAdvance } from "./payrollSchemas";
 import { AdvanceReassignDialog } from "./AdvanceReassignDialog";
-import { AddWorkerDeductionDialog, type WorkerDeductionFormData } from "./AddWorkerDeductionDialog";
+import { AddWorkerDeductionDialog } from "./AddWorkerDeductionDialog";
+import { AdvancesTabSection, useAdvancesTabState, type AdvancesTabProps } from "./useAdvancesTabState";
+import {
+  AdvancesTabDialogSection,
+  AdvancesTabTabsContentSection,
+  AdvancesTabTabsContentSection2,
+} from "./AdvancesTabDialogSection";
 
-interface AdvancesTabProps {
-  cashAccounts?: AccountOption[];
-}
-
-export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
-  const appMode = useAppMode();
-  const { user } = useAuthenticatedUser();
-  const recordChanges = useExistingRecordChangeAccess();
-  const canCreateAdvance = recordChanges.canCreate("POST", "/api/salary-advances");
-  const canReassignAdvance =
-    recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(user?.currentRole ?? user?.role ?? "");
-  const modeApiRequest = getApiRequest(appMode);
-  const { selectedCompany } = useCompany();
-  const { toast } = useToast();
-  const { formatDisplayDate } = useDateFormat();
-  const { formatAmount } = useCurrencyContext();
-
-  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
-  const [deductionDialogOpen, setDeductionDialogOpen] = useState(false);
-  const [selectedAdvance, setSelectedAdvance] = useState<SalaryAdvance | null>(null);
-  const [reassignTarget, setReassignTarget] = useState<SalaryAdvance | null>(null);
-  const [showPaid, setShowPaid] = useState(false);
-  const [workerFilter, setWorkerFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [addWorkerDeductionDialogOpen, setAddWorkerDeductionDialogOpen] = useState(false);
-
-  const { data: workerStaff = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/payroll/employees-with-balances", selectedCompany?.id],
-    enabled: !!selectedCompany,
-    select: (data) => data.filter((e) => e.employeeType === "Worker"),
-  });
-
-  const { data: salaryAdvances = [], isLoading: advancesLoading } = useQuery<SalaryAdvance[]>({
-    queryKey: ["/api/salary-advances", selectedCompany?.id],
-    enabled: !!selectedCompany,
-  });
-
-  const { data: repayments = [], isLoading: repaymentsLoading } = useQuery<
-    {
-      id: number;
-      workerName?: string;
-      employeeId?: number;
-      payrollMonth?: string;
-      deductionAmount?: string;
-      advanceRemaining?: string;
-      createdAt?: string;
-    }[]
-  >({
-    queryKey: ["/api/salary-advance-deductions", selectedCompany?.id],
-    enabled: !!selectedCompany,
-  });
-
-  const workerDeductionsBase =
-    appMode === "factory" ? "/api/factory/worker-deductions" : "/api/payroll/worker-deductions";
-  const { data: workerDeductions = [], isLoading: deductionsLoading } = useQuery<
-    {
-      id: number;
-      workerId: number;
-      workerName?: string;
-      deductionDate?: string;
-      reason?: string | null;
-      amount?: string;
-      applied?: boolean;
-    }[]
-  >({
-    queryKey: [workerDeductionsBase, selectedCompany?.id],
-    queryFn: async () => {
-      if (!selectedCompany?.id) return [];
-      const res = await fetch(`${workerDeductionsBase}?companyId=${selectedCompany.id}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch worker deductions");
-      return res.json();
-    },
-    enabled: !!selectedCompany,
-  });
-
-  const advanceForm = useForm<SalaryAdvanceFormData>({
-    resolver: zodResolver(salaryAdvanceSchema),
-    defaultValues: {
-      employeeId: "",
-      amount: "",
-      advanceDate: new Date(),
-      notes: "",
-      isOpeningBalance: false,
-    },
-  });
-
-  const deductionForm = useForm<DeductionFormData>({
-    resolver: zodResolver(deductionSchema),
-    defaultValues: {
-      deductionAmount: "",
-      payrollMonth: format(new Date(), "yyyy-MM"),
-    },
-  });
-
-  const addWorkerDeductionForm = useForm<WorkerDeductionFormData>({
-    defaultValues: {
-      workerId: "",
-      amount: "",
-      reason: "",
-      deductionDate: new Date().toLocaleDateString("en-CA"),
-    },
-  });
-
-  const advanceMutation = useMutation({
-    mutationFn: async (data: SalaryAdvanceFormData) => {
-      return await modeApiRequest("POST", "/api/salary-advances", {
-        employeeId: parseInt(data.employeeId),
-        amount: data.amount,
-        advanceDate: format(data.advanceDate, "yyyy-MM-dd"),
-        cashAccountId: data.isOpeningBalance ? undefined : parseInt(data.cashAccountId || "0"),
-        notes: data.notes,
-        isOpeningBalance: data.isOpeningBalance,
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Created", description: "Salary advance created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/net-profit"] });
-      setAdvanceDialogOpen(false);
-      advanceForm.reset();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteAdvanceMutation = useMutation({
-    mutationFn: async (advanceId: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return await modeApiRequest("DELETE", `/api/salary-advances/${advanceId}`, undefined);
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "Salary advance deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deductionMutation = useMutation({
-    mutationFn: async (data: DeductionFormData) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      if (!selectedAdvance) throw new Error("No advance selected");
-      return await modeApiRequest("POST", `/api/salary-advances/${selectedAdvance.id}/deduction`, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: "Deduction recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advance-deductions", selectedCompany?.id] });
-      setDeductionDialogOpen(false);
-      deductionForm.reset();
-      setSelectedAdvance(null);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const workerDeductionsWorkerBase = appMode === "factory" ? "/api/factory/workers" : "/api/payroll/workers";
-
-  const addWorkerDeductionMutation = useMutation({
-    mutationFn: async (data: { workerId: string; amount: string; reason: string; deductionDate: string }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return await modeApiRequest("POST", `${workerDeductionsWorkerBase}/${data.workerId}/deductions`, {
-        amount: data.amount,
-        reason: data.reason || null,
-        deductionDate: data.deductionDate,
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Deduction added", description: "Worker deduction recorded successfully." });
-      queryClient.invalidateQueries({ queryKey: [workerDeductionsBase, selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/payroll/employees-with-balances", selectedCompany?.id] });
-      setAddWorkerDeductionDialogOpen(false);
-      addWorkerDeductionForm.reset({
-        workerId: "",
-        amount: "",
-        reason: "",
-        deductionDate: new Date().toLocaleDateString("en-CA"),
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteWorkerDeductionMutation = useMutation({
-    mutationFn: async ({ workerId, deductionId }: { workerId: number; deductionId: number }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return await modeApiRequest(
-        "DELETE",
-        `${workerDeductionsWorkerBase}/${workerId}/deductions/${deductionId}`,
-        undefined
-      );
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "Worker deduction deleted." });
-      queryClient.invalidateQueries({ queryKey: [workerDeductionsBase, selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/payroll/employees-with-balances", selectedCompany?.id] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const stats = useMemo(() => calculateAdvanceStats(salaryAdvances), [salaryAdvances]);
-
-  // Filtered list
-  const filteredAdvances = useMemo(() => {
-    return salaryAdvances.filter((a) => {
-      const matchWorker = workerFilter === "all" || String(a.employeeId) === workerFilter;
-      const matchStatus =
-        statusFilter === "all" ||
-        (statusFilter === "outstanding" && !a.fullyPaid) ||
-        (statusFilter === "paid" && a.fullyPaid);
-      return matchWorker && matchStatus;
-    });
-  }, [salaryAdvances, workerFilter, statusFilter]);
-
-  const outstanding = filteredAdvances.filter((a) => !a.fullyPaid);
-  const paid = filteredAdvances.filter((a) => a.fullyPaid);
+export function AdvancesTab(props: AdvancesTabProps) {
+  const {
+    addWorkerDeductionDialogOpen,
+    addWorkerDeductionForm,
+    addWorkerDeductionMutation,
+    advanceDialogOpen,
+    advanceForm,
+    advanceMutation,
+    advancesLoading,
+    canCreateAdvance,
+    canReassignAdvance,
+    cashAccounts,
+    deductionDialogOpen,
+    deductionForm,
+    deductionMutation,
+    deductionsLoading,
+    deleteAdvanceMutation,
+    deleteWorkerDeductionMutation,
+    formatAmount,
+    formatDisplayDate,
+    modeApiRequest,
+    outstanding,
+    paid,
+    reassignTarget,
+    recordChanges,
+    repayments,
+    repaymentsLoading,
+    selectedAdvance,
+    selectedCompany,
+    setAddWorkerDeductionDialogOpen,
+    setAdvanceDialogOpen,
+    setDeductionDialogOpen,
+    setReassignTarget,
+    setSelectedAdvance,
+    setShowPaid,
+    setStatusFilter,
+    setWorkerFilter,
+    showPaid,
+    stats,
+    statusFilter,
+    workerDeductions,
+    workerFilter,
+    workerStaff,
+  } = useAdvancesTabState(props);
 
   if (advancesLoading) {
     return (
@@ -419,45 +220,15 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
           </div>
 
           {/* Filters + actions */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={workerFilter} onValueChange={setWorkerFilter}>
-              <SelectTrigger className="w-44" data-testid="select-worker-filter">
-                <SelectValue placeholder="All Workers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Workers</SelectItem>
-                {workerStaff.map((w) => (
-                  <SelectItem key={w.id} value={String(w.id)}>
-                    {w.firstName} {w.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40" data-testid="select-status-filter">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="outstanding">Outstanding</SelectItem>
-                <SelectItem value="paid">Fully Paid</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {canCreateAdvance && (
-              <div className="ml-auto flex gap-2">
-                <Button variant="outline" onClick={() => setAdvanceDialogOpen(true)} data-testid="button-bulk-advance">
-                  <Banknote className="mr-2 h-4 w-4" />
-                  Bulk Advance
-                </Button>
-                <Button onClick={() => setAdvanceDialogOpen(true)} data-testid="button-create-advance">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Advance
-                </Button>
-              </div>
-            )}
-          </div>
+          <AdvancesTabSection
+            canCreateAdvance={canCreateAdvance}
+            setAdvanceDialogOpen={setAdvanceDialogOpen}
+            setStatusFilter={setStatusFilter}
+            setWorkerFilter={setWorkerFilter}
+            statusFilter={statusFilter}
+            workerFilter={workerFilter}
+            workerStaff={workerStaff}
+          />
 
           {/* Outstanding table */}
           <div className="border rounded-md">
@@ -510,146 +281,23 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
         </TabsContent>
 
         {/* ── Repayments sub-tab ── */}
-        <TabsContent value="repayments" className="pt-4">
-          {repaymentsLoading ? (
-            <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="border rounded-md">
-              <Table mobileLayout="cards">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Worker</TableHead>
-                    <TableHead>Payroll Month</TableHead>
-                    <TableHead className="text-right">Repayment Amount</TableHead>
-                    <TableHead className="text-right">Advance Remaining After</TableHead>
-                    <TableHead>Date Recorded</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {repayments.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No repayments recorded yet
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    repayments.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <span className="font-medium">{r.workerName || `Employee #${r.employeeId}`}</span>
-                        </TableCell>
-                        <TableCell>{r.payrollMonth}</TableCell>
-                        <TableCell className="text-right font-mono text-green-600 dark:text-green-400 font-bold">
-                          {formatAmount(parseFloat(r.deductionAmount || "0"))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
-                          {formatAmount(parseFloat(r.advanceRemaining || "0"))}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {r.createdAt ? formatDisplayDate(r.createdAt.split("T")[0]) : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
+        <AdvancesTabTabsContentSection2
+          formatAmount={formatAmount}
+          formatDisplayDate={formatDisplayDate}
+          repayments={repayments}
+          repaymentsLoading={repaymentsLoading}
+        />
 
         {/* ── Worker Deductions sub-tab ── */}
-        <TabsContent value="worker-deductions" className="pt-4 space-y-4">
-          {recordChanges.allowed && (
-            <div className="flex justify-end">
-              <Button onClick={() => setAddWorkerDeductionDialogOpen(true)} data-testid="button-add-worker-deduction">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Deduction
-              </Button>
-            </div>
-          )}
-          {deductionsLoading ? (
-            <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="border rounded-md">
-              <Table mobileLayout="cards">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Worker</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workerDeductions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No worker deductions recorded
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    workerDeductions.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell>
-                          <span className="font-medium">{d.workerName || `Worker #${d.workerId}`}</span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {d.deductionDate ? formatDisplayDate(d.deductionDate) : "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                          {d.reason || "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-bold text-red-600 dark:text-red-400">
-                          {formatAmount(parseFloat(d.amount || "0"))}
-                        </TableCell>
-                        <TableCell>
-                          {d.applied ? (
-                            <Badge variant="default" className="bg-green-600">
-                              Paid
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-amber-500 text-amber-500">
-                              Pending
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {recordChanges.allowed && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="text-destructive"
-                              disabled={deleteWorkerDeductionMutation.isPending}
-                              onClick={async () => {
-                                if (
-                                  await confirmAction({
-                                    title: `Delete this deduction of ${formatAmount(parseFloat(d.amount || "0"))} for ${d.workerName || "this worker"}?`,
-                                    tone: "destructive",
-                                  })
-                                ) {
-                                  deleteWorkerDeductionMutation.mutate({ workerId: d.workerId, deductionId: d.id });
-                                }
-                              }}
-                              data-testid={`button-delete-deduction-${d.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
+        <AdvancesTabTabsContentSection
+          deductionsLoading={deductionsLoading}
+          deleteWorkerDeductionMutation={deleteWorkerDeductionMutation}
+          formatAmount={formatAmount}
+          formatDisplayDate={formatDisplayDate}
+          recordChanges={recordChanges}
+          setAddWorkerDeductionDialogOpen={setAddWorkerDeductionDialogOpen}
+          workerDeductions={workerDeductions}
+        />
       </Tabs>
 
       <AdvanceReassignDialog
@@ -661,146 +309,14 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
       />
 
       {/* ── Add Advance Dialog ── */}
-      <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Salary Advance</DialogTitle>
-            <DialogDescription>Record a cash advance given to a worker.</DialogDescription>
-          </DialogHeader>
-          <Form {...advanceForm}>
-            <form onSubmit={advanceForm.handleSubmit((data) => advanceMutation.mutate(data))} className="space-y-4">
-              <FormField
-                control={advanceForm.control}
-                name="employeeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Worker</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-advance-worker">
-                          <SelectValue placeholder="Select worker" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {workerStaff.map((w) => (
-                          <SelectItem key={w.id} value={String(w.id)}>
-                            {w.code} - {w.firstName} {w.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={advanceForm.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Amount</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          {...field}
-                          data-testid="input-advance-amount"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={advanceForm.control}
-                  name="advanceDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Date</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="date"
-                          value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-                          onChange={(e) => field.onChange(new Date(e.target.value))}
-                          data-testid="input-advance-date"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={advanceForm.control}
-                name="isOpeningBalance"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Opening Balance</FormLabel>
-                      <p className="text-xs text-muted-foreground">
-                        Tick if this is an existing balance from before system startup.
-                      </p>
-                    </div>
-                  </FormItem>
-                )}
-              />
-              {!advanceForm.watch("isOpeningBalance") && (
-                <FormField
-                  control={advanceForm.control}
-                  name="cashAccountId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cash Account</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-advance-cash">
-                            <SelectValue placeholder="Select account" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {cashAccounts.map((acc) => (
-                            <SelectItem key={acc.id} value={String(acc.id)}>
-                              {acc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              <FormField
-                control={advanceForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} data-testid="textarea-advance-notes" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={advanceMutation.isPending}
-                data-testid="button-save-advance"
-              >
-                {advanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Advance
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <AdvancesTabDialogSection
+        advanceDialogOpen={advanceDialogOpen}
+        advanceForm={advanceForm}
+        advanceMutation={advanceMutation}
+        cashAccounts={cashAccounts}
+        setAdvanceDialogOpen={setAdvanceDialogOpen}
+        workerStaff={workerStaff}
+      />
 
       {/* ── Add Worker Deduction Dialog ── */}
       <AddWorkerDeductionDialog

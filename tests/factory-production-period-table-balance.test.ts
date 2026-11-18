@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { calculatePeriodTableBalance } from "../server/routes/factory/bale-exports/production-value-math";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 describe("selected-period Balance on Table", () => {
   it("derives 18,773 kg from two historical snapshots, never from today's ACTIVE batches", () => {
@@ -50,9 +50,8 @@ describe("selected-period Balance on Table", () => {
   });
 
   it("keeps production Weight Cost and overall WIP valuation unchanged", () => {
-    const source = readFileSync(
-      resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"),
-      "utf8"
+    const source = readModuleFamily(
+      resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts")
     );
     expect(source).toContain("producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg)");
     expect(source).toContain("batchRateCost: balanceBatchRateDecimal");
@@ -72,9 +71,8 @@ describe("selected-period Balance on Table", () => {
 
 describe("single Balance on Table KPI, internally split", () => {
   it("places both WIP sections into the fourth card without an extra row", () => {
-    const ui = readFileSync(
-      resolve(process.cwd(), "client/src/pages/factory/dailyproductionreport/components/ProductionTabPanel.tsx"),
-      "utf8"
+    const ui = readModuleFamily(
+      resolve(process.cwd(), "client/src/pages/factory/dailyproductionreport/components/ProductionTabPanel.tsx")
     );
     expect(ui).toContain("xl:grid-cols-4");
     expect(ui).toContain('data-testid="card-balance-on-table"');
