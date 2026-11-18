@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
+import { POSDaybookTransferDetails } from "./POSDaybookTransferDetails";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,6 +49,7 @@ export function POSDaybookDialogSection({
   | "whatsappMutation"
 >) {
   const [editing, setEditing] = useState(false);
+  const isTransfer = Boolean(selectedVoucher && selectedVoucher.voucherType !== "Sales");
   const { selectedCompany } = useCompany();
   const { data: liveAccess } = useQuery<{
     role: string;
@@ -91,7 +93,10 @@ export function POSDaybookDialogSection({
     >
       <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit POS Sale" : "POS Sale Details"} - {selectedVoucher?.voucherNumber}</DialogTitle>
+          <DialogTitle>
+            {isTransfer ? "Stock Transfer Details" : editing ? "Edit POS Sale" : "POS Sale Details"} -{" "}
+            {selectedVoucher?.voucherNumber}
+          </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto">
           {editing && voucherDetails ? (
@@ -107,6 +112,8 @@ export function POSDaybookDialogSection({
                 <Skeleton key={key} className="h-14 w-full" />
               ))}
             </div>
+          ) : voucherDetails && isTransfer ? (
+            <POSDaybookTransferDetails transfer={voucherDetails.transferData} />
           ) : voucherDetails ? (
             <div className="space-y-4">
               <div className="grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-2">
@@ -188,13 +195,13 @@ export function POSDaybookDialogSection({
             <X className="mr-2 h-4 w-4" />
             Close
           </Button>
-          <ExportButton
+          {!isTransfer && <ExportButton
             kind="print"
             variant="outline"
             disabled={!voucherDetails}
             onClick={() => voucherDetails && setPrintVoucherId(voucherDetails.id)}
-          />
-          {recordChanges.allowed && (
+          />}
+          {!isTransfer && recordChanges.allowed && (
             <Button
               variant="outline"
               disabled={!voucherDetails || whatsappMutation.isPending}
@@ -218,7 +225,7 @@ export function POSDaybookDialogSection({
                 Make Optional
               </Button>
             )}
-          {recordChanges.allowed && (
+          {!isTransfer && recordChanges.allowed && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
