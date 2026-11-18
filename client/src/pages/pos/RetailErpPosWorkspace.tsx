@@ -3,6 +3,7 @@ import { Minus, Percent, Plus, ScanLine, ShoppingCart, Trash2 } from "lucide-rea
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PosCartCell, PosCartGrid, PosCartRow, PosCartSummary, type PosCartColumn } from "./pos-components/PosCartGrid";
 import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
 import { RetailCameraScanner } from "./RetailCameraScanner";
 import { RetailScanFeedback } from "./RetailScanFeedback";
@@ -20,7 +21,15 @@ interface RetailErpPosSaleGridProps {
   onRemove: (variantId: number) => void;
 }
 
-/** ERP-style sales grid, but with exact retail variant IDs and a photo viewer. */
+const RETAIL_CART_COLUMNS: PosCartColumn[] = [
+  { key: "item", label: "Item", width: "flex-1 min-w-[220px]" },
+  { key: "quantity", label: "Qty", width: "w-[98px] shrink-0", headerClassName: "justify-center" },
+  { key: "rate", label: "Rate", width: "w-[85px] shrink-0", headerClassName: "justify-end" },
+  { key: "amount", label: "Amt", width: "w-[100px] shrink-0", headerClassName: "justify-end" },
+  { key: "actions", label: "Actions", width: "w-[82px] shrink-0", headerClassName: "justify-center" },
+];
+
+/** The shared POS cart grid, with exact retail variant IDs and a photo viewer. */
 export function RetailErpPosSaleGrid({
   cart,
   pricingLines,
@@ -32,132 +41,110 @@ export function RetailErpPosSaleGrid({
   onRemove,
 }: RetailErpPosSaleGridProps) {
   return (
-    <Card className="overflow-hidden min-w-0" id="retail-pos-cart">
-      <div className="overflow-x-auto">
-        <div className="min-w-[570px]">
-          <div className="grid grid-cols-[35px_minmax(220px,1fr)_98px_85px_100px_82px] border-b bg-foreground/6 text-[11px] font-semibold text-muted-foreground dark:bg-muted/40">
-            <div className="border-r px-2 py-3 text-center">#</div>
-            <div className="border-r px-3 py-3">Item</div>
-            <div className="border-r px-2 py-3 text-center">Qty</div>
-            <div className="border-r px-2 py-3 text-right">Rate</div>
-            <div className="border-r px-2 py-3 text-right">Amt</div>
-            <div className="px-2 py-3 text-center">Actions</div>
-          </div>
-          {cart.map((line, rowIndex) => {
-            const priced = pricingLines.find((entry) => entry.variantId === line.variantId);
-            const adjusted = line.priceOverride != null || (line.discountType ?? "none") !== "none";
-            const rate = priced?.unitPrice ?? line.priceOverride ?? line.promotion?.promotionPrice ?? line.price;
-            const amount = priced?.lineTotal ?? rate * line.cartQuantity;
-            return (
-              <div
-                key={line.variantId}
-                className="grid grid-cols-[35px_minmax(220px,1fr)_98px_85px_100px_82px] items-center border-b text-sm hover:bg-muted/25"
-                data-testid="cart-line"
-              >
-                <div className="text-center text-xs text-muted-foreground">{rowIndex + 1}</div>
-                <div className="flex min-w-0 items-center gap-2 border-x p-2">
-                  <RetailPhotoGallery
-                    images={line.imageUrls ?? []}
-                    title={`${line.brand} · ${line.name} · ${line.color} / ${line.size}`}
-                    imageClassName="h-12 w-12 rounded-md border"
-                  />
-                  <div className="min-w-0 flex-1" data-no-translate>
-                    <div className="truncate font-semibold">{line.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {line.brand} · {line.color} / {line.size}
-                    </div>
-                    <div className="truncate font-mono text-[10px] text-muted-foreground">{line.barcode}</div>
-                    {adjusted && (
-                      <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                        Discount / override applied
-                      </div>
-                    )}
-                    {line.cartQuantity > line.quantity && (
-                      <div className="text-xs text-destructive">Above available stock ({line.quantity})</div>
-                    )}
+    <PosCartGrid
+      id="retail-pos-cart"
+      columns={RETAIL_CART_COLUMNS}
+      minWidthClassName="min-w-[600px]"
+      emptyMessage="Type to search or scan an item from the sidebar…"
+      summary={<PosCartSummary itemCount={cart.length} quantity={units} total={money(total)} />}
+    >
+      {cart.map((line, rowIndex) => {
+        const priced = pricingLines.find((entry) => entry.variantId === line.variantId);
+        const adjusted = line.priceOverride != null || (line.discountType ?? "none") !== "none";
+        const rate = priced?.unitPrice ?? line.priceOverride ?? line.promotion?.promotionPrice ?? line.price;
+        const amount = priced?.lineTotal ?? rate * line.cartQuantity;
+        return (
+          <PosCartRow key={line.variantId} index={rowIndex} className="text-sm" data-testid="cart-line">
+            <PosCartCell width={RETAIL_CART_COLUMNS[0].width} className="flex items-center gap-2 p-2">
+              <RetailPhotoGallery
+                images={line.imageUrls ?? []}
+                title={`${line.brand} · ${line.name} · ${line.color} / ${line.size}`}
+                imageClassName="h-12 w-12 rounded-md border"
+              />
+              <div className="min-w-0 flex-1" data-no-translate>
+                <div className="truncate font-semibold">{line.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {line.brand} · {line.color} / {line.size}
+                </div>
+                <div className="truncate font-mono text-[10px] text-muted-foreground">{line.barcode}</div>
+                {adjusted && (
+                  <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                    Discount / override applied
                   </div>
-                </div>
-                <div className="flex items-center justify-center gap-1">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => onDecrease(line.variantId)}
-                    aria-label={`Decrease ${line.name} quantity`}
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </Button>
-                  <span
-                    className="min-w-5 text-center font-mono"
-                    data-testid={`retail-grid-quantity-${line.variantId}`}
-                  >
-                    {line.cartQuantity}
-                  </span>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => onIncrease(line)}
-                    aria-label={`Increase ${line.name} quantity`}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <div className="border-x px-2 text-right font-mono text-xs" data-no-translate>
-                  {money(rate)}
-                </div>
-                <div className="border-r bg-muted/20 px-2 text-right font-mono font-semibold" data-no-translate>
-                  {money(amount)}
-                </div>
-                <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant={adjusted ? "secondary" : "ghost"}
-                    className="h-8 w-8"
-                    onClick={() => onAdjust(line)}
-                    title="Discount or price override"
-                    aria-label="Line discount or price override"
-                    data-testid="retail-line-discount"
-                  >
-                    <Percent className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => onRemove(line.variantId)}
-                    title="Remove item"
-                    aria-label={`Remove ${line.name} from sale`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                )}
+                {line.cartQuantity > line.quantity && (
+                  <div className="text-xs text-destructive">Above available stock ({line.quantity})</div>
+                )}
               </div>
-            );
-          })}
-          {!cart.length && (
-            <div className="flex h-14 items-center border-b px-3 text-sm text-muted-foreground">
-              <span className="w-8 text-center">1</span>
-              <span className="ml-2">Type to search or scan an item from the sidebar…</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-4 bg-muted/20 px-3 py-2 text-sm">
-            <div className="text-muted-foreground">
-              <strong className="text-foreground">{cart.length}</strong> items · Qty{" "}
-              <strong className="font-mono text-foreground">{units.toFixed(2)}</strong>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-muted-foreground">Total</span>
-              <strong className="font-mono text-2xl">{money(total)}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
+            </PosCartCell>
+            <PosCartCell width={RETAIL_CART_COLUMNS[1].width} className="flex items-center justify-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => onDecrease(line.variantId)}
+                aria-label={`Decrease ${line.name} quantity`}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <span className="min-w-5 text-center font-mono" data-testid={`retail-grid-quantity-${line.variantId}`}>
+                {line.cartQuantity}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => onIncrease(line)}
+                aria-label={`Increase ${line.name} quantity`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </PosCartCell>
+            <PosCartCell
+              width={RETAIL_CART_COLUMNS[2].width}
+              className="flex items-center justify-end px-2 font-mono text-xs"
+              data-no-translate
+            >
+              {money(rate)}
+            </PosCartCell>
+            <PosCartCell
+              width={RETAIL_CART_COLUMNS[3].width}
+              className="flex items-center justify-end bg-muted/20 px-2 font-mono font-semibold"
+              data-no-translate
+            >
+              {money(amount)}
+            </PosCartCell>
+            <PosCartCell width={RETAIL_CART_COLUMNS[4].width} className="flex items-center justify-center border-r-0">
+              <Button
+                type="button"
+                size="icon"
+                variant={adjusted ? "secondary" : "ghost"}
+                className="h-8 w-8"
+                onClick={() => onAdjust(line)}
+                title="Discount or price override"
+                aria-label="Line discount or price override"
+                data-testid="retail-line-discount"
+              >
+                <Percent className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => onRemove(line.variantId)}
+                title="Remove item"
+                aria-label={`Remove ${line.name} from sale`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </PosCartCell>
+          </PosCartRow>
+        );
+      })}
+    </PosCartGrid>
   );
 }
 

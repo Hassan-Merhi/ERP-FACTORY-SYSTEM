@@ -274,6 +274,8 @@ export const MODULE_ACCENT = {
   erp: "hsl(var(--module-erp))",
   factory: "hsl(var(--module-factory))",
   properties: "hsl(var(--module-properties))",
+  /** POS keeps the violet accent its own shell used. */
+  pos: "#8b5cf6",
 };
 
 /** Section color tokens for navSections. */

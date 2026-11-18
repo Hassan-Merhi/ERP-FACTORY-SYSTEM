@@ -1,45 +1,29 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
+import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
+import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import {
-  SidebarProvider,
-  SidebarTrigger,
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-} from "@/components/ui/sidebar";
-import { CurrencyToggle } from "@/components/CurrencyToggle";
-import { CompanySelector } from "@/components/CompanySelector";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { UserMenu } from "@/components/UserMenu";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
+import { AppTopBar } from "@/components/AppTopBar";
 import { DailyRateModal } from "@/components/DailyRateModal";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { PendingSyncIndicator } from "@/components/PendingSyncIndicator";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ModuleIdentity } from "@/components/navigation/module-identity";
+import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import { Router } from "@/routes/AppRoutes";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown, TreePine } from "lucide-react";
-import { usePosNavigationItems } from "./usePosNavigationItems";
+import { ArrowLeft, Search, ShoppingCart, TreePine } from "lucide-react";
+import { PosSidebar } from "./PosSidebar";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
-import "@/styles/pos-sidebar-modern.css";
-import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
-import { DakzoBrand } from "@/components/DakzoBrand";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import "@/styles/pos-sidebar-modern.css";
 
 interface PosShellProps {
   user: ShellUser;
@@ -71,6 +55,27 @@ const posWorkspaceClasses = [
   "[&_.tabular-nums]:font-variant-numeric-tabular-nums",
 ].join(" ");
 
+/**
+ * Routes that fill the workspace instead of scrolling it: the sale screens (ERP and Retail) and
+ * the containers board. They keep their own internal scrolling and pinned checkout bars, so the
+ * shell gives them a fixed-height, unpadded content area (the POS "focus" layout).
+ */
+function isPosFullHeightRoute(location: string): boolean {
+  return (
+    location === "/" ||
+    location === "/pos" ||
+    location === "/pos/" ||
+    location === "/retail/pos" ||
+    location === "/pos-containers" ||
+    location.startsWith("/pos/edit/")
+  );
+}
+
+/**
+ * The POS role's app chrome, built from the shared shell pieces (sidebar primitives, AppTopBar,
+ * phone sheets) that ERP, Factory and Properties use. Navigation items and route access still come
+ * from `usePosNavigationItems` and `PosRoutes`, so what a POS user can open is unchanged.
+ */
 export function PosShell({
   user,
   posImportEnabled,
@@ -85,54 +90,67 @@ export function PosShell({
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const posNavItems = usePosNavigationItems({
-    user,
-    posImportEnabled,
-    chatUnread,
-    companyType: selectedCompany?.companyType,
-  });
-  const primaryNavItems = posNavItems.filter((item) => item.group === "primary");
-  const toolNavItems = posNavItems.filter((item) => item.group === "tools");
-  const [toolsExpanded, setToolsExpanded] = useState(false);
-  const toolsActive = toolNavItems.some((item) => item.active);
-  useEffect(() => {
-    if (toolsActive) setToolsExpanded(true);
-  }, [toolsActive, currentLocation, selectedCompany?.id]);
-
-  const posStyle = { "--sidebar-width": "14rem", "--sidebar-width-icon": "3.5rem" };
-  const isFullHeightRoute =
-    currentLocation === "/" ||
-    currentLocation === "/pos" ||
-    currentLocation === "/pos/" ||
-    currentLocation === "/retail/pos" ||
-    currentLocation === "/pos-containers" ||
-    currentLocation.startsWith("/pos/edit/");
+  const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
+  const isFullHeightRoute = isPosFullHeightRoute(currentLocation);
   const hasAdminSearch = canUseAdminSearch(user);
   const userMenuUser = { username: user.username, role: user.role ?? "POS" };
+  const stationName = user.posStation ? `POS ${user.posStation}` : "Point of Sale";
   const posContainerRef = useRef<HTMLDivElement>(null);
   useMainContentFocus(currentLocation, isFullHeightRoute);
+  // Shell-scoped dialog styling keys off this marker, as in the other shells.
+  useDocumentAppShell("pos");
+  // Phone sheets and dialogs size to the visible viewport, so the keyboard never hides their actions.
+  useVisualViewportMetrics();
+
+  const christmasSwitch =
+    christmasSetting.data?.available === true ? (
+      <label
+        className="pos-christmas-switch flex items-center gap-2"
+        title="Your personal Christmas Mode preference — controlled by the Developer master setting"
+      >
+        <TreePine className="h-4 w-4" aria-hidden="true" />
+        <span className="hidden xl:inline">Christmas Mode</span>
+        <Switch
+          aria-label="Show Christmas Mode on my account"
+          data-testid="switch-pos-christmas-mode"
+          checked={christmasSetting.data.preferenceEnabled === true}
+          disabled={updatePersonalPreference.isPending}
+          onCheckedChange={(enabled) =>
+            updatePersonalPreference.mutate(enabled, {
+              onSuccess: () => toast({ title: enabled ? "Christmas Mode preference on" : "Christmas Mode turned off" }),
+              onError: (error) =>
+                toast({
+                  title: "Could not change Christmas Mode",
+                  description: error.message,
+                  variant: "destructive",
+                }),
+            })
+          }
+        />
+      </label>
+    ) : null;
 
   return (
-    <>
+    <PhoneSheetDialogs>
       <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
-      <SidebarProvider style={posStyle as React.CSSProperties}>
+      <SidebarProvider style={style as React.CSSProperties}>
         <div
           ref={posContainerRef}
           data-pos-shell="true"
           className="flex h-full w-full min-w-0 overflow-hidden bg-background"
         >
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
-          <Sidebar data-pos-sidebar="modern">
-            <SidebarHeader data-pos-sidebar-header>
-              <div className="pos-shell-wordmark">
-                <DakzoBrand />
-              </div>
-              <SeasonalBrandAccent />
-              <div className="flex items-center gap-2">
+          <PosSidebar
+            user={user}
+            posImportEnabled={posImportEnabled}
+            chatUnread={chatUnread}
+            onLogout={handleLogout}
+            identity={
+              <>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 shrink-0 rounded-xl border border-sidebar-border/60 bg-background/60 hover:bg-background"
+                  className="h-9 w-9 shrink-0 rounded-lg border border-sidebar-border/60"
                   onClick={handleGoBack}
                   aria-label="Go back"
                   data-testid="button-pos-back"
@@ -147,208 +165,48 @@ export function PosShell({
                   tone="pos"
                   className="min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none"
                 />
-              </div>
-            </SidebarHeader>
-            <SidebarContent className="px-2 py-3">
-              <SidebarGroup className="p-0">
-                <SidebarGroupLabel className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
-                  Workspace
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu aria-label="Point of sale navigation">
-                    {primaryNavItems.map((item) => (
-                      <SidebarMenuItem key={item.label}>
-                        <SidebarMenuButton
-                          isActive={item.active}
-                          onClick={item.onClick}
-                          aria-current={item.active ? "page" : undefined}
-                          data-testid={item.testId}
-                        >
-                          <span data-pos-nav-icon>
-                            <item.icon className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.badge !== undefined && item.badge > 0 && (
-                            <Badge
-                              variant={item.active ? "secondary" : "default"}
-                              className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
-                              aria-label={`${item.badge} unread`}
-                              data-testid="badge-chat-unread-pos"
-                            >
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-              {toolNavItems.length > 0 && (
-                <SidebarGroup className="mt-2 border-t border-sidebar-border/60 p-0 pt-2">
-                  <button
-                    type="button"
-                    aria-expanded={toolsExpanded}
-                    aria-controls="pos-secondary-tools"
-                    onClick={() => setToolsExpanded((expanded) => !expanded)}
-                    className="mb-1 flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/65 hover:bg-sidebar-accent/40"
-                    data-testid="button-pos-more-tools"
-                  >
-                    More tools
-                    <ChevronDown className={toolsExpanded ? "h-4 w-4 rotate-180" : "h-4 w-4"} aria-hidden="true" />
-                  </button>
-                  {toolsExpanded && (
-                    <SidebarGroupContent id="pos-secondary-tools">
-                      <SidebarMenu aria-label="Additional point of sale tools">
-                        {toolNavItems.map((item) => (
-                          <SidebarMenuItem key={item.label}>
-                            <SidebarMenuButton
-                              isActive={item.active}
-                              onClick={item.onClick}
-                              aria-current={item.active ? "page" : undefined}
-                              data-testid={item.testId}
-                            >
-                              <span data-pos-nav-icon>
-                                <item.icon className="h-4 w-4" aria-hidden="true" />
-                              </span>
-                              <span className="flex-1 truncate">{item.label}</span>
-                              {item.badge !== undefined && item.badge > 0 && (
-                                <Badge
-                                  variant={item.active ? "secondary" : "default"}
-                                  className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
-                                  aria-label={`${item.badge} unread`}
-                                  data-testid="badge-chat-unread-pos"
-                                >
-                                  {item.badge}
-                                </Badge>
-                              )}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  )}
-                </SidebarGroup>
-              )}
-            </SidebarContent>
-            <SidebarFooter data-pos-sidebar-footer-card className="pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 px-1">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                    {user.username?.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      data-business-value="true"
-                      dir="auto"
-                      className="truncate text-sm font-medium text-sidebar-foreground"
-                    >
-                      {user.username}
-                    </div>
-                    <div className="truncate text-[11px] text-sidebar-foreground/55">POS user</div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1 rounded-xl bg-background/45 p-1">
-                  <CurrencyToggle />
-                  <CompanySelector />
-                  <ThemeToggle />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto h-8 w-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleLogout}
-                    aria-label="Log out"
-                    data-testid="button-logout"
-                  >
-                    <LogOut className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-            </SidebarFooter>
-          </Sidebar>
+              </>
+            }
+          />
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <header
-              data-slot="pos-top-bar"
-              className="pos-top-bar no-print relative flex min-h-14 items-center gap-2 border-b px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:min-h-12 sm:pt-2"
-            >
-              <SidebarTrigger
-                className="h-11 w-11 sm:h-9 sm:w-9"
-                aria-label="Toggle point of sale navigation"
-                data-testid="button-sidebar-toggle"
-              />
-              <div className="min-w-0 flex-1 lg:hidden">
-                <p className="truncate text-sm font-semibold">
-                  {user.posStation ? `POS ${user.posStation}` : "Point of Sale"}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{selectedCompany?.name}</p>
-              </div>
-              {currentLocation === "/pos-containers" && (
-                <button
-                  type="button"
-                  className="pos-top-search hidden min-w-0 items-center gap-2 lg:flex"
-                  onClick={() =>
-                    document.querySelector<HTMLInputElement>('[data-testid="input-pos-container-search"]')?.focus()
-                  }
-                  aria-label="Focus container search"
-                  data-testid="button-pos-focus-container-search"
-                >
-                  <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate text-left">Search containers, suppliers, trucks...</span>
-                  <kbd className="pos-top-search-key">Search</kbd>
-                </button>
-              )}
-              <div data-slot="pos-top-bar-actions" className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
-                <PendingSyncIndicator />
-                {christmasSetting.data?.available === true && (
-                  <label
-                    className="pos-christmas-switch"
-                    title="Your personal Christmas Mode preference — controlled by the Developer master setting"
-                  >
-                    <TreePine className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden xl:inline">Christmas Mode</span>
-                    <Switch
-                      aria-label="Show Christmas Mode on my account"
-                      data-testid="switch-pos-christmas-mode"
-                      checked={christmasSetting.data.preferenceEnabled === true}
-                      disabled={updatePersonalPreference.isPending}
-                      onCheckedChange={(enabled) =>
-                        updatePersonalPreference.mutate(enabled, {
-                          onSuccess: () =>
-                            toast({ title: enabled ? "Christmas Mode preference on" : "Christmas Mode turned off" }),
-                          onError: (error) =>
-                            toast({
-                              title: "Could not change Christmas Mode",
-                              description: error.message,
-                              variant: "destructive",
-                            }),
-                        })
-                      }
-                    />
-                  </label>
-                )}
-                {hasAdminSearch && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex min-h-11 items-center gap-2 px-3 text-muted-foreground sm:min-h-9"
-                    data-pos-command-search="true"
-                    onClick={() => setPaletteOpen(true)}
-                    aria-label="Open command search"
-                    data-testid="button-open-palette"
-                  >
-                    <Search className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden truncate lg:inline">Search anything...</span>
-                    <kbd className="hidden h-5 items-center gap-1 rounded-sm border bg-muted px-1.5 font-mono text-[11px] lg:inline-flex">
-                      {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
-                        ? "⌘ /"
-                        : "Ctrl /"}
-                    </kbd>
-                  </Button>
-                )}
-                <UserMenu accentColor="#8b5cf6" user={userMenuUser} onLogout={handleLogout} />
-              </div>
-            </header>
             <OfflineBanner />
+            <AppTopBar
+              accentColor={MODULE_ACCENT.pos}
+              user={userMenuUser}
+              onLogout={handleLogout}
+              onSearchOpen={hasAdminSearch ? () => setPaletteOpen(true) : undefined}
+              showSearch={hasAdminSearch}
+              // POS sessions have no notifications feed (its API is outside the POS scope).
+              showNotifications={false}
+              leftContent={
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="block min-w-0 max-w-48">
+                    <span data-business-value="true" dir="auto" className="block truncate text-sm font-semibold">
+                      {stationName}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">{selectedCompany?.name}</span>
+                  </span>
+                  {currentLocation === "/pos-containers" && (
+                    <button
+                      type="button"
+                      className="pos-top-search hidden min-w-0 items-center gap-2 lg:flex"
+                      onClick={() =>
+                        document.querySelector<HTMLInputElement>('[data-testid="input-pos-container-search"]')?.focus()
+                      }
+                      aria-label="Focus container search"
+                      data-testid="button-pos-focus-container-search"
+                    >
+                      <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate text-left">Search containers, suppliers, trucks...</span>
+                      <kbd className="pos-top-search-key">Search</kbd>
+                    </button>
+                  )}
+                </span>
+              }
+              extraActions={
+                christmasSwitch ? <span data-slot="pos-top-bar-actions">{christmasSwitch}</span> : undefined
+              }
+            />
             <main
               id="main-content"
               tabIndex={-1}
@@ -374,6 +232,6 @@ export function PosShell({
       </SidebarProvider>
       {hasAdminSearch && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} isPOS={true} user={user} />}
       {leaveConfirmDialog}
-    </>
+    </PhoneSheetDialogs>
   );
 }
