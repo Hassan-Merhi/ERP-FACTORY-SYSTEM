@@ -12,6 +12,9 @@ export interface Voucher {
   description: string | null;
   optional?: boolean;
   totalAmount: string;
+  currency?: string | null;
+  exchangeRate?: string | null;
+  nativeZmwTotal?: string | null;
   locationId: number;
   locationName?: string;
   createdAt: string;
@@ -33,7 +36,7 @@ export interface SalesItem {
 
 export interface VoucherWithItems extends Voucher {
   salesItems?: SalesItem[];
-  exchangeRate?: string | null;
+  entries?: Array<{ transactionCurrency?: string | null; transactionDebitAmount?: string | null }>;
   isCreditSale?: boolean;
   customerName?: string | null;
 }
