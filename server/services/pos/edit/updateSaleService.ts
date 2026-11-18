@@ -54,6 +54,7 @@ import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrai
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
 import { editedZmwSaleAmounts, posZmwEditUsdRows } from "./posZmwEditedAmounts";
+import { validateLockedPosDaybookEdit } from "./posDaybookEditGuard";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
@@ -127,6 +128,8 @@ export async function applyPosSaleUpdateTx(
   if (!lockedVoucher || lockedVoucher.deletedAt) {
     return { error: { status: 404, body: { message: "Voucher not found" } } };
   }
+  const editRefusal = await validateLockedPosDaybookEdit(tx, lockedVoucher, params);
+  if (editRefusal) return { error: editRefusal };
   if (lockedVoucher.currency === "ZMW") {
     // Preserve the original sale's currency and historical rate. A re-date
     // could otherwise make a new financial date silently reuse the old rate.
@@ -254,7 +257,6 @@ export async function applyPosSaleUpdateTx(
   }
 
   const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-  // Wave 11: the old lines come back exactly; the ledger's COGS is compared below.
   const cogsBefore = await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId);
   const restoredDelta = await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
   await clearOldSaleRecords(tx, voucherId);
