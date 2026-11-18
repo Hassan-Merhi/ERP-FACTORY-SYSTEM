@@ -42,6 +42,8 @@ export function usePOSStatePart2({
   paymentAccountType,
   pendingAutoSend,
   pendingStockSend,
+  posAssignedLocations,
+  posSelectedLocation,
   posUser,
   posWritesDisabled,
   printRef,
@@ -61,6 +63,7 @@ export function usePOSStatePart2({
   setNotes,
   setPaymentAccountId,
   setPaymentAccountType,
+  setPosSelectedLocation,
   setPendingAutoSend,
   setPendingStockSend,
   setRows,
@@ -115,6 +118,8 @@ export function usePOSStatePart2({
   | "paymentAccountType"
   | "pendingAutoSend"
   | "pendingStockSend"
+  | "posAssignedLocations"
+  | "posSelectedLocation"
   | "posUser"
   | "posWritesDisabled"
   | "printRef"
@@ -134,6 +139,7 @@ export function usePOSStatePart2({
   | "setNotes"
   | "setPaymentAccountId"
   | "setPaymentAccountType"
+  | "setPosSelectedLocation"
   | "setPendingAutoSend"
   | "setPendingStockSend"
   | "setRows"
@@ -172,9 +178,14 @@ export function usePOSStatePart2({
   // Edit mode: select the voucher's location, populate rows once, infer payment type.
   usePosEditVoucherHydration({
     editVoucherId,
+    activeCurrency,
     editVoucher,
     editVoucherViewEntries,
     allLocations,
+    posAssignedLocations,
+    posUser,
+    posSelectedLocation,
+    setPosSelectedLocation,
     allLedgerAccounts,
     selectedLocation,
     setSelectedLocation,
@@ -206,6 +217,7 @@ export function usePOSStatePart2({
 
   const { saveMutation, deleteDraftMutation, saveDraftMutation } = usePosMutations({
     activeLocation,
+    posUser,
     editVoucherId,
     editVoucher,
     isSpCompany,
@@ -243,7 +255,8 @@ export function usePOSStatePart2({
     setCurrentDraftId,
     setLastAutosaved,
     refetchDrafts,
-    disabled: posWritesDisabled,
+    // An existing receipt must never be silently saved as a new POS draft.
+    disabled: posWritesDisabled || !!editVoucherId,
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────

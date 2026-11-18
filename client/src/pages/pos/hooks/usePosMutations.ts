@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import type { AuthMe } from "@shared/apiTypes";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, invalidateCustomerBalances, keyStartsWith } from "@/lib/queryClient";
 import { invalidateLocationInventoryQueries } from "@/api/inventoryApi";
@@ -36,6 +37,7 @@ interface Phase6PosSaleData {
 
 interface UsePosMutationsParams {
   activeLocation: Location | null;
+  posUser?: AuthMe | null;
   editVoucherId?: string;
   editVoucher?: PosEditVoucher | null;
   isSpCompany?: boolean;
@@ -111,6 +113,7 @@ function phase6PosResult(
 
 export function usePosMutations({
   activeLocation,
+  posUser,
   editVoucherId,
   editVoucher,
   isSpCompany,
@@ -143,8 +146,11 @@ export function usePosMutations({
         const updateData = {
           description: saleData.notes,
           locationId: saleData.locationId,
-          paymentAccountType: saleData.paymentAccountType,
-          paymentAccountId: saleData.paymentAccountId,
+          // The Daybook POS edit API forbids changing the original payment.
+          // Admin/ERP edits retain their existing payment update behavior.
+          ...(!posUser
+            ? { paymentAccountType: saleData.paymentAccountType, paymentAccountId: saleData.paymentAccountId }
+            : {}),
           isCreditSale: saleData.isCreditSale,
           voucherDate: saleData.voucherDate,
           currency: saleData.currency,
@@ -153,7 +159,7 @@ export function usePosMutations({
             stockItemId: item.stockItemId,
             quantity: String(item.quantity),
             sellingPrice: String(item.rate),
-            ...(saleData.currency === "ZMW" ? { originalCurrencyRate: item.originalCurrencyRate } : {}),
+            ...(item.originalCurrencyRate !== undefined ? { originalCurrencyRate: item.originalCurrencyRate } : {}),
           })),
         };
         const res = await apiRequest("PUT", `/api/vouchers/${editVoucherId}/sales`, {

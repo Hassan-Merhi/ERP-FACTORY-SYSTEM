@@ -3,11 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsExportMenu";
 import {
   UnifiedRentalAccountingCardSection,
   UnifiedRentalAccountingSection,
   name,
   useUnifiedRentalAccountingState,
+  type Expense,
+  type Guarantee,
+  type Payment,
 } from "./useUnifiedRentalAccountingState";
 
 export default function UnifiedRentalAccounting() {
@@ -41,7 +45,93 @@ export default function UnifiedRentalAccounting() {
       <PageHeader
         title="Unified Rental Accounting"
         subtitle="Tenant-side shops and shared leases show rent payable; landlord-side warehouses show rent receivable. Contract-month ledger, payments, advance rent, deposits and property expenses. Financial vouchers remain unchanged."
-      />
+      >
+        {detail.data && (
+          <RowsExportMenu
+            title="Rental Accounting"
+            period={{ to: asOf }}
+            filters={[
+              {
+                label: "Contract",
+                value: `${detail.data.contract.unitNumber} · ${detail.data.contract.tenantName} · ${detail.data.contract.currency}`,
+              },
+            ]}
+            sheetName="Contract months"
+            rows={detail.data.periods}
+            columns={[
+              { header: "Due", value: (p) => p.dueDate },
+              { header: "Expected", value: (p) => p.expected, type: "number" },
+              { header: "Paid", value: (p) => p.paid, type: "number" },
+              { header: "Outstanding", value: (p) => p.outstanding, type: "number" },
+              {
+                header: "Accrual evidence",
+                value: (p) =>
+                  (p.accrualVoucherId
+                    ? `Voucher #${p.accrualVoucherId}`
+                    : p.accrualStale
+                      ? "Stale accrual link"
+                      : "Not accrued") +
+                  (p.usedPrepaidAccount || p.usedAdvanceAccount ? " · Advance/prepaid recognition" : ""),
+              },
+              { header: "Status", value: (p) => p.status },
+            ]}
+            extraSheets={[
+              ...(showPayments
+                ? [
+                    {
+                      name: "Payment allocations",
+                      rows: detail.data.payments,
+                      columns: [
+                        { header: "Paid / planned date", value: (p) => p.date },
+                        {
+                          header: "Period",
+                          value: (p) => p.period + (p.isGuaranteeActivity ? " · Deposit activity, not rent" : ""),
+                        },
+                        { header: "Amount", value: (p) => p.amount, type: "number" },
+                        { header: "Currency", value: (p) => p.currency },
+                        { header: "Recorded FX", value: (p) => p.historicalRate },
+                        { header: "Posting", value: (p) => p.status },
+                        {
+                          header: "Voucher",
+                          value: (p) => (p.voucherId ? p.voucherNumber || "#" + p.voucherId : null),
+                        },
+                      ],
+                    } satisfies RowsExportSheet<Payment>,
+                  ]
+                : []),
+              {
+                name: "Deposit evidence",
+                rows: detail.data.guarantee.vouchers,
+                columns: [
+                  { header: "Date", value: (g) => g.date },
+                  { header: "Voucher", value: (g) => g.voucherNumber },
+                  { header: "Account", value: (g) => g.accountCode },
+                  { header: "USD", value: (g) => g.signedUsd, type: "number" },
+                ],
+              } satisfies RowsExportSheet<Guarantee["vouchers"][number]>,
+              {
+                name: "Property expenses",
+                rows: detail.data.expenses,
+                columns: [
+                  { header: "Category", value: (e) => name(e.category) },
+                  { header: "Voucher", value: (e) => e.voucherNumber || "#" + e.voucherId },
+                  { header: "USD", value: (e) => e.amountUsd, type: "number" },
+                  {
+                    header: "Source",
+                    value: (e) =>
+                      e.sourceStatus !== "active"
+                        ? `Source voucher ${e.sourceStatus} — excluded from current expense total`
+                        : null,
+                  },
+                  { header: "Note", value: (e) => e.note },
+                ],
+              } satisfies RowsExportSheet<Expense>,
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-rental-accounting"
+          />
+        )}
+      </PageHeader>
       <UnifiedRentalAccountingCardSection
         asOf={asOf}
         detail={detail}

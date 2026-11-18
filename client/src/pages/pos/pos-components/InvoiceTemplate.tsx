@@ -1,7 +1,7 @@
 import { formatNumber } from "@/lib/formatNumber";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { SafeStyle } from "@/components/SafeStyle";
-import { getPosInvoiceNativeZmwTotal, getPosInvoiceNativeZmwUnit } from "./posInvoiceZmwTotals";
+import { getPosInvoiceNativeZmwTotal, getPosInvoiceNativeZmwUnits } from "./posInvoiceZmwTotals";
 import Decimal from "decimal.js";
 
 export type InvoiceSaleItem = {
@@ -56,9 +56,14 @@ export function InvoiceTemplate({
   const hasLockedZmw = savedSale?.voucher?.currency === "ZMW" && Number.isFinite(lockedRate) && lockedRate > 0;
   const displaySaleMoney = (usd: number) =>
     hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
-  const nativeUnitPrice = (item: InvoiceSaleItem) => getPosInvoiceNativeZmwUnit(item, lockedRate);
-  const nativeLineAmount = (item: InvoiceSaleItem) =>
-    nativeUnitPrice(item).times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const nativeUnits = getPosInvoiceNativeZmwUnits(
+    savedSale?.items,
+    savedSale?.nativeZmwTotal,
+    lockedRate,
+    hasLockedZmw
+  );
+  const nativeLineAmount = (item: InvoiceSaleItem, idx: number) =>
+    nativeUnits[idx].times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   const nativeInvoiceTotal = getPosInvoiceNativeZmwTotal(
     savedSale?.items,
     savedSale?.nativeZmwTotal,
@@ -312,7 +317,7 @@ export function InvoiceTemplate({
                     }}
                   >
                     {hasLockedZmw
-                      ? formatMoneyDisplay(nativeUnitPrice(item).toNumber(), { currency: "ZMW" })
+                      ? formatMoneyDisplay(nativeUnits[idx].toNumber(), { currency: "ZMW" })
                       : displaySaleMoney(itemRateUSD)}
                   </td>
                   <td
@@ -325,7 +330,7 @@ export function InvoiceTemplate({
                     }}
                   >
                     {hasLockedZmw
-                      ? formatMoneyDisplay(nativeLineAmount(item).toNumber(), { currency: "ZMW" })
+                      ? formatMoneyDisplay(nativeLineAmount(item, idx).toNumber(), { currency: "ZMW" })
                       : displaySaleMoney(itemAmountUSD)}
                   </td>
                   <td
@@ -449,9 +454,7 @@ export function InvoiceTemplate({
           }}
         >
           <span>TOTAL PAID:</span>
-          <span>
-            {formattedInvoiceTotal}
-          </span>
+          <span>{formattedInvoiceTotal}</span>
         </div>
 
         {/* Notes - dir=auto handles Arabic RTL automatically */}

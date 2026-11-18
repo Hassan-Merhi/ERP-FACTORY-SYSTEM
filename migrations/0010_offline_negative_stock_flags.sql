@@ -1,4 +1,4 @@
--- 0009_offline_negative_stock_flags.sql
+-- 0010_offline_negative_stock_flags.sql
 --
 -- Full offline mode (Phase B2). Owner decision 2026-11-17: stock sold twice
 -- while PCs were offline goes negative and is flagged; flags may stay open at

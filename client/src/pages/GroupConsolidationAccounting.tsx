@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { label } from "./GroupConsolidationAccountingTypes";
 import {
   GroupConsolidationAccountingCardSection,
@@ -42,7 +43,92 @@ export default function GroupConsolidationAccounting() {
       <PageHeader
         title="Intercompany & Consolidation"
         subtitle="USD ledger workpaper across authorized companies: trial balances, paired intercompany receivables/payables, reconciliation and hypothetical elimination entries. Source vouchers remain unchanged."
-      />
+      >
+        {report.data && tab === "pairs" && (
+          <RowsExportMenu
+            title="Intercompany Pairs"
+            period={{ from, to: asOf }}
+            rows={report.data.pairs.filter((p) => !onlyIssues || p.status !== "matched" || p.reason)}
+            columns={[
+              { header: "Companies", value: (p) => p.companyNames.join(" ↔ ") },
+              { header: "Receivable USD", value: (p) => p.receivables, type: "number" },
+              { header: "Payable USD", value: (p) => p.payables, type: "number" },
+              { header: "Matched USD", value: (p) => p.matchedUsd, type: "number" },
+              { header: "Applied USD", value: (p) => p.appliedUsd, type: "number" },
+              { header: "Residual USD", value: (p) => p.differenceUsd, type: "number" },
+              { header: "Review", value: (p) => [label(p.status), p.reason].filter(Boolean).join(" — ") },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-consolidation"
+          />
+        )}
+        {report.data && tab === "trial" && (
+          <RowsExportMenu
+            title="Consolidated Trial Balance"
+            period={{ from, to: asOf }}
+            rows={financialRows}
+            columns={[
+              { header: "Company", value: (r) => r.companyName },
+              { header: "Account", value: (r) => `${r.code ?? r.accountKind}: ${r.name}` },
+              { header: "Class", value: (r) => r.financialClass },
+              { header: "Booked USD", value: (r) => r.bookedUsd, type: "number" },
+              { header: "Period movement", value: (r) => r.periodMovementUsd, type: "number" },
+              { header: "Elimination", value: (r) => r.eliminationUsd, type: "number" },
+              { header: "Adjusted USD", value: (r) => r.adjustedUsd, type: "number" },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-consolidation"
+          />
+        )}
+        {transfers.data && tab === "transfers" && (
+          <RowsExportMenu
+            title="Intercompany Transfers"
+            period={{ from, to: asOf }}
+            rows={transfers.data.rows.filter((t) => !onlyIssues || t.status !== "matched")}
+            columns={[
+              { header: "Transfer", value: (t) => `#${t.transferId} · ${t.type}` },
+              { header: "Date", value: (t) => t.transferDate },
+              { header: "From company", value: (t) => companyName(t.fromCompanyId) },
+              { header: "To company", value: (t) => companyName(t.toCompanyId) },
+              { header: "Source USD", value: (t) => t.amountSourceUsd, type: "number" },
+              {
+                header: "From voucher",
+                value: (t) => (t.fromVoucherId ? (t.fromVoucherNumber ?? "#" + t.fromVoucherId) : "Missing"),
+              },
+              { header: "From interco GL", value: (t) => t.sourceSideUsd ?? "Missing" },
+              {
+                header: "To voucher",
+                value: (t) => (t.toVoucherId ? (t.toVoucherNumber ?? "#" + t.toVoucherId) : "Missing"),
+              },
+              { header: "To interco GL", value: (t) => t.destinationSideUsd ?? "Missing" },
+              { header: "Status", value: (t) => label(t.status) },
+              { header: "Explanation", value: (t) => t.explanation },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-consolidation"
+          />
+        )}
+        {report.data && tab === "workpaper" && (
+          <RowsExportMenu
+            title="Elimination Workpaper"
+            period={{ from, to: asOf }}
+            rows={report.data.eliminations}
+            columns={[
+              {
+                header: "Debit — internal payable",
+                value: (item) => `${companyName(item.debitCompanyId)} · Ledger #${item.debitAccountId}`,
+              },
+              {
+                header: "Credit — internal receivable",
+                value: (item) => `${companyName(item.creditCompanyId)} · Ledger #${item.creditAccountId}`,
+              },
+              { header: "USD each side", value: (item) => item.amountUsd, type: "number" },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-consolidation"
+          />
+        )}
+      </PageHeader>
       <Card>
         <CardHeader>
           <CardTitle>Group scope and dates</CardTitle>

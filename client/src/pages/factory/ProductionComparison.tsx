@@ -8,7 +8,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, ChevronDown, Package, Scale, BarChart3, TrendingUp, Coins, Layers3 } from "lucide-react";
 import React from "react";

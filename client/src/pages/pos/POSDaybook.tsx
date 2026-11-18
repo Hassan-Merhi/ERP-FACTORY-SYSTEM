@@ -7,7 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePOSDaybookState } from "./usePOSDaybookState";
 import { POSDaybookDaybookResultsSection } from "./POSDaybookDaybookResultsSection";
 import { POSDaybookDialogSection } from "./POSDaybookDialogSection";
-import { formatPosVoucherAmount, formatPosZmwUnitPrice, formatPosZmwLineTotal } from "./posdaybook/zmwDisplay";
+import {
+  formatPosVoucherAmount,
+  formatPosZmwUnitPrice,
+  formatPosZmwLineTotal,
+  postedPosZmwUnitPrices,
+} from "./posdaybook/zmwDisplay";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
@@ -214,18 +219,19 @@ export default function POSDaybook() {
               </tr>
             </thead>
             <tbody>
-              {(printDetails?.salesItems || []).map((item) => {
+              {(printDetails?.salesItems || []).map((item, index, items) => {
                 const qty = Number(item.quantity || 0);
                 const price = Number(item.sellingPrice || 0);
+                const kwacha = postedPosZmwUnitPrices(printDetails, items)?.[index];
                 return (
                   <tr key={item.id}>
                     <td className="border border-black p-2">{item.stockItemName || `Item ${item.stockItemId}`}</td>
                     <td className="border border-black p-2 text-right">{fmtPrint(qty)}</td>
                     <td className="border border-black p-2 text-right">
-                      {formatPosZmwUnitPrice(printDetails, price, (usd) => `${fmtPrint(usd)}`)}
+                      {formatPosZmwUnitPrice(printDetails, price, (usd) => `${fmtPrint(usd)}`, kwacha)}
                     </td>
                     <td className="border border-black p-2 text-right">
-                      {formatPosZmwLineTotal(printDetails, qty, price, (usd) => `${fmtPrint(usd)}`)}
+                      {formatPosZmwLineTotal(printDetails, qty, price, (usd) => `${fmtPrint(usd)}`, kwacha)}
                     </td>
                   </tr>
                 );

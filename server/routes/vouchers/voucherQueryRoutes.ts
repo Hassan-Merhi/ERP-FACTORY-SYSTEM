@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 
-import { containers, vouchers, posShifts } from "@shared/schema";
+import { containers, vouchers } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
@@ -288,11 +288,11 @@ export function registerVoucherQueryRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: scope.isDestination ? transferData.sourceLocationId : scope.displayLocationId,
             sourceLocationName: scope.isDestination
-              ? (transferData.sourceLocationName || "Multi-source")
+              ? transferData.sourceLocationName || "Multi-source"
               : scope.displayLocationName,
             destinationLocationId: transferData.destinationLocationId,
             destinationLocationName: transferData.destinationLocationName,
-            inventoryApplied: transferData.inventoryApplied,
+            inventoryApplied: "inventoryApplied" in transferData ? transferData.inventoryApplied : undefined,
             notes: transferData.notes,
             items: visibleItems.map((item) => ({
               id: item.id,
@@ -317,20 +317,6 @@ export function registerVoucherQueryRoutes(app: Express) {
         }
       }
 
-      // POS sales ownership is recorded through the linked shift.
-      if (liveContext.role === "POS" && voucher.voucherType === "Sales") {
-        const [ownedShift] = voucher.shiftId
-          ? await db
-              .select({ id: posShifts.id })
-              .from(posShifts)
-              .where(and(eq(posShifts.id, voucher.shiftId), eq(posShifts.userId, req.user.id)))
-              .limit(1)
-          : [];
-        if (!ownedShift) {
-          return res.status(403).json({ message: "Access denied" });
-        }
-      }
-
       const [displayVoucher] = await withPropertiesRentalTenantNames(access.activeCompanyId, [voucher]);
       const [entries, relatedData] = await Promise.all([
         storage.getVoucherEntriesByVoucher(id),
@@ -348,6 +334,38 @@ export function registerVoucherQueryRoutes(app: Express) {
         if (debitEntry?.accountName && debitEntry.accountName !== "Unknown Account") {
           customerName = debitEntry.accountName;
         }
+      }
+
+      // Cashiers may inspect sales at any of their assigned locations, but
+      // never receive general-ledger entries, costs, profits or other ERP data.
+      if (liveContext.role === "POS") {
+        const [nativeSale] = await withPosZmwNativeTotals([displayVoucher]);
+        return res.json({
+          id: voucher.id,
+          voucherNumber: voucher.voucherNumber,
+          voucherType: voucher.voucherType,
+          voucherDate: voucher.voucherDate,
+          createdAt: voucher.createdAt,
+          description: voucher.description,
+          optional: voucher.optional,
+          locationId: voucher.locationId,
+          locationName: voucher.locationName,
+          totalAmount: voucher.totalAmount,
+          currency: voucher.currency,
+          exchangeRate: voucher.exchangeRate,
+          isCreditSale: voucher.isCreditSale,
+          nativeZmwTotal: nativeSale.nativeZmwTotal ?? null,
+          customerName,
+          entries: [],
+          salesItems: (salesItemsList ?? []).map((item) => ({
+            id: item.id,
+            stockItemId: item.stockItemId,
+            stockItemName: item.stockItemName,
+            stockItemCode: item.stockItemCode,
+            quantity: item.quantity,
+            sellingPrice: item.sellingPrice,
+          })),
+        });
       }
 
       res.json({

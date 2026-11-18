@@ -1,11 +1,10 @@
 // Extracted from ./POSDaybook.tsx to keep that module under the source-size cap.
 import { Lock, MessageCircle, Pencil, Undo2, X } from "lucide-react";
-import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 import { posDaybookTransferText } from "@shared/posDaybookTransferText";
-import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
 import { POSDaybookTransferDetails } from "./POSDaybookTransferDetails";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -49,7 +48,7 @@ export function POSDaybookDialogSection({
   | "voucherDetails"
   | "whatsappMutation"
 >) {
-  const [editing, setEditing] = useState(false);
+  const [, navigate] = useLocation();
   const isTransfer = Boolean(selectedVoucher && selectedVoucher.voucherType !== "Sales");
   const { selectedCompany } = useCompany();
   const { data: liveAccess } = useQuery<{
@@ -73,7 +72,6 @@ export function POSDaybookDialogSection({
     originalDate: selectedVoucher?.voucherDate || "",
     businessDate: liveAccess?.businessDate ?? "",
     editDays: Number(liveAccess?.daybookEditDays ?? 0),
-    isOwnSale: Boolean(selectedVoucher && String(selectedVoucher.userId) === String(currentUser?.id)),
     viewOnly: Boolean(liveAccess?.posViewOnly ?? currentUser?.posViewOnly),
   });
   const canEditSelected = Boolean(
@@ -87,7 +85,6 @@ export function POSDaybookDialogSection({
       open={Boolean(selectedVoucher)}
       onOpenChange={(open) => {
         if (!open) {
-          setEditing(false);
           setSelectedVoucher(null);
         }
       }}
@@ -95,19 +92,12 @@ export function POSDaybookDialogSection({
       <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
-            {isTransfer ? posDaybookTransferText.heading : editing ? "Edit POS Sale" : "POS Sale Details"} -{" "}
+            {isTransfer ? posDaybookTransferText.heading : "POS Sale Details"} -{" "}
             {selectedVoucher?.voucherNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto">
-          {editing && voucherDetails ? (
-            <POSDaybookEditPanel
-              key={voucherDetails.id}
-              sale={voucherDetails}
-              onCancel={() => setEditing(false)}
-              onSaved={() => setEditing(false)}
-            />
-          ) : detailsLoading ? (
+          {detailsLoading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((key) => (
                 <Skeleton key={key} className="h-14 w-full" />
@@ -191,7 +181,7 @@ export function POSDaybookDialogSection({
             <div className="py-8 text-center text-muted-foreground">Sale details could not be loaded.</div>
           )}
         </div>
-        {!editing && <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
           <Button variant="outline" onClick={() => setSelectedVoucher(null)}>
             <X className="mr-2 h-4 w-4" />
             Close
@@ -202,7 +192,7 @@ export function POSDaybookDialogSection({
             disabled={!voucherDetails}
             onClick={() => voucherDetails && setPrintVoucherId(voucherDetails.id)}
           />}
-          {!isTransfer && recordChanges.allowed && (
+          {!isTransfer && recordChanges.allowed && (!posUser || (selectedVoucher?.userId != null && String(selectedVoucher.userId) === String(currentUser?.id))) && (
             <Button
               variant="outline"
               disabled={!voucherDetails || whatsappMutation.isPending}
@@ -233,7 +223,12 @@ export function POSDaybookDialogSection({
                   <span>
                     <Button
                       disabled={!canEditSelected || !voucherDetails}
-                      onClick={() => setEditing(true)}
+                      onClick={() => {
+                        if (!canEditSelected || !selectedVoucher) return;
+                        const id = selectedVoucher.id;
+                        setSelectedVoucher(null);
+                        navigate(`/pos/edit/${id}`);
+                      }}
                       data-testid="pos-daybook-edit-sale"
                     >
                       {canEditSelected ? <Pencil className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
@@ -251,7 +246,7 @@ export function POSDaybookDialogSection({
               </Tooltip>
             </TooltipProvider>
           )}
-        </div>}
+        </div>
       </DialogContent>
     </Dialog>
   );

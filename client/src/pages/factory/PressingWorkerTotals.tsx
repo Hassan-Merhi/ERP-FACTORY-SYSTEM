@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { formatQuantity } from "@/lib/formatNumber";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
@@ -14,7 +16,6 @@ interface WorkerTotalsResponse {
   workers: PressingWorkerTotal[];
 }
 const formatCount = (value: number) => value.toLocaleString();
-const formatKg = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 const standingStyles: Record<
   PressingStanding,
@@ -116,6 +117,19 @@ export default function PressingWorkerTotals({
             <RefreshCw className="mr-1 h-4 w-4" />
             Refresh
           </Button>
+          <RowsExportMenu
+            title="Pressing Worker Totals"
+            rows={rankedWorkers}
+            columns={[
+              { header: "Worker", value: (worker) => worker.name?.trim() || "Display name not set" },
+              { header: "Standing", value: (worker) => standingStyles[worker.standing].label },
+              { header: "Total Items", value: (worker) => Number(worker.totalBales || 0), type: "number" },
+              { header: "Total KG", value: (worker) => Number(worker.totalKg || 0), type: "number" },
+            ]}
+            footer={["Total", null, totalBales, totalKg]}
+            period={{ from: day || totals.data?.day || null }}
+            resource="factory.production"
+          />
         </div>
       </div>
       {totals.isLoading && <LoadingState title="Loading worker totals…" />}
@@ -164,7 +178,7 @@ export default function PressingWorkerTotals({
                       {formatCount(Number(worker.totalBales || 0))}
                     </td>
                     <td className={"p-3 text-right tabular-nums " + style.kg}>
-                      {formatKg(Number(worker.totalKg || 0))}
+                      {formatQuantity(Number(worker.totalKg || 0))}
                     </td>
                   </tr>
                 );
@@ -181,7 +195,7 @@ export default function PressingWorkerTotals({
               <tr>
                 <td className="p-3">Total</td>
                 <td className="p-3 text-right tabular-nums">{formatCount(totalBales)}</td>
-                <td className="p-3 text-right tabular-nums">{formatKg(totalKg)}</td>
+                <td className="p-3 text-right tabular-nums">{formatQuantity(totalKg)}</td>
               </tr>
             </tfoot>
           </table>

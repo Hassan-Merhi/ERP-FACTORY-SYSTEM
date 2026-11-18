@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,20 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               ? "Showing all sources, including empty balances."
               : "Sources with no free balance are hidden."}
           </p>
+          <RowsExportMenu
+            title="Raw Stock"
+            rows={categories.flatMap((cat) => groupedStock[cat])}
+            columns={[
+              { header: "Category", value: (row) => row.categoryName || "Uncategorized" },
+              { header: "Source / Supplier", value: (row) => row.supplierName },
+              { header: "Total Received (kg)", value: (row) => parseFloat(row.receivedKg), type: "number" },
+              { header: "Total Used (kg)", value: (row) => parseFloat(row.usedKg), type: "number" },
+              { header: "Available (Free) (kg)", value: (row) => parseFloat(row.freeKg || "0"), type: "number" },
+              { header: "Value (USD)", value: (row) => parseFloat(row.valueRemainingUsd), type: "number" },
+            ]}
+            resource="factory.raw_stock"
+            className="ml-auto h-9"
+          />
           {zeroBalanceCount > 0 && (
             <Button
               type="button"

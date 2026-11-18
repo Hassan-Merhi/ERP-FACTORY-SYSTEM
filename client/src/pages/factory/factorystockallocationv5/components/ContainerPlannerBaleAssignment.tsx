@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatCount } from "@/lib/formatNumber";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Barcode, Boxes, Loader2, PackageCheck, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import type { PlanAssignmentSummary } from "@shared/containerBaleAssignment";
@@ -39,10 +40,6 @@ interface AssignMutationResponse {
 interface Props {
   planId: number;
   onPlanChanged: () => void;
-}
-
-function formatQty(value: number): string {
-  return Math.round(Number(value || 0)).toLocaleString();
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -174,8 +171,8 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
           <div>
             <p className="text-sm font-semibold">Physical bales</p>
             <p className="text-xs text-muted-foreground">
-              {formatQty(summary.assignedTotal)} of {formatQty(summary.plannedTotal)} planned bales assigned ·{" "}
-              {formatQty(summary.assignedWeightKg)} kg
+              {formatCount(summary.assignedTotal)} of {formatCount(summary.plannedTotal)} planned bales assigned ·{" "}
+              {formatCount(summary.assignedWeightKg)} kg
             </p>
           </div>
         </div>
@@ -186,7 +183,7 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
               Ready to load
             </>
           ) : (
-            `${formatQty(summary.remainingTotal)} bales still unassigned`
+            `${formatCount(summary.remainingTotal)} bales still unassigned`
           )}
         </Badge>
       </div>
@@ -204,9 +201,9 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
             <CardContent className="p-3">
               <div className="truncate text-xs font-semibold">{container.containerName}</div>
               <div className="mt-1 text-lg font-semibold tabular-nums">
-                {formatQty(container.assignedQty)}
+                {formatCount(container.assignedQty)}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">
-                  / {formatQty(container.plannedQty)}
+                  / {formatCount(container.plannedQty)}
                 </span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -241,7 +238,7 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
                 data-testid="button-auto-assign-bales"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
-                Auto-fill {formatQty(selectedContainer.remainingQty)}
+                Auto-fill {formatCount(selectedContainer.remainingQty)}
               </Button>
               <Button
                 size="sm"
@@ -275,7 +272,10 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
               autoFocus
               data-testid="input-scan-bale"
             />
-            <MobileBarcodeScanner onScan={(code) => submitScan(code)} disabled={selectedContainer.isLocked || assignMutation.isPending} />
+            <MobileBarcodeScanner
+              onScan={(code) => submitScan(code)}
+              disabled={selectedContainer.isLocked || assignMutation.isPending}
+            />
             <Button
               size="sm"
               disabled={!scanValue.trim() || selectedContainer.isLocked || assignMutation.isPending}
@@ -300,9 +300,9 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
                 {selectedContainer.products.map((product) => (
                   <tr key={product.articleCode} className="border-t">
                     <td className="py-1">{product.productName}</td>
-                    <td className="py-1 text-right tabular-nums">{formatQty(product.plannedQty)}</td>
-                    <td className="py-1 text-right tabular-nums">{formatQty(product.assignedQty)}</td>
-                    <td className="py-1 text-right tabular-nums">{formatQty(product.remainingQty)}</td>
+                    <td className="py-1 text-right tabular-nums">{formatCount(product.plannedQty)}</td>
+                    <td className="py-1 text-right tabular-nums">{formatCount(product.assignedQty)}</td>
+                    <td className="py-1 text-right tabular-nums">{formatCount(product.remainingQty)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -337,7 +337,7 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
       {assignmentQuery.data && assignmentQuery.data.unassignedStock.length > 0 && (
         <div className="mt-3 text-xs text-muted-foreground" data-testid="text-unassigned-stock">
           Unassigned stock:{" "}
-          {assignmentQuery.data.unassignedStock.map((row) => `${row.productName} ${formatQty(row.qty)}`).join(" · ")}
+          {assignmentQuery.data.unassignedStock.map((row) => `${row.productName} ${formatCount(row.qty)}`).join(" · ")}
         </div>
       )}
     </div>

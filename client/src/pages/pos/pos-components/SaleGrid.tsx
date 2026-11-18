@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import type { PosToast, SaleRow } from "./posTypes";
 import { PosCartCell, PosCartGrid, PosCartRow, PosCartSummary } from "./PosCartGrid";
-import type { POSColumn } from "../utils/posCalculations";
+import { formatDisplayAmount as formatPosAmount, type POSColumn } from "../utils/posCalculations";
 
 export interface SaleGridProps {
   rows: SaleRow[];
@@ -122,7 +122,12 @@ export function SaleGrid({
                     <div
                       className={`flex items-center justify-end h-full px-1.5 sm:px-2 font-mono text-xs sm:text-sm ${color ?? "text-muted-foreground"}`}
                     >
-                      {hasConfig ? formatDisplayAmount(Math.abs(val)) : "—"}
+                      {/* P/L is a USD figure; a Kwacha sale shows it as USD, never with a K sign. */}
+                      {!hasConfig
+                        ? "—"
+                        : activeCurrency === "ZMW"
+                          ? formatPosAmount("USD", Number(Math.abs(val).toFixed(2)))
+                          : formatDisplayAmount(Math.abs(val))}
                     </div>
                   );
                 })()

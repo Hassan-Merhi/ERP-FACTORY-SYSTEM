@@ -116,7 +116,7 @@ export async function rebuildSaleItems(
       voucherId,
       stockItemId,
       quantity: inventoryQuantity(sellQty),
-      sellingPrice: inventoryMoney(effectiveSellingPrice),
+      sellingPrice: inventoryUnitCost(effectiveSellingPrice),
       costPrice: inventoryUnitCost(costPrice),
       totalSales: inventoryMoney(totalSales),
       totalCost: inventoryMoney(totalCost),

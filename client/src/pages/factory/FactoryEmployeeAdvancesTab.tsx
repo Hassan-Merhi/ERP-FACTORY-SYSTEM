@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fmt, fmtUsd } from "./FactoryEmployeeAdvancesTabTypes";
 import { useFactoryEmployeeAdvancesTabState } from "./useFactoryEmployeeAdvancesTabState";
 import { FactoryEmployeeAdvancesTabSection } from "./FactoryEmployeeAdvancesTabSection";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export default function FactoryEmployeeAdvancesTab() {
   const {
@@ -85,11 +86,32 @@ export default function FactoryEmployeeAdvancesTab() {
             </span>
           </div>
         )}
-        {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
-          <Button onClick={() => setAddOpen(true)} className="ml-auto" data-testid="button-add-advance">
-            <Plus className="h-4 w-4 mr-2" /> Add Advance
-          </Button>
-        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <RowsExportMenu
+            title="Employee Advances"
+            rows={advances}
+            columns={[
+              { header: "Employee", value: (adv) => `${adv.firstName} ${adv.lastName}` },
+              { header: "Date", value: (adv) => adv.advanceDate },
+              { header: "Amount (USD)", value: (adv) => parseFloat(String(adv.amount ?? 0)), type: "number" },
+              {
+                header: "Remaining (USD)",
+                value: (adv) => (adv.fullyPaid ? null : parseFloat(String(adv.remainingBalance ?? 0))),
+                type: "number",
+              },
+              { header: "Status", value: (adv) => (adv.fullyPaid ? "Paid" : "Open") },
+              { header: "Notes", value: (adv) => adv.notes },
+            ]}
+            resource="factory.payroll"
+            size="default"
+            data-testid="button-export-employee-advances"
+          />
+          {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
+            <Button onClick={() => setAddOpen(true)} data-testid="button-add-advance">
+              <Plus className="h-4 w-4 mr-2" /> Add Advance
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Table */}

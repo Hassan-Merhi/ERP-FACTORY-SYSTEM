@@ -20,7 +20,7 @@ interface LocationSummary {
   kg: number;
 }
 
-interface Product {
+export interface Product {
   id: number;
   name: string;
   code: string;

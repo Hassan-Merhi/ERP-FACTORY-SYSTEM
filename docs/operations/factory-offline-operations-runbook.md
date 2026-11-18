@@ -299,7 +299,7 @@ receipt.
 **Negative stock (Phase B2, owner decision).** Stock sold twice while PCs were
 offline goes negative and is flagged: when the only disagreement is that stock
 would go below zero, the cloud applies the entry anyway and writes one row to
-`offline_negative_stock_flags` (migration 0009) in the same transaction. An Admin
+`offline_negative_stock_flags` (migration 0010) in the same transaction. An Admin
 or Developer of the company lists them with
 `GET /api/offline/pc-sync/negative-stock-flags` (`?status=all` includes closed
 ones) and closes one with a note through

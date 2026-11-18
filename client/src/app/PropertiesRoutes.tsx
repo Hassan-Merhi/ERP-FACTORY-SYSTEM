@@ -41,7 +41,6 @@ import {
   PropertiesAccounts,
   PropertiesAnalytics,
   PropertiesCreate,
-  PropertiesDashboard,
   PropertiesDaybook,
   PropertiesLedgerMonthly,
   PropertiesLedgerVouchers,
@@ -82,8 +81,8 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   return (
     <Switch>
       <Route path="/properties/help-training">{() => <PropertiesHelpTraining user={user} />}</Route>
-      {/* Compatibility-only dashboard: real cash/payable management remains reachable by old bookmarks. */}
-      <Route path="/properties/dashboard" component={PropertiesDashboard} />
+      {/* Retired compatibility dashboard (owner decision 13): old bookmarks open the Properties home. */}
+      <Route path="/properties/dashboard">{() => <Redirect replace to="/properties/daybook" />}</Route>
       <Route path="/properties/accounts" component={PropertiesAccounts} />
       {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}
       {isDeveloper && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}

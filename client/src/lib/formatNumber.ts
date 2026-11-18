@@ -80,3 +80,24 @@ export function formatCurrencyWithLabel(num: number | string, currency: Currency
 export function formatPercent(num: number): string {
   return `${formatNumber(num, 2)}%`;
 }
+
+/**
+ * Quantity or weight with thousands separators and up to `maxDecimals`
+ * decimals (no trailing zeros), e.g. kilograms: `formatQuantity(1234.5678)`
+ * → "1,234.568". The one quantity/weight helper (docs/ui-unification/plan.md).
+ * Strings are parsed; anything that is not a finite number shows as "0".
+ */
+export function formatQuantity(value: number | string | null | undefined, maxDecimals: number = 3): string {
+  const numeric = typeof value === "string" ? Number.parseFloat(value) : value;
+  return formatNumber(numeric, maxDecimals);
+}
+
+/** A weight with its unit: `formatKg(12.34, 1)` → "12.3 kg"; blank or zero → "0 kg". */
+export function formatKg(value: number | string | null | undefined, maxDecimals: number = 1): string {
+  return `${formatQuantity(value, maxDecimals)} kg`;
+}
+
+/** A whole count (bales, pieces) rounded to an integer: `formatCount(1234.6)` → "1,235". */
+export function formatCount(value: number | string | null | undefined): string {
+  return Math.round(Number(value || 0)).toLocaleString();
+}

@@ -52,7 +52,7 @@ type Period = {
   postedPaymentIds: number[];
 };
 
-type Payment = {
+export type Payment = {
   id: number;
   date: string;
   period: string;
@@ -67,7 +67,7 @@ type Payment = {
   ledgerRowId: number | null;
 };
 
-type Guarantee = {
+export type Guarantee = {
   contractPledgeNative: string;
   statementFlag: boolean;
   statedPostedNative: string | null;
@@ -81,7 +81,7 @@ type Guarantee = {
   }>;
 };
 
-type Expense = {
+export type Expense = {
   id: number;
   voucherId: number;
   voucherNumber: string | null;

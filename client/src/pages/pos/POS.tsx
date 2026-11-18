@@ -77,7 +77,9 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
     notes,
     paymentAccountId,
     paymentAccountType,
-    posAssignedLocations,
+    // Always bind a concrete array before rendering the POS location picker.
+    // This also covers initial query hydration for cashier sessions.
+    posAssignedLocations: assignedPosLocations = [],
     posLocationsLoading,
     posSelectedLocation,
     posUser,
@@ -153,7 +155,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         };
         cell.alignment = { horizontal: "center" };
       });
-
       // ── Column widths ────────────────────────────────────────────────────────
       ws.getColumn(1).width = 5; // #
       ws.getColumn(2).width = 30; // Item
@@ -163,7 +164,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       ws.getColumn(6).width = 12; // Amt
       ws.getColumn(7).width = 10; // P/L
       ws.getColumn(8).width = 12; // T.P/L
-
       // ── Data rows ────────────────────────────────────────────────────────────
       validRows.forEach((row, i) => {
         const rateUSD = row.rateUSD ?? row.rate;
@@ -186,7 +186,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
           dataRow.getCell(8).font = { color: { argb: "FFDC2626" } };
         }
       });
-
       // ── Totals row ───────────────────────────────────────────────────────────
       const totalQty = validRows.reduce((s, r) => s + r.quantity, 0);
       const totalAmt = validRows.reduce((s, r) => s + r.amount, 0);
@@ -194,13 +193,11 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         const rateUSD = r.rateUSD ?? r.rate;
         return s + (rateUSD - (r.configuredPrice ?? 0)) * r.quantity;
       }, 0);
-
       const totRow = ws.addRow(["", "TOTAL", "", totalQty, "", totalAmt, "", totalTPL]);
       totRow.font = { bold: true };
       totRow.eachCell((cell) => {
         cell.border = { top: { style: "thin", color: { argb: "FF94A3B8" } } };
       });
-
       // ── Download ─────────────────────────────────────────────────────────────
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -213,7 +210,8 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       toast({ title: "Export failed", description: getErrorDetails(err).optionalMessage, variant: "destructive" });
     }
   }
-
+  // Never enable Update until the original receipt and its location are loaded.
+  const editNotReady = Boolean(editVoucherId && (!editVoucher || activeLocation?.id !== editVoucher.locationId));
   // ── Early returns ─────────────────────────────────────────────────────────
   if (posUser && posLocationsLoading) {
     return (
@@ -223,7 +221,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       </div>
     );
   }
-
   if (inventoryError) {
     return (
       <div className="p-4 md:p-6">
@@ -236,8 +233,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       </div>
     );
   }
-
-  if (posUser && !posLocationsLoading && posAssignedLocations.length === 0) {
+  if (posUser && !posLocationsLoading && assignedPosLocations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 gap-2">
         <p className="font-semibold">No location assigned</p>
@@ -288,7 +284,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         navigate={navigate}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         lastAutosaved={lastAutosaved}
         drafts={drafts}
@@ -305,9 +301,10 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
       <PosCheckoutStrip
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
@@ -408,9 +405,10 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       {/* ── Mobile layout ── */}
       <PosMobileLayout
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
@@ -443,7 +441,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         setNotes={setNotes}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         formatDisplayAmount={fmtAmount}
         isSpCompany={isSpCompany}
