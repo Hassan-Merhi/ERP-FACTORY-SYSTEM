@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "../shared/posZmwMoney";
+import { calculateZmwSaleAmounts, resolvePostedZmwUnitPrices, resolveZmwUnitPrice } from "../shared/posZmwMoney";
 import { posSaleLines } from "../server/services/pos/saleAccountingLines";
 import { buildErpVoucherEntries } from "../server/services/accounting/erpVoucherPosting";
 
@@ -29,6 +29,25 @@ describe("Zambia POS exact native Kwacha totals", () => {
     expect(resolveZmwUnitPrice(item, rate, true).toFixed(2)).toBe("5000.00");
     expect(calculateZmwSaleAmounts([item], rate, true).nativeTotal).toBe("5000.00");
     expect(() => calculateZmwSaleAmounts([item], rate)).toThrow("original Kwacha unit price");
+  });
+
+  it("reads cent-rounded legacy prices back as the whole Kwacha typed when that matches the posted total", () => {
+    const units = (lines: { quantity: number; rate: string }[], posted: string | null) =>
+      resolvePostedZmwUnitPrices(lines, "20.8", posted).map((unit) => unit.toFixed(2));
+    // K2,000 and 5 x K1,620 at 20.8 were stored as $96.15 and $77.88; the sale posted K10,100.
+    const legacy = [
+      { quantity: 1, rate: "96.150000" },
+      { quantity: 5, rate: "77.88" },
+    ];
+    expect(units(legacy, "10100.000000")).toEqual(["2000.00", "1620.00"]);
+    // A sale really typed at K1,999.92 stores the same $96.15 and posted K1,999.92: never K2,000.
+    expect(units([{ quantity: 1, rate: "96.150000" }], "1999.92")).toEqual(["1999.92"]);
+    // Without a posted total, or when neither reading matches it, the nearest ngwee stands.
+    expect(units(legacy, null)).toEqual(["1999.92", "1619.90"]);
+    expect(units(legacy, "9000.00")).toEqual(["1999.92", "1619.90"]);
+    // Six-decimal prices are exact and are never moved.
+    expect(units([{ quantity: 1, rate: "96.149519" }], "2000.00")).toEqual(["1999.91"]);
+    expect(resolveZmwUnitPrice({ quantity: 1, rate: "96.15" }, "20.8", true).toFixed(2)).toBe("1999.92");
   });
 
   it("rejects invalid native unit precision and quantity, rather than silently truncating", () => {

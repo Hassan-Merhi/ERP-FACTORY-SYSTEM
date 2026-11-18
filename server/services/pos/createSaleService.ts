@@ -370,7 +370,7 @@ export async function createPosSale(
           voucherId: txVoucher.id,
           stockItemId: item.stockItemId,
           quantity: inventoryQuantity(qty),
-          sellingPrice: inventoryMoney(sellingPrice),
+          sellingPrice: inventoryUnitCost(sellingPrice),
           costPrice: inventoryUnitCost(costPriceDecimal),
           totalSales: inventoryMoney(totalSales),
           totalCost: inventoryMoney(totalCost),

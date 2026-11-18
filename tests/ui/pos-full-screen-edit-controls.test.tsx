@@ -100,6 +100,46 @@ describe("full POS receipt edit protections", () => {
     );
   });
 
+  it("keeps a Kwacha sale in Kwacha when it is updated from the USD view", () => {
+    const mutate = vi.fn();
+    const toast = vi.fn();
+    const checkout = usePosCheckout({
+      activeLocation: depot,
+      editVoucherId: "123",
+      editVoucher: { locationId: depot.id, currency: "ZMW", exchangeRate: "20.8" },
+      posUser: { role: "POS" },
+      rows: [
+        // Untouched line: shown as $96.15, still carrying the exact K2,000 price.
+        { id: "1", itemName: "A", stockItemId: 55, salesItemId: 71, quantity: 1, rate: 96.15, rateUSD: 2000 / 20.8 },
+        // Line retyped in USD while viewing the sale in USD.
+        { id: "2", itemName: "B", stockItemId: 56, salesItemId: 72, quantity: 2, rate: 100, rateUSD: 100 },
+      ].map((row) => ({ ...row, amount: row.quantity * row.rate })),
+      isCreditSale: false,
+      paymentAccountType: "cash",
+      paymentAccountId: null,
+      selectedCustomerId: "",
+      notes: "",
+      saleDate: "2026-11-18",
+      activeCurrency: "USD",
+      exchangeRate: 20.8,
+      dailyExchangeRate: 20.8,
+      saveMutation: { mutate },
+      toast,
+    } as any);
+    checkout.handleSaveSale();
+    expect(toast).not.toHaveBeenCalled();
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: "ZMW",
+        exchangeRate: "20.8",
+        items: [
+          expect.objectContaining({ originalCurrencyRate: "2000.00", rate: "96.153846" }),
+          expect.objectContaining({ originalCurrencyRate: "2080.00", rate: "100.000000" }),
+        ],
+      })
+    );
+  });
+
   it("rejects a stale or mismatched location before sending an edit", () => {
     const mutate = vi.fn();
     const toast = vi.fn();
