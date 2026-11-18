@@ -84,6 +84,7 @@ export default function Settings() {
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
   const isDeveloperMode = effectiveRole === "Developer";
   const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
+  const canAccessAdminSections = canManageSessions && ["Admin", "Owner", "Developer"].includes(effectiveRole);
 
   const sidebarGroups = [
     {
@@ -141,18 +142,18 @@ export default function Settings() {
                 key: "automatic-priority-printing",
                 label: "Automatic Priority Printing",
                 icon: Printer,
-                devOnly: true,
+                adminOnly: true,
               },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
                 icon: Images,
                 href: "/factory/label-banners",
-                devOnly: true,
+                adminOnly: true,
               },
-              { key: "fx-rates", label: "FX Rates", icon: TrendingUp, devOnly: true },
+              { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
-                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, devOnly: true }]
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, adminOnly: true }]
                 : []),
             ]
           : [],
@@ -167,7 +168,7 @@ export default function Settings() {
     items.filter(
       (item) =>
         (!item.devOnly || isDeveloperMode) &&
-        (!item.adminOnly || canManageSessions) &&
+        (!item.adminOnly || canAccessAdminSections) &&
         (item.key !== "system" || canAccessSystemTools)
     );
   // Non-developers should never see headings with no accessible Settings pages.
@@ -288,18 +289,18 @@ export default function Settings() {
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
           {activeSection === "pos-setup" && isDeveloperMode && <PosSetupHub userRole={effectiveRole} />}
-          {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "automatic-priority-printing" && canAccessAdminSections && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
           )}
-          {activeSection === "fx-rates" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "fx-rates" && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">
               <FxRatesCard />
             </div>
           )}
           {activeSection === "company-timezone" &&
-            isDeveloperMode &&
+            canAccessAdminSections &&
             appMode === "factory" &&
             canManageCompanyTimezone && (
               <div className="space-y-5 max-w-2xl">

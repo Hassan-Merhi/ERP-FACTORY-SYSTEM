@@ -339,7 +339,6 @@ export default function FactoryShippingContainers() {
           allowNewOrder={Boolean(me?.role && !isExistingRecordReadOnlyRole(me.role))}
           showOrderValue={colVis.containerCost}
         />
-        {/* ── Compact search + controls ── */}
         <ShippingToolbar
           search={search}
           onSearch={setSearch}
@@ -364,7 +363,6 @@ export default function FactoryShippingContainers() {
           exportMenu={<ShippingListExport rows={filtered} colVis={colVis} period={{ from: dateFrom, to: dateTo }} />}
         />
 
-        {/* ── Filter Panel ── */}
         {showFilters && (
           <FilterPanel
             filterDocs={filterDocs}
