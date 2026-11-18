@@ -15,14 +15,7 @@ export interface GreenChat {
 
 /** Green API instance states returned by getStateInstance */
 export type GreenInstanceState =
-  | "authorized"
-  | "notAuthorized"
-  | "sleepMode"
-  | "starting"
-  | "yellowCard"
-  | "blocked"
-  | "suspended"
-  | "unknown";
+  "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
 
 /**
  * Call Green API's getStateInstance to get the real connection state.
