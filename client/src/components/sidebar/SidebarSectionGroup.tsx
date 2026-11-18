@@ -135,6 +135,8 @@ interface SidebarFlatLinkProps {
   badge?: number;
   testId: string;
   trailing?: ReactNode;
+  /** Overrides the path match for links that also own other routes (POS: `/` opens Containers). */
+  active?: boolean;
 }
 
 export function SidebarFlatLink({
@@ -145,13 +147,15 @@ export function SidebarFlatLink({
   badge,
   testId,
   trailing,
+  active,
 }: SidebarFlatLinkProps) {
   const [location] = useLocation();
-  const isActive = sidebarPathMatches(location, href);
+  const isActive = active ?? sidebarPathMatches(location, href);
   return (
     <Link
       href={href}
       data-testid={testId}
+      aria-current={isActive ? "page" : undefined}
       className={`${baseLinkClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
       {isActive && <ActiveRail color={color} />}

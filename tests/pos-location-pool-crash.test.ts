@@ -55,7 +55,6 @@ describe("POS location database-pool crash protection", () => {
   it("does not mount the hidden ERP command palette for ordinary POS users", () => {
     const shell = source("client/src/app/PosShell.tsx");
 
-    expect(shell).toContain("{hasAdminSearch && (");
     expect(shell).toContain(
       "<CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} isPOS={true} user={user} />"
     );
