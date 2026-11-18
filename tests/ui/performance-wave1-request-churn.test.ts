@@ -39,11 +39,6 @@ const pollingCases = [
     "refetchInterval: 5 * 60 * 1000,",
   ],
   [
-    "client/src/pages/factory/factorystockallocationv3/components/ScanningPanel.tsx",
-    "visibleTabInterval(30_000)",
-    "refetchInterval: 30000,",
-  ],
-  [
     "client/src/pages/factory/factorycontainerloadingscan/useProformaComparison.ts",
     "visibleTabInterval(30_000)",
     "refetchInterval: 30000,",

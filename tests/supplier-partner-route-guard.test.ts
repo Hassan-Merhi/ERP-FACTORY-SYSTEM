@@ -15,9 +15,7 @@ describe("Supplier Partner route boundary", () => {
     // still awaited before any route decision is resolved, so Supplier Partner
     // routes are never rejected mid-restoration.
     expect(authenticatedApp).toContain("const { selectedCompany, isLoading: companyLoading } = useCompany()");
-    expect(authenticatedApp).toContain(
-      "if (companyLoading || !selectedCompany) return <AppLoadingState />"
-    );
+    expect(authenticatedApp).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />");
     const companyGuard = authenticatedApp.indexOf("companyLoading || !selectedCompany");
     const routeResolution = authenticatedApp.indexOf("resolveAuthenticatedAppRoute({");
     expect(companyGuard).toBeGreaterThan(-1);
@@ -27,8 +25,8 @@ describe("Supplier Partner route boundary", () => {
     expect(routeGuard).toContain('decision = { kind: "redirect", to: "/tracking" }');
   });
 
-  it("uses the Supplier Partner overview as the stable namespace landing page", () => {
-    expect(erpRoutes).toContain('<Route path="/sp" component={SpOverview} />');
-    expect(routeGuard).not.toContain('to: "/sp/reports"');
+  it("keeps /sp as a namespace URL that lands on SP Reports now the Overview is retired", () => {
+    expect(erpRoutes).toContain('<Route path="/sp">\n        <Redirect replace to="/sp/reports" />');
+    expect(erpRoutes).toContain('<Route path="/sp/reports" component={SpReports} />');
   });
 });

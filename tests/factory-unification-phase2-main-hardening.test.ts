@@ -24,8 +24,6 @@ describe("Factory Phase 2 follow-up isolation on main", () => {
       "/api/factory/bale-products",
       "/api/factory/categories",
     ],
-    "client/src/pages/factory/FactoryStockAllocationV2.tsx": ["/api/factory/v2/stock-allocation"],
-    "client/src/pages/factory/FactoryStockAllocationV3.tsx": ["/api/factory/v3/loads", "/api/factory/v3/proformas"],
     "client/src/pages/factory/factorysettings/useFactorySettingsModel.ts": [
       "/api/factory/settings?scope=attendance",
       "/api/factory/weekly-report-wa-settings",

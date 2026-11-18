@@ -8,6 +8,7 @@ import { MapPin } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useEscapeBack } from "@/hooks/use-escape-back";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 
 export type DatePreset =
   "all" | "today" | "yesterday" | "this-month" | "last-1-month" | "last-6-months" | "this-year" | "custom";
@@ -199,10 +200,15 @@ export function useStockItemDetailState() {
 
   const handleSaleClick = (sale: Sale) => {
     if (!sale.voucherId) return;
-    if (isProperties) navigate(`/properties/vouchers/${sale.voucherId}/edit`);
-    else if (sale.posStation != null)
+    if (sale.posStation != null && !isProperties)
       navigate(`/pos-daybook?date=${sale.saleDate.split(" ")[0]}&voucherId=${sale.voucherId}`);
-    else navigate(`/vouchers/${sale.voucherId}/edit`);
+    else
+      navigate(
+        voucherEditPath(
+          { id: sale.voucherId, voucherType: "Sales" },
+          isProperties ? "/properties/vouchers" : "/vouchers"
+        )!
+      );
   };
   return {
     applyPreset,

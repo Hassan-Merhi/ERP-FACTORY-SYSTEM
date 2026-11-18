@@ -15,10 +15,8 @@ declare global {
 function getSupplierPartnerParent(pathname: string): string | null {
   const cleanPath = pathname.split("?")[0].split("#")[0];
 
-  if (cleanPath === "/sp/reports") return "/sp";
-  if (cleanPath === "/sp/opening-stock") return "/sp";
-  if (cleanPath === "/sp/aliases") return "/sp";
-  if (cleanPath === "/sp/setup") return "/sp";
+  // SP Reports is the Supplier Partner home; the old /sp Overview redirects there.
+  if (cleanPath === "/sp/setup") return "/sp/reports";
   if (cleanPath === "/sp/migration" || cleanPath === "/sp/gc-migration") {
     return "/sp/setup";
   }

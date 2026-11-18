@@ -65,6 +65,6 @@ describe("Properties Stock/OTW workspace", () => {
     expect(query).toContain("/properties/stock-query/");
     expect(detail).toContain('useRoute("/properties/stock-query/:id")');
     expect(detail).toContain('"/properties/stock?tab=query"');
-    expect(detail).toContain("/properties/vouchers/");
+    expect(detail).toContain('isProperties ? "/properties/vouchers" : "/vouchers"');
   });
 });

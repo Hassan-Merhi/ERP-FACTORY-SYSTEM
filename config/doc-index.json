@@ -668,6 +668,10 @@
     "docs/universal-excel-export/phase-9-appearance.md": "reference",
     "docs/universal-excel-export/phase-10-release-certification.md": "reference",
     "docs/archive/engineering/code-line-phase2-dead-code-re-audit-20261114.md": "record",
-    "docs/engineering/code-file-line-policy-phase1.md": "reference"
+    "docs/engineering/code-file-line-policy-phase1.md": "reference",
+    "docs/archive/type-env-phase1-inventory.md": "record",
+    "docs/archive/type-env-phase2-progress.md": "record",
+    "docs/archive/type-env-phase3-cleanup.md": "record",
+    "docs/archive/type-env-phase4-guards.md": "record"
   }
 }

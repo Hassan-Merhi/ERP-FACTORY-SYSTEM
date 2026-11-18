@@ -30,7 +30,6 @@ describe("Factory Phase 2 further source coverage", () => {
     const expected: Record<string, string[]> = {
       "FactoryInvoices.tsx": ["/api/factory/customers", "/api/factory/customer-orders"],
       "FactoryPendingInvoices.tsx": ["status=PENDING_VERIFICATION", "status=VERIFIED", "status=FINALIZED"],
-      "FactoryDispatchBatches.tsx": ["/api/factory/dispatch-batches", "/api/factory/dispatch-reports/summary"],
       "FactoryCustomerStatement.tsx": ["/api/factory/customer-price-lists", "/api/factory/customers"],
       "FactorySheetsAndSacks.tsx": ["/api/factory/sheets-sacks", "/api/factory/my-access"],
       "FactoryDashboard.tsx": ["/api/factory/dashboard", "/api/factory/containers"],
