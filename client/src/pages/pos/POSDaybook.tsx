@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useReactToPrint } from "react-to-print";
 import { addDays, format, isValid, parseISO } from "date-fns";
 import {
   ArrowRight,
-  BookOpen,
   ReceiptText,
-  Search,
   ShoppingCart,
   Snowflake,
-  ChevronLeft,
-  ChevronRight,
   DollarSign,
   Eye,
   EyeOff,
@@ -29,11 +25,24 @@ import "@/styles/pos-daybook-modern.css";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/PageHeader";
+import {
+  DaybookHeader,
+  DaybookKpiStrip,
+  DaybookPage,
+  DaybookResults,
+  DaybookShowHiddenButton,
+  DaybookTableState,
+} from "@/components/daybook/DaybookFrame";
+import { DaybookFilterBar } from "@/components/daybook/DaybookFilterBar";
+import { useDaybookDayKeys } from "@/components/daybook/useDaybookDayKeys";
+import { PaginationBar } from "@/components/PaginationBar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErpListTable } from "@/erp-core";
+import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PeriodFilter, type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
+import { type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -47,6 +56,8 @@ import { formatNumber } from "@/lib/formatNumber";
 import { sendInvoicePdfWithRetry } from "./utils/posPrintHelpers";
 import type { AuthMe } from "@shared/apiTypes";
 import type { Voucher, VoucherWithItems } from "./posdaybook/types";
+
+const POS_DAYBOOK_PAGE_SIZE = 100;
 
 const offscreenPrintStyle: React.CSSProperties = {
   position: "fixed",
@@ -117,7 +128,13 @@ export default function POSDaybook() {
   });
   const assignedLocationIds = useMemo(() => new Set(myLocations.map((location) => location.id)), [myLocations]);
 
-  const { data: vouchers = [], isLoading } = useQuery<Voucher[]>({
+  const {
+    data: vouchers = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Voucher[]>({
     queryKey: ["/api/vouchers", periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -166,6 +183,11 @@ export default function POSDaybook() {
       );
     return matchesKind && matchesSearch;
   });
+  const pagination = useClientTablePagination(searchedVouchers.length, POS_DAYBOOK_PAGE_SIZE);
+  const { resetPage } = pagination;
+  useEffect(() => {
+    resetPage();
+  }, [resetPage, periodFilter.fromDate, periodFilter.toDate, transactionKind, transactionSearch, showHidden]);
 
   const { data: voucherDetails, isLoading: detailsLoading } = useQuery<VoucherWithItems>({
     queryKey: selectedVoucher ? [`/api/vouchers/${selectedVoucher.id}`] : ["pos-daybook-no-selection"],
@@ -285,15 +307,16 @@ export default function POSDaybook() {
   const transfersOnly = filteredVouchers.filter((voucher) => voucher.voucherType !== "Sales");
   const totalSales = salesOnly.reduce((sum, voucher) => sum + Number(voucher.totalAmount || 0), 0);
 
-  const shiftDay = (days: number) => {
-    const from = addDays(new Date(`${periodFilter.fromDate}T00:00:00`), days);
-    const to = addDays(new Date(`${periodFilter.toDate}T00:00:00`), days);
-    setFilter("periodFilter", {
-      fromDate: format(from, "yyyy-MM-dd"),
-      toDate: format(to, "yyyy-MM-dd"),
-      preset: "custom",
-    });
-  };
+  const shiftDay = useCallback(
+    (days: number) =>
+      setFilter("periodFilter", (prev) => ({
+        fromDate: format(addDays(new Date(`${prev.fromDate}T00:00:00`), days), "yyyy-MM-dd"),
+        toDate: format(addDays(new Date(`${prev.toDate}T00:00:00`), days), "yyyy-MM-dd"),
+        preset: "custom",
+      })),
+    [setFilter]
+  );
+  useDaybookDayKeys(shiftDay);
 
   const subtitle =
     periodFilter.fromDate === periodFilter.toDate
@@ -305,11 +328,20 @@ export default function POSDaybook() {
     return fixed.endsWith(".00") ? fixed.slice(0, -3) : fixed;
   };
 
+  const kindLabels = { all: "All Types", sales: "Sales", transfers: "Transfers" } as const;
+  const searchTerm = transactionSearch.trim();
+  const clearAllFilters = () => {
+    resetFilters();
+    setTransactionSearch("");
+    setTransactionKind("all");
+  };
+  const kpiValue = (value: string) => (isLoading ? <Skeleton className="h-7 w-24" /> : value);
+  const showState = isLoadingUser || isLoading || isError || searchedVouchers.length === 0;
+
   return (
-    <div className="pos-daybook mx-auto w-full min-w-0 max-w-[1560px] space-y-5 pb-8" data-pos-daybook="modern">
-      <PageHeader
+    <DaybookPage className="mx-auto w-full max-w-[1560px] pb-8" data-pos-daybook="modern">
+      <DaybookHeader
         title="POS Daybook"
-        icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
         meta={
           <>
             <span>{subtitle}</span>
@@ -321,270 +353,233 @@ export default function POSDaybook() {
             )}
           </>
         }
+      />
+
+      <DaybookKpiStrip
+        label="Sales summary"
+        items={[
+          { id: "sales", label: "Sales", value: kpiValue(String(salesOnly.length)), icon: Package, tone: "count" },
+          {
+            id: "revenue",
+            label: "Total Revenue",
+            value: kpiValue(formatCashAmount(totalSales)),
+            icon: DollarSign,
+            tone: "value",
+          },
+          {
+            id: "average",
+            label: "Avg per Sale",
+            value: kpiValue(formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)),
+            icon: ReceiptText,
+            tone: "active",
+          },
+          {
+            id: "transfers",
+            label: "Transfers",
+            value: kpiValue(String(transfersOnly.length)),
+            icon: ArrowRight,
+            tone: "optional",
+          },
+        ]}
+      />
+
+      <DaybookFilterBar
+        period={periodFilter}
+        onPeriodChange={(next) => setFilter("periodFilter", next)}
+        periodTestId="pos-daybook-period-filter"
+        onPrevDay={() => shiftDay(-1)}
+        onNextDay={() => shiftDay(1)}
+        search={transactionSearch}
+        onSearchChange={setTransactionSearch}
+        searchPlaceholder="Search transactions..."
+        searchLabel="Search POS transactions"
+        searchTestId="pos-daybook-search"
+        activeCount={transactionKind !== "all" ? 1 : 0}
+        chips={[
+          ...(transactionKind !== "all"
+            ? [{ id: "type", label: kindLabels[transactionKind], onRemove: () => setTransactionKind("all") }]
+            : []),
+          ...(searchTerm
+            ? [{ id: "search", label: <>Search: {searchTerm}</>, onRemove: () => setTransactionSearch("") }]
+            : []),
+        ]}
+        hasActiveFilters={hasActiveFilters || !!searchTerm || transactionKind !== "all"}
+        onClearFilters={clearAllFilters}
+        data-testid="pos-daybook-filters"
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-xl"
-          onClick={() => shiftDay(-1)}
-          aria-label="Previous day"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <PeriodFilter
-          value={periodFilter}
-          onChange={(next) => setFilter("periodFilter", next)}
-          data-testid="pos-daybook-period-filter"
-        />
-        <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(1)} aria-label="Next day">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        {(hasActiveFilters || transactionSearch.trim() || transactionKind !== "all") && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl"
-            onClick={() => {
-              resetFilters();
-              setTransactionSearch("");
-              setTransactionKind("all");
-            }}
-            data-testid="button-reset-filters"
-          >
-            <X className="mr-1 h-4 w-4" />
-            Reset
-          </Button>
-        )}
-      </PageHeader>
+        <Select value={transactionKind} onValueChange={(value) => setTransactionKind(value as typeof transactionKind)}>
+          <SelectTrigger className="daybook-filter-control w-full" aria-label="Transaction type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="sales">Sales</SelectItem>
+            <SelectItem value="transfers">Transfers</SelectItem>
+          </SelectContent>
+        </Select>
+      </DaybookFilterBar>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Sales summary">
-        <Stat
-          label="Sales"
-          value={String(salesOnly.length)}
-          icon={<Package className="h-5 w-5" />}
-          tone="blue"
-          loading={isLoading}
-        />
-        <Stat
-          label="Total Revenue"
-          value={formatCashAmount(totalSales)}
-          icon={<DollarSign className="h-5 w-5" />}
-          tone="violet"
-          loading={isLoading}
-        />
-        <Stat
-          label="Avg per Sale"
-          value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)}
-          icon={<ReceiptText className="h-5 w-5" />}
-          tone="cyan"
-          loading={isLoading}
-        />
-        <Stat
-          label="Transfers"
-          value={String(transfersOnly.length)}
-          icon={<ArrowRight className="h-5 w-5" />}
-          tone="slate"
-          loading={isLoading}
-        />
-      </section>
-
-      <section className="pos-daybook-transactions" aria-label="Transactions">
-        <div className="pos-daybook-toolbar flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <h2 className="text-lg font-semibold tracking-tight">Transactions</h2>
-            <span className="pos-daybook-count rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
-              {searchedVouchers.length}
-            </span>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <label className="pos-daybook-search flex min-h-10 min-w-[170px] flex-1 items-center gap-2 rounded-xl px-3 sm:flex-none">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="search"
-                value={transactionSearch}
-                onChange={(event) => setTransactionSearch(event.target.value)}
-                aria-label="Search POS transactions"
-                placeholder="Search transactions..."
-                className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground sm:w-44"
-                data-testid="pos-daybook-search"
-              />
-            </label>
-            <div
-              className="pos-daybook-type-tabs flex shrink-0 items-center gap-0.5 rounded-xl p-1"
-              role="group"
-              aria-label="Transaction type"
-            >
-              {(["all", "sales", "transfers"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  aria-pressed={transactionKind === kind}
-                  className="pos-daybook-type-tab rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
-                  onClick={() => setTransactionKind(kind)}
-                >
-                  {kind === "all" ? "All" : kind === "sales" ? "Sales" : "Transfers"}
-                </button>
-              ))}
-            </div>
-            <Button
-              variant={showHidden ? "secondary" : "outline"}
-              size="sm"
-              className="min-h-10 rounded-xl"
-              onClick={() => setFilter("showHidden", (value) => !value)}
-              disabled={hiddenRowIds.size === 0}
-            >
-              {showHidden ? <Eye className="mr-1.5 h-4 w-4" /> : <EyeOff className="mr-1.5 h-4 w-4" />}
-              {showHidden ? "Showing hidden" : "Show hidden"}
-            </Button>
-          </div>
-        </div>
-
-        {isLoadingUser || isLoading ? (
-          <div className="space-y-2 p-4" role="status" aria-label="Loading transactions">
-            {[0, 1, 2].map((key) => (
-              <Skeleton key={key} className="h-14 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : searchedVouchers.length === 0 ? (
-          <div className="pos-daybook-empty flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
-            <span className="pos-daybook-empty-icon mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">
-              <ReceiptText className="h-8 w-8" aria-hidden="true" />
-            </span>
-            <h3 className="text-base font-semibold">
-              {visibleVouchers.length === 0 ? "No transactions found" : "No matching transactions"}
-            </h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              {visibleVouchers.length === 0
+      <DaybookResults
+        count={searchedVouchers.length}
+        tools={
+          <DaybookShowHiddenButton
+            showHidden={showHidden}
+            onToggle={() => setFilter("showHidden", (value) => !value)}
+            hiddenCount={hiddenRowIds.size}
+          />
+        }
+        footer={
+          !showState && (
+            <PaginationBar
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={searchedVouchers.length}
+              pageSize={pagination.pageSize}
+              onPageChange={pagination.setPage}
+              noun="transactions"
+            />
+          )
+        }
+      >
+        {showState ? (
+          <DaybookTableState
+            isLoading={isLoadingUser || isLoading}
+            errorMessage={isError ? (error instanceof Error ? error.message : "Failed to load POS transactions") : null}
+            onRetry={() => void refetch()}
+            isEmpty={searchedVouchers.length === 0}
+            emptyTitle={visibleVouchers.length === 0 ? "No transactions found" : "No matching transactions"}
+            emptyDescription={
+              visibleVouchers.length === 0
                 ? "There are no visible POS sales or transfers for the selected date."
-                : "Try a different search term or transaction type."}
-            </p>
-            {isPOS && (
-              <Button className="mt-5 rounded-xl shadow-sm" onClick={() => navigate("/pos")}>
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                New Sale
-              </Button>
-            )}
-          </div>
+                : "Try a different search term or transaction type."
+            }
+            emptyAction={
+              isPOS ? (
+                <Button className="mt-3 rounded-xl shadow-sm" onClick={() => navigate("/pos")}>
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  New Sale
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <div className="pos-daybook-table-wrap table-responsive">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">Time</TableHead>
-                  <TableHead className="whitespace-nowrap">Receipt #</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="hidden sm:table-cell">Location</TableHead>
-                  <TableHead className="whitespace-nowrap text-right">Amount</TableHead>
-                  <TableHead className="hidden md:table-cell">Notes</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {searchedVouchers.map((voucher) => {
-                  const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
-                  const canAct = isOwnVoucher;
-                  const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
-                  const isPrinting = printVoucherId === voucher.id;
-                  const isHidden = hiddenRowIds.has(voucher.id);
-                  return (
-                    <TableRow key={voucher.id} className={isHidden && showHidden ? "opacity-50" : ""}>
-                      <TableCell className="whitespace-nowrap text-xs font-medium tabular-nums">
-                        {voucher.createdAt && isValid(new Date(voucher.createdAt))
-                          ? format(new Date(voucher.createdAt), "MMM dd, hh:mm a")
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm font-semibold tabular-nums">
-                        {voucher.voucherNumber}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            voucher.voucherType === "Sales" ? "pos-daybook-sale-badge" : "pos-daybook-transfer-badge"
-                          }
-                        >
-                          {voucher.voucherType === "Sales" ? "Sale" : "Transfer"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {voucher.locationName || `Location ${voucher.locationId}`}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
-                        {formatCashAmount(Number(voucher.totalAmount || 0))}
-                      </TableCell>
-                      <TableCell
-                        className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
-                        title={voucher.description || ""}
+          <ErpListTable pageKey="pos-daybook" scrollLabel="POS daybook">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Time</TableHead>
+                <TableHead className="whitespace-nowrap">Receipt #</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="hidden sm:table-cell">Location</TableHead>
+                <TableHead className="whitespace-nowrap text-right">Amount</TableHead>
+                <TableHead className="hidden md:table-cell">Notes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pagination.paginate(searchedVouchers).map((voucher) => {
+                const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
+                const canAct = isOwnVoucher;
+                const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
+                const isPrinting = printVoucherId === voucher.id;
+                const isHidden = hiddenRowIds.has(voucher.id);
+                return (
+                  <TableRow key={voucher.id} className={isHidden && showHidden ? "opacity-50" : ""}>
+                    <TableCell className="whitespace-nowrap text-xs font-medium tabular-nums">
+                      {voucher.createdAt && isValid(new Date(voucher.createdAt))
+                        ? format(new Date(voucher.createdAt), "MMM dd, hh:mm a")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                      {voucher.voucherNumber}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          voucher.voucherType === "Sales" ? "pos-daybook-sale-badge" : "pos-daybook-transfer-badge"
+                        }
                       >
-                        {voucher.description || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          {voucher.voucherType === "Sales" && (
-                            <>
+                        {voucher.voucherType === "Sales" ? "Sale" : "Transfer"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {voucher.locationName || `Location ${voucher.locationId}`}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
+                      {formatCashAmount(Number(voucher.totalAmount || 0))}
+                    </TableCell>
+                    <TableCell
+                      className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
+                      title={voucher.description || ""}
+                    >
+                      {voucher.description || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        {voucher.voucherType === "Sales" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 rounded-lg"
+                              disabled={!canAct || isPrinting}
+                              onClick={() => setPrintVoucherId(voucher.id)}
+                              title={canAct ? "Print receipt" : "You can only print your own sales"}
+                              aria-label={`Print receipt ${voucher.voucherNumber}`}
+                            >
+                              <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
+                            </Button>
+                            {recordChanges.allowed && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-9 w-9 rounded-lg"
-                                disabled={!canAct || isPrinting}
-                                onClick={() => setPrintVoucherId(voucher.id)}
-                                title={canAct ? "Print receipt" : "You can only print your own sales"}
-                                aria-label={`Print receipt ${voucher.voucherNumber}`}
+                                disabled={!canAct || isSending}
+                                onClick={() => whatsappMutation.mutate(voucher)}
+                                title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
+                                aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
                               >
-                                <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
+                                <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
                               </Button>
-                              {recordChanges.allowed && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-9 w-9 rounded-lg"
-                                  disabled={!canAct || isSending}
-                                  onClick={() => whatsappMutation.mutate(voucher)}
-                                  title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
-                                  aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
-                                >
-                                  <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
-                                </Button>
-                              )}
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 rounded-lg"
-                            disabled={!canAct}
-                            onClick={() => canAct && setSelectedVoucher(voucher)}
-                            title={canAct ? "View full sale details" : "You can only view your own sales"}
-                            aria-label={`View ${voucher.voucherNumber}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 rounded-lg"
-                            onClick={() =>
-                              setHiddenRowIds((previous) => {
-                                const next = new Set(previous);
-                                if (next.has(voucher.id)) next.delete(voucher.id);
-                                else next.add(voucher.id);
-                                return next;
-                              })
-                            }
-                            title={isHidden ? "Unhide row" : "Hide row"}
-                            aria-label={`${isHidden ? "Unhide" : "Hide"} ${voucher.voucherNumber}`}
-                          >
-                            {isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                            )}
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg"
+                          disabled={!canAct}
+                          onClick={() => canAct && setSelectedVoucher(voucher)}
+                          title={canAct ? "View full sale details" : "You can only view your own sales"}
+                          aria-label={`View ${voucher.voucherNumber}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg"
+                          onClick={() =>
+                            setHiddenRowIds((previous) => {
+                              const next = new Set(previous);
+                              if (next.has(voucher.id)) next.delete(voucher.id);
+                              else next.add(voucher.id);
+                              return next;
+                            })
+                          }
+                          title={isHidden ? "Unhide row" : "Hide row"}
+                          aria-label={`${isHidden ? "Unhide" : "Hide"} ${voucher.voucherNumber}`}
+                        >
+                          {isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </ErpListTable>
         )}
-      </section>
+      </DaybookResults>
 
       <div style={offscreenPrintStyle} aria-hidden="true">
         <div ref={printRef} className="bg-white p-6 text-black">
@@ -793,43 +788,6 @@ export default function POSDaybook() {
           await optionalMutation.mutateAsync(optionalVoucher);
         }}
       />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-  loading,
-  tone,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  loading: boolean;
-  tone: "blue" | "violet" | "cyan" | "slate";
-}) {
-  return (
-    <div
-      className={`pos-daybook-stat pos-daybook-stat--${tone} relative min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
-        <span
-          className="pos-daybook-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-      </div>
-      {loading ? (
-        <Skeleton className="mt-4 h-7 w-24" />
-      ) : (
-        <p className="mt-4 truncate text-xl font-bold tracking-tight tabular-nums sm:text-2xl" title={value}>
-          {value}
-        </p>
-      )}
-    </div>
+    </DaybookPage>
   );
 }

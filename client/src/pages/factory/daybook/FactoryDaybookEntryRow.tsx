@@ -1,7 +1,8 @@
 /**
  * A single expanded daybook entry inside a condensed group row.
  *
- * Carries the per-entry action affordances unchanged: view details, the
+ * One table row in the shared Daybook table. Carries the per-entry action
+ * affordances unchanged: view details, the
  * container "pencil" jump, the source-record edit link, voucher void and the
  * admin hard-delete — including their exact visibility rules. When amounts are
  * hidden by ERP cost permissions only view/pencil remain, as before.
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/formatNumber";
 import { cn } from "@/lib/utils";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { currencySymbol, formatDaybookDescription, VOUCHER_TX_TYPES } from "./daybookUtils";
 import type { DaybookEntry, DisplayEntry } from "./types";
 import type { FactoryDaybookModel } from "./useFactoryDaybookModel";
@@ -34,15 +36,7 @@ function resolvePencilTarget(entry: DaybookEntry): string | null {
   return null;
 }
 
-export function FactoryDaybookEntryRow({
-  entry,
-  colsClass,
-  model,
-}: {
-  entry: DisplayEntry;
-  colsClass: string;
-  model: FactoryDaybookModel;
-}) {
+export function FactoryDaybookEntryRow({ entry, model }: { entry: DisplayEntry; model: FactoryDaybookModel }) {
   const { isAdminOrOwner, showAmounts, navigate } = model;
   const de = entry as DisplayEntry;
   const isBaleTransfer = entry.txType === "BALE_TRANSFER";
@@ -55,6 +49,7 @@ export function FactoryDaybookEntryRow({
     <Button
       size="icon"
       variant="ghost"
+      className="h-6 w-6"
       title="View details"
       aria-label="View details"
       onClick={(e) => {
@@ -71,6 +66,7 @@ export function FactoryDaybookEntryRow({
     <Button
       size="icon"
       variant="ghost"
+      className="h-6 w-6"
       title="Go to container"
       aria-label="Go to container"
       onClick={(e) => {
@@ -84,51 +80,43 @@ export function FactoryDaybookEntryRow({
   );
 
   return (
-    <div
+    <TableRow
       data-testid={`row-expanded-${entry.id}`}
       onClick={isBaleTransfer ? (e) => model.handleEntryClick(entry, e) : undefined}
-      // Phones stack the description above its amount and actions; sm+ keeps the column grid.
-      className={cn(
-        "flex w-full flex-wrap items-center border-t border-border/50 bg-muted/20 transition-colors hover:bg-blue-50/40 dark:bg-slate-900/40 dark:hover:bg-blue-500/5 sm:grid",
-        colsClass,
-        isBaleTransfer && "cursor-pointer"
-      )}
+      className={cn("bg-muted/20", isBaleTransfer && "cursor-pointer")}
     >
-      {/* Description — deep indent to align under badge */}
-      <div className="min-w-0 basis-full py-2 pl-8 pr-3 sm:basis-auto sm:pl-14 sm:pr-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span
-            className="min-w-0 wrap-break-word text-sm text-foreground sm:truncate"
-            title={formatDaybookDescription(entry)}
-          >
+      <TableCell className="sticky left-0 z-10 w-full max-w-0 overflow-hidden bg-inherit pl-16">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm" title={formatDaybookDescription(entry)}>
             {formatDaybookDescription(entry)}
           </span>
           {entry.optional && (
             <Badge
               variant="outline"
-              className="text-muted-foreground text-xs shrink-0"
+              className="shrink-0 text-xs text-muted-foreground"
               data-testid={`badge-optional-${entry.id}`}
             >
               Optional
             </Badge>
           )}
         </div>
-      </div>
-      {/* Empty count cell */}
-      <div className="hidden sm:block" />
-      {/* Amount + actions */}
-      {showAmounts ? (
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 py-1 pl-8 pr-2 sm:ml-0 sm:flex-nowrap sm:py-2 sm:pl-0">
-          <span className="text-sm font-mono font-medium">
-            {currencySymbol(entry.currencyCode)}
-            {formatNumber(parseFloat(entry.amountCurrency))}
-          </span>
+      </TableCell>
+      <TableCell />
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          {showAmounts && (
+            <span className="whitespace-nowrap font-mono text-sm tabular-nums">
+              {currencySymbol(entry.currencyCode)}
+              {formatNumber(parseFloat(entry.amountCurrency))}
+            </span>
+          )}
           {viewButton}
           {pencilButton}
-          {canEdit && (
+          {showAmounts && canEdit && (
             <Button
               size="icon"
               variant="ghost"
+              className="h-6 w-6"
               title="Edit"
               aria-label="Edit"
               onClick={(e) => {
@@ -140,10 +128,11 @@ export function FactoryDaybookEntryRow({
               <ExternalLink className="h-3 w-3" />
             </Button>
           )}
-          {isAdminOrOwner && isVoucherBacked && VOIDABLE_TX_TYPES.includes(entry.txType) && (
+          {showAmounts && isAdminOrOwner && isVoucherBacked && VOIDABLE_TX_TYPES.includes(entry.txType) && (
             <Button
               size="icon"
               variant="ghost"
+              className="h-6 w-6"
               title="Delete voucher and reverse accounting"
               aria-label="Delete voucher and reverse accounting"
               onClick={(e) => {
@@ -157,7 +146,8 @@ export function FactoryDaybookEntryRow({
           )}
           {/* Source-backed bonus rows use the reversal transaction, never hard delete.
           All other non-voucher rows retain their existing admin delete flow. */}
-          {isAdminOrOwner &&
+          {showAmounts &&
+            isAdminOrOwner &&
             entry.id > 0 &&
             entry.txType !== "SUPPLIER_FX_TRANSFER" &&
             entry.txType !== "PRODUCTION_TARGET_BONUS_REVERSAL" &&
@@ -166,10 +156,17 @@ export function FactoryDaybookEntryRow({
               <Button
                 size="icon"
                 variant="ghost"
-                title={entry.txType.startsWith("PRODUCTION_TARGET_")
-                  ? "Remove bonus payment and reverse accounting" : "Delete entry"}
-                aria-label={entry.txType.startsWith("PRODUCTION_TARGET_")
-                  ? "Remove bonus payment and reverse accounting" : "Delete entry"}
+                className="h-6 w-6"
+                title={
+                  entry.txType.startsWith("PRODUCTION_TARGET_")
+                    ? "Remove bonus payment and reverse accounting"
+                    : "Delete entry"
+                }
+                aria-label={
+                  entry.txType.startsWith("PRODUCTION_TARGET_")
+                    ? "Remove bonus payment and reverse accounting"
+                    : "Delete entry"
+                }
                 onClick={(e) => {
                   e.stopPropagation();
                   model.setDeleteEntry(de._source as DaybookEntry);
@@ -180,12 +177,7 @@ export function FactoryDaybookEntryRow({
               </Button>
             )}
         </div>
-      ) : (
-        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">
-          {viewButton}
-          {pencilButton}
-        </div>
-      )}
-    </div>
+      </TableCell>
+    </TableRow>
   );
 }

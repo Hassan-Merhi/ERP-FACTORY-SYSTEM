@@ -252,6 +252,21 @@ describe("FactoryDaybook page", () => {
     const heading = await screen.findByTestId("text-page-title");
     expect(heading).toHaveTextContent("Factory Daybook");
   });
+
+  it("opens the tab named in ?tab= once access is known and keeps it in the URL", async () => {
+    window.history.replaceState({}, "", "/factory/daybook?tab=activity");
+    try {
+      const { default: FactoryDaybook } = await import("@/pages/factory/FactoryDaybook");
+      renderWithProviders(<FactoryDaybook />, {
+        seedQueries: [[[FACTORY_MY_ACCESS_URL, mockCompany.selectedCompany.id], factoryFullAccess()]],
+      });
+      expect(await screen.findByRole("tab", { name: "Edits & Activity" })).toHaveAttribute("data-state", "active");
+      expect(screen.getByRole("tab", { name: "Transactions" })).toHaveAttribute("data-state", "inactive");
+      expect(window.location.search).toBe("?tab=activity");
+    } finally {
+      window.history.replaceState({}, "", "/");
+    }
+  });
 });
 
 // ── 13. PropertiesRentalShops (PropertyRentalPage shell) ─────────────────────

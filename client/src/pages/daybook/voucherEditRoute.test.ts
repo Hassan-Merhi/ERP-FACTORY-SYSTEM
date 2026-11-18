@@ -17,6 +17,13 @@ describe("voucherEditPath", () => {
     expect(voucherEditPath({ id: 4, voucherType: "Purchase" })).toBe("/vouchers?edit=4&tab=purchase&from=daybook");
   });
 
+  it("opens Sales/POS read-only outside ERP, where there is no POS editor", () => {
+    expect(voucherEditPath({ id: 3, voucherType: "Sales" }, "/properties/vouchers")).toBe(
+      "/properties/voucher-detail/3"
+    );
+    expect(voucherEditPath({ id: 4, voucherType: "POS" }, "/factory/vouchers")).toBe("/factory/voucher-detail/4");
+  });
+
   it("returns null for types without an editor", () => {
     expect(voucherEditPath({ id: 5, voucherType: "Opening" })).toBeNull();
   });
