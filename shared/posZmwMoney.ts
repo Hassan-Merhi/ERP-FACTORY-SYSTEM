@@ -31,7 +31,11 @@ function decimal(value: unknown, label: string): Decimal {
   return parsed;
 }
 
-export function resolveZmwUnitPrice(line: ZmwSaleLine, historicalRate: string | number, allowReconstruction = false): Decimal {
+export function resolveZmwUnitPrice(
+  line: ZmwSaleLine,
+  historicalRate: string | number,
+  allowReconstruction = false
+): Decimal {
   const rate = decimal(historicalRate, "USD/ZMW rate");
   if (!rate.gt(0)) throw new Error(zmwAmountErrorMessages.rateRequired);
   const supplied = line.originalCurrencyRate;
