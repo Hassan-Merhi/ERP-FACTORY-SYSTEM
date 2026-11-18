@@ -305,8 +305,10 @@ describe("location prices and stock group archives tenant scope", () => {
     const price = await agent
       .post(`/api/stock-items/${ctx.stockItemIds[1]}/location-prices`)
       .send({ locationId: foreignLocationId, sellingPrice: "9.99" });
-    expect(price.status).toBe(400);
-    expect(price.body.message).toBe("Location not found");
+    // The price-list write service refuses a foreign location outright, with a stable code.
+    expect(price.status).toBe(403);
+    expect(price.body.code).toBe("POS_PRICE_LOCATION_DENIED");
+    expect(price.body.message).toBe("Location does not belong to the active company.");
 
     const archive = await agent
       .post("/api/stock-group-archives")

@@ -320,6 +320,10 @@ describe("PaymentReceiptTab — FX wallet, direct EUR supplier payment", () => {
       />
     );
     expect(await screen.findByTestId("fx-payment-voucher")).toHaveTextContent("Amount exceeds supplier EUR balance.");
+    // An Optional EUR draft posts nothing, so the cap applies to the live payment: switch Optional off.
+    const optional = screen.getByTestId("checkbox-optional");
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));
     expect(screen.getByTestId("button-save-voucher")).toBeDisabled();
   });
 
