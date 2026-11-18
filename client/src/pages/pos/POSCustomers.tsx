@@ -10,10 +10,10 @@ import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Plus, Users, DollarSign } from "lucide-react";
 import { drCrClass } from "@/lib/formatNumber";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePOSCustomersState } from "./usePOSCustomersState";
 import { POSCustomersDialogSection } from "./POSCustomersDialogSection";
 import { POSCustomersSection } from "./POSCustomersSection";
+import { POSCustomerOpeningFields } from "./POSCustomerOpeningFields";
 
 export default function POSCustomers() {
   const {
@@ -100,51 +100,7 @@ export default function POSCustomers() {
                     </FormItem>
                   )}
                 />
-                {!isPosCashier && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                    control={form.control}
-                    name="openingBalance"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Opening Balance</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value || "0"}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            data-testid="input-opening-balance"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="openingBalanceSide"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Balance Side</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || "Dr"}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-balance-side">
-                              <SelectValue placeholder="Select side" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Dr">Dr (Debit)</SelectItem>
-                            <SelectItem value="Cr">Cr (Credit)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  </div>
-                )}
+                {!isPosCashier && <POSCustomerOpeningFields control={form.control} />}
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     type="button"
@@ -164,7 +120,6 @@ export default function POSCustomers() {
         </Dialog>
       </div>
 
-      {/* Stats pill bar */}
       <div className="flex flex-wrap gap-3">
         <div className="rounded-lg border bg-muted/40 px-4 py-2.5 flex items-center gap-3">
           <Users className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -194,7 +149,6 @@ export default function POSCustomers() {
         </div>
       </div>
 
-      {/* Search + customer table */}
       <div className="space-y-3">
         <DataTableToolbar
           search={searchQuery}
