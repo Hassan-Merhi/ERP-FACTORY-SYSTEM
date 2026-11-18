@@ -7,33 +7,14 @@ import { getErrorDetails } from "@shared/errorUtils";
  * inline price editor with its keyboard grid navigation, and the Excel
  * template/export/import flows.
  */
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  type ChangeEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useRef, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
-import type {
-  Location,
-  MasterItem,
-  MasterPriceListResponse,
-  POSPriceListProps,
-  PriceListItem,
-  PriceListRow,
-} from "./types";
-import { ALL_LOCATIONS_ID } from "./utils";
+import { getDefaultPeriodValue } from "@/components/ui/period-filter";
+import type { MasterItem, POSPriceListProps } from "./types";
 import { buildPosPriceListExportRow } from "./posPriceListExportRow";
+import { usePosPriceListDataModel } from "./usePosPriceListDataModel";
 
-const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
+export const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
 
 export type ImportPreviewRow = {
   barcode: string;
@@ -42,363 +23,18 @@ export type ImportPreviewRow = {
 };
 
 export function usePosPriceListModel({ posUser }: POSPriceListProps) {
-  const { formatAmount } = useCurrencyContext();
-  const { toast } = useToast();
-  const recordChanges = useExistingRecordChangeAccess();
-  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-  const [groupFilter, setGroupFilter] = useState<string>("all");
-  const [salesPeriod, setSalesPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
-  const [editingItem, setEditingItem] = useState<{ stockItemId: number; locationId: number; value: string } | null>(
-    null
-  );
-  const [showUnpriced, setShowUnpriced] = useState(false);
-  const [hideZeroQty, setHideZeroQty] = useState(false);
-  const [showZeroQty, setShowZeroQty] = useState(false);
-  const [hiddenUnpricedGroups, setHiddenUnpricedGroups] = useState<Set<string>>(new Set());
-  const [hiddenLocations, setHiddenLocations] = useState<Set<number>>(new Set());
-  const inputRef = useRef<HTMLInputElement>(null);
-  const editingItemRef = useRef(editingItem);
-  useEffect(() => {
-    editingItemRef.current = editingItem;
-  }, [editingItem]);
-  useEffect(() => {
-    if (editingItem) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [editingItem]);
-  const lastSavedRef = useRef<{ stockItemId: number; locationId: number } | null>(null);
-  const skipBlurSaveRef = useRef(false);
-  // A navigation blur may be ignored once, but a later manual blur must still save.
-  useEffect(() => {
-    skipBlurSaveRef.current = false;
-  }, [editingItem?.stockItemId, editingItem?.locationId]);
+  const p = usePosPriceListDataModel({ posUser });
 
-  const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
-  const isPrivileged = PRIVILEGED_ROLES.includes(currentUser?.role || "");
-
-  const { data: posAssignedLocations = [], isLoading: posLocationsLoading } = useQuery<Location[]>({
-    queryKey: ["/api/my-locations"],
-    enabled: !!posUser,
-  });
-
-  const { data: allLocations = [], isLoading: allLocationsLoading } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
-    enabled: !posUser,
-  });
-
-  const locations = posUser ? posAssignedLocations : allLocations;
-  const locationsLoading = posUser ? posLocationsLoading : allLocationsLoading;
-
-  useEffect(() => {
-    if (locations.length === 1 && selectedLocationId === null) {
-      setSelectedLocationId(locations[0].id);
-    }
-  }, [locations, selectedLocationId]);
-
-  const isAllMode = selectedLocationId === ALL_LOCATIONS_ID;
-
-  // ── Single-location price list ──────────────────────────────────────────────
-  const {
-    data: priceList = [],
-    isLoading: priceListLoading,
-    isError: priceListError,
-    error: priceListErrorObj,
-  } = useQuery<PriceListItem[]>({
-    queryKey: ["/api/pos/price-list", selectedLocationId, salesPeriod.fromDate, salesPeriod.toDate],
-    queryFn: async () => {
-      const params = new URLSearchParams({ locationId: String(selectedLocationId) });
-      if (salesPeriod.fromDate) params.set("fromDate", salesPeriod.fromDate);
-      if (salesPeriod.toDate) params.set("toDate", salesPeriod.toDate);
-      const res = await fetch(`/api/pos/price-list?${params.toString()}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "Unknown error" }));
-        throw new Error(body.message || "Failed to load price list");
-      }
-      return res.json();
-    },
-    enabled: !!selectedLocationId && !isAllMode,
-  });
-
-  // ── All-masters price list ──────────────────────────────────────────────────
-  const {
-    data: mastersData,
-    isLoading: mastersLoading,
-    isError: mastersError,
-    error: mastersErrorObj,
-  } = useQuery<MasterPriceListResponse>({
-    queryKey: ["/api/pos/price-list-by-masters"],
-    queryFn: async () => {
-      const res = await fetch("/api/pos/price-list-by-masters", { credentials: "include" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "Unknown error" }));
-        throw new Error(body.message || "Failed to load price list");
-      }
-      return res.json();
-    },
-    enabled: isAllMode,
-  });
-
-  const masters = useMemo(() => mastersData?.masters ?? [], [mastersData?.masters]);
-  const masterItems = useMemo(() => mastersData?.items ?? [], [mastersData?.items]);
-
-  // ── Merged state ────────────────────────────────────────────────────────────
-  const isLoading = isAllMode ? mastersLoading : priceListLoading;
-  const isError = isAllMode ? mastersError : priceListError;
-  const error = isAllMode ? mastersErrorObj : priceListErrorObj;
-
-  const visibleMasters = useMemo(() => {
-    if (!isAllMode) return masters;
-    return masters.filter((m) => !hiddenLocations.has(m.id));
-  }, [isAllMode, masters, hiddenLocations]);
-
-  const locationPricedList = useMemo<PriceListRow[]>(() => {
-    if (isAllMode) return masterItems;
-    if (!posUser) return priceList;
-    return priceList.filter((item) => {
-      // Keep the usual POS view limited to stocked items with a custom price.
-      if (item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0) {
-        return true;
-      }
-      // "Show 0 Qty" also exposes priced items with no stock at this location.
-      // The base-price fallback is valid here; unpriced items remain hidden.
-      return showZeroQty && Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0;
-    });
-  }, [priceList, masterItems, posUser, isAllMode, showZeroQty]);
-
-  const stockGroups = useMemo(() => {
-    const groups = new Set<string>();
-    locationPricedList.forEach((item) => {
-      if (item.stockGroupName) groups.add(item.stockGroupName);
-    });
-    return Array.from(groups).sort();
-  }, [locationPricedList]);
-
-  const isItemUnpriced = useCallback(
-    (item: PriceListRow): boolean => {
-      if (isAllMode) {
-        const hasBase = item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0;
-        if (hasBase) return false; // base price covers all locations
-        const masterPrices = "masterPrices" in item ? item.masterPrices : undefined;
-        const allMasterPrices = masterPrices ? Object.values(masterPrices) : [];
-        if (allMasterPrices.length === 0) return true;
-        const allHavePrice = allMasterPrices.every((p) => p && parseFloat(p) > 0);
-        return !allHavePrice; // unpriced until every location has a price
-      }
-      const sellingPrice = "sellingPrice" in item ? item.sellingPrice : undefined;
-      return !sellingPrice || parseFloat(sellingPrice) === 0;
-    },
-    [isAllMode]
-  );
-
-  const unpricedCount = useMemo(
-    () => locationPricedList.filter(isItemUnpriced).length,
-    [locationPricedList, isItemUnpriced]
-  );
-
-  // Groups that have at least one unpriced item, with their counts — used for the chip picker
-  const unpricedByGroup = useMemo<{ name: string; count: number }[]>(() => {
-    if (!showUnpriced) return [];
-    const map = new Map<string, number>();
-    for (const item of locationPricedList) {
-      if (!isItemUnpriced(item)) continue;
-      const g = item.stockGroupName || "(No Group)";
-      map.set(g, (map.get(g) || 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [showUnpriced, locationPricedList, isItemUnpriced]);
-
-  const itemQty = useCallback(
-    (item: PriceListRow): number => {
-      const rawQty = isAllMode ? item.totalQuantity : item.quantity;
-      const parsed = Number(rawQty ?? 0);
-      return Number.isFinite(parsed) ? parsed : 0;
-    },
-    [isAllMode]
-  );
-
-  const zeroQtyCount = useMemo(() => {
-    if (posUser && !isAllMode) {
-      // Count the additional zero-stock, priced rows even before they are shown.
-      return priceList.filter(
-        (item) => Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0
-      ).length;
-    }
-    return locationPricedList.filter((item) => itemQty(item) === 0).length;
-  }, [itemQty, locationPricedList, priceList, posUser, isAllMode]);
-
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return locationPricedList.filter((item) => {
-      const matchesSearch =
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        (item.code && item.code.toLowerCase().includes(q)) ||
-        (item.stockGroupName && item.stockGroupName.toLowerCase().includes(q));
-      const matchesGroup = showUnpriced
-        ? !hiddenUnpricedGroups.has(item.stockGroupName || "(No Group)")
-        : groupFilter === "all" || item.stockGroupName === groupFilter;
-      const matchesUnpriced = !showUnpriced || isItemUnpriced(item);
-      const matchesQty = !hideZeroQty || itemQty(item) !== 0;
-      return matchesSearch && matchesGroup && matchesUnpriced && matchesQty;
-    });
-  }, [
-    search,
-    locationPricedList,
-    showUnpriced,
-    hiddenUnpricedGroups,
-    groupFilter,
-    isItemUnpriced,
-    hideZeroQty,
-    itemQty,
-  ]);
-
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId);
-
-  const updatePriceMutation = useMutation({
-    mutationFn: async ({
-      stockItemId,
-      locationId,
-      sellingPrice,
-    }: {
-      stockItemId: number;
-      locationId: number;
-      sellingPrice: string;
-    }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("POST", `/api/stock-items/${stockItemId}/location-prices`, {
-        locationId,
-        sellingPrice,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "Failed to update price" }));
-        throw new Error(body.message || "Failed to update price");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      if (isAllMode) {
-        queryClient.invalidateQueries({ queryKey: ["/api/pos/price-list-by-masters"] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/pos/price-list", selectedLocationId] });
-      }
-      toast({ title: "Price updated" });
-      const current = editingItemRef.current;
-      const lastSaved = lastSavedRef.current;
-      if (
-        current &&
-        lastSaved &&
-        current.stockItemId === lastSaved.stockItemId &&
-        current.locationId === lastSaved.locationId
-      ) {
-        setEditingItem(null);
-      }
-      lastSavedRef.current = null;
-    },
-    onError: (err: Error) => {
-      toast({ title: "Update failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
-    if (posUser || !recordChanges.allowed) return;
-    lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
-    const hasValue = currentPrice && parseFloat(currentPrice) > 0;
-    setEditingItem({ stockItemId, locationId, value: hasValue ? currentPrice : "" });
-  };
-
-  /** Price shown for an item in a given master column (falls back to the base price). */
-  const masterPriceFor = (item: PriceListRow, locationId: number): string | null =>
-    item.masterPrices?.[locationId] ?? item.baseSellingPrice ?? null;
-
-  const editCell = (stockItemId: number, locationId: number, price: string | null | undefined) => {
-    const hasValue = price && parseFloat(price) > 0;
-    setEditingItem({ stockItemId, locationId, value: hasValue ? price : "" });
-  };
-
-  const navigateEdit = (direction: "up" | "down") => {
-    const current = editingItemRef.current;
-    if (!current) return;
-    const items = filteredItems;
-    const idx = items.findIndex((i) => i.stockItemId === current.stockItemId);
-    if (idx === -1) return;
-    const nextIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (nextIdx < 0 || nextIdx >= items.length) return;
-    const nextItem = items[nextIdx];
-    const nextPrice = isAllMode ? masterPriceFor(nextItem, current.locationId) : nextItem.sellingPrice;
-    editCell(nextItem.stockItemId, current.locationId, nextPrice);
-  };
-
-  const navigateHorizontal = (direction: "left" | "right") => {
-    const current = editingItemRef.current;
-    if (!current) return;
-    if (!isAllMode) {
-      // Single-location mode: left/right behaves like up/down
-      navigateEdit(direction === "left" ? "up" : "down");
-      return;
-    }
-    const items = filteredItems;
-    const idx = items.findIndex((i) => i.stockItemId === current.stockItemId);
-    if (idx === -1) return;
-    const masterIdx = visibleMasters.findIndex((m) => m.id === current.locationId);
-    if (masterIdx === -1) return;
-    if (direction === "left") {
-      if (masterIdx > 0) {
-        const prevMaster = visibleMasters[masterIdx - 1];
-        editCell(current.stockItemId, prevMaster.id, masterPriceFor(items[idx], prevMaster.id));
-      } else if (idx > 0) {
-        const prevItem = items[idx - 1];
-        const lastMaster = visibleMasters[visibleMasters.length - 1];
-        editCell(prevItem.stockItemId, lastMaster.id, masterPriceFor(prevItem, lastMaster.id));
-      } else {
-        return;
-      }
-    } else {
-      // direction === "right"
-      if (masterIdx < visibleMasters.length - 1) {
-        const nextMaster = visibleMasters[masterIdx + 1];
-        editCell(current.stockItemId, nextMaster.id, masterPriceFor(items[idx], nextMaster.id));
-      } else if (idx < items.length - 1) {
-        const nextItem = items[idx + 1];
-        const firstMaster = visibleMasters[0];
-        editCell(nextItem.stockItemId, firstMaster.id, masterPriceFor(nextItem, firstMaster.id));
-      } else {
-        return;
-      }
-    }
-  };
-
-  const commitEdit = (): boolean => {
-    if (!editingItem || updatePriceMutation.isPending) return false;
-    const val = editingItem.value.trim();
-    if (!val || !Number.isFinite(Number(val)) || Number(val) < 0) {
-      toast({ title: "Invalid price", description: "Enter a valid number.", variant: "destructive" });
-      return false;
-    }
-    lastSavedRef.current = { stockItemId: editingItem.stockItemId, locationId: editingItem.locationId };
-    updatePriceMutation.mutate({
-      stockItemId: editingItem.stockItemId,
-      locationId: editingItem.locationId,
-      sellingPrice: val,
-    });
-    return true;
-  };
-
-  const cancelEdit = () => setEditingItem(null);
+  const cancelEdit = () => p.setEditingItem(null);
 
   const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
       // Save first, then move right to the next location price (or down
       // to the next product when there is only one editable price column).
-      skipBlurSaveRef.current = true;
-      if (commitEdit()) navigateHorizontal("right");
-      else skipBlurSaveRef.current = false;
+      p.skipBlurSaveRef.current = true;
+      if (p.commitEdit()) p.navigateHorizontal("right");
+      else p.skipBlurSaveRef.current = false;
       return;
     }
     if (e.key === "Escape") {
@@ -409,34 +45,34 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     const vertical = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : null;
     if (vertical) {
       e.preventDefault();
-      skipBlurSaveRef.current = true;
-      commitEdit();
-      navigateEdit(vertical);
+      p.skipBlurSaveRef.current = true;
+      p.commitEdit();
+      p.navigateEdit(vertical);
       return;
     }
     const horizontal = e.key === "ArrowLeft" ? "left" : e.key === "ArrowRight" ? "right" : null;
     if (horizontal) {
       e.preventDefault();
-      skipBlurSaveRef.current = true;
-      commitEdit();
-      navigateHorizontal(horizontal);
+      p.skipBlurSaveRef.current = true;
+      p.commitEdit();
+      p.navigateHorizontal(horizontal);
     }
   };
 
   const handleBlur = () => {
-    if (skipBlurSaveRef.current) {
-      skipBlurSaveRef.current = false;
+    if (p.skipBlurSaveRef.current) {
+      p.skipBlurSaveRef.current = false;
       return;
     }
-    const current = editingItemRef.current;
+    const current = p.editingItemRef.current;
     if (!current) return;
     const val = current.value.trim();
     if (!val || isNaN(parseFloat(val))) {
       cancelEdit();
       return;
     }
-    lastSavedRef.current = { stockItemId: current.stockItemId, locationId: current.locationId };
-    updatePriceMutation.mutate({
+    p.lastSavedRef.current = { stockItemId: current.stockItemId, locationId: current.locationId };
+    p.updatePriceMutation.mutate({
       stockItemId: current.stockItemId,
       locationId: current.locationId,
       sellingPrice: val,
@@ -445,8 +81,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
 
   const canEdit = !posUser;
   // Price edits and imports change existing items; read-only roles keep the view filters only.
-  const canEditPrices = canEdit && recordChanges.allowed;
-  const showCostPrice = (isPrivileged || currentUser?.role === "View Only") && !posUser;
+  const canEditPrices = canEdit && p.recordChanges.allowed;
+  const showCostPrice = (p.isPrivileged || p.currentUser?.role === "View Only") && !posUser;
 
   const [exporting, setExporting] = useState(false);
 
@@ -458,16 +94,16 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const downloadTemplate = async () => {
-    if (!isAllMode || masters.length === 0) return;
+    if (!p.isAllMode || p.masters.length === 0) return;
     const XLSX = await import("@/lib/excelHelper");
-    const rows = masterItems.map((item: MasterItem) => {
+    const rows = p.masterItems.map((item: MasterItem) => {
       const row: Record<string, unknown> = {
         Code: item.code || "",
         "Item Name": item.name,
         Group: item.stockGroupName || "",
       };
-      for (const m of masters) {
-        const price = masterPriceFor(item, m.id);
+      for (const m of p.masters) {
+        const price = p.masterPriceFor(item, m.id);
         row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
       }
       return row;
@@ -490,16 +126,16 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rawRows = utils.sheet_to_json(ws, { defval: "" });
       if (rawRows.length === 0) {
-        toast({ title: "Empty file", description: "The file has no data rows.", variant: "destructive" });
+        p.toast({ title: "Empty file", description: "The file has no data rows.", variant: "destructive" });
         return;
       }
 
       // Build locationName → locationId map from current masters
       const nameToId = new Map<string, number>();
-      for (const m of masters) nameToId.set(m.name.toLowerCase().trim(), m.id);
+      for (const m of p.masters) nameToId.set(m.name.toLowerCase().trim(), m.id);
       const locationCols = Object.keys(rawRows[0]).filter((col) => nameToId.has(col.toLowerCase().trim()));
       if (locationCols.length === 0) {
-        toast({
+        p.toast({
           title: "No location columns found",
           description: "Make sure you're uploading the template downloaded from this page.",
           variant: "destructive",
@@ -527,7 +163,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         if (changes.length > 0) preview.push({ barcode, name, changes });
       }
       if (preview.length === 0) {
-        toast({
+        p.toast({
           title: "No prices to update",
           description: "All price cells in the file are blank. Fill in at least one price and try again.",
           variant: "destructive",
@@ -537,7 +173,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       setImportPreview(preview);
       setImportDialogOpen(true);
     } catch (err) {
-      toast({
+      p.toast({
         title: "Could not read file",
         description: getErrorDetails(err).optionalMessage || "Make sure it is a valid .xlsx file.",
         variant: "destructive",
@@ -546,7 +182,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   const handleImportSubmit = async () => {
-    if (importPreview.length === 0 || !recordChanges.allowed) return;
+    if (importPreview.length === 0 || !p.recordChanges.allowed) return;
     setImporting(true);
     try {
       const prices: { barcode: string; sellingPrice: string; locationId: number }[] = [];
@@ -557,13 +193,13 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       }
       const res = await apiRequest("POST", "/api/stock-items/bulk-update-prices", { prices });
       const data = await res.json();
-      toast({ title: "Price list uploaded", description: data.message || `Updated ${importPreview.length} items.` });
+      p.toast({ title: "Price list uploaded", description: data.message || `Updated ${importPreview.length} items.` });
       setImportDialogOpen(false);
       setImportPreview([]);
       queryClient.invalidateQueries({ queryKey: ["/api/pos/price-list-by-masters"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/price-list", selectedLocationId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/price-list", p.selectedLocationId] });
     } catch (err) {
-      toast({
+      p.toast({
         title: "Upload failed",
         description: getErrorDetails(err).message || "Something went wrong.",
         variant: "destructive",
@@ -584,16 +220,21 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   const exportToExcel = async () => {
-    if (filteredItems.length === 0) return;
+    if (p.filteredItems.length === 0) return;
     setExporting(true);
     try {
-      const rows = filteredItems.map((item) =>
-        buildPosPriceListExportRow(item, { showCostPrice, isAllMode, masters, masterPriceFor })
+      const rows = p.filteredItems.map((item) =>
+        buildPosPriceListExportRow(item, {
+          showCostPrice,
+          isAllMode: p.isAllMode,
+          masters: p.masters,
+          masterPriceFor: p.masterPriceFor,
+        })
       );
 
-      const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
-      const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
-      const searchPart = search.trim() ? ` search ${search.trim()}` : "";
+      const locationLabel = p.isAllMode ? "all locations" : (p.selectedLocation?.name ?? "unknown");
+      const filterPart = p.showUnpriced ? " unpriced" : p.groupFilter !== "all" ? ` ${p.groupFilter}` : "";
+      const searchPart = p.search.trim() ? ` search ${p.search.trim()}` : "";
       const dateStr = new Date().toLocaleDateString("en-CA");
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
@@ -602,8 +243,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         "Item Name",
         "Group",
         ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
-        ...(isAllMode
-          ? ["Total Qty", ...masters.map((master) => master.name)]
+        ...(p.isAllMode
+          ? ["Total Qty", ...p.masters.map((master) => master.name)]
           : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
       ];
       const types: Record<string, "auto" | "money" | "decimal"> = {};
@@ -613,8 +254,10 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       await exportOperationalWorkbook({
         title: "POS Price List",
         fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",
-        mode: isAllMode ? "import-template" : "report",
-        filters: [{ label: "Location", value: isAllMode ? "All Locations" : (selectedLocation?.name ?? "Unknown") }],
+        mode: p.isAllMode ? "import-template" : "report",
+        filters: [
+          { label: "Location", value: p.isAllMode ? "All Locations" : (p.selectedLocation?.name ?? "Unknown") },
+        ],
         sheets: [
           {
             name: "Price List",
@@ -632,33 +275,33 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   const selectLocation = (id: number) => {
-    setSelectedLocationId(id);
-    setSearch("");
-    setGroupFilter("all");
-    setEditingItem(null);
-    setShowUnpriced(false);
-    setShowZeroQty(false);
-    setHiddenUnpricedGroups(new Set());
+    p.setSelectedLocationId(id);
+    p.setSearch("");
+    p.setGroupFilter("all");
+    p.setEditingItem(null);
+    p.setShowUnpriced(false);
+    p.setShowZeroQty(false);
+    p.setHiddenUnpricedGroups(new Set());
   };
 
   const clearFilters = () => {
-    setSearch("");
-    setGroupFilter("all");
-    setShowUnpriced(false);
-    setHideZeroQty(false);
-    setShowZeroQty(false);
-    setHiddenUnpricedGroups(new Set());
-    setSalesPeriod(getDefaultPeriodValue("all_time"));
+    p.setSearch("");
+    p.setGroupFilter("all");
+    p.setShowUnpriced(false);
+    p.setHideZeroQty(false);
+    p.setShowZeroQty(false);
+    p.setHiddenUnpricedGroups(new Set());
+    p.setSalesPeriod(getDefaultPeriodValue("all_time"));
   };
 
   const toggleUnpriced = () => {
-    setShowUnpriced((v) => !v);
-    setHiddenUnpricedGroups(new Set());
-    setGroupFilter("all");
+    p.setShowUnpriced((v) => !v);
+    p.setHiddenUnpricedGroups(new Set());
+    p.setGroupFilter("all");
   };
 
   const toggleHiddenLocation = (id: number) =>
-    setHiddenLocations((prev) => {
+    p.setHiddenLocations((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -666,7 +309,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     });
 
   const toggleHiddenUnpricedGroup = (name: string) =>
-    setHiddenUnpricedGroups((prev) => {
+    p.setHiddenUnpricedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
@@ -677,60 +320,60 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     posUser,
     canEdit,
     canEditPrices,
-    canChangeExistingRecords: recordChanges.allowed,
+    canChangeExistingRecords: p.recordChanges.allowed,
     showCostPrice,
-    formatAmount,
+    formatAmount: p.formatAmount,
     // locations
-    locations,
-    locationsLoading,
-    selectedLocationId,
-    selectedLocation,
+    locations: p.locations,
+    locationsLoading: p.locationsLoading,
+    selectedLocationId: p.selectedLocationId,
+    selectedLocation: p.selectedLocation,
     selectLocation,
-    isAllMode,
-    masters,
-    visibleMasters,
-    hiddenLocations,
-    setHiddenLocations,
+    isAllMode: p.isAllMode,
+    masters: p.masters,
+    visibleMasters: p.visibleMasters,
+    hiddenLocations: p.hiddenLocations,
+    setHiddenLocations: p.setHiddenLocations,
     toggleHiddenLocation,
     // data
-    isLoading,
-    isError,
-    error,
-    locationPricedList,
-    filteredItems,
-    stockGroups,
-    isItemUnpriced,
-    unpricedCount,
-    unpricedByGroup,
-    masterPriceFor,
+    isLoading: p.isLoading,
+    isError: p.isError,
+    error: p.error,
+    locationPricedList: p.locationPricedList,
+    filteredItems: p.filteredItems,
+    stockGroups: p.stockGroups,
+    isItemUnpriced: p.isItemUnpriced,
+    unpricedCount: p.unpricedCount,
+    unpricedByGroup: p.unpricedByGroup,
+    masterPriceFor: p.masterPriceFor,
     // filters
-    search,
-    setSearch,
-    groupFilter,
-    setGroupFilter,
-    salesPeriod,
-    setSalesPeriod,
-    showUnpriced,
+    search: p.search,
+    setSearch: p.setSearch,
+    groupFilter: p.groupFilter,
+    setGroupFilter: p.setGroupFilter,
+    salesPeriod: p.salesPeriod,
+    setSalesPeriod: p.setSalesPeriod,
+    showUnpriced: p.showUnpriced,
     toggleUnpriced,
-    hideZeroQty,
-    setHideZeroQty,
-    showZeroQty,
-    setShowZeroQty,
-    zeroQtyCount,
-    hiddenUnpricedGroups,
-    setHiddenUnpricedGroups,
+    hideZeroQty: p.hideZeroQty,
+    setHideZeroQty: p.setHideZeroQty,
+    showZeroQty: p.showZeroQty,
+    setShowZeroQty: p.setShowZeroQty,
+    zeroQtyCount: p.zeroQtyCount,
+    hiddenUnpricedGroups: p.hiddenUnpricedGroups,
+    setHiddenUnpricedGroups: p.setHiddenUnpricedGroups,
     toggleHiddenUnpricedGroup,
     clearFilters,
     // inline editing
-    editingItem,
-    setEditingItem,
-    inputRef,
-    startEdit,
-    commitEdit,
+    editingItem: p.editingItem,
+    setEditingItem: p.setEditingItem,
+    inputRef: p.inputRef,
+    startEdit: p.startEdit,
+    commitEdit: p.commitEdit,
     cancelEdit,
     handleKeyDown,
     handleBlur,
-    updatePriceMutation,
+    updatePriceMutation: p.updatePriceMutation,
     // excel
     exporting,
     exportToExcel,

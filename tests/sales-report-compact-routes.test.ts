@@ -4,6 +4,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { transformSalesReportBandwidthSource } from "../build/viteSalesReportBandwidthPlugin";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 /**
  * The Sales Report page does not request the endpoints written in its source.
@@ -122,13 +123,15 @@ function referencedIdentifiers(code: string): Set<string> {
 
 /** Sales-report URLs the built Sales Report pages fetch (raw lines included). */
 function clientRequestedSalesReportUrls(): string[] {
+  // Split pages keep part of their source in extracted siblings.
+  const family = (relativePath: string) => readModuleFamily(path.join(repoRoot, relativePath));
   const pageSources: Array<[string, string]> = [
-    ["client/src/pages/SalesReportLegacy.tsx", read("client/src/pages/SalesReportLegacy.tsx")],
+    ["client/src/pages/SalesReportLegacy.tsx", family("client/src/pages/SalesReportLegacy.tsx")],
     [
       "client/src/pages/salesreportdetail/useSalesReportDetailModel.ts",
-      read("client/src/pages/salesreportdetail/useSalesReportDetailModel.ts"),
+      family("client/src/pages/salesreportdetail/useSalesReportDetailModel.ts"),
     ],
-    ["client/src/pages/SalesReportComparison.tsx", read("client/src/pages/SalesReportComparison.tsx")],
+    ["client/src/pages/SalesReportComparison.tsx", family("client/src/pages/SalesReportComparison.tsx")],
   ];
 
   const urls = new Set<string>();

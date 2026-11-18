@@ -4,370 +4,48 @@
  * Roughly 1,400 lines of the original page, and self-contained: it takes an
  * entry and a close handler and owns everything else itself.
  */
-import { EmptyState, LoadingState } from "@/components/ui/page-state";
-import { useQuery } from "@tanstack/react-query";
+import { LoadingState } from "@/components/ui/page-state";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { companyDataKey } from "@/lib/frontendDataArchitecture";
-import {
-  FACTORY_BALANCE_VOUCHER_TYPES,
-  fetchFactoryVoucherCurrentBalances,
-  type FactoryVoucherCurrentBalances,
-} from "./entry-views/voucherBalances";
 import type { DaybookEntry } from "./types";
-import type {
-  ContainerDetail,
-  ContainerImportDetail,
-  LoadingOrder,
-  MixBatchDetail,
-  MixBatchSource,
-  PayrollSummary,
-  SupplierBalance,
-  VoucherViewEntry,
-} from "./entry-views/types";
-import { apiNumber } from "./entry-views/types";
+import type { VoucherViewEntry } from "./entry-views/types";
 import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
 import { LoadingCreatedView } from "./entry-views/LoadingCreatedView";
 import { OpenContainerButton } from "./entry-views/OpenContainerButton";
-import {
-  parseBalesMeta,
-  formatDaybookDescription,
-  currencySymbol,
-  formatTxType,
-  getFactoryTxTypeBadge,
-} from "./daybookUtils";
+import { formatDaybookDescription, formatTxType } from "./daybookUtils";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { useViewEntryModalModel } from "./ViewEntryModalModel";
+import { renderVoucherBackedEntry } from "./viewEntryVoucherBacked";
 
 // Stable empty default: `= []` is a new array each render while the query is
 // disabled (entries that are not voucher-backed), and the balance effect below
 // depends on it and resets state with a new {} — an endless re-render loop.
-const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
+export const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
 
-export function ViewEntryModal({
-  entry,
-  onClose,
-  onNavigate,
-  formatDisplayDate,
-}: {
+export interface ViewEntryModalProps {
   entry: DaybookEntry;
   onClose: () => void;
   onNavigate: (path: string) => void;
   formatDisplayDate: (d: string) => string;
-}) {
-  const { selectedCompany } = useCompany();
-  const { formatHistoricalBaseAmount: formatCurrentLedgerBalance } = useCurrencyContext();
-  const isVoucherBacked = entry.referenceTable === "vouchers" && !!entry.referenceId;
-  const isBaleStockEntry = entry.txType === "BALE_STOCK_ENTRY";
-  const isBaleRemoval = entry.txType === "BALE_REMOVAL";
-  const hasBalesMeta = isBaleStockEntry || isBaleRemoval;
-  const isContainerImport = entry.txType === "CONTAINER_IMPORT" && !!entry.referenceId;
-  const isPayrollPayment = entry.txType === "PAYROLL_PAYMENT" && !!entry.referenceId;
-  const isMixBatchCreated =
-    (entry.txType === "MIX_BATCH_CREATED" || entry.txType === "MIX_BATCH_TOPUP") && !!entry.referenceId;
-  const isLoadingCreated = entry.txType === "LOADING_CREATED" && !!entry.referenceId;
-  const isOffloadRawStock = entry.txType === "OFFLOAD_RAW_STOCK";
-  const isCommission = entry.txType === "COMMISSION";
-  const isWasteDisposal = entry.txType === "WASTE_DISPOSAL";
-  const isOtherCharge = entry.txType === "OTHER_CHARGE";
+}
 
-  const entryMeta = (() => {
-    try {
-      return JSON.parse(entry.metaJson || "{}");
-    } catch {
-      return {};
-    }
-  })();
-  const metaContainerId: number | undefined = entryMeta.containerId;
+export function ViewEntryModal({ entry, onClose, onNavigate, formatDisplayDate }: ViewEntryModalProps) {
+  const m = useViewEntryModalModel({ entry });
 
-  const { data: rawViewEntries } = useQuery<VoucherViewEntry[] | { entries?: VoucherViewEntry[] }>({
-    queryKey: companyDataKey(`/api/vouchers/${entry.referenceId}/view-entries`, selectedCompany?.id, "factory-daybook-view"),
-    enabled: isVoucherBacked && !!entry.referenceId && !!selectedCompany?.id,
-    // A voucher may have been revised since it was last viewed.
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-  const viewEntries = Array.isArray(rawViewEntries) ? rawViewEntries : (rawViewEntries?.entries ?? NO_VIEW_ENTRIES);
-
-  const { data: containerDetail } = useQuery<ContainerImportDetail>({
-    queryKey: [`/api/factory/containers/${entry.referenceId}`],
-    enabled: isContainerImport,
-  });
-
-  const { data: supplierBalance } = useQuery<SupplierBalance>({
-    queryKey: [`/api/factory/suppliers/${containerDetail?.supplierId}/balance`],
-    enabled: isContainerImport && !!containerDetail?.supplierId,
-  });
-
-  const { data: payrollSummary } = useQuery<PayrollSummary>({
-    queryKey: [`/api/factory/payroll/${entry.referenceId}/summary`],
-    enabled: isPayrollPayment,
-  });
-
-  const { data: mixBatchDetail } = useQuery<MixBatchDetail>({
-    queryKey: [`/api/factory/mix-batches/${entry.referenceId}`],
-    enabled: isMixBatchCreated,
-  });
-
-  const { data: mixBatchSources = [] } = useQuery<MixBatchSource[]>({
-    queryKey: [`/api/factory/mix-batches/${entry.referenceId}/sources`],
-    enabled: isMixBatchCreated,
-  });
-
-  const { data: loadingOrder } = useQuery<LoadingOrder>({
-    queryKey: [`/api/factory/customer-orders/${entry.referenceId}`],
-    enabled: isLoadingCreated,
-    // Only while this detail dialog is open: keep scanned bales and totals live.
-    refetchInterval: isLoadingCreated ? 2_500 : false,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: metaContainerDetail } = useQuery<ContainerDetail>({
-    queryKey: [`/api/factory/containers/${metaContainerId}`],
-    enabled: (isOffloadRawStock || isCommission) && !!metaContainerId,
-  });
-
-  const { data: otherChargeContainerDetail } = useQuery<ContainerDetail>({
-    queryKey: [`/api/factory/containers/${entry.referenceId}`],
-    enabled: isOtherCharge && !!entry.referenceId,
-  });
-
-  // Current posted account balances, shared with ERP Daybook's book-balance basis.
-  // The company and voucher IDs are part of the query identity so switching
-  // companies or vouchers never displays a balance from another selection.
-  const isBalanceVoucher = FACTORY_BALANCE_VOUCHER_TYPES.has(entry.txType);
-  const {
-    data: currentBalances,
-    isPending: currentBalancesPending,
-    isFetching: currentBalancesFetching,
-  } = useQuery<FactoryVoucherCurrentBalances>({
-    queryKey: companyDataKey(
-      `/api/factory/daybook/voucher-balances/${entry.referenceId}`,
-      selectedCompany?.id,
-      entry.txType,
-      viewEntries.map((e) => [
-        e.id,
-        e.ledgerAccountId,
-        e.bankAccountId,
-        e.customerId,
-        e.employeeId,
-        e.supplierId,
-        e.factorySupplierId,
-        e.debitAmount,
-        e.creditAmount,
-      ])
-    ),
-    queryFn: ({ signal }) => fetchFactoryVoucherCurrentBalances(entry.txType, viewEntries, signal),
-    enabled: isVoucherBacked && !!selectedCompany?.id && isBalanceVoucher && viewEntries.length > 0,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-  const sourceBalance = currentBalances?.sourceBalance ?? null;
-  const entryBalances = currentBalances?.entryBalances ?? {};
-  const balancesLoading = isBalanceVoucher && (currentBalancesPending || currentBalancesFetching);
-  const displayCurrentBalance = (balance: string | null | undefined) =>
-    balancesLoading ? "Loading…" : balance == null ? "Unavailable" : formatCurrentLedgerBalance(balance);
-
-  const bales = parseBalesMeta(entry);
-  const amt = parseFloat(entry.amountCurrency || "0");
-  const sym = currencySymbol(entry.currencyCode);
-
-  const totalDebit = viewEntries.reduce((s, e) => s + apiNumber(e.debitAmount), 0);
-  const totalCredit = viewEntries.reduce((s, e) => s + apiNumber(e.creditAmount), 0);
-
-  const { variant: badgeVariant, className: badgeClass } = getFactoryTxTypeBadge(entry.txType);
-
-  if (isVoucherBacked) {
-    // Determine voucher type from txType: PAYMENT → Payment, RECEIPT → Receipt, JOURNAL → Journal
-    const voucherType =
-      entry.txType === "PAYMENT"
-        ? "Payment"
-        : entry.txType === "RECEIPT"
-          ? "Receipt"
-          : entry.txType === "JOURNAL"
-            ? "Journal"
-            : entry.txType;
-
-    const isPayment = voucherType === "Payment";
-    const isReceipt = voucherType === "Receipt";
-    const isJournal = voucherType === "Journal";
-    const isPaymentOrReceipt = isPayment || isReceipt;
-
-    // Source account: For Payment = credit entry (cash going OUT), For Receipt = debit entry (cash coming IN)
-    const sourceEntry = isPayment
-      ? viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
-      : isReceipt
-        ? viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
-        : null;
-
-    // Total = opposite side of source for Payment/Receipt
-    const totalAmount = isPayment
-      ? viewEntries.reduce((s: number, e) => s + apiNumber(e.debitAmount), 0)
-      : isReceipt
-        ? viewEntries.reduce((s: number, e) => s + apiNumber(e.creditAmount), 0)
-        : Math.max(totalDebit, totalCredit);
-
-    // Display entries: Payment = debit side only, Receipt = credit side only, Journal = all
-    const displayEntries = isPayment
-      ? viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
-      : isReceipt
-        ? viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
-        : viewEntries;
-
-    return (
-      <>
-        <DialogHeader>
-          <DialogTitle>Voucher Details</DialogTitle>
-          <DialogDescription>View voucher information</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 md:space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Date</p>
-              <p className="font-medium">{formatDisplayDate(entry.txDate + "T00:00:00")}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Type</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant={badgeVariant} className={badgeClass}>
-                  {voucherType}
-                </Badge>
-                {entry.optional && <span className="text-sm text-muted-foreground">Optional</span>}
-              </div>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Description</p>
-            <p className="text-sm font-medium">{formatDaybookDescription(entry)}</p>
-          </div>
-
-          {/* Paid From / Received In card — Payment and Receipt only */}
-          {isPaymentOrReceipt && sourceEntry && (
-            <div className="p-3 md:p-4 bg-muted/50 rounded-md">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{isPayment ? "Paid From" : "Received In"}</p>
-                  <p className="font-medium text-base md:text-lg">{sourceEntry.accountName}</p>
-                  <p className="text-sm font-mono mt-2 text-muted-foreground" data-testid="factory-voucher-source-balance">
-                    Current balance: {displayCurrentBalance(sourceBalance)}
-                  </p>
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
-                  <p className="text-xl md:text-2xl font-bold font-mono">
-                    {sym} {formatNumber(totalAmount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Entries table */}
-          <div>
-            <h3 className="font-semibold mb-3">Entries</h3>
-            {viewEntries.length === 0 ? (
-              <EmptyState title="No entries found" className="min-h-0 py-4 sm:py-4" />
-            ) : (
-              <div className="rounded-md border overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Account
-                      </th>
-                      {isPaymentOrReceipt || isJournal ? (
-                        <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Amount
-                        </th>
-                      ) : (
-                        <>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Debit
-                          </th>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Credit
-                          </th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayEntries.map((e, i: number) => (
-                      <tr key={e.id ?? i} className="border-b last:border-0">
-                        <td className="px-3 py-2">
-                          <p className="font-medium">{e.accountName || "—"}</p>
-                          {(isPaymentOrReceipt || isJournal) && (
-                            <p
-                              className="text-xs text-muted-foreground mt-0.5"
-                              data-testid={`factory-voucher-current-balance-${e.id}`}
-                            >
-                              Current balance: {displayCurrentBalance(entryBalances[e.id])}
-                            </p>
-                          )}
-                        </td>
-                        {isPaymentOrReceipt || isJournal ? (
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount)))}
-                          </td>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.debitAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.debitAmount))}` : "-"}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.creditAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.creditAmount))}` : "-"}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-bold border-t">
-                      <td className="px-3 py-2">Total</td>
-                      {isPaymentOrReceipt || isJournal ? (
-                        <td className="px-3 py-2 text-right font-mono">
-                          {sym}
-                          {formatNumber(totalAmount)}
-                        </td>
-                      ) : (
-                        <>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(totalDebit)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(totalCredit)}
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    );
+  if (m.isVoucherBacked) {
+    return renderVoucherBackedEntry({ entry, m, formatDisplayDate });
   }
 
   // ── CONTAINER_IMPORT enriched view ──────────────────────────────────────
-  if (isContainerImport) {
+  if (m.isContainerImport) {
     return (
       <ContainerImportView
         entry={entry}
-        containerDetail={containerDetail}
-        supplierBalance={supplierBalance}
+        containerDetail={m.containerDetail}
+        supplierBalance={m.supplierBalance}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
         onNavigate={onNavigate}
@@ -376,52 +54,52 @@ export function ViewEntryModal({
   }
 
   // ── PAYROLL_PAYMENT enriched view ────────────────────────────────────────
-  if (isPayrollPayment) {
+  if (m.isPayrollPayment) {
     return (
       <PayrollPaymentView
         entry={entry}
-        payrollSummary={payrollSummary}
+        payrollSummary={m.payrollSummary}
         formatDisplayDate={formatDisplayDate}
-        badgeVariant={badgeVariant}
-        badgeClass={badgeClass}
+        badgeVariant={m.badgeVariant}
+        badgeClass={m.badgeClass}
       />
     );
   }
 
   // ── MIX_BATCH_CREATED / MIX_BATCH_TOPUP enriched view ────────────────────
-  if (isMixBatchCreated) {
+  if (m.isMixBatchCreated) {
     return (
       <MixBatchView
         entry={entry}
-        mixBatchDetail={mixBatchDetail}
+        mixBatchDetail={m.mixBatchDetail}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
-        mixBatchSources={mixBatchSources}
+        mixBatchSources={m.mixBatchSources}
         onNavigate={onNavigate}
       />
     );
   }
 
   // ── LOADING_CREATED enriched view ───────────────────────────────────────
-  if (isLoadingCreated) {
+  if (m.isLoadingCreated) {
     return (
       <LoadingCreatedView
         entry={entry}
         onClose={onClose}
         formatDisplayDate={formatDisplayDate}
-        loadingOrder={loadingOrder}
-        badgeVariant={badgeVariant}
-        badgeClass={badgeClass}
+        loadingOrder={m.loadingOrder}
+        badgeVariant={m.badgeVariant}
+        badgeClass={m.badgeClass}
         onNavigate={onNavigate}
       />
     );
   }
 
   // ── BALE_STOCK_ENTRY enriched view ────────────────────────────────────────
-  if (isBaleStockEntry && bales.length > 0) {
-    const totalAmt = amt;
-    const amtPerBale = bales.length > 0 ? totalAmt / bales.length : 0;
-    const groups = bales.reduce((acc: Record<string, { count: number; totalAmount: number }>, b) => {
+  if (m.isBaleStockEntry && m.bales.length > 0) {
+    const totalAmt = m.amt;
+    const amtPerBale = m.bales.length > 0 ? totalAmt / m.bales.length : 0;
+    const groups = m.bales.reduce((acc: Record<string, { count: number; totalAmount: number }>, b) => {
       const key = b.productName || b.ref || "Unknown";
       if (!acc[key]) acc[key] = { count: 0, totalAmount: 0 };
       acc[key].count += 1;
@@ -434,7 +112,7 @@ export function ViewEntryModal({
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Bale Stock Entry</DialogTitle>
-            <Badge variant={badgeVariant} className={badgeClass}>
+            <Badge variant={m.badgeVariant} className={m.badgeClass}>
               Bale Stock Entry
             </Badge>
           </div>
@@ -462,7 +140,7 @@ export function ViewEntryModal({
                     <td className="px-3 py-2 font-medium">{name}</td>
                     <td className="px-3 py-2 text-right font-mono">{stats.count}</td>
                     <td className="px-3 py-2 text-right font-mono">
-                      {sym}
+                      {m.sym}
                       {formatNumber(stats.totalAmount)}
                     </td>
                   </tr>
@@ -471,9 +149,9 @@ export function ViewEntryModal({
               <tfoot>
                 <tr className="bg-muted/50 border-t font-semibold">
                   <td className="px-3 py-2 text-xs">Total</td>
-                  <td className="px-3 py-2 text-right font-mono">{bales.length}</td>
+                  <td className="px-3 py-2 text-right font-mono">{m.bales.length}</td>
                   <td className="px-3 py-2 text-right font-mono">
-                    {sym}
+                    {m.sym}
                     {formatNumber(totalAmt)}
                   </td>
                 </tr>
@@ -486,14 +164,14 @@ export function ViewEntryModal({
   }
 
   // ── OFFLOAD_RAW_STOCK enriched view ────────────────────────────────────────
-  if (isOffloadRawStock) {
-    const c = metaContainerDetail;
+  if (m.isOffloadRawStock) {
+    const c = m.metaContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Offload Raw Stock</DialogTitle>
-            <Badge variant={badgeVariant} className={badgeClass}>
+            <Badge variant={m.badgeVariant} className={m.badgeClass}>
               Offload Raw Stock
             </Badge>
           </div>
@@ -501,7 +179,7 @@ export function ViewEntryModal({
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
-            {!c && metaContainerId ? (
+            {!c && m.metaContainerId ? (
               <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -512,15 +190,15 @@ export function ViewEntryModal({
                   </p>
                   {c.origin && <p className="text-xs text-muted-foreground">Origin: {c.origin}</p>}
                 </div>
-                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
+                <OpenContainerButton containerId={m.metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {sym}
-              {formatNumber(amt)}
+              {m.sym}
+              {formatNumber(m.amt)}
             </p>
             {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd || "1") !== 1 && (
               <p className="text-xs font-mono text-muted-foreground">
@@ -535,14 +213,14 @@ export function ViewEntryModal({
   }
 
   // ── COMMISSION enriched view ───────────────────────────────────────────────
-  if (isCommission) {
-    const c = metaContainerDetail;
+  if (m.isCommission) {
+    const c = m.metaContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Commission</DialogTitle>
-            <Badge variant={badgeVariant} className={badgeClass}>
+            <Badge variant={m.badgeVariant} className={m.badgeClass}>
               Commission
             </Badge>
           </div>
@@ -550,7 +228,7 @@ export function ViewEntryModal({
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
-            {!c && metaContainerId ? (
+            {!c && m.metaContainerId ? (
               <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -558,15 +236,15 @@ export function ViewEntryModal({
                   <p className="font-semibold text-base">{c.containerNumber}</p>
                   {c.supplierName && <p className="text-xs text-muted-foreground">Supplier: {c.supplierName}</p>}
                 </div>
-                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
+                <OpenContainerButton containerId={m.metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Commission Amount</p>
             <p className="text-lg font-bold font-mono">
-              {sym}
-              {formatNumber(amt)}
+              {m.sym}
+              {formatNumber(m.amt)}
             </p>
             {entry.description && <p className="text-sm text-muted-foreground mt-1">{entry.description}</p>}
           </div>
@@ -576,13 +254,13 @@ export function ViewEntryModal({
   }
 
   // ── WASTE_DISPOSAL enriched view ───────────────────────────────────────────
-  if (isWasteDisposal) {
+  if (m.isWasteDisposal) {
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Waste Disposal</DialogTitle>
-            <Badge variant={badgeVariant} className={badgeClass}>
+            <Badge variant={m.badgeVariant} className={m.badgeClass}>
               Waste Disposal
             </Badge>
           </div>
@@ -597,8 +275,8 @@ export function ViewEntryModal({
           <div className="rounded-md border px-4 py-3">
             <p className="text-xs text-muted-foreground">Written Off Value</p>
             <p className="text-lg font-bold font-mono">
-              {sym}
-              {formatNumber(amt)}
+              {m.sym}
+              {formatNumber(m.amt)}
             </p>
           </div>
         </div>
@@ -607,14 +285,14 @@ export function ViewEntryModal({
   }
 
   // ── OTHER_CHARGE enriched view ─────────────────────────────────────────────
-  if (isOtherCharge) {
-    const c = otherChargeContainerDetail;
+  if (m.isOtherCharge) {
+    const c = m.otherChargeContainerDetail;
     return (
       <>
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <DialogTitle>Other Charge</DialogTitle>
-            <Badge variant={badgeVariant} className={badgeClass}>
+            <Badge variant={m.badgeVariant} className={m.badgeClass}>
               Other Charge
             </Badge>
           </div>
@@ -637,8 +315,8 @@ export function ViewEntryModal({
           <div className="rounded-md border px-4 py-3 space-y-1">
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {sym}
-              {formatNumber(amt)}
+              {m.sym}
+              {formatNumber(m.amt)}
             </p>
             {entry.description && <p className="text-sm text-muted-foreground mt-1">{entry.description}</p>}
           </div>
@@ -652,7 +330,7 @@ export function ViewEntryModal({
       <DialogHeader>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <DialogTitle>Transaction Details</DialogTitle>
-          <Badge variant={badgeVariant} className={badgeClass}>
+          <Badge variant={m.badgeVariant} className={m.badgeClass}>
             {formatTxType(entry.txType)}
           </Badge>
         </div>
@@ -667,8 +345,8 @@ export function ViewEntryModal({
           <div>
             <p className="text-xs text-muted-foreground">Amount</p>
             <p className="text-lg font-bold font-mono">
-              {sym}
-              {formatNumber(amt)}
+              {m.sym}
+              {formatNumber(m.amt)}
             </p>
           </div>
           {entry.currencyCode !== "USD" && parseFloat(entry.fxRateToUsd) !== 1 && (
@@ -678,18 +356,18 @@ export function ViewEntryModal({
             </div>
           )}
         </div>
-        {isBaleRemoval && bales.length === 0 && (
+        {m.isBaleRemoval && m.bales.length === 0 && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
             Bale details were not recorded for this entry (created before bale tracking was enabled).
           </div>
         )}
-        {hasBalesMeta && bales.length > 0 && (
+        {m.hasBalesMeta && m.bales.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-              {isBaleRemoval ? "Removed Bales" : "Bales"} ({bales.length})
+              {m.isBaleRemoval ? "Removed Bales" : "Bales"} ({m.bales.length})
             </p>
             <div className="max-h-64 overflow-y-auto space-y-1">
-              {bales.map((bale) => (
+              {m.bales.map((bale) => (
                 <div
                   key={bale.ref}
                   className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover-elevate cursor-pointer"

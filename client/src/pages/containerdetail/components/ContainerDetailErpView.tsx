@@ -1,248 +1,42 @@
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  DollarSign,
-  FileText,
-  Truck,
-  Trash2,
-  HandCoins,
-  Calendar,
-  User,
-  RotateCcw,
-  Edit,
-  Download,
-  Printer,
-  Upload,
-  ChevronDown,
-  RefreshCw,
-  ExternalLink,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DollarSign, HandCoins, Calendar, User } from "lucide-react";
 import { OffloadDialog } from "@/components/OffloadDialog";
 import { ContainerDetailDialog1 } from "./ContainerDetailDialog1";
 import { ContainerDetailPriceImportDialog } from "./ContainerDetailPriceImportDialog";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
-import { compareItemNamesAZ } from "@/lib/itemNameSort";
 import PropertiesIntercompanyContainerWorkflow from "../PropertiesIntercompanyContainerWorkflow";
 import LinkedDestinationContainerEditor from "../LinkedDestinationContainerEditor";
 import { ContainerDetailFreightDialog } from "./ContainerDetailFreightDialog";
+import { useContainerDetailErpViewModel, deriveContainerErpView } from "./ContainerDetailErpViewModel";
+import { ContainerErpSellDialog } from "./ContainerErpSellDialog";
+import { ContainerErpPurchaseOrders } from "./ContainerErpPurchaseOrders";
+import { ContainerErpHeader } from "./ContainerErpHeader";
 
-type Model = ReturnType<typeof useContainerDetailModel>;
+export type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
-  // prettier-ignore
-  const { formatDisplayDate, containerId, showOffloadDialog, setShowOffloadDialog, showSellDialog, setShowSellDialog, pendingDelete, setPendingDelete, setLocation, formatAmount, isDeveloper, containerData, suppliers, customers, incomeAccounts, containerSale, docsData, showUploadDialog, setShowUploadDialog, uploadDocTypeId, setUploadDocTypeId, uploadFile, setUploadFile, fileInputRef, setShowPriceImportDialog, setPriceImportPreview, setPriceImportError, uploadDocMutation, handleExportContainer, handleExportContainerNoCost, backUrl, form, deletePOMutation, deleteContainerMutation, syncVoucherMutation, reverseOffloadMutation, sellContainerMutation, handleDeletePO, handleDeleteContainer, handleSellSubmit, handlePrint, saleCustomer, canChangeExistingRecords, canCreate } = model;
-  // Properties owns the canonical physical container; receiving and sale are
-  // intercompany workflows, not legacy ERP offload/sell/delete actions.
-  const isPropertiesContainer = backUrl.startsWith("/properties");
+  const m = useContainerDetailErpViewModel({ model });
   // Defensive guard: by this point isSupplierPartner is false (handled above) and the
   // earlier `!containerData && !isSupplierPartner` check already returned if missing,
   // but TS can't infer that across the two branches — this re-confirms it for display only.
-  if (!containerData) return null;
+  if (!m.containerData) return null;
 
-  const { container, pos, charges } = containerData;
-  // Display-only ordering, shared by desktop table and mobile item cards.
-  const alphabetizedPos = pos.map((po) => ({
-    ...po,
-    items: [...po.items].sort((a, b) => compareItemNamesAZ(a.itemName, b.itemName)),
-  }));
-  const supplier = suppliers.find((s) => s.id === container.supplierId);
-
-  // Compute totals live from the actual PO and charges data so they are
-  // always accurate, even when the stored container totals are stale.
-  const itemsTotal = pos.reduce((sum: number, po) => sum + parseFloat(po.itemsTotal || "0"), 0);
-  const chargesTotal = charges.reduce((sum: number, c) => sum + parseFloat(c.amount || "0"), 0);
-  const grandTotal = itemsTotal + chargesTotal;
-
-  // Calculate total bales from all line items
-  const totalBales = pos.reduce((total: number, po) => {
-    return (
-      total +
-      po.items.reduce((sum, item) => {
-        return sum + parseFloat(item.quantity || "0");
-      }, 0)
-    );
-  }, 0);
-
-  // Format quantity: strip trailing zeros (e.g. "7.000" → "7", "2.500" → "2.5")
-  const fmtQty = (q: string | number | null | undefined) => {
-    const n = parseFloat(String(q ?? "0"));
-    if (isNaN(n)) return "0";
-    return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-  };
+  const containerData = m.containerData;
+  const v = deriveContainerErpView({ containerData, m });
 
   return (
     <div className="space-y-5">
       {/* ── Page header ── */}
-      <PageHeader
-        title={<span data-testid="text-container-number">Container {container.containerNumber}</span>}
-        backTarget={backUrl}
-        meta={
-          <>
-            <Badge
-              variant={
-                container.status === "OTW" ? "default" : container.status === "OFFLOADED" ? "secondary" : "outline"
-              }
-              className="shrink-0"
-              data-testid="badge-status"
-            >
-              {container.status}
-            </Badge>
-            <span>Imported on {formatDisplayDate(container.importDate)}</span>
-          </>
-        }
-      >
-        {/* View Offload button — only shown on offloaded containers */}
-        {container.status === "OFFLOADED" && containerData?.offloadId && (
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() =>
-              setLocation(
-                `${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`
-              )
-            }
-            data-testid="button-view-offload"
-          >
-            <ExternalLink className="w-4 h-4" />
-            View Offload
-          </Button>
-        )}
-        {/* Actions dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-actions-dropdown">
-              Actions
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {!isPropertiesContainer && isDeveloper && canChangeExistingRecords && (
-              <>
-                <DropdownMenuItem
-                  onClick={() => syncVoucherMutation.mutate()}
-                  disabled={syncVoucherMutation.isPending}
-                  data-testid="button-sync-voucher"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  {syncVoucherMutation.isPending ? "Syncing..." : "Sync Supplier Balance"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            <DropdownMenuItem
-              onClick={() =>
-                setLocation(
-                  `${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`
-                )
-              }
-              data-testid="button-verify-container"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Verify
-            </DropdownMenuItem>
-            {!isPropertiesContainer && !containerSale && canCreate("POST", "/api/container-sales") && (
-              <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
-                <HandCoins className="w-4 h-4 mr-2" />
-                Sell Container
-              </DropdownMenuItem>
-            )}
-            {!isPropertiesContainer && canChangeExistingRecords && container.status !== "OFFLOADED" && (
-              <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
-                <Truck className="w-4 h-4 mr-2" />
-                Offload Container
-              </DropdownMenuItem>
-            )}
-            {!isPropertiesContainer && canChangeExistingRecords && container.status === "OFFLOADED" && (
-              <>
-                <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit Offload
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setPendingDelete(() => () => reverseOffloadMutation.mutate(parseInt(containerId!)))}
-                  disabled={reverseOffloadMutation.isPending}
-                  data-testid="button-reverse-offload"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Reverse Offload
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <ContainerErpHeader m={m} v={v} containerData={m.containerData} />
 
-        {/* Export dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
-              <Download className="w-4 h-4" />
-              Export
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={handleExportContainer} data-testid="button-export-excel">
-              <Download className="w-4 h-4 mr-2" />
-              Full Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportContainerNoCost} data-testid="button-export-no-cost">
-              <Download className="w-4 h-4 mr-2" />
-              No Cost / Freight Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handlePrint} data-testid="button-export-pdf">
-              <Printer className="w-4 h-4 mr-2" />
-              Export PDF
-            </DropdownMenuItem>
-            {!isPropertiesContainer && canChangeExistingRecords && <DropdownMenuSeparator />}
-            {!isPropertiesContainer && canChangeExistingRecords && (
-              <DropdownMenuItem
-                onClick={() => {
-                  setPriceImportPreview(null);
-                  setPriceImportError(null);
-                  setShowPriceImportDialog(true);
-                }}
-                data-testid="button-import-pricing"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import Pricing (Excel)
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {m.isPropertiesContainer && <PropertiesIntercompanyContainerWorkflow containerId={v.container.id} />}
+      {!m.isPropertiesContainer && <LinkedDestinationContainerEditor containerId={v.container.id} />}
 
-        {!isPropertiesContainer && canChangeExistingRecords && (
-          <Button
-            variant="destructive"
-            onClick={handleDeleteContainer}
-            disabled={deleteContainerMutation.isPending}
-            className="gap-2"
-            data-testid="button-delete-container"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Delete Container</span>
-            <span className="sm:hidden">Delete</span>
-          </Button>
-        )}
-      </PageHeader>
-
-      {isPropertiesContainer && <PropertiesIntercompanyContainerWorkflow containerId={container.id} />}
-      {!isPropertiesContainer && <LinkedDestinationContainerEditor containerId={container.id} />}
-
-      {containerSale && (
+      {m.containerSale && (
         <Card className="border-green-500">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -256,7 +50,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <div>
                 <p className="text-sm text-muted-foreground">Sold to</p>
                 <p className="font-semibold" data-testid="text-sale-customer">
-                  {saleCustomer?.legalName || "Unknown Customer"}
+                  {m.saleCustomer?.legalName || "Unknown Customer"}
                 </p>
               </div>
             </div>
@@ -265,7 +59,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <div>
                 <p className="text-sm text-muted-foreground">Sale Date</p>
                 <p className="font-semibold" data-testid="text-sale-date">
-                  {formatDisplayDate(containerSale.saleDate)}
+                  {m.formatDisplayDate(m.containerSale.saleDate)}
                 </p>
               </div>
             </div>
@@ -274,7 +68,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <div>
                 <p className="text-sm text-muted-foreground">Sale Price</p>
                 <p className="font-semibold" data-testid="text-sale-price">
-                  {formatAmount(containerSale.containerCost)}
+                  {m.formatAmount(m.containerSale.containerCost)}
                 </p>
               </div>
             </div>
@@ -283,14 +77,14 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <div>
                 <p className="text-sm text-muted-foreground">Commission</p>
                 <p className="font-semibold" data-testid="text-sale-commission">
-                  {formatAmount(containerSale.commission)}
+                  {m.formatAmount(m.containerSale.commission)}
                 </p>
               </div>
             </div>
             <div className="pt-2 border-t">
               <p className="text-sm text-muted-foreground">Total Amount</p>
               <p className="text-xl font-bold" data-testid="text-sale-total">
-                {formatAmount(containerSale.totalAmount)}
+                {m.formatAmount(m.containerSale.totalAmount)}
               </p>
             </div>
           </CardContent>
@@ -301,28 +95,30 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         <div className="rounded-lg border bg-card p-4 space-y-1">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Supplier</p>
           <p className="text-base font-semibold leading-tight" data-testid="text-supplier">
-            {supplier ? supplier.legalName : "—"}
+            {v.supplier ? v.supplier.legalName : "—"}
           </p>
-          {supplier && <p className="text-xs text-muted-foreground">{supplier.code}</p>}
+          {v.supplier && <p className="text-xs text-muted-foreground">{v.supplier.code}</p>}
         </div>
 
         <div className="rounded-lg border bg-card p-4 space-y-1">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Items Total</p>
           <p className="text-2xl font-bold tabular-nums" data-testid="text-items-total">
-            {formatAmount(itemsTotal)}
+            {m.formatAmount(v.itemsTotal)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {pos.reduce((sum: number, po) => sum + po.items.length, 0)} items in {pos.length} PO(s)
+            {v.pos.reduce((sum: number, po) => sum + po.items.length, 0)} items in {v.pos.length} PO(s)
           </p>
         </div>
 
         <div className="rounded-lg border bg-card p-4 space-y-1">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Grand Total</p>
           <p className="text-2xl font-bold tabular-nums" data-testid="text-grand-total">
-            {formatAmount(grandTotal)}
+            {m.formatAmount(v.grandTotal)}
           </p>
-          {chargesTotal > 0 && (
-            <p className="text-xs text-muted-foreground">Including {formatAmount(Math.abs(chargesTotal))} in charges</p>
+          {v.chargesTotal > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Including {m.formatAmount(Math.abs(v.chargesTotal))} in charges
+            </p>
           )}
         </div>
       </div>
@@ -330,118 +126,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
       <div className="space-y-1">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-0.5">Purchase Orders</h2>
       </div>
-      {pos.length === 0 ? (
-        <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-          No purchase orders found
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {alphabetizedPos.map((po) => (
-            <div key={po.id} className="rounded-lg border bg-card overflow-hidden">
-              {/* PO header bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-muted/40 border-b">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-sm" data-testid={`text-po-${po.poNumber}`}>
-                    {po.poNumber}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{po.currency}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold tabular-nums">{formatAmount(po.itemsTotal)}</span>
-                  {!isPropertiesContainer && canChangeExistingRecords && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setLocation(
-                            `${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`
-                          )
-                        }
-                        data-testid={`button-edit-po-${po.id}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeletePO(po.id, po.poNumber)}
-                        disabled={deletePOMutation.isPending}
-                        data-testid={`button-delete-po-${po.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+      <ContainerErpPurchaseOrders m={m} v={v} />
 
-              {/* Items table — desktop */}
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Item Name
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Qty
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Rate
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Total
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {po.items.map((item) => (
-                      <TableRow key={item.id} data-testid={`row-item-${item.id}`} className="text-sm">
-                        <TableCell className="font-medium py-2">{item.itemName}</TableCell>
-                        <TableCell className="text-right tabular-nums py-2 text-muted-foreground">
-                          {fmtQty(item.quantity)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums py-2 text-muted-foreground">
-                          {formatAmount(item.rate)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums py-2 font-semibold">
-                          {formatAmount(item.lineTotal)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Items — mobile */}
-              <div className="md:hidden divide-y">
-                {po.items.map((item) => (
-                  <div key={item.id} className="px-4 py-3 text-sm" data-testid={`row-item-${item.id}`}>
-                    <p className="font-medium mb-1.5">{item.itemName}</p>
-                    <div className="grid grid-cols-3 gap-2 text-muted-foreground text-xs">
-                      <div>
-                        <span className="block">Qty</span>
-                        <span className="font-mono font-medium text-foreground">{fmtQty(item.quantity)}</span>
-                      </div>
-                      <div>
-                        <span className="block">Rate</span>
-                        <span className="font-mono font-medium text-foreground">{formatAmount(item.rate)}</span>
-                      </div>
-                      <div>
-                        <span className="block">Total</span>
-                        <span className="font-mono font-semibold text-foreground">{formatAmount(item.lineTotal)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {charges.length > 0 && (
+      {v.charges.length > 0 && (
         <div className="rounded-lg border bg-card overflow-x-auto">
           <div className="px-4 py-3 bg-muted/40 border-b">
             <p className="text-sm font-semibold">Extra Charges</p>
@@ -458,11 +145,11 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               </tr>
             </thead>
             <tbody>
-              {charges.map((c, i: number) => (
+              {v.charges.map((c, i: number) => (
                 <tr key={i} className="border-t first:border-t-0">
                   <td className="px-4 py-2.5 text-muted-foreground">{c.chargeType}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                    {formatAmount(parseFloat(c.amount || "0"))}
+                    {m.formatAmount(parseFloat(c.amount || "0"))}
                   </td>
                 </tr>
               ))}
@@ -470,7 +157,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             <tfoot>
               <tr className="border-t bg-muted/20">
                 <td className="px-4 py-2.5 font-semibold">Total Charges</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatAmount(chargesTotal)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{m.formatAmount(v.chargesTotal)}</td>
               </tr>
             </tfoot>
           </table>
@@ -482,153 +169,38 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Items Total</span>
-            <span className="tabular-nums font-medium">{formatAmount(itemsTotal)}</span>
+            <span className="tabular-nums font-medium">{m.formatAmount(v.itemsTotal)}</span>
           </div>
-          {chargesTotal !== 0 && (
+          {v.chargesTotal !== 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Charges Total</span>
-              <span className="tabular-nums font-medium">{formatAmount(chargesTotal)}</span>
+              <span className="tabular-nums font-medium">{m.formatAmount(v.chargesTotal)}</span>
             </div>
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total Qty</span>
-            <span className="tabular-nums font-medium">{fmtQty(totalBales)}</span>
+            <span className="tabular-nums font-medium">{v.fmtQty(v.totalBales)}</span>
           </div>
           <div className="flex justify-between pt-2 border-t font-bold">
             <span>Grand Total</span>
-            <span className="tabular-nums text-base">{formatAmount(grandTotal)}</span>
+            <span className="tabular-nums text-base">{m.formatAmount(v.grandTotal)}</span>
           </div>
         </div>
       </div>
 
-      {!isPropertiesContainer && (
+      {!m.isPropertiesContainer && (
         <OffloadDialog
-          open={showOffloadDialog}
-          onOpenChange={setShowOffloadDialog}
-          containerId={parseInt(containerId!)}
-          containerNumber={container.containerNumber}
-          totalBales={totalBales}
+          open={m.showOffloadDialog}
+          onOpenChange={m.setShowOffloadDialog}
+          containerId={parseInt(m.containerId!)}
+          containerNumber={v.container.containerNumber}
+          totalBales={v.totalBales}
         />
       )}
 
-      <Dialog open={showSellDialog} onOpenChange={setShowSellDialog}>
-        <DialogContent data-testid="dialog-sell-container">
-          <DialogHeader>
-            <DialogTitle>Sell Container</DialogTitle>
-            <DialogDescription>
-              Record the sale of container {container.containerNumber} to a customer.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form noValidate onSubmit={form.handleSubmit(handleSellSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="customerId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-customer">
-                          <SelectValue placeholder="Select a customer" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id.toString()}>
-                            {customer.legalName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+      <ContainerErpSellDialog m={m} v={v} />
 
-              <FormField
-                control={form.control}
-                name="saleDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sale Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} data-testid="input-sale-date" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="rounded-md border p-4 bg-muted/50">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Container Cost</span>
-                  <span className="text-lg font-bold">{formatAmount(grandTotal)}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">Full balance will be charged to customer</p>
-              </div>
-
-              <FormField
-                control={form.control}
-                name="commission"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Commission</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-commission" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="commissionAccountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Commission Account (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-commission-account">
-                          <SelectValue placeholder="Default commission account" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {incomeAccounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id.toString()}>
-                            {account.name} ({account.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Leave empty to use default commission revenue account
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowSellDialog(false)}
-                  data-testid="button-cancel-sale"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={sellContainerMutation.isPending} data-testid="button-submit-sale">
-                  {sellContainerMutation.isPending ? "Processing..." : "Record Sale"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+      <Dialog open={m.showUploadDialog} onOpenChange={m.setShowUploadDialog}>
         <DialogContent data-testid="dialog-upload-doc">
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
@@ -637,12 +209,12 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Document Type</label>
-              <Select value={uploadDocTypeId} onValueChange={setUploadDocTypeId}>
+              <Select value={m.uploadDocTypeId} onValueChange={m.setUploadDocTypeId}>
                 <SelectTrigger data-testid="select-doc-type">
                   <SelectValue placeholder="Select document type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(docsData?.docTypes || []).map((dt) => (
+                  {(m.docsData?.docTypes || []).map((dt) => (
                     <SelectItem key={dt.id} value={String(dt.id)}>
                       {dt.label}
                       {dt.isRequired ? " *" : ""}
@@ -655,38 +227,40 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <label className="text-sm font-medium">File</label>
               <Input
                 type="file"
-                ref={fileInputRef}
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                ref={m.fileInputRef}
+                onChange={(e) => m.setUploadFile(e.target.files?.[0] || null)}
                 data-testid="input-doc-file"
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowUploadDialog(false)} data-testid="button-cancel-upload">
+              <Button variant="outline" onClick={() => m.setShowUploadDialog(false)} data-testid="button-cancel-upload">
                 Cancel
               </Button>
               <Button
-                disabled={!uploadDocTypeId || !uploadFile || uploadDocMutation.isPending}
-                onClick={() => uploadDocMutation.mutate({ docTypeId: Number(uploadDocTypeId), file: uploadFile! })}
+                disabled={!m.uploadDocTypeId || !m.uploadFile || m.uploadDocMutation.isPending}
+                onClick={() =>
+                  m.uploadDocMutation.mutate({ docTypeId: Number(m.uploadDocTypeId), file: m.uploadFile! })
+                }
                 data-testid="button-submit-upload"
               >
-                {uploadDocMutation.isPending ? "Uploading..." : "Upload"}
+                {m.uploadDocMutation.isPending ? "Uploading..." : "Upload"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <ContainerDetailFreightDialog model={model} isPropertiesContainer={isPropertiesContainer} />
+      <ContainerDetailFreightDialog model={model} isPropertiesContainer={m.isPropertiesContainer} />
 
       <ContainerDetailDialog1 model={model} />
       <DeleteConfirmDialog
-        open={!!pendingDelete}
+        open={!!m.pendingDelete}
         onOpenChange={(open) => {
-          if (!open) setPendingDelete(null);
+          if (!open) m.setPendingDelete(null);
         }}
         onConfirm={() => {
-          pendingDelete?.();
-          setPendingDelete(null);
+          m.pendingDelete?.();
+          m.setPendingDelete(null);
         }}
       />
 

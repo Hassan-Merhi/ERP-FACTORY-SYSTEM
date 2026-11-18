@@ -1,7 +1,3 @@
-import { exportFileName } from "@/lib/exportFile";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import {
   ChevronRight,
   Coins,
@@ -14,120 +10,19 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import {
-  ErpListTable,
-  ErpReportExportMenu,
-  ErpReportPrintFooter,
-  erpReportFileName,
-  exportErpReportCsv,
-} from "@/erp-core";
-import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core/erpData";
+import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatNumber";
 
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
 import StockInSalesReportDetail from "./StockInSalesReportDetail";
-import { useLocation } from "wouter";
 import { MultiSelectFilter, SummaryPill } from "./StockInSalesReportFilters";
-
-interface LocationOption {
-  id: number;
-  name: string;
-}
-
-interface StockGroupOption {
-  id: number;
-  name: string;
-}
-
-interface StockInSalesMetrics {
-  openingStockQty: number;
-  openingStockValue: number;
-  stockInQty: number;
-  stockInValue: number;
-  stockInAvgRate: number;
-  stockAdjustmentQty: number;
-  stockAdjustmentValue: number;
-  totalAvailableQty: number;
-  stockOutQty: number;
-  stockOutValue: number;
-  closingStockQty: number;
-  closingStockValue: number;
-  totalSales: number;
-  costOfSales: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-  salesOutQty?: number;
-  salesOutValue?: number;
-  transferOutQty?: number;
-  transferOutValue?: number;
-  otherStockOutQty?: number;
-  otherStockOutValue?: number;
-  netSalesQty?: number;
-}
-
-interface StockInSalesRow extends StockInSalesMetrics {
-  periodKey: string;
-  periodStart: string;
-  periodEnd: string;
-}
-
-interface StockInSalesResponse {
-  generatedAt: string;
-  summary: StockInSalesMetrics;
-  rows: StockInSalesRow[];
-  rowCount: number;
-}
-
-type ReportGrouping = "daily" | "monthly" | "yearly";
-
-function resolveGrouping(period: PeriodFilterValue): ReportGrouping {
-  if (["today", "yesterday", "this_week", "this_month", "last_1_month"].includes(period.preset)) {
-    return "daily";
-  }
-  if (period.preset === "this_year" || period.preset === "last_6_months") return "monthly";
-  if (period.preset === "all_time") return "yearly";
-
-  if (period.fromDate && period.toDate) {
-    try {
-      const days = Math.abs(differenceInCalendarDays(parseISO(period.toDate), parseISO(period.fromDate))) + 1;
-      if (days <= 45) return "daily";
-      if (days <= 730) return "monthly";
-      return "yearly";
-    } catch {
-      return "monthly";
-    }
-  }
-
-  return "monthly";
-}
-
-const EMPTY_METRICS: StockInSalesMetrics = {
-  openingStockQty: 0,
-  openingStockValue: 0,
-  stockInQty: 0,
-  stockInValue: 0,
-  stockInAvgRate: 0,
-  stockAdjustmentQty: 0,
-  stockAdjustmentValue: 0,
-  totalAvailableQty: 0,
-  stockOutQty: 0,
-  stockOutValue: 0,
-  closingStockQty: 0,
-  closingStockValue: 0,
-  totalSales: 0,
-  costOfSales: 0,
-  costProfit: 0,
-  avgProfitPerBale: 0,
-};
+import { useStockInSalesReportSummaryModel } from "./StockInSalesReportSummaryModel";
 
 export default function StockInSalesReport() {
   const view = new URLSearchParams(window.location.search).get("view");
@@ -137,269 +32,72 @@ export default function StockInSalesReport() {
 }
 
 function StockInSalesReportSummary() {
-  const [, navigate] = useLocation();
-  const { selectedCompany } = useCompany();
-  const { formatAmount } = useCurrencyContext();
-  const { toast } = useToast();
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("this_year"));
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedStockGroups, setSelectedStockGroups] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [isExporting, setIsExporting] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
-    return () => window.clearTimeout(timer);
-  }, [searchTerm]);
-
-  useEffect(() => {
-    setSelectedLocations([]);
-    setSelectedStockGroups([]);
-  }, [selectedCompany?.id]);
-
-  const { data: locations = [] } = useQuery<LocationOption[]>({
-    queryKey: erpReferenceKeys.locations(selectedCompany?.id),
-    enabled: !!selectedCompany?.id,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
-    queryKey: erpReferenceKeys.stockGroups(selectedCompany?.id),
-    enabled: !!selectedCompany?.id,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const sortedLocations = useMemo(() => [...locations].sort((a, b) => a.name.localeCompare(b.name)), [locations]);
-  const sortedStockGroups = useMemo(() => [...stockGroups].sort((a, b) => a.name.localeCompare(b.name)), [stockGroups]);
-  const grouping = useMemo(() => resolveGrouping(periodFilter), [periodFilter]);
-  const periodColumnLabel = grouping === "daily" ? "Day" : grouping === "yearly" ? "Year" : "Month";
-
-  const queryUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (periodFilter.fromDate) params.set("startDate", periodFilter.fromDate);
-    if (periodFilter.toDate) params.set("endDate", periodFilter.toDate);
-    params.set("grouping", grouping);
-    params.set("profitFilter", "all");
-    if (selectedLocations.length > 0) params.set("locationIds", selectedLocations.join(","));
-    if (selectedStockGroups.length > 0) params.set("stockGroupIds", selectedStockGroups.join(","));
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    return `/api/reports/stock-in-sales?${params.toString()}`;
-  }, [periodFilter, grouping, selectedLocations, selectedStockGroups, debouncedSearch]);
-
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery<StockInSalesResponse, Error>({
-    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
-    enabled: !!selectedCompany?.id,
-    staleTime: 30_000,
-  });
-
-  const summary = data?.summary ?? EMPTY_METRICS;
-  const rows = data?.rows ?? [];
-  const formatSignedAmount = (value: number) => (value < 0 ? `-${formatAmount(Math.abs(value))}` : formatAmount(value));
-  const formatRoundedAmount = (value: number) => formatAmount(Math.round(value));
-  const formatSignedRoundedAmount = (value: number) =>
-    value < 0 ? `-${formatAmount(Math.round(Math.abs(value)))}` : formatAmount(Math.round(value));
-  const formatPeriodLabel = (row: StockInSalesRow) => {
-    try {
-      if (grouping === "daily") return format(parseISO(row.periodKey), "EEE, MMM d, yyyy");
-      if (grouping === "yearly") return row.periodKey;
-      return format(parseISO(`${row.periodKey}-01`), "MMMM yyyy");
-    } catch {
-      return row.periodKey;
-    }
-  };
-
-  const stockInSalesActiveFilterCount = [selectedLocations.length > 0, selectedStockGroups.length > 0].filter(
-    Boolean
-  ).length;
-
-  const clearFilters = () => {
-    setPeriodFilter(getDefaultPeriodValue("this_year"));
-    setSelectedLocations([]);
-    setSelectedStockGroups([]);
-    setSearchTerm("");
-    setDebouncedSearch("");
-  };
-
-  const openDetail = (row: StockInSalesRow) => {
-    const params = new URLSearchParams({
-      view: "detail",
-      startDate: row.periodStart,
-      endDate: row.periodEnd,
-      periodLabel: formatPeriodLabel(row),
-    });
-    if (selectedLocations.length > 0) params.set("locationIds", selectedLocations.join(","));
-    if (selectedStockGroups.length > 0) params.set("stockGroupIds", selectedStockGroups.join(","));
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    window.location.assign(`/stock-in-sales-report?${params.toString()}`);
-  };
-
-  const openComparison = () => {
-    const params = new URLSearchParams({ view: "comparison", grouping });
-    if (periodFilter.fromDate) params.set("startDate", periodFilter.fromDate);
-    if (periodFilter.toDate) params.set("endDate", periodFilter.toDate);
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (selectedLocations[0]) params.set("sideALocationId", selectedLocations[0]);
-    if (selectedLocations[1]) params.set("sideBLocationId", selectedLocations[1]);
-    if (selectedStockGroups.length > 0) {
-      params.set("sideAStockGroupIds", selectedStockGroups.join(","));
-      params.set("sideBStockGroupIds", selectedStockGroups.join(","));
-    }
-    window.location.assign(`/stock-in-sales-report?${params.toString()}`);
-  };
-
-  const exportExcel = async () => {
-    if (!data || rows.length === 0) return;
-    setIsExporting(true);
-    try {
-      const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-      const exportRows = rows.map((row) => ({
-        period: formatPeriodLabel(row),
-        openingStockQty: row.openingStockQty,
-        stockInQty: row.stockInQty,
-        stockOutQty: row.stockOutQty,
-        closingStockQty: row.closingStockQty,
-        closingStockValue: row.closingStockValue,
-        totalSales: row.totalSales,
-        costProfit: row.costProfit,
-      }));
-      await exportOperationalWorkbook({
-        title: "Stock & Sales Report",
-        fileName: erpReportFileName("stock-in-sales-report", "xlsx", new Date(), "-"),
-        companyName: selectedCompany?.name,
-        currencyCode: "USD",
-        filters: [
-          { label: "Period", value: periodFilter.fromDate + " — " + periodFilter.toDate },
-          { label: "Locations", value: selectedLocations.join(",") || "All" },
-          { label: "Groups", value: selectedStockGroups.join(",") || "All" },
-          { label: "Search", value: debouncedSearch || "All" },
-        ],
-        sheets: [
-          {
-            name: "Stock & Sales Report",
-            columns: [
-              { key: "period", header: periodColumnLabel, width: 22 },
-              { key: "openingStockQty", header: "Opening Qty", type: "decimal", width: 16 },
-              { key: "stockInQty", header: "Stock In", type: "decimal", width: 16 },
-              { key: "stockOutQty", header: "Stock Out", type: "decimal", width: 16 },
-              { key: "closingStockQty", header: "Closing Qty", type: "decimal", width: 16 },
-              { key: "closingStockValue", header: "Closing Value", type: "money", width: 18 },
-              { key: "totalSales", header: "Sales", type: "money", width: 18 },
-              { key: "costProfit", header: "Gross Profit", type: "money", width: 18 },
-            ],
-            rows: exportRows,
-          },
-        ],
-      });
-    } catch (exportError: unknown) {
-      toast({
-        title: "Export failed",
-        description: (exportError instanceof Error ? exportError.message : "") || "Unable to create the Excel file.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const exportCsv = () => {
-    if (rows.length === 0) return;
-    const headers = [
-      periodColumnLabel,
-      "Opening Qty",
-      "Stock In",
-      "Stock Out",
-      "Closing Qty",
-      "Closing Value",
-      "Sales",
-      "Gross Profit",
-    ];
-    const values = rows.map((row) => [
-      formatPeriodLabel(row),
-      row.openingStockQty,
-      row.stockInQty,
-      row.stockOutQty,
-      row.closingStockQty,
-      row.closingStockValue,
-      row.totalSales,
-      row.costProfit,
-    ]);
-    exportErpReportCsv({
-      headers,
-      rows: values,
-      fileName: exportFileName("stock in sales report", "csv", {
-        from: periodFilter.fromDate,
-        to: periodFilter.toDate,
-      }),
-    });
-  };
-
-  const profitTone = summary.costProfit > 0 ? "positive" : summary.costProfit < 0 ? "negative" : "default";
+  const m = useStockInSalesReportSummaryModel();
 
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
       <PageHeader
         title="Stock & Sales Report"
-        onBack={() => navigate("/sales-report")}
+        onBack={() => m.navigate("/sales-report")}
         backButtonTestId="button-back-stock-in-sales"
-        meta={<span>Stock and sales overview{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
+        meta={<span>Stock and sales overview{m.selectedCompany?.name ? ` · ${m.selectedCompany.name}` : ""}</span>}
       >
-        <Button variant="outline" size="sm" onClick={openComparison} data-testid="button-stock-in-sales-compare">
+        <Button variant="outline" size="sm" onClick={m.openComparison} data-testid="button-stock-in-sales-compare">
           <GitCompare className="mr-2 h-4 w-4" /> Compare
         </Button>
         <ErpReportExportMenu
           size="sm"
           className="gap-2"
-          busy={isExporting}
-          disabled={rows.length === 0 || isFetching || isLoading}
+          busy={m.isExporting}
+          disabled={m.rows.length === 0 || m.isFetching || m.isLoading}
           options={[
-            { id: "stock-sales-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
-            { id: "stock-sales-csv", label: "Export CSV", kind: "csv", onSelect: exportCsv },
+            { id: "stock-sales-excel", label: "Export Excel", kind: "excel", onSelect: m.exportExcel },
+            { id: "stock-sales-csv", label: "Export CSV", kind: "csv", onSelect: m.exportCsv },
             { id: "stock-sales-print", label: "Print", kind: "print", onSelect: () => window.print() },
           ]}
         />
       </PageHeader>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || isFetching}>
-        {isLoading ? (
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy={m.isLoading || m.isFetching}>
+        {m.isLoading ? (
           Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-14 rounded-lg" />)
         ) : (
           <>
             <SummaryPill
               label="Opening Stock"
-              value={formatNumber(summary.openingStockQty, 0)}
+              value={formatNumber(m.summary.openingStockQty, 0)}
               icon={PackagePlus}
               testId="text-opening-stock-qty"
             />
             <SummaryPill
               label="Stock In"
-              value={formatNumber(summary.stockInQty, 0)}
+              value={formatNumber(m.summary.stockInQty, 0)}
               icon={PackagePlus}
               testId="text-stock-in-qty"
             />
             <SummaryPill
               label="Stock in Hand"
-              value={formatNumber(summary.closingStockQty, 0)}
+              value={formatNumber(m.summary.closingStockQty, 0)}
               icon={PackageMinus}
               testId="text-stock-in-hand-qty"
             />
             <SummaryPill
               label="Stock Value"
-              value={formatRoundedAmount(summary.closingStockValue)}
+              value={m.formatRoundedAmount(m.summary.closingStockValue)}
               icon={Coins}
               testId="text-stock-in-hand-value"
             />
             <SummaryPill
               label="Sales"
-              value={formatRoundedAmount(summary.totalSales)}
+              value={m.formatRoundedAmount(m.summary.totalSales)}
               icon={TrendingUp}
               testId="text-stock-in-sales-total-sales"
             />
             <SummaryPill
               label="Gross Profit"
-              value={formatSignedRoundedAmount(summary.costProfit)}
-              icon={summary.costProfit < 0 ? TrendingDown : TrendingUp}
-              tone={profitTone}
+              value={m.formatSignedRoundedAmount(m.summary.costProfit)}
+              icon={m.summary.costProfit < 0 ? TrendingDown : TrendingUp}
+              tone={m.profitTone}
               testId="text-stock-in-sales-profit"
             />
           </>
@@ -411,22 +109,22 @@ function StockInSalesReportSummary() {
         className="print:hidden"
         primary={
           <PeriodFilter
-            value={periodFilter}
-            onChange={setPeriodFilter}
+            value={m.periodFilter}
+            onChange={m.setPeriodFilter}
             data-testid="period-filter-stock-in-sales-report"
           />
         }
         quick={
           <Input
             placeholder="Search items..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
+            value={m.searchTerm}
+            onChange={(event) => m.setSearchTerm(event.target.value)}
             className="w-full"
           />
         }
-        activeCount={stockInSalesActiveFilterCount}
-        onClear={clearFilters}
-        canClear={stockInSalesActiveFilterCount > 0 || !!searchTerm || periodFilter.preset !== "this_year"}
+        activeCount={m.stockInSalesActiveFilterCount}
+        onClear={m.clearFilters}
+        canClear={m.stockInSalesActiveFilterCount > 0 || !!m.searchTerm || m.periodFilter.preset !== "this_year"}
         data-testid="stock-in-sales-filters"
       >
         {(layout) =>
@@ -435,53 +133,53 @@ function StockInSalesReportSummary() {
               <MultiSelectFilter
                 label="Locations"
                 singularLabel="Location"
-                items={sortedLocations}
-                selectedIds={selectedLocations}
-                onChange={setSelectedLocations}
+                items={m.sortedLocations}
+                selectedIds={m.selectedLocations}
+                onChange={m.setSelectedLocations}
                 testId="button-stock-in-sales-location-filter"
               />
               <MultiSelectFilter
                 label="Groups"
                 singularLabel="Group"
-                items={sortedStockGroups}
-                selectedIds={selectedStockGroups}
-                onChange={setSelectedStockGroups}
+                items={m.sortedStockGroups}
+                selectedIds={m.selectedStockGroups}
+                onChange={m.setSelectedStockGroups}
                 testId="button-stock-in-sales-group-filter"
               />
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <PeriodFilter
-                value={periodFilter}
-                onChange={setPeriodFilter}
+                value={m.periodFilter}
+                onChange={m.setPeriodFilter}
                 data-testid="period-filter-stock-in-sales-report"
               />
               <MultiSelectFilter
                 label="Locations"
                 singularLabel="Location"
-                items={sortedLocations}
-                selectedIds={selectedLocations}
-                onChange={setSelectedLocations}
+                items={m.sortedLocations}
+                selectedIds={m.selectedLocations}
+                onChange={m.setSelectedLocations}
                 testId="button-stock-in-sales-location-filter"
               />
               <MultiSelectFilter
                 label="Groups"
                 singularLabel="Group"
-                items={sortedStockGroups}
-                selectedIds={selectedStockGroups}
-                onChange={setSelectedStockGroups}
+                items={m.sortedStockGroups}
+                selectedIds={m.selectedStockGroups}
+                onChange={m.setSelectedStockGroups}
                 testId="button-stock-in-sales-group-filter"
               />
               <Input
                 placeholder="Search items..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                value={m.searchTerm}
+                onChange={(event) => m.setSearchTerm(event.target.value)}
                 className="h-9 w-48"
               />
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <Button variant="ghost" size="sm" onClick={m.clearFilters}>
                 Clear
               </Button>
-              {isFetching && !isLoading && (
+              {m.isFetching && !m.isLoading && (
                 <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing" />
               )}
             </div>
@@ -491,9 +189,9 @@ function StockInSalesReportSummary() {
 
       <div>
         <p className="mb-3 text-xs text-muted-foreground">
-          {grouping === "daily"
+          {m.grouping === "daily"
             ? "Daily stock movement and profitability · Click a day for that day's full details"
-            : grouping === "yearly"
+            : m.grouping === "yearly"
               ? "Yearly stock movement and profitability · Click a year for full details"
               : "Monthly stock movement and profitability · Click a month for full details"}
         </p>
@@ -501,14 +199,14 @@ function StockInSalesReportSummary() {
           <div className="overflow-x-auto">
             <ErpListTable
               pageKey="stock-in-sales-report"
-              companyId={selectedCompany?.id}
+              companyId={m.selectedCompany?.id}
               className="min-w-[900px]"
               mobileLayout="cards"
               scrollLabel="Stock and sales reporting"
             >
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead>{periodColumnLabel}</TableHead>
+                  <TableHead>{m.periodColumnLabel}</TableHead>
                   <TableHead className="text-right">Opening</TableHead>
                   <TableHead className="text-right">Stock In</TableHead>
                   <TableHead className="text-right">Stock Out</TableHead>
@@ -520,7 +218,7 @@ function StockInSalesReportSummary() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {m.isLoading ? (
                   Array.from({ length: 6 }).map((_, index) => (
                     <TableRow key={index}>
                       {Array.from({ length: 9 }).map((__, cellIndex) => (
@@ -530,20 +228,20 @@ function StockInSalesReportSummary() {
                       ))}
                     </TableRow>
                   ))
-                ) : isError ? (
+                ) : m.isError ? (
                   <TableRow>
                     <TableCell colSpan={9}>
                       <div className="flex flex-col items-center gap-3 py-10 text-center">
                         <TrendingDown className="h-6 w-6 text-destructive" />
                         <p className="text-sm font-medium">Unable to load the report</p>
-                        <p className="text-xs text-muted-foreground">{error?.message}</p>
-                        <Button variant="outline" size="sm" onClick={() => refetch()}>
+                        <p className="text-xs text-muted-foreground">{m.error?.message}</p>
+                        <Button variant="outline" size="sm" onClick={() => m.refetch()}>
                           Retry
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : rows.length === 0 ? (
+                ) : m.rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                       No stock or sales activity found for these filters.
@@ -551,7 +249,7 @@ function StockInSalesReportSummary() {
                   </TableRow>
                 ) : (
                   <>
-                    {rows.map((row) => {
+                    {m.rows.map((row) => {
                       const profitClass =
                         row.costProfit > 0
                           ? "text-emerald-600 dark:text-emerald-400"
@@ -562,19 +260,21 @@ function StockInSalesReportSummary() {
                         <TableRow
                           key={row.periodKey}
                           className="cursor-pointer hover:bg-muted/40"
-                          onClick={() => openDetail(row)}
+                          onClick={() => m.openDetail(row)}
                         >
-                          <TableCell className="py-3 font-medium">{formatPeriodLabel(row)}</TableCell>
+                          <TableCell className="py-3 font-medium">{m.formatPeriodLabel(row)}</TableCell>
                           <TableCell className="text-right font-mono">{formatNumber(row.openingStockQty, 0)}</TableCell>
                           <TableCell className="text-right font-mono">{formatNumber(row.stockInQty, 0)}</TableCell>
                           <TableCell className="text-right font-mono">{formatNumber(row.stockOutQty, 0)}</TableCell>
                           <TableCell className="text-right font-mono font-semibold">
                             {formatNumber(row.closingStockQty, 0)}
                           </TableCell>
-                          <TableCell className="text-right font-mono">{formatAmount(row.closingStockValue)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatAmount(row.totalSales)}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {m.formatAmount(row.closingStockValue)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{m.formatAmount(row.totalSales)}</TableCell>
                           <TableCell className={`text-right font-mono font-semibold ${profitClass}`}>
-                            {formatSignedAmount(row.costProfit)}
+                            {m.formatSignedAmount(row.costProfit)}
                           </TableCell>
                           <TableCell>
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -584,13 +284,21 @@ function StockInSalesReportSummary() {
                     })}
                     <TableRow className="bg-muted/40 font-semibold hover:bg-muted/40">
                       <TableCell className="text-xs uppercase tracking-wide text-muted-foreground">Total</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(summary.openingStockQty, 0)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(summary.stockInQty, 0)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(summary.stockOutQty, 0)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(summary.closingStockQty, 0)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatAmount(summary.closingStockValue)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatAmount(summary.totalSales)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatSignedAmount(summary.costProfit)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatNumber(m.summary.openingStockQty, 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(m.summary.stockInQty, 0)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(m.summary.stockOutQty, 0)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatNumber(m.summary.closingStockQty, 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {m.formatAmount(m.summary.closingStockValue)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{m.formatAmount(m.summary.totalSales)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {m.formatSignedAmount(m.summary.costProfit)}
+                      </TableCell>
                       <TableCell />
                     </TableRow>
                   </>
@@ -603,9 +311,9 @@ function StockInSalesReportSummary() {
 
       <ErpReportPrintFooter
         title="Stock & Sales Report"
-        companyName={selectedCompany?.name}
-        fromDate={periodFilter.fromDate}
-        toDate={periodFilter.toDate}
+        companyName={m.selectedCompany?.name}
+        fromDate={m.periodFilter.fromDate}
+        toDate={m.periodFilter.toDate}
       />
     </div>
   );

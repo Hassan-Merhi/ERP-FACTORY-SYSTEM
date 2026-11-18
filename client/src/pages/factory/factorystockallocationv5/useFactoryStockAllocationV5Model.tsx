@@ -1,16 +1,13 @@
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { fetchAllV5AllocationData } from "@/lib/v5AllocationPaginationClient";
 import { FACTORY_V5_ALLOCATION_BASE } from "@/lib/factoryAllocationReadModel";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useDebounce } from "@/hooks/use-debounce";
 import type { V5Data, V5Row } from "./types";
+import { useFactoryStockAllocationV5DataModel } from "./useFactoryStockAllocationV5DataModel";
 
 function isGarbageOrWipers(row: V5Row) {
   if (row.isGarbageOrWipers) return true;
@@ -19,304 +16,7 @@ function isGarbageOrWipers(row: V5Row) {
 }
 
 export function useFactoryStockAllocationV5Model() {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const [, navigate] = useLocation();
-  const searchString = useSearch();
-  const focusProformaId = useMemo(() => {
-    const p = new URLSearchParams(searchString).get("proformaId");
-    return p ? parseInt(p) : null;
-  }, [searchString]);
-
-  const openEditOnLoad = useMemo(() => {
-    return new URLSearchParams(searchString).get("openEdit") === "true";
-  }, [searchString]);
-
-  const firstMatchRef = useRef<HTMLTableRowElement | null>(null);
-  // Track the focused proforma we already auto-scrolled to. The focus query
-  // parameter can stay in the URL while the user is working on this page, so
-  // re-renders must not keep pulling the scroll position back to that row.
-  const autoScrolledProformaIdRef = useRef<number | null>(null);
-
-  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [hideZero, setHideZero] = useState(false);
-  const [showNegativeOnly, setShowNegativeOnly] = useState(false);
-  const [showGarbageWipers, setShowGarbageWipers] = useState(false);
-  const [refreshFlash, setRefreshFlash] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  // Debounced value sent to the server — prevents one request per keystroke.
-  const debouncedSearch = useDebounce(searchQuery, 300);
-
-  /* ── Export dialog state ─────────────────────────────────────────────────── */
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportIncludePositive, setExportIncludePositive] = useState(true);
-  const [exportIncludeNegative, setExportIncludeNegative] = useState(true);
-  const [exportIncludeZero, setExportIncludeZero] = useState(false);
-
-  /* ── Add-Containers dialog state ────────────────────────────────────────── */
-  const [addCtDialog, setAddCtDialog] = useState<{
-    proformaId: number;
-    proformaName: string;
-    existingCount: number;
-  } | null>(null);
-  const [ctCount, setCtCount] = useState(1);
-  const [ctNames, setCtNames] = useState<string[]>([]);
-
-  function openAddContainers(proformaId: number, proformaName: string, existingCount: number) {
-    setAddCtDialog({ proformaId, proformaName, existingCount });
-    setCtCount(1);
-    setCtNames([`Container ${existingCount + 1}`]);
-  }
-
-  function handleCtCountChange(val: number) {
-    const n = Math.max(1, Math.min(50, val || 1));
-    setCtCount(n);
-    setCtNames((prev) => {
-      const base = addCtDialog?.existingCount ?? 0;
-      if (n > prev.length) {
-        const extra = Array.from({ length: n - prev.length }, (_, i) => `Container ${base + prev.length + i + 1}`);
-        return [...prev, ...extra];
-      }
-      return prev.slice(0, n);
-    });
-  }
-
-  function handleCtNameChange(idx: number, val: string) {
-    setCtNames((prev) => prev.map((n, i) => (i === idx ? val : n)));
-  }
-
-  const addContainersMut = useMutation({
-    mutationFn: ({ proformaId, names }: { proformaId: number; names: string[] }) =>
-      apiRequest("POST", `/api/factory/v5/proforma/${proformaId}/add-containers`, { containerNames: names }),
-    onSuccess: (_data, { names }) => {
-      toast({ title: `Added ${names.length} container${names.length !== 1 ? "s" : ""}.` });
-      setAddCtDialog(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Error adding containers", description: err.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  function submitAddContainers() {
-    if (!addCtDialog) return;
-    const trimmed = ctNames.map((n) => n.trim());
-    if (trimmed.some((n) => !n)) {
-      toast({ title: "Validation error", description: "Container names must not be empty.", variant: "destructive" });
-      return;
-    }
-    const uniq = new Set(trimmed);
-    if (uniq.size !== trimmed.length) {
-      toast({ title: "Validation error", description: "Container names must be unique.", variant: "destructive" });
-      return;
-    }
-    addContainersMut.mutate({ proformaId: addCtDialog.proformaId, names: trimmed });
-  }
-
-  /* ── Close-Proforma dialog state ─────────────────────────────────────────── */
-  const [closeDialog, setCloseDialog] = useState<{
-    proformaId: number;
-    proformaName: string;
-  } | null>(null);
-
-  const closeProformaMut = useMutation({
-    mutationFn: (proformaId: number) => apiRequest("PATCH", `/api/factory/v5/proforma/${proformaId}/close`, {}),
-    onSuccess: () => {
-      toast({ title: "Proforma closed." });
-      setCloseDialog(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Error closing proforma", description: err.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  /* ── Edit-Draft-Quantities dialog state ─────────────────────────────────── */
-  interface EditDraftArticle {
-    articleCode: string;
-    productName: string;
-    currentExpectedQty: number;
-    eligibleCount: number; // DRAFT containers with 0 loadedQty for this article
-  }
-  const [editDraftDialog, setEditDraftDialog] = useState<{
-    proformaId: number;
-    proformaName: string;
-    articles: EditDraftArticle[];
-  } | null>(null);
-  const [editDraftQtys, setEditDraftQtys] = useState<Record<string, number>>({});
-
-  async function openEditDraft(proformaId: number, proformaName: string, _currentRows: V5Row[]) {
-    // Always load the complete catalog, not only the stock-allocation rows
-    // currently displayed by progressive pagination.
-    let currentRows: V5Row[];
-    try {
-      const complete = await fetchAllV5AllocationData(new URLSearchParams());
-      currentRows = complete.rows as V5Row[];
-    } catch (error) {
-      toast({
-        title: "Unable to load draft products",
-        description: error instanceof Error ? error.message : "The complete stock allocation list could not be loaded.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const articles: EditDraftArticle[] = [];
-    for (const row of currentRows) {
-      const pd = row.proformaDetails.find((p) => p.proformaId === proformaId);
-      if (!pd) continue;
-      const eligible = pd.containers.filter((c) => c.status === "DRAFT" && c.loadedQty === 0);
-      if (eligible.length === 0) continue;
-      articles.push({
-        articleCode: row.articleCode,
-        productName: row.productName,
-        currentExpectedQty: eligible[0].expectedQty,
-        eligibleCount: eligible.length,
-      });
-    }
-    setEditDraftDialog({ proformaId, proformaName, articles });
-    const initQtys: Record<string, number> = {};
-    articles.forEach((a) => {
-      initQtys[a.articleCode] = a.currentExpectedQty;
-    });
-    setEditDraftQtys(initQtys);
-  }
-
-  const editDraftMut = useMutation({
-    mutationFn: async ({
-      proformaId,
-      updates,
-    }: {
-      proformaId: number;
-      updates: { articleCode: string; expectedQty: number }[];
-    }) => {
-      const res = await apiRequest("PATCH", `/api/factory/v5/proforma/${proformaId}/draft-expected-lines`, { updates });
-      return (await res.json()) as { updated?: number };
-    },
-    onSuccess: (data: { updated?: number }) => {
-      toast({ title: `Draft quantities updated (${data?.updated ?? 0} lines changed).` });
-      setEditDraftDialog(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({
-        title: "Error updating quantities",
-        description: err.message ?? "Unknown error",
-        variant: "destructive",
-      });
-    },
-  });
-
-  function submitEditDraft() {
-    if (!editDraftDialog) return;
-    const updates = editDraftDialog.articles.map((a) => ({
-      articleCode: a.articleCode,
-      expectedQty: editDraftQtys[a.articleCode] ?? a.currentExpectedQty,
-    }));
-    const invalid = updates.find((u) => !Number.isInteger(u.expectedQty) || u.expectedQty < 0);
-    if (invalid) {
-      toast({
-        title: "Validation error",
-        description: "Quantities must be non-negative integers.",
-        variant: "destructive",
-      });
-      return;
-    }
-    editDraftMut.mutate({ proformaId: editDraftDialog.proformaId, updates });
-  }
-
-  /* ── Link-Existing-Container dialog state ───────────────────────────────── */
-  interface UnlinkedOrder {
-    id: number;
-    containerNumber: string;
-    status: string;
-    customerId: number | null;
-    customerName: string;
-    createdAt: string;
-    loadedBaleCount: number;
-  }
-  const [linkDialog, setLinkDialog] = useState<{
-    proformaId: number;
-    proformaName: string;
-    proformaCustomerId: number | null;
-  } | null>(null);
-  const [linkSelected, setLinkSelected] = useState<Set<number>>(new Set());
-
-  const unlinkedQuery = useQuery<{ orders: UnlinkedOrder[] }>({
-    queryKey: companyQueryKey("/api/factory/v5/unlinked-loading-orders", selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/v5/unlinked-loading-orders", { credentials: "include" });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed");
-      }
-      return res.json();
-    },
-    enabled: !!linkDialog && Boolean(selectedCompany?.id),
-    staleTime: 15000,
-  });
-
-  const linkMut = useMutation({
-    mutationFn: async ({ proformaId, orderIds }: { proformaId: number; orderIds: number[] }) => {
-      const results = [];
-      for (const orderId of orderIds) {
-        const r = await apiRequest("PATCH", `/api/factory/customer-orders/${orderId}/link-proforma`, { proformaId });
-        results.push(r);
-      }
-      return results;
-    },
-    onSuccess: (_data, { orderIds }) => {
-      toast({ title: `Linked ${orderIds.length} container${orderIds.length !== 1 ? "s" : ""} to proforma.` });
-      setLinkDialog(null);
-      setLinkSelected(new Set());
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Linking failed", description: err.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  /* ── Restore-Cancelled-Container dialog state ────────────────────────────── */
-  interface CancelledContainerRow {
-    id: number;
-    containerNumber: string;
-    customerName: string;
-    cancelledAt: string;
-    wasLoading: boolean;
-    proformaId: number | null;
-    proformaName: string | null;
-  }
-  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-
-  const cancelledContainersQuery = useQuery<{ orders: CancelledContainerRow[] }>({
-    queryKey: companyQueryKey("/api/factory/v5/recently-cancelled-containers", selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/v5/recently-cancelled-containers", { credentials: "include" });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed");
-      }
-      return res.json();
-    },
-    enabled: restoreDialogOpen && Boolean(selectedCompany?.id),
-    staleTime: 15000,
-  });
-
-  const restoreContainerMut = useMutation({
-    mutationFn: async (orderId: number) => {
-      const res = await apiRequest("POST", `/api/factory/v5/containers/${orderId}/restore`, {});
-      return (await res.json()) as { restoredTo?: string };
-    },
-    onSuccess: (data: { restoredTo?: string }) => {
-      toast({ title: `Container restored to ${data?.restoredTo === "LOADING" ? "Loading" : "Draft"}.` });
-      cancelledContainersQuery.refetch();
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Restore failed", description: err.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
+  const hs = useFactoryStockAllocationV5DataModel();
 
   /* ── Cancel-Container dialog state ──────────────────────────────────────── */
   const [cancelDialog, setCancelDialog] = useState<{
@@ -341,25 +41,30 @@ export function useFactoryStockAllocationV5Model() {
         ...(supervisorUsername ? { supervisorUsername, supervisorPassword } : {}),
       }),
     onSuccess: () => {
-      toast({ title: "Container cancelled." });
+      hs.toast({ title: "Container cancelled." });
       setCancelDialog(null);
       setCancelSuperUser("");
       setCancelSuperPass("");
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Cancel failed", description: err.message ?? "Unknown error", variant: "destructive" });
+      hs.toast({ title: "Cancel failed", description: err.message ?? "Unknown error", variant: "destructive" });
     },
   });
 
   /* ── Query ──────────────────────────────────────────────────────────────── */
   const query = useQuery<V5Data>({
-    queryKey: companyQueryKey(FACTORY_V5_ALLOCATION_BASE, selectedCompany?.id, hideZero, debouncedSearch || undefined),
-    enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey(
+      FACTORY_V5_ALLOCATION_BASE,
+      hs.selectedCompany?.id,
+      hs.hideZero,
+      hs.debouncedSearch || undefined
+    ),
+    enabled: Boolean(hs.selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (hideZero) params.set("hideZero", "true");
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (hs.hideZero) params.set("hideZero", "true");
+      if (hs.debouncedSearch.trim()) params.set("search", hs.debouncedSearch.trim());
       // The overview is a complete, naturally scrolling table. Bypass the legacy
       // 50-row progressive fetch interceptor and allow the server to return all rows.
       params.set("fullAction", "1");
@@ -384,16 +89,16 @@ export function useFactoryStockAllocationV5Model() {
   );
   const garbageWipersCount = allRows.filter(isGarbageOrWipers).length;
   const rows = useMemo(() => {
-    const filteredRows = showGarbageWipers ? allRows : allRows.filter((r) => !isGarbageOrWipers(r));
-    const negativeFilteredRows = showNegativeOnly ? filteredRows.filter((r) => r.freeToPromise < 0) : filteredRows;
+    const filteredRows = hs.showGarbageWipers ? allRows : allRows.filter((r) => !isGarbageOrWipers(r));
+    const negativeFilteredRows = hs.showNegativeOnly ? filteredRows.filter((r) => r.freeToPromise < 0) : filteredRows;
     const categoryFilteredRows =
-      categoryFilter.length > 0
-        ? negativeFilteredRows.filter((r) => categoryFilter.includes(r.categoryName ?? ""))
+      hs.categoryFilter.length > 0
+        ? negativeFilteredRows.filter((r) => hs.categoryFilter.includes(r.categoryName ?? ""))
         : negativeFilteredRows;
 
-    if (!searchQuery.trim()) return categoryFilteredRows;
-    return categoryFilteredRows.filter((r) => searchAny(searchQuery, r.productName, r.articleCode));
-  }, [allRows, categoryFilter, searchQuery, showGarbageWipers, showNegativeOnly]);
+    if (!hs.searchQuery.trim()) return categoryFilteredRows;
+    return categoryFilteredRows.filter((r) => searchAny(hs.searchQuery, r.productName, r.articleCode));
+  }, [allRows, hs.categoryFilter, hs.searchQuery, hs.showGarbageWipers, hs.showNegativeOnly]);
 
   // Unique sorted category names from all loaded rows (unfiltered) for the dropdown
   const allCategories = useMemo(() => {
@@ -410,50 +115,55 @@ export function useFactoryStockAllocationV5Model() {
   // effect repeatedly called scrollIntoView and pulled the user back down while
   // they were trying to scroll upward.
   useEffect(() => {
-    if (!focusProformaId) {
-      autoScrolledProformaIdRef.current = null;
-      firstMatchRef.current = null;
+    if (!hs.focusProformaId) {
+      hs.autoScrolledProformaIdRef.current = null;
+      hs.firstMatchRef.current = null;
       return;
     }
-    if (rows.length === 0 || autoScrolledProformaIdRef.current === focusProformaId) return;
+    if (rows.length === 0 || hs.autoScrolledProformaIdRef.current === hs.focusProformaId) return;
 
     const toExpand = rows
-      .filter((r) => r.proformaDetails.some((p) => p.proformaId === focusProformaId))
+      .filter((r) => r.proformaDetails.some((p) => p.proformaId === hs.focusProformaId))
       .map((r) => r.articleCode);
     if (toExpand.length === 0) return;
 
     // Clear any stale target from a previously focused proforma, then mark this
     // focus as handled before the state update can trigger another render.
-    firstMatchRef.current = null;
-    autoScrolledProformaIdRef.current = focusProformaId;
-    setExpandedRows((prev) => {
+    hs.firstMatchRef.current = null;
+    hs.autoScrolledProformaIdRef.current = hs.focusProformaId;
+    hs.setExpandedRows((prev) => {
       const next = new Set(prev);
       toExpand.forEach((c) => next.add(c));
       return next;
     });
 
     const scrollTimer = window.setTimeout(() => {
-      firstMatchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      hs.firstMatchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
     return () => window.clearTimeout(scrollTimer);
-  }, [focusProformaId, rows]);
+  }, [hs.focusProformaId, rows]);
 
   // Preserve older "Edit in Allocation" bookmarked links without opening a popup.
   useEffect(() => {
-    if (openEditOnLoad && focusProformaId !== null && Number.isSafeInteger(focusProformaId) && focusProformaId > 0) {
-      navigate(`/factory/stock-allocation-v5/proformas/${focusProformaId}/edit`, { replace: true });
+    if (
+      hs.openEditOnLoad &&
+      hs.focusProformaId !== null &&
+      Number.isSafeInteger(hs.focusProformaId) &&
+      hs.focusProformaId > 0
+    ) {
+      hs.navigate(`/factory/stock-allocation-v5/proformas/${hs.focusProformaId}/edit`, { replace: true });
     }
-  }, [openEditOnLoad, focusProformaId, navigate]);
+  }, [hs.openEditOnLoad, hs.focusProformaId, hs.navigate]);
 
   const handleRefresh = useCallback(() => {
     query.refetch().then(() => {
-      setRefreshFlash(true);
-      setTimeout(() => setRefreshFlash(false), 1500);
+      hs.setRefreshFlash(true);
+      setTimeout(() => hs.setRefreshFlash(false), 1500);
     });
   }, [query]);
 
   function toggleRow(code: string) {
-    setExpandedRows((prev) => {
+    hs.setExpandedRows((prev) => {
       const next = new Set(prev);
       if (next.has(code)) next.delete(code);
       else next.add(code);
@@ -465,28 +175,28 @@ export function useFactoryStockAllocationV5Model() {
   async function handleExportExcel() {
     // Export every matching article across pages, not just the visible grid.
     const exportParams = new URLSearchParams();
-    if (hideZero) exportParams.set("hideZero", "true");
-    if (debouncedSearch.trim()) exportParams.set("search", debouncedSearch.trim());
+    if (hs.hideZero) exportParams.set("hideZero", "true");
+    if (hs.debouncedSearch.trim()) exportParams.set("search", hs.debouncedSearch.trim());
 
     let exportRows: V5Row[];
     try {
       const complete = await fetchAllV5AllocationData(exportParams);
       exportRows = complete.rows as V5Row[];
     } catch (error) {
-      toast({
+      hs.toast({
         title: "Export failed",
         description: error instanceof Error ? error.message : "The complete filtered allocation could not be loaded.",
         variant: "destructive",
       });
       return;
     }
-    if (!showGarbageWipers) exportRows = exportRows.filter((row) => !isGarbageOrWipers(row));
-    if (showNegativeOnly) exportRows = exportRows.filter((row) => row.freeToPromise < 0);
+    if (!hs.showGarbageWipers) exportRows = exportRows.filter((row) => !isGarbageOrWipers(row));
+    if (hs.showNegativeOnly) exportRows = exportRows.filter((row) => row.freeToPromise < 0);
 
     const filtered = exportRows.filter((r) => {
-      if (r.freeToPromise > 0) return exportIncludePositive;
-      if (r.freeToPromise < 0) return exportIncludeNegative;
-      return exportIncludeZero;
+      if (r.freeToPromise > 0) return hs.exportIncludePositive;
+      if (r.freeToPromise < 0) return hs.exportIncludeNegative;
+      return hs.exportIncludeZero;
     });
 
     const rows = filtered.map((r) => ({
@@ -516,11 +226,11 @@ export function useFactoryStockAllocationV5Model() {
         mode: "report",
         title: "Factory Stock Allocation",
         filters: [
-          { label: "Search", value: debouncedSearch.trim() || "All" },
-          { label: "Include positive", value: String(exportIncludePositive) },
-          { label: "Include negative", value: String(exportIncludeNegative) },
-          { label: "Include zero", value: String(exportIncludeZero) },
-          { label: "Include garbage/wipers", value: String(showGarbageWipers) },
+          { label: "Search", value: hs.debouncedSearch.trim() || "All" },
+          { label: "Include positive", value: String(hs.exportIncludePositive) },
+          { label: "Include negative", value: String(hs.exportIncludeNegative) },
+          { label: "Include zero", value: String(hs.exportIncludeZero) },
+          { label: "Include garbage/wipers", value: String(hs.showGarbageWipers) },
         ],
         sheets: [
           {
@@ -556,14 +266,14 @@ export function useFactoryStockAllocationV5Model() {
       });
       await writeFile(workbook, "stock_allocation_" + stamp + ".xlsx");
     } catch (error: unknown) {
-      toast({
+      hs.toast({
         title: "Export failed",
         description: error instanceof Error ? error.message : "Could not export stock allocation",
         variant: "destructive",
       });
       return;
     }
-    setExportDialogOpen(false);
+    hs.setExportDialogOpen(false);
   }
 
   /* ── Category multi-select helpers ───────────────────────────────────── */
@@ -577,69 +287,69 @@ export function useFactoryStockAllocationV5Model() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
   function toggleCategory(cat: string) {
-    setCategoryFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+    hs.setCategoryFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
   }
   const catLabel =
-    categoryFilter.length === 0
+    hs.categoryFilter.length === 0
       ? "All Categories"
-      : categoryFilter.length === 1
-        ? categoryFilter[0]
-        : `${categoryFilter.length} categories`;
+      : hs.categoryFilter.length === 1
+        ? hs.categoryFilter[0]
+        : `${hs.categoryFilter.length} categories`;
 
   return {
-    focusProformaId,
-    firstMatchRef,
-    createDrawerOpen,
-    setCreateDrawerOpen,
-    expandedRows,
-    hideZero,
-    setHideZero,
-    showNegativeOnly,
-    setShowNegativeOnly,
-    showGarbageWipers,
-    setShowGarbageWipers,
-    refreshFlash,
-    searchQuery,
-    setSearchQuery,
-    categoryFilter,
-    setCategoryFilter,
-    exportDialogOpen,
-    setExportDialogOpen,
-    exportIncludePositive,
-    setExportIncludePositive,
-    exportIncludeNegative,
-    setExportIncludeNegative,
-    exportIncludeZero,
-    setExportIncludeZero,
-    addCtDialog,
-    setAddCtDialog,
-    ctCount,
-    ctNames,
-    openAddContainers,
-    handleCtCountChange,
-    handleCtNameChange,
-    addContainersMut,
-    submitAddContainers,
-    closeDialog,
-    setCloseDialog,
-    closeProformaMut,
-    editDraftDialog,
-    setEditDraftDialog,
-    editDraftQtys,
-    setEditDraftQtys,
-    openEditDraft,
-    editDraftMut,
-    submitEditDraft,
-    linkDialog,
-    setLinkDialog,
-    linkSelected,
-    setLinkSelected,
-    unlinkedQuery,
-    linkMut,
-    restoreDialogOpen,
-    setRestoreDialogOpen,
-    cancelledContainersQuery,
-    restoreContainerMut,
+    focusProformaId: hs.focusProformaId,
+    firstMatchRef: hs.firstMatchRef,
+    createDrawerOpen: hs.createDrawerOpen,
+    setCreateDrawerOpen: hs.setCreateDrawerOpen,
+    expandedRows: hs.expandedRows,
+    hideZero: hs.hideZero,
+    setHideZero: hs.setHideZero,
+    showNegativeOnly: hs.showNegativeOnly,
+    setShowNegativeOnly: hs.setShowNegativeOnly,
+    showGarbageWipers: hs.showGarbageWipers,
+    setShowGarbageWipers: hs.setShowGarbageWipers,
+    refreshFlash: hs.refreshFlash,
+    searchQuery: hs.searchQuery,
+    setSearchQuery: hs.setSearchQuery,
+    categoryFilter: hs.categoryFilter,
+    setCategoryFilter: hs.setCategoryFilter,
+    exportDialogOpen: hs.exportDialogOpen,
+    setExportDialogOpen: hs.setExportDialogOpen,
+    exportIncludePositive: hs.exportIncludePositive,
+    setExportIncludePositive: hs.setExportIncludePositive,
+    exportIncludeNegative: hs.exportIncludeNegative,
+    setExportIncludeNegative: hs.setExportIncludeNegative,
+    exportIncludeZero: hs.exportIncludeZero,
+    setExportIncludeZero: hs.setExportIncludeZero,
+    addCtDialog: hs.addCtDialog,
+    setAddCtDialog: hs.setAddCtDialog,
+    ctCount: hs.ctCount,
+    ctNames: hs.ctNames,
+    openAddContainers: hs.openAddContainers,
+    handleCtCountChange: hs.handleCtCountChange,
+    handleCtNameChange: hs.handleCtNameChange,
+    addContainersMut: hs.addContainersMut,
+    submitAddContainers: hs.submitAddContainers,
+    closeDialog: hs.closeDialog,
+    setCloseDialog: hs.setCloseDialog,
+    closeProformaMut: hs.closeProformaMut,
+    editDraftDialog: hs.editDraftDialog,
+    setEditDraftDialog: hs.setEditDraftDialog,
+    editDraftQtys: hs.editDraftQtys,
+    setEditDraftQtys: hs.setEditDraftQtys,
+    openEditDraft: hs.openEditDraft,
+    editDraftMut: hs.editDraftMut,
+    submitEditDraft: hs.submitEditDraft,
+    linkDialog: hs.linkDialog,
+    setLinkDialog: hs.setLinkDialog,
+    linkSelected: hs.linkSelected,
+    setLinkSelected: hs.setLinkSelected,
+    unlinkedQuery: hs.unlinkedQuery,
+    linkMut: hs.linkMut,
+    restoreDialogOpen: hs.restoreDialogOpen,
+    setRestoreDialogOpen: hs.setRestoreDialogOpen,
+    cancelledContainersQuery: hs.cancelledContainersQuery,
+    restoreContainerMut: hs.restoreContainerMut,
     cancelDialog,
     setCancelDialog,
     setCancelSuperUser,

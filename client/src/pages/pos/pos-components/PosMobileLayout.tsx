@@ -1,14 +1,10 @@
-import { Search, ShoppingCart, Trash2, MapPin, User, ChevronDown, Check, Minus, Plus } from "lucide-react";
+import { Search, ShoppingCart, Trash2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card } from "@/components/ui/card";
 import { PosMobileNotes } from "./PosMobileNotes";
 import { PosSaleSubmitButton } from "./PosSaleHeader";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import type { AuthMe } from "@shared/apiTypes";
 import type {
   BankAccountRow,
@@ -18,12 +14,12 @@ import type {
   PosMutationPending,
   SaleRow,
 } from "./posTypes";
-import { getFilteredInventory } from "../utils/posCalculations";
 import type { PosItemSelectionOverrides } from "../hooks/usePosRowCalculations";
 import { PosMobileItemSheet, type PosItemRateInfo } from "./PosMobileItemSheet";
-import { useState } from "react";
+import { usePosMobileLayoutModel } from "./PosMobileLayoutModel";
+import { PosMobileCustomerSection } from "./PosMobileCustomerSection";
 
-interface PosMobileLayoutProps {
+export interface PosMobileLayoutProps {
   posUser?: AuthMe | null;
   activeLocation: Location | null;
   allLocations: Location[];
@@ -110,29 +106,7 @@ export function PosMobileLayout({
   formatDisplayAmount,
   isSpCompany,
 }: PosMobileLayoutProps) {
-  const filteredInventory = getFilteredInventory(inventory, searchTerm).slice(0, 60);
-  const validRows = rows.filter((row) => row.stockItemId && row.quantity > 0);
-  // A line stays on screen while its quantity is being retyped. Filtering the
-  // cards by quantity > 0 unmounted the line (and its focused input) the moment
-  // a cashier cleared "1" to type "3", leaving an invisible zero-quantity row.
-  const cartRows = rows.filter((row) => row.stockItemId);
-  const total = validRows.reduce((sum, row) => sum + row.amount, 0);
-  const quantity = validRows.reduce((sum, row) => sum + row.quantity, 0);
-  const resultsId = "pos-mobile-product-results";
-  // Tapping a result opens the item sheet (quantity + price) instead of adding a line at once.
-  const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
-
-  const openItemSheet = (item: InventoryItem) => {
-    if (!ensureItemSellable(item)) return;
-    setSheetItem(item);
-  };
-
-  const addFromSheet = (item: InventoryItem, quantity: number, rate: number) => {
-    // Same row placement, stock rule and currency handling as every other POS add; the search
-    // is cleared by selectItem and focus returns to it when the sheet closes.
-    selectItem(item, undefined, { quantity, rate });
-    setSheetItem(null);
-  };
+  const m = usePosMobileLayoutModel({ searchTerm, inventory, selectItem, ensureItemSellable, rows });
 
   return (
     <div
@@ -154,8 +128,8 @@ export function PosMobileLayout({
               ref={mobileSearchInputRef as React.RefObject<HTMLInputElement>}
               role="combobox"
               aria-autocomplete="list"
-              aria-expanded={Boolean(searchTerm && filteredInventory.length)}
-              aria-controls={resultsId}
+              aria-expanded={Boolean(searchTerm && m.filteredInventory.length)}
+              aria-controls={m.resultsId}
               autoComplete="off"
               autoCapitalize="none"
               enterKeyHint="search"
@@ -168,7 +142,7 @@ export function PosMobileLayout({
             <MobileBarcodeScanner
               onScan={(code) => {
                 const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
-                if (match) openItemSheet(match);
+                if (match) m.openItemSheet(match);
                 else setSearchTerm(code);
               }}
             />
@@ -184,14 +158,14 @@ export function PosMobileLayout({
             )}
           </div>
 
-          {searchTerm && filteredInventory.length > 0 && (
+          {searchTerm && m.filteredInventory.length > 0 && (
             <div
-              id={resultsId}
+              id={m.resultsId}
               role="listbox"
               aria-label="Matching stock items"
               className="absolute inset-x-0 top-full z-40 mt-2 max-h-[min(22rem,48dvh)] overflow-y-auto overscroll-contain rounded-xl border bg-background shadow-xl"
             >
-              {filteredInventory.map((item) => {
+              {m.filteredInventory.map((item) => {
                 const isOut = item.stock === 0;
                 const isLow = !isOut && item.stock < 10;
                 return (
@@ -201,7 +175,7 @@ export function PosMobileLayout({
                     aria-selected="false"
                     key={item.stockItemId ?? item.code}
                     className="flex min-h-14 w-full items-center justify-between gap-3 border-b px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50 active:bg-primary/10 sm:px-4"
-                    onClick={() => openItemSheet(item)}
+                    onClick={() => m.openItemSheet(item)}
                     data-testid={`button-mobile-select-item-${item.stockItemId ?? item.code}`}
                   >
                     <span className="min-w-0 flex-1">
@@ -235,178 +209,31 @@ export function PosMobileLayout({
         </div>
       </section>
 
-      <section className="border-b bg-muted/10 px-3 py-3 sm:px-4" aria-label="Sale settings">
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-          {!posUser ? (
-            <Select
-              value={activeLocation?.id?.toString()}
-              onValueChange={(value) => {
-                const location = allLocations.find((candidate) => candidate.id.toString() === value);
-                if (location) setSelectedLocation(location);
-              }}
-            >
-              <SelectTrigger className="min-h-11 w-full min-w-0" data-testid="select-mobile-location">
-                <MapPin className="mr-1 h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Location" />
-              </SelectTrigger>
-              <SelectContent>
-                {allLocations.map((location) => (
-                  <SelectItem key={location.id} value={location.id.toString()}>
-                    {location.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : posAssignedLocations.length > 1 ? (
-            <Select
-              value={posSelectedLocation?.id?.toString()}
-              onValueChange={(value) => {
-                const location = posAssignedLocations.find((candidate) => candidate.id.toString() === value);
-                if (location) setPosSelectedLocation(location);
-              }}
-            >
-              <SelectTrigger className="min-h-11 w-full min-w-0" data-testid="select-mobile-pos-location">
-                <MapPin className="mr-1 h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Location" />
-              </SelectTrigger>
-              <SelectContent>
-                {posAssignedLocations.map((location) => (
-                  <SelectItem key={location.id} value={location.id.toString()}>
-                    {location.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm">
-              <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 truncate font-medium">{activeLocation?.name}</span>
-            </div>
-          )}
-
-          <input
-            type="date"
-            value={saleDate}
-            onChange={posUser ? undefined : (event) => setSaleDate(event.target.value)}
-            readOnly={Boolean(posUser)}
-            aria-label="Sale date"
-            className={`min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-base font-mono outline-hidden focus:ring-2 focus:ring-ring ${
-              posUser ? "cursor-not-allowed opacity-60" : ""
-            }`}
-            data-testid="input-mobile-sale-date"
-          />
-        </div>
-
-        <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-          {!isSpCompany && (
-            <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background px-3">
-              <Label htmlFor="mobile-credit-sale" className="cursor-pointer text-sm font-medium">
-                Credit sale
-              </Label>
-              <Switch
-                id="mobile-credit-sale"
-                checked={isCreditSale}
-                onCheckedChange={setIsCreditSale}
-                data-testid="toggle-mobile-credit-sale"
-              />
-            </div>
-          )}
-
-          {!isSpCompany && isCreditSale ? (
-            <Popover open={mobileCustomerComboOpen} onOpenChange={setMobileCustomerComboOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full min-w-0 justify-start gap-2 font-normal"
-                  data-testid="select-mobile-customer"
-                >
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {selectedCustomerId
-                      ? customerAccounts.find((account) => String(account.id) === selectedCustomerId)?.name ||
-                        "Customer"
-                      : "Select customer…"}
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[min(22rem,calc(100vw-1rem))] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search customer…" />
-                  <CommandList>
-                    <CommandEmpty>No customer found.</CommandEmpty>
-                    <CommandGroup>
-                      {customerAccounts.map((account) => (
-                        <CommandItem
-                          key={account.id}
-                          value={account.name ?? ""}
-                          onSelect={() => {
-                            setSelectedCustomerId(String(account.id));
-                            setMobileCustomerComboOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 shrink-0 ${
-                              selectedCustomerId === String(account.id) ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                          {account.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          ) : (
-            /* Full row from sm: in a half-width cell the account select shrank to ~90px on
-               tablets and showed "Sele…" instead of the account name. */
-            <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 sm:col-span-2">
-              <Select
-                value={paymentAccountType}
-                onValueChange={
-                  posUser
-                    ? undefined
-                    : (value) => {
-                        if (value === "bank" || value === "cash") setPaymentAccountType(value);
-                      }
-                }
-                disabled={Boolean(posUser)}
-              >
-                <SelectTrigger className="min-h-11 w-full" data-testid="select-mobile-account-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="bank">Bank</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={paymentAccountId || ""}
-                onValueChange={posUser ? undefined : setPaymentAccountId}
-                disabled={Boolean(posUser)}
-              >
-                <SelectTrigger className="min-h-11 w-full min-w-0" data-testid="select-mobile-payment-account">
-                  <SelectValue placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentAccountType === "bank"
-                    ? (Array.isArray(bankAccounts) ? bankAccounts : []).map((account) => (
-                        <SelectItem key={account.id} value={String(account.id)}>
-                          {account.name} ({account.code})
-                        </SelectItem>
-                      ))
-                    : cashLedgerAccounts.map((account) => (
-                        <SelectItem key={account.id} value={String(account.id)}>
-                          {account.name}
-                        </SelectItem>
-                      ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-      </section>
+      <PosMobileCustomerSection
+        posUser={posUser}
+        activeLocation={activeLocation}
+        allLocations={allLocations}
+        setSelectedLocation={setSelectedLocation}
+        posAssignedLocations={posAssignedLocations}
+        posSelectedLocation={posSelectedLocation}
+        setPosSelectedLocation={setPosSelectedLocation}
+        saleDate={saleDate}
+        setSaleDate={setSaleDate}
+        isSpCompany={isSpCompany}
+        isCreditSale={isCreditSale}
+        setIsCreditSale={setIsCreditSale}
+        mobileCustomerComboOpen={mobileCustomerComboOpen}
+        setMobileCustomerComboOpen={setMobileCustomerComboOpen}
+        selectedCustomerId={selectedCustomerId}
+        customerAccounts={customerAccounts}
+        setSelectedCustomerId={setSelectedCustomerId}
+        paymentAccountType={paymentAccountType}
+        setPaymentAccountType={setPaymentAccountType}
+        paymentAccountId={paymentAccountId}
+        setPaymentAccountId={setPaymentAccountId}
+        bankAccounts={bankAccounts}
+        cashLedgerAccounts={cashLedgerAccounts}
+      />
 
       <section className="min-w-0 space-y-3 px-3 py-4 sm:px-4" aria-labelledby="pos-mobile-cart-title">
         <div className="flex min-w-0 items-center justify-between gap-3">
@@ -415,19 +242,19 @@ export function PosMobileLayout({
               Current sale
             </h2>
             <p className="text-xs text-muted-foreground">
-              {validRows.length} {validRows.length === 1 ? "item" : "items"} · Qty {quantity.toFixed(0)}
+              {m.validRows.length} {m.validRows.length === 1 ? "item" : "items"} · Qty {m.quantity.toFixed(0)}
             </p>
           </div>
           <ShoppingCart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         </div>
 
-        {cartRows.length === 0 ? (
+        {m.cartRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center text-muted-foreground">
             <ShoppingCart className="h-12 w-12 opacity-30" />
             <p className="text-sm">Search above to add items.</p>
           </div>
         ) : (
-          cartRows.map((row) => {
+          m.cartRows.map((row) => {
             const actualIndex = rows.indexOf(row);
             return (
               <Card key={row.id} className="min-w-0 p-3 shadow-xs sm:p-4">
@@ -523,13 +350,13 @@ export function PosMobileLayout({
       <PosMobileNotes notes={notes} setNotes={setNotes} />
 
       <PosMobileItemSheet
-        item={sheetItem}
+        item={m.sheetItem}
         onOpenChange={(open) => {
-          if (!open) setSheetItem(null);
+          if (!open) m.setSheetItem(null);
         }}
-        rateInfo={sheetItem ? resolveItemRate(sheetItem) : null}
+        rateInfo={m.sheetItem ? resolveItemRate(m.sheetItem) : null}
         formatDisplayAmount={formatDisplayAmount}
-        onAdd={addFromSheet}
+        onAdd={m.addFromSheet}
         returnFocusRef={mobileSearchInputRef}
       />
 
@@ -542,10 +369,10 @@ export function PosMobileLayout({
         <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">
-              {validRows.length} {validRows.length === 1 ? "item" : "items"} · Qty {quantity.toFixed(0)}
+              {m.validRows.length} {m.validRows.length === 1 ? "item" : "items"} · Qty {m.quantity.toFixed(0)}
             </p>
             <p className="truncate font-mono text-xl font-bold tabular-nums sm:text-2xl">
-              {formatDisplayAmount(total)}
+              {formatDisplayAmount(m.total)}
             </p>
           </div>
           <PosSaleSubmitButton

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
 
@@ -25,7 +26,8 @@ const [
     read("client/src/lib/accountingRequestFetchGuard.ts"),
     read("vite.config.ts"),
     read("build/viteHeavyListPaginationPlugin.ts"),
-    read("client/src/pages/StockEntryHistory.tsx"),
+    // The page keeps its data wiring in extracted siblings (see ./lib/readModuleFamily.mjs).
+    readModuleFamily(path.join(ROOT, "client/src/pages/StockEntryHistory.tsx")),
     read("client/src/pages/stockentryhistory/reports.ts"),
     read("client/src/pages/stockentryhistory/reportsLegacy.ts"),
     read("server/routes/factory/factoryStockEntryHistoryPaginationRoutes.ts"),
