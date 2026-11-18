@@ -56,6 +56,7 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
+import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
@@ -273,10 +274,19 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
+  const zmwAmounts = lockedVoucher.currency === "ZMW"
+    ? calculateZmwSaleAmounts(
+        (items as PosEditSaleItemInput[]).map((item) => ({ ...item, rate: item.sellingPrice })),
+        String(lockedVoucher.exchangeRate),
+        true
+      )
+    : null;
+  const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
+
   await updateVoucherRecord(tx, {
     voucherId,
     description: typeof description === "string" ? description : null,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
     locationChanged,
     targetLocationId,
     oldLocationId,
@@ -287,7 +297,8 @@ export async function applyPosSaleUpdateTx(
   await rebuildSaleAccountingEntries(tx, {
     voucherId,
     oldEntries,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
+    nativeZmwTotal: zmwAmounts?.nativeTotal,
     paymentAccountType: rawPaymentAccountType,
     paymentAccountId: rawPaymentAccountId,
     isSpCompanyEdit,
@@ -368,7 +379,7 @@ export async function applyPosSaleUpdateTx(
   return {
     existingVoucher: lockedVoucher,
     targetLocationId,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
     totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
     isGoldenCoastEdit,
     editBefore: editContext.before,
