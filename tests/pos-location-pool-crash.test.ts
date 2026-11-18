@@ -22,6 +22,19 @@ describe("POS location database-pool crash protection", () => {
     expect(middleware).not.toContain("assignedLocations.map");
   });
 
+
+  it("binds assigned POS locations before the cashier screen renders", () => {
+    const pos = source("client/src/pages/pos/POS.tsx");
+    const queries = source("client/src/pages/pos/hooks/usePosQueries.ts");
+
+    // Regression: /pos must never read an unbound posAssignedLocations variable.
+    expect(pos).toContain("posAssignedLocations: assignedPosLocations = []");
+    expect(pos).toContain("assignedPosLocations.length === 0");
+    expect(pos).toContain("posAssignedLocations={assignedPosLocations}");
+    expect(pos).not.toContain("posAssignedLocations={posAssignedLocations}");
+    expect(queries).toContain("data: posAssignedLocations = []");
+  });
+
   it("serializes cold-cache net-profit calculations", () => {
     const guard = source("server/runtimeMemoryGuard.mjs");
 
