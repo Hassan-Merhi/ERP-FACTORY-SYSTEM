@@ -14,11 +14,13 @@ import { getOrCreateSalesRevenueAccount, fetchSupplierPartnerAccountingContext }
 import { POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
+import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 import { offlineEnteredRate, err } from "./createSaleServiceHelpers";
 import type { CreatePosSaleParams } from "./posSaleTypes";
-import type { ValidateInventoryAvailabilityResult } from "./createSaleService";
+
+type ValidateInventoryAvailabilityResult = Awaited<ReturnType<typeof validateInventoryAvailability>>;
 
 export async function preparePosSale({
   params,
@@ -143,8 +145,8 @@ export async function preparePosSale({
 
   const grandTotalResult = calculateGrandTotal(items);
   if ("error" in grandTotalResult) return { done: true as const, value: err(grandTotalResult.error) };
-  const { grandTotal } = grandTotalResult;
-
+  let { grandTotal } = grandTotalResult;
+  let nativeZmwTotal: string | undefined;
   const salesAccountResult = await getOrCreateSalesRevenueAccount(currentCompanyId);
   if ("error" in salesAccountResult) return { done: true as const, value: err(salesAccountResult.error) };
   const { salesAccount } = salesAccountResult;
@@ -165,9 +167,6 @@ export async function preparePosSale({
   // backdated ZMW sale's approved rate differs from the current rate.
   let lockedPosCurrency: { currency: string; exchangeRate: string | null };
   try {
-    // Offline (owner decision 2026-11-02): the cashier's entered rate is the
-    // sale's rate on the factory LAN server, and the cloud replay posts at
-    // that same rate. Online, the company's effective-dated rate is locked.
     const enteredRate = lanCapture ? offlineEnteredRate(currency, exchangeRate) : null;
     lockedPosCurrency =
       params.lockedCurrency ??
@@ -183,11 +182,13 @@ export async function preparePosSale({
     throw error;
   }
 
-  // Verify original ZMW POS unit prices against the USD line prices at the
-  // exact company/date rate before inventory or voucher writes. This blocks
-  // stale client rates, silent currency substitution, and altered USD prices.
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
+    if (lockedPosCurrency.currency === "ZMW") {
+      const amounts = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+      nativeZmwTotal = amounts.nativeTotal;
+      grandTotal = amounts.usdTotal;
+    }
   } catch (error) {
     if (error instanceof PosZmwRateError) {
       return {
@@ -201,7 +202,6 @@ export async function preparePosSale({
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return { done: true as const, value: err(stockExistsError.error) };
 
-  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
   const mirrorRefusal = await baleMirrorMovementRefusal(
     db,
     currentCompanyId,
@@ -247,6 +247,7 @@ export async function preparePosSale({
     effectiveShiftId,
     parsedLocationId,
     grandTotal,
+    nativeZmwTotal,
     salesAccount,
     location,
     voucherDate,

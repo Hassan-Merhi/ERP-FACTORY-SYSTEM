@@ -1,7 +1,7 @@
 /**
  * server/services/pos/createSaleService.ts
  *
- * PHASE 19 — POS Backend Sale Creation Structural Split.
+ * POS sale creation, inventory and accounting posting.
  */
 import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger";
@@ -20,7 +20,6 @@ import { stockItems, stockItemLocationPrices, salesItems } from "@shared/schema"
 import { eq, and } from "drizzle-orm";
 import type { CreatePosSaleParams, CreatePosSaleResult, PosSaleResponseItem, PosSaleVoucher } from "./posSaleTypes";
 import { checkIdempotentSale } from "./validateSaleRequest";
-import { validateInventoryAvailability } from "./buildSaleItems";
 import { buildSaleAccountingLines } from "./postSaleAccounting";
 import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
@@ -31,8 +30,6 @@ import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx } from "../../edge/phase9PosOutbox";
 import { preparePosSale } from "./createSaleServicePrepare";
-
-export type ValidateInventoryAvailabilityResult = Awaited<ReturnType<typeof validateInventoryAvailability>>;
 
 export async function createPosSale(
   params: CreatePosSaleParams,
@@ -46,6 +43,7 @@ export async function createPosSale(
     clientSaleId,
     location,
     grandTotal,
+    nativeZmwTotal,
     isCreditSale,
     accountType,
     accountId,
@@ -87,6 +85,7 @@ export async function createPosSale(
       const saleLines = await buildSaleAccountingLines(tx, {
         voucherLabel: location.name,
         grandTotal,
+        nativeZmwTotal,
         isCreditSale,
         accountType,
         accountId,
@@ -99,7 +98,6 @@ export async function createPosSale(
         currency: lockedPosCurrency.currency,
         exchangeRate: lockedPosCurrency.exchangeRate,
       });
-      // Offline sales take the next LAN invoice number, never an SV- number.
       const lanInvoice = lanCapture ? await allocatePhase9PosInvoiceTx(tx) : null;
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
@@ -347,6 +345,7 @@ export async function createPosSale(
       location,
       items: saleItems,
       grandTotal: grandTotal.toFixed(2),
+      ...(nativeZmwTotal ? { nativeZmwTotal } : {}),
       voucherNumber,
       saleDate: voucherDate,
       isCreditSale,
