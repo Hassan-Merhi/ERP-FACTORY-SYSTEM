@@ -1952,10 +1952,8 @@
         "client/src/pages/pos/POSContainerDetail.tsx",
         "client/src/pages/pos/POSContainerTracking.tsx",
         "client/src/pages/pos/POSCustomers.tsx",
-        "client/src/pages/pos/POSDashboard.tsx",
         "client/src/pages/pos/POSDaybook.tsx",
         "client/src/pages/pos/POSPriceList.tsx",
-        "client/src/pages/pos/POSSettings.tsx",
         "client/src/pages/pos/PosTransferOrders.tsx"
       ],
       "resource": "retail.pos",
@@ -1979,8 +1977,7 @@
         "/properties/analytics"
       ],
       "pageFiles": [
-        "client/src/pages/properties/PropertiesAnalytics.tsx",
-        "client/src/pages/properties/PropertiesDashboard.tsx"
+        "client/src/pages/properties/PropertiesAnalytics.tsx"
       ],
       "resource": "properties.analytics",
       "actions": [

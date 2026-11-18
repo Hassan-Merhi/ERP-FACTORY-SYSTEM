@@ -25,6 +25,7 @@ export default function FactoryContacts() {
     isLoading,
     openEdit,
     openNew,
+    orderedContacts,
     pageSize,
     pages,
     prefs,
@@ -62,6 +63,7 @@ export default function FactoryContacts() {
         isLoading={isLoading}
         openEdit={openEdit}
         openNew={openNew}
+        orderedContacts={orderedContacts}
         pageSize={pageSize}
         pages={pages}
         prefs={prefs}

@@ -1,13 +1,8 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { PageHeader } from "@/components/PageHeader";
-import { useState } from "react";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Building2,
@@ -54,23 +49,8 @@ import { ScheduledWhatsAppMessagesTab } from "./settings/ScheduledWhatsAppMessag
 import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
 import { FloatingWidgetsSettingsCard } from "./settings/FloatingWidgetsSettingsCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { Company } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
-
-interface SettingsUserToDelete {
-  id: string;
-  username?: string;
-}
 
 interface SettingsSidebarItem {
   key: string;
@@ -82,15 +62,12 @@ interface SettingsSidebarItem {
 }
 
 export default function Settings() {
-  const { toast } = useToast();
   const { language } = useApplicationLanguage();
   const excelAppearanceCopy = getExcelAppearanceCopy(language);
   const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
   const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -100,21 +77,6 @@ export default function Settings() {
     queryKey: ["/api/auth/me"],
   });
 
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await modeApiRequest("DELETE", `/api/users/${userId}`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "User deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      setUserToDelete(null);
-    },
-    onError: (error: ClientErrorLike) => {
-      toast({ title: "Delete failed", description: error.message || "Failed to delete user", variant: "destructive" });
-    },
-  });
-
   const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
@@ -122,6 +84,7 @@ export default function Settings() {
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
   const isDeveloperMode = effectiveRole === "Developer";
   const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
+  const canAccessAdminSections = canManageSessions && ["Admin", "Owner", "Developer"].includes(effectiveRole);
 
   const sidebarGroups = [
     {
@@ -179,18 +142,18 @@ export default function Settings() {
                 key: "automatic-priority-printing",
                 label: "Automatic Priority Printing",
                 icon: Printer,
-                devOnly: true,
+                adminOnly: true,
               },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
                 icon: Images,
                 href: "/factory/label-banners",
-                devOnly: true,
+                adminOnly: true,
               },
-              { key: "fx-rates", label: "FX Rates", icon: TrendingUp, devOnly: true },
+              { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
-                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, devOnly: true }]
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, adminOnly: true }]
                 : []),
             ]
           : [],
@@ -205,7 +168,7 @@ export default function Settings() {
     items.filter(
       (item) =>
         (!item.devOnly || isDeveloperMode) &&
-        (!item.adminOnly || canManageSessions) &&
+        (!item.adminOnly || canAccessAdminSections) &&
         (item.key !== "system" || canAccessSystemTools)
     );
   // Non-developers should never see headings with no accessible Settings pages.
@@ -326,18 +289,18 @@ export default function Settings() {
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
           {activeSection === "pos-setup" && isDeveloperMode && <PosSetupHub userRole={effectiveRole} />}
-          {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "automatic-priority-printing" && canAccessAdminSections && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
           )}
-          {activeSection === "fx-rates" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "fx-rates" && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">
               <FxRatesCard />
             </div>
           )}
           {activeSection === "company-timezone" &&
-            isDeveloperMode &&
+            canAccessAdminSections &&
             appMode === "factory" &&
             canManageCompanyTimezone && (
               <div className="space-y-5 max-w-2xl">
@@ -358,26 +321,6 @@ export default function Settings() {
               companies={companies}
             />
           )}
-
-          <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete User</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {userToDelete?.username}?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
     </div>

@@ -18,11 +18,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAdvancesPanelState } from "./useAdvancesPanelState";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export function AdvancesPanelSection2({
   canChangeExistingRecords,
   filterStatus,
   filterWorker,
+  filtered,
+  formatDate,
   setAddOpen,
   setBulkOpen,
   setCashAdjOpen,
@@ -38,6 +41,8 @@ export function AdvancesPanelSection2({
   | "canChangeExistingRecords"
   | "filterStatus"
   | "filterWorker"
+  | "filtered"
+  | "formatDate"
   | "setAddOpen"
   | "setBulkOpen"
   | "setCashAdjOpen"
@@ -75,6 +80,22 @@ export function AdvancesPanelSection2({
         </SelectContent>
       </Select>
       <div className="ml-auto flex items-center gap-2 flex-wrap">
+        <RowsExportMenu
+          title="Worker Advances"
+          rows={filtered}
+          columns={[
+            { header: "Worker", value: (adv) => adv.workerName },
+            { header: "Date", value: (adv) => formatDate(adv.advanceDate) },
+            { header: "Amount (USD)", value: (adv) => parseFloat(adv.amount || "0"), type: "number" },
+            { header: "Remaining (USD)", value: (adv) => parseFloat(adv.remainingBalance || "0"), type: "number" },
+            { header: "Type", value: (adv) => (adv.repaymentType === "manual_repayment" ? "Loan" : "Salary Ded.") },
+            { header: "Status", value: (adv) => (adv.fullyPaid ? "Paid" : "Outstanding") },
+            { header: "Notes", value: (adv) => adv.notes },
+          ]}
+          resource="factory.payroll"
+          size="default"
+          data-testid="button-export-advances"
+        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" data-testid="button-advances-actions">

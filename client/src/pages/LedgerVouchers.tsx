@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { ErpListTable } from "@/erp-core";
 import { FileText } from "lucide-react";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
@@ -125,6 +126,29 @@ export default function LedgerVouchers() {
     );
   }
 
+  // Export rows: the opening line, then the visible vouchers with the same running balance.
+  type ExportLine = { date: string; type: string; particulars: string; debit: number; credit: number; balance: number };
+  let exportBalance = data?.openingBalance ?? 0;
+  const exportLines: ExportLine[] = data
+    ? [
+        { date: "", type: "", particulars: "Opening Balance", debit: 0, credit: 0, balance: data.openingBalance },
+        ...(Array.isArray(data.vouchers) ? data.vouchers : [])
+          .map((v) => {
+            exportBalance = exportBalance + v.credit - v.debit;
+            return { ...v, runningBalance: exportBalance };
+          })
+          .filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date }))
+          .map((v) => ({
+            date: formatShortDate(v.date),
+            type: v.voucherType,
+            particulars: v.particulars,
+            debit: v.debit,
+            credit: v.credit,
+            balance: v.runningBalance,
+          })),
+      ]
+    : [];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -135,6 +159,39 @@ export default function LedgerVouchers() {
           meta={<span>Ledger Vouchers</span>}
         >
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="ledger-vouchers-period-filter" />
+          <RowsExportMenu
+            title={`${data?.account?.name ?? "Ledger"} Vouchers`}
+            sheetName="Ledger Vouchers"
+            rows={exportLines}
+            columns={[
+              { header: "Date", value: (line) => line.date },
+              { header: "Type", value: (line) => line.type },
+              { header: "Particulars", value: (line) => line.particulars },
+              { header: "Debit", value: (line) => (line.debit > 0 ? line.debit : null), type: "number" },
+              { header: "Credit", value: (line) => (line.credit > 0 ? line.credit : null), type: "number" },
+              {
+                header: "Balance",
+                value: (line) => (line.balance === 0 ? null : Math.abs(line.balance)),
+                type: "number",
+              },
+              { header: "Dr/Cr", value: (line) => (line.balance === 0 ? "" : line.balance >= 0 ? "Cr" : "Dr") },
+            ]}
+            footer={
+              data
+                ? [
+                    "Current Balance",
+                    null,
+                    null,
+                    data.totals.debit > 0 ? data.totals.debit : null,
+                    data.totals.credit > 0 ? data.totals.credit : null,
+                    data.closingBalance === 0 ? null : Math.abs(data.closingBalance),
+                    data.closingBalance === 0 ? "" : data.closingBalance >= 0 ? "Cr" : "Dr",
+                  ]
+                : undefined
+            }
+            period={{ from: periodFilter.fromDate, to: periodFilter.toDate }}
+            resource="erp.accounts"
+          />
         </PageHeader>
       </div>
 

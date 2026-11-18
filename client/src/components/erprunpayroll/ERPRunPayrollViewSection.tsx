@@ -1,11 +1,10 @@
 // Extracted from ./ERPRunPayrollView.tsx to keep that module under the source-size cap.
-import { ArrowLeft, CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { useERPRunPayrollModel } from "./useERPRunPayrollModel";
-import { SearchField } from "@/components/ui/search-field";
 
 export interface ERPRunPayrollViewProps {
   model: ReturnType<typeof useERPRunPayrollModel>;
@@ -17,11 +16,6 @@ export function useERPRunPayrollViewState({ model }: ERPRunPayrollViewProps) {
     setActiveTab,
     canChangeExistingRecords,
     canCreate,
-    searchQuery,
-    setSearchQuery,
-    expandedGroups,
-    selectedWorkers,
-    step,
     setStep,
     previewItems,
     previewDate,
@@ -39,16 +33,7 @@ export function useERPRunPayrollViewState({ model }: ERPRunPayrollViewProps) {
     payrollRuns,
     runsLoading,
     cashAccounts,
-    workers,
-    workerGroups,
-    ungroupedWorkers,
     advanceBalanceByEmployee,
-    filtered,
-    workerById,
-    toggleGroup,
-    toggleWorker,
-    toggleGroupSelection,
-    enterPreview,
     updateDeduction,
     saveDraftMutation,
     payRunMutation,
@@ -57,7 +42,6 @@ export function useERPRunPayrollViewState({ model }: ERPRunPayrollViewProps) {
     printRun,
     exportRunExcel,
     isLoading,
-    totalSelectedBase,
     previewTotalNet,
     previewTotalBase,
     formatAmount,
@@ -70,10 +54,7 @@ export function useERPRunPayrollViewState({ model }: ERPRunPayrollViewProps) {
     cashAccounts,
     deleteRunId,
     deleteRunMutation,
-    enterPreview,
-    expandedGroups,
     exportRunExcel,
-    filtered,
     formatAmount,
     isLoading,
     payAccountId,
@@ -88,29 +69,17 @@ export function useERPRunPayrollViewState({ model }: ERPRunPayrollViewProps) {
     printRun,
     runsLoading,
     saveDraftMutation,
-    searchQuery,
-    selectedWorkers,
     setActiveTab,
     setDeleteRunId,
     setPayAccountId,
     setPayDialogRun,
     setPreviewDate,
     setPreviewNotes,
-    setSearchQuery,
     setStep,
     setUndoRunId,
-    step,
-    toggleGroup,
-    toggleGroupSelection,
-    toggleWorker,
-    totalSelectedBase,
     undoRunId,
     undoRunMutation,
-    ungroupedWorkers,
     updateDeduction,
-    workerById,
-    workerGroups,
-    workers,
   };
 }
 
@@ -271,60 +240,6 @@ export function ERPRunPayrollViewSection({
         <span>
           Net Payable: <span className="font-semibold text-foreground">{formatAmount(previewTotalNet)}</span>
         </span>
-      </div>
-    </div>
-  );
-}
-
-export function ERPRunPayrollViewSection2({
-  enterPreview,
-  formatAmount,
-  previewDate,
-  searchQuery,
-  selectedWorkers,
-  setPreviewDate,
-  setSearchQuery,
-  totalSelectedBase,
-}: Pick<
-  ReturnType<typeof useERPRunPayrollViewState>,
-  | "enterPreview"
-  | "formatAmount"
-  | "previewDate"
-  | "searchQuery"
-  | "selectedWorkers"
-  | "setPreviewDate"
-  | "setSearchQuery"
-  | "totalSelectedBase"
->) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 mb-4">
-      <SearchField
-        value={searchQuery}
-        onValueChange={setSearchQuery}
-        placeholder="Search by name, code, department..."
-        wrapperClassName="flex-1 min-w-52"
-        data-testid="input-search-workers"
-      />
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Label className="text-sm whitespace-nowrap">Payroll Date</Label>
-          <Input
-            type="date"
-            value={previewDate}
-            onChange={(e) => setPreviewDate(e.target.value)}
-            className="w-40"
-            data-testid="input-payroll-date"
-          />
-        </div>
-        {selectedWorkers.size > 0 && (
-          <span className="text-sm text-muted-foreground">
-            {selectedWorkers.size} selected — {formatAmount(totalSelectedBase)}
-          </span>
-        )}
-        <Button onClick={enterPreview} disabled={selectedWorkers.size === 0} data-testid="button-preview-payroll">
-          <ClipboardList className="h-4 w-4 mr-2" />
-          Preview Payroll ({selectedWorkers.size})
-        </Button>
       </div>
     </div>
   );

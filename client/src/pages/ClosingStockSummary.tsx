@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import { PeriodFilter, type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { ErpPage, formatErpFixedQuantity } from "@/erp-core";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
 import { PageActions, financialNumberClassName } from "@/components/ui/page-shell";
@@ -120,6 +121,31 @@ export default function ClosingStockSummary() {
       headerActions={
         <PageActions>
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter-closing-stock" />
+          <RowsExportMenu
+            title="Closing Stock Summary"
+            rows={data?.stockGroups ?? []}
+            columns={[
+              { header: "Particulars", value: (group) => group.name },
+              { header: "Quantity (BL)", value: (group) => group.closing.quantity || null, type: "number" },
+              {
+                header: "Rate",
+                value: (group) => (group.closing.rate > 0 ? group.closing.rate : null),
+                type: "number",
+              },
+              {
+                header: "Value",
+                value: (group) => (group.closing.value > 0 ? group.closing.value : null),
+                type: "number",
+              },
+            ]}
+            footer={
+              data?.grandTotal
+                ? ["Grand Total", data.grandTotal.quantity, data.grandTotal.rate, data.grandTotal.value]
+                : undefined
+            }
+            resource="erp.inventory"
+            period={{ from: periodFilter.fromDate, to: periodFilter.toDate }}
+          />
           {canChangeExistingRecords && data?.grandTotal && data.grandTotal.value > 0 ? (
             <Button onClick={() => setShowCarryForwardDialog(true)} data-testid="button-carryforward-stock">
               <RefreshCw className="mr-2 h-4 w-4" />

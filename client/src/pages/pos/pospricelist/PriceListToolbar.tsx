@@ -192,7 +192,7 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
           </SelectContent>
         </Select>
       )}
-      {Boolean(model.posUser) && (
+      {Boolean(model.posUser) && !model.canEditPrices && (
         <button
           type="button"
           data-testid="button-show-zero-qty"

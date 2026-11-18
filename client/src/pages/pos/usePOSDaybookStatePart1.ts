@@ -85,7 +85,7 @@ export function usePOSDaybookStatePart1() {
     error,
     refetch,
   } = useQuery<Voucher[]>({
-    queryKey: ["/api/vouchers", periodFilter.fromDate, periodFilter.toDate],
+    queryKey: ["/api/vouchers", selectedCompany?.id, periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const params = new URLSearchParams({
         startDate: periodFilter.fromDate,
@@ -95,16 +95,20 @@ export function usePOSDaybookStatePart1() {
       if (!response.ok) throw new Error("Failed to load POS transactions");
       return response.json();
     },
-    enabled: !isLoadingUser,
+    enabled: !isLoadingUser && Boolean(selectedCompany?.id),
   });
 
   const filteredVouchers = useMemo(
     () =>
       vouchers
         .filter((voucher) => {
-          const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer"].includes(voucher.voucherType);
+          const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer", "Transfer"].includes(voucher.voucherType);
           if (!isSupportedType || voucher.optional) return false;
           if (!isPOS) return true;
+          // The server already validates each transfer's source/destination
+          // stock legs and selects an assigned display location. Do not hide
+          // receiving transfers merely because their voucher header is elsewhere.
+          if (voucher.voucherType !== "Sales") return true;
           return assignedLocationIds.has(voucher.locationId);
         })
         .sort((a, b) => {

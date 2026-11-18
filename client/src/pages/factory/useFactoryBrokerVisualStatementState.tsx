@@ -35,7 +35,7 @@ export interface BrokerContainer {
   commissionCurrency: string;
 }
 
-interface BrokerPayment {
+export interface BrokerPayment {
   id: number;
   date?: string | null;
   type: string;

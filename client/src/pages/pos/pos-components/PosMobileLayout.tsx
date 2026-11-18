@@ -25,6 +25,7 @@ import { useState } from "react";
 
 interface PosMobileLayoutProps {
   posUser?: AuthMe | null;
+  editVoucherId?: string;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -70,6 +71,7 @@ interface PosMobileLayoutProps {
 
 export function PosMobileLayout({
   posUser,
+  editVoucherId,
   activeLocation,
   allLocations,
   posAssignedLocations,
@@ -110,6 +112,7 @@ export function PosMobileLayout({
   formatDisplayAmount,
   isSpCompany,
 }: PosMobileLayoutProps) {
+  const lockedPosEdit = Boolean(posUser && editVoucherId);
   const filteredInventory = getFilteredInventory(inventory, searchTerm).slice(0, 60);
   const validRows = rows.filter((row) => row.stockItemId && row.quantity > 0);
   // A line stays on screen while its quantity is being retyped. Filtering the
@@ -121,19 +124,16 @@ export function PosMobileLayout({
   const resultsId = "pos-mobile-product-results";
   // Tapping a result opens the item sheet (quantity + price) instead of adding a line at once.
   const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
-
   const openItemSheet = (item: InventoryItem) => {
     if (!ensureItemSellable(item)) return;
     setSheetItem(item);
   };
-
   const addFromSheet = (item: InventoryItem, quantity: number, rate: number) => {
     // Same row placement, stock rule and currency handling as every other POS add; the search
     // is cleared by selectItem and focus returns to it when the sheet closes.
     selectItem(item, undefined, { quantity, rate });
     setSheetItem(null);
   };
-
   return (
     <div
       data-pos-mobile-page="true"
@@ -183,7 +183,6 @@ export function PosMobileLayout({
               </button>
             )}
           </div>
-
           {searchTerm && filteredInventory.length > 0 && (
             <div
               id={resultsId}
@@ -234,7 +233,6 @@ export function PosMobileLayout({
           )}
         </div>
       </section>
-
       <section className="border-b bg-muted/10 px-3 py-3 sm:px-4" aria-label="Sale settings">
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {!posUser ? (
@@ -260,6 +258,7 @@ export function PosMobileLayout({
           ) : posAssignedLocations.length > 1 ? (
             <Select
               value={posSelectedLocation?.id?.toString()}
+              disabled={lockedPosEdit}
               onValueChange={(value) => {
                 const location = posAssignedLocations.find((candidate) => candidate.id.toString() === value);
                 if (location) setPosSelectedLocation(location);
@@ -283,7 +282,6 @@ export function PosMobileLayout({
               <span className="min-w-0 truncate font-medium">{activeLocation?.name}</span>
             </div>
           )}
-
           <input
             type="date"
             value={saleDate}
@@ -296,7 +294,6 @@ export function PosMobileLayout({
             data-testid="input-mobile-sale-date"
           />
         </div>
-
         <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {!isSpCompany && (
             <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background px-3">
@@ -307,12 +304,19 @@ export function PosMobileLayout({
                 id="mobile-credit-sale"
                 checked={isCreditSale}
                 onCheckedChange={setIsCreditSale}
+                disabled={lockedPosEdit}
                 data-testid="toggle-mobile-credit-sale"
               />
             </div>
           )}
-
-          {!isSpCompany && isCreditSale ? (
+          {lockedPosEdit ? (
+            <div
+              className="flex min-h-11 items-center rounded-lg border bg-muted/30 px-3 text-sm"
+              data-testid="pos-mobile-edit-payment-locked"
+            >
+              {isCreditSale ? "Credit" : "Original payment"} — unchanged
+            </div>
+          ) : !isSpCompany && isCreditSale ? (
             <Popover open={mobileCustomerComboOpen} onOpenChange={setMobileCustomerComboOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -407,7 +411,6 @@ export function PosMobileLayout({
           )}
         </div>
       </section>
-
       <section className="min-w-0 space-y-3 px-3 py-4 sm:px-4" aria-labelledby="pos-mobile-cart-title">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
@@ -420,7 +423,6 @@ export function PosMobileLayout({
           </div>
           <ShoppingCart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         </div>
-
         {cartRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center text-muted-foreground">
             <ShoppingCart className="h-12 w-12 opacity-30" />
@@ -448,7 +450,6 @@ export function PosMobileLayout({
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-
                 <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                   <div className="min-w-0 space-y-1">
                     <Label htmlFor={`input-mobile-qty-${actualIndex}`} className="text-xs text-muted-foreground">
@@ -489,7 +490,6 @@ export function PosMobileLayout({
                       </Button>
                     </div>
                   </div>
-
                   <div className="grid min-w-0 grid-cols-2 gap-3">
                     <div className="min-w-0 space-y-1">
                       <Label htmlFor={`input-mobile-rate-${actualIndex}`} className="text-xs text-muted-foreground">
@@ -519,9 +519,7 @@ export function PosMobileLayout({
           })
         )}
       </section>
-
       <PosMobileNotes notes={notes} setNotes={setNotes} />
-
       <PosMobileItemSheet
         item={sheetItem}
         onOpenChange={(open) => {
@@ -532,7 +530,6 @@ export function PosMobileLayout({
         onAdd={addFromSheet}
         returnFocusRef={mobileSearchInputRef}
       />
-
       {/* Sticky inside the POS scroller (not viewport-fixed), so on a tablet with the sidebar pinned the
           bar spans the content column instead of painting over the sidebar footer. */}
       <div
@@ -556,7 +553,7 @@ export function PosMobileLayout({
             data-testid="button-mobile-checkout"
             pending={Boolean(saveMutation?.isPending)}
             pendingLabel="Saving…"
-            label="Checkout"
+            label={editVoucherId ? "Update Sale" : "Checkout"}
             showIcon={false}
           />
         </div>

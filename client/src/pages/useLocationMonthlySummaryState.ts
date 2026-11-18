@@ -12,7 +12,7 @@ import { useCursorNav } from "@/contexts/CursorNavContext";
 import type { AuthMe } from "@shared/apiTypes";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
-interface MonthlyData {
+export interface MonthlyData {
   month: number;
   monthName: string;
   openingQty: number;
@@ -75,7 +75,7 @@ interface LocationMonthlySummaryData {
   };
 }
 
-function toSafeNumber(value: unknown): number {
+export function toSafeNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }

@@ -163,6 +163,8 @@ export interface InvoiceData {
   userName: string;
   customerName: string | null;
   items: InvoiceItem[];
+  /** Actual posted native debit amount (ZMW), not current-rate USD conversion. */
+  nativeZmwTotal?: number | null;
   hideProfitCols: boolean;
   compactMode: boolean;
 }

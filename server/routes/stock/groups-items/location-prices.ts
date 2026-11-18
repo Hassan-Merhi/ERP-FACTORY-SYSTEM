@@ -9,14 +9,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
-import { ownLocationIds } from "../../helpers/companyOwnership";
-import { locationPriceGroups, stockItemLocationPrices, stockItems } from "@shared/schema";
+import { stockItemLocationPrices, stockItems } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import {
-  finishStockItemEditCaptureTx,
-  stockItemEditRecorder,
-  upsertLocationPriceTx,
-} from "../../../services/inventory/stockItemEditCapture";
+import { saveLocationPrice, PosPriceWriteError } from "../../../services/pos/posPriceListEdit";
+import { ActiveCompanyPermissionContextError } from "../../../services/security/activeCompanyPermissionContext";
 
 export function registerStockItemLocationPriceRoutes(app: Express) {
   // Get all location prices for the current company (for export)
@@ -53,78 +49,15 @@ export function registerStockItemLocationPriceRoutes(app: Express) {
     }
   });
 
-  // Update or create location price for a stock item (cascades to follower locations)
-  app.post("/api/stock-items/:id/location-prices", requireAuth, requireNonPOS, async (req, res) => {
+  // Inline prices are editable by assigned, non-view-only POS cashiers too.
+  app.post("/api/stock-items/:id/location-prices", requireAuth, async (req, res) => {
     try {
-      const stockItemId = parseInt(req.params.id);
-      if (isNaN(stockItemId)) {
-        return res.status(400).json({ message: "Invalid stock item ID" });
-      }
-
-      const { locationId, sellingPrice } = req.body;
-      if (!locationId || !sellingPrice) {
-        return res.status(400).json({ message: "Location ID and selling price are required" });
-      }
-
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      // The location is a body id, outside the path-based company scope.
-      if (!(await ownLocationIds(companyId, [locationId])).has(Number(locationId))) {
-        return res.status(400).json({ message: "Location not found" });
-      }
-
-      const recorder = stockItemEditRecorder("POST /api/stock-items/:id/location-prices");
-      if (recorder.active) {
-        // Factory LAN server: the item must be this company's; every price
-        // (target and followers) is recorded for the cloud in one transaction.
-        const [item] = await db
-          .select({ id: stockItems.id })
-          .from(stockItems)
-          .where(and(eq(stockItems.id, stockItemId), eq(stockItems.companyId, companyId)));
-        if (!item) return res.status(404).json({ message: "Stock item not found" });
-        await db.transaction(async (tx) => {
-          const price = String(sellingPrice);
-          await upsertLocationPriceTx(tx, recorder, {
-            stockItemId,
-            locationId: Number(locationId),
-            sellingPrice: price,
-          });
-          const followers = await tx
-            .select({ followerLocationId: locationPriceGroups.followerLocationId })
-            .from(locationPriceGroups)
-            .where(
-              and(eq(locationPriceGroups.companyId, companyId), eq(locationPriceGroups.masterLocationId, locationId))
-            );
-          for (const f of followers) {
-            await upsertLocationPriceTx(tx, recorder, {
-              stockItemId,
-              locationId: f.followerLocationId,
-              sellingPrice: price,
-            });
-          }
-          await finishStockItemEditCaptureTx(tx, req, recorder);
-        });
-        return res.json({ message: "Location price updated successfully" });
-      }
-
-      // Save price for the target location
-      await storage.upsertLocationPrice(stockItemId, locationId, sellingPrice);
-
-      // Cascade to follower locations if this is a master location
-      if (companyId) {
-        const followers = await db
-          .select({ followerLocationId: locationPriceGroups.followerLocationId })
-          .from(locationPriceGroups)
-          .where(
-            and(eq(locationPriceGroups.companyId, companyId), eq(locationPriceGroups.masterLocationId, locationId))
-          );
-        for (const f of followers) {
-          await storage.upsertLocationPrice(stockItemId, f.followerLocationId, sellingPrice);
-        }
-      }
-
-      res.json({ message: "Location price updated successfully" });
+      const result = await saveLocationPrice(req, req.params.id, req.body?.locationId, req.body?.sellingPrice);
+      res.json({ message: "Location price updated successfully", ...result });
     } catch (error: unknown) {
+      if (error instanceof PosPriceWriteError || error instanceof ActiveCompanyPermissionContextError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

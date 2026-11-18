@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatNumber } from "@/lib/formatNumber";
@@ -147,7 +148,53 @@ export default function ProductionSummary() {
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
         <BarChart3 className="h-6 w-6 text-muted-foreground" />
-        <PageHeader title="Production Summary" />
+        <PageHeader title="Production Summary">
+          <RowsExportMenu
+            title="Production Summary"
+            sheetName="Batch Utilization"
+            rows={activeBatches}
+            columns={[
+              { header: "Batch", value: (batch) => batch.name || batch.batchCode },
+              { header: "Total (kg)", value: (batch) => parseFloat(batch.totalWeightKg || "0"), type: "number" },
+              { header: "Used (kg)", value: (batch) => parseFloat(batch.usedKg || "0"), type: "number" },
+              {
+                header: "Remaining (kg)",
+                value: (batch) => parseFloat(batch.totalWeightKg || "0") - parseFloat(batch.usedKg || "0"),
+                type: "number",
+              },
+              {
+                header: "Utilization",
+                value: (batch) => {
+                  const total = parseFloat(batch.totalWeightKg || "0");
+                  const used = parseFloat(batch.usedKg || "0");
+                  return `${(total > 0 ? Math.min((used / total) * 100, 100) : 0).toFixed(0)}%`;
+                },
+              },
+            ]}
+            extraSheets={[
+              {
+                name: "Raw Stock Status",
+                rows: allRawStock,
+                columns: [
+                  { header: "Container", value: (row: RawStockRow) => row.containerNumber },
+                  {
+                    header: "Received (kg)",
+                    value: (row: RawStockRow) => parseFloat(row.receivedKg || "0"),
+                    type: "number",
+                  },
+                  { header: "Used (kg)", value: (row: RawStockRow) => parseFloat(row.usedKg || "0"), type: "number" },
+                  {
+                    header: "Remaining (kg)",
+                    value: (row: RawStockRow) => parseFloat(row.remainingKg || "0"),
+                    type: "number",
+                  },
+                  { header: "Cost/kg", value: (row: RawStockRow) => parseFloat(row.costPerKg || "0"), type: "number" },
+                ],
+              },
+            ]}
+            resource="factory.production"
+          />
+        </PageHeader>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

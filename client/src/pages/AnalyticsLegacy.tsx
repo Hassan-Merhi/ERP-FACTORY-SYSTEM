@@ -9,6 +9,7 @@ import { ExpenseSectionsPanel } from "./analyticslegacy/components/ExpenseSectio
 import { SalesSectionPanel } from "./analyticslegacy/components/SalesSectionPanel";
 import { ContainersSectionPanel } from "./analyticslegacy/components/ContainersSectionPanel";
 import { ReportsSectionPanel } from "./analyticslegacy/components/ReportsSectionPanel";
+import { AnalyticsExportMenu } from "./analyticslegacy/components/AnalyticsExportMenu";
 
 // Layout shell. State lives in useAnalyticsLegacy; each group of mutually
 // exclusive `activeSection` blocks is its own panel component.
@@ -77,6 +78,7 @@ export default function Analytics() {
           {activeSection !== "containers" && (
             <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="analytics-period-filter" />
           )}
+          <AnalyticsExportMenu analytics={analytics} />
         </PageHeader>
 
         <BalanceSectionsPanel analytics={analytics} />

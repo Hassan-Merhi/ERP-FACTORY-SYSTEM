@@ -5,7 +5,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Package, Trash2, ShoppingCart, AlertTriangle, RefreshCw, Layers, Truck } from "lucide-react";
-import { SectionTable, fmtKg, fmtMoney, fmtN, type BucketRow, type SectionTotal } from "./BaleLedgerSectionTable";
+import { RowsExportMenu, type RowsExportColumn, type RowsExportSheet } from "@/components/export/RowsExportMenu";
+import {
+  SectionTable,
+  fmtKg,
+  fmtMoney,
+  fmtN,
+  groupByCategory,
+  type BucketRow,
+  type SectionKey,
+  type SectionTotal,
+} from "./BaleLedgerSectionTable";
 
 interface LedgerData {
   currentStock: BucketRow[];
@@ -23,6 +33,48 @@ interface LedgerData {
   };
 }
 
+const LEDGER_EXPORT_SECTIONS: readonly [SectionKey, string][] = [
+  ["currentStock", "Current Stock"],
+  ["wasteStock", "Wipers & Garbages"],
+  ["sold", "Stock Sold"],
+  ["pendingLoading", "Pending Loading"],
+  ["wasteDispatched", "Waste Dispatched"],
+];
+
+const LEDGER_EXPORT_COLUMNS: RowsExportColumn<BucketRow>[] = [
+  { header: "Category", value: (row) => row.categoryName || "—" },
+  { header: "Product", value: (row) => row.productName },
+  { header: "Bales", value: (row) => row.baleCount, type: "number" },
+  { header: "Weight (kg)", value: (row) => row.totalWeightKg, type: "number" },
+  {
+    header: "Avg Sell/Bale",
+    value: (row) => (row.baleCount > 0 && row.totalCost > 0 ? row.totalCost / row.baleCount : null),
+    type: "number",
+  },
+  { header: "Total Sell Value", value: (row) => (row.totalCost > 0 ? row.totalCost : null), type: "number" },
+];
+
+/** One worksheet per ledger section, rows grouped by category as on screen. */
+function ledgerExportSheets(data: LedgerData | undefined): RowsExportSheet<BucketRow>[] {
+  if (!data) return [];
+  return LEDGER_EXPORT_SECTIONS.map(([key, name]) => {
+    const total = data.totals[key];
+    return {
+      name,
+      rows: groupByCategory(data[key]).flatMap((group) => group.items),
+      columns: LEDGER_EXPORT_COLUMNS,
+      footer: [
+        "Subtotal",
+        null,
+        total.baleCount,
+        total.totalWeightKg,
+        total.baleCount > 0 && total.totalCost > 0 ? total.totalCost / total.baleCount : null,
+        total.totalCost > 0 ? total.totalCost : null,
+      ],
+    };
+  });
+}
+
 export default function BaleLedger() {
   const { data, isLoading, isError, refetch, isFetching } = useQuery<LedgerData>({
     queryKey: ["/api/factory/bale-ledger"],
@@ -32,6 +84,7 @@ export default function BaleLedger() {
   });
 
   const grand = data?.totals.grand;
+  const [firstSheet, ...otherSheets] = ledgerExportSheets(data);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -51,6 +104,16 @@ export default function BaleLedger() {
             <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+          <RowsExportMenu
+            title="Bale Production Ledger"
+            sheetName={firstSheet?.name}
+            rows={firstSheet?.rows ?? []}
+            columns={LEDGER_EXPORT_COLUMNS}
+            footer={firstSheet?.footer}
+            extraSheets={otherSheets}
+            resource="erp.inventory"
+            size="default"
+          />
         </PageHeader>
       </div>
 

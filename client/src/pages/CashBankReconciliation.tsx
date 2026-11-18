@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
-import { exact, fmt } from "./CashBankReconciliationTypes";
+import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsExportMenu";
+import { exact, fmt, type BookEntry } from "./CashBankReconciliationTypes";
 import { CashBankReconciliationSection, useCashBankReconciliationState } from "./useCashBankReconciliationState";
 import { CashBankReconciliationCardSection } from "./CashBankReconciliationCardSection";
 import { SelectContent, SelectTrigger, SelectValue, Select, SelectItem } from "@/components/ui/select";
@@ -12,6 +13,7 @@ export default function CashBankReconciliation() {
   const {
     account,
     accounts,
+    bookEntriesShown,
     busy,
     createPath,
     current,
@@ -43,7 +45,6 @@ export default function CashBankReconciliation() {
     setVoidReason,
     statementId,
     statements,
-    suggestions,
     unmatchMutation,
     voidReason,
     voucherPath,
@@ -58,6 +59,52 @@ export default function CashBankReconciliation() {
         <a className="rounded-md border px-3 py-2 text-sm" href={createPath}>
           Create voucher for an unrecorded bank fee or transfer
         </a>
+        {detail.data && (
+          <RowsExportMenu
+            title="Cash and Bank Reconciliation"
+            filters={[
+              { label: "Account", value: detail.data.account.name },
+              { label: "Statement", value: `#${detail.data.statement.id} · ${detail.data.statement.currency}` },
+            ]}
+            period={{ from: detail.data.statement.period_start, to: detail.data.statement.period_end }}
+            sheetName="Statement movements"
+            rows={detail.data.lines}
+            columns={[
+              { header: "Date", value: (line) => line.date },
+              { header: "Reference", value: (line) => line.reference || line.description },
+              { header: "Amount", value: (line) => line.amount, type: "number" },
+              { header: "Status", value: (line) => line.status },
+              { header: "Review", value: (line) => line.reviewCategory?.replaceAll("_", " ") },
+              { header: "Matched voucher", value: (line) => line.matchedVoucherNumber },
+            ]}
+            extraSheets={[
+              {
+                name: "Posted voucher movements",
+                rows: bookEntriesShown,
+                columns: [
+                  { header: "Voucher", value: (item) => item.voucherNumber },
+                  { header: "Date", value: (item) => item.date },
+                  { header: "Entry", value: (item) => item.entryId, type: "number" },
+                  { header: "Amount", value: (item) => item.amount, type: "number" },
+                  { header: "Currency", value: (item) => item.currency },
+                  {
+                    header: "Status",
+                    value: (item) =>
+                      !item.currencyVerified
+                        ? "FX unverified"
+                        : item.matched
+                          ? "Matched"
+                          : item.eligible
+                            ? "Uncleared"
+                            : "Other currency",
+                  },
+                ],
+              } satisfies RowsExportSheet<BookEntry>,
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-cash-bank"
+          />
+        )}
       </PageHeader>
       <Card>
         <CardHeader>
@@ -283,51 +330,45 @@ export default function CashBankReconciliation() {
                       </tr>
                     </thead>
                     <tbody>
-                      {[...detail.data.bookEntries]
-                        .sort((a, b) => {
-                          const ax = suggestions.some((x) => x.entryId === a.entryId) ? 0 : 1;
-                          const bx = suggestions.some((x) => x.entryId === b.entryId) ? 0 : 1;
-                          return ax - bx;
-                        })
-                        .map((item) => (
-                          <tr key={item.entryId} className="border-b">
-                            <td className="p-2">
-                              <a className="underline" href={voucherPath(item.voucherId)}>
-                                {item.voucherNumber}
-                              </a>
-                              <div className="text-muted-foreground">
-                                {item.date} · entry #{item.entryId}
-                              </div>
-                            </td>
-                            <td className="p-2 text-right tabular-nums">
-                              {item.amount} {item.currency}
-                            </td>
-                            <td className="p-2">
-                              {!item.currencyVerified
-                                ? "FX unverified"
-                                : item.matched
-                                  ? "Matched"
-                                  : item.eligible
-                                    ? "Uncleared"
-                                    : "Other currency"}
-                            </td>
-                            <td className="p-2">
-                              <Button
-                                size="sm"
-                                variant={selectedEntry === item.entryId ? "default" : "outline"}
-                                disabled={
-                                  !item.eligible ||
-                                  !selected ||
-                                  !exact(item.amount, selected.amount) ||
-                                  item.currency !== detail.data.statement.currency
-                                }
-                                onClick={() => setSelectedEntry(item.entryId)}
-                              >
-                                Select
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                      {bookEntriesShown.map((item) => (
+                        <tr key={item.entryId} className="border-b">
+                          <td className="p-2">
+                            <a className="underline" href={voucherPath(item.voucherId)}>
+                              {item.voucherNumber}
+                            </a>
+                            <div className="text-muted-foreground">
+                              {item.date} · entry #{item.entryId}
+                            </div>
+                          </td>
+                          <td className="p-2 text-right tabular-nums">
+                            {item.amount} {item.currency}
+                          </td>
+                          <td className="p-2">
+                            {!item.currencyVerified
+                              ? "FX unverified"
+                              : item.matched
+                                ? "Matched"
+                                : item.eligible
+                                  ? "Uncleared"
+                                  : "Other currency"}
+                          </td>
+                          <td className="p-2">
+                            <Button
+                              size="sm"
+                              variant={selectedEntry === item.entryId ? "default" : "outline"}
+                              disabled={
+                                !item.eligible ||
+                                !selected ||
+                                !exact(item.amount, selected.amount) ||
+                                item.currency !== detail.data.statement.currency
+                              }
+                              onClick={() => setSelectedEntry(item.entryId)}
+                            >
+                              Select
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

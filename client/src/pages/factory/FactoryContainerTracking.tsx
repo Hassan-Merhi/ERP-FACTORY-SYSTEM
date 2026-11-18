@@ -7,6 +7,7 @@ import { ExternalLink, Ship } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 interface InvoiceContainerRow {
   id: number;
@@ -31,15 +32,17 @@ function fmtDate(d: string | null | undefined): string {
   return `${day}/${m}/${y.slice(2)}`;
 }
 
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  VERIFIED: "Verified",
+  FINALIZED: "Finalized",
+};
+
 function InvoiceStatus({ status }: { status: string }) {
   const colors: Record<string, string> = {
     VERIFIED: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
     FINALIZED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   };
-  const labels: Record<string, string> = {
-    VERIFIED: "Verified",
-    FINALIZED: "Finalized",
-  };
+  const labels = INVOICE_STATUS_LABELS;
   const cls = colors[status] ?? "bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400";
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${cls}`}>
@@ -80,6 +83,27 @@ export default function FactoryContainerTracking() {
         <span className="text-xs text-muted-foreground">
           {filtered.length} container{filtered.length !== 1 ? "s" : ""}
         </span>
+        <RowsExportMenu
+          title="Container Tracking"
+          rows={filtered}
+          columns={[
+            { header: "#", value: (row) => filtered.indexOf(row) + 1, type: "number" },
+            { header: "Container #", value: (row) => row.containerNumber },
+            { header: "Customer", value: (row) => row.customerName },
+            { header: "Invoice", value: (row) => row.invoiceNumber },
+            {
+              header: "Cost (USD)",
+              value: (row) => (row.grandTotal ? parseFloat(row.grandTotal) : null),
+              type: "number",
+            },
+            { header: "ETA", value: (row) => (row.eta ? fmtDate(row.eta) : null) },
+            { header: "Invoice Status", value: (row) => INVOICE_STATUS_LABELS[row.status] ?? row.status },
+            { header: "Manual Tracking Link", value: (row) => row.trackingLink },
+          ]}
+          resource="factory.customer_orders"
+          className="ml-auto"
+          data-testid="button-export-container-tracking"
+        />
       </div>
 
       {isLoading ? (

@@ -111,6 +111,15 @@ export function usePosCheckout({
 }: PosCheckoutParams) {
   // ISSUE 3: Full payload with shiftId, clientSaleId, currency, exchangeRate, correct rate conversion
   const handleSaveSale = () => {
+    const editingAsPos = Boolean(posUser && editVoucherId);
+    if (editingAsPos && (!editVoucher || !activeLocation || activeLocation.id !== editVoucher.locationId)) {
+      toast({
+        title: "Sale not ready",
+        description: "The original receipt and its assigned location must finish loading before editing.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!activeLocation && !editVoucherId) {
       toast({ title: "Missing information", description: "Please select a location", variant: "destructive" });
       return;
@@ -133,11 +142,11 @@ export function usePosCheckout({
       });
       return;
     }
-    if (!isCreditSale && !paymentAccountId) {
+    if (!editingAsPos && !isCreditSale && !paymentAccountId) {
       toast({ title: "Missing information", description: "Please select a payment account", variant: "destructive" });
       return;
     }
-    if (isCreditSale && !selectedCustomerId) {
+    if (!editingAsPos && isCreditSale && !selectedCustomerId) {
       toast({
         title: "Missing information",
         description: "Please select a customer for credit sale",
@@ -145,7 +154,12 @@ export function usePosCheckout({
       });
       return;
     }
-    if (activeCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+    // An edited Kwacha sale stays a Kwacha sale at its locked rate, even while
+    // the grid shows it in USD; its Kwacha prices then follow from the USD ones.
+    const saleCurrency = editVoucherId && editVoucher?.currency === "ZMW" ? "ZMW" : activeCurrency;
+    const salePrice = (row: SaleRow) =>
+      saleCurrency === activeCurrency ? row.rate : Number((row.rateUSD * (exchangeRate ?? NaN)).toFixed(2));
+    if (saleCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
       toast({
         title: "Missing information",
         description: "Please enter an exchange rate for this transaction.",
@@ -176,12 +190,12 @@ export function usePosCheckout({
     }
 
     if (
-      activeCurrency === "ZMW" &&
+      saleCurrency === "ZMW" &&
       validItems.some(
         (row) =>
-          !Number.isFinite(row.rate) ||
-          row.rate <= 0 ||
-          Math.abs(row.rate * 100 - Math.round(row.rate * 100)) > 0.000001
+          !Number.isFinite(salePrice(row)) ||
+          salePrice(row) <= 0 ||
+          Math.abs(salePrice(row) * 100 - Math.round(salePrice(row) * 100)) > 0.000001
       )
     ) {
       toast({
@@ -196,18 +210,20 @@ export function usePosCheckout({
       locationId: activeLocation?.id || editVoucher?.locationId,
       shiftId: posUser && currentShift ? currentShift.id : undefined,
       clientSaleId: !editVoucherId ? clientSaleIdRef.current : undefined,
-      paymentAccountType: isCreditSale ? "credit" : paymentAccountType,
-      paymentAccountId: isCreditSale ? parseInt(selectedCustomerId) : parseInt(paymentAccountId!),
+      paymentAccountType: editingAsPos ? undefined : isCreditSale ? "credit" : paymentAccountType,
+      paymentAccountId: editingAsPos
+        ? undefined
+        : isCreditSale
+          ? parseInt(selectedCustomerId)
+          : parseInt(paymentAccountId!),
       isCreditSale,
       notes,
       voucherDate: saleDate,
-      currency: activeCurrency,
-      exchangeRate: activeCurrency !== "USD" && exchangeRate ? exchangeRate.toString() : undefined,
+      currency: saleCurrency,
+      exchangeRate: saleCurrency !== "USD" && exchangeRate ? exchangeRate.toString() : undefined,
       items: validItems.map((row) => {
         const rateInUSD =
-          activeCurrency !== "USD" && dailyExchangeRate
-            ? parseFloat(row.rate.toString()) / dailyExchangeRate
-            : row.rateUSD;
+          saleCurrency !== "USD" && dailyExchangeRate ? salePrice(row) / dailyExchangeRate : row.rateUSD;
         return {
           stockItemId: row.stockItemId,
           salesItemId: row.salesItemId,
@@ -216,7 +232,7 @@ export function usePosCheckout({
           // USD is the inventory/ledger basis. Preserve the *typed* Kwacha
           // unit price separately so the server can verify the round-trip
           // against the rate locked for this exact sale date.
-          originalCurrencyRate: activeCurrency === "ZMW" ? row.rate.toFixed(2) : undefined,
+          originalCurrencyRate: saleCurrency === "ZMW" ? salePrice(row).toFixed(2) : undefined,
           stockItemName: row.itemName,
           stockItemCode: row.stockItemCode,
           configuredPrice: row.configuredPrice,

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 type Kind = "sale" | "purchase_order" | "offload" | "inventory_movement" | "credit_debit_note" | "transfer";
 type Status = "posted" | "cost_mismatch" | "date_mismatch" | "missing" | "expected_periodic" | "review";
@@ -112,7 +113,34 @@ export default function ErpInventoryAccounting() {
       <PageHeader
         title="ERP Inventory & COGS Accounting"
         subtitle="Trace purchases, offloads, sales and stock adjustments to their financial journals. Read-only until the existing perpetual inventory cutover is certified."
-      />
+      >
+        {current && (
+          <RowsExportMenu
+            title="ERP Inventory Accounting"
+            period={{ to: asOf }}
+            filters={[
+              { label: "Source", value: kind === "all" ? "All" : sourceLabel(kind) },
+              { label: "Status", value: status === "all" ? "All" : status.replaceAll("_", " ") },
+            ]}
+            rows={rows}
+            columns={[
+              { header: "Source", value: (row) => sourceLabel(row.kind) },
+              { header: "Document", value: (row) => row.documentNumber },
+              { header: "Date", value: (row) => row.documentDate },
+              { header: "Linked journal", value: (row) => row.linkedJournalNumber },
+              {
+                header: "Recorded cost delta",
+                value: (row) => row.expectedStockMovement ?? "Not reconstructable",
+              },
+              { header: "Posted stock delta", value: (row) => row.postedStockMovement, type: "number" },
+              { header: "Audit status", value: (row) => row.status.replaceAll("_", " ") },
+              { header: "Note", value: (row) => row.note },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-erp-inventory-accounting"
+          />
+        )}
+      </PageHeader>
       <Card>
         <CardHeader>
           <CardTitle>Accounting policy & cutover</CardTitle>

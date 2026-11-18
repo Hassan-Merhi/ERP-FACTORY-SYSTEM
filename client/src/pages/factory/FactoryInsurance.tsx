@@ -13,6 +13,7 @@ import { InsuranceClearDialog } from "./factoryinsurance/components/InsuranceCle
 import { useFactoryInsuranceState } from "./useFactoryInsuranceState";
 import { FactoryInsuranceCardSection } from "./FactoryInsuranceCardSection";
 import { FactoryInsuranceDialogSection, FactoryInsuranceSection } from "./FactoryInsuranceDialogSection";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export default function FactoryInsurance() {
   const {
@@ -170,6 +171,23 @@ export default function FactoryInsurance() {
             Show inactive
           </Label>
         </div>
+        <RowsExportMenu
+          title="Insurance Members"
+          rows={filteredMembers}
+          columns={[
+            { header: "Name", value: (m) => m.name },
+            { header: "Insurance No.", value: (m) => m.insuranceNumber },
+            { header: "Nationality", value: (m) => m.nationality },
+            { header: "Position", value: (m) => m.positionWorking },
+            { header: "Start Date", value: (m) => formatDisplayDate(m.startDate) },
+            { header: "Date of Birth", value: (m) => (m.dob ? formatDisplayDate(m.dob) : null) },
+            { header: "Monthly Amount (USD)", value: (m) => parseFloat(m.amount), type: "number" },
+            { header: "Status", value: (m) => (m.active ? "Active" : "Inactive") },
+          ]}
+          resource="factory.payroll"
+          size="default"
+          data-testid="button-export-insurance-members"
+        />
       </div>
 
       {/* Members Table — cosmetic treatment only; all member actions and data sources are unchanged. */}

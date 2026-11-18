@@ -6,6 +6,7 @@
  */
 import { exportFileName } from "@/lib/exportFile";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { printDocument } from "@/lib/printDocument";
 
 export type PeopleExportCellType = "text" | "integer" | "money" | "date";
 
@@ -199,11 +200,6 @@ ${lines.map((line) => `<div class="sub">${escapeHtml(line)}</div>`).join("")}
 
 /** Opens the browser print dialog for the table. Returns false when a pop-up blocker stopped it. */
 export function printPeopleTable<Row>(spec: PeopleExportSpec<Row>): boolean {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return false;
-  printWindow.document.write(peopleTablePrintHtml(spec));
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => printWindow.print(), 400);
-  return true;
+  // Callers show their own "Print failed" toast when this returns false.
+  return printDocument(peopleTablePrintHtml(spec), { onBlocked: () => undefined }) !== null;
 }

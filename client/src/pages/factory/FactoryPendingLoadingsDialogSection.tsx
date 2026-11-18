@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { fmtKg } from "./FactoryPendingLoadingsTypes";
+import { formatKg } from "@/lib/formatNumber";
 import { useFactoryPendingLoadingsState } from "./useFactoryPendingLoadingsStatePart2";
 
 export function FactoryPendingLoadingsListPendingLoadings({
@@ -62,7 +62,7 @@ export function FactoryPendingLoadingsListPendingLoadings({
                   <Package className="h-3.5 w-3.5" /> {groupBales.toLocaleString()} bales total
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <Weight className="h-3.5 w-3.5" /> {fmtKg(groupKg)}
+                  <Weight className="h-3.5 w-3.5" /> {formatKg(groupKg)}
                 </span>
                 <span className="hidden text-xs lg:inline">{isExpanded ? "Click to collapse" : "Click to expand"}</span>
               </span>

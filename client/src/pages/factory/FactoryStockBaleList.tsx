@@ -6,6 +6,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Package, AlertTriangle, Pencil } from "lucide-react";
 import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useEscapeBack } from "@/hooks/use-escape-back";
@@ -91,6 +92,27 @@ export default function FactoryStockBaleList() {
               {reserved.length} reserved for order
             </Badge>
           )}
+          <RowsExportMenu
+            title={`In Stock Bales ${articleCode}`}
+            sheetName="In Stock Bales"
+            rows={bales}
+            columns={[
+              { header: "Reference No.", value: (bale) => bale.referenceNumber },
+              { header: "Bale Code", value: (bale) => bale.baleCode },
+              { header: "Weight (kg)", value: (bale) => parseFloat(bale.weightKg).toFixed(2), type: "number" },
+              {
+                header: "Production Date",
+                value: (bale) => fmtDate(bale.productionDate ?? bale.stockEntryDate ?? bale.finalizedAt),
+              },
+              { header: "Worker", value: (bale) => bale.workerName || "—" },
+              {
+                header: "Status",
+                value: (bale) => (bale.lockedInLoading ? "Loading" : bale.blockedByOrder ? "Reserved" : "Available"),
+              },
+            ]}
+            filters={[{ label: "Product", value: mhd.nameFor(articleCode, productName) }]}
+            resource="factory.bales"
+          />
         </PageActions>
       </PageHeader>
 

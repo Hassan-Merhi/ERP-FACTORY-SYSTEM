@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -181,6 +182,36 @@ export default function OffloadDetail() {
             </AlertDialogContent>
           </AlertDialog>
         )}
+        <RowsExportMenu
+          title={`Offload ${offload?.containerNumber ?? ""} Stock Items`}
+          sheetName="Stock Items"
+          rows={sortedItems}
+          columns={[
+            { header: "Item", value: (item) => offloadItemDisplayName(item) },
+            { header: copy.offloaded, value: (item) => item.quantity, type: "number" },
+            {
+              header: copy.returned,
+              value: (item) => (Number(item.returnedQty || 0) ? -Number(item.returnedQty) : null),
+              type: "number",
+            },
+            { header: copy.netQty, value: (item) => item.netQty ?? item.quantity, type: "number" },
+            { header: "Rate", value: (item) => item.rate, type: "number" },
+            { header: copy.originalLanded, value: (item) => item.totalValue, type: "number" },
+          ]}
+          footer={
+            offload
+              ? [
+                  "Total",
+                  offload.items.reduce((sum, item) => sum + Number(item.quantity), 0),
+                  offload.items.reduce((sum, item) => sum + Number(item.returnedQty || 0), 0),
+                  Number(offload.netTotalBales ?? offload.totalBales),
+                  null,
+                  itemsTotal,
+                ]
+              : undefined
+          }
+          resource="erp.containers"
+        />
       </PageHeader>
 
       {isLoading ? (

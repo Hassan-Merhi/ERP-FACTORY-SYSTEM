@@ -13,6 +13,7 @@ import {
   type StockGroupOption,
 } from "./useStockInSalesReportComparisonState";
 import { StockInSalesReportComparisonSection } from "./StockInSalesReportComparisonSection";
+import { StockInSalesReportComparisonExport } from "./StockInSalesReportComparisonExport";
 import { SearchField } from "@/components/ui/search-field";
 
 function GroupMultiSelect({
@@ -126,6 +127,7 @@ export default function StockInSalesReportComparison() {
     clearComparison,
     data,
     error,
+    formatMetric,
     formatPeriod,
     grouping,
     isError,
@@ -173,6 +175,17 @@ export default function StockInSalesReportComparison() {
         <Button variant="outline" size="sm" onClick={clearComparison}>
           Clear
         </Button>
+        <StockInSalesReportComparisonExport
+          data={data}
+          formatMetric={formatMetric}
+          formatPeriod={formatPeriod}
+          itemMetric={itemMetric}
+          period={period}
+          selectedItemMetric={selectedItemMetric}
+          sideALabel={sideALabel}
+          sideBLabel={sideBLabel}
+          summary={summary}
+        />
       </PageHeader>
 
       <div className="grid grid-cols-2 items-center gap-2 rounded-xl border bg-card p-2 sm:flex sm:flex-wrap sm:p-3 *:min-w-0">

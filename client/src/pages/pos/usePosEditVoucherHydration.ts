@@ -7,9 +7,11 @@
 // god-file line cap; effect order and dependencies are unchanged.
 import { useEffect, useRef } from "react";
 import type { useLocation as useLocationContext } from "@/contexts/LocationContext";
-import type { PosEditSalesItem } from "./pos-components/posTypes";
+import type { Location, PosEditSalesItem } from "./pos-components/posTypes";
+import type { AuthMe } from "@shared/apiTypes";
 import type { usePosQueries } from "./hooks/usePosQueries";
 import type { usePosState } from "./hooks/usePosState";
+import { resolvePostedZmwUnitPrices } from "@shared/posZmwMoney";
 
 type PosState = ReturnType<typeof usePosState>;
 type PosQueries = ReturnType<typeof usePosQueries>;
@@ -27,16 +29,29 @@ export interface UsePosEditVoucherHydrationArgs
       | "setIsCreditSale"
       | "setSelectedCustomerId"
     >,
-    Pick<PosQueries, "editVoucher" | "editVoucherViewEntries" | "allLocations" | "allLedgerAccounts">,
+    Pick<
+      PosQueries,
+      "editVoucher" | "editVoucherViewEntries" | "allLocations" | "posAssignedLocations" | "allLedgerAccounts"
+    >,
     Pick<LocationContextValue, "selectedLocation" | "setSelectedLocation"> {
   editVoucherId?: string;
+  /** Currency the grid shows; a Kwacha sale can be viewed in USD. Defaults to the sale's own. */
+  activeCurrency?: string;
+  posUser?: AuthMe | null;
+  posSelectedLocation: Location | null;
+  setPosSelectedLocation: (location: Location) => void;
 }
 
 export function usePosEditVoucherHydration({
   editVoucherId,
+  activeCurrency,
   editVoucher,
   editVoucherViewEntries,
   allLocations,
+  posAssignedLocations,
+  posUser,
+  posSelectedLocation,
+  setPosSelectedLocation,
   allLedgerAccounts,
   selectedLocation,
   setSelectedLocation,
@@ -48,26 +63,45 @@ export function usePosEditVoucherHydration({
   setIsCreditSale,
   setSelectedCustomerId,
 }: UsePosEditVoucherHydrationArgs) {
-  // Set location from edit voucher
+  // Read at hydration time only; later USD/ZMW switches convert the rows.
+  const activeCurrencyRef = useRef(activeCurrency);
+  activeCurrencyRef.current = activeCurrency;
+  // Select the ORIGINAL sale location. POS users only receive their assigned
+  // locations, so allLocations is intentionally empty for those users.
   useEffect(() => {
-    if (editVoucher && editVoucher.locationId && !selectedLocation && allLocations.length > 0) {
-      const voucherLocation = allLocations.find((loc) => loc.id === editVoucher.locationId);
-      if (voucherLocation) setSelectedLocation(voucherLocation);
+    if (!editVoucherId || !editVoucher?.locationId) return;
+    const locations = posUser ? posAssignedLocations : allLocations;
+    const voucherLocation = locations.find((loc) => loc.id === editVoucher.locationId);
+    if (!voucherLocation) return; // The server still enforces location access.
+    if (posUser) {
+      if (posSelectedLocation?.id !== voucherLocation.id) setPosSelectedLocation(voucherLocation);
+    } else if (selectedLocation?.id !== voucherLocation.id) {
+      setSelectedLocation(voucherLocation);
     }
-  }, [editVoucher, allLocations, selectedLocation, setSelectedLocation]);
+  }, [
+    editVoucherId,
+    editVoucher?.locationId,
+    posUser,
+    posAssignedLocations,
+    allLocations,
+    posSelectedLocation?.id,
+    selectedLocation?.id,
+    setPosSelectedLocation,
+    setSelectedLocation,
+  ]);
 
   // Guard: rows + notes + date are only populated ONCE per edit session.
   // Without this, any dependency change (e.g. allLedgerAccounts re-fetching on
   // window focus) would call setRows() again and wipe the user's in-progress edits.
-  const editRowsInitRef = useRef(false);
+  const editRowsInitRef = useRef<string | null>(null);
 
   // Effect 1: Populate rows / notes / date from the voucher — runs once.
   useEffect(() => {
     if (!editVoucherId) {
-      editRowsInitRef.current = false;
+      editRowsInitRef.current = null;
       return;
     }
-    if (editRowsInitRef.current) return; // already populated; never reset user edits
+    if (editRowsInitRef.current === editVoucherId) return; // never overwrite in-progress edits
 
     // Primary source: salesItems attached to the voucher object.
     // Fallback: view-entries endpoint (populated when salesItems is missing from the voucher).
@@ -90,22 +124,52 @@ export function usePosEditVoucherHydration({
 
     if (!editVoucher || resolvedItems.length === 0) return;
 
-    const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => ({
-      id: String(index + 1),
-      itemName: item.stockItemName || "",
-      stockItemCode: item.stockItemCode || "",
-      // Ensure stockItemId is always a number (guard against 0/null from old data)
-      stockItemId: item.stockItemId ? Number(item.stockItemId) : undefined,
-      salesItemId: item.id,
-      quantity: parseFloat(String(item.quantity)),
-      rate:
-        editVoucher?.currency === "ZMW" && editVoucher.exchangeRate
-          ? Number((Number(item.sellingPrice) * Number(editVoucher.exchangeRate)).toFixed(2))
-          : parseFloat(String(item.sellingPrice)),
-      rateUSD: parseFloat(String(item.sellingPrice)),
-      amount: parseFloat(String(item.totalSales)),
-      configuredPrice: parseFloat(String(item.configuredPrice || "0")) || undefined,
-    }));
+    // The Kwacha price is the sale's real price; USD follows from it, so a
+    // USD/ZMW switch never drifts off the price the cashier typed.
+    const lockedRate = editVoucher.currency === "ZMW" ? Number(editVoucher.exchangeRate) : 0;
+    let kwachaPrices: ReturnType<typeof resolvePostedZmwUnitPrices> | null = null;
+    if (lockedRate > 0) {
+      const postedKwacha =
+        editVoucher.nativeZmwTotal ??
+        editVoucher.entries?.find((e) => e.transactionCurrency === "ZMW" && Number(e.transactionDebitAmount) > 0)
+          ?.transactionDebitAmount;
+      try {
+        kwachaPrices = resolvePostedZmwUnitPrices(
+          resolvedItems.map((item: PosEditSalesItem) => ({ quantity: item.quantity, rate: item.sellingPrice })),
+          lockedRate,
+          postedKwacha
+        );
+      } catch {
+        kwachaPrices = null; // a stored line that is not a valid sale line: load plain USD prices
+      }
+    }
+
+    const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => {
+      const quantity = Number(item.quantity ?? 0);
+      const storedUsd = Number(item.sellingPrice ?? 0);
+      const kwacha = kwachaPrices?.[index] ?? null;
+      const usdRate = kwacha === null ? storedUsd : kwacha.div(lockedRate).toNumber();
+      const rate =
+        kwacha === null
+          ? usdRate
+          : activeCurrencyRef.current === "USD"
+            ? Number(usdRate.toFixed(2))
+            : kwacha.toNumber();
+      return {
+        id: String(index + 1),
+        itemName: item.stockItemName || "",
+        stockItemCode: item.stockItemCode || "",
+        stockItemId: item.stockItemId ? Number(item.stockItemId) : undefined,
+        salesItemId: item.id,
+        quantity,
+        rate,
+        rateUSD: usdRate,
+        // The POS-safe receipt response has no accounting line totals.
+        // A grid row must still display its original native-currency amount.
+        amount: Number((quantity * rate).toFixed(2)),
+        configuredPrice: parseFloat(String(item.configuredPrice || "0")) || undefined,
+      };
+    });
     newRows.push({
       id: String(newRows.length + 1),
       itemName: "",
@@ -119,11 +183,12 @@ export function usePosEditVoucherHydration({
       configuredPrice: undefined,
     });
     setRows(newRows);
-    editRowsInitRef.current = true;
+    editRowsInitRef.current = editVoucherId;
 
-    if (editVoucher.description) setNotes(editVoucher.description);
+    setNotes(editVoucher.description ?? "");
     if (editVoucher.voucherDate) setSaleDate(editVoucher.voucherDate);
-  }, [editVoucherId, editVoucher, editVoucherViewEntries, setRows, setNotes, setSaleDate]);
+    setIsCreditSale(Boolean(editVoucher.isCreditSale));
+  }, [editVoucherId, editVoucher, editVoucherViewEntries, setRows, setNotes, setSaleDate, setIsCreditSale]);
 
   // Effect 2: Detect payment account type once ledger accounts are available.
   // This is separate from Effect 1 so that ledger-account re-fetches never

@@ -11,13 +11,20 @@ import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
+import { SalesReportComparisonExport } from "./SalesReportComparisonExport";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Building2, ChevronDown } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { getAiResult, type SalesItem, type ItemRow, type ViewFilter } from "./salesReportComparisonModel";
+import {
+  getAiResult,
+  summaryForCompany,
+  type SalesItem,
+  type ItemRow,
+  type ViewFilter,
+} from "./salesReportComparisonModel";
 
 export default function SalesReportComparison() {
   const [, navigate] = useLocation();
@@ -175,19 +182,6 @@ export default function SalesReportComparison() {
     );
   };
 
-  const summaryForCompany = (code: string) => {
-    let totalSales = 0,
-      totalProfit = 0;
-    for (const row of tableData) {
-      const entry = row.byCompany[code];
-      if (entry) {
-        totalSales += entry.totalSales;
-        totalProfit += entry.costProfit;
-      }
-    }
-    return { totalSales, totalProfit };
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -196,7 +190,11 @@ export default function SalesReportComparison() {
           title="Company Comparison"
           subtitle="Compare sales performance across companies"
           onBack={() => navigate("/sales-report")}
-        />
+        >
+          {enabled && (
+            <SalesReportComparisonExport rows={tableData} companies={displayCompanies} from={startDate} to={endDate} />
+          )}
+        </PageHeader>
 
         {/* Controls */}
         <ErpMobileFilters
@@ -366,7 +364,7 @@ export default function SalesReportComparison() {
             {/* Summary cards */}
             <div className="flex flex-wrap gap-3 mb-6">
               {displayCompanies.map((c) => {
-                const { totalSales, totalProfit } = summaryForCompany(c.code);
+                const { totalSales, totalProfit } = summaryForCompany(tableData, c.code);
                 return (
                   <Card key={c.code} className="flex-1 min-w-44">
                     <CardContent className="p-4">
