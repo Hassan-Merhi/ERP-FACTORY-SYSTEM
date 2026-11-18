@@ -1,31 +1,32 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { VoucherWithItems } from "./posdaybook/types";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
 
 /** No pricing, internal valuation, account entries or edit actions in POS transfer details. */
 export function POSDaybookTransferDetails({ transfer }: { transfer: VoucherWithItems["transferData"] }) {
   if (!transfer) {
-    return <div className="py-6 text-center text-muted-foreground">Transfer details are unavailable.</div>;
+    return <div className="py-6 text-center text-muted-foreground">{posDaybookTransferText.unavailable}</div>;
   }
 
   return (
     <div className="space-y-4" data-testid="pos-daybook-transfer-details">
       <div className="grid gap-3 rounded-lg border p-3 text-sm sm:grid-cols-2">
         <div>
-          <span className="text-muted-foreground">From:</span>{" "}
-          <span data-testid="pos-transfer-source">{transfer.sourceLocationName || "Multi-source"}</span>
+          <span className="text-muted-foreground">{posDaybookTransferText.from}</span>{" "}
+          <span data-testid="pos-transfer-source">{transfer.sourceLocationName || posDaybookTransferText.multiSource}</span>
         </div>
         <div>
-          <span className="text-muted-foreground">To:</span>{" "}
+          <span className="text-muted-foreground">{posDaybookTransferText.to}</span>{" "}
           <span data-testid="pos-transfer-destination">{transfer.destinationLocationName}</span>
         </div>
         <div>
-          <span className="text-muted-foreground">Status:</span>{" "}
-          <Badge variant="secondary">{transfer.inventoryApplied ? "Stock applied" : "Pending stock application"}</Badge>
+          <span className="text-muted-foreground">{posDaybookTransferText.status}</span>{" "}
+          <Badge variant="secondary">{transfer.inventoryApplied ? posDaybookTransferText.stockApplied : posDaybookTransferText.stockPending}</Badge>
         </div>
         {transfer.notes && (
           <div className="sm:col-span-2">
-            <span className="text-muted-foreground">Notes:</span> {transfer.notes}
+            <span className="text-muted-foreground">{posDaybookTransferText.notes}</span> {transfer.notes}
           </div>
         )}
       </div>
@@ -33,9 +34,9 @@ export function POSDaybookTransferDetails({ transfer }: { transfer: VoucherWithI
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Item</TableHead>
-              <TableHead className="hidden sm:table-cell">Source</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
+              <TableHead>{posDaybookTransferText.item}</TableHead>
+              <TableHead className="hidden sm:table-cell">{posDaybookTransferText.source}</TableHead>
+              <TableHead className="text-right">{posDaybookTransferText.quantity}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -54,7 +55,7 @@ export function POSDaybookTransferDetails({ transfer }: { transfer: VoucherWithI
             {transfer.items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="text-center text-muted-foreground">
-                  No transfer items for this location.
+                  {posDaybookTransferText.noItems}
                 </TableCell>
               </TableRow>
             )}
