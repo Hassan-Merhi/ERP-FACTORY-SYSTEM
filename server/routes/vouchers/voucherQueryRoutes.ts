@@ -361,6 +361,7 @@ export function registerVoucherQueryRoutes(app: Express) {
             id: item.id,
             stockItemId: item.stockItemId,
             stockItemName: item.stockItemName,
+            stockItemCode: item.stockItemCode,
             quantity: item.quantity,
             sellingPrice: item.sellingPrice,
           })),
