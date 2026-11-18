@@ -147,6 +147,8 @@ export function AdvancesPanel(props: { model: ReturnType<typeof useAdvancesModel
         canChangeExistingRecords={canChangeExistingRecords}
         filterStatus={filterStatus}
         filterWorker={filterWorker}
+        filtered={filtered}
+        formatDate={formatDate}
         setAddOpen={setAddOpen}
         setBulkOpen={setBulkOpen}
         setCashAdjOpen={setCashAdjOpen}

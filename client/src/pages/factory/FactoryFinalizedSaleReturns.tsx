@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 type Invoice = {
   id: number;
@@ -290,7 +291,27 @@ export default function FactoryFinalizedSaleReturns() {
       )}
 
       <div className="space-y-2 border-t pt-4">
-        <h3 className="font-semibold">{copy.history}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">{copy.history}</h3>
+          <RowsExportMenu
+            title="Sale Returns History"
+            rows={history}
+            columns={[
+              {
+                header: copy.dateInvoice,
+                value: (row) =>
+                  new Date(row.returnedAt).toLocaleString() + " " + row.invoiceNumber + " / " + row.containerNumber,
+              },
+              { header: copy.name, value: (row) => row.productName },
+              { header: copy.articleCode, value: (row) => row.articleCode },
+              { header: copy.totalRemoved, value: (row) => row.quantity, type: "number" },
+              { header: copy.references, value: (row) => row.baleReferences },
+              { header: copy.userReason, value: (row) => [row.returnedBy, row.reason].filter(Boolean).join(" — ") },
+            ]}
+            resource="factory.customer_orders"
+            data-testid="button-export-sale-returns-history"
+          />
+        </div>
         <div className="overflow-x-auto rounded border">
           <table className="w-full min-w-[780px] text-left text-sm">
             <thead>

@@ -84,6 +84,7 @@ export function useFactoryPendingLoadingsState() {
     customerNames,
     deleteTarget,
     dismissUndo,
+    formatDate,
     formatDisplayDate,
     groups,
     handleConfirmDelete,

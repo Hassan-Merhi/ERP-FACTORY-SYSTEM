@@ -104,6 +104,7 @@ export function useFactoryInvoicesState() {
     dropIdx,
     expandedCustomers,
     filteredOrders,
+    formatDisplayDate,
     fromDate,
     handleDragEnd,
     handleDragOver,

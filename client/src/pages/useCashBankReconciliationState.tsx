@@ -163,9 +163,16 @@ export function useCashBankReconciliationState() {
     exact(selected.amount, chosen.amount) &&
     chosen.currency === detail.data?.statement.currency;
   const busy = previewMutation.isPending || importMutation.isPending;
+  // Exact unmatched voucher candidates first, as the table lists them.
+  const bookEntriesShown = [...(detail.data?.bookEntries ?? [])].sort((a, b) => {
+    const ax = suggestions.some((x) => x.entryId === a.entryId) ? 0 : 1;
+    const bx = suggestions.some((x) => x.entryId === b.entryId) ? 0 : 1;
+    return ax - bx;
+  });
   return {
     account,
     accounts,
+    bookEntriesShown,
     busy,
     createPath,
     current,

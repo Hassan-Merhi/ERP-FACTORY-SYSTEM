@@ -31,6 +31,7 @@ import { ScheduledContainersTable } from "./factoryshippingcontainers/components
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
 import { ShippingToolbar } from "./factoryshippingcontainers/components/ShippingToolbar";
+import { ShippingListExport } from "./factoryshippingcontainers/components/ShippingListExport";
 import { DoneContainersSection } from "./factoryshippingcontainers/components/DoneContainersSection";
 import { ShippingConfirmDialogs } from "./factoryshippingcontainers/components/ShippingConfirmDialogs";
 import {
@@ -360,6 +361,7 @@ export default function FactoryShippingContainers() {
           toggleCol={toggleCol}
           showAllCols={showAllCols}
           hiddenCount={hiddenCount}
+          exportMenu={<ShippingListExport rows={filtered} colVis={colVis} period={{ from: dateFrom, to: dateTo }} />}
         />
 
         {/* ── Filter Panel ── */}
