@@ -161,6 +161,59 @@ the full schema; queue, delivery, capture and panel in the browser test
 suite). It has not been run on real laptops or in production, and the staging
 drills do not cover it yet.
 
+### Full offline mode (Phase A): cloud change feed
+
+Every PC will keep a full local copy of its companies and stay current by
+downloading the cloud's change feed. Owner decisions (2026-11-17): stock sold
+twice offline goes negative and is flagged (flags may stay open at month end);
+the same master edited on two PCs is held for Admin/Developer review; customers
+created twice are merged by name; a PC that has not synced for 2 days stops
+taking new entries; Windows and Mac; the shared factory server stays paused.
+The plan document lists the phases.
+
+**What exists (Phase A1, switched off).**
+
+- `config/pc-sync-table-policy.json` says which rows of every table a PC may
+  hold: by `company_id`, through a parent row (a voucher line through its
+  voucher), through company columns (inter-company links), membership (users,
+  password removed), shared reference data, or excluded with a reason (sync
+  bookkeeping, sessions, credentials, mailbox and WhatsApp settings, telemetry).
+  `node scripts/pc-sync/audit-table-policy.mjs` checks it against a database
+  and fails on an unclassified table, a parent link that does not reach a
+  company, a stale rule or a secret-looking column that is not redacted; the
+  same check runs in `tests/pc-sync-table-policy.test.ts`.
+- The change feed is DBA-installed. `node scripts/pc-sync/render-change-feed-sql.mjs
+  <out.sql> --grant-to=<app role>` writes the install script for that exact
+  schema (read-only; it applies nothing). It creates `pc_sync.changes` and one
+  trigger per synced table that records each insert, update or delete with its
+  transaction id and companies, secret columns removed before storage. The
+  application role may only call `pc_sync.watermark()` and
+  `pc_sync.read_changes(...)`. Re-generate and re-run after every schema change.
+- `GET /api/offline/pc-sync/changes?cursor=&limit=` returns pages for every
+  company the signed-in user may open (`authorized-companies` in the route
+  access manifest). It answers 404 unless `OFFLINE_PC_SYNC_ENABLED=1` and 503
+  until the feed is installed.
+
+**Applying rule for every PC.** Changes arrive in transaction order, which is
+not always commit order. The later write to a row always has the higher `seq`
+(writes to one row are serialized by its lock), so a PC applies a change only if
+its `seq` is higher than the last one it applied to that row, deletes included.
+
+**Guarantees, each covered by `tests/pc-sync-change-feed.test.ts`:** only the
+user's companies; a child row's company found through its parent; no password
+stored or sent; a row moved to another company reaches the old company as a
+removal with its key only; a transaction that commits after a newer one is
+never skipped (the cursor stops at the oldest open transaction); paging returns
+every change once, in transaction order.
+
+**Known limits.** A user row is not re-sent when the user joins another
+company; a child row deleted after its parent is gone, with no foreign key,
+reaches no PC; TRUNCATE tells every PC to reload that table. The initial
+snapshot (Phase A2) covers rows that existed before the feed was installed.
+
+**Not installed anywhere and not verified on PCs.** Next: the initial snapshot,
+then the desktop app with its local server and database, read-only offline.
+
 ### Entries left in the old browser queues
 
 Some browsers still hold entries saved offline before the current design
