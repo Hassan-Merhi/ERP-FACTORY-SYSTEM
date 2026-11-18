@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,9 +8,10 @@ import {
 } from "../shared/schema";
 import { companyTypeSchema } from "../client/src/contracts/sessionContracts";
 import { resolveAuthenticatedAppRoute } from "../client/src/app/authenticatedAppRouteGuard";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const read = (relativePath: string) => readModuleFamily(path.join(root, relativePath));
 
 const route = (currentLocation: string, companyType: string | null = "retail") =>
   resolveAuthenticatedAppRoute({

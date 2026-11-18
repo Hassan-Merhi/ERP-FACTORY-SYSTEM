@@ -1,8 +1,8 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const adminRoutes = readFileSync("server/routes/adminRoutes.ts", "utf8");
-const roundTripRoutes = readFileSync("server/routes/admin/accountMigrationRoundTripRoutes.ts", "utf8");
+const adminRoutes = readModuleFamily("server/routes/adminRoutes.ts");
+const roundTripRoutes = readModuleFamily("server/routes/admin/accountMigrationRoundTripRoutes.ts");
 
 describe("account migration round-trip safety", () => {
   it("registers the transaction-aware move-back handler before the normal undo handler", () => {

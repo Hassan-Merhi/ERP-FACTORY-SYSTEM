@@ -1,0 +1,335 @@
+// Extracted from ./maintenance.ts to keep that module under the source-size cap.
+import type { PoolClient } from "pg";
+import { getErrorMessage } from "../../lib/httpHandlers";
+import { logger } from "../../lib/logger";
+import { db, pool } from "../../db";
+import { presentStockItemHistoryTables, stockItemHistorySqlText } from "../inventory/stockItemHistory";
+
+type MixBatchPurgeCandidate = {
+  id: number;
+  company_id: number;
+  batch_code: string | null;
+};
+
+type MixBatchReferenceCounts = {
+  own_sources: number;
+  downstream_sources: number;
+  daily_usages: number;
+  carry_forward_children: number;
+  pressing_batches: number;
+  bales: number;
+  waste_entries: number;
+};
+
+type DatabaseErrorMetadata = {
+  code?: string;
+  constraint?: string;
+  table?: string;
+  column?: string;
+  detail?: string;
+};
+
+const PURGE_SAVEPOINT = "soft_delete_purge_unit";
+
+const MIX_BATCH_PURGE_SAVEPOINT = "soft_delete_purge_mix_batch";
+
+function extractDatabaseErrorMetadata(error: unknown): DatabaseErrorMetadata {
+  const metadata: DatabaseErrorMetadata = {};
+  let current: unknown = error;
+  const seen = new Set<object>();
+
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (typeof current !== "object" || current === null || seen.has(current)) break;
+    seen.add(current);
+    const record = current as Record<string, unknown>;
+
+    for (const field of ["code", "constraint", "table", "column", "detail"] as const) {
+      const value = record[field];
+      if (typeof value === "string" && value.length > 0) metadata[field] = value;
+    }
+
+    current = record.cause;
+  }
+
+  return metadata;
+}
+
+function mixBatchReferenceTotal(references: MixBatchReferenceCounts): number {
+  return Object.values(references).reduce((total, count) => total + Number(count || 0), 0);
+}
+
+/**
+ * Wave 18 (B): the purge keeps an account or party that is history — named on
+ * any voucher line (live or deleted voucher) or holding a non-zero opening.
+ * `column` is the voucher_entries column that names the row.
+ */
+function accountHistoryKeep(column: string): string {
+  return `COALESCE(t.opening_balance, 0) <> 0 OR EXISTS (SELECT 1 FROM voucher_entries ve WHERE ve.${column} = t.id)`;
+}
+
+/**
+ * Deletes the rows of `table` matching `where` (alias `t`) and writes one
+ * audit row per removed row, with the row as it was, in the same statement
+ * (and so the same transaction). Returns how many rows went.
+ */
+async function auditedPurgeDelete(
+  client: PoolClient,
+  table: string,
+  where: string,
+  params: unknown[]
+): Promise<number> {
+  const result = await client.query(
+    `WITH removed AS (DELETE FROM ${table} t WHERE ${where} RETURNING to_jsonb(t) AS row)
+     INSERT INTO audit_log (user_id, username, company_id, action, table_name, record_id, record_identifier, changes)
+     SELECT 'system', 'scheduler:soft-delete-purge', NULLIF(row->>'company_id', '')::int, 'delete', '${table}',
+            NULLIF(row->>'id', '')::int,
+            COALESCE(row->>'code', row->>'voucher_number', row->>'batch_code', row->>'legal_name', row->>'name'),
+            jsonb_build_object('permanentDelete', jsonb_build_object('new', true),
+                               'reason', jsonb_build_object('new', '30-day soft-delete purge'),
+                               'row', jsonb_build_object('old', row))
+       FROM removed`,
+    params
+  );
+  return result.rowCount ?? 0;
+}
+
+async function runIsolatedPurgeUnit(client: PoolClient, label: string, action: () => Promise<void>): Promise<boolean> {
+  await client.query(`SAVEPOINT ${PURGE_SAVEPOINT}`);
+  try {
+    await action();
+    await client.query(`RELEASE SAVEPOINT ${PURGE_SAVEPOINT}`);
+    return true;
+  } catch (err: unknown) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${PURGE_SAVEPOINT}`);
+    await client.query(`RELEASE SAVEPOINT ${PURGE_SAVEPOINT}`);
+    const databaseError = extractDatabaseErrorMetadata(err);
+    logger.error("[Purge] Isolated purge unit failed; retained its rows and continuing.", {
+      label,
+      error: getErrorMessage(err),
+      dbErrorCode: databaseError.code,
+      dbConstraint: databaseError.constraint,
+      dbTable: databaseError.table,
+      dbColumn: databaseError.column,
+      dbDetail: databaseError.detail,
+    });
+    return false;
+  }
+}
+
+/**
+ * Mix batches carry costing and production history. Automatic retention cleanup
+ * must never erase that history simply to satisfy an FK. A batch is therefore
+ * permanently removed only when none of the known production/history links
+ * still reference it. Unknown/schema-drifted FK blockers are caught per batch,
+ * rolled back to a savepoint, logged with the batch identity, and retained.
+ * Explicit Delete Forever remains the separate workflow for destructive cleanup.
+ */
+async function purgeOldFactoryMixBatches(client: PoolClient, cutoff: string): Promise<void> {
+  const candidates = await client.query<MixBatchPurgeCandidate>(
+    `SELECT id, company_id, batch_code
+       FROM factory_mix_batches
+      WHERE deleted_at IS NOT NULL
+        AND deleted_at < $1
+      ORDER BY deleted_at ASC, id ASC`,
+    [cutoff]
+  );
+
+  let deletedCount = 0;
+  let protectedCount = 0;
+  let failedCount = 0;
+  const protectedSamples: Array<{
+    mixBatchId: number;
+    companyId: number;
+    batchCode: string | null;
+    references: MixBatchReferenceCounts;
+  }> = [];
+
+  for (const candidate of candidates.rows) {
+    await client.query(`SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
+    try {
+      const referenceResult = await client.query<MixBatchReferenceCounts>(
+        `SELECT
+           (SELECT COUNT(*)::int FROM factory_mix_batch_sources WHERE mix_batch_id = $1) AS own_sources,
+           (SELECT COUNT(*)::int
+              FROM factory_mix_batch_sources
+             WHERE source_batch_id = $1
+                OR (source_type = 'BATCH' AND source_id = $1)) AS downstream_sources,
+           (SELECT COUNT(*)::int FROM factory_daily_usages WHERE mix_batch_id = $1 AND company_id = $2) AS daily_usages,
+           (SELECT COUNT(*)::int FROM factory_mix_batches WHERE carry_forward_from_id = $1 AND company_id = $2) AS carry_forward_children,
+           (SELECT COUNT(*)::int FROM factory_pressing_batches WHERE mix_batch_id = $1 AND company_id = $2) AS pressing_batches,
+           (SELECT COUNT(*)::int FROM factory_bales WHERE mix_batch_id = $1 AND company_id = $2) AS bales,
+           (SELECT COUNT(*)::int FROM factory_waste_entries WHERE mix_batch_id = $1 AND company_id = $2) AS waste_entries`,
+        [candidate.id, candidate.company_id]
+      );
+
+      const references = referenceResult.rows[0];
+      if (!references) {
+        throw new Error("mix_batch_reference_inspection_failed");
+      }
+
+      if (mixBatchReferenceTotal(references) > 0) {
+        protectedCount += 1;
+        if (protectedSamples.length < 20) {
+          protectedSamples.push({
+            mixBatchId: candidate.id,
+            companyId: candidate.company_id,
+            batchCode: candidate.batch_code,
+            references,
+          });
+        }
+        await client.query(`RELEASE SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
+        continue;
+      }
+
+      deletedCount += await auditedPurgeDelete(
+        client,
+        "factory_mix_batches",
+        "t.id = $1 AND t.company_id = $2 AND t.deleted_at IS NOT NULL AND t.deleted_at < $3",
+        [candidate.id, candidate.company_id, cutoff]
+      );
+      await client.query(`RELEASE SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
+    } catch (err: unknown) {
+      await client.query(`ROLLBACK TO SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
+      await client.query(`RELEASE SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
+      failedCount += 1;
+      const databaseError = extractDatabaseErrorMetadata(err);
+      logger.error("[Purge] Mix batch could not be safely purged; retained it and continuing.", {
+        mixBatchId: candidate.id,
+        companyId: candidate.company_id,
+        batchCode: candidate.batch_code,
+        error: getErrorMessage(err),
+        dbErrorCode: databaseError.code,
+        dbConstraint: databaseError.constraint,
+        dbTable: databaseError.table,
+        dbColumn: databaseError.column,
+        dbDetail: databaseError.detail,
+      });
+    }
+  }
+
+  if (deletedCount > 0) {
+    logger.info(`[Purge] Permanently deleted ${deletedCount} unreferenced factory mix batch(es) older than 30 days.`);
+  }
+  if (protectedCount > 0) {
+    logger.info(
+      "[Purge] Retained soft-deleted factory mix batches because production/history references still exist.",
+      {
+        protectedCount,
+        samples: protectedSamples,
+      }
+    );
+  }
+  if (failedCount > 0) {
+    logger.warn("[Purge] Some factory mix batches were retained after isolated purge errors.", { failedCount });
+  }
+}
+
+export async function purgeOldSoftDeletes(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await client.query("BEGIN");
+
+    // ── Stock Items (must clear FK children first) ──────────────────────────
+    await runIsolatedPurgeUnit(client, "stock_items", async () => {
+      // Wave 11: a deleted item that still holds stock (any quantity or value at
+      // any location) is kept: purging it would drop that stock value from the
+      // sub-ledger with no journal. Wave 15 (M9): so is an item with any stock
+      // history (document lines, stock movements, shortage layers, valuation
+      // records): the purge used to delete its document lines, so the documents
+      // that moved it (a merged item's in particular) could no longer be
+      // reversed or replayed exactly. Both are reported for review instead.
+      const history = stockItemHistorySqlText(await presentStockItemHistoryTables(db), "si.id");
+      const oldStockItems = await client.query<{ id: number }>(
+        `SELECT si.id FROM stock_items si
+          WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
+            AND NOT EXISTS (${history})`,
+        [cutoff]
+      );
+      const retained = await client.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM stock_items si
+          WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
+            AND EXISTS (${history})`,
+        [cutoff]
+      );
+      if (Number(retained.rows[0]?.count ?? 0) > 0) {
+        logger.warn("[Purge] Deleted stock items that still hold stock or stock history were retained.", {
+          retained: Number(retained.rows[0]?.count ?? 0),
+        });
+      }
+      if (oldStockItems.rows.length === 0) return;
+
+      // No history: only the item's own empty stock rows, aliases and prices remain.
+      const ids = oldStockItems.rows.map((r) => r.id);
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+      await client.query(`DELETE FROM inventory                         WHERE stock_item_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM stock_item_code_aliases           WHERE stock_item_id IN (${placeholders})`, ids);
+      await client.query(`DELETE FROM stock_item_location_prices        WHERE stock_item_id IN (${placeholders})`, ids);
+      await auditedPurgeDelete(client, "stock_items", `t.id IN (${placeholders})`, ids);
+      logger.info(`[Purge] Permanently deleted ${ids.length} stock item(s) older than 30 days.`);
+    });
+
+    // Mix batches are not a simple purge target: their sources/usages are historical
+    // factory records and must not be silently deleted by the automatic scheduler.
+    await purgeOldFactoryMixBatches(client, cutoff);
+
+    // ── Other soft-delete tables ─────────────────────────────────────────────
+    // Each table is isolated so a restrictive FK/schema-drift issue in one table
+    // does not roll back unrelated cleanup completed by the same scheduled run.
+    // Wave 18 (B): a ledger account, bank account, customer or supplier named on
+    // any voucher line (live or deleted voucher) or carrying a non-zero opening
+    // is never hard-deleted (it is history the books still read); those rows are
+    // counted and reported. Every row the purge removes is audited (the row as
+    // it was) in the same transaction as its delete.
+    const simplePurges: Array<{ table: string; col: string; keep?: string }> = [
+      { table: "stock_groups", col: "deleted_at" },
+      { table: "locations", col: "deleted_at" },
+      { table: "ledger_accounts", col: "deleted_at", keep: accountHistoryKeep("ledger_account_id") },
+      { table: "employees", col: "deleted_at" },
+      { table: "customers", col: "deleted_at", keep: accountHistoryKeep("customer_id") },
+      { table: "suppliers", col: "deleted_at", keep: accountHistoryKeep("supplier_id") },
+      { table: "bank_accounts", col: "deleted_at", keep: accountHistoryKeep("bank_account_id") },
+      { table: "factory_categories", col: "deleted_at" },
+      { table: "factory_bale_products", col: "deleted_at" },
+      { table: "factory_containers", col: "deleted_at" },
+      { table: "factory_raw_stock", col: "deleted_at" },
+      { table: "factory_raw_material_adjustments", col: "deleted_at" },
+      { table: "factory_bales", col: "deleted_at" },
+      { table: "customer_proformas", col: "deleted_at" },
+      { table: "customer_orders", col: "deleted_at" },
+    ];
+
+    for (const { table, col, keep } of simplePurges) {
+      await runIsolatedPurgeUnit(client, table, async () => {
+        const due = `t.${col} IS NOT NULL AND t.${col} < $1`;
+        if (keep) {
+          const retained = await client.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM ${table} t WHERE ${due} AND (${keep})`,
+            [cutoff]
+          );
+          const retainedCount = Number(retained.rows[0]?.count ?? 0);
+          if (retainedCount > 0) {
+            logger.warn(`[Purge] Deleted ${table} rows with voucher lines or an opening balance were retained.`, {
+              retained: retainedCount,
+            });
+          }
+        }
+        const removed = await auditedPurgeDelete(client, table, keep ? `${due} AND NOT (${keep})` : due, [cutoff]);
+        if (removed > 0) {
+          logger.info(`[Purge] Permanently deleted ${removed} ${table} row(s) older than 30 days.`);
+        }
+      });
+    }
+
+    await client.query("COMMIT");
+    logger.info("[Purge] 30-day soft-delete purge complete.");
+  } catch (err: unknown) {
+    await client.query("ROLLBACK").catch(() => {});
+    logger.error("[Purge] Fatal error during soft-delete purge (transaction rolled back):", {
+      error: getErrorMessage(err),
+    });
+    throw err;
+  } finally {
+    client.release();
+  }
+}

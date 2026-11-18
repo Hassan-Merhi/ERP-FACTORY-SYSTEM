@@ -5,15 +5,15 @@ import {
   pressingReportFiltersSchema,
   pressingSavedViewSchema,
 } from "../shared/pressingReportContracts";
-import fs from "node:fs";
 
 import { indexDefinition } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const server = fs.readFileSync("server/routes/factory/factoryPressingReportRoutes.ts", "utf8");
-const client = fs.readFileSync("client/src/pages/factory/pressing-scanner/pressingReportClient.ts", "utf8");
-const page = fs.readFileSync("client/src/pages/factory/PressingHistoryReport.tsx", "utf8");
-const parent = fs.readFileSync("client/src/pages/factory/PressingMachineManagement.tsx", "utf8");
-const registration = fs.readFileSync("server/routes/factoryRoutes.ts", "utf8");
+const server = readModuleFamily("server/routes/factory/factoryPressingReportRoutes.ts");
+const client = readModuleFamily("client/src/pages/factory/pressing-scanner/pressingReportClient.ts");
+const page = readModuleFamily("client/src/pages/factory/PressingHistoryReport.tsx");
+const parent = readModuleFamily("client/src/pages/factory/PressingMachineManagement.tsx");
+const registration = readModuleFamily("server/routes/factoryRoutes.ts");
 
 describe("pressing machine Phase 6 reporting contracts", () => {
   it("rejects invalid dates, excessive pagination and unknown filter fields", () => {

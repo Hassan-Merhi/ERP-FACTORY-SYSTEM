@@ -1,18 +1,20 @@
 /** Phase 6 source contracts; live PostgreSQL/WhatsApp E2E remains Phase 7. */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { columnDefinition, tableConstraints } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
+// Whitespace-insensitive source matching: Prettier formats the split route modules.
+const compact = (text: string) => text.replace(/\s+/g, "");
 // Historical SQL (archived); the live schema is asserted against the manifest.
 const sqlMigration = read(
   "migrations/archive/legacy/20261111_004_stock_transfer_order_whatsapp_reconciliation_phase6.sql"
 );
 const service = read("server/services/stockTransferOrderWaDeliveryReconciliation.ts");
 const policy = read("server/services/stockTransferOrderWaReconciliationPolicy.ts");
-const routes = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
+const routes = compact(read("server/routes/stockTransferOrderWaApprovalRoutes.ts"));
 const worker = read("server/services/stockTransferOrderWaDeliveryWorker.ts");
 const screen = read("client/src/pages/stock-transfer-order/StockTransferOrderApprovalRequestPanel.tsx");
 const review = read("client/src/pages/stock-transfer-order/StockTransferOrderWaDeliveryReconciliation.tsx");
@@ -41,13 +43,13 @@ describe("Stock Transfer Order WhatsApp Phase 6 administrator reconciliation", (
   });
 
   it("restricts both endpoints to admins and active company records", () => {
-    expect(routes).toContain('app.get("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries"');
+    expect(routes).toContain(compact('app.get("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries"'));
     expect(routes).toContain(
-      'app.post("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile"'
+      compact('app.post("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile"')
     );
-    expect(routes).toContain("requireAuth,admins");
-    expect(routes).toContain("company_id=$1 AND id=$2");
-    expect(routes).toContain("getActiveCompanyPermissionContext");
+    expect(routes).toContain(compact("requireAuth,admins"));
+    expect(routes).toContain(compact("company_id=$1 AND id=$2"));
+    expect(routes).toContain(compact("getActiveCompanyPermissionContext"));
     expect(manifest.routeCount).toBe(manifest.routes.length);
     expect(manifest.routes).toContain(
       "POST /api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile [requireAuth > <anonymous> > <anonymous>]"
@@ -83,7 +85,7 @@ describe("Stock Transfer Order WhatsApp Phase 6 administrator reconciliation", (
     expect(service).toContain("available_at=clock_timestamp()");
     expect(worker).toContain("d.status IN ('pending','failed')");
     expect(worker).toContain("quarantineExpiredStockTransferOrderWaClaims");
-    expect(routes).toContain("queueStockTransferOrderWaDeliveries(batchId)");
+    expect(routes).toContain(compact("queueStockTransferOrderWaDeliveries(batchId)"));
   });
 
   it("prevents duplicate uploads when approval group and destination are the same chat", () => {

@@ -5,6 +5,7 @@
  */
 
 import type { MergedRow, ProductRow } from "./types";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -156,3 +157,15 @@ export function mergeProductionPeriods(periodA: ProductRow[], periodB: ProductRo
 }
 
 // ── MultiSelectFilter ─────────────────────────────────────────────────────────
+
+/** USD cost per kg to 4 decimals, or an em dash when no kilograms were recorded. */
+export function costPerKgUsd(cost: number, kg: number): string {
+  return kg > 0 ? formatUsd(cost / kg, 4) : "—";
+}
+
+/** Quotes one CSV cell, prefixing a quote to values Excel would treat as a formula (CSV injection guard). */
+export function escapeSupplierCsvCell(value: string): string {
+  const unsafe = /^[\s]*[=+@\t\r]/.test(value) || /^[\s]*-(?!\d+(?:\.\d+)?$)/.test(value);
+  const safe = unsafe ? "'" + value : value;
+  return '"' + safe.replace(/"/g, '""') + '"';
+}

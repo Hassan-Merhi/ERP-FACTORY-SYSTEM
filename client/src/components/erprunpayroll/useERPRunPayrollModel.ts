@@ -17,6 +17,7 @@ import type {
   WorkerDeductionRow,
   WorkerGroup,
 } from "./types";
+import { getRunDateHeaders } from "./erpRunPayrollDates";
 
 export function useERPRunPayrollModel() {
   const { toast } = useToast();
@@ -337,16 +338,6 @@ export function useERPRunPayrollModel() {
   });
 
   // ── Helpers for the worker-salaries template ──────────────────────────────
-  function getRunDateHeaders(runDate: string): string[] {
-    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const base = new Date(runDate + "T00:00:00");
-    return Array.from({ length: 10 }, (_, i) => {
-      const d = new Date(base);
-      d.setDate(d.getDate() + i);
-      return `${String(d.getDate()).padStart(2, "0")}-${MONTHS[d.getMonth()]}`;
-    });
-  }
-
   function getWorkerCodeById(employeeId: number): string {
     return workerById[employeeId]?.code || "";
   }

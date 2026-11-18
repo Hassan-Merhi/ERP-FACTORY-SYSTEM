@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { functionDefinition, triggerDefinition } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readModuleFamily(path);
 const correction = read("server/routes/factory/factoryPressingCorrectionRoutes.ts");
 const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");

@@ -1,6 +1,6 @@
-import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-const read = (path: string) => fs.readFileSync(path, "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (path: string) => readModuleFamily(path);
 const routes = read("server/routes/factoryRoutes.ts");
 const page = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const access = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");

@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 describe("POS revision WhatsApp routing", () => {
   it("routes revision images to the Settings → Stock Transfers group of the POS source location", () => {
-    const helper = readFileSync("server/helpers/sendRevisedTransferWhatsApp.ts", "utf8");
-    const routes = readFileSync("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts", "utf8");
-    const lifecycle = readFileSync("server/services/immutableStockTransferRevisionLifecycle.ts", "utf8");
+    const helper = readModuleFamily("server/helpers/sendRevisedTransferWhatsApp.ts");
+    const routes = readModuleFamily("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts");
+    const lifecycle = readModuleFamily("server/services/immutableStockTransferRevisionLifecycle.ts");
 
     // The route passes the source location from the revision items, and the
     // lifecycle enforces that a POS user can only submit their assigned source.

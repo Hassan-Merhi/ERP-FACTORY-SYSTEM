@@ -1,0 +1,453 @@
+// Extracted from ./MixBatchList.tsx to keep that module under the source-size cap.
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
+import { useMixIntegrityAudits } from "./useMixIntegrityAudits";
+import { MixIntegrityAuditControls } from "./MixIntegrityAuditControls";
+import { MixIntegrityAuditResults } from "./MixIntegrityAuditResults";
+import { formatNumber } from "@/lib/formatNumber";
+import { recordedMixBatchCost, summarizeRecordedMixBatches } from "@/lib/recordedMixBatchCost";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useOptionalCompany } from "@/contexts/CompanyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileSpreadsheet, Layers, Loader2, MessageCircle, Pencil, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
+import type { MixBatchListProps } from "./MixBatchListTypes";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
+
+export function MixBatchList({
+  mixBatches,
+  isLoading,
+  onEdit,
+  onDelete,
+  onViewDetail,
+  onSendWhatsApp,
+  isSendingWhatsApp,
+  mixBatchDate,
+  setMixBatchDate,
+  mixBatchesByDate,
+  mixBatchPrintRef,
+  reportCategories,
+  reportSuppliers,
+  reportAllocations,
+  reportLoading,
+  formatDisplayDate,
+}: MixBatchListProps) {
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
+  const selectedCompany = useOptionalCompany()?.selectedCompany;
+  // These diagnostic panels are for Developer accounts only; routine mix operations stay available.
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const canAuditHistoricalMixes = currentUser?.role === "Developer";
+  const monitorCompanyId = selectedCompany?.id ?? null;
+  const [showAllMixBatches, setShowAllMixBatches] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
+  const [exportMonth, setExportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const { toast } = useToast();
+
+  const audits = useMixIntegrityAudits({ canAuditHistoricalMixes, monitorCompanyId });
+
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      const response = await fetch("/api/factory/mix-batches/cost-sources", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not load historical supplier costs. Please try again.");
+      const supplierSources = (await response.json()) as import("./mixBatchCostExport").MixBatchCostSourceRow[];
+      const { exportMixBatchCostAnalysis } = await import("./mixBatchCostExport");
+      await exportMixBatchCostAnalysis(
+        mixBatches,
+        exportPeriod === "all-time" ? "all-time" : exportMonth,
+        supplierSources
+      );
+      toast({
+        title: "Excel exported",
+        description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded.",
+      });
+    } catch (error) {
+      toast({
+        title: "Excel export failed",
+        description: error instanceof Error ? error.message : "Could not generate the Excel workbook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const BATCH_PREVIEW_COUNT = 15;
+
+  const visibleMixBatches = useMemo(
+    () => (showAllMixBatches ? mixBatches : mixBatches.slice(0, BATCH_PREVIEW_COUNT)),
+    [mixBatches, showAllMixBatches]
+  );
+
+  const fmtKg = (n: number) => formatNumber(n, 3);
+  const { totalWeightKg: sumTotal, costPerKg: blendedCost } = summarizeRecordedMixBatches(mixBatches);
+  const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
+  const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
+
+  return (
+    <Card
+      className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+      data-testid="mix-batch-list"
+    >
+      <CardHeader className="flex flex-col gap-4 border-b border-border/50 bg-linear-to-r from-amber-50/55 via-card to-card p-4 dark:from-amber-500/5 dark:via-card dark:to-card sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="flex items-center gap-2.5 text-lg font-bold tracking-tight sm:text-xl">
+            <Layers className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            Recent Mix Batches
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Historical list of blends and their cost origins</p>
+        </div>
+
+        <div className="grid w-full grid-cols-1 gap-2 rounded-xl border border-border/70 bg-muted/30 p-2 shadow-sm min-[420px]:grid-cols-[minmax(0,1fr)_auto] sm:w-auto sm:p-1.5">
+          <input
+            type="date"
+            value={mixBatchDate}
+            onChange={(e) => setMixBatchDate(e.target.value)}
+            className="min-h-11 min-w-0 w-full rounded-lg border border-input bg-background px-3 py-1 text-base font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 sm:w-auto sm:text-sm"
+            data-testid="input-mix-batch-date"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSendWhatsApp}
+            disabled={isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0}
+            data-testid="button-send-mix-batch-whatsapp"
+            className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
+          >
+            {isSendingWhatsApp ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <MessageCircle className="h-3.5 w-3.5" />
+            )}
+            Send WhatsApp
+          </Button>
+        </div>
+
+        <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Select value={exportPeriod} onValueChange={(v) => setExportPeriod(v as "month" | "all-time")}>
+              <SelectTrigger
+                aria-label="Excel cost report period"
+                className="h-10 min-w-0 rounded-xl text-sm font-semibold shadow-sm"
+                data-testid="select-mix-batch-export-period"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Selected Month</SelectItem>
+                <SelectItem value="all-time">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+            {exportPeriod === "month" && (
+              <input
+                type="month"
+                value={exportMonth}
+                onChange={(event) => setExportMonth(event.target.value)}
+                aria-label="Excel dashboard month"
+                className="h-10 min-w-0 rounded-xl border border-input bg-background px-3 text-sm font-semibold shadow-sm sm:w-40"
+                data-testid="input-mix-batch-export-month"
+              />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={
+                isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)
+              }
+              className="h-10 gap-2 rounded-xl border-emerald-500/40 bg-emerald-500/5 font-bold text-emerald-700 shadow-sm hover:bg-emerald-500/10 dark:text-emerald-300"
+              data-testid="button-export-mix-batch-cost-excel"
+            >
+              {isExportingExcel ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
+              Export Cost Excel
+            </Button>
+          </div>
+          <span className="text-[10px] text-muted-foreground">
+            {exportPeriod === "all-time"
+              ? "All-time dashboard · all suppliers and production dates"
+              : "Selected month dashboard · full historical supplier detail included"}
+          </span>
+        </div>
+
+        <MixIntegrityAuditControls audits={audits} />
+
+        <MixBatchWhatsAppPreview
+          reportRef={mixBatchPrintRef}
+          date={mixBatchDate}
+          batches={mixBatchesByDate}
+          categories={reportCategories}
+          suppliers={reportSuppliers}
+          allocations={reportAllocations}
+        />
+      </CardHeader>
+
+      <CardContent className="min-w-0 p-4 sm:p-5">
+        <MixIntegrityAuditResults audits={audits} />
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : mixBatches.length > 0 ? (
+          <>
+            <div className="space-y-3 md:hidden phone-land:block" data-testid="mix-batch-mobile-list">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-muted/25 p-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
+                  <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-total">
+                    {fmtKg(sumTotal)} kg
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Blended Cost</div>
+                  <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-cost">
+                    ${blendedCost.toFixed(4)}/kg
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumUsed)} kg</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumRemaining)} kg</div>
+                </div>
+              </div>
+
+              {visibleMixBatches.map((batch) => {
+                const total = parseFloat(batch.totalWeightKg) || 0;
+                const used = parseFloat(batch.usedKg) || 0;
+                const remaining = parseFloat(batch.remainingKg) || 0;
+                const cost = recordedMixBatchCost(batch).costPerKg;
+                return (
+                  <div
+                    key={`mobile-${batch.id}`}
+                    className="rounded-2xl border border-border/70 bg-card p-3 shadow-sm"
+                    data-testid={`card-mix-batch-mobile-${batch.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        className="min-w-0 text-left"
+                        onClick={() => onViewDetail(batch)}
+                        data-testid={`link-mix-batch-mobile-${batch.id}`}
+                      >
+                        <div className="break-all font-mono text-sm font-semibold text-primary">{batch.batchCode}</div>
+                        <div className="mt-0.5 wrap-break-word text-xs text-muted-foreground">
+                          {batch.name || "Unnamed batch"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
+                        </div>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onEdit(batch)}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Edit ${batch.batchCode}`}
+                          data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onDelete(batch.id)}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Delete ${batch.batchCode}`}
+                          data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</div>
+                        <div className="mt-0.5 font-mono font-semibold">{formatNumber(total)} kg</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
+                        <div className="mt-0.5 font-mono font-semibold">${cost.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
+                        <div className="mt-0.5 font-mono font-medium">{fmtKg(used)} kg</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                        <div className="mt-0.5 font-mono font-medium">{fmtKg(remaining)} kg</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {mixBatches.length > BATCH_PREVIEW_COUNT && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAllMixBatches(!showAllMixBatches)}
+                  data-testid="button-toggle-show-all-batches-mobile"
+                  className="w-full text-xs"
+                >
+                  {showAllMixBatches
+                    ? "Show less"
+                    : `Show all ${mixBatches.length} batches (${mixBatches.length - BATCH_PREVIEW_COUNT} hidden)`}
+                </Button>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-xl border border-border/70 md:block phone-land:hidden">
+              <Table>
+                <TableHeader className="bg-slate-100/80 dark:bg-slate-800/70">
+                  <TableRow>
+                    <TableHead className="min-w-40">Batch Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="min-w-32 whitespace-nowrap">Date</TableHead>
+                    <TableHead className="min-w-32 text-right whitespace-nowrap">Total (kg)</TableHead>
+                    <TableHead className="min-w-36 text-right whitespace-nowrap">Recorded Cost/kg</TableHead>
+                    <TableHead className="min-w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleMixBatches.map((batch) => {
+                    const total = parseFloat(batch.totalWeightKg) || 0;
+                    return (
+                      <TableRow
+                        key={batch.id}
+                        className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5"
+                        data-testid={`row-mix-batch-${batch.id}`}
+                      >
+                        <TableCell
+                          className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
+                          onClick={() => onViewDetail(batch)}
+                          data-testid={`link-mix-batch-detail-${batch.id}`}
+                        >
+                          {batch.batchCode}
+                        </TableCell>
+                        <TableCell
+                          className="text-sm cursor-pointer hover:underline"
+                          onClick={() => onViewDetail(batch)}
+                        >
+                          {batch.name || <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{formatNumber(total)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          ${recordedMixBatchCost(batch).costPerKg.toFixed(4)}/kg
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onEdit(batch)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
+                              data-testid={`button-edit-mix-batch-${batch.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onDelete(batch.id)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
+                              data-testid={`button-delete-mix-batch-${batch.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                {mixBatches.length > BATCH_PREVIEW_COUNT && (
+                  <tbody>
+                    <tr>
+                      <td colSpan={6} className="py-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllMixBatches(!showAllMixBatches)}
+                          data-testid="button-toggle-show-all-batches"
+                          className="text-xs text-muted-foreground"
+                        >
+                          {showAllMixBatches
+                            ? "Show less"
+                            : `Show all ${mixBatches.length} batches (${mixBatches.length - BATCH_PREVIEW_COUNT} hidden)`}
+                        </Button>
+                      </td>
+                    </tr>
+                  </tbody>
+                )}
+                <tfoot className="border-t-2 border-border bg-slate-100/60 dark:bg-slate-800/50">
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={3} className="px-4 py-3 text-sm font-semibold text-foreground">
+                      Combined Total
+                      <div className="text-xs text-muted-foreground font-normal mt-0.5">
+                        {mixBatches.length} batch{mixBatches.length !== 1 ? "es" : ""}
+                        {" · "}Used: {fmtKg(sumUsed)}
+                        {" · "}Remaining: {fmtKg(sumRemaining)}
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className="px-4 py-3 text-right font-mono font-semibold text-sm"
+                      data-testid="text-mix-summary-total"
+                    >
+                      {fmtKg(sumTotal)}
+                    </TableCell>
+                    <TableCell
+                      className="px-4 py-3 text-right font-mono font-semibold text-sm"
+                      data-testid="text-mix-summary-cost"
+                    >
+                      ${blendedCost.toFixed(4)}/kg
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </tfoot>
+              </Table>
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            icon={Layers}
+            title="No mix batches"
+            description="No mix batches yet. Create one to get started."
+            className="py-10"
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}

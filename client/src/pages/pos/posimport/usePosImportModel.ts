@@ -1,475 +1,104 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-/**
- * Controller hook for the POS Import page.
- *
- * Owns the upload/parse/validate/import pipeline for both cash and credit
- * sales, the CFA→USD rate conversion applied before import and on the printed
- * receipt, the inventory-warning confirmation gate and the print snapshot.
- */
-import { useState, useEffect, useRef, type ChangeEvent } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { useReactToPrint } from "react-to-print";
-import { formatNumber } from "@/lib/formatNumber";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { downloadFromUrl } from "@/lib/exportFile";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import type {
-  Customer,
-  ImportedSale,
-  LedgerAccount,
-  Location,
-  PosImportItem,
-  PosImportPreview,
-  PosImportValidationResult,
-} from "./types";
-
-function createImportIdentity(scope: string): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return `${scope}:${globalThis.crypto.randomUUID()}`;
-  }
-  return `${scope}:${Date.now()}:${Math.random().toString(36).slice(2, 12)}`;
-}
+import { usePosImportModelPart1 } from "./usePosImportModelPart1";
+import { usePosImportModelPart2 } from "./usePosImportModelPart2";
 
 export function usePosImportModel() {
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const { displayCurrency, exchangeRate, isLoadingCompany } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<PosImportPreview | null>(null);
-  const [validationResult, setValidationResult] = useState<PosImportValidationResult | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<string>("");
-  const [selectedCashAccount, setSelectedCashAccount] = useState<string>("");
-  const [selectedCustomer, setSelectedCustomer] = useState<string>("");
-  const [isCreditSale, setIsCreditSale] = useState(false);
-  const [saleDate, setSaleDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
-  const [showWarningDialog, setShowWarningDialog] = useState(false);
-  const [saleCurrency, setSaleCurrency] = useState<"USD" | "CFA" | "ZMW">("USD");
-  const [showPrintDialog, setShowPrintDialog] = useState(false);
-  const [importedSale, setImportedSale] = useState<ImportedSale | null>(null);
-  const [printTime, setPrintTime] = useState<string>("");
-  const printRef = useRef<HTMLDivElement>(null);
-  const errorsRef = useRef<HTMLDivElement>(null);
-  const importBatchIdRef = useRef<string>(createImportIdentity("pos-import-batch"));
-  const clientRequestIdRef = useRef<string>(createImportIdentity("pos-import-request"));
-
-  const refreshImportIdentity = () => {
-    importBatchIdRef.current = createImportIdentity("pos-import-batch");
-    clientRequestIdRef.current = createImportIdentity("pos-import-request");
-  };
-
-  const fmtPrint = (n: number, prefix = "") => {
-    const fixed = Math.abs(n).toFixed(2);
-    const clean = fixed.replace(/\.00$/, "");
-    const parts = clean.split(".");
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    const num = parts.join(".");
-    return prefix ? prefix + "\u00A0" + num : num;
-  };
-
-  // Printed ZMW imports display original Kwacha worksheet amounts, not
-  // today's conversion of the already-stored USD sales items.
-  const printCurrPrefix = importedSale?.voucher?.currency === "ZMW" ? "K" : "$";
-
-  const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
+  const {
+    applicableExchangeRate,
+    clientRequestIdRef,
+    customers,
+    displayCurrency,
+    errorsRef,
+    file,
+    fmtPrint,
+    handlePrint,
+    importBatchIdRef,
+    importMutation,
+    importedSale,
+    isCreditSale,
+    ledgerAccounts,
+    locations,
+    navigate,
+    parseMutation,
+    preview,
+    printCurrPrefix,
+    printRef,
+    printTime,
+    printUserName,
+    refreshImportIdentity,
+    saleCurrency,
+    saleDate,
+    selectedCashAccount,
+    selectedCompany,
+    selectedCustomer,
+    selectedLocation,
+    setFile,
+    setImportedSale,
+    setIsCreditSale,
+    setPreview,
+    setPrintTime,
+    setSaleCurrency,
+    setSaleDate,
+    setSelectedCashAccount,
+    setSelectedCustomer,
+    setSelectedLocation,
+    setShowPrintDialog,
+    setShowWarningDialog,
+    setValidationResult,
+    showCurrencySelector,
+    showPrintDialog,
+    showWarningDialog,
+    toUsdItems,
+    toast,
+    validateMutation,
+    validationResult,
+  } = usePosImportModelPart1();
+  const {
+    creditImportMutation,
+    downloadTemplate,
+    handleConfirmImport,
+    handleFileChange,
+    handleImport,
+    handleLocationChange,
+    handleParse,
+    handleValidate,
+    hasValidationErrors,
+    isValidated,
+    skipPrint,
+    toggleCreditSale,
+  } = usePosImportModelPart2({
+    applicableExchangeRate,
+    clientRequestIdRef,
+    customers,
+    file,
+    importBatchIdRef,
+    importMutation,
+    isCreditSale,
+    locations,
+    navigate,
+    parseMutation,
+    preview,
+    refreshImportIdentity,
+    saleCurrency,
+    saleDate,
+    selectedCashAccount,
+    selectedCustomer,
+    selectedLocation,
+    setFile,
+    setImportedSale,
+    setIsCreditSale,
+    setPreview,
+    setPrintTime,
+    setSelectedCashAccount,
+    setSelectedCustomer,
+    setSelectedLocation,
+    setShowPrintDialog,
+    setShowWarningDialog,
+    setValidationResult,
+    toUsdItems,
+    toast,
+    validateMutation,
+    validationResult,
   });
-
-  const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts?profile=picker"],
-  });
-
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/customers/for-pos"],
-    enabled: isCreditSale,
-  });
-
-  const { data: authUser } = useQuery<{ fullName?: string; name?: string; username?: string; email?: string }>({
-    queryKey: ["/api/auth/me"],
-  });
-  const printUserName = authUser?.fullName || authUser?.name || authUser?.username || authUser?.email || "Import";
-
-  const showCurrencySelector = !isLoadingCompany && (displayCurrency === "CFA" || displayCurrency === "ZMW");
-
-  // Changing company must clear the previous company's native-currency choice
-  // and validation; otherwise the same Excel upload could be imported as CFA
-  // on Zambia or as ZMW on Mali.
-  useEffect(() => {
-    setSaleCurrency(displayCurrency === "CFA" || displayCurrency === "ZMW" ? displayCurrency : "USD");
-    setValidationResult(null);
-  }, [selectedCompany?.id, displayCurrency]);
-
-  const { data: datedZmwRate, isFetching: isFetchingZmwRate } = useQuery<{ rate: string } | null>({
-    queryKey: ["/api/exchange-rates/latest", selectedCompany?.id, "USD", "ZMW", saleDate, "pos-import"],
-    queryFn: async () => {
-      const query = new URLSearchParams({
-        companyId: String(selectedCompany!.id),
-        fromCurrency: "USD",
-        toCurrency: "ZMW",
-        asOf: saleDate,
-      });
-      const response = await fetch("/api/exchange-rates/latest?" + query, { credentials: "include" });
-      if (!response.ok) return null;
-      return response.json();
-    },
-    enabled: !!selectedCompany?.id && displayCurrency === "ZMW" && !!saleDate,
-    staleTime: 0,
-  });
-  const datedZmwNumber = Number(datedZmwRate?.rate);
-  const applicableExchangeRate =
-    saleCurrency === "ZMW"
-      ? !isFetchingZmwRate && datedZmwRate && Number.isFinite(datedZmwNumber) && datedZmwNumber > 0
-        ? datedZmwNumber
-        : null
-      : exchangeRate;
-
-  /** Import payload USD rates and the original typed ZMW rate for audit/reconciliation. */
-  const toUsdItems = (items: PosImportItem[]): PosImportItem[] =>
-    saleCurrency !== "USD" && applicableExchangeRate
-      ? items.map((item) => ({
-          ...item,
-          originalCurrencyRate: saleCurrency === "ZMW" ? String(item.rate) : undefined,
-          rate: (Number(item.rate) / applicableExchangeRate).toFixed(saleCurrency === "ZMW" ? 6 : 2),
-        }))
-      : items;
-
-  const parseMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const res = await fetch("/api/pos-import/parse", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to parse file");
-      }
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      setPreview(data);
-      setValidationResult(null);
-      toast({
-        title: "File parsed successfully",
-        description: `Found ${data.items.length} item(s) totaling ${formatNumber(data.totalValue)}. Click Validate to check the data.`,
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Parse error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const validateMutation = useMutation({
-    mutationFn: async (data: unknown) => {
-      const res = await apiRequest("POST", "/api/pos-import/validate", data);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      setValidationResult(data);
-      const errorCount = data.errors?.length || 0;
-      if (errorCount === 0) {
-        toast({
-          title: "Validation passed",
-          description: "All items validated successfully. You can now import the data.",
-        });
-      } else {
-        toast({
-          title: "Validation failed",
-          description: `Found ${errorCount} error(s). Scroll down to see the full list.`,
-          variant: "destructive",
-        });
-        // Auto-scroll to the error list so the user sees them immediately
-        setTimeout(() => {
-          errorsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
-      }
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Validation error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `${(importedSale?.location?.name || "POS").replace(/\s+/g, "_")}_${new Date().toLocaleDateString("en-CA")}`,
-    onAfterPrint: () => {
-      setShowPrintDialog(false);
-      navigate("/vouchers");
-    },
-  });
-
-  const importMutation = useMutation({
-    mutationFn: async (data: unknown) => {
-      const res = await apiRequest("POST", "/api/pos-import/import", data);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Import successful",
-        description: `${data.itemsCount} items imported. Total sales: ${data.totalSales}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-
-      const location = locations.find((l) => l.id === parseInt(selectedLocation));
-      const itemsForPrint =
-        saleCurrency === "ZMW"
-          ? validationResult?.validatedItems || []
-          : toUsdItems(validationResult?.validatedItems || []);
-      setImportedSale({
-        voucher: data.voucher,
-        items: itemsForPrint,
-        grandTotal: data.totalSales,
-        saleDate,
-        location,
-        isCreditSale: false,
-      });
-      setPrintTime(new Date().toLocaleTimeString());
-      setShowPrintDialog(true);
-      refreshImportIdentity();
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Import error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const creditImportMutation = useMutation({
-    mutationFn: async (data: unknown) => {
-      const res = await apiRequest("POST", "/api/credit-sales-import/import", data);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Credit Sale Import successful",
-        description: `${data.itemsCount} items imported. Total: $${data.totalSales} to ${data.customerName}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/for-pos"] });
-
-      const location = locations.find((l) => l.id === parseInt(selectedLocation));
-      const customer = customers.find((c) => c.id === parseInt(selectedCustomer));
-      const itemsForPrint =
-        saleCurrency === "ZMW"
-          ? validationResult?.validatedItems || []
-          : toUsdItems(validationResult?.validatedItems || []);
-      setImportedSale({
-        voucher: data.voucher,
-        items: itemsForPrint,
-        grandTotal: data.totalSales,
-        saleDate,
-        location,
-        isCreditSale: true,
-        customer: customer ? { name: customer.legalName } : null,
-      });
-      setPrintTime(new Date().toLocaleTimeString());
-      setShowPrintDialog(true);
-      refreshImportIdentity();
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Credit Import error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      refreshImportIdentity();
-      setFile(selectedFile);
-      setPreview(null);
-      setValidationResult(null);
-    }
-  };
-
-  const toggleCreditSale = (checked: boolean) => {
-    setIsCreditSale(checked);
-    setSelectedCashAccount("");
-    setSelectedCustomer("");
-    setValidationResult(null);
-  };
-
-  const handleLocationChange = (locationId: string) => {
-    setSelectedLocation(locationId);
-    // Remaining stock in the validation result belongs to the former location.
-    setValidationResult(null);
-  };
-
-  const warn = (title: string, description: string) => {
-    toast({ title, description, variant: "destructive" });
-  };
-
-  /** Location + cash-account/customer requirements shared by validate and import. */
-  const hasRequiredTargets = () => {
-    if (!selectedLocation) {
-      warn("Location required", "Please select a location");
-      return false;
-    }
-    if (!isCreditSale && !selectedCashAccount) {
-      warn("Cash account required", "Please select a cash account");
-      return false;
-    }
-    if (isCreditSale && !selectedCustomer) {
-      warn("Customer required", "Please select a customer for credit sale");
-      return false;
-    }
-    return true;
-  };
-
-  const handleParse = () => {
-    if (!file) {
-      warn("No file selected", "Please select an Excel file to upload");
-      return;
-    }
-    if (!navigator.onLine) {
-      warn("Not available offline", "File imports require a connection");
-      return;
-    }
-    const formData = new FormData();
-    formData.append("file", file);
-    parseMutation.mutate(formData);
-  };
-
-  const handleValidate = () => {
-    if (!hasRequiredTargets()) return;
-
-    if (!preview) {
-      warn("No preview data", "Please parse the file first");
-      return;
-    }
-
-    validateMutation.mutate({
-      locationId: parseInt(selectedLocation),
-      saleDate,
-      items: preview.items,
-    });
-  };
-
-  const doImport = () => {
-    if (!validationResult) return;
-
-    // Both normal and credit imports post USD sale prices, with the approved
-    // dated foreign amount and locked rate recorded on the voucher entries.
-    if (saleCurrency !== "USD" && (!applicableExchangeRate || !Number.isFinite(applicableExchangeRate))) {
-      warn("Exchange rate required", "A valid rate for the sale date is required before importing.");
-      return;
-    }
-    const itemsToImport = toUsdItems(validationResult.validatedItems);
-    const requestIdentity = {
-      importBatchId: importBatchIdRef.current,
-      clientRequestId: clientRequestIdRef.current,
-    };
-
-    if (isCreditSale) {
-      creditImportMutation.mutate({
-        locationId: parseInt(selectedLocation),
-        customerId: parseInt(selectedCustomer),
-        saleDate,
-        currency: saleCurrency,
-        exchangeRate: saleCurrency === "USD" ? undefined : String(applicableExchangeRate),
-        items: itemsToImport,
-        ...requestIdentity,
-      });
-    } else {
-      importMutation.mutate({
-        locationId: parseInt(selectedLocation),
-        cashAccountId: parseInt(selectedCashAccount),
-        saleDate,
-        currency: saleCurrency,
-        exchangeRate: saleCurrency === "USD" ? undefined : String(applicableExchangeRate),
-        items: itemsToImport,
-        ...requestIdentity,
-      });
-    }
-  };
-
-  const isValidated = validationResult !== null;
-  const hasValidationErrors = validationResult?.errors && validationResult.errors.length > 0;
-
-  const handleImport = () => {
-    if (!hasRequiredTargets()) return;
-
-    if (saleCurrency !== "USD" && (!applicableExchangeRate || !Number.isFinite(applicableExchangeRate))) {
-      warn(
-        "Exchange rate required",
-        `Set an approved USD/${saleCurrency} rate for the selected sale date before importing.`
-      );
-      return;
-    }
-
-    if (!preview) {
-      warn("No preview data", "Please parse the file first");
-      return;
-    }
-
-    if (!isValidated) {
-      warn("Validation required", "Please validate the data before importing");
-      return;
-    }
-
-    if (hasValidationErrors) {
-      warn("Validation errors present", "Please fix validation errors before importing");
-      return;
-    }
-
-    if (!validationResult?.validatedItems) {
-      warn("Validation data missing", "Please validate again before importing");
-      return;
-    }
-
-    // Check if there are inventory warnings
-    const hasWarnings = validationResult?.warnings && validationResult.warnings.length > 0;
-
-    if (hasWarnings) {
-      // Show confirmation dialog
-      setShowWarningDialog(true);
-    } else {
-      // No warnings, proceed with import
-      doImport();
-    }
-  };
-
-  const handleConfirmImport = () => {
-    setShowWarningDialog(false);
-    doImport();
-  };
-
-  const downloadTemplate = async () => {
-    try {
-      await downloadFromUrl("/api/pos-import/template", { fileName: "pos_import_template.xlsx" });
-    } catch (error) {
-      toast({
-        title: "Template download failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const skipPrint = () => {
-    setShowPrintDialog(false);
-    navigate("/vouchers");
-  };
 
   return {
     // context

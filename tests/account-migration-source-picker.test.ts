@@ -1,9 +1,9 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const page = readFileSync("client/src/pages/AccountMigration.tsx", "utf8");
-const route = readFileSync("server/routes/admin/import-export/account-migration.ts", "utf8");
-const safeRoutes = readFileSync("server/routes/admin/accountMigrationSafeRoutes.ts", "utf8");
+const page = readModuleFamily("client/src/pages/AccountMigration.tsx");
+const route = readModuleFamily("server/routes/admin/import-export/account-migration.ts");
+const safeRoutes = readModuleFamily("server/routes/admin/accountMigrationSafeRoutes.ts");
 
 describe("account migration source-company picker", () => {
   it("loads source ledgers through the dedicated authorized migration read", () => {

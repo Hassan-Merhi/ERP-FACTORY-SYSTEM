@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase3CutoverRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase3CutoverRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
 
 describe("Golden Coast Phase 3 cutover route surface hardened by Phase 13", () => {
   it("registers status, preview and cutover inside Supplier Partner routes", () => {

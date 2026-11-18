@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getRemainingBales } from "../client/src/pages/factory/factoryinvoices/invoiceCalculations";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (relativePath: string) => readFileSync(resolve(process.cwd(), relativePath), "utf8");
+const read = (relativePath: string) => readModuleFamily(resolve(process.cwd(), relativePath));
 
 describe("continuation loading quantities across screens", () => {
   it("reads the remaining-only plan for verification, while retaining original proforma prices", () => {

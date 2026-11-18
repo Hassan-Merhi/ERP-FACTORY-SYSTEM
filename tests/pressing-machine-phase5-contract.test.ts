@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-const source = (file: string) => readFileSync(file, "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const source = (file: string) => readModuleFamily(file);
 const queue = source("client/src/pages/factory/pressing-scanner/pressingOfflineQueue.ts");
 const hook = source("client/src/pages/factory/pressing-scanner/usePressingOfflineSync.ts");
 const transport = source("client/src/pages/factory/pressing-scanner/pressingConfirmClient.ts");
@@ -12,12 +12,13 @@ const generic = source("client/src/lib/offlineQueue.ts");
 
 describe("Phase 5 pressing offline resilience contract", () => {
   it("persists a request ID and payload in IndexedDB before HTTP", () => {
-    expect(queue).toContain('indexedDB.open(DB_NAME, DB_VERSION)');
+    expect(queue).toContain("indexedDB.open(DB_NAME, DB_VERSION)");
     expect(queue).toContain('db.createObjectStore(STORE, { keyPath: "requestId" })');
     expect(queue).toContain('store.createIndex("actor", ["companyId", "userId"]');
     expect(queue).toContain("await savePressingScan(record)");
-    expect(hook.indexOf("await enqueuePressingScan(identity, payload)"))
-      .toBeLessThan(hook.indexOf("return deliver(identity, current)"));
+    expect(hook.indexOf("await enqueuePressingScan(identity, payload)")).toBeLessThan(
+      hook.indexOf("return deliver(identity, current)")
+    );
     expect(transport).toContain('"/api/factory/pressing-machines/confirm", row.payload');
     expect(queue).toContain("requestId: record.requestId, payload: record.payload");
   });
@@ -44,7 +45,7 @@ describe("Phase 5 pressing offline resilience contract", () => {
   it("automatically retries safe requests on reconnect, page visibility and interval", () => {
     expect(hook).toContain('window.addEventListener("online", onOnline)');
     expect(hook).toContain('document.addEventListener("visibilitychange", onVisibility)');
-    expect(hook).toContain('window.setInterval(run, 12_000)');
+    expect(hook).toContain("window.setInterval(run, 12_000)");
     expect(hook).toContain('r.state === "syncing"');
     expect(hook).toContain("pressingRetryDelay(changed.attempts)");
     expect(hook).toContain("requestId: crypto.randomUUID()");

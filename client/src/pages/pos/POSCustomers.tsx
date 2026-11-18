@@ -1,9 +1,5 @@
-import { searchIncludes } from "@shared/searchNormalization";
-import { useState, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
-import { SafeStyle } from "@/components/SafeStyle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,118 +8,45 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Plus, Users, DollarSign } from "lucide-react";
-import { ExportButton } from "@/components/export/ReportExportMenu";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { drCrClass } from "@/lib/formatNumber";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@/lib/form-resolver";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useReactToPrint } from "react-to-print";
-import { format } from "date-fns";
-import { z } from "zod";
-import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-
-interface POSCustomer {
-  id: number;
-  legalName: string;
-  phone: string | null;
-  balance: number;
-  balanceSide: string;
-}
-
-const formSchema = z.object({
-  legalName: z.string().min(1, "Customer name is required"),
-  phone: z.string().optional(),
-  openingBalance: z.string().optional(),
-  openingBalanceSide: z.enum(["Dr", "Cr"]).default("Dr"),
-});
-
-type FormData = z.infer<typeof formSchema>;
+import { usePOSCustomersState } from "./usePOSCustomersState";
+import { POSCustomersDialogSection } from "./POSCustomersDialogSection";
+import { POSCustomersSection } from "./POSCustomersSection";
 
 export default function POSCustomers() {
-  const { toast } = useToast();
-  const { formatCashAmount, formatAmount } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const {
-    filters: { searchQuery },
-    setFilter,
-    resetFilters,
-    hasActiveFilters,
-  } = usePaginatedFilterState<{ searchQuery: string }>({
-    createInitialFilters: () => ({ searchQuery: "" }),
-    storageKey: selectedCompany?.id ? `erp-pos-customers-filters-v1:${selectedCompany.id}` : undefined,
-  });
-  const [statementCustomer, setStatementCustomer] = useState<POSCustomer | null>(null);
-
-  const printRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Statement_${statementCustomer?.legalName?.replace(/\s+/g, "_") ?? "Customer"}`,
-  });
-
-  const {
-    data: customers = [],
-    isLoading,
-    isError,
+    customers,
     refetch,
-  } = useQuery<POSCustomer[]>({
-    queryKey: ["/api/pos/customers"],
-  });
-
-  // Fetch transactions when a customer is selected — uses POS-specific endpoint
-  const { data: ledgerTxnsRaw, isLoading: txnsLoading } = useQuery<unknown>({
-    queryKey: ["/api/pos/customers", statementCustomer?.id, "transactions"],
-    queryFn: () => fetch(`/api/pos/customers/${statementCustomer!.id}/transactions`).then((r) => r.json()),
-    enabled: !!statementCustomer?.id,
-  });
-  const ledgerTxns = Array.isArray(ledgerTxnsRaw) ? ledgerTxnsRaw : [];
-
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      legalName: "",
-      phone: "",
-      openingBalance: "0",
-      openingBalanceSide: "Dr",
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      return await apiRequest("POST", "/api/pos/customers", data);
-    },
-    onSuccess: () => {
-      toast({ title: "Created", description: "Customer created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/customers"] });
-      setIsCreateOpen(false);
-      form.reset({ legalName: "", phone: "", openingBalance: "0", openingBalanceSide: "Dr" });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const onSubmit = (data: FormData) => createMutation.mutate(data);
-
-  const filteredCustomers = customers.filter((customer) => searchIncludes(customer.legalName, searchQuery));
-
-  const totalCustomers = customers.length;
-  const totalReceivables = customers
-    .filter((c) => c.balanceSide === "Dr")
-    .reduce((sum, c) => sum + (c.balance || 0), 0);
-
-  // Compute statement rows
-  const sorted = [...ledgerTxns].sort((a, b) => new Date(a.voucherDate).getTime() - new Date(b.voucherDate).getTime());
-  const totalDr = sorted.reduce((s, t) => s + parseFloat(t.debitAmount || "0"), 0);
-  const totalCr = sorted.reduce((s, t) => s + parseFloat(t.creditAmount || "0"), 0);
-  const closingBalance = statementCustomer?.balance || 0;
-  const openingBalance = closingBalance - totalDr + totalCr;
+    isError,
+    closingBalance,
+    createMutation,
+    filteredCustomers,
+    form,
+    formatAmount,
+    formatCashAmount,
+    handlePrint,
+    hasActiveFilters,
+    isCreateOpen,
+    isLoading,
+    onSubmit,
+    openingBalance,
+    printRef,
+    resetFilters,
+    searchQuery,
+    selectedCompany,
+    setFilter,
+    setIsCreateOpen,
+    setStatementCustomer,
+    sorted,
+    statementCustomer,
+    totalCr,
+    totalCustomers,
+    totalDr,
+    totalReceivables,
+    txnsLoading,
+  } = usePOSCustomersState();
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-5">
@@ -344,239 +267,33 @@ export default function POSCustomers() {
       </div>
 
       {/* Customer Statement Dialog */}
-      <Dialog open={!!statementCustomer} onOpenChange={(open) => !open && setStatementCustomer(null)}>
-        <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <DialogTitle className="text-lg">{statementCustomer?.legalName}</DialogTitle>
-                <div className="flex items-center gap-3 pt-1 text-sm text-muted-foreground">
-                  <span>
-                    Balance:{" "}
-                    <span className="font-mono font-semibold text-foreground">
-                      {formatCashAmount(statementCustomer?.balance || 0)}
-                    </span>
-                  </span>
-                  <Badge variant="secondary" className={drCrClass(statementCustomer?.balanceSide || "Dr")}>
-                    {statementCustomer?.balanceSide || "Dr"}
-                  </Badge>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <ExportButton
-                  kind="print"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePrint()}
-                  data-testid="button-print-statement"
-                />
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto mt-2">
-            {txnsLoading ? (
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : sorted.length === 0 ? (
-              <EmptyState title="No transactions found" className="py-8" />
-            ) : (
-              (() => {
-                let running = openingBalance;
-                return (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Debit</TableHead>
-                        <TableHead className="text-right">Credit</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {openingBalance !== 0 && (
-                        <TableRow className="text-muted-foreground text-sm">
-                          <TableCell>—</TableCell>
-                          <TableCell className="italic">Opening Balance</TableCell>
-                          <TableCell />
-                          <TableCell />
-                          <TableCell className="text-right font-mono">
-                            {formatAmount(Math.abs(openingBalance))}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {sorted.map((t, i) => {
-                        const dr = parseFloat(t.debitAmount || "0");
-                        const cr = parseFloat(t.creditAmount || "0");
-                        running = running + dr - cr;
-                        return (
-                          <TableRow key={t.entryId ?? i}>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">
-                              {t.voucherDate ? format(new Date(t.voucherDate), "yyyy-MM-dd") : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                              {t.narration || t.voucherDescription || t.voucherType || "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {dr > 0 ? formatAmount(dr) : ""}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {cr > 0 ? formatAmount(cr) : ""}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm font-medium">
-                              {formatAmount(Math.abs(running))}
-                              <span className={`text-xs font-semibold ml-1 ${drCrClass(running >= 0 ? "Dr" : "Cr")}`}>
-                                {running >= 0 ? "Dr" : "Cr"}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                    <TableHeader className="border-t-2">
-                      <TableRow className="font-semibold">
-                        <TableHead colSpan={2}>Total</TableHead>
-                        <TableHead className="text-right font-mono text-foreground">{formatAmount(totalDr)}</TableHead>
-                        <TableHead className="text-right font-mono text-foreground">{formatAmount(totalCr)}</TableHead>
-                        <TableHead className="text-right font-mono text-foreground">
-                          {formatAmount(Math.abs(closingBalance))}
-                          <span
-                            className={`text-xs font-semibold ml-1 ${drCrClass(statementCustomer?.balanceSide || "Dr")}`}
-                          >
-                            {statementCustomer?.balanceSide || "Dr"}
-                          </span>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                  </Table>
-                );
-              })()
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <POSCustomersDialogSection
+        closingBalance={closingBalance}
+        formatAmount={formatAmount}
+        formatCashAmount={formatCashAmount}
+        handlePrint={handlePrint}
+        openingBalance={openingBalance}
+        setStatementCustomer={setStatementCustomer}
+        sorted={sorted}
+        statementCustomer={statementCustomer}
+        totalCr={totalCr}
+        totalDr={totalDr}
+        txnsLoading={txnsLoading}
+      />
 
       {/* Hidden print template */}
-      <div style={{ position: "fixed", top: "-9999px", left: "-9999px", visibility: "hidden", pointerEvents: "none" }}>
-        <div
-          ref={printRef}
-          style={{
-            fontFamily: "Arial, Helvetica, sans-serif",
-            fontSize: "10pt",
-            padding: "20px",
-            backgroundColor: "white",
-            color: "black",
-          }}
-        >
-          <SafeStyle
-            css={`
-              @media print {
-                body {
-                  font-family: Arial, Helvetica, sans-serif !important;
-                }
-                table {
-                  width: 100%;
-                  border-collapse: collapse;
-                }
-                th,
-                td {
-                  border: 1px solid #ccc;
-                  padding: 4px 8px;
-                  font-size: 9pt;
-                }
-                th {
-                  background-color: #f0f0f0;
-                  font-weight: bold;
-                  text-align: left;
-                }
-                .text-right {
-                  text-align: right;
-                }
-              }
-            `}
-          />
-          <div style={{ textAlign: "center", marginBottom: "12px" }}>
-            <div style={{ fontSize: "14pt", fontWeight: "900" }}>Customer Statement</div>
-            <div style={{ fontSize: "10pt", color: "#555" }}>{selectedCompany?.name}</div>
-            <div style={{ fontSize: "9pt", color: "#777", marginTop: "2px" }}>
-              Printed: {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-            </div>
-          </div>
-          <div style={{ marginBottom: "10px", padding: "8px", border: "1px solid #ddd", borderRadius: "4px" }}>
-            <strong>{statementCustomer?.legalName}</strong>
-            {statementCustomer?.phone && (
-              <span style={{ marginLeft: "12px", color: "#555" }}>{statementCustomer.phone}</span>
-            )}
-            <span style={{ float: "right" }}>
-              Balance: <strong>{formatCashAmount(statementCustomer?.balance || 0)}</strong>{" "}
-              <strong>{statementCustomer?.balanceSide || "Dr"}</strong>
-            </span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th className="text-right" style={{ textAlign: "right" }}>
-                  Debit
-                </th>
-                <th className="text-right" style={{ textAlign: "right" }}>
-                  Credit
-                </th>
-                <th className="text-right" style={{ textAlign: "right" }}>
-                  Balance
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {openingBalance !== 0 && (
-                <tr style={{ color: "#777" }}>
-                  <td>—</td>
-                  <td>
-                    <em>Opening Balance</em>
-                  </td>
-                  <td></td>
-                  <td></td>
-                  <td style={{ textAlign: "right" }}>{formatAmount(Math.abs(openingBalance))}</td>
-                </tr>
-              )}
-              {(() => {
-                let r = openingBalance;
-                return sorted.map((t, i) => {
-                  const dr = parseFloat(t.debitAmount || "0");
-                  const cr = parseFloat(t.creditAmount || "0");
-                  r = r + dr - cr;
-                  return (
-                    <tr key={i}>
-                      <td>{t.voucherDate ? format(new Date(t.voucherDate), "yyyy-MM-dd") : "—"}</td>
-                      <td>{t.narration || t.voucherDescription || t.voucherType || "—"}</td>
-                      <td style={{ textAlign: "right" }}>{dr > 0 ? formatAmount(dr) : ""}</td>
-                      <td style={{ textAlign: "right" }}>{cr > 0 ? formatAmount(cr) : ""}</td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatAmount(Math.abs(r))} {r >= 0 ? "Dr" : "Cr"}
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
-            </tbody>
-            <tfoot>
-              <tr style={{ fontWeight: "bold", borderTop: "2px solid #333" }}>
-                <td colSpan={2}>Total</td>
-                <td style={{ textAlign: "right" }}>{formatAmount(totalDr)}</td>
-                <td style={{ textAlign: "right" }}>{formatAmount(totalCr)}</td>
-                <td style={{ textAlign: "right" }}>
-                  {formatAmount(Math.abs(closingBalance))} {statementCustomer?.balanceSide || "Dr"}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+      <POSCustomersSection
+        closingBalance={closingBalance}
+        formatAmount={formatAmount}
+        formatCashAmount={formatCashAmount}
+        openingBalance={openingBalance}
+        printRef={printRef}
+        selectedCompany={selectedCompany}
+        sorted={sorted}
+        statementCustomer={statementCustomer}
+        totalCr={totalCr}
+        totalDr={totalDr}
+      />
     </div>
   );
 }

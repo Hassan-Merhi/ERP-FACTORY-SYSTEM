@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import {
   finalizedStockItemId,
   planDestinationStockMapping,
@@ -288,7 +288,7 @@ describe("Phase 4 verified destination stock mapping", () => {
   });
 
   it("preserves the all-or-nothing posting boundary and zero opening balances", () => {
-    const sourceCode = readFileSync("server/services/intercompany/containerTradingImport.ts", "utf8");
+    const sourceCode = readModuleFamily("server/services/intercompany/containerTradingImport.ts");
     expect(sourceCode).toContain("planDestinationStockMapping({");
     expect(sourceCode).toMatch(/tx\s*\.insert\(stockItems\)/);
     expect(sourceCode).toContain('openingQty: "0"');

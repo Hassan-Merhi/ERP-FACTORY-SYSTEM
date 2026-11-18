@@ -7,8 +7,9 @@ import {
   FAILED_CAPTURE_BACKOFF_MS,
   IDLE_REFRESH_MS,
 } from "../client/src/hooks/screen-feed-capture-policy";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
+const read = (file: string) => readModuleFamily(path.join(process.cwd(), file));
 
 const runtimeSource = read("server/services/remoteSupportRuntime.ts");
 const transportSource = read("server/routes/screenFeedTransportHardening.ts");

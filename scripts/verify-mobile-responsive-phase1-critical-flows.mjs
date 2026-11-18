@@ -2,9 +2,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
-const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
+const read = (file) => readModuleFamily(path.join(ROOT, file));
 
 const browserCompat = await read("client/src/mobile-browser-compat.css");
 const workspaceBoundary = await read("client/src/components/ui/workspace-route-boundary.tsx");

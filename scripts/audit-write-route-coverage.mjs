@@ -35,6 +35,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readWholeModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(projectRoot, "config/route-manifest.json");
@@ -231,7 +232,9 @@ export function auditWriteRouteCoverage(options = {}) {
     let owner = owners?.[0] ?? null;
     let sensitiveTable = null;
     for (const file of owners ?? []) {
-      const table = writesSensitiveTable(sources.get(file));
+      // A module split under the source-size policy writes through its
+      // extracted siblings; classify the registering module as a whole family.
+      const table = writesSensitiveTable(readWholeModuleFamily(path.join(projectRoot, file)));
       if (table) {
         owner = file;
         sensitiveTable = table;

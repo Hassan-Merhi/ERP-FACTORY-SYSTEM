@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
 import {
   deriveRecurringDescriptionTemplate,
@@ -7,6 +6,7 @@ import {
   nextMonthEndIso,
   renderRecurringDescription,
 } from "../server/services/accounting/recurringJournalService";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 describe("recurring journal scheduling", () => {
   it("schedules a source-month voucher for the following month end", () => {
@@ -31,7 +31,7 @@ describe("recurring journal scheduling", () => {
 describe("recurring journal posting safety contract", () => {
   it("locks and rechecks recurrence state and writes the factory daybook mirror", () => {
     const sourcePath = path.resolve(process.cwd(), "server/services/accounting/recurringJournalService.ts");
-    const source = fs.readFileSync(sourcePath, "utf8");
+    const source = readModuleFamily(sourcePath);
 
     expect(source).toContain('.for("update")');
     expect(source).toContain("locked.nextRunDate !== scheduledFor");
