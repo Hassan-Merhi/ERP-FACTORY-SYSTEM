@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "../shared/posZmwMoney";
+import { calculateZmwSaleAmounts, resolvePostedZmwUnitPrices, resolveZmwUnitPrice } from "../shared/posZmwMoney";
 import { posSaleLines } from "../server/services/pos/saleAccountingLines";
 import { buildErpVoucherEntries } from "../server/services/accounting/erpVoucherPosting";
 
@@ -31,19 +31,23 @@ describe("Zambia POS exact native Kwacha totals", () => {
     expect(() => calculateZmwSaleAmounts([item], rate)).toThrow("original Kwacha unit price");
   });
 
-  it("reads a legacy cent-rounded USD price back as the whole Kwacha the cashier typed", () => {
-    // K2,000 at 20.8 was stored as $96.15; 96.15 x 20.8 is K1,999.92.
-    const legacy = (usd: string) => resolveZmwUnitPrice({ quantity: 1, rate: usd }, "20.8", true).toFixed(2);
-    expect(legacy("96.15")).toBe("2000.00");
-    expect(legacy("144.230000")).toBe("3000.00");
-    expect(legacy("139.42")).toBe("2900.00");
-    expect(legacy("77.88")).toBe("1620.00");
-    expect(calculateZmwSaleAmounts([{ quantity: 5, rate: "77.88" }], "20.8", true).nativeTotal).toBe("8100.00");
-    // No whole Kwacha rounds to this cent, so the nearest ngwee stands.
-    expect(legacy("96.13")).toBe("1999.50");
-    // Six-decimal prices are exact and never snapped.
-    expect(legacy("96.149519")).toBe("1999.91");
-    expect(legacy("96.153846")).toBe("2000.00");
+  it("reads cent-rounded legacy prices back as the whole Kwacha typed when that matches the posted total", () => {
+    const units = (lines: { quantity: number; rate: string }[], posted: string | null) =>
+      resolvePostedZmwUnitPrices(lines, "20.8", posted).map((unit) => unit.toFixed(2));
+    // K2,000 and 5 x K1,620 at 20.8 were stored as $96.15 and $77.88; the sale posted K10,100.
+    const legacy = [
+      { quantity: 1, rate: "96.150000" },
+      { quantity: 5, rate: "77.88" },
+    ];
+    expect(units(legacy, "10100.000000")).toEqual(["2000.00", "1620.00"]);
+    // A sale really typed at K1,999.92 stores the same $96.15 and posted K1,999.92: never K2,000.
+    expect(units([{ quantity: 1, rate: "96.150000" }], "1999.92")).toEqual(["1999.92"]);
+    // Without a posted total, or when neither reading matches it, the nearest ngwee stands.
+    expect(units(legacy, null)).toEqual(["1999.92", "1619.90"]);
+    expect(units(legacy, "9000.00")).toEqual(["1999.92", "1619.90"]);
+    // Six-decimal prices are exact and are never moved.
+    expect(units([{ quantity: 1, rate: "96.149519" }], "2000.00")).toEqual(["1999.91"]);
+    expect(resolveZmwUnitPrice({ quantity: 1, rate: "96.15" }, "20.8", true).toFixed(2)).toBe("1999.92");
   });
 
   it("rejects invalid native unit precision and quantity, rather than silently truncating", () => {

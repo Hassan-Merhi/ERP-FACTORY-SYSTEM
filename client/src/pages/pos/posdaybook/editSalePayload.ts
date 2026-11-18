@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import type { VoucherWithItems } from "./types";
-import { resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import { resolvePostedZmwUnitPrices } from "@shared/posZmwMoney";
 import { posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 
 export interface PosDaybookDraftLine {
@@ -13,20 +13,32 @@ export interface PosDaybookDraftLine {
 
 export function createDaybookDraftLines(sale: VoucherWithItems): PosDaybookDraftLine[] {
   const exchangeRate = new Decimal(sale.exchangeRate || "1");
-  return (sale.salesItems ?? []).map((item) => ({
+  const items = sale.salesItems ?? [];
+  const kwacha = sale.currency === "ZMW" ? postedKwachaUnitPrices(sale, items, exchangeRate) : null;
+  return items.map((item, index) => ({
     id: item.id,
     stockItemId: item.stockItemId,
     stockItemName: item.stockItemName || `Item ${item.stockItemId}`,
     quantity: String(item.quantity),
-    unitPrice:
-      sale.currency === "ZMW"
-        ? resolveZmwUnitPrice(
-            { quantity: item.quantity, rate: item.sellingPrice },
-            exchangeRate.toString(),
-            true
-          ).toFixed(2)
-        : String(item.sellingPrice),
+    unitPrice: kwacha ? kwacha[index] : String(item.sellingPrice),
   }));
+}
+
+/** Kwacha prices as posted; falls back to plain conversion if a stored line is not a valid sale line. */
+function postedKwachaUnitPrices(
+  sale: VoucherWithItems,
+  items: NonNullable<VoucherWithItems["salesItems"]>,
+  exchangeRate: Decimal
+): string[] {
+  try {
+    return resolvePostedZmwUnitPrices(
+      items.map((item) => ({ quantity: item.quantity, rate: item.sellingPrice })),
+      exchangeRate.toString(),
+      sale.nativeZmwTotal
+    ).map((unit) => unit.toFixed(2));
+  } catch {
+    return items.map((item) => new Decimal(item.sellingPrice).times(exchangeRate).toDecimalPlaces(2).toFixed(2));
+  }
 }
 
 /** Preserve original date, currency, payment and sale credit status. */

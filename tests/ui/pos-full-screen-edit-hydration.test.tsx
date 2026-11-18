@@ -76,13 +76,16 @@ describe("Daybook receipt hydration on the full Point of Sale editor", () => {
   });
 
   it("loads a cent-rounded legacy Kwacha sale at the price typed, in Kwacha or as a USD view", () => {
-    const kwachaView = editorProps();
-    kwachaView.editVoucher.salesItems[0].sellingPrice = "96.150000";
+    const legacySale = () => {
+      const props = editorProps();
+      props.editVoucher.salesItems[0].sellingPrice = "96.150000";
+      return { ...props, editVoucher: { ...props.editVoucher, nativeZmwTotal: "4000.000000" } };
+    };
+    const kwachaView = legacySale();
     renderHook(() => usePosEditVoucherHydration(kwachaView));
     expect(kwachaView.setRows.mock.calls[0][0][0]).toMatchObject({ rate: 2000, amount: 4000 });
 
-    const usdView = { ...editorProps(), activeCurrency: "USD" };
-    usdView.editVoucher.salesItems[0].sellingPrice = "96.150000";
+    const usdView = { ...legacySale(), activeCurrency: "USD" };
     renderHook(() => usePosEditVoucherHydration(usdView));
     const row = usdView.setRows.mock.calls[0][0][0];
     expect(row).toMatchObject({ rate: 96.15, amount: 192.3 });

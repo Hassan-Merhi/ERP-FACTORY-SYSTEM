@@ -11,7 +11,7 @@ import type { Location, PosEditSalesItem } from "./pos-components/posTypes";
 import type { AuthMe } from "@shared/apiTypes";
 import type { usePosQueries } from "./hooks/usePosQueries";
 import type { usePosState } from "./hooks/usePosState";
-import { resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import { resolvePostedZmwUnitPrices } from "@shared/posZmwMoney";
 
 type PosState = ReturnType<typeof usePosState>;
 type PosQueries = ReturnType<typeof usePosQueries>;
@@ -124,16 +124,30 @@ export function usePosEditVoucherHydration({
 
     if (!editVoucher || resolvedItems.length === 0) return;
 
+    // The Kwacha price is the sale's real price; USD follows from it, so a
+    // USD/ZMW switch never drifts off the price the cashier typed.
+    const lockedRate = editVoucher.currency === "ZMW" ? Number(editVoucher.exchangeRate) : 0;
+    let kwachaPrices: ReturnType<typeof resolvePostedZmwUnitPrices> | null = null;
+    if (lockedRate > 0) {
+      const postedKwacha =
+        editVoucher.nativeZmwTotal ??
+        editVoucher.entries?.find((e) => e.transactionCurrency === "ZMW" && Number(e.transactionDebitAmount) > 0)
+          ?.transactionDebitAmount;
+      try {
+        kwachaPrices = resolvePostedZmwUnitPrices(
+          resolvedItems.map((item: PosEditSalesItem) => ({ quantity: item.quantity, rate: item.sellingPrice })),
+          lockedRate,
+          postedKwacha
+        );
+      } catch {
+        kwachaPrices = null; // a stored line that is not a valid sale line: load plain USD prices
+      }
+    }
+
     const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => {
       const quantity = Number(item.quantity ?? 0);
       const storedUsd = Number(item.sellingPrice ?? 0);
-      const lockedRate = editVoucher.currency === "ZMW" ? Number(editVoucher.exchangeRate) : 0;
-      // The Kwacha price is the sale's real price; USD follows from it, so a
-      // USD/ZMW switch never drifts off the price the cashier typed.
-      const kwacha =
-        lockedRate > 0 && storedUsd > 0
-          ? resolveZmwUnitPrice({ quantity, rate: item.sellingPrice }, lockedRate, true)
-          : null;
+      const kwacha = kwachaPrices?.[index] ?? null;
       const usdRate = kwacha === null ? storedUsd : kwacha.div(lockedRate).toNumber();
       const rate =
         kwacha === null
