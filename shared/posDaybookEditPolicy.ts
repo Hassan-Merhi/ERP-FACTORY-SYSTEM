@@ -1,0 +1,41 @@
+/** POS sale-edit eligibility. All dates are YYYY-MM-DD company-local business days. */
+export type PosDaybookEditDecision = {
+  allowed: boolean;
+  reason: "enabled" | "disabled" | "not-owner" | "view-only" | "outside-window" | "invalid-date" | "future-date";
+};
+
+function utcDay(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const ms = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value ? ms : null;
+}
+
+export function posDaybookEditEligibility(input: {
+  originalDate: string;
+  businessDate: string;
+  editDays: number;
+  isOwnSale: boolean;
+  viewOnly?: boolean;
+}): PosDaybookEditDecision {
+  if (input.viewOnly) return { allowed: false, reason: "view-only" };
+  if (!input.isOwnSale) return { allowed: false, reason: "not-owner" };
+  if (!Number.isInteger(input.editDays) || input.editDays <= 0) {
+    return { allowed: false, reason: "disabled" };
+  }
+  const original = utcDay(input.originalDate);
+  const today = utcDay(input.businessDate);
+  if (original === null || today === null) return { allowed: false, reason: "invalid-date" };
+  const elapsed = Math.round((today - original) / 86_400_000);
+  if (elapsed < 0) return { allowed: false, reason: "future-date" };
+  if (elapsed > input.editDays) return { allowed: false, reason: "outside-window" };
+  return { allowed: true, reason: "enabled" };
+}
+
+export const posDaybookEditMessages = {
+  disabled: "Daybook sale editing is disabled for this POS account.",
+  ownership: "Only sales belonging to your own POS shift may be edited.",
+  date: "This sale is outside your configured Daybook editing window.",
+  noRedate: "POS cashiers cannot change the original sale date. Reverse and rebook instead.",
+  noPaymentChange: "POS cashiers cannot change an existing sale's payment account or credit status.",
+  viewOnly: "This POS account is view-only and cannot edit sales.",
+} as const;
