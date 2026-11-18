@@ -279,6 +279,55 @@ for the operating system it runs on), then `npm run build:all` on Windows or
 `npm run build:mac` on a Mac. Without the staging step the build is the
 cloud-only app, exactly as before.
 
+**Offline entries on a PC (Phase B1, off unless enabled per PC).** With
+`"entries": true` in `offline-pc.json` the local server runs in
+`OFFLINE_PC_LOCAL_MODE=entry`: besides reading, it accepts the entries the cloud
+can apply exactly once (payment/receipt, stock adjustment, stock transfer, new
+stock item, POS sale). Each runs against the local copy as usual, so the PC sees
+it at once, and is recorded in `pc_local.outbox` only if the local route
+succeeded. New entries stop with `423 OFFLINE_PC_LOCAL_SYNC_TOO_OLD` once the
+copy is 2 days old (or was never completed); reading always works. Rows the PC
+creates get ids from 1,000,000,000 up, the offline range the cloud translates,
+so they never collide with cloud rows.
+
+The sync process delivers the connected person's entries, oldest first, to
+`POST /api/offline/pc-sync/operations`: the cloud's existing offline apply path
+(it also needs `OFFLINE_BROWSER_SYNC_ENABLED=1`), applied exactly once as that
+person, a changed replay refused, a lost acknowledgement answered with the same
+receipt.
+
+**Negative stock (Phase B2, owner decision).** Stock sold twice while PCs were
+offline goes negative and is flagged: when the only disagreement is that stock
+would go below zero, the cloud applies the entry anyway and writes one row to
+`offline_negative_stock_flags` (migration 0010) in the same transaction. An Admin
+or Developer of the company lists them with
+`GET /api/offline/pc-sync/negative-stock-flags` (`?status=all` includes closed
+ones) and closes one with a note through
+`POST /api/offline/pc-sync/negative-stock-flags/:id/resolve`. Flags may stay open
+at month end. Any other conflict writes nothing and is held; **Offline copy →
+Held entries…** lets an Admin or Developer approve it (the cloud re-checks the
+role) or anyone discard it. Entries made by other people on the PC wait until they connect it; switching
+the connected account is refused while the current one still has entries to
+send, held or unconfirmed, and the refused account's new session is signed out
+at once (the PC keeps delivering as the person already connected). Each person
+and company on a PC is a separate device to the cloud (an id derived from the
+PC's), because the cloud binds a device to one user and company. An entry is
+recorded under a database lock that the sync process takes alone while it
+checks, undoes local writes and pulls, so no entry starts in between (a save
+that waits more than 5 seconds answers `503 OFFLINE_PC_LOCAL_SYNC_BUSY`; try
+again). A save interrupted mid-request (the PC or server stopped) is marked
+unconfirmed after 10 minutes and appears in **Held entries…** to send or
+discard. Once nothing is outstanding, the PC undoes its own local writes
+(recorded by a trigger that the sync process's own writes skip) and pulls the
+feed, which brings back the cloud's version of every delivered entry. While
+entries are outstanding the pull waits, so cloud rows never mix with undelivered
+local ones. Covered by `tests/pc-sync-offline-entries.test.ts`.
+
+Still to come: a screen for the negative-stock flags (today the two routes
+above), the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
+edits and deletes of synced records (Phase D), and factory screens and files
+(Phase E).
+
 **Not installed anywhere and not verified on real Windows or Mac PCs.** The
 sync process and the staged server were exercised on Linux only; the Electron
 wiring, the embedded PostgreSQL on Windows/Mac and the packaged installers need
