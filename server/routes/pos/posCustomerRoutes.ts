@@ -38,10 +38,16 @@ export function registerPosCustomerRoutes(app: Express): void {
       }
 
       if (access.role === "POS" && !hasZeroOpeningBalance(req.body?.openingBalance)) {
-        return res.status(403).json({ code: "POS_CUSTOMER_OPENING_BALANCE_DENIED", message: posCustomerAccessText.openingDenied });
+        return res.status(403).json({
+          code: "POS_CUSTOMER_OPENING_BALANCE_DENIED",
+          message: posCustomerAccessText.openingDenied,
+        });
       }
       if (access.role === "POS" && req.body?.ledgerAccountId != null) {
-        return res.status(403).json({ code: "POS_CUSTOMER_LEDGER_LINK_DENIED", message: posCustomerAccessText.ledgerDenied });
+        return res.status(403).json({
+          code: "POS_CUSTOMER_LEDGER_LINK_DENIED",
+          message: posCustomerAccessText.ledgerDenied,
+        });
       }
       const safeInput =
         access.role === "POS"

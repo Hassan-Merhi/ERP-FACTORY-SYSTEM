@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  canCreatePosCustomers,
-  canViewPosCustomers,
-  hasZeroOpeningBalance,
-} from "../shared/posCustomerAccess";
+import { canCreatePosCustomers, canViewPosCustomers, hasZeroOpeningBalance } from "../shared/posCustomerAccess";
 
 const harness = vi.hoisted(() => ({ getContext: vi.fn() }));
 
@@ -94,7 +90,12 @@ describe("Zambia POS customer permission policy", () => {
   });
 
   it("developer bypass remains intact, but not missing company access", async () => {
-    harness.getContext.mockResolvedValue({ ...cashier, role: "Developer", canAccessCustomers: false, developerBypass: true });
+    harness.getContext.mockResolvedValue({
+      ...cashier,
+      role: "Developer",
+      canAccessCustomers: false,
+      developerBypass: true,
+    });
     expect((await check("POST")).next).toHaveBeenCalledOnce();
     harness.getContext.mockRejectedValueOnce(new Error("database offline"));
     const next = vi.fn();

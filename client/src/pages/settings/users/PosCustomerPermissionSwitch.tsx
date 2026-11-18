@@ -2,13 +2,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { posCustomerAccessText } from "@shared/posCustomerAccess";
 
-export function PosCustomerPermissionSwitch({
-  enabled,
-  onChange,
-}: {
+interface Props {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
-}) {
+}
+
+export function PosCustomerPermissionSwitch({ enabled, onChange }: Props) {
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
       <Switch

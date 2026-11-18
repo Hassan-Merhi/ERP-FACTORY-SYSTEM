@@ -41,11 +41,13 @@ export function usePOSCustomersState() {
     posViewOnly?: boolean;
   }>({ queryKey: ["/api/auth/me"] });
   const isPosCashier = (authUser?.currentRole ?? authUser?.role) === "POS";
-  const canCreateCustomer = authUser != null && canCreatePosCustomers({
-    role: authUser.currentRole ?? authUser.role ?? "",
-    canAccessCustomers: authUser.canAccessCustomers === true,
-    posViewOnly: authUser.posViewOnly === true,
-  });
+  const canCreateCustomer =
+    authUser != null &&
+    canCreatePosCustomers({
+      role: authUser.currentRole ?? authUser.role ?? "",
+      canAccessCustomers: authUser.canAccessCustomers === true,
+      posViewOnly: authUser.posViewOnly === true,
+    });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const {
     filters: { searchQuery },

@@ -25,7 +25,10 @@ beforeAll(async () => {
     [cashierId, ctx.companyId, ctx.locationId, ctx.cashAccountId]
   );
   agent = request.agent(ctx.app) as request.SuperAgentTest;
-  const login = await agent.post("/api/auth/login").send({ username: `${PREFIX}_pos`, password: "testpassword123" });
+  const login = await agent.post("/api/auth/login").send({
+    username: `${PREFIX}_pos`,
+    password: "testpassword123",
+  });
   expect(login.status, login.text).toBe(200);
   const company = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   expect(company.status, company.text).toBe(200);

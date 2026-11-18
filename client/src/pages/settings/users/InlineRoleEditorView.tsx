@@ -188,7 +188,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         cashAccountId: undefined,
         canSellNegativeStock: canSellNegativeStock,
         posViewOnly: isPOS ? posViewOnly : false,
-        canAccessCustomers: isPOS ? canAccessCustomers : (editingRole?.canAccessCustomers ?? false),
+        canAccessCustomers: isPOS ? canAccessCustomers : Boolean(editingRole?.canAccessCustomers),
         canDeleteRecords: role === "Manager" || isTester ? canDeleteRecords : false,
       };
 
@@ -437,7 +437,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         role={role}
         canDeleteRecords={canDeleteRecords}
         canSellNegativeStock={canSellNegativeStock}
-        canAccessCustomers={isPOS ? canAccessCustomers : (editingRole?.canAccessCustomers ?? false)}
+        canAccessCustomers={isPOS ? canAccessCustomers : Boolean(editingRole?.canAccessCustomers)}
         daybookEditDays={daybookEditDays}
       />
 
