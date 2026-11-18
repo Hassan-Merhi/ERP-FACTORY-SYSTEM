@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportColumn } from "@/components/export/RowsExportMenu";
 import type { CurrencyGroup } from "./factory-suppliers/factorySupplierTypes";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +18,45 @@ import {
   type StatementRow,
 } from "./useFactorySupplierStatementState";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
+
+type FormatDate = (date: string) => string;
+type StatementColumns = RowsExportColumn<StatementRow>[];
+
+/** Columns of a currency group's container table, as the page shows them. */
+function statementContainerColumns(formatDate: FormatDate): StatementColumns {
+  return [
+    { header: "Container", value: (c) => c.containerNumber },
+    { header: "Date", value: (c) => (c.date ? formatDate(c.date) : null) },
+    { header: "Origin", value: (c) => c.origin },
+    { header: "Status", value: (c) => c.status },
+    { header: "Kg", value: (c) => parseFloat(c.actualReceivedKg || c.totalKg || "0"), type: "number" },
+    { header: "Rate", value: (c) => parseFloat(c.ratePerKg || "0"), type: "number" },
+    { header: "Goods Value", value: (c) => parseFloat(c.value), type: "number" },
+    { header: "Commission", value: (c) => rowCommissionDisplay(c).amount || null, type: "number" },
+    {
+      header: "Commission Currency",
+      value: (c) => (rowCommissionDisplay(c).amount > 0 ? rowCommissionDisplay(c).currency : null),
+    },
+    {
+      header: "Commission Basis",
+      value: (c) => (rowCommissionDisplay(c).amount > 0 ? (rowUsesCanonical(c) ? "canonical" : "est.") : null),
+    },
+    { header: "Total Owed", value: (c) => getRowTotalOwed(c), type: "number" },
+    { header: "Total Basis", value: (c) => (rowUsesCanonical(c) ? "all-in" : "est.") },
+  ];
+}
+
+/** Columns of the "Commission Earned (as Broker)" table. */
+function brokerCommissionColumns(formatDate: FormatDate): StatementColumns {
+  return [
+    { header: "Container", value: (c) => c.containerNumber },
+    { header: "Purchase Supplier", value: (c) => c.supplierName },
+    { header: "Date", value: (c) => (c.arrivalDate ? formatDate(c.arrivalDate) : null) },
+    { header: "Status", value: (c) => c.status },
+    { header: "Commission Earned", value: (c) => parseFloat(c.commissionAmount || "0"), type: "number" },
+    { header: "Currency", value: (c) => c.commissionCurrencyCode || "USD" },
+  ];
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -45,7 +85,37 @@ export default function FactorySupplierStatement() {
   return (
     <div className="space-y-6">
       <div>
-        <PageHeader title="Supplier Statement" subtitle="Multi-currency supplier account statement" />
+        <PageHeader title="Supplier Statement" subtitle="Multi-currency supplier account statement">
+          {statement && !statementLoading && (
+            <RowsExportMenu
+              title="Supplier Statement"
+              filters={[
+                { label: "Supplier", value: suppliers.find((s) => String(s.id) === supplierId)?.name ?? supplierId },
+              ]}
+              sheetName={`${statement.currencyGroups?.[0]?.currencyCode ?? "USD"} Containers`}
+              rows={(statement.currencyGroups?.[0]?.containers ?? []) as StatementRow[]}
+              columns={statementContainerColumns(formatDisplayDate)}
+              extraSheets={[
+                ...((statement.currencyGroups ?? []) as CurrencyGroup[]).slice(1).map((group) => ({
+                  name: `${group.currencyCode} Containers`,
+                  rows: group.containers as StatementRow[],
+                  columns: statementContainerColumns(formatDisplayDate),
+                })),
+                ...(statement.brokerContainers?.length
+                  ? [
+                      {
+                        name: "Commission Earned",
+                        rows: statement.brokerContainers as StatementRow[],
+                        columns: brokerCommissionColumns(formatDisplayDate),
+                      },
+                    ]
+                  : []),
+              ]}
+              resource="factory.accounting"
+              data-testid="button-export-supplier-statement"
+            />
+          )}
+        </PageHeader>
       </div>
 
       <FactorySupplierStatementCardSection

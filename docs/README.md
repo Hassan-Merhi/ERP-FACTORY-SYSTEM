@@ -379,6 +379,7 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [factory-mix-cost-integrity-phase7.md](factory-mix-cost-integrity-phase7.md) | Factory Mix Cost Integrity — Phase 7 |
 | [file-size-limits-20261113.md](file-size-limits-20261113.md) | File upload and export size limits (source of truth: `shared/fileSizePolicy.ts`) |
 | [ui-unification/plan.md](ui-unification/plan.md) | UI Unification — standards, phased plan, owner decisions and progress tracker |
+| [ui-unification/closeout.md](ui-unification/closeout.md) | UI Unification — phases 1–4 close-out: status of every audit finding, exports added and what is still open |
 | [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
 | [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
 | [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |

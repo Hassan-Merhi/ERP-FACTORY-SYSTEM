@@ -134,19 +134,49 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
     }
   });
 
-  it("denies other shifts' sales even when the voucher is in the assigned location", async () => {
+  it("opens and edits a different shift's sale at an assigned location without exposing ERP costs", async () => {
     const wrongShift = await pool.query<{ id: number }>(
       `INSERT INTO pos_shifts (company_id, location_id, user_id, username)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [ctx.companyId, ctx.locationId, ctx.userId, "Admin"]
     );
+    await pool.query("UPDATE vouchers SET shift_id = $1 WHERE id = $2", [wrongShift.rows[0].id, voucherId]);
+    try {
+      const listed = await cashier.get(`/api/vouchers?startDate=${today}&endDate=${today}`);
+      expect(listed.status, listed.text).toBe(200);
+      const row = listed.body.find((voucher: { id: number }) => voucher.id === voucherId);
+      expect(row).toMatchObject({ id: voucherId, userId: ctx.userId });
+
+      const details = await cashier.get(`/api/vouchers/${voucherId}`);
+      expect(details.status, details.text).toBe(200);
+      expect(details.body).toMatchObject({ id: voucherId, voucherType: "Sales", entries: [] });
+      expect(details.body.salesItems.length).toBeGreaterThan(0);
+      expect(details.body.salesItems[0]).toHaveProperty("sellingPrice");
+      expect(details.body.salesItems[0]).not.toHaveProperty("costPrice");
+      expect(details.body.salesItems[0]).not.toHaveProperty("profit");
+      expect(details.body).not.toHaveProperty("purchaseOrder");
+      expect(details.body).not.toHaveProperty("transferData");
+
+      const edited = await cashier.put(`/api/vouchers/${voucherId}/sales`).send(editBody());
+      expect(edited.status, edited.text).toBe(200);
+      expect(edited.body.items[0]).not.toHaveProperty("costPrice");
+      expect(edited.body.items[0]).not.toHaveProperty("totalCost");
+      expect(edited.body.items[0]).not.toHaveProperty("profit");
+      expect(edited.body.voucher).not.toHaveProperty("shiftId");
+    } finally {
+      await pool.query("UPDATE vouchers SET shift_id = $1 WHERE id = $2", [shiftId, voucherId]);
+    }
+  });
+
+  it("denies viewing or editing a sale from an unassigned location", async () => {
     const otherSale = await pool.query<{ id: number }>(
-      `INSERT INTO vouchers (company_id, location_id, voucher_number, voucher_type, voucher_date, total_amount, shift_id)
-       VALUES ($1, $2, $3, 'Sales', $4, '10', $5) RETURNING id`,
-      [ctx.companyId, ctx.locationId, `${PREFIX}-OTHER`, today, wrongShift.rows[0].id]
+      `INSERT INTO vouchers (company_id, location_id, voucher_number, voucher_type, voucher_date, total_amount)
+       VALUES ($1, $2, $3, 'Sales', $4, '10') RETURNING id`,
+      [ctx.companyId, ctx.location2Id, `${PREFIX}-OTHER-LOCATION`, today]
     );
-    const result = await cashier.put(`/api/vouchers/${otherSale.rows[0].id}/sales`).send(editBody());
-    expect(result.status).toBe(403);
+    expect((await cashier.get(`/api/vouchers/${otherSale.rows[0].id}`)).status).toBe(404);
+    const edit = await cashier.put(`/api/vouchers/${otherSale.rows[0].id}/sales`).send(editBody());
+    expect(edit.status).toBe(403);
   });
 
   it("checks the original saved date when voucherDate is omitted and ignores forged client date headers", async () => {
@@ -171,6 +201,7 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
     const liveStatus = await cashier.get("/api/pos/daybook-edit-status");
     expect(liveStatus.status).toBe(200);
     expect(liveStatus.body.daybookEditDays).toBe(0);
+    expect((await cashier.get(`/api/vouchers/${voucherId}`)).status).toBe(200);
     for (const method of ["put", "patch"] as const) {
       const result = await cashier[method](`/api/vouchers/${voucherId}/sales`).send(editBody());
       expect(result.status).toBe(403);
@@ -185,6 +216,7 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
     );
     const liveStatus = await cashier.get("/api/pos/daybook-edit-status");
     expect(liveStatus.body.posViewOnly).toBe(true);
+    expect((await cashier.get(`/api/vouchers/${voucherId}`)).status).toBe(200);
     const response = await cashier.put(`/api/vouchers/${voucherId}/sales`).send(editBody());
     expect(response.status).toBe(403);
   });

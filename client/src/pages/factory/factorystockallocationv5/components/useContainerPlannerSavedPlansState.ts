@@ -4,8 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readActiveCompanyScope } from "@/lib/progressivePagination";
+import { formatCount as formatQty } from "@/lib/formatNumber";
 import {
-  formatQty,
   getJson,
   requestId,
   type MoveSource,

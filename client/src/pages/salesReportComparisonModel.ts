@@ -74,3 +74,17 @@ export function getAiResult(row: ItemRow, companies: Company[]): string {
   if (profitTied) return salesPart;
   return `${profitPart} — ${salesPart}`;
 }
+
+/** Total sales and profit of one company across the comparison rows. */
+export function summaryForCompany(rows: readonly ItemRow[], code: string) {
+  let totalSales = 0,
+    totalProfit = 0;
+  for (const row of rows) {
+    const entry = row.byCompany[code];
+    if (entry) {
+      totalSales += entry.totalSales;
+      totalProfit += entry.costProfit;
+    }
+  }
+  return { totalSales, totalProfit };
+}

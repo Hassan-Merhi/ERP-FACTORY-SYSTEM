@@ -29,6 +29,7 @@ import type { FactoryWorker } from "@shared/schema";
 
 import type { DeductionRecord } from "../types";
 import { fmt } from "../utils";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export function DeductionsView() {
   const { formatDisplayDate } = useDateFormat();
@@ -178,6 +179,20 @@ export function DeductionsView() {
             <SelectItem value="applied">Applied</SelectItem>
           </SelectContent>
         </Select>
+        <RowsExportMenu
+          title="Worker Deductions"
+          rows={filtered}
+          columns={[
+            { header: "Worker", value: (d) => d.workerName },
+            { header: "Date", value: (d) => formatDate(d.deductionDate) },
+            { header: "Reason", value: (d) => d.reason },
+            { header: "Amount (USD)", value: (d) => parseFloat(d.amount || "0"), type: "number" },
+            { header: "Status", value: (d) => (d.applied ? "Applied" : "Pending") },
+          ]}
+          resource="factory.payroll"
+          className="ml-auto"
+          data-testid="button-export-deductions"
+        />
       </div>
 
       <Card>

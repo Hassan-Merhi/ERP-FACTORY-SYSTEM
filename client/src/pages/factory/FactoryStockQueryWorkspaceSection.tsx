@@ -6,12 +6,15 @@ import {
   money,
   useFactoryStockQueryWorkspaceState,
   type DisplayColumn,
+  type Product,
 } from "./useFactoryStockQueryWorkspaceState";
+import { RowsExportMenu, type RowsExportColumn } from "@/components/export/RowsExportMenu";
 import { SearchField } from "@/components/ui/search-field";
 import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function FactoryStockQueryWorkspaceSection({
   displayedProducts,
+  from,
   mhd,
   products,
   search,
@@ -21,10 +24,12 @@ export function FactoryStockQueryWorkspaceSection({
   setSort,
   setVisible,
   sort,
+  to,
   visible,
 }: Pick<
   ReturnType<typeof useFactoryStockQueryWorkspaceState>,
   | "displayedProducts"
+  | "from"
   | "mhd"
   | "products"
   | "search"
@@ -34,14 +39,37 @@ export function FactoryStockQueryWorkspaceSection({
   | "setSort"
   | "setVisible"
   | "sort"
+  | "to"
   | "visible"
 >) {
+  // The Inventory in Hand table as shown, honouring the Columns picker.
+  const inventoryExportColumns: RowsExportColumn<Product>[] = [
+    { header: "Item / Product", value: (p) => mhd.nameFor(p.code, p.name) },
+    { header: "Code", value: (p) => p.code },
+    ...(visible.category ? [{ header: "Category", value: (p: Product) => p.categoryName }] : []),
+    ...(visible.bales ? [{ header: "Bales", value: (p: Product) => p.bales, type: "number" as const }] : []),
+    ...(visible.kg ? [{ header: "In hand (kg)", value: (p: Product) => p.kg, type: "number" as const }] : []),
+    ...(visible.soldBales ? [{ header: "Sold", value: (p: Product) => p.soldBales, type: "number" as const }] : []),
+    ...(visible.salesValue
+      ? [{ header: "Sales value", value: (p: Product) => p.salesValue, type: "number" as const }]
+      : []),
+  ];
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="flex flex-wrap items-center gap-2 border-b factory-brand-gradient p-3.5 text-white">
         <Package className="h-5 w-5" />
         <h2 className="font-semibold">Inventory in Hand (by item)</h2>
         <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{products.length} items</span>
+        <RowsExportMenu
+          title="Factory Stock Query Inventory in Hand"
+          sheetName="Inventory in Hand"
+          rows={displayedProducts}
+          columns={inventoryExportColumns}
+          period={{ from: from || null, to: to || null }}
+          resource="factory.bales"
+          variant="secondary"
+          className="ml-auto h-8"
+        />
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b p-3">
         <SearchField

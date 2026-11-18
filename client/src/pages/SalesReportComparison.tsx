@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Building2, ChevronDown } from "lucide-react";
-import { type ViewFilter } from "./salesReportComparisonModel";
-import { useSalesReportComparisonModel } from "./SalesReportComparisonModel";
+import { summaryForCompany, type ViewFilter } from "./salesReportComparisonModel";
+import { SalesReportComparisonExport } from "./SalesReportComparisonExport";
+import { useSalesReportComparisonModel } from "./useSalesReportComparisonState";
 
 export default function SalesReportComparison() {
   const sc = useSalesReportComparisonModel();
@@ -25,7 +26,16 @@ export default function SalesReportComparison() {
           title="Company Comparison"
           subtitle="Compare sales performance across companies"
           onBack={() => sc.navigate("/sales-report")}
-        />
+        >
+          {sc.enabled && (
+            <SalesReportComparisonExport
+              rows={sc.tableData}
+              companies={sc.displayCompanies}
+              from={sc.startDate}
+              to={sc.endDate}
+            />
+          )}
+        </PageHeader>
 
         {/* Controls */}
         <ErpMobileFilters
@@ -211,7 +221,7 @@ export default function SalesReportComparison() {
             {/* Summary cards */}
             <div className="flex flex-wrap gap-3 mb-6">
               {sc.displayCompanies.map((c) => {
-                const { totalSales, totalProfit } = sc.summaryForCompany(c.code);
+                const { totalSales, totalProfit } = summaryForCompany(sc.tableData, c.code);
                 return (
                   <Card key={c.code} className="flex-1 min-w-44">
                     <CardContent className="p-4">

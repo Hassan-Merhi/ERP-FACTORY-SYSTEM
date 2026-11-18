@@ -1,5 +1,6 @@
 // Extracted from ./FactoryContacts.tsx to keep that module under the source-size cap.
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { TableViewOptions } from "@/components/TableViewOptions";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -19,6 +20,7 @@ import {
   CopyButton,
   roleAccent,
   useFactoryContactsState,
+  type Contact,
   type ContactFilter,
 } from "./useFactoryContactsState";
 
@@ -29,6 +31,7 @@ export function FactoryContactsSection({
   isLoading,
   openEdit,
   openNew,
+  orderedContacts,
   pageSize,
   pages,
   prefs,
@@ -53,6 +56,7 @@ export function FactoryContactsSection({
   | "isLoading"
   | "openEdit"
   | "openNew"
+  | "orderedContacts"
   | "pageSize"
   | "pages"
   | "prefs"
@@ -79,6 +83,21 @@ export function FactoryContactsSection({
           icon={<UsersRound className="h-5 w-5 text-indigo-600 dark:text-violet-300" />}
           showBackButton
         >
+          <RowsExportMenu
+            title="Contacts"
+            rows={orderedContacts}
+            columns={[
+              { header: "Name", value: (c) => c.name },
+              ...(show("role") ? [{ header: "Role", value: (c: Contact) => c.role }] : []),
+              {
+                header: "Phone Numbers",
+                value: (c) => c.numbers.map((n) => (n.label ? `${n.number} (${n.label})` : n.number)).join("\n"),
+              },
+              ...(show("notes") ? [{ header: "Notes", value: (c: Contact) => c.notes }] : []),
+            ]}
+            resource="factory.employees"
+            data-testid="button-export-contacts"
+          />
           {canCreateContact && (
             <Button
               size="sm"

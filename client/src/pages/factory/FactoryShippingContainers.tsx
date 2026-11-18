@@ -7,6 +7,7 @@ import { ShippingAvailabilityTable } from "./factoryshippingcontainers/component
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { FilterPanel } from "./factoryshippingcontainers/components/FilterPanel";
 import { ShippingToolbar } from "./factoryshippingcontainers/components/ShippingToolbar";
+import { ShippingListExport } from "./factoryshippingcontainers/components/ShippingListExport";
 import { DoneContainersSection } from "./factoryshippingcontainers/components/DoneContainersSection";
 import { ShippingConfirmDialogs } from "./factoryshippingcontainers/components/ShippingConfirmDialogs";
 import { ShippingDashboardOverview } from "./factoryshippingcontainers/components/ShippingDashboardOverview";
@@ -33,7 +34,6 @@ export default function FactoryShippingContainers() {
           allowNewOrder={Boolean(m.me?.role && !isExistingRecordReadOnlyRole(m.me.role))}
           showOrderValue={m.colVis.containerCost}
         />
-        {/* ── Compact search + controls ── */}
         <ShippingToolbar
           search={m.search}
           onSearch={m.setSearch}
@@ -55,9 +55,11 @@ export default function FactoryShippingContainers() {
           toggleCol={m.toggleCol}
           showAllCols={m.showAllCols}
           hiddenCount={m.hiddenCount}
+          exportMenu={
+            <ShippingListExport rows={m.filtered} colVis={m.colVis} period={{ from: m.dateFrom, to: m.dateTo }} />
+          }
         />
 
-        {/* ── Filter Panel ── */}
         {m.showFilters && (
           <FilterPanel
             filterDocs={m.filterDocs}

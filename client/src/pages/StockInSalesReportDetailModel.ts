@@ -8,7 +8,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatNumber";
-import type { Metrics, StockInRow } from "./StockInSalesReportDetailTypes";
+import type { Metrics, StockInRow, StockOutRow } from "./StockInSalesReportDetailTypes";
 
 export function useStockInSalesReportDetailModel() {
   const { selectedCompany } = useCompany();
@@ -277,22 +277,6 @@ export function useStockInSalesReportDetailModel() {
 }
 
 export type StockInSalesReportDetailModel = ReturnType<typeof useStockInSalesReportDetailModel>;
-
-export interface StockOutRow {
-  id: number;
-  sourceType: "Sale" | "Credit Note" | "Debit Note";
-  activityDate: string;
-  isCreditSale: boolean | null;
-  locationName: string;
-  stockItemId?: number;
-  stockItemName: string;
-  quantity: number;
-  sellingRate?: number;
-  totalSales: number;
-  totalCost: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-}
 
 export interface StockAdjustmentRow {
   id: number;

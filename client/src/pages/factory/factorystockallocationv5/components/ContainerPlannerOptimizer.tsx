@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCount } from "@/lib/formatNumber";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
 import type { ContainerOptimizationPlan } from "@shared/containerOptimizer";
@@ -13,10 +14,6 @@ interface Props {
   capacityBales: number;
   includeGarbageWipers: boolean;
   onPlanChanged: () => void;
-}
-
-function formatQty(value: number): string {
-  return Math.round(Number(value || 0)).toLocaleString();
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -101,10 +98,10 @@ export function ContainerPlannerOptimizer({ planId, capacityBales, includeGarbag
       {suggestion && (
         <div className="mt-3" data-testid="container-optimizer-suggestion">
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">{formatQty(suggestion.containerCount)} containers</Badge>
+            <Badge variant="secondary">{formatCount(suggestion.containerCount)} containers</Badge>
             <Badge variant="secondary">{Math.round(suggestion.averageFillPercent)}% average fill</Badge>
-            <Badge variant="secondary">{formatQty(suggestion.customerContainers)} ship-ready</Badge>
-            <Badge variant="secondary">{formatQty(suggestion.unusedCapacity)} bales of unused capacity</Badge>
+            <Badge variant="secondary">{formatCount(suggestion.customerContainers)} ship-ready</Badge>
+            <Badge variant="secondary">{formatCount(suggestion.unusedCapacity)} bales of unused capacity</Badge>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
@@ -115,15 +112,15 @@ export function ContainerPlannerOptimizer({ planId, capacityBales, includeGarbag
                     {container.customerName || KIND_LABEL[container.kind] || container.kind}
                   </div>
                   <div className="mt-1 text-lg font-semibold tabular-nums">
-                    {formatQty(container.totalBales)}
+                    {formatCount(container.totalBales)}
                     <span className="ml-1 text-xs font-normal text-muted-foreground">
-                      / {formatQty(suggestion.capacity)}
+                      / {formatCount(suggestion.capacity)}
                     </span>
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {container.lines.map((line) => (
                       <p key={line.articleCode} className="truncate text-[11px] text-muted-foreground">
-                        {line.productName} · {formatQty(line.qty)}
+                        {line.productName} · {formatCount(line.qty)}
                       </p>
                     ))}
                   </div>
@@ -136,7 +133,7 @@ export function ContainerPlannerOptimizer({ planId, capacityBales, includeGarbag
             <div className="mt-3 text-xs text-amber-600" data-testid="text-unserved-demand">
               Not enough stock for:{" "}
               {suggestion.unservedDemand
-                .map((row) => `${row.customerName} ${row.productName} ${formatQty(row.shortfallQty)}`)
+                .map((row) => `${row.customerName} ${row.productName} ${formatCount(row.shortfallQty)}`)
                 .join(" · ")}
             </div>
           )}

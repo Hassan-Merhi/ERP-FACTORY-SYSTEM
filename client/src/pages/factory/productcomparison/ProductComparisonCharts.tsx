@@ -1,5 +1,7 @@
 import { AlertTriangle, ArrowLeftRight, BarChart3, Package, Scale, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { pctChange } from "@/pages/factory/productioncomparison/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +16,7 @@ import {
   Stat,
   formatMetric,
   localizedProductName,
+  metricValue,
   productKey,
 } from "./ProductComparisonChartsStat";
 import { ProductComparisonChartsCardSection, useProductComparisonChartsState } from "./useProductComparisonChartsState";
@@ -38,6 +41,7 @@ export default function ProductComparisonCharts() {
     month,
     period,
     productOptions,
+    ranges,
     selectedCatalogRows,
     selectedCategories,
     selectedGrades,
@@ -122,6 +126,45 @@ export default function ProductComparisonCharts() {
             </Button>
           </div>
         ) : null}
+
+        <RowsExportMenu
+          title={`${copy.title} ${metric === "bales" ? copy.bales : copy.weight}`}
+          sheetName={copy.title}
+          rows={selectedCatalogRows}
+          columns={[
+            { header: copy.products, value: (product) => localizedProductName(product, language) },
+            {
+              header: `${copy.current}: ${selectedLabel}`,
+              value: (product) => metricValue(selectedRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: `${copy.compared}: ${comparisonLabel}`,
+              value: (product) => metricValue(comparisonRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: copy.difference,
+              value: (product) =>
+                metricValue(selectedRows.get(productKey(product)), metric) -
+                metricValue(comparisonRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: `${copy.change} %`,
+              value: (product) =>
+                pctChange(
+                  metricValue(selectedRows.get(productKey(product)), metric),
+                  metricValue(comparisonRows.get(productKey(product)), metric)
+                ),
+              type: "number",
+            },
+          ]}
+          footer={[copy.selectedTotal, totals.selected, totals.comparison, totals.difference, totals.change]}
+          period={{ from: ranges.selected.from, to: ranges.selected.to }}
+          resource="factory.production"
+          className="pc-control-button"
+        />
 
         <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-auto">
           <Button

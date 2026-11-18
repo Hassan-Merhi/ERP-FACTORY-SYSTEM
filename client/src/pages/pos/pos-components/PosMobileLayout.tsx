@@ -21,6 +21,7 @@ import { PosMobileCustomerSection } from "./PosMobileCustomerSection";
 
 export interface PosMobileLayoutProps {
   posUser?: AuthMe | null;
+  editVoucherId?: string;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -66,6 +67,7 @@ export interface PosMobileLayoutProps {
 
 export function PosMobileLayout({
   posUser,
+  editVoucherId,
   activeLocation,
   allLocations,
   posAssignedLocations,
@@ -106,6 +108,7 @@ export function PosMobileLayout({
   formatDisplayAmount,
   isSpCompany,
 }: PosMobileLayoutProps) {
+  const lockedPosEdit = Boolean(posUser && editVoucherId);
   const m = usePosMobileLayoutModel({ searchTerm, inventory, selectItem, ensureItemSellable, rows });
 
   return (
@@ -211,6 +214,7 @@ export function PosMobileLayout({
 
       <PosMobileCustomerSection
         posUser={posUser}
+        lockedPosEdit={lockedPosEdit}
         activeLocation={activeLocation}
         allLocations={allLocations}
         setSelectedLocation={setSelectedLocation}
@@ -383,7 +387,7 @@ export function PosMobileLayout({
             data-testid="button-mobile-checkout"
             pending={Boolean(saveMutation?.isPending)}
             pendingLabel="Saving…"
-            label="Checkout"
+            label={editVoucherId ? "Update Sale" : "Checkout"}
             showIcon={false}
           />
         </div>

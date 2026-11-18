@@ -7,6 +7,7 @@ import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Search, Package, Container, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 interface OffloadResult {
   itemName: string;
@@ -67,7 +68,27 @@ export default function OffloadItemSearch() {
       <PageHeader
         title="Offload Item Search"
         subtitle="Search any item name to see every offloaded container it arrived in"
-      />
+      >
+        <RowsExportMenu
+          title={`Offload Item Search ${searchTerm}`}
+          sheetName="Offload Item Search"
+          rows={results}
+          columns={[
+            { header: "Item Name", value: (row) => row.itemName },
+            { header: "Container", value: (row) => row.containerNumber },
+            {
+              header: "Offload Date",
+              value: (row) => (row.offloadDate ? format(new Date(row.offloadDate), "dd MMM yyyy") : ""),
+            },
+            { header: "Qty", value: (row) => row.quantity, type: "number" },
+            { header: "Price / BL", value: (row) => row.rate, type: "number" },
+            { header: "Total", value: (row) => row.lineTotal, type: "number" },
+          ]}
+          footer={["Total", null, null, totalQty, null, totalValue]}
+          filters={searchTerm ? [{ label: "Search", value: searchTerm }] : undefined}
+          resource="erp.inventory"
+        />
+      </PageHeader>
       <div className="flex w-full gap-2 sm:max-w-xl">
         <SearchField
           value={input}

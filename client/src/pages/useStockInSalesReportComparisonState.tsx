@@ -48,13 +48,13 @@ interface ComparisonSet {
   difference: Metrics;
 }
 
-interface ComparisonRow extends ComparisonSet {
+export interface ComparisonRow extends ComparisonSet {
   periodKey: string;
   periodStart: string;
   periodEnd: string;
 }
 
-interface ItemComparisonRow extends ComparisonSet {
+export interface ItemComparisonRow extends ComparisonSet {
   stockItemId: number;
   stockItemCode: string;
   stockItemName: string;
@@ -253,6 +253,7 @@ export function useStockInSalesReportComparisonState() {
     clearComparison,
     data,
     error,
+    formatMetric,
     formatPeriod,
     grouping,
     isError,

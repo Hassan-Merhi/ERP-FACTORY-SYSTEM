@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -10,6 +11,7 @@ import { useStockInSalesReportDetailModel } from "./StockInSalesReportDetailMode
 import { breakdownTitle, profitClassName } from "./StockInSalesReportDetailModel";
 
 export default function StockInSalesReportDetail() {
+  const [, navigate] = useLocation();
   const m = useStockInSalesReportDetailModel();
 
   if (!m.startDate || !m.endDate) {
@@ -17,7 +19,7 @@ export default function StockInSalesReportDetail() {
       <div className="container mx-auto p-0 sm:p-6">
         <PageHeader title="Stock Flow Details" />
         <p className="mt-3 text-sm text-muted-foreground">A valid report period is required.</p>
-        <Button className="mt-4" variant="outline" onClick={() => (window.location.href = "/stock-in-sales-report")}>
+        <Button className="mt-4" variant="outline" onClick={() => navigate("/stock-in-sales-report")}>
           Back to report
         </Button>
       </div>

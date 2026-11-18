@@ -168,19 +168,6 @@ export function useSalesReportComparisonModel() {
     );
   };
 
-  const summaryForCompany = (code: string) => {
-    let totalSales = 0,
-      totalProfit = 0;
-    for (const row of tableData) {
-      const entry = row.byCompany[code];
-      if (entry) {
-        totalSales += entry.totalSales;
-        totalProfit += entry.costProfit;
-      }
-    }
-    return { totalSales, totalProfit };
-  };
-
   return {
     navigate,
     allCompanies,
@@ -212,7 +199,6 @@ export function useSalesReportComparisonModel() {
     fmtAvgPrice,
     profitCell,
     aiResultCell,
-    summaryForCompany,
   };
 }
 

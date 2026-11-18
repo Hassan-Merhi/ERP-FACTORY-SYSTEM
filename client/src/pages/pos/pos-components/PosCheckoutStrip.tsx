@@ -12,6 +12,7 @@ import { PosCheckoutField, PosCheckoutPanel } from "./PosCheckoutPanel";
 
 interface PosCheckoutStripProps {
   posUser?: AuthMe | null;
+  editVoucherId?: string;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -39,6 +40,7 @@ interface PosCheckoutStripProps {
 
 export function PosCheckoutStrip({
   posUser,
+  editVoucherId,
   activeLocation,
   allLocations,
   posAssignedLocations,
@@ -63,6 +65,7 @@ export function PosCheckoutStrip({
   isSpCompany,
 }: PosCheckoutStripProps) {
   const { t } = useApplicationLanguage();
+  const lockedPosEdit = Boolean(posUser && editVoucherId);
   if (!activeLocation) return null;
 
   return (
@@ -92,6 +95,7 @@ export function PosCheckoutStrip({
         ) : posAssignedLocations.length > 1 ? (
           <Select
             value={posSelectedLocation?.id?.toString()}
+            disabled={lockedPosEdit}
             onValueChange={(val) => {
               const loc = posAssignedLocations.find((l) => l.id.toString() === val);
               if (loc) setPosSelectedLocation(loc);
@@ -129,7 +133,13 @@ export function PosCheckoutStrip({
         />
       </PosCheckoutField>
 
-      {!isCreditSale && (
+      {lockedPosEdit ? (
+        <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
+          <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-xs" data-testid="pos-edit-payment-locked">
+            {isCreditSale ? "Credit" : "Original payment"} — unchanged
+          </div>
+        </PosCheckoutField>
+      ) : !isCreditSale && (
         <>
           <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
             <Select
@@ -186,6 +196,7 @@ export function PosCheckoutStrip({
             id="credit-sale-strip"
             checked={isCreditSale}
             onCheckedChange={setIsCreditSale}
+            disabled={lockedPosEdit}
             data-testid="toggle-credit-sale"
           />
           <Label htmlFor="credit-sale-strip" className="text-sm cursor-pointer">
@@ -194,7 +205,7 @@ export function PosCheckoutStrip({
         </div>
       )}
 
-      {!isSpCompany && isCreditSale && (
+      {!isSpCompany && isCreditSale && !lockedPosEdit && (
         <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="gap-2 font-normal" data-testid="select-customer">

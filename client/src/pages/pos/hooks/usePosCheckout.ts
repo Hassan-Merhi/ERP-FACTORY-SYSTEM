@@ -111,6 +111,15 @@ export function usePosCheckout({
 }: PosCheckoutParams) {
   // ISSUE 3: Full payload with shiftId, clientSaleId, currency, exchangeRate, correct rate conversion
   const handleSaveSale = () => {
+    const editingAsPos = Boolean(posUser && editVoucherId);
+    if (editingAsPos && (!editVoucher || !activeLocation || activeLocation.id !== editVoucher.locationId)) {
+      toast({
+        title: "Sale not ready",
+        description: "The original receipt and its assigned location must finish loading before editing.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!activeLocation && !editVoucherId) {
       toast({ title: "Missing information", description: "Please select a location", variant: "destructive" });
       return;
@@ -133,11 +142,11 @@ export function usePosCheckout({
       });
       return;
     }
-    if (!isCreditSale && !paymentAccountId) {
+    if (!editingAsPos && !isCreditSale && !paymentAccountId) {
       toast({ title: "Missing information", description: "Please select a payment account", variant: "destructive" });
       return;
     }
-    if (isCreditSale && !selectedCustomerId) {
+    if (!editingAsPos && isCreditSale && !selectedCustomerId) {
       toast({
         title: "Missing information",
         description: "Please select a customer for credit sale",
@@ -196,8 +205,12 @@ export function usePosCheckout({
       locationId: activeLocation?.id || editVoucher?.locationId,
       shiftId: posUser && currentShift ? currentShift.id : undefined,
       clientSaleId: !editVoucherId ? clientSaleIdRef.current : undefined,
-      paymentAccountType: isCreditSale ? "credit" : paymentAccountType,
-      paymentAccountId: isCreditSale ? parseInt(selectedCustomerId) : parseInt(paymentAccountId!),
+      paymentAccountType: editingAsPos ? undefined : isCreditSale ? "credit" : paymentAccountType,
+      paymentAccountId: editingAsPos
+        ? undefined
+        : isCreditSale
+          ? parseInt(selectedCustomerId)
+          : parseInt(paymentAccountId!),
       isCreditSale,
       notes,
       voucherDate: saleDate,

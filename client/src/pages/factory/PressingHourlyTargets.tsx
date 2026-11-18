@@ -17,7 +17,6 @@ import {
   SCHEDULE_DAYS,
   SCHEDULE_HOURS,
   ZONE,
-  formatKg,
   hourLabel,
   localHour,
   resultStatus,
@@ -25,6 +24,9 @@ import {
   usePressingHourlyTargetsState,
   verdictStyle,
 } from "./usePressingHourlyTargetsState";
+import { formatQuantity } from "@/lib/formatNumber";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { pressingHourlyExportColumns } from "./pressingHourlyTargetsExport";
 
 /** Confirmed scans only; editable date-scoped hour targets are shared by P1/P2/P3.
  * No active shift schedule exists, so zero-scan completed hours stay neutral. */
@@ -91,7 +93,7 @@ export default function PressingHourlyTargets(props: {
       });
       toast({
         title: "Hourly target saved",
-        description: hourLabel(hour) + " — " + formatKg(targetKgPerHour) + " KG per worker",
+        description: hourLabel(hour) + " — " + formatQuantity(targetKgPerHour) + " KG per worker",
       });
     } catch (error) {
       toast({
@@ -228,6 +230,14 @@ export default function PressingHourlyTargets(props: {
             <RefreshCw className={"h-3.5 w-3.5 " + (hourly.isFetching ? "animate-spin" : "")} />
             <span className="sr-only">Refresh hourly targets</span>
           </Button>
+          <RowsExportMenu
+            title="Pressing Hourly Targets"
+            rows={hours}
+            columns={pressingHourlyExportColumns({ data, configured, now, t })}
+            period={{ from: day || data?.day || null }}
+            resource="factory.production"
+            className="h-9 rounded-lg"
+          />
         </div>
       </div>
       {hourly.isError && (
@@ -334,7 +344,7 @@ export default function PressingHourlyTargets(props: {
                           <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
                             <div className="flex flex-wrap items-center justify-between gap-1.5">
                               <strong className="whitespace-nowrap tabular-nums">
-                                {formatKg(kg)} / {scheduled ? formatKg(target) + " KG" : "Off"}
+                                {formatQuantity(kg)} / {scheduled ? formatQuantity(target) + " KG" : "Off"}
                               </strong>
                               <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>
                                 {verdict === "upcoming" || verdict === "above" || verdict === "below"
@@ -370,7 +380,7 @@ export default function PressingHourlyTargets(props: {
                                     "mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")
                                   }
                                 >
-                                  {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
+                                  {formatQuantity(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
                                 </div>
                               )}
                           </td>

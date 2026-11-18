@@ -10,6 +10,7 @@ import type { PosMobileLayoutProps } from "./PosMobileLayout";
 
 export function PosMobileCustomerSection({
   posUser,
+  lockedPosEdit,
   activeLocation,
   allLocations,
   setSelectedLocation,
@@ -34,6 +35,7 @@ export function PosMobileCustomerSection({
   cashLedgerAccounts,
 }: {
   posUser: PosMobileLayoutProps["posUser"];
+  lockedPosEdit: boolean;
   activeLocation: PosMobileLayoutProps["activeLocation"];
   allLocations: PosMobileLayoutProps["allLocations"];
   setSelectedLocation: PosMobileLayoutProps["setSelectedLocation"];
@@ -83,6 +85,7 @@ export function PosMobileCustomerSection({
         ) : posAssignedLocations.length > 1 ? (
           <Select
             value={posSelectedLocation?.id?.toString()}
+            disabled={lockedPosEdit}
             onValueChange={(value) => {
               const location = posAssignedLocations.find((candidate) => candidate.id.toString() === value);
               if (location) setPosSelectedLocation(location);
@@ -130,12 +133,20 @@ export function PosMobileCustomerSection({
               id="mobile-credit-sale"
               checked={isCreditSale}
               onCheckedChange={setIsCreditSale}
+              disabled={lockedPosEdit}
               data-testid="toggle-mobile-credit-sale"
             />
           </div>
         )}
 
-        {!isSpCompany && isCreditSale ? (
+        {lockedPosEdit ? (
+          <div
+            className="flex min-h-11 items-center rounded-lg border bg-muted/30 px-3 text-sm"
+            data-testid="pos-mobile-edit-payment-locked"
+          >
+            {isCreditSale ? "Credit" : "Original payment"} — unchanged
+          </div>
+        ) : !isSpCompany && isCreditSale ? (
           <Popover open={mobileCustomerComboOpen} onOpenChange={setMobileCustomerComboOpen}>
             <PopoverTrigger asChild>
               <Button

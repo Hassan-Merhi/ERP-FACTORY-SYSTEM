@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { exportFileName } from "@/lib/exportFile";
+import { POPUP_BLOCKED_TOAST } from "@/lib/popupBlockedToast";
+import { printDocument } from "@/lib/printDocument";
 import type { PayrollRun } from "./types";
 import { getRunDateHeaders } from "./erpRunPayrollDates";
 import { useERPRunPayrollStateModel } from "./useERPRunPayrollStateModel";
@@ -192,11 +194,8 @@ export function useERPRunPayrollModel() {
       </div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-    }
+    // The page prints itself on load (its own script), so the helper only opens it.
+    printDocument(html, { print: false, onBlocked: () => hs.toast(POPUP_BLOCKED_TOAST) });
   }
 
   // ── Excel export (payroll amounts) ─────────────────────────────────────────

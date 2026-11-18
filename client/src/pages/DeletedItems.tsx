@@ -1,6 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { deletedItemsExportColumns } from "@/pages/deleted-items/deletedItemsExport";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -71,7 +73,14 @@ export default function DeletedItems() {
         title={<span data-testid="title-deleted-items">Deleted Items</span>}
         subtitle="View and manage deleted records. You can restore items or permanently delete them."
         icon={<Trash2 className="h-5 w-5" />}
-      />
+      >
+        <RowsExportMenu
+          title="Deleted Items"
+          rows={items}
+          columns={deletedItemsExportColumns(typeLabels, formatDisplayDate)}
+          resource="erp.accounts"
+        />
+      </PageHeader>
       <DeletedItemsCardSection
         data={data}
         filterType={filterType}

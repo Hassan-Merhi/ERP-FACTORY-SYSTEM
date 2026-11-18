@@ -175,6 +175,10 @@ export function usePOSStatePart2({
     editVoucher,
     editVoucherViewEntries,
     allLocations,
+    posAssignedLocations,
+    posUser,
+    posSelectedLocation,
+    setPosSelectedLocation,
     allLedgerAccounts,
     selectedLocation,
     setSelectedLocation,
@@ -206,6 +210,7 @@ export function usePOSStatePart2({
 
   const { saveMutation, deleteDraftMutation, saveDraftMutation } = usePosMutations({
     activeLocation,
+    posUser,
     editVoucherId,
     editVoucher,
     isSpCompany,
@@ -243,7 +248,8 @@ export function usePOSStatePart2({
     setCurrentDraftId,
     setLastAutosaved,
     refetchDrafts,
-    disabled: posWritesDisabled,
+    // An existing receipt must never be silently saved as a new POS draft.
+    disabled: posWritesDisabled || !!editVoucherId,
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
