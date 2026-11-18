@@ -170,8 +170,9 @@ describe("compact sales-report routes are mounted by the live registry", () => {
 
   it("keeps the automatic COGS reconciliation query and its bindings in the built Sales Report", () => {
     const file = "client/src/pages/SalesReportLegacy.tsx";
-    const source = read(file);
-    const built = transformSalesReportBandwidthSource(source, path.join(repoRoot, file)) ?? source;
+    // The page is split across its module family; the bandwidth transform is integrated into it.
+    const source = readModuleFamily(path.join(repoRoot, file));
+    const built = transformSalesReportBandwidthSource(read(file), path.join(repoRoot, file)) ?? source;
 
     // The built page still requests the reconciliation endpoint...
     expect(clientRequestedSalesReportUrls()).toEqual(expect.arrayContaining(["/api/sales-report/cogs-reconciliation"]));

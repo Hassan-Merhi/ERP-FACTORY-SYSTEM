@@ -67,16 +67,24 @@ export function useAccountsLegacyModel() {
     );
   }, [st.rawTransactionData]);
 
+  // The continuous statement chunk also carries these optional fields.
+  const statementPayload = st.rawTransactionData as
+    | (NonNullable<typeof st.rawTransactionData> & {
+        customerId?: number | null;
+        notInLedger?: { prePeriodTotal?: unknown } | null;
+      })
+    | undefined;
+
   // Expose customer ownership from the active statement query reactively. A linked
   // Factory customer account has type "ledger", so name/type alone cannot
   // reliably identify it. Passing this value as a prop avoids reading a
   // non-subscribed query-cache snapshot in AccountStatementView.
   const statementCustomerId: number | null =
-    st.rawTransactionData &&
-    !Array.isArray(st.rawTransactionData) &&
-    Number.isSafeInteger(st.rawTransactionData.customerId) &&
-    (st.rawTransactionData.customerId ?? 0) > 0
-      ? (st.rawTransactionData.customerId ?? null)
+    statementPayload &&
+    !Array.isArray(statementPayload) &&
+    Number.isSafeInteger(statementPayload.customerId) &&
+    (statementPayload.customerId ?? 0) > 0
+      ? (statementPayload.customerId ?? null)
       : null;
 
   // broughtForwardBalance = stored account opening balance + net of all entries before the period start.
@@ -86,10 +94,10 @@ export function useAccountsLegacyModel() {
     const rawOB = parseFloat(String(st.d.selectedAccount?.openingBalance ?? 0)) || 0;
     const obSide = st.d.selectedAccount?.openingBalanceSide || "Dr";
     const storedOB = obSide === "Cr" ? -rawOB : rawOB;
-    if (!st.rawTransactionData || Array.isArray(st.rawTransactionData)) return storedOB;
-    const memoPrePeriod = Number(st.rawTransactionData.notInLedger?.prePeriodTotal ?? 0);
-    return storedOB + (st.rawTransactionData.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
-  }, [st.rawTransactionData, st.d.selectedAccount]);
+    if (!statementPayload || Array.isArray(statementPayload)) return storedOB;
+    const memoPrePeriod = Number(statementPayload.notInLedger?.prePeriodTotal ?? 0);
+    return storedOB + (statementPayload.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
+  }, [statementPayload, st.d.selectedAccount]);
 
   // Calculate ALL original posted lines first. The archived historical
   // supplier batch must continue to affect running and closing balances.
