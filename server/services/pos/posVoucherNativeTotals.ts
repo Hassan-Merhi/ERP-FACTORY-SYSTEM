@@ -6,12 +6,15 @@ import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { voucherEntries } from "@shared/schema";
 import { db } from "../../db";
 
-export async function withPosZmwNativeTotals<T extends { id: number; voucherType: string; currency?: string | null }>(
+export async function withPosZmwNativeTotals<T extends object>(
   vouchers: T[]
 ): Promise<Array<T & { nativeZmwTotal?: string }>> {
   const ids = vouchers
-    .filter((voucher) => voucher.currency === "ZMW" && voucher.voucherType === "Sales")
-    .map((voucher) => voucher.id);
+    .filter((voucher) => {
+      const row = voucher as T & { id?: unknown; currency?: unknown; voucherType?: unknown };
+      return typeof row.id === "number" && row.currency === "ZMW" && row.voucherType === "Sales";
+    })
+    .map((voucher) => (voucher as T & { id: number }).id);
   if (!ids.length) return vouchers;
 
   const totals = new Map<number, string>();
@@ -37,7 +40,8 @@ export async function withPosZmwNativeTotals<T extends { id: number; voucherType
   }
 
   return vouchers.map((voucher) => {
-    const nativeZmwTotal = totals.get(voucher.id);
+    const row = voucher as T & { id?: unknown };
+    const nativeZmwTotal = typeof row.id === "number" ? totals.get(row.id) : undefined;
     return nativeZmwTotal == null ? voucher : { ...voucher, nativeZmwTotal };
   });
 }
