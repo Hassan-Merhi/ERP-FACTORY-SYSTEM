@@ -78,9 +78,10 @@ export function previewDaybookSaleTotals(
       }
       return quantity.times(price).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     });
-    if (amounts.some((amount) => amount === null)) return null;
-    const lineTotals = amounts.map((amount) => amount!.toFixed(2));
-    const total = amounts.reduce((sum, amount) => sum.plus(amount!), new Decimal(0)).toFixed(2);
+    const validAmounts = amounts.filter((amount): amount is Decimal => amount !== null);
+    if (validAmounts.length !== amounts.length) return null;
+    const lineTotals = validAmounts.map((amount) => amount.toFixed(2));
+    const total = validAmounts.reduce((sum, amount) => sum.plus(amount), new Decimal(0)).toFixed(2);
     return { lineTotals, total };
   } catch {
     return null;
