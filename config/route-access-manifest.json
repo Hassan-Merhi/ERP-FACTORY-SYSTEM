@@ -1,7 +1,7 @@
 {
   "formatVersion": 2,
   "description": "Access rule for every registered Express route, in registration order. The access boundary (server/security/access/manifestAccessBoundary.ts) enforces these rules; tests/route-access-manifest.test.ts fails when a route has no rule or a rule no longer matches its route. See docs/manifest-driven-access-consolidation.md before editing.",
-  "routeCount": 2459,
+  "routeCount": 2460,
   "routes": [
     {"id":"POST /api/stock-transfer-order/wa-approval/webhook#1","guards":"stockTransferOrderWaWebhookHandler","auth":"service-token","companyScope":"none","roles":"any","permission":"none"},
     {"id":"GET /api/admin/operational-monitoring#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none"},
@@ -13,6 +13,7 @@
     {"id":"POST /api/offline/browser-sync/operations#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"POST /api/offline/browser-sync/operations/discard#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"POST /api/offline/browser-sync/receipts#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
+    {"id":"GET /api/offline/pc-sync/changes#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","crossCompany":["authorized-companies"],"roles":"any","permission":"none"},
     {"id":"GET /api/seasonal/christmas-mode#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"PUT /api/seasonal/christmas-mode/preference#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"GET /api/seasonal/christmas-mode/config#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer"]}},"permission":"none"},
