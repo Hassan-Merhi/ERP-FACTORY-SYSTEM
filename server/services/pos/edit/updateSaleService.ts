@@ -3,10 +3,7 @@
  *
  * PHASE 20 — POS Backend Edit-Sale Structural Split.
  *
- * Program 2C keeps the existing edit formulas and response contract, while
- * moving the authoritative voucher, location, currency, accounting-entry, and
- * sales-item reads under one transaction lock. Concurrent edits therefore use
- * the latest committed sale state instead of stale pre-transaction snapshots.
+ * Edits lock the voucher and its inventory/accounting state transactionally.
  */
 import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import { db, type DbTransaction } from "../../../db";
