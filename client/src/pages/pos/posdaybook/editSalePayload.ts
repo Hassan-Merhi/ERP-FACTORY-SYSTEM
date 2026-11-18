@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import type { VoucherWithItems } from "./types";
+import { resolveZmwUnitPrice } from "@shared/posZmwMoney";
 import { posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 
 export interface PosDaybookDraftLine {
@@ -19,17 +20,17 @@ export function createDaybookDraftLines(sale: VoucherWithItems): PosDaybookDraft
     quantity: String(item.quantity),
     unitPrice:
       sale.currency === "ZMW"
-        ? new Decimal(item.sellingPrice).times(exchangeRate).toDecimalPlaces(2).toFixed(2)
+        ? resolveZmwUnitPrice(
+            { quantity: item.quantity, rate: item.sellingPrice },
+            exchangeRate.toString(),
+            true
+          ).toFixed(2)
         : String(item.sellingPrice),
   }));
 }
 
 /** Preserve original date, currency, payment and sale credit status. */
-export function buildDaybookSaleEditPayload(
-  sale: VoucherWithItems,
-  lines: PosDaybookDraftLine[],
-  description: string
-) {
+export function buildDaybookSaleEditPayload(sale: VoucherWithItems, lines: PosDaybookDraftLine[], description: string) {
   if (!lines.length) throw new Error(posDaybookEditMessages.missingItems);
   const isZmw = sale.currency === "ZMW";
   const lockedRate = new Decimal(sale.exchangeRate || "0");

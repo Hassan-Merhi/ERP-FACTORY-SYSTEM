@@ -31,6 +31,21 @@ describe("Zambia POS exact native Kwacha totals", () => {
     expect(() => calculateZmwSaleAmounts([item], rate)).toThrow("original Kwacha unit price");
   });
 
+  it("reads a legacy cent-rounded USD price back as the whole Kwacha the cashier typed", () => {
+    // K2,000 at 20.8 was stored as $96.15; 96.15 x 20.8 is K1,999.92.
+    const legacy = (usd: string) => resolveZmwUnitPrice({ quantity: 1, rate: usd }, "20.8", true).toFixed(2);
+    expect(legacy("96.15")).toBe("2000.00");
+    expect(legacy("144.230000")).toBe("3000.00");
+    expect(legacy("139.42")).toBe("2900.00");
+    expect(legacy("77.88")).toBe("1620.00");
+    expect(calculateZmwSaleAmounts([{ quantity: 5, rate: "77.88" }], "20.8", true).nativeTotal).toBe("8100.00");
+    // No whole Kwacha rounds to this cent, so the nearest ngwee stands.
+    expect(legacy("96.13")).toBe("1999.50");
+    // Six-decimal prices are exact and never snapped.
+    expect(legacy("96.149519")).toBe("1999.91");
+    expect(legacy("96.153846")).toBe("2000.00");
+  });
+
   it("rejects invalid native unit precision and quantity, rather than silently truncating", () => {
     const wrongPrecision = () => calculateZmwSaleAmounts([{ quantity: "1", originalCurrencyRate: "10.001" }], rate);
     const missingQuantity = () => calculateZmwSaleAmounts([{ quantity: "0", originalCurrencyRate: "10.00" }], rate);

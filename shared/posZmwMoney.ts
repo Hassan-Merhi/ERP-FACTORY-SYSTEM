@@ -31,6 +31,20 @@ function decimal(value: unknown, label: string): Decimal {
   return parsed;
 }
 
+/**
+ * Older sales stored the USD unit price rounded to cents, so K2,000 at 20.8
+ * was saved as $96.15 and read back as K1,999.92. Every Kwacha price inside
+ * that cent's rounding window gives the same stored USD price; when the window
+ * holds a whole-Kwacha price, that is the price the cashier typed. Six-decimal
+ * prices (how sales are stored now) are already exact and are left alone.
+ */
+function legacyWholeKwachaPrice(usd: Decimal, rate: Decimal): Decimal | null {
+  if (usd.decimalPlaces() > 2) return null;
+  const whole = usd.times(rate).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  if (!whole.gt(0)) return null;
+  return whole.div(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).eq(usd) ? whole : null;
+}
+
 export function resolveZmwUnitPrice(
   line: ZmwSaleLine,
   historicalRate: string | number,
@@ -43,9 +57,8 @@ export function resolveZmwUnitPrice(
     if (!allowReconstruction) throw new Error(zmwAmountErrorMessages.originalPriceRequired);
     const usd = decimal(line.rate ?? line.sellingPrice, "USD unit price");
     if (!usd.gt(0)) throw new Error(zmwAmountErrorMessages.usdPriceRequired);
-    // Existing sale_items persist six-decimal USD unit prices; reconstruct the
-    // nearest ngwee using the voucher's LOCKED rate, never the current rate.
-    const native = usd.times(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    // Reconstruct at the voucher's LOCKED rate, never the current rate.
+    const native = legacyWholeKwachaPrice(usd, rate) ?? usd.times(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     if (!native.gt(0)) throw new Error(zmwAmountErrorMessages.convertedPriceRequired);
     return native;
   }
