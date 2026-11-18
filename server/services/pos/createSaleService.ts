@@ -202,7 +202,6 @@ export async function createPosSale(
   // backdated ZMW sale's approved rate differs from the current rate.
   let lockedPosCurrency: { currency: string; exchangeRate: string | null };
   try {
-    // Offline replays retain the cashier's rate; online uses the dated rate.
     const enteredRate = lanCapture ? offlineEnteredRate(currency, exchangeRate) : null;
     lockedPosCurrency =
       params.lockedCurrency ??
@@ -292,7 +291,6 @@ export async function createPosSale(
         currency: lockedPosCurrency.currency,
         exchangeRate: lockedPosCurrency.exchangeRate,
       });
-      // Offline sales take the next LAN invoice number, never an SV- number.
       const lanInvoice = lanCapture ? await allocatePhase9PosInvoiceTx(tx) : null;
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
