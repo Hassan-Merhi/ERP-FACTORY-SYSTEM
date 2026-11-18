@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import type { VoucherWithItems } from "./types";
+import { posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 
 export interface PosDaybookDraftLine {
   id?: number;
@@ -29,11 +30,11 @@ export function buildDaybookSaleEditPayload(
   lines: PosDaybookDraftLine[],
   description: string
 ) {
-  if (!lines.length) throw new Error("At least one sale item is required.");
+  if (!lines.length) throw new Error(posDaybookEditMessages.missingItems);
   const isZmw = sale.currency === "ZMW";
   const lockedRate = new Decimal(sale.exchangeRate || "0");
-  if (isZmw && !lockedRate.isFinite() || (isZmw && lockedRate.lte(0))) {
-    throw new Error("This sale has no valid historical Kwacha exchange rate.");
+  if (isZmw && (!lockedRate.isFinite() || lockedRate.lte(0))) {
+    throw new Error(posDaybookEditMessages.invalidRate);
   }
 
   return {
@@ -46,10 +47,10 @@ export function buildDaybookSaleEditPayload(
       const quantity = new Decimal(line.quantity);
       const nativeUnit = new Decimal(line.unitPrice);
       if (!quantity.isFinite() || quantity.lte(0) || !nativeUnit.isFinite() || nativeUnit.lte(0)) {
-        throw new Error("Quantity and selling price must both be positive.");
+        throw new Error(posDaybookEditMessages.invalidLine);
       }
       if (isZmw && nativeUnit.decimalPlaces() > 2) {
-        throw new Error("Kwacha prices cannot have more than two decimals.");
+        throw new Error(posDaybookEditMessages.invalidKwachaPrecision);
       }
       const usdUnit = isZmw ? nativeUnit.div(lockedRate).toDecimalPlaces(6).toFixed(6) : nativeUnit.toString();
       return {

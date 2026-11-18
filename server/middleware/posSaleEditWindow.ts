@@ -22,7 +22,11 @@ declare global {
 export async function requirePosSaleEditWindow(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const context = await getActiveCompanyPermissionContext(req);
-    if (req.user) req.user.role = context.role;
+    if (req.user) {
+      req.user.role = context.role;
+      req.user.canSellNegativeStock = context.canSellNegativeStock;
+      req.user.posViewOnly = context.posViewOnly;
+    }
     if (context.role !== "POS") {
       canModifyDate("voucherDate")(req, res, next);
       return;

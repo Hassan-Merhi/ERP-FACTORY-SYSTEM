@@ -38,4 +38,8 @@ export const posDaybookEditMessages = {
   noRedate: "POS cashiers cannot change the original sale date. Reverse and rebook instead.",
   noPaymentChange: "POS cashiers cannot change an existing sale's payment account or credit status.",
   viewOnly: "This POS account is view-only and cannot edit sales.",
+  missingItems: "At least one sale item is required.",
+  invalidRate: "This sale has no valid historical Kwacha exchange rate.",
+  invalidLine: "Quantity and selling price must both be positive.",
+  invalidKwachaPrecision: "Kwacha prices cannot have more than two decimals.",
 } as const;
