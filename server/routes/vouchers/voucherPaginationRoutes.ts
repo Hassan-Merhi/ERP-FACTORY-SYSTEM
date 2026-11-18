@@ -10,6 +10,7 @@ import { userLocations, vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
+import { withPosZmwNativeTotals } from "../../services/pos/posVoucherNativeTotals";
 import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import {
   filterRoutineCorrection,
@@ -190,7 +191,7 @@ export function registerVoucherPaginationRoutes(app: Express): void {
       const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
       const narrated = await withStockTransferNarrations(companyId, data);
       const withTenants = await withPropertiesRentalTenantNames(companyId, narrated);
-      const items = isPos ? sanitizeForPos(withTenants) : withTenants;
+      const items = await withPosZmwNativeTotals(isPos ? sanitizeForPos(withTenants) : withTenants);
       applyPaginationHeaders(res, total, page, limit, totalPages);
       return res.json({
         items,
