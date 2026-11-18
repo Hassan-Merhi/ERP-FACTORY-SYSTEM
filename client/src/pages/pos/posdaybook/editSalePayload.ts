@@ -63,3 +63,26 @@ export function buildDaybookSaleEditPayload(
     }),
   };
 }
+
+/** Preview the same per-line cent/ngwee rounding the posted sale will use. */
+export function previewDaybookSaleTotals(
+  lines: readonly PosDaybookDraftLine[]
+): { lineTotals: string[]; total: string } | null {
+  if (!lines.length) return null;
+  try {
+    const amounts = lines.map((line) => {
+      const quantity = new Decimal(line.quantity);
+      const price = new Decimal(line.unitPrice);
+      if (!quantity.isFinite() || !price.isFinite() || quantity.lte(0) || price.lte(0)) {
+        return null;
+      }
+      return quantity.times(price).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    });
+    if (amounts.some((amount) => amount === null)) return null;
+    const lineTotals = amounts.map((amount) => amount!.toFixed(2));
+    const total = amounts.reduce((sum, amount) => sum.plus(amount!), new Decimal(0)).toFixed(2);
+    return { lineTotals, total };
+  } catch {
+    return null;
+  }
+}

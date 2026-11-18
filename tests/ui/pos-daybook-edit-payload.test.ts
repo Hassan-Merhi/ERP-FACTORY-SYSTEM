@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDaybookSaleEditPayload,
   createDaybookDraftLines,
+  previewDaybookSaleTotals,
 } from "../../client/src/pages/pos/posdaybook/editSalePayload";
 import type { VoucherWithItems } from "../../client/src/pages/pos/posdaybook/types";
 
@@ -67,6 +68,19 @@ describe("Zambia POS Daybook modal payload", () => {
     expect(payload.items[0]).toMatchObject({ sellingPrice: "25.75" });
     expect(payload.items[0]).not.toHaveProperty("originalCurrencyRate");
     expect(payload.isCreditSale).toBe(true);
+  });
+
+  it("previews the sale total from individual rounded line amounts", () => {
+    const lines = createDaybookDraftLines(original);
+    lines[0].quantity = "1.5";
+    lines[0].unitPrice = "10.01";
+    lines.push({ stockItemId: 18, stockItemName: "Added", quantity: "2", unitPrice: "12.25" });
+    expect(previewDaybookSaleTotals(lines)).toEqual({
+      lineTotals: ["15.02", "24.50"],
+      total: "39.52",
+    });
+    lines[0].unitPrice = "";
+    expect(previewDaybookSaleTotals(lines)).toBeNull();
   });
 
   it("rejects empty sales, invalid quantities and sub-ngwee values", () => {

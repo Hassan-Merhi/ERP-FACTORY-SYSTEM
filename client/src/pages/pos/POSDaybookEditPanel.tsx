@@ -11,7 +11,7 @@ import { locationInventoryLightUrl, invalidateLocationInventoryQueries } from "@
 import { useToast } from "@/hooks/use-toast";
 import type { APIInventoryItem } from "./pos-components/posTypes";
 import type { VoucherWithItems } from "./posdaybook/types";
-import { buildDaybookSaleEditPayload, createDaybookDraftLines } from "./posdaybook/editSalePayload";
+import { buildDaybookSaleEditPayload, createDaybookDraftLines, previewDaybookSaleTotals } from "./posdaybook/editSalePayload";
 
 export function POSDaybookEditPanel({
   sale,
@@ -25,6 +25,8 @@ export function POSDaybookEditPanel({
   const { toast } = useToast();
   const [lines, setLines] = useState(() => createDaybookDraftLines(sale));
   const [description, setDescription] = useState(sale.description ?? "");
+  const preview = previewDaybookSaleTotals(lines);
+  const nativeCurrencyLabel = sale.currency === "ZMW" ? "K" : sale.currency || "USD";
   const inventoryUrl = locationInventoryLightUrl(sale.locationId, true);
   const { data: availableItems = [] } = useQuery<APIInventoryItem[]>({ queryKey: [inventoryUrl] });
   const mutation = useMutation({
@@ -61,7 +63,8 @@ export function POSDaybookEditPanel({
             <tr className="border-b bg-muted/40">
               <th className="p-2 text-left">Item</th>
               <th className="p-2 text-right">Qty</th>
-              <th className="p-2 text-right">Price ({sale.currency === "ZMW" ? "K" : sale.currency || "USD"})</th>
+              <th className="p-2 text-right">Price ({nativeCurrencyLabel})</th>
+              <th className="p-2 text-right">Line Total</th>
               <th className="p-2 text-right">Remove</th>
             </tr>
           </thead>
@@ -91,6 +94,7 @@ export function POSDaybookEditPanel({
                     className="ml-auto w-32 text-right"
                   />
                 </td>
+                <td className="p-2 text-right font-mono">{preview?.lineTotals[index] ?? "—"}</td>
                 <td className="p-2 text-right">
                   <Button
                     type="button"
@@ -139,6 +143,9 @@ export function POSDaybookEditPanel({
           </SelectContent>
         </Select>
       </div>
+      <p className="text-right text-base font-semibold" data-testid="pos-daybook-edit-total">
+        New total: {nativeCurrencyLabel} {preview?.total ?? "—"}
+      </p>
       <div className="space-y-1.5">
         <Label htmlFor="pos-daybook-edit-notes">Notes</Label>
         <Textarea id="pos-daybook-edit-notes" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -150,7 +157,7 @@ export function POSDaybookEditPanel({
         <Button
           type="button"
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || lines.length === 0}
+          disabled={mutation.isPending || preview === null}
           data-testid="pos-daybook-save-edit"
         >
           {mutation.isPending ? "Saving..." : "Save sale changes"}
