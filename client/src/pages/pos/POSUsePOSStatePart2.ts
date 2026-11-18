@@ -248,7 +248,8 @@ export function usePOSStatePart2({
     setCurrentDraftId,
     setLastAutosaved,
     refetchDrafts,
-    disabled: posWritesDisabled,
+    // An existing receipt must never be silently saved as a new POS draft.
+    disabled: posWritesDisabled || !!editVoucherId,
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
