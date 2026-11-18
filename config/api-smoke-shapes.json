@@ -1667,7 +1667,7 @@
     },
     "/api/pos/customers": {
       "status": 403,
-      "shape": "{message:scalar}"
+      "shape": "{code:scalar,message:scalar}"
     },
     "/api/pos/drafts": {
       "status": 200,
