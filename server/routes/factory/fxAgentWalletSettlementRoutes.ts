@@ -303,7 +303,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
             AND src.transaction_credit_amount > 0
           JOIN factory_fx_agent_wallets w ON w.company_id = v.company_id
             AND w.ledger_account_id = src.ledger_account_id
-          JOIN voucher_entries dst ON dst.voucher_id = v.id
+          LEFT JOIN voucher_entries dst ON dst.voucher_id = v.id
             AND dst.transaction_debit_amount > 0 AND dst.factory_supplier_id IS NOT NULL
           WHERE v.id = ${id} AND v.company_id = ${cid}
             AND v.optional = true AND v.deleted_at IS NULL
