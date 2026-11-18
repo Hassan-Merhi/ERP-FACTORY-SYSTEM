@@ -49,6 +49,7 @@ import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
+import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
 
 /** The rate a cashier entered for a non-USD sale on the factory LAN server. */
 function offlineEnteredRate(
@@ -179,7 +180,8 @@ export async function createPosSale(
 
   const grandTotalResult = calculateGrandTotal(items);
   if ("error" in grandTotalResult) return err(grandTotalResult.error);
-  const { grandTotal } = grandTotalResult;
+  let { grandTotal } = grandTotalResult;
+  let nativeZmwTotal: string | undefined;
 
   const salesAccountResult = await getOrCreateSalesRevenueAccount(currentCompanyId);
   if ("error" in salesAccountResult) return err(salesAccountResult.error);
@@ -221,6 +223,11 @@ export async function createPosSale(
   // stale client rates, silent currency substitution, and altered USD prices.
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
+    if (lockedPosCurrency.currency === "ZMW") {
+      const native = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+      nativeZmwTotal = native.nativeTotal;
+      grandTotal = native.usdTotal;
+    }
   } catch (error) {
     if (error instanceof PosZmwRateError) {
       return err({ status: error.statusCode, body: { code: error.code, message: error.message } });
@@ -279,6 +286,7 @@ export async function createPosSale(
       const saleLines = await buildSaleAccountingLines(tx, {
         voucherLabel: location.name,
         grandTotal,
+        nativeZmwTotal,
         isCreditSale,
         accountType,
         accountId,
@@ -539,6 +547,7 @@ export async function createPosSale(
       location,
       items: saleItems,
       grandTotal: grandTotal.toFixed(2),
+      ...(nativeZmwTotal ? { nativeZmwTotal } : {}),
       voucherNumber,
       saleDate: voucherDate,
       isCreditSale,
