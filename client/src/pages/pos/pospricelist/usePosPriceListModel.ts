@@ -77,7 +77,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
 
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isPrivileged = PRIVILEGED_ROLES.includes(currentUser?.role || "");
-  const posViewOnly = Boolean(posUser && typeof posUser === "object" && "posViewOnly" in posUser && posUser.posViewOnly === true);
+  const posViewOnly = Boolean((posUser as { posViewOnly?: boolean } | undefined)?.posViewOnly);
   const canEdit = !posViewOnly;
   const canEditPrices = canEdit && recordChanges.allowed;
 
