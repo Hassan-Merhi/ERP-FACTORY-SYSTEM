@@ -214,6 +214,9 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
     }
   }
 
+  // Never enable Update until the original receipt and its location are loaded.
+  const editNotReady = Boolean(editVoucherId && (!editVoucher || activeLocation?.id !== editVoucher.locationId));
+
   // ── Early returns ─────────────────────────────────────────────────────────
   if (posUser && posLocationsLoading) {
     return (
@@ -288,7 +291,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         navigate={navigate}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         lastAutosaved={lastAutosaved}
         drafts={drafts}
@@ -305,6 +308,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
       <PosCheckoutStrip
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
         posAssignedLocations={posAssignedLocations}
@@ -408,6 +412,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       {/* ── Mobile layout ── */}
       <PosMobileLayout
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
         posAssignedLocations={posAssignedLocations}
@@ -443,7 +448,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         setNotes={setNotes}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         formatDisplayAmount={fmtAmount}
         isSpCompany={isSpCompany}
