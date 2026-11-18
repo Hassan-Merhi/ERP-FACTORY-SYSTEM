@@ -16,6 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { FactoryWorkerFormFields } from "./FactoryWorkerFormFields";
+import { PersonFormDialog } from "../people/PersonFormDialog";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
 
 interface FactoryWorkersModelProps {
@@ -147,7 +148,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <PersonFormDialog
         open={createOpen || editingWorker !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -156,41 +157,14 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
             resetForm();
           }
         }}
+        title={editingWorker ? "Edit Worker" : "Add Worker"}
+        description={editingWorker ? "Update worker details" : "Fill in the worker details below"}
+        onSave={handleSubmit}
+        saving={createMutation.isPending || updateMutation.isPending}
+        testIds={{ dialog: "dialog-worker-form", cancel: "button-cancel-worker", save: "button-submit-worker" }}
       >
-        <DialogContent className="max-w-2xl" data-testid="dialog-worker-form">
-          <DialogHeader>
-            <DialogTitle>{editingWorker ? "Edit Worker" : "Add Worker"}</DialogTitle>
-            <DialogDescription>
-              {editingWorker ? "Update worker details" : "Fill in the worker details below"}
-            </DialogDescription>
-          </DialogHeader>
-          <FactoryWorkerFormFields model={model} />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setCreateOpen(false);
-                setEditingWorker(null);
-                resetForm();
-              }}
-              data-testid="button-cancel-worker"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={createMutation.isPending || updateMutation.isPending}
-              data-testid="button-submit-worker"
-            >
-              {createMutation.isPending || updateMutation.isPending
-                ? "Saving..."
-                : editingWorker
-                  ? "Update"
-                  : "Add Worker"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <FactoryWorkerFormFields model={model} />
+      </PersonFormDialog>
 
       <Dialog
         open={endContractWorker !== null}

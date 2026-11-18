@@ -12,55 +12,6 @@ import {
 import { useFactoryEmployeesState } from "./useFactoryEmployeesState";
 import { formatUsd } from "@/lib/moneyDisplay";
 
-export function FactoryEmployeesDialogFooterSection({
-  createMutation,
-  editingEmployee,
-  formData,
-  recordChanges,
-  setCreateOpen,
-  setEditingEmployee,
-  updateMutation,
-}: Pick<
-  ReturnType<typeof useFactoryEmployeesState>,
-  | "createMutation"
-  | "editingEmployee"
-  | "formData"
-  | "recordChanges"
-  | "setCreateOpen"
-  | "setEditingEmployee"
-  | "updateMutation"
->) {
-  return (
-    <DialogFooter>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setCreateOpen(false);
-          setEditingEmployee(null);
-        }}
-        data-testid="button-cancel"
-      >
-        Cancel
-      </Button>
-      {(editingEmployee ? recordChanges.allowed : recordChanges.canCreate("POST", "/api/factory/employees")) && (
-        <Button
-          onClick={() => {
-            if (editingEmployee) {
-              updateMutation.mutate({ id: editingEmployee.id, data: formData });
-            } else {
-              createMutation.mutate(formData);
-            }
-          }}
-          disabled={createMutation.isPending || updateMutation.isPending}
-          data-testid="button-save"
-        >
-          {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
-        </Button>
-      )}
-    </DialogFooter>
-  );
-}
-
 export function FactoryEmployeesDialogSection({
   deactivateMutation,
   employees,

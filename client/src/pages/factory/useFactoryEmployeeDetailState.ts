@@ -12,7 +12,21 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import type { Employee, LedgerAccount, StatementRow } from "./FactoryEmployeeDetailTypes";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import {
+  exportPeopleTableExcel,
+  exportPeopleTablePdf,
+  printPeopleTable,
+  type PeopleExportSpec,
+} from "@/pages/factory/people/peopleExport";
+import {
+  EMPLOYEE_DETAIL_TABS,
+  type EmployeeDetailTab,
+  type Employee,
+  type LedgerAccount,
+  type StatementRow,
+} from "./FactoryEmployeeDetailTypes";
 
 export function useFactoryEmployeeDetailState() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
@@ -103,6 +117,80 @@ export function useFactoryEmployeeDetailState() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+
+  // Tabs reuse the Employees hub access keys for Advances and Attendance.
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
+  const hiddenTabs = accessReady && myAccess?.hasFactoryAccess === true ? myAccess.hiddenCostFields : null;
+  const showAdvancesTab = hiddenTabs !== null && !hiddenTabs.includes("hide_tab_employees_advances");
+  const showAttendanceTab = hiddenTabs !== null && !hiddenTabs.includes("hide_tab_employees_attendance");
+  const visibleDetailTabs: EmployeeDetailTab[] = [
+    "profile",
+    "statement",
+    ...(showAdvancesTab ? (["advances"] as const) : []),
+    ...(showAttendanceTab ? (["attendance"] as const) : []),
+  ];
+  const [requestedTab, setRequestedTab] = useHubQueryState<EmployeeDetailTab>({
+    key: "tab",
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleDetailTabs : EMPLOYEE_DETAIL_TABS,
+    knownValues: EMPLOYEE_DETAIL_TABS,
+    defaultValue: "statement",
+    omitDefault: true,
+  });
+  const activeTab = visibleDetailTabs.includes(requestedTab) ? requestedTab : "statement";
+  const [exportBusy, setExportBusy] = useState(false);
+
+  const statementRows = statement?.rows ?? [];
+  const exportStatement = async (format: "excel" | "pdf" | "print") => {
+    if (!employee) return;
+    const fullName = `${employee.firstName} ${employee.lastName}`;
+    const spec: PeopleExportSpec<StatementRow> = {
+      title: "Employee Statement",
+      fileStem: `${fullName} statement`,
+      subtitle: [employee.code, fullName].filter(Boolean).join(" · "),
+      columns: [
+        { header: "Date", width: 14, value: (row) => formatDate(row.voucherDate) },
+        { header: "Voucher", width: 16, value: (row) => row.voucherNumber },
+        { header: "Description", width: 40, value: (row) => row.narration || row.description || "" },
+        { header: "Deposit", type: "money", value: (row) => (row.credit > 0 ? row.credit : null) },
+        { header: "Withdrawal", type: "money", value: (row) => (row.debit > 0 ? row.debit : null) },
+        { header: "Balance", type: "money", value: (row) => row.balance },
+      ],
+      rows: statementRows,
+      footer: [
+        "TOTAL",
+        "",
+        "",
+        statementRows.reduce((sum, row) => sum + (row.credit > 0 ? row.credit : 0), 0),
+        statementRows.reduce((sum, row) => sum + (row.debit > 0 ? row.debit : 0), 0),
+        statementRows.length ? statementRows[statementRows.length - 1].balance : null,
+      ],
+    };
+    if (format === "print") {
+      if (!printPeopleTable(spec)) {
+        toast({ title: "Print failed", description: "Allow pop-ups to print.", variant: "destructive" });
+      }
+      return;
+    }
+    setExportBusy(true);
+    try {
+      if (format === "excel") await exportPeopleTableExcel(spec);
+      else await exportPeopleTablePdf(spec);
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
   // Mutations
   const updateMutation = useMutation({
@@ -222,6 +310,13 @@ export function useFactoryEmployeeDetailState() {
     },
   });
   return {
+    activeTab,
+    exportBusy,
+    exportStatement,
+    setRequestedTab,
+    showAdvancesTab,
+    showAttendanceTab,
+    statementRows,
     stmtError,
     refetchStatement,
     AdminDialog,

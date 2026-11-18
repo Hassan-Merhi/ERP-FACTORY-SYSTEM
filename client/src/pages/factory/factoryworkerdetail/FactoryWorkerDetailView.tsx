@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   ArrowLeft,
   UserX,
@@ -38,6 +37,11 @@ import { PayrollDetailDialog } from "../factory-worker-detail/dialogs/PayrollDet
 import type { useFactoryWorkerDetailModel } from "./useFactoryWorkerDetailModel";
 import { FactoryWorkerAdvancesPanel } from "./FactoryWorkerAdvancesPanel";
 import { FactoryWorkerDocumentsBalesPanel } from "./FactoryWorkerDocumentsBalesPanel";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
+import { PersonAttendancePanel } from "../people/PersonAttendancePanel";
+import { PersonStatusBadge } from "../people/PeopleRoster";
+import { PersonInfoCard, PersonInfoRow } from "../people/PersonDetailParts";
+import { useFactoryWorkerDetailViewTabs, type WorkerDetailTab } from "./useFactoryWorkerDetailViewTabs";
 
 interface FactoryWorkerDetailModelProps {
   model: ReturnType<typeof useFactoryWorkerDetailModel>;
@@ -101,6 +105,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
     setPendingDeleteDocId,
     setViewingDoc,
     showAdvances,
+    showAttendance,
     showBales,
     showDocuments,
     showProfile,
@@ -117,17 +122,8 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
     workerLoading,
     wrapAdminAction,
   } = model;
-  const visibleDetailTabs = [
-    showProfile ? "profile" : null,
-    showStatement ? "statement" : null,
-    showAdvances ? "advances" : null,
-    showBales ? "bales" : null,
-    showDocuments ? "documents" : null,
-  ].filter((value): value is "profile" | "statement" | "advances" | "bales" | "documents" => value !== null);
-  const [requestedDetailTab, setRequestedDetailTab] = useState<
-    "profile" | "statement" | "advances" | "bales" | "documents"
-  >("profile");
-  const activeDetailTab = visibleDetailTabs.includes(requestedDetailTab) ? requestedDetailTab : visibleDetailTabs[0];
+  const { activeDetailTab, setRequestedDetailTab, statementExportBusy, exportStatement } =
+    useFactoryWorkerDetailViewTabs(model);
 
   if (!workerId)
     return <div className="flex items-center justify-center py-20 text-muted-foreground">Invalid worker ID</div>;
@@ -158,12 +154,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
   }
 
   const infoRow = (label: string, value: string | number | null | undefined, testId?: string) => (
-    <div className="flex justify-between py-1.5 border-b last:border-0 text-sm">
-      <span className="text-muted-foreground shrink-0 mr-3">{label}</span>
-      <span className="font-medium text-right" data-testid={testId}>
-        {value || "—"}
-      </span>
-    </div>
+    <PersonInfoRow label={label} value={value || "—"} testId={testId} />
   );
 
   const avatarColor = getAvatarColor(worker.fullName);
@@ -205,13 +196,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                   )}
                   {worker.department && <p className="text-xs text-muted-foreground">{worker.department}</p>}
                 </div>
-                <Badge
-                  variant={worker.active ? "default" : "secondary"}
-                  className="no-default-active-elevate"
-                  data-testid="badge-worker-status"
-                >
-                  {worker.active ? "Active" : "Inactive"}
-                </Badge>
+                <PersonStatusBadge active={worker.active} data-testid="badge-worker-status" />
               </div>
 
               <div className="border-t pt-3 space-y-2">
@@ -332,12 +317,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
 
         <div className="flex-1 min-w-0">
           {activeDetailTab ? (
-            <Tabs
-              value={activeDetailTab}
-              onValueChange={(value) =>
-                setRequestedDetailTab(value as "profile" | "statement" | "advances" | "bales" | "documents")
-              }
-            >
+            <Tabs value={activeDetailTab} onValueChange={(value) => setRequestedDetailTab(value as WorkerDetailTab)}>
               <div className="erp-mobile-scroll-tabs mb-4 pb-1">
                 <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory worker details">
                   {showProfile && (
@@ -353,6 +333,11 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                   {showAdvances && (
                     <TabsTrigger value="advances" data-testid="tab-advances">
                       Advances
+                    </TabsTrigger>
+                  )}
+                  {showAttendance && (
+                    <TabsTrigger value="attendance" data-testid="tab-attendance">
+                      Attendance
                     </TabsTrigger>
                   )}
                   {showBales && (
@@ -371,83 +356,55 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
               {showProfile && (
                 <TabsContent value="profile" className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <span>Personal</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4">
-                        {infoRow("Full Name", worker.fullName, "text-detail-fullname")}
-                        {infoRow("Father Name", worker.fatherName, "text-detail-father")}
-                        {infoRow("Mother Name", worker.motherName, "text-detail-mother")}
-                        {infoRow("National ID", worker.nationalId, "text-detail-nationalid")}
-                        {infoRow("Passport", worker.passportNumber, "text-detail-passport")}
-                        {infoRow("Date of Birth", formatDate(worker.dateOfBirth), "text-detail-dob")}
-                        {infoRow("Gender", worker.gender, "text-detail-gender")}
-                        {infoRow("Nationality", worker.nationality, "text-detail-nationality")}
-                        {infoRow("Marital Status", worker.maritalStatus, "text-detail-marital")}
-                        {infoRow("Children", worker.numberOfChildren ?? "—", "text-detail-children")}
-                      </CardContent>
-                    </Card>
+                    <PersonInfoCard title="Personal">
+                      {infoRow("Full Name", worker.fullName, "text-detail-fullname")}
+                      {infoRow("Father Name", worker.fatherName, "text-detail-father")}
+                      {infoRow("Mother Name", worker.motherName, "text-detail-mother")}
+                      {infoRow("National ID", worker.nationalId, "text-detail-nationalid")}
+                      {infoRow("Passport", worker.passportNumber, "text-detail-passport")}
+                      {infoRow("Date of Birth", formatDate(worker.dateOfBirth), "text-detail-dob")}
+                      {infoRow("Gender", worker.gender, "text-detail-gender")}
+                      {infoRow("Nationality", worker.nationality, "text-detail-nationality")}
+                      {infoRow("Marital Status", worker.maritalStatus, "text-detail-marital")}
+                      {infoRow("Children", worker.numberOfChildren ?? "—", "text-detail-children")}
+                    </PersonInfoCard>
 
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Phone className="h-3.5 w-3.5" /> Contact
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4">
-                        {infoRow("Phone 1", worker.phone1, "text-detail-phone1")}
-                        {infoRow("Phone 2", worker.phone2, "text-detail-phone2")}
-                        {infoRow("Emergency Name", worker.emergencyContactName, "text-detail-emergency")}
-                        {infoRow("Emergency Phone", worker.emergencyContactPhone)}
-                        {infoRow("Address", worker.address, "text-detail-address")}
-                        {infoRow("City", worker.city, "text-detail-city")}
-                        {infoRow("Country", worker.country, "text-detail-country")}
-                      </CardContent>
-                    </Card>
+                    <PersonInfoCard title="Contact" icon={Phone}>
+                      {infoRow("Phone 1", worker.phone1, "text-detail-phone1")}
+                      {infoRow("Phone 2", worker.phone2, "text-detail-phone2")}
+                      {infoRow("Emergency Name", worker.emergencyContactName, "text-detail-emergency")}
+                      {infoRow("Emergency Phone", worker.emergencyContactPhone)}
+                      {infoRow("Address", worker.address, "text-detail-address")}
+                      {infoRow("City", worker.city, "text-detail-city")}
+                      {infoRow("Country", worker.country, "text-detail-country")}
+                    </PersonInfoCard>
 
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Building className="h-3.5 w-3.5" /> Employment
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4">
-                        {infoRow("Employee Code", worker.employeeCode, "text-detail-code")}
-                        {infoRow("Position", worker.position, "text-detail-position")}
-                        {infoRow("Department", worker.department, "text-detail-department")}
-                        {infoRow("Date Joined", formatDate(worker.dateJoined), "text-detail-joined")}
-                        {infoRow("Contract Start", formatDate(worker.contractStartDate), "text-detail-contract-start")}
-                        {infoRow("Contract End", formatDate(worker.contractEndDate), "text-detail-contract-end")}
-                        {infoRow("Shift", worker.shiftType, "text-detail-shift")}
-                      </CardContent>
-                    </Card>
+                    <PersonInfoCard title="Employment" icon={Building}>
+                      {infoRow("Employee Code", worker.employeeCode, "text-detail-code")}
+                      {infoRow("Position", worker.position, "text-detail-position")}
+                      {infoRow("Department", worker.department, "text-detail-department")}
+                      {infoRow("Date Joined", formatDate(worker.dateJoined), "text-detail-joined")}
+                      {infoRow("Contract Start", formatDate(worker.contractStartDate), "text-detail-contract-start")}
+                      {infoRow("Contract End", formatDate(worker.contractEndDate), "text-detail-contract-end")}
+                      {infoRow("Shift", worker.shiftType, "text-detail-shift")}
+                    </PersonInfoCard>
 
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <CreditCard className="h-3.5 w-3.5" /> Compensation
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4">
-                        {infoRow("Salary Type", worker.salaryType, "text-detail-salary-type")}
-                        {infoRow("Base Salary", fmt(worker.baseSalary), "text-detail-base-salary")}
-                        {infoRow(
-                          "Transport Allowance",
-                          fmt(worker.transportAllowance),
-                          "text-detail-transport-allowance"
-                        )}
-                        {infoRow("Per Bale Rate", fmt(worker.perBaleRate), "text-detail-bale-rate")}
-                        {infoRow("Per KG Rate", fmt(worker.perKgRate), "text-detail-kg-rate")}
-                        {infoRow("Overtime Rate", fmt(worker.overtimeRate), "text-detail-overtime-rate")}
-                        {infoRow("Pay Frequency", worker.payFrequency)}
-                        {infoRow("Payment Method", worker.paymentMethod, "text-detail-payment-method")}
-                        {infoRow("Bank Name", worker.bankName, "text-detail-bank")}
-                        {infoRow("Bank Account", worker.bankAccountNumber, "text-detail-bank-account")}
-                      </CardContent>
-                    </Card>
+                    <PersonInfoCard title="Compensation" icon={CreditCard}>
+                      {infoRow("Salary Type", worker.salaryType, "text-detail-salary-type")}
+                      {infoRow("Base Salary", fmt(worker.baseSalary), "text-detail-base-salary")}
+                      {infoRow(
+                        "Transport Allowance",
+                        fmt(worker.transportAllowance),
+                        "text-detail-transport-allowance"
+                      )}
+                      {infoRow("Per Bale Rate", fmt(worker.perBaleRate), "text-detail-bale-rate")}
+                      {infoRow("Per KG Rate", fmt(worker.perKgRate), "text-detail-kg-rate")}
+                      {infoRow("Overtime Rate", fmt(worker.overtimeRate), "text-detail-overtime-rate")}
+                      {infoRow("Pay Frequency", worker.payFrequency)}
+                      {infoRow("Payment Method", worker.paymentMethod, "text-detail-payment-method")}
+                      {infoRow("Bank Name", worker.bankName, "text-detail-bank")}
+                      {infoRow("Bank Account", worker.bankAccountNumber, "text-detail-bank-account")}
+                    </PersonInfoCard>
                   </div>
                   {worker.notes && (
                     <Card>
@@ -464,6 +421,18 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
 
               {showStatement && (
                 <TabsContent value="statement" className="space-y-4">
+                  <div className="flex justify-end">
+                    <ReportExportMenu
+                      busy={statementExportBusy}
+                      disabled={!payrolls?.length}
+                      data-testid="button-statement-export"
+                      options={[
+                        { id: "excel", label: "Excel", kind: "excel", onSelect: () => exportStatement("excel") },
+                        { id: "pdf", label: "PDF", kind: "pdf", onSelect: () => exportStatement("pdf") },
+                        { id: "print", label: "Print", kind: "print", onSelect: () => exportStatement("print") },
+                      ]}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <Card>
                       <CardContent className="p-4 text-center">
@@ -694,6 +663,17 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
               )}
 
               <FactoryWorkerAdvancesPanel model={model} />
+
+              {showAttendance && (
+                <TabsContent value="attendance" className="space-y-4">
+                  <PersonAttendancePanel
+                    endpoint={`/api/factory/attendance/worker/${worker.id}`}
+                    personName={worker.fullName}
+                    kind="worker"
+                    formatDate={formatDate}
+                  />
+                </TabsContent>
+              )}
 
               <FactoryWorkerDocumentsBalesPanel model={model} />
             </Tabs>
