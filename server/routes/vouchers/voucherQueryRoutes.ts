@@ -25,6 +25,7 @@ import { withStockTransferNarrations } from "../../services/inventory/stockTrans
 import { withPosZmwNativeTotals } from "../../services/pos/posVoucherNativeTotals";
 import { withPosVoucherShiftUserIds } from "../../services/pos/posVoucherShiftOwnership";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
 import {
   getPosDaybookLocations,
   getPosTransferScope,
@@ -266,9 +267,9 @@ export function registerVoucherQueryRoutes(app: Express) {
       const liveContext = await getActiveCompanyPermissionContext(req);
       if (liveContext.role === "POS" && isStockTransferVoucherType(voucher.voucherType)) {
         const scope = await getPosTransferScope(liveContext, voucher.id);
-        if (!scope) return res.status(404).json({ message: "Transfer not found" });
+        if (!scope) return res.status(404).json({ message: posDaybookTransferText.notFound });
         const { transferData } = await loadVoucherRelatedData(voucher);
-        if (!transferData?.id) return res.status(404).json({ message: "Transfer not found" });
+        if (!transferData?.id) return res.status(404).json({ message: posDaybookTransferText.notFound });
         const visibleItems = posTransferVisibleItems(transferData.items, scope);
         return res.json({
           id: voucher.id,
