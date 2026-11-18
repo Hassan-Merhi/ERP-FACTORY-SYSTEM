@@ -77,6 +77,17 @@ afterAll(async () => {
 }, 120_000);
 
 describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
+  it("reads the active company editing window and business date from the server", async () => {
+    const response = await cashier.get("/api/pos/daybook-edit-status");
+    expect(response.status, response.text).toBe(200);
+    expect(response.body).toMatchObject({
+      role: "POS",
+      daybookEditDays: 2,
+      posViewOnly: false,
+      businessDate: today,
+    });
+  });
+
   it("lists the shift owner's ID so their sale can open in the Daybook popup", async () => {
     const result = await cashier.get(`/api/vouchers?startDate=${today}&endDate=${today}`);
     expect(result.status, result.text).toBe(200);
@@ -157,6 +168,9 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
       "UPDATE user_company_roles SET daybook_edit_days = 0 WHERE user_id = $1 AND company_id = $2",
       [cashierId, ctx.companyId]
     );
+    const liveStatus = await cashier.get("/api/pos/daybook-edit-status");
+    expect(liveStatus.status).toBe(200);
+    expect(liveStatus.body.daybookEditDays).toBe(0);
     for (const method of ["put", "patch"] as const) {
       const result = await cashier[method](`/api/vouchers/${voucherId}/sales`).send(editBody());
       expect(result.status).toBe(403);
@@ -169,6 +183,8 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
       "UPDATE user_company_roles SET daybook_edit_days = 2, pos_view_only = true WHERE user_id = $1 AND company_id = $2",
       [cashierId, ctx.companyId]
     );
+    const liveStatus = await cashier.get("/api/pos/daybook-edit-status");
+    expect(liveStatus.body.posViewOnly).toBe(true);
     const response = await cashier.put(`/api/vouchers/${voucherId}/sales`).send(editBody());
     expect(response.status).toBe(403);
   });
