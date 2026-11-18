@@ -12,6 +12,7 @@ import path from "node:path";
 import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
+// Split modules keep their contracts in extracted siblings (see ./lib/readModuleFamily.mjs).
 const read = (relativePath) => readModuleFamily(path.join(root, relativePath));
 const failures = [];
 const assert = (condition, message) => {
