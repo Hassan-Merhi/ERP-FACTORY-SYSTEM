@@ -175,17 +175,17 @@ export default function Settings() {
       items:
         appMode === "factory"
           ? [
-              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer, devOnly: true },
+              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer, adminOnly: true },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
                 icon: Images,
                 href: "/factory/label-banners",
-                devOnly: true,
+                adminOnly: true,
               },
               { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
-                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, devOnly: true }]
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, adminOnly: true }]
                 : []),
             ]
           : [],
@@ -325,7 +325,7 @@ export default function Settings() {
           {activeSection === "pos-setup" && isDeveloperMode && (
             <PosSetupHub userRole={effectiveRole} />
           )}
-          {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "automatic-priority-printing" && canManageSessions && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
@@ -335,7 +335,7 @@ export default function Settings() {
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && isDeveloperMode && appMode === "factory" && canManageCompanyTimezone && (
+          {activeSection === "company-timezone" && canManageSessions && appMode === "factory" && canManageCompanyTimezone && (
             <div className="space-y-5 max-w-2xl">
               <CompanyTimezoneCard />
             </div>
