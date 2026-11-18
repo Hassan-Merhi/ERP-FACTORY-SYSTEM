@@ -8,6 +8,7 @@ import { ErpListTable } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePOSDaybookState } from "./usePOSDaybookState";
+import { formatPosVoucherAmount } from "./posdaybook/zmwDisplay";
 
 export function POSDaybookDaybookResultsSection({
   currentUser,
@@ -144,7 +145,7 @@ export function POSDaybookDaybookResultsSection({
                     {voucher.locationName || `Location ${voucher.locationId}`}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
-                    {formatCashAmount(Number(voucher.totalAmount || 0))}
+                    {formatPosVoucherAmount(voucher, formatCashAmount)}
                   </TableCell>
                   <TableCell
                     className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
