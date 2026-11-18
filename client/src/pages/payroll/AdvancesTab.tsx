@@ -26,6 +26,7 @@ import {
   AdvancesTabTabsContentSection,
   AdvancesTabTabsContentSection2,
 } from "./AdvancesTabDialogSection";
+import { isPayrollAdvancesTab, usePayrollAdvancesTab } from "./payrollTabs";
 
 export function AdvancesTab(props: AdvancesTabProps) {
   const {
@@ -71,6 +72,7 @@ export function AdvancesTab(props: AdvancesTabProps) {
     workerFilter,
     workerStaff,
   } = useAdvancesTabState(props);
+  const [advancesTab, setAdvancesTab] = usePayrollAdvancesTab();
 
   if (advancesLoading) {
     return (
@@ -183,7 +185,7 @@ export function AdvancesTab(props: AdvancesTabProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="advances">
+      <Tabs value={advancesTab} onValueChange={(value) => isPayrollAdvancesTab(value) && setAdvancesTab(value)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Advance and deduction sections">
             <TabsTrigger value="advances">Advances</TabsTrigger>

@@ -65,6 +65,7 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
+vi.mock("@/components/ConfirmHost", () => ({ confirmAction: vi.fn(async () => true) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/contexts/CompanyContext", () => ({
   // No provider role: the shared change-access helper leaves controls as they are.
@@ -124,6 +125,7 @@ vi.mock("@/pages/payroll/EmployeesTab", () => ({
         Edit Alice
       </button>
       <button onClick={() => props.setEmpSearch("missing")}>Filter missing</button>
+      <button onClick={() => props.handleDeleteEmployee(props.employeeStaff[0])}>Delete Alice</button>
     </div>
   ),
 }));
@@ -316,5 +318,21 @@ describe("ERP payroll page behavior", () => {
       )
     );
     expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Deduction added" }));
+  });
+
+  it("names the failed action in the error toast title", async () => {
+    harness.apiRequest.mockRejectedValueOnce(new Error("Employee has vouchers"));
+    render(<Payroll />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Alice" }));
+    await waitFor(() =>
+      expect(harness.toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Delete failed",
+          description: "Employee has vouchers",
+          variant: "destructive",
+        })
+      )
+    );
+    expect(harness.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Error" }));
   });
 });

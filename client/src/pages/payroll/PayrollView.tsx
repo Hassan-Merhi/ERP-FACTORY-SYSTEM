@@ -15,12 +15,11 @@ import { WorkersTab } from "./WorkersTab";
 import { AdvancesTab } from "./AdvancesTab";
 import { WorkerDeductionDialog } from "./PayrollDialogs";
 import type { usePayrollModel } from "./usePayrollModel";
+import { isPayrollSection, usePayrollSection } from "./payrollTabs";
 
 export function PayrollView({ model }: { model: ReturnType<typeof usePayrollModel> }) {
   const {
     selectedCompany,
-    selectedTab,
-    setSelectedTab,
     empSearch,
     setEmpSearch,
     empStatusFilter,
@@ -221,14 +220,14 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
     workerDeductionMutation,
   } = model;
 
-  const visibleTab = selectedTab === "groups" ? "employees" : selectedTab;
+  const [selectedTab, setSelectedTab] = usePayrollSection();
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <PageHeader title="Payroll Management" />
 
       <div className="flex-1 overflow-y-auto p-4">
-        <Tabs value={visibleTab} onValueChange={setSelectedTab}>
+        <Tabs value={selectedTab} onValueChange={(value) => isPayrollSection(value) && setSelectedTab(value)}>
           {/* Phones scroll the tab row instead of squeezing four labels into equal columns. */}
           <div className="erp-mobile-scroll-tabs pb-1">
             <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Payroll sections">

@@ -1,5 +1,4 @@
 import { SearchField } from "@/components/ui/search-field";
-import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { formatNumber } from "@/lib/formatNumber";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -25,7 +24,6 @@ export function CreditNoteTab(props: CreditNoteTabProps) {
     highlightedIndex,
     isEditMode,
     isPending,
-    isPhoneLayout,
     itemListRef,
     itemQuantity,
     items,
@@ -35,7 +33,6 @@ export function CreditNoteTab(props: CreditNoteTabProps) {
     onSubmit,
     refundRate,
     removeItem,
-    resetForm,
     searchInputRef,
     searchTerm,
     selectedLocationId,
@@ -68,13 +65,11 @@ export function CreditNoteTab(props: CreditNoteTabProps) {
         form={form}
         isEditMode={isEditMode}
         isPending={isPending}
-        isPhoneLayout={isPhoneLayout}
         items={items}
         noteCurrency={noteCurrency}
         noteType={noteType}
         onSubmit={onSubmit}
         removeItem={removeItem}
-        resetForm={resetForm}
         totalInventoryValue={totalInventoryValue}
         totalRefund={totalRefund}
         totalRefundUsd={totalRefundUsd}
@@ -182,16 +177,6 @@ export function CreditNoteTab(props: CreditNoteTabProps) {
           </ScrollArea>
         </CardContent>
       </Card>
-
-      <VoucherPhoneActionBar
-        summary={`${items.length} items · Refund ${formatNumber(totalRefund)}`}
-        saveLabel={isEditMode ? "Update Note" : "Create Note"}
-        saving={isPending}
-        disabled={items.length === 0}
-        onSave={form.handleSubmit(onSubmit)}
-        onCancel={isEditMode ? resetForm : undefined}
-        data-testid="credit-note-phone-actions"
-      />
     </div>
   );
 }

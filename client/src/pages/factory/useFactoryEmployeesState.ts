@@ -9,6 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export interface Employee {
   id: number;
@@ -26,31 +27,6 @@ export interface Employee {
   employeeType: string;
 }
 
-const AVATAR_COLORS = [
-  "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-  "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-  "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
-];
-
-export function getAvatarColor(name: string) {
-  let hash = 0;
-  for (const c of name) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-export function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
-}
-
 export const emptyForm = {
   firstName: "",
   lastName: "",
@@ -63,8 +39,8 @@ export const emptyForm = {
 
 export function fmt(val: string | number | null | undefined) {
   const n = parseFloat(String(val || 0));
-  if (isNaN(n)) return "$0";
-  return n % 1 === 0 ? `$${n.toLocaleString()}` : `$${n.toFixed(2)}`;
+  if (Number.isNaN(n)) return formatUsd(0, 0);
+  return n % 1 === 0 ? formatUsd(n, 0) : formatUsd(n, 2);
 }
 
 export function useFactoryEmployeesState() {
@@ -75,6 +51,9 @@ export function useFactoryEmployeesState() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Active");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [exportBusy, setExportBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [endingContractEmployee, setEndingContractEmployee] = useState<Employee | null>(null);
@@ -208,6 +187,13 @@ export function useFactoryEmployeesState() {
     },
   });
   return {
+    departmentFilter,
+    exportBusy,
+    filtersOpen,
+    setDepartmentFilter,
+    setExportBusy,
+    setFiltersOpen,
+    toast,
     refetch,
     isError,
     employeesData,

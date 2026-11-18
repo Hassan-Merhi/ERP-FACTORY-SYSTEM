@@ -6,9 +6,20 @@ import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factory
  */
 import * as XLSX from "@/lib/excelHelper";
 import type { AttendanceRecord, AttendanceStatus, PrintLang, ViewMode, WeekDay, WorkerRow } from "./types";
-import { LABELS, STATUS_MARKS, WEEKLY_COLGROUP, WEEKLY_CSS, buildRangeSheet, weekLabel } from "./utilsBuildRangeSheet";
+import {
+  LABELS,
+  PERSON_LABELS,
+  STATUS_MARKS,
+  WEEKLY_COLGROUP,
+  WEEKLY_CSS,
+  buildRangeSheet,
+  weekLabel,
+  type AttendancePersonKind,
+} from "./utilsBuildRangeSheet";
+export type { AttendancePersonKind } from "./utilsBuildRangeSheet";
 export {
   LABELS,
+  PERSON_LABELS,
   STATUS_COLORS,
   STATUS_MARKS,
   WEEKLY_COLGROUP,
@@ -36,9 +47,11 @@ export function generateWeeklyBlankSheetHtml(
   workers: WorkerRow[],
   weekDays: WeekDay[],
   shift: string,
-  lang: PrintLang
+  lang: PrintLang,
+  kind: AttendancePersonKind = "worker"
 ) {
   const L = LABELS[lang];
+  const P = PERSON_LABELS[kind][lang];
   const dayHeaders = weekDays
     .map((d) => {
       const name = lang === "ar" ? d.dayNameAr : d.dayName;
@@ -74,14 +87,14 @@ export function generateWeeklyBlankSheetHtml(
   <div class="subtitle">
     ${L.week}: <strong>${weekLabel(weekDays)}</strong>
     ${shift ? `&nbsp;&nbsp;|&nbsp;&nbsp; ${L.shift}: <strong>${escHtml(shift)}</strong>` : ""}
-    &nbsp;&nbsp;|&nbsp;&nbsp; ${L.totalWorkers}: <strong>${workers.length}</strong>
+    &nbsp;&nbsp;|&nbsp;&nbsp; ${P.total}: <strong>${workers.length}</strong>
   </div>
   <table>
     ${WEEKLY_COLGROUP}
     <thead className="sticky top-0 z-30 bg-muted">
       <tr>
         <th>#</th>
-        <th class="name-col">${L.workerName}</th>
+        <th class="name-col">${P.name}</th>
         ${dayHeaders}
         <th>${L.notes}</th>
       </tr>
@@ -117,9 +130,11 @@ export function generateWeeklyResultsSheetHtml(
   weekDays: WeekDay[],
   selectedDate: string,
   shift: string,
-  lang: PrintLang
+  lang: PrintLang,
+  kind: AttendancePersonKind = "worker"
 ) {
   const L = LABELS[lang];
+  const P = PERSON_LABELS[kind][lang];
 
   const dayHeaders = weekDays
     .map((d) => {
@@ -178,7 +193,7 @@ export function generateWeeklyResultsSheetHtml(
     ${shift ? `&nbsp;&nbsp;|&nbsp;&nbsp; ${L.shift}: <strong>${escHtml(shift)}</strong>` : ""}
   </div>
   <div class="summary">
-    <div>${L.totalWorkers}: <span>${workers.length}</span></div>
+    <div>${P.total}: <span>${workers.length}</span></div>
     <div>${lang === "ar" ? "\u062D\u0627\u0636\u0631" : "Present"}: <span style="color:#15803d">${present}</span></div>
     <div>${lang === "ar" ? "\u063A\u0627\u0626\u0628" : "Absent"}: <span style="color:#b91c1c">${absent}</span></div>
   </div>
@@ -187,7 +202,7 @@ export function generateWeeklyResultsSheetHtml(
     <thead className="sticky top-0 z-30 bg-muted">
       <tr>
         <th>#</th>
-        <th class="name-col">${L.workerName}</th>
+        <th class="name-col">${P.name}</th>
         ${dayHeaders}
         <th>${L.notes}</th>
       </tr>

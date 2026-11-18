@@ -1,5 +1,6 @@
 // Extracted from ./useFactoryWorkerDetailModel.tsx to keep that module under the source-size cap.
 import { useRef, useState } from "react";
+import { FACTORY_WORKERS_HUB_TABS } from "@/factory/config/navigationPresentation";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -55,6 +56,7 @@ export function useFactoryWorkerDetailModelPart1() {
           "hide_tab_workerdetail_advances",
           "hide_tab_workerdetail_bales",
           "hide_tab_workerdetail_documents",
+          FACTORY_WORKERS_HUB_TABS.attendance,
         ];
   const showProfile = !hiddenTabs.includes("hide_tab_workerdetail_profile");
 
@@ -66,6 +68,9 @@ export function useFactoryWorkerDetailModelPart1() {
     tabSettings?.workerDetailTabBalesEnabled !== false && !hiddenTabs.includes("hide_tab_workerdetail_bales");
   const showDocuments =
     tabSettings?.workerDetailTabDocumentsEnabled !== false && !hiddenTabs.includes("hide_tab_workerdetail_documents");
+  // Attendance history reuses the Workers hub Attendance tab's access key and setting.
+  const showAttendance =
+    tabSettings?.workersTabAttendanceEnabled !== false && !hiddenTabs.includes(FACTORY_WORKERS_HUB_TABS.attendance);
 
   const { formatDisplayDate } = useDateFormat();
   const formatDate = (val: string | Date | null | undefined) => {
@@ -324,6 +329,7 @@ export function useFactoryWorkerDetailModelPart1() {
     setViewingDoc,
     showAdvanceForm,
     showAdvances,
+    showAttendance,
     showBales,
     showDocuments,
     showProfile,

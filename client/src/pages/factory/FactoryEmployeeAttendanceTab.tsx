@@ -6,19 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
+import { AttendanceActionsMenu } from "./factoryattendance/components/AttendanceActionsMenu";
+import { AttendanceSheetPrintDialog } from "./people/AttendanceSheetPrintDialog";
 import { attendanceToday } from "./factoryattendance/attendanceEditPolicy";
-import {
-  CalendarDays,
-  CheckCircle,
-  XCircle,
-  RotateCcw,
-  Save,
-  Users,
-  UserCheck,
-  UserX,
-  Clock,
-  User,
-} from "lucide-react";
+import { CalendarDays, CheckCircle, XCircle, Save, Users, Clock, User } from "lucide-react";
 import {
   STATUS_COLORS,
   STATUS_OPTIONS,
@@ -57,8 +48,8 @@ export default function FactoryEmployeeAttendanceTab() {
     setMode,
     setNotesMap,
     setSelectedDate,
-    setShift,
-    shift,
+    printDialog,
+    setPrintDialog,
   } = useFactoryEmployeeAttendanceTabState();
 
   return (
@@ -110,44 +101,14 @@ export default function FactoryEmployeeAttendanceTab() {
                     data-testid="input-attendance-date"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-muted-foreground">Shift (optional)</Label>
-                  <Input
-                    placeholder="e.g. Morning"
-                    value={shift}
-                    onChange={(e) => setShift(e.target.value)}
-                    className="h-10 w-40 rounded-xl border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-950/40"
-                    data-testid="input-shift"
-                  />
-                </div>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="rounded-xl border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-200 dark:hover:bg-emerald-500/25"
-                    onClick={() => markAll("Present")}
+                  <AttendanceActionsMenu
                     disabled={!emps.length}
-                    data-testid="button-mark-all-present"
-                  >
-                    <UserCheck className="h-4 w-4 mr-1" /> Mark All Present
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-xl border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-500/60 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:bg-rose-500/25"
-                    onClick={() => markAll("Absent")}
-                    disabled={!emps.length}
-                    data-testid="button-mark-all-absent"
-                  >
-                    <UserX className="h-4 w-4 mr-1" /> Mark All Absent
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/60 dark:hover:bg-slate-700"
-                    onClick={reset}
-                    disabled={!emps.length}
-                    data-testid="button-reset"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-1" /> Reset
-                  </Button>
+                    canChange={recordChanges.allowed}
+                    onMarkAll={markAll}
+                    onReset={reset}
+                    onPrint={setPrintDialog}
+                  />
                   {recordChanges.allowed && (
                     <Button
                       className="rounded-xl border border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 px-5 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
@@ -204,7 +165,6 @@ export default function FactoryEmployeeAttendanceTab() {
                   <CalendarDays className="h-5 w-5" />
                 </span>
                 Employees — {formatDate(selectedDate)}
-                {shift && <Badge variant="secondary">{shift}</Badge>}
               </CardTitle>
               {emps.length > 0 && (
                 <span className="text-sm text-muted-foreground">
@@ -355,6 +315,19 @@ export default function FactoryEmployeeAttendanceTab() {
         onApprove={approveAttendanceSave}
         isPending={saveMutation.isPending}
         dates={approvalDates}
+      />
+      <AttendanceSheetPrintDialog
+        kind={printDialog}
+        onClose={() => setPrintDialog(null)}
+        people={emps.map((e) => ({
+          id: e.id,
+          fullName: `${e.firstName} ${e.lastName}`,
+          code: e.code,
+          department: e.department,
+        }))}
+        attendanceMap={attendanceMap}
+        notesMap={notesMap}
+        selectedDate={selectedDate}
       />
     </div>
   );

@@ -4,8 +4,6 @@ import { getThisMonthRange, type SalaryAdvance } from "./payrollSchemas";
 import type { BaleBonusRow, EmployeeDeleteConflict, EmployeeGroup, SalesPreview, WorkerGroup } from "./payrollTypes";
 
 export function usePayrollState() {
-  const [selectedTab, setSelectedTab] = useState("employees");
-
   // Shared state for dialogs
   const [empSearch, setEmpSearch] = useState("");
   const [empStatusFilter, setEmpStatusFilter] = useState("Active");
@@ -98,8 +96,6 @@ export function usePayrollState() {
   const [workerGroupMemberSelections, setWorkerGroupMemberSelections] = useState<Record<number, boolean>>({});
 
   return {
-    selectedTab,
-    setSelectedTab,
     empSearch,
     setEmpSearch,
     empStatusFilter,

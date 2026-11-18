@@ -1,15 +1,20 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Loader2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/page-state";
+import { SectionSaveBar } from "@/components/SectionSaveBar";
+import { useSectionSave } from "@/hooks/use-section-save";
 import type { SettingsPosReceipt } from "./settingsTypes";
 
+const RECEIPT_OPTIONS: { key: keyof SettingsPosReceipt; label: string }[] = [
+  { key: "showLogo", label: "Show Company Logo" },
+  { key: "showAddress", label: "Show Address" },
+  { key: "showFooter", label: "Show Footer Message" },
+];
+
 export function POSReceiptSettings() {
-  const { toast } = useToast();
   const { selectedCompany } = useCompany();
 
   const { data: settings, isLoading } = useQuery<SettingsPosReceipt>({
@@ -17,47 +22,37 @@ export function POSReceiptSettings() {
     enabled: !!selectedCompany?.id,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (newSettings: SettingsPosReceipt) => {
-      const res = await apiRequest("POST", `/api/settings/pos-receipt/${selectedCompany?.id}`, newSettings);
-      return res.json();
+  const section = useSectionSave<SettingsPosReceipt>({
+    saved: settings || { showLogo: true, showAddress: true, showFooter: true },
+    save: async (draft) => {
+      await apiRequest("POST", `/api/settings/pos-receipt/${selectedCompany?.id}`, draft);
+      await queryClient.invalidateQueries({ queryKey: ["/api/settings/pos-receipt", selectedCompany?.id] });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings/pos-receipt", selectedCompany?.id] });
-      toast({ title: "Updated", description: "Receipt settings updated" });
-    },
-    onError: (e: ClientErrorLike) => {
-      toast({ title: "Update failed", description: e.message, variant: "destructive" });
-    },
+    successTitle: "Receipt settings saved",
   });
 
-  if (isLoading) return <Loader2 className="h-4 w-4 animate-spin" />;
-
-  const current = settings || { showLogo: true, showAddress: true, showFooter: true };
+  if (isLoading) return <LoadingState className="py-4" />;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Label>Show Company Logo</Label>
-        <Switch
-          checked={current.showLogo}
-          onCheckedChange={(val) => updateMutation.mutate({ ...current, showLogo: val })}
-        />
-      </div>
-      <div className="flex items-center justify-between">
-        <Label>Show Address</Label>
-        <Switch
-          checked={current.showAddress}
-          onCheckedChange={(val) => updateMutation.mutate({ ...current, showAddress: val })}
-        />
-      </div>
-      <div className="flex items-center justify-between">
-        <Label>Show Footer Message</Label>
-        <Switch
-          checked={current.showFooter}
-          onCheckedChange={(val) => updateMutation.mutate({ ...current, showFooter: val })}
-        />
-      </div>
+      {RECEIPT_OPTIONS.map((option) => (
+        <div key={option.key} className="flex items-center justify-between">
+          <Label htmlFor={`pos-receipt-${option.key}`}>{option.label}</Label>
+          <Switch
+            id={`pos-receipt-${option.key}`}
+            checked={section.draft[option.key]}
+            disabled={section.isSaving}
+            onCheckedChange={(value) => section.update({ [option.key]: value })}
+          />
+        </div>
+      ))}
+      <SectionSaveBar
+        isDirty={section.isDirty}
+        isSaving={section.isSaving}
+        onSave={() => void section.save()}
+        onReset={section.reset}
+        data-testid="pos-receipt-save"
+      />
     </div>
   );
 }

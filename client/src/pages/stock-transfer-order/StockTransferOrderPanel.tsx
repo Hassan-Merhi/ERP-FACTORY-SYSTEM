@@ -1,7 +1,5 @@
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { VoucherPhoneActionBar, useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { searchAny } from "@shared/searchNormalization";
-import { ArrowRight, Check, GitBranch, Package, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Package, Plus, Trash2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,16 +39,7 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
     removeFromOrder,
     editVoucherId,
     autosaveStatus,
-    handleValidate,
-    handleProcessOrder,
-    isProcessing,
-    existingTransfer,
-    handleSaveAsRevision,
-    isSavingRevision,
   } = model;
-  const isPhone = useErpPhoneLayout();
-  const cancelEdit = useVoucherEditCancel(!!editVoucherId);
-  const processLabel = editVoucherId ? "Update Order" : "Process";
 
   return (
     <div className="min-w-0 flex-1 flex flex-col gap-4">
@@ -249,96 +238,11 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
                         : "Draft save failed"}
                   </p>
                 )}
-
-                {!isPhone && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleValidate}
-                      className="flex-1"
-                      data-testid="button-validate-order"
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Validate
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleProcessOrder}
-                      disabled={isProcessing || !destinationLocationId}
-                      className="flex-1"
-                      data-testid="button-process-order"
-                    >
-                      {isProcessing
-                        ? editVoucherId
-                          ? "Updating..."
-                          : "Processing..."
-                        : editVoucherId
-                          ? "Update Order"
-                          : "Process"}
-                    </Button>
-                  </div>
-                )}
-
-                {!isPhone && editVoucherId && existingTransfer?.id && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSaveAsRevision}
-                    disabled={isSavingRevision || !destinationLocationId}
-                    className="w-full"
-                    data-testid="button-save-as-revision"
-                  >
-                    <GitBranch className="h-4 w-4 mr-1" />
-                    Save as Revision
-                  </Button>
-                )}
               </div>
             </>
           )}
         </CardContent>
       </Card>
-
-      {/* Always on phones, so Process is visible from the start; it enables once the order has a
-          destination and at least one item, and the status says what is still missing. */}
-      <VoucherPhoneActionBar
-        summary={`${orderItems.length} items · ${totalBales} bales`}
-        status={
-          orderItems.length === 0
-            ? { ok: false, label: "Add an item" }
-            : !destinationLocationId
-              ? { ok: false, label: "Choose destination" }
-              : undefined
-        }
-        saveLabel={processLabel}
-        savingLabel={editVoucherId ? "Updating..." : "Processing..."}
-        saving={isProcessing}
-        disabled={orderItems.length === 0 || !destinationLocationId}
-        onSave={handleProcessOrder}
-        onCancel={cancelEdit}
-        extra={
-          orderItems.length > 0 ? (
-            <>
-              <Button variant="outline" onClick={handleValidate} data-testid="button-validate-order">
-                <Check className="h-4 w-4 mr-1" />
-                Validate
-              </Button>
-              {editVoucherId && existingTransfer?.id && (
-                <Button
-                  variant="outline"
-                  onClick={handleSaveAsRevision}
-                  disabled={isSavingRevision || !destinationLocationId}
-                  data-testid="button-save-as-revision"
-                >
-                  <GitBranch className="h-4 w-4 mr-1" />
-                  Revision
-                </Button>
-              )}
-            </>
-          ) : undefined
-        }
-        data-testid="transfer-order-phone-actions"
-      />
     </div>
   );
 }

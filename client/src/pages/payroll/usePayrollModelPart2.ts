@@ -279,7 +279,7 @@ export function usePayrollModelPart2({
       const data = (await res.json()) as SalesPreview;
       setBonusSalesPreview(data);
     } catch (error: unknown) {
-      showError(error);
+      showError("Load failed")(error);
     } finally {
       setBonusSalesLoading(false);
     }

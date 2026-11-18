@@ -145,7 +145,7 @@ export function usePayrollModelPart4({
         });
       }
     } catch (error: unknown) {
-      showError(error);
+      showError("Load failed")(error);
     } finally {
       setBulkBonusAutoLoading(false);
     }
@@ -184,7 +184,7 @@ export function usePayrollModelPart4({
           toast({ title: "Deleted", description: "Employee deleted" });
           queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
         })
-        .catch(showError);
+        .catch(showError("Delete failed"));
     }
   };
 
@@ -196,7 +196,7 @@ export function usePayrollModelPart4({
         queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
         setDeleteConflict(null);
       })
-      .catch(showError);
+      .catch(showError("Delete failed"));
   };
 
   const editEmployeeMutation = useMutation({
@@ -252,7 +252,7 @@ export function usePayrollModelPart4({
       setEditEmployeeDialogOpen(false);
       setEditingEmployee(null);
     },
-    onError: showError,
+    onError: showError("Update failed"),
   });
 
   const createEmployeeMutation = useMutation({
@@ -268,7 +268,7 @@ export function usePayrollModelPart4({
       setCreateEmployeeDialogOpen(false);
       createEmployeeForm.reset();
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const {

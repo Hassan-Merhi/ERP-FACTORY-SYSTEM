@@ -1,9 +1,9 @@
 import { searchAny } from "@shared/searchNormalization";
+import { exportFileName } from "@/lib/exportFile";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
@@ -640,7 +640,7 @@ export function useFactoryWorkersModel() {
     try {
       await exportOperationalWorkbook({
         title: "Factory Workers — Salaries",
-        fileName: "workers-salaries-" + new Date().toLocaleDateString("en-CA") + ".xlsx",
+        fileName: exportFileName("workers salaries", "xlsx"),
         sheets: [
           {
             name: "Workers Salaries",
