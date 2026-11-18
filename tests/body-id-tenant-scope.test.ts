@@ -305,8 +305,9 @@ describe("location prices and stock group archives tenant scope", () => {
     const price = await agent
       .post(`/api/stock-items/${ctx.stockItemIds[1]}/location-prices`)
       .send({ locationId: foreignLocationId, sellingPrice: "9.99" });
-    expect(price.status).toBe(400);
-    expect(price.body.message).toBe("Location not found");
+    // The POS price-list writer (#3323) refuses a foreign location as a permission failure.
+    expect(price.status).toBe(403);
+    expect(price.body.code).toBe("POS_PRICE_LOCATION_DENIED");
 
     const archive = await agent
       .post("/api/stock-group-archives")

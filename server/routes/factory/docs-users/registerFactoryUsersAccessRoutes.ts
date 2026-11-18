@@ -134,10 +134,12 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
             })
             .returning();
 
+          // Factory users are governed by their page list; "Normal User" is the
+          // deny-by-default ERP role. The retired "User" role is not recognised.
           await tx.insert(userCompanyRoles).values({
             userId: created.id,
             companyId,
-            role: "User",
+            role: "Normal User",
           });
 
           await tx.insert(factoryUserProfiles).values({
