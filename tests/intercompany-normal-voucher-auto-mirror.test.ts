@@ -110,13 +110,21 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
     const client = readFileSync("client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx", "utf8");
     const route = readFileSync("server/routes/vouchers/normalIntercompanyVoucherRoutes.ts", "utf8");
     expect(client).toContain("const PREVIEW_TIMEOUT_MS = 12_000");
-    expect(client).toContain('apiRequestPrivileged("POST", PREVIEW,');
-    expect(client).toContain("PREVIEW_TIMEOUT_MS);");
+    // Formatting-independent: the preview uses the non-queued request path with the bounded timeout.
+    const compact = client.replace(/\s+/g, "");
+    expect(compact).toContain('apiRequestPrivileged("POST",PREVIEW,{');
+    expect(compact).toContain("},PREVIEW_TIMEOUT_MS);");
+    expect(client).not.toContain("apiRequest(");
     expect(client).toContain('className="sr-only" role="status"');
-    expect(client).toContain("Retry account check");
+    expect(client).toContain("{copy.linkedCheckFailed}");
+    expect(client).toContain("{copy.linkedCheckRetry}");
     expect(client).toContain("previewQuery.refetch()");
     expect(client).toContain("previewQuery.isError || previewQuery.isFetching");
-    expect(route).toContain('if (!match) return next();');
+    // An unmatched voucher falls through to the ordinary route, but never with a stale mirror payload.
+    const unmatched = route.slice(route.indexOf("if (!match) {"), route.indexOf("if (isPhase9LanPrimary())"));
+    expect(unmatched).toContain("req.body?.intercompanyMirror != null");
+    expect(unmatched).toContain('"IC_VOUCHER_UNMATCHED"');
+    expect(unmatched).toContain("return next();");
     expect(route).toContain("matchNormalIntercompanyVoucher(");
   });
 

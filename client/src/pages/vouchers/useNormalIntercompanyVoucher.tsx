@@ -71,12 +71,17 @@ export function useNormalIntercompanyVoucher(options: {
     enabled: shouldCheck,
     retry: false,
     queryFn: async () => {
-      const response = await apiRequestPrivileged("POST", PREVIEW, {
-        voucherType,
-        paymentAccountType,
-        paymentAccountId,
-        entries: accountKeys.filter((row) => row.accountId > 0),
-      }, PREVIEW_TIMEOUT_MS);
+      const response = await apiRequestPrivileged(
+        "POST",
+        PREVIEW,
+        {
+          voucherType,
+          paymentAccountType,
+          paymentAccountId,
+          entries: accountKeys.filter((row) => row.accountId > 0),
+        },
+        PREVIEW_TIMEOUT_MS
+      );
       return (await response.json()) as Preview;
     },
     // A verified match is rechecked on posting by the server; avoid needless UI refetch churn.
@@ -133,17 +138,21 @@ export function useNormalIntercompanyVoucher(options: {
     if (previewQuery.isPending || previewQuery.isFetching) {
       // Most receipts only involve local ledger accounts. Avoid displaying a
       // misleading intercompany warning while checking an unrelated account.
-      return <span className="sr-only" role="status">{copy.linkedChecking}</span>;
+      return (
+        <span className="sr-only" role="status">
+          {copy.linkedChecking}
+        </span>
+      );
     }
     if (previewQuery.isError) {
       // Do not fail open: submitting while the classification is unavailable
       // remains blocked by buildMirror() and by the server's write guard.
       return (
         <div role="alert" className="space-y-2 text-sm text-destructive" data-testid="ic-normal-error">
-          <p>Linked-account verification failed. No voucher was posted. Retry before saving.</p>
+          <p>{copy.linkedCheckFailed}</p>
           <p className="text-xs">{previewQuery.error.message}</p>
           <Button type="button" size="sm" variant="outline" onClick={() => void previewQuery.refetch()}>
-            Retry account check
+            {copy.linkedCheckRetry}
           </Button>
         </div>
       );
