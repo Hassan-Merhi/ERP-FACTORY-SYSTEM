@@ -23,6 +23,8 @@ export class PosPriceWriteError extends Error {
 }
 
 function positiveId(input: unknown): number | null {
+  if (typeof input === "string" && !/^[1-9]\d*$/.test(input)) return null;
+  if (typeof input !== "number" && typeof input !== "string") return null;
   const id = Number(input);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
@@ -31,7 +33,7 @@ function validPrice(input: unknown): string | null {
   if (typeof input !== "number" && typeof input !== "string") return null;
   const price = String(input).trim();
   // stock_item_location_prices has numeric(15, 2); reject rounded/invalid inputs.
-  return /^(?:0|[1-9]\\d{0,12})(?:\\.\\d{1,2})?$/.test(price) ? price : null;
+  return /^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(price) ? price : null;
 }
 
 /**
@@ -51,9 +53,17 @@ export async function saveLocationPrice(
   const locationId = positiveId(rawLocationId);
   const sellingPrice = validPrice(rawPrice);
   if (!stockItemId || !locationId || sellingPrice === null) {
-    throw new PosPriceWriteError(400, "POS_PRICE_INPUT_INVALID", "Valid item, location and non-negative price (up to two decimals) are required.");
+    throw new PosPriceWriteError(
+      400,
+      "POS_PRICE_INPUT_INVALID",
+      "Valid item, location and non-negative price (up to two decimals) are required."
+    );
   }
-  if (context.role === "View Only" || context.role === "Create Only" || (context.role === "POS" && context.posViewOnly)) {
+  if (
+    context.role === "View Only" ||
+    context.role === "Create Only" ||
+    (context.role === "POS" && context.posViewOnly)
+  ) {
     throw new PosPriceWriteError(403, "POS_PRICE_WRITE_DENIED", "This account cannot change prices.");
   }
 
