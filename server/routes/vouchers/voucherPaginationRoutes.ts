@@ -138,17 +138,18 @@ export function registerVoucherPaginationRoutes(app: Express): void {
         )`);
       }
 
-      const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
-      const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
-      if (Number.isFinite(minAmount)) {
-        conditions.push(sql`${vouchers.totalAmount}::numeric >= ${minAmount}`);
-      }
-      if (Number.isFinite(maxAmount)) {
-        conditions.push(sql`${vouchers.totalAmount}::numeric <= ${maxAmount}`);
-      }
-
       const liveContext = await getActiveCompanyPermissionContext(req);
       const isPos = liveContext.role === "POS";
+      // Transfer values are hidden from POS: numeric filters must use the same
+      // zero amount, or a cashier could infer costs by varying min/max ranges.
+      const amountForFilter = isPos
+        ? sql`CASE WHEN ${vouchers.voucherType} IN ('Stock Transfer', 'StockTransfer', 'Transfer')
+              THEN 0 ELSE ${vouchers.totalAmount}::numeric END`
+        : sql`${vouchers.totalAmount}::numeric`;
+      const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
+      const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
+      if (Number.isFinite(minAmount)) conditions.push(sql`${amountForFilter} >= ${minAmount}`);
+      if (Number.isFinite(maxAmount)) conditions.push(sql`${amountForFilter} <= ${maxAmount}`);
       if (isPos) {
         const allowed = [...(await getPosDaybookLocations(liveContext)).keys()];
         if (!allowed.length) {

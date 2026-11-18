@@ -54,21 +54,37 @@ export async function getPosTransferScopes(
 ): Promise<Map<number, PosTransferScope>> {
   const ids = [...new Set(voucherIds)].filter((id) => Number.isSafeInteger(id) && id > 0);
   if (!ids.length || assignedLocations.size === 0) return new Map();
-  const rows = await db
-    .select({
-      voucherId: stockTransferVouchers.voucherId,
-      destinationId: stockTransferVouchers.destinationLocationId,
-      headerSourceId: stockTransferVouchers.sourceLocationId,
-      lineId: stockTransferItems.id,
-      lineSourceId: stockTransferItems.sourceLocationId,
-    })
-    .from(stockTransferVouchers)
-    .innerJoin(
-      vouchers,
-      and(eq(vouchers.id, stockTransferVouchers.voucherId), eq(vouchers.companyId, companyId))
-    )
-    .leftJoin(stockTransferItems, eq(stockTransferItems.transferId, stockTransferVouchers.id))
-    .where(and(inArray(stockTransferVouchers.voucherId, ids), isNull(vouchers.deletedAt)));
+  const rows: Array<{
+    voucherId: number;
+    destinationId: number;
+    headerSourceId: number | null;
+    lineId: number | null;
+    lineSourceId: number | null;
+  }> = [];
+  // One business-day query can still contain thousands of vouchers. Bound
+  // Postgres bind parameters rather than relying on a single unbounded IN.
+  for (let index = 0; index < ids.length; index += 200) {
+    const page = await db
+      .select({
+        voucherId: stockTransferVouchers.voucherId,
+        destinationId: stockTransferVouchers.destinationLocationId,
+        headerSourceId: stockTransferVouchers.sourceLocationId,
+        lineId: stockTransferItems.id,
+        lineSourceId: stockTransferItems.sourceLocationId,
+      })
+      .from(stockTransferVouchers)
+      .innerJoin(
+        vouchers,
+        and(eq(vouchers.id, stockTransferVouchers.voucherId), eq(vouchers.companyId, companyId))
+      )
+      .innerJoin(
+        locations,
+        and(eq(locations.id, stockTransferVouchers.destinationLocationId), eq(locations.companyId, companyId))
+      )
+      .leftJoin(stockTransferItems, eq(stockTransferItems.transferId, stockTransferVouchers.id))
+      .where(and(inArray(stockTransferVouchers.voucherId, ids.slice(index, index + 200)), isNull(vouchers.deletedAt)));
+    rows.push(...page);
+  }
 
   const transfers = new Map<number, {
     destinationId: number;
