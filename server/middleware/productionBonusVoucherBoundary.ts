@@ -19,9 +19,39 @@ import { firstRow } from "../lib/queryResult";
  */
 const BLOCK_CODE = "PRODUCTION_BONUS_VOUCHER_LOCKED";
 
-function positiveId(value: unknown): number | null {
-  const id = typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
-  return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
+/**
+ * Every voucher or entry id a writer could read from this value. Writers parse
+ * ids with Number() or parseInt(), which accept forms such as "16893.0" or
+ * "16893abc"; the guard checks each id either would produce, so no spelling
+ * of a bonus voucher's id slips past it.
+ */
+function candidateIds(value: unknown): number[] {
+  const ids = new Set<number>();
+  if (typeof value === "number") ids.add(value);
+  if (typeof value === "string") {
+    ids.add(Number(value));
+    ids.add(Number.parseInt(value, 10));
+  }
+  return [...ids].filter((id) => Number.isSafeInteger(id) && id > 0);
+}
+
+async function anyProductionBonusVoucher(values: unknown[]): Promise<boolean> {
+  for (const value of values) {
+    for (const id of candidateIds(value)) if (await isProductionBonusVoucher(id)) return true;
+  }
+  return false;
+}
+
+async function anyProductionBonusVoucherEntry(values: unknown[]): Promise<boolean> {
+  for (const value of values) {
+    for (const entryId of candidateIds(value)) {
+      const row = firstRow<{ voucherId: number | null }>(
+        await db.execute(sql`SELECT voucher_id AS "voucherId" FROM voucher_entries WHERE id = ${entryId}`)
+      );
+      if (row?.voucherId != null && (await anyProductionBonusVoucher([Number(row.voucherId)]))) return true;
+    }
+  }
+  return false;
 }
 
 /** True when the voucher is the payment or reversal voucher of any production bonus. */
@@ -41,14 +71,6 @@ export async function isProductionBonusVoucher(voucherId: number): Promise<boole
     `)
   );
   return row?.found === true;
-}
-
-async function isProductionBonusVoucherEntry(entryId: number): Promise<boolean> {
-  const row = firstRow<{ voucherId: number | null }>(
-    await db.execute(sql`SELECT voucher_id AS "voucherId" FROM voucher_entries WHERE id = ${entryId}`)
-  );
-  const voucherId = positiveId(row?.voucherId);
-  return voucherId !== null && (await isProductionBonusVoucher(voucherId));
 }
 
 const BLOCK_MESSAGE =
@@ -79,40 +101,30 @@ export function registerProductionBonusVoucherBoundary(app: Express): void {
   // Edit, delete, reverse, finalize and every typed update of one voucher.
   app.use(
     "/api/vouchers/:voucherId",
-    guard(async (req) => {
-      const id = positiveId(req.params.voucherId);
-      return id !== null && (await isProductionBonusVoucher(id));
-    })
+    guard((req) => anyProductionBonusVoucher([req.params.voucherId]))
   );
 
   // Reject the whole bulk delete if it includes a bonus voucher.
   app.post(
     "/api/vouchers/bulk-delete",
-    guard(async (req) => {
-      const ids = Array.isArray(req.body?.voucherIds) ? req.body.voucherIds : [];
-      for (const value of ids) {
-        const id = positiveId(value);
-        if (id !== null && (await isProductionBonusVoucher(id))) return true;
-      }
-      return false;
-    })
+    guard((req) => anyProductionBonusVoucher(Array.isArray(req.body?.voucherIds) ? req.body.voucherIds : []))
   );
 
   // New lines on a bonus voucher.
   app.post(
     "/api/voucher-entries",
-    guard(async (req) => {
-      const id = positiveId(req.body?.voucherId);
-      return id !== null && (await isProductionBonusVoucher(id));
-    })
+    guard((req) => anyProductionBonusVoucher([req.body?.voucherId]))
+  );
+
+  // Admin reclassification of existing lines: reject the whole transfer if any line is a bonus line.
+  app.post(
+    "/api/voucher-entries/transfer-account",
+    guard((req) => anyProductionBonusVoucherEntry(Array.isArray(req.body?.entryIds) ? req.body.entryIds : []))
   );
 
   // Existing lines edited by their own id.
   app.use(
     "/api/voucher-entries/:entryId",
-    guard(async (req) => {
-      const id = positiveId(req.params.entryId);
-      return id !== null && (await isProductionBonusVoucherEntry(id));
-    })
+    guard((req) => anyProductionBonusVoucherEntry([req.params.entryId]))
   );
 }

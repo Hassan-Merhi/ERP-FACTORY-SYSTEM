@@ -20,6 +20,24 @@ UPDATE public.user_company_roles SET role = 'POS', pos_station = 4 WHERE role = 
 UPDATE public.user_company_roles SET role = 'POS', pos_station = 5 WHERE role = 'POS5';
 UPDATE public.user_company_roles SET role = 'POS', pos_station = 6 WHERE role = 'POS6';
 UPDATE public.user_company_roles SET role = 'Normal User' WHERE role = 'User';
+-- role_feature_permissions is unique on (company_id, role, feature_key), so a
+-- legacy row whose feature already has a row under the new role would collide.
+-- The row already under the new role wins; among POS1..POS6 the lowest station
+-- wins. Production has no legacy permission rows, so this removes nothing there.
+DELETE FROM public.role_feature_permissions l
+ WHERE l.role IN ('POS1', 'POS2', 'POS3', 'POS4', 'POS5', 'POS6')
+   AND EXISTS (
+     SELECT 1 FROM public.role_feature_permissions o
+      WHERE o.company_id = l.company_id
+        AND o.feature_key = l.feature_key
+        AND (o.role = 'POS' OR (o.role IN ('POS1', 'POS2', 'POS3', 'POS4', 'POS5', 'POS6') AND o.role < l.role))
+   );
+DELETE FROM public.role_feature_permissions l
+ WHERE l.role = 'User'
+   AND EXISTS (
+     SELECT 1 FROM public.role_feature_permissions o
+      WHERE o.company_id = l.company_id AND o.feature_key = l.feature_key AND o.role = 'Normal User'
+   );
 UPDATE public.role_feature_permissions SET role = 'POS' WHERE role IN ('POS1', 'POS2', 'POS3', 'POS4', 'POS5', 'POS6');
 UPDATE public.role_feature_permissions SET role = 'Normal User' WHERE role = 'User';
 

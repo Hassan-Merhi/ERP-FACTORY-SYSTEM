@@ -99,6 +99,14 @@ describe("production bonus voucher boundary", () => {
           .post("/api/voucher-entries")
           .send({ voucherId: bonusVoucherId, ledgerAccountId: ctx.cashAccountId, debitAmount: "1", creditAmount: "0" }),
       () => agent.patch(`/api/voucher-entries/${bonusEntryId}`).send({ debitAmount: "27.00" }),
+      // Spellings that Number() / parseInt() in the writers still read as the bonus voucher.
+      () => agent.patch(`/api/vouchers/${bonusVoucherId}.0/journal`).send({ description: "edited" }),
+      () => agent.delete(`/api/vouchers/${bonusVoucherId}.0`),
+      () => agent.patch(`/api/voucher-entries/${bonusEntryId}x`).send({ debitAmount: "27.00" }),
+      () =>
+        agent
+          .post("/api/voucher-entries/transfer-account")
+          .send({ entryIds: [bonusEntryId], toAccountId: ctx.salesAccountId }),
     ];
     for (const attempt of attempts) {
       const response = await attempt();
