@@ -88,7 +88,9 @@ export const FACTORY_PRIMARY_PAGES: readonly FactoryPageDefinition[] = [
     label: "Vouchers",
     group: "Finance",
     route: "/factory/vouchers",
-    aliases: ["/factory/voucher-detail"],
+    // Optional drafts are created from the Vouchers page and finalized in this
+    // list, so the list follows the same page permission.
+    aliases: ["/factory/voucher-detail", "/factory/optional-vouchers"],
     pinned: true,
     landing: true,
   },

@@ -288,11 +288,13 @@ export function registerVoucherQueryRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: scope.isDestination ? transferData.sourceLocationId : scope.displayLocationId,
             sourceLocationName: scope.isDestination
-              ? (transferData.sourceLocationName || "Multi-source")
+              ? transferData.sourceLocationName || "Multi-source"
               : scope.displayLocationName,
             destinationLocationId: transferData.destinationLocationId,
             destinationLocationName: transferData.destinationLocationName,
-            inventoryApplied: transferData.inventoryApplied,
+            // The missing-transfer placeholder (id 0) was rejected above; it is
+            // the only shape without the flag.
+            inventoryApplied: "inventoryApplied" in transferData ? transferData.inventoryApplied : false,
             notes: transferData.notes,
             items: visibleItems.map((item) => ({
               id: item.id,

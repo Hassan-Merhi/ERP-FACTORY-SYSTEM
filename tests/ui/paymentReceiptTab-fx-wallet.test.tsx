@@ -320,6 +320,11 @@ describe("PaymentReceiptTab — FX wallet, direct EUR supplier payment", () => {
       />
     );
     expect(await screen.findByTestId("fx-payment-voucher")).toHaveTextContent("Amount exceeds supplier EUR balance.");
+    // An Optional draft moves no balances and is validated when it is finalized;
+    // the live settlement is what the supplier balance must block.
+    const optional = screen.getByTestId("checkbox-optional");
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));
     expect(screen.getByTestId("button-save-voucher")).toBeDisabled();
   });
 
