@@ -162,7 +162,7 @@ export function registerVoucherPaginationRoutes(app: Express): void {
           conditions.push(
             or(
               and(
-                sql`${vouchers.voucherType} NOT IN ('Stock Transfer', 'StockTransfer', 'Transfer')`,
+                eq(vouchers.voucherType, "Sales"),
                 inArray(vouchers.locationId, allowed)
               ),
               and(

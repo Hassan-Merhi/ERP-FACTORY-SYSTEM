@@ -19,6 +19,7 @@ let incoming = 0;
 let outgoing = 0;
 let multiSource = 0;
 let unrelated = 0;
+let unrelatedPurchase = 0;
 
 async function transfer(
   number: string,
@@ -99,6 +100,13 @@ beforeAll(async () => {
   unrelated = await transfer("OTHER", ctx.location2Id, ctx.location2Id, location3, [
     { stockItemId: ctx.stockItemIds[2], sourceLocationId: ctx.location2Id, quantity: "7.000" },
   ]);
+  const purchase = await pool.query<{ id: number }>(
+    `INSERT INTO vouchers
+       (company_id, location_id, voucher_number, voucher_type, voucher_date, total_amount)
+       VALUES ($1, $2, $3, 'Purchase', $4, '1200.00') RETURNING id`,
+    [ctx.companyId, ctx.locationId, `${PREFIX}-PURCHASE`, today]
+  );
+  unrelatedPurchase = purchase.rows[0].id;
 }, 120_000);
 
 afterAll(async () => {
@@ -117,6 +125,7 @@ describe("Zambia POS Daybook stock transfers", () => {
     const seen = ids(response.body);
     expect(seen).toEqual(expect.arrayContaining([incoming, outgoing, multiSource]));
     expect(seen).not.toContain(unrelated);
+    expect(seen).not.toContain(unrelatedPurchase);
     for (const voucher of response.body.filter((row: { id: number }) => seen.includes(row.id))) {
       expect(voucher.totalAmount).toBe("0");
       expect(voucher.locationId).toBe(ctx.locationId);
@@ -134,6 +143,7 @@ describe("Zambia POS Daybook stock transfers", () => {
     expect(response.status, response.text).toBe(200);
     expect(ids(response.body.items)).toEqual(expect.arrayContaining([incoming, outgoing, multiSource]));
     expect(ids(response.body.items)).not.toContain(unrelated);
+    expect(ids(response.body.items)).not.toContain(unrelatedPurchase);
     expect(response.body.total).toBe(3);
     expect(response.body.items.every((row: { totalAmount: string }) => row.totalAmount === "0")).toBe(true);
   }, 60_000);
@@ -167,6 +177,7 @@ describe("Zambia POS Daybook stock transfers", () => {
 
   it("rejects direct access to unrelated transfers across all existing POS read APIs", async () => {
     expect((await cashier.get(`/api/vouchers/${unrelated}`)).status).toBe(404);
+    expect((await cashier.get(`/api/vouchers/${unrelatedPurchase}`)).status).toBe(404);
     expect((await cashier.get("/api/pos-transfer-detail").query({ voucherId: unrelated })).status).toBe(404);
     expect((await cashier.get("/api/stock-transfers").query({ voucherId: unrelated })).status).toBe(404);
     const listed = await cashier.get("/api/stock-transfers/list").query({ startDate: today, endDate: today });

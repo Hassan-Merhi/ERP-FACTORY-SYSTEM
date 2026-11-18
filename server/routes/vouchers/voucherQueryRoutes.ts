@@ -308,6 +308,9 @@ export function registerVoucherQueryRoutes(app: Express) {
         });
       }
       if (liveContext.role === "POS") {
+        if (voucher.voucherType !== "Sales") {
+          return res.status(404).json({ message: "Voucher not found" });
+        }
         const locations = await getPosDaybookLocations(liveContext);
         if (voucher.locationId == null || !locations.has(voucher.locationId)) {
           return res.status(404).json({ message: "Voucher not found" });

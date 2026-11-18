@@ -172,6 +172,8 @@ export async function scopePosDaybookVouchers<
         totalAmount: "0",
       }];
     }
-    return row.locationId != null && allowed.has(row.locationId) ? [row] : [];
+    // POS Daybook is sales plus authorized physical stock transfers, never
+    // a side channel for Purchase, Payment, Journal or other ERP records.
+    return row.voucherType === "Sales" && row.locationId != null && allowed.has(row.locationId) ? [row] : [];
   });
 }
