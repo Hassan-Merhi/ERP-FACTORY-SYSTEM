@@ -56,7 +56,7 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
-import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
+import { editedZmwSaleAmounts } from "./posZmwEditedAmounts";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
@@ -274,13 +274,7 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
-  const zmwAmounts = lockedVoucher.currency === "ZMW"
-    ? calculateZmwSaleAmounts(
-        (items as PosEditSaleItemInput[]).map((item) => ({ ...item, rate: item.sellingPrice })),
-        String(lockedVoucher.exchangeRate),
-        true
-      )
-    : null;
+  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher.currency, lockedVoucher.exchangeRate, items as PosEditSaleItemInput[]);
   const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
 
   await updateVoucherRecord(tx, {
