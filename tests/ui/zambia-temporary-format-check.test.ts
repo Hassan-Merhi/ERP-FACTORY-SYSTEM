@@ -1,6 +1,6 @@
 /** Temporary verification-only: emit exact Prettier output for branch source files. */
 import { readFileSync } from "node:fs";
-import prettier from "prettier";
+import * as prettier from "prettier";
 import { it } from "vitest";
 
 const paths = [
