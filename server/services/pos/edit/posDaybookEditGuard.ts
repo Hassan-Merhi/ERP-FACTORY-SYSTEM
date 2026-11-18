@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { posShifts } from "@shared/schema";
+import { posShifts, userCompanyRoles, userLocations } from "@shared/schema";
+import { companyBusinessDate } from "../../accounting/companyBusinessDate";
 import type { DbTransaction } from "../../../db";
 import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 import type { HandlerErrorResult, UpdatePosSaleParams, VoucherRow } from "./posEditSaleTypes";
@@ -10,8 +11,50 @@ export async function validateLockedPosDaybookEdit(
   voucher: VoucherRow,
   params: UpdatePosSaleParams
 ): Promise<HandlerErrorResult | null> {
-  const auth = params.posDaybookEditAuthorization;
-  if (params.userRole !== "POS" || !auth) return null;
+  if (params.userRole !== "POS") return null;
+  if (!params.posDaybookEditAuthorization) {
+    return {
+      status: 403,
+      body: { code: "POS_SALE_EDIT_AUTH_REQUIRED", message: posDaybookEditMessages.disabled },
+    };
+  }
+
+  const [role] = await tx
+    .select({
+      role: userCompanyRoles.role,
+      editDays: userCompanyRoles.daybookEditDays,
+      viewOnly: userCompanyRoles.posViewOnly,
+      assignedLocationId: userCompanyRoles.assignedLocationId,
+    })
+    .from(userCompanyRoles)
+    .where(and(
+      eq(userCompanyRoles.companyId, params.currentCompanyId),
+      eq(userCompanyRoles.userId, params.userId)
+    ))
+    .limit(1);
+  if (!role || role.role !== "POS" || role.viewOnly) {
+    return {
+      status: 403,
+      body: { code: "POS_SALE_EDIT_ROLE_REVOKED", message: posDaybookEditMessages.viewOnly },
+    };
+  }
+
+  const [location] = await tx
+    .select({ id: userLocations.id })
+    .from(userLocations)
+    .where(and(
+      eq(userLocations.userId, params.userId),
+      eq(userLocations.companyId, params.currentCompanyId),
+      eq(userLocations.locationId, Number(voucher.locationId))
+    ))
+    .limit(1);
+  if (!voucher.locationId || (!location && role.assignedLocationId !== voucher.locationId)) {
+    return {
+      status: 403,
+      body: { code: "POS_SALE_EDIT_LOCATION_REVOKED", message: posDaybookEditMessages.ownership },
+    };
+  }
+  const businessDate = await companyBusinessDate(params.currentCompanyId, tx);
 
   const [shift] = voucher.shiftId
     ? await tx
@@ -23,8 +66,8 @@ export async function validateLockedPosDaybookEdit(
 
   const eligibility = posDaybookEditEligibility({
     originalDate: String(voucher.voucherDate),
-    businessDate: auth.businessDate,
-    editDays: auth.editDays,
+    businessDate,
+    editDays: role.editDays ?? 0,
     isOwnSale: shift?.userId === params.userId,
   });
   if (!eligibility.allowed) {
