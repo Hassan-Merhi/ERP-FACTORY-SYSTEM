@@ -11,7 +11,7 @@ afterEach(() => {
 
 describe("Factory Daybook voucher current ledger balances", () => {
   it("fetches the book balance of every Journal account and preserves signed values", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, _options?: RequestInit) => {
       const balance = url.includes("/101/") ? -582900 : -234519;
       return { ok: true, json: async () => ({ balance }) };
     });
