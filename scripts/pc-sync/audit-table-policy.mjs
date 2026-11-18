@@ -18,7 +18,7 @@ try {
   const { rules, problems } = resolvePcSyncPolicy(loadPcSyncPolicy(), schema);
   const counts = {};
   for (const rule of rules.values()) counts[rule.mode] = (counts[rule.mode] ?? 0) + 1;
-  console.log(`PC sync table policy: ${schema.size} tables`, JSON.stringify(counts));
+  console.log(`PC sync table policy: ${schema.size} tables ${JSON.stringify(counts)}`);
   if (problems.length) {
     console.error(`${problems.length} problem(s):\n- ${problems.join("\n- ")}`);
     process.exitCode = 1;
