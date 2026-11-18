@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
 import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
 import { POSDaybookTransferDetails } from "./POSDaybookTransferDetails";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export function POSDaybookDialogSection({
       <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
-            {isTransfer ? "Stock Transfer Details" : editing ? "Edit POS Sale" : "POS Sale Details"} -{" "}
+            {isTransfer ? posDaybookTransferText.heading : editing ? "Edit POS Sale" : "POS Sale Details"} -{" "}
             {selectedVoucher?.voucherNumber}
           </DialogTitle>
         </DialogHeader>
