@@ -25,7 +25,6 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
     if (req.user) {
       req.user.role = context.role;
       req.user.canSellNegativeStock = context.canSellNegativeStock;
-      req.user.posViewOnly = context.posViewOnly;
     }
     if (context.role !== "POS") {
       canModifyDate("voucherDate")(req, res, next);

@@ -31,6 +31,23 @@ export function posDaybookEditEligibility(input: {
   return { allowed: true, reason: "enabled" };
 }
 
+/** Mirrors the server's company-business-date calculation for accurate popup buttons. */
+export function posDaybookBusinessDate(timezone: string | null | undefined, now: Date = new Date()): string {
+  if (timezone) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(now);
+    } catch {
+      // Same invalid-zone fallback as getCompanyBusinessDate on the server.
+    }
+  }
+  return now.toISOString().slice(0, 10);
+}
+
 export const posDaybookEditMessages = {
   disabled: "Daybook sale editing is disabled for this POS account.",
   ownership: "Only sales belonging to your own POS shift may be edited.",

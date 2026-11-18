@@ -1,8 +1,9 @@
 // Extracted from ./POSDaybook.tsx to keep that module under the source-size cap.
 import { Lock, MessageCircle, Pencil, Undo2, X } from "lucide-react";
 import { useState } from "react";
-import { format } from "date-fns";
-import { posDaybookEditEligibility } from "@shared/posDaybookEditPolicy";
+import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { posDaybookBusinessDate, posDaybookEditEligibility } from "@shared/posDaybookEditPolicy";
 import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -47,12 +48,24 @@ export function POSDaybookDialogSection({
   | "whatsappMutation"
 >) {
   const [editing, setEditing] = useState(false);
+  const { selectedCompany } = useCompany();
+  const { data: settings } = useQuery<{ timezone?: string | null }>({
+    queryKey: ["/api/company-settings", selectedCompany?.id],
+    enabled: Boolean(selectedCompany?.id),
+    queryFn: async () => {
+      const response = await fetch(`/api/company-settings?companyId=${selectedCompany?.id}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Unable to load company timezone");
+      return response.json();
+    },
+  });
   const posUser = currentUser?.role === "POS";
   const permission = posDaybookEditEligibility({
     originalDate: selectedVoucher?.voucherDate || "",
-    businessDate: format(new Date(), "yyyy-MM-dd"),
+    businessDate: posDaybookBusinessDate(settings?.timezone),
     editDays: Number(currentUser?.daybookEditDays ?? 0),
-    isOwnSale: Boolean(selectedVoucher && selectedVoucher.userId === currentUser?.id),
+    isOwnSale: Boolean(selectedVoucher && String(selectedVoucher.userId) === String(currentUser?.id)),
     viewOnly: Boolean(currentUser?.posViewOnly),
   });
   const canEditSelected = Boolean(
