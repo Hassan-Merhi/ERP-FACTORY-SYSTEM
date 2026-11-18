@@ -1,8 +1,7 @@
 import { formatNumber } from "@/lib/formatNumber";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { SafeStyle } from "@/components/SafeStyle";
-import { resolveZmwUnitPrice } from "@shared/posZmwMoney";
-import { getPosInvoiceNativeZmwTotal } from "./posInvoiceZmwTotals";
+import { getPosInvoiceNativeZmwTotal, getPosInvoiceNativeZmwUnit } from "./posInvoiceZmwTotals";
 import Decimal from "decimal.js";
 
 export type InvoiceSaleItem = {
@@ -57,16 +56,7 @@ export function InvoiceTemplate({
   const hasLockedZmw = savedSale?.voucher?.currency === "ZMW" && Number.isFinite(lockedRate) && lockedRate > 0;
   const displaySaleMoney = (usd: number) =>
     hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
-  const nativeUnitPrice = (item: InvoiceSaleItem) =>
-    resolveZmwUnitPrice(
-      {
-        quantity: item.quantity ?? 0,
-        originalCurrencyRate: item.originalCurrencyRate,
-        rate: item.rateUSD ?? item.rate,
-      },
-      lockedRate,
-      true
-    );
+  const nativeUnitPrice = (item: InvoiceSaleItem) => getPosInvoiceNativeZmwUnit(item, lockedRate);
   const nativeLineAmount = (item: InvoiceSaleItem) =>
     nativeUnitPrice(item).times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   const nativeInvoiceTotal = getPosInvoiceNativeZmwTotal(
