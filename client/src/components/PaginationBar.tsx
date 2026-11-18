@@ -46,7 +46,7 @@ export function PaginationBar({
       data-testid={testId}
     >
       <p className="text-sm text-muted-foreground" aria-live="polite">
-        Showing {start}–{end} of {total} {noun}
+        Showing {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()} {noun}
       </p>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         {onPageSizeChange && (

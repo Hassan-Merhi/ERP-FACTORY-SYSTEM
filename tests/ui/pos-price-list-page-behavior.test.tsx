@@ -7,6 +7,7 @@ const harness = vi.hoisted(() => ({
   apiRequest: vi.fn(),
   invalidateQueries: vi.fn(),
   navigate: vi.fn(),
+  exportOperationalWorkbook: vi.fn(),
 }));
 
 const priceItems = [
@@ -159,6 +160,10 @@ vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (v: number) => `$${v.toFixed(2)}` }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
+vi.mock("@/lib/operationalExcelExport", () => ({
+  columnsFromOperationalRows: () => [],
+  exportOperationalWorkbook: harness.exportOperationalWorkbook,
+}));
 vi.mock("@/lib/utils", () => ({ cn: (...values: any[]) => values.filter(Boolean).join(" ") }));
 
 vi.mock("@/components/ui/input", () => ({
@@ -258,6 +263,22 @@ describe("POS price list page behavior", () => {
       queryKey: ["/api/pos/price-list", 11],
     });
     expect(harness.toast).toHaveBeenCalledWith({ title: "Price updated" });
+  });
+
+  it("shows an Export failed toast when the price list export throws", async () => {
+    harness.exportOperationalWorkbook.mockRejectedValueOnce(new Error("Workbook too large"));
+    render(<POSPriceList />);
+    fireEvent.click(screen.getByTestId("button-location-11"));
+    fireEvent.click(screen.getByTestId("button-export-price-list"));
+
+    await waitFor(() =>
+      expect(harness.toast).toHaveBeenCalledWith({
+        title: "Export failed",
+        description: "Workbook too large",
+        variant: "destructive",
+      })
+    );
+    await waitFor(() => expect(screen.getByTestId("button-export-price-list")).toHaveTextContent("Export"));
   });
 
   it("supports all-locations visibility and independent master price editing", async () => {

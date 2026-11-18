@@ -71,6 +71,7 @@ npm run audit:write-routes
 npm run audit:write-evidence
 npm run audit:toolchain
 npm run audit:scripts
+npm run audit:ui-unification
 npm run verify:lockfile
 npm run verify:production-dependencies
 npm run verify:observability
@@ -80,6 +81,19 @@ npm run verify:bandwidth
 
 The baselines are one-way ratchets. Existing ceilings may fall, but a change
 must not widen them merely to make CI pass.
+
+`npm run audit:ui-unification` (`scripts/audit-ui-unification-ratchet.mjs`,
+baseline `config/ui-unification-ratchet.json`) keeps client code on the shared
+UI pieces from the UI unification program (`docs/ui-unification/plan.md`). It
+counts, per file under `client/src` (tests excluded), native `confirm()` calls
+(use `confirmAction`), raw `xlsx` / `xlsx-js-style` / `exceljs` / `file-saver` /
+`jspdf` imports and blob downloads outside the shared export helpers, bare `<h1>`
+page titles under `pages/` (use `PageHeader`), page tab lists held only in
+`useState` (use `useHubQueryState`), and hand-built `"$"` money strings (use
+`formatUsd` / `formatMoneyDisplay`). A file whose count rises, or a new file with
+a hit, fails with the fix for that check; a falling count asks you to lower the
+baseline in the same change. Each check's heuristic is documented at the top of
+the script.
 
 ## Skips and todos
 
