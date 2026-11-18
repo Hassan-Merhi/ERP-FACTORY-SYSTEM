@@ -121,6 +121,7 @@ export default function Settings() {
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
   const isDeveloperMode = effectiveRole === "Developer";
+  const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
 
   const sidebarGroups = [
     {
@@ -191,7 +192,7 @@ export default function Settings() {
     },
     {
       label: "System",
-      items: [{ key: "system", label: "System Tools", icon: Wrench, devOnly: true }],
+      items: [{ key: "system", label: "System Tools", icon: Wrench }],
     },
   ];
 
@@ -199,7 +200,8 @@ export default function Settings() {
     items.filter(
       (item) =>
         (!item.devOnly || isDeveloperMode) &&
-        (!item.adminOnly || canManageSessions)
+        (!item.adminOnly || canManageSessions) &&
+        (item.key !== "system" || canAccessSystemTools)
     );
   // Non-developers should never see headings with no accessible Settings pages.
   // Developers retain the full Settings taxonomy, including empty groups.
@@ -344,10 +346,10 @@ export default function Settings() {
             <ExcelAppearanceSettingsTab company={selectedCompany} />
           )}
           {activeSection === "preferences" && <PreferencesTab />}
-          {activeSection === "system" && isDeveloperMode && (
+          {activeSection === "system" && canAccessSystemTools && (
             <SystemToolsTab
               appMode={appMode}
-              currentUser={currentUser}
+              currentUser={{ role: effectiveRole }}
               selectedCompany={selectedCompany}
               companies={companies}
             />
