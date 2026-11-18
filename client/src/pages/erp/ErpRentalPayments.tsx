@@ -1,13 +1,10 @@
 import RentalPaymentsLog from "@/pages/properties/RentalPaymentsLog";
-import { ClipboardList } from "lucide-react";
+import { RoutedRentalsHub } from "@/pages/properties/RentalsHub";
 
 export default function ErpRentalPayments() {
   return (
-    <RentalPaymentsLog
-      pageTitle="ERP — Rental Payments Log"
-      pageIcon={<ClipboardList className="h-5 w-5 text-blue-600" />}
-      testIdPrefix="erp-rental"
-      rentalModule="ERP"
-    />
+    <RoutedRentalsHub module="ERP" section="payments">
+      <RentalPaymentsLog testIdPrefix="erp-rental" rentalModule="ERP" />
+    </RoutedRentalsHub>
   );
 }

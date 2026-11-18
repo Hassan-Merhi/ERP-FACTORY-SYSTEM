@@ -488,6 +488,10 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
     ar: "أظهر أو أخفِ الأدوات العائمة التي تظهر في كل صفحة من حسابك.",
     fr: "Affichez ou masquez les outils flottants présents sur chaque page de votre compte.",
   },
+  // Phase 9f: shared rental section titles (properties/config/rentalSections).
+  { en: "Warehouse Rentals", ar: "تأجير المستودعات", fr: "Locations d'entrepôts" },
+  { en: "Shop Rentals", ar: "تأجير المحلات", fr: "Locations de magasins" },
+  { en: "Rental Payments Log", ar: "سجل دفعات الإيجار", fr: "Journal des paiements de location" },
   // Phase 9b: shared Daybook frame (ERP, Factory, POS).
   { en: "Avg per Sale", ar: "متوسط البيع", fr: "Moyenne par vente" },
   { en: "Search factory transactions", ar: "البحث في معاملات المصنع", fr: "Rechercher les transactions de l’usine" },

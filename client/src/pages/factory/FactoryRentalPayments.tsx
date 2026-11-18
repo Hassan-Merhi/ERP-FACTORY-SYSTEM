@@ -1,13 +1,12 @@
 import RentalPaymentsLog from "@/pages/properties/RentalPaymentsLog";
-import { ClipboardList } from "lucide-react";
+import { RoutedRentalsHub } from "@/pages/properties/RentalsHub";
+import { useFactoryRentalSections } from "./useFactoryRentalSections";
 
 export default function FactoryRentalPayments() {
+  const sections = useFactoryRentalSections();
   return (
-    <RentalPaymentsLog
-      pageTitle="Factory — Rental Payments Log"
-      pageIcon={<ClipboardList className="h-7 w-7 text-orange-600" />}
-      testIdPrefix="factory-rental"
-      rentalModule="FACTORY"
-    />
+    <RoutedRentalsHub module="FACTORY" section="payments" sections={sections}>
+      <RentalPaymentsLog testIdPrefix="factory-rental" rentalModule="FACTORY" />
+    </RoutedRentalsHub>
   );
 }
