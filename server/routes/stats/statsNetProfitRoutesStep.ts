@@ -195,8 +195,8 @@ export async function statsNetProfitRoutesStep({ req, res }: { req: Request; res
   //    The helper skips expense/income types; we handle them here, classified
   //    by the shared classifier (Indirect Income in either storage form,
   //    Revenue and mis-cased types are income; Government Taxes is an expense).
-  let expensesTotal = 0;
-  let incomeTotal = 0;
+  const expensesTotal = 0;
+  const incomeTotal = 0;
   const expensesAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
   const incomeAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
 

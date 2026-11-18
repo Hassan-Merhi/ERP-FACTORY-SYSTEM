@@ -74,7 +74,7 @@ export async function companyImportRoutesStep({ req, res }: { req: Request; res:
 
   const t = payload.tables;
   const summary: Record<string, number> = {};
-  let totalRecords = 0;
+  const totalRecords = 0;
   const importSuffix = `_C${targetCompanyId}`;
 
   const remap: Record<string, Map<number, number>> = {};

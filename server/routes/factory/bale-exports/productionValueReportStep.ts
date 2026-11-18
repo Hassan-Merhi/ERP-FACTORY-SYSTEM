@@ -228,8 +228,8 @@ export async function productionValueReportStep({ req, res }: { req: Request; re
     }
   >();
 
-  let totalSellingValue = 0;
-  let totalProductionCostValue = 0;
+  const totalSellingValue = 0;
+  const totalProductionCostValue = 0;
 
   return {
     done: false as const,

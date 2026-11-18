@@ -223,12 +223,9 @@ export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Re
     scannedByName = scannedUser?.username || null;
   }
 
-  let product = null;
-  if (labelPrint.productId) {
-    product = await storage.getBaleProductById(labelPrint.productId);
-  } else {
-    product = await storage.getBaleProductByArticleCode(labelPrint.articleCode, companyId);
-  }
+  const product = labelPrint.productId
+    ? await storage.getBaleProductById(labelPrint.productId)
+    : await storage.getBaleProductByArticleCode(labelPrint.articleCode, companyId);
 
   // ── Enrich with factory_bales data (stable id first, normalized reference fallback) ──
 

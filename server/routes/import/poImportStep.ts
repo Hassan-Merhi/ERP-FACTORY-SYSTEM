@@ -282,9 +282,9 @@ export async function poImportStep({ req, res }: { req: Request; res: Response }
   }
 
   // Get or create "Import Charges" ledger account for container charges
-  let importChargesAccount = await storage.getLedgerAccountByCode("IMPORT_CHARGES", req.session.currentCompanyId!);
+  const importChargesAccount = await storage.getLedgerAccountByCode("IMPORT_CHARGES", req.session.currentCompanyId!);
   if (!importChargesAccount) {
-    importChargesAccount = await storage.createLedgerAccount({
+    await storage.createLedgerAccount({
       companyId: req.session.currentCompanyId!,
       code: "IMPORT_CHARGES",
       name: "Import Charges",

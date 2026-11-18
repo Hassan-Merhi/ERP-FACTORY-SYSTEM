@@ -65,7 +65,7 @@ export async function bulkImportStep({ req, res }: { req: Request; res: Response
     .where(eq(customerOrderBales.orderId, orderId));
   const alreadyAddedBaleIds = new Set(existingOrderBales.map((b) => b.baleId));
 
-  let totalAdded = 0;
+  const totalAdded = 0;
   const notFound: Array<{ articleCode: string; requestedQty: number; foundQty: number }> = [];
   const notFoundRefs: string[] = [];
 
