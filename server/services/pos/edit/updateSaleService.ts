@@ -273,7 +273,7 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
-  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[]);
+  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[], isSpCompanyEdit);
   const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
 
   await updateVoucherRecord(tx, {

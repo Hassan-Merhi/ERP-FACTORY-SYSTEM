@@ -140,6 +140,73 @@ describe("full POS receipt edit protections", () => {
     );
   });
 
+  it("updates a CFA sale in CFA at its own rate, from the CFA view or the USD view", () => {
+    const save = (activeCurrency: string, rows: Array<Record<string, unknown>>) => {
+      const mutate = vi.fn();
+      const toast = vi.fn();
+      usePosCheckout({
+        activeLocation: depot,
+        editVoucherId: "123",
+        editVoucher: { locationId: depot.id, currency: "CFA", exchangeRate: "605" },
+        posUser: { role: "POS" },
+        rows,
+        isCreditSale: false,
+        paymentAccountType: "cash",
+        paymentAccountId: null,
+        selectedCustomerId: "",
+        notes: "",
+        saleDate: "2026-11-16",
+        activeCurrency,
+        // The edit screen hands over the sale's locked rate, not today's.
+        exchangeRate: 605,
+        dailyExchangeRate: 605,
+        saveMutation: { mutate },
+        toast,
+      } as any).handleSaveSale();
+      expect(toast).not.toHaveBeenCalled();
+      return mutate.mock.calls[0][0];
+    };
+    const line = { id: "1", itemName: "A", stockItemId: 55, salesItemId: 71, quantity: 2 };
+    const expected = expect.objectContaining({
+      currency: "CFA",
+      exchangeRate: "605",
+      items: [expect.objectContaining({ originalCurrencyRate: "40000.00", rate: "66.115702" })],
+    });
+    expect(save("CFA", [{ ...line, rate: 40000, rateUSD: 40000 / 605, amount: 80000 }])).toEqual(expected);
+    expect(save("USD", [{ ...line, rate: 66.12, rateUSD: 40000 / 605, amount: 132.24 }])).toEqual(expected);
+  });
+
+  it("sends the typed CFA price with a new CFA sale so it can post exactly", () => {
+    const mutate = vi.fn();
+    const toast = vi.fn();
+    usePosCheckout({
+      activeLocation: depot,
+      rows: [
+        { id: "1", itemName: "A", stockItemId: 55, quantity: 3, rate: 45000, rateUSD: 45000 / 613, amount: 135000 },
+      ],
+      isCreditSale: false,
+      paymentAccountType: "cash",
+      paymentAccountId: "7",
+      selectedCustomerId: "",
+      notes: "",
+      saleDate: "2026-11-18",
+      activeCurrency: "CFA",
+      exchangeRate: 613,
+      dailyExchangeRate: 613,
+      clientSaleIdRef: { current: "abc" },
+      saveMutation: { mutate },
+      toast,
+    } as any).handleSaveSale();
+    expect(toast).not.toHaveBeenCalled();
+    expect(mutate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        currency: "CFA",
+        exchangeRate: "613",
+        items: [expect.objectContaining({ originalCurrencyRate: "45000.00", rate: "73.409462" })],
+      })
+    );
+  });
+
   it("rejects a stale or mismatched location before sending an edit", () => {
     const mutate = vi.fn();
     const toast = vi.fn();

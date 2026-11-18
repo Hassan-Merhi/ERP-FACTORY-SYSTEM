@@ -148,10 +148,10 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
   });
 
   const editedCurrency = editVoucherId && editVoucher?.currency;
-  // A Kwacha sale being edited follows the header USD/ZMW switch as a view of
-  // the same sale; it is still saved in Kwacha at its locked rate.
-  const editingZmwSale = editedCurrency === "ZMW" && displayCurrency === "ZMW";
-  const activeCurrency: Currency = editingZmwSale
+  // A Kwacha or CFA sale being edited follows the header currency switch as a
+  // view of the same sale; it is still saved in its own currency at its locked rate.
+  const editingLocalSale = (editedCurrency === "ZMW" || editedCurrency === "CFA") && editedCurrency === displayCurrency;
+  const activeCurrency: Currency = editingLocalSale
     ? selectedCurrency
     : displayCurrency
       ? (editedCurrency === displayCurrency || editedCurrency === "USD") &&
@@ -171,7 +171,9 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
         : !isFetchingDatedZmwRate && approvedZmwRate && Number.isFinite(approvedZmwRate) && approvedZmwRate > 0
           ? approvedZmwRate
           : null
-      : dailyExchangeRate;
+      : editingLocalSale && editLockedRate && editLockedRate > 0
+        ? editLockedRate // a CFA sale is edited at the rate it was sold at, never today's
+        : dailyExchangeRate;
 
   // Keep a line's display price and canonical USD rate synchronized when
   // switching USD/ZMW or selecting a different sale date. A date change while
@@ -179,7 +181,7 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
   // Do not reinterpret the rows until a valid dated FX rate has resolved.
   const lastDisplayedFx = useRef<{ companyId: number; currency: Currency; rate: number | null } | null>(null);
   useEffect(() => {
-    if ((editVoucherId && !editingZmwSale) || !selectedCompany?.id) return;
+    if ((editVoucherId && !editingLocalSale) || !selectedCompany?.id) return;
     if (activeCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate))) return;
     const next = { companyId: selectedCompany.id, currency: activeCurrency, rate: exchangeRate };
     const old = lastDisplayedFx.current;
@@ -204,7 +206,7 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
       })
     );
     lastDisplayedFx.current = next;
-  }, [activeCurrency, exchangeRate, editVoucherId, editingZmwSale, selectedCompany?.id, setRows]);
+  }, [activeCurrency, exchangeRate, editVoucherId, editingLocalSale, selectedCompany?.id, setRows]);
 
   // POS view-only is a real write boundary, not just a server-side fallback.
   // Keep every client mutation path quiet so expected denials do not become
