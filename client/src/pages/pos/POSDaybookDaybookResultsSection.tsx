@@ -118,7 +118,7 @@ export function POSDaybookDaybookResultsSection({
           <TableBody>
             {pagination.paginate(searchedVouchers).map((voucher) => {
               const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
-              const canAct = isOwnVoucher;
+              const canAct = voucher.voucherType !== "Sales" || isOwnVoucher;
               const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
               const isPrinting = printVoucherId === voucher.id;
               const isHidden = hiddenRowIds.has(voucher.id);
@@ -145,7 +145,7 @@ export function POSDaybookDaybookResultsSection({
                     {voucher.locationName || `Location ${voucher.locationId}`}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
-                    {formatPosVoucherAmount(voucher, formatCashAmount)}
+                    {voucher.voucherType === "Sales" ? formatPosVoucherAmount(voucher, formatCashAmount) : "—"}
                   </TableCell>
                   <TableCell
                     className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
