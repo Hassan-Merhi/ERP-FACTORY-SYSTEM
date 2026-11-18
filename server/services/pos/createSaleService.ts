@@ -1,7 +1,7 @@
 /**
  * server/services/pos/createSaleService.ts
  *
- * PHASE 19 — POS Backend Sale Creation Structural Split.
+ * POS sale creation, inventory and accounting posting.
  */
 import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger";
@@ -215,7 +215,6 @@ export async function createPosSale(
     throw error;
   }
 
-  // Verify native ZMW prices at the locked sale-date rate before writes.
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
     if (lockedPosCurrency.currency === "ZMW") {
@@ -231,7 +230,6 @@ export async function createPosSale(
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
 
-  // Refuse factory bale-mirror items after cut-over.
   const mirrorRefusal = await baleMirrorMovementRefusal(
     db,
     currentCompanyId,
