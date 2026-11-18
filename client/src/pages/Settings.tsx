@@ -183,7 +183,7 @@ export default function Settings() {
                 href: "/factory/label-banners",
                 devOnly: true,
               },
-              { key: "fx-rates", label: "FX Rates", icon: TrendingUp, devOnly: true },
+              { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
                 ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, devOnly: true }]
                 : []),
@@ -330,7 +330,7 @@ export default function Settings() {
               <AutomaticPriorityPrintingCard />
             </div>
           )}
-          {activeSection === "fx-rates" && isDeveloperMode && appMode === "factory" && (
+          {activeSection === "fx-rates" && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">
               <FxRatesCard />
             </div>
