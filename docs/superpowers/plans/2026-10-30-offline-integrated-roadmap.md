@@ -207,8 +207,12 @@ plan are in the plan document and the
 - Phase A2 (switched off): initial full copy, `GET /api/offline/pc-sync/snapshot/start`
   and `GET /api/offline/pc-sync/snapshot`, table by table in key order, then
   feed replay from the start cursor.
-- Next: A3 desktop app (Windows and Mac) with a local server and database,
-  read-only offline; then Phases B to E.
+- Phase A3a (switched off): PC sync agent (`scripts/pc-sync/local/`: copy,
+  resume, feed replay, TRUNCATE reload, offline sign-in only for people who
+  signed in on that PC, 24h warning / 2-day block rule) and the read-only local
+  server mode (`OFFLINE_PC_LOCAL_MODE=read-only`).
+- Next: A3b desktop app wiring (Windows and Mac) with the local database,
+  server and sync loop; then Phases B to E.
 
 ## Resume checklist (next session)
 

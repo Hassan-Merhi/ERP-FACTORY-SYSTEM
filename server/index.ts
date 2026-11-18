@@ -14,6 +14,7 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
+import { applyPcLocalModeEnvironment, makePcLocalReadOnlyGuard } from "./offline/pcLocal/localReadOnlyGuard";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
@@ -71,6 +72,8 @@ import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/app
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 
 registerProcessErrorHandlers();
+// A PC's local read-only copy (desktop app only) runs no background jobs.
+applyPcLocalModeEnvironment();
 
 // and causes the browser to think the app was updated, triggering false reload prompts.
 const BUILD_VERSION = process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || "dev";
@@ -134,6 +137,9 @@ app.use(sessionMiddleware);
 // Read-only LAN edge safety boundary + same-origin server identity endpoint.
 // Cloud stays unchanged; edge requests never silently proxy to cloud.
 registerFactoryEdgeBoundary(app);
+
+// A PC's local copy (OFFLINE_PC_LOCAL_MODE=read-only, desktop app only) refuses writes.
+app.use(makePcLocalReadOnlyGuard());
 
 // Permission monitoring: classify refused API responses (403s and
 // cross-company refusals) into permission signals after they are sent. Reads

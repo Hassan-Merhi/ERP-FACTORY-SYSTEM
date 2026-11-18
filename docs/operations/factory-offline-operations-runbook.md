@@ -226,8 +226,32 @@ company; a child row deleted after its parent is gone, with no foreign key,
 reaches no PC; TRUNCATE tells every PC to reload that table (with the full
 copy above).
 
-**Not installed anywhere and not verified on PCs.** Next: the desktop app with
-its local server and database, read-only offline (Phase A3).
+**PC side (Phase A3a, switched off).** `scripts/pc-sync/local/` keeps a PC's
+own PostgreSQL equal to the cloud. The PC database is built with
+`node scripts/db/migrate.mjs apply` (same schema as the cloud);
+`prepareLocalDatabase` adds the PC-only `pc_local` schema. `syncOnce` refuses to
+load if the cloud's schema version differs, copies each table page by page
+(each page commits with its progress, so a PC switched off mid-copy resumes),
+then replays the feed with the applying rule; a TRUNCATE empties the table and
+copies it again. Foreign keys are switched off only while applying, on the PC
+only, because rows of other companies that a row points to are not on the PC.
+The cloud never sends passwords: someone can sign in offline only after signing
+in on that PC while online (`rememberLocalLogin` keeps a bcrypt hash there);
+everyone else gets a password that matches nothing. A password changed in the
+cloud keeps working offline on that PC until the next online sign-in there.
+`pcSyncFreshness` gives the owner's rule: warning after 24 hours without a
+completed sync, new entries stopped after 2 days (reading always works).
+`createCloudClient` signs in over HTTPS and keeps only the session cookie.
+
+The ERP server started with `OFFLINE_PC_LOCAL_MODE=read-only` (desktop app
+only, never the cloud) refuses every write except sign-in, sign-out and company
+switch with `423 OFFLINE_PC_LOCAL_READ_ONLY`, and starts no background jobs.
+Covered by `tests/pc-sync-local-agent.test.ts` (a second database built from
+migrations as the PC).
+
+**Not installed anywhere and not verified on PCs.** Next (A3b): the desktop app
+starts the local database, server and sync loop, and opens the local copy when
+the cloud cannot be reached.
 
 ### Entries left in the old browser queues
 
