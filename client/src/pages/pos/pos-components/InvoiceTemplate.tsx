@@ -1,12 +1,15 @@
 import { formatNumber } from "@/lib/formatNumber";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { SafeStyle } from "@/components/SafeStyle";
+import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import Decimal from "decimal.js";
 
 type InvoiceSaleItem = {
   stockItemName?: string;
   quantity?: string | number;
   rate?: string | number;
   rateUSD?: string | number;
+  originalCurrencyRate?: string | number;
   configuredPrice?: string | number;
 };
 
@@ -15,6 +18,7 @@ export type InvoiceSale = {
   isCreditSale?: boolean;
   customer?: { name?: string } | null;
   items?: InvoiceSaleItem[];
+  nativeZmwTotal?: string;
   location?: { id?: number; whatsappGroupChatId?: unknown };
   voucher?: {
     id?: number;
@@ -52,6 +56,17 @@ export function InvoiceTemplate({
   const hasLockedZmw = savedSale?.voucher?.currency === "ZMW" && Number.isFinite(lockedRate) && lockedRate > 0;
   const displaySaleMoney = (usd: number) =>
     hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
+  const nativeUnitPrice = (item: InvoiceSaleItem) =>
+    resolveZmwUnitPrice({ ...item, rate: item.rateUSD ?? item.rate }, lockedRate, true);
+  const nativeLineAmount = (item: InvoiceSaleItem) =>
+    nativeUnitPrice(item).times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const nativeInvoiceTotal = hasLockedZmw && (savedSale?.items?.length ?? 0) > 0
+    ? savedSale?.nativeZmwTotal ?? calculateZmwSaleAmounts(
+        (savedSale?.items ?? []).map((item) => ({ ...item, rate: item.rateUSD ?? item.rate })),
+        lockedRate,
+        true
+      ).nativeTotal
+    : savedSale?.nativeZmwTotal;
   return (
     <div style={{ position: "fixed", top: 0, left: "-99999px", width: "680px", pointerEvents: "none", zIndex: -1 }}>
       <div
@@ -290,7 +305,7 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {displaySaleMoney(itemRateUSD)}
+                    {hasLockedZmw ? formatMoneyDisplay(nativeUnitPrice(item).toNumber(), { currency: "ZMW" }) : displaySaleMoney(itemRateUSD)}
                   </td>
                   <td
                     style={{
@@ -301,7 +316,7 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {displaySaleMoney(itemAmountUSD)}
+                    {hasLockedZmw ? formatMoneyDisplay(nativeLineAmount(item).toNumber(), { currency: "ZMW" }) : displaySaleMoney(itemAmountUSD)}
                   </td>
                   <td
                     style={{
@@ -373,13 +388,15 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                {displaySaleMoney(
-                  (savedSale?.items ?? []).reduce(
-                    (sum: number, item: InvoiceSaleItem) =>
-                      sum + parseFloat(String(item.quantity)) * parseFloat(String(item.rateUSD || item.rate)),
-                    0
-                  )
-                )}
+                {hasLockedZmw && nativeInvoiceTotal
+                  ? formatMoneyDisplay(Number(nativeInvoiceTotal), { currency: "ZMW" })
+                  : displaySaleMoney(
+                      (savedSale?.items ?? []).reduce(
+                        (sum: number, item: InvoiceSaleItem) =>
+                          sum + parseFloat(String(item.quantity)) * parseFloat(String(item.rateUSD || item.rate)),
+                        0
+                      )
+                    )}
               </td>
               <td style={{ border: "1px solid #999" }}></td>
               <td style={{ border: "1px solid #999" }}></td>
@@ -431,12 +448,14 @@ export function InvoiceTemplate({
         >
           <span>TOTAL PAID:</span>
           <span>
-            {displaySaleMoney(
-              (savedSale?.items ?? []).reduce((sum: number, item: InvoiceSaleItem) => {
-                const rateUSD = parseFloat(String(item.rateUSD ?? item.rate ?? 0));
-                return sum + parseFloat(String(item.quantity ?? 0)) * rateUSD;
-              }, 0)
-            )}
+            {hasLockedZmw && nativeInvoiceTotal
+              ? formatMoneyDisplay(Number(nativeInvoiceTotal), { currency: "ZMW" })
+              : displaySaleMoney(
+                  (savedSale?.items ?? []).reduce((sum: number, item: InvoiceSaleItem) => {
+                    const rateUSD = parseFloat(String(item.rateUSD ?? item.rate ?? 0));
+                    return sum + parseFloat(String(item.quantity ?? 0)) * rateUSD;
+                  }, 0)
+                )}
           </span>
         </div>
 
