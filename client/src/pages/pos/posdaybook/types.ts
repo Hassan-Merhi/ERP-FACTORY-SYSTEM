@@ -34,7 +34,29 @@ export interface SalesItem {
   configuredPrice?: string | null;
 }
 
+export interface PosDaybookTransferData {
+  id: number;
+  voucherId: number;
+  sourceLocationId: number | null;
+  sourceLocationName: string;
+  destinationLocationId: number;
+  destinationLocationName: string;
+  inventoryApplied: boolean | null;
+  notes: string | null;
+  items: Array<{
+    id: number;
+    stockItemId: number;
+    stockItemCode: string;
+    stockItemName: string;
+    stockItemUom: string;
+    sourceLocationId: number | null;
+    sourceLocationName: string;
+    quantity: string;
+  }>;
+}
+
 export interface VoucherWithItems extends Voucher {
+  transferData?: PosDaybookTransferData | null;
   salesItems?: SalesItem[];
   entries?: Array<{ transactionCurrency?: string | null; transactionDebitAmount?: string | null }>;
   isCreditSale?: boolean;
