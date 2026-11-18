@@ -283,7 +283,6 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
   app.post(
     "/api/vouchers/:id/finalize",
     requireAuth,
-    requireRole("Admin", "Owner", "Developer"),
     async (req: Request, res: Response, next: NextFunction) => {
       const cid = Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
       const id = Number(req.params.id);
@@ -309,8 +308,11 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         `);
         const row = draft.rows[0];
         if (!row) return next();
+        if (!["Admin", "Owner", "Developer"].includes(String(req.session.currentRole))) {
+          return res.status(403).json({ message: "Only Admin and Owner can finalize FX wallet payments" });
+        }
         if (
-          !row.supplierId || !/^[0-9]+(?:\\.[0-9]+)?$/.test(String(row.recipientEur)) ||
+          !row.supplierId || !/^[0-9]+(?:\.[0-9]+)?$/.test(String(row.recipientEur)) ||
           !toMoney(String(row.recipientEur)).eq(String(row.sourceEur))
         ) return res.status(409).json({ message: "Optional FX draft EUR amounts do not match" });
         req.params.id = String(row.walletId);
