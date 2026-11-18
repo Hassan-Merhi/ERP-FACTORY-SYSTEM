@@ -19,6 +19,7 @@ import {
 } from "@shared/schema";
 import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
 import { getPosTransferScope, posTransferVisibleItems } from "../../services/pos/posDaybookTransferAccess";
 
 function sendTransferNotFound(res: Response) {
@@ -36,7 +37,7 @@ export function registerPosTransferDetailRoutes(app: Express) {
       const voucherId =
         typeof rawId === "string" && /^[1-9]\d*$/.test(rawId) ? Number(rawId) : null;
       if (!voucherId || !Number.isSafeInteger(voucherId)) {
-        return res.status(400).json({ message: "Valid voucherId required" });
+        return res.status(400).json({ message: posDaybookTransferText.invalidId });
       }
 
       const [transferRow] = await db
