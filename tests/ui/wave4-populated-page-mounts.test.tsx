@@ -401,7 +401,7 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/pos/POSContainerTracking"),
     landmark: "pos-container-tracking-page",
   },
-  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "button-create-customer" },
+  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "input-search-customers" },
   { name: "PosTransferOrders", load: () => import("@/pages/pos/PosTransferOrders"), landmark: "input-date-filter" },
   {
     name: "AgentDutyWhatsAppSection",
