@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Banknote, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -342,10 +342,6 @@ export function AdvancesTabSection({
 
       {canCreateAdvance && (
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={() => setAdvanceDialogOpen(true)} data-testid="button-bulk-advance">
-            <Banknote className="mr-2 h-4 w-4" />
-            Bulk Advance
-          </Button>
           <Button onClick={() => setAdvanceDialogOpen(true)} data-testid="button-create-advance">
             <Plus className="mr-2 h-4 w-4" />
             Add Advance

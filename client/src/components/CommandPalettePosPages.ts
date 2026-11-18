@@ -15,5 +15,5 @@ export const posPages: PageEntry[] = [
     icon: ArrowLeftRight,
   },
   { label: "Containers OTW", description: "On-the-way containers", path: "/pos-containers", icon: Ship },
-  { label: "My Settings", description: "Personal settings", path: "/pos-settings", icon: Settings },
+  { label: "My Settings", description: "Personal settings", path: "/my-settings", icon: Settings },
 ];

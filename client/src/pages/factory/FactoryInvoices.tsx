@@ -19,6 +19,7 @@ import { getEstimatedKg, getEstimatedPrice, getRemainingBales } from "./factoryi
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { FactoryInvoicesSection, useFactoryInvoicesState } from "./FactoryInvoicesSection";
+import { InvoiceListExport } from "./factoryinvoices/InvoiceListExport";
 import { SearchField } from "@/components/ui/search-field";
 import { PeriodFilter } from "@/components/ui/period-filter";
 
@@ -35,6 +36,7 @@ export default function FactoryInvoices() {
     dropIdx,
     expandedCustomers,
     filteredOrders,
+    formatDisplayDate,
     fromDate,
     handleDragEnd,
     handleDragOver,
@@ -263,6 +265,12 @@ export default function FactoryInvoices() {
               </div>
             </PopoverContent>
           </Popover>
+          <InvoiceListExport
+            orders={orderedCustomerGroups.flatMap((group) => group.orders)}
+            isColumnVisible={isColumnVisible}
+            formatDisplayDate={formatDisplayDate}
+            period={{ from: fromDate, to: toDate }}
+          />
         </div>
         {showMoreFilters && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">

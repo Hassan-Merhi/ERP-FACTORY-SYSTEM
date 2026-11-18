@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import {
   CheckCircle2,
   X,
@@ -230,6 +231,21 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {isLoading ? "Loading…" : `${transfers.length} ${transfers.length === 1 ? "order" : "orders"}`}
         </span>
+        <RowsExportMenu
+          title="Transfer Orders"
+          period={{ from: dateFilter, to: dateFilter }}
+          rows={transfers}
+          columns={[
+            { header: "Voucher", value: (transfer) => transfer.voucherNumber },
+            { header: "Date", value: (transfer) => formatDate(transfer.voucherDate) },
+            { header: "Status", value: (transfer) => (transfer.inventoryApplied ? "Applied" : "Pending") },
+            { header: "From", value: (transfer) => transfer.sourceLocationName },
+            { header: "To", value: (transfer) => transfer.destinationLocationName },
+            { header: "Items", value: (transfer) => transfer.itemCount, type: "number" },
+          ]}
+          resource="retail.transfers"
+          data-testid="button-export-transfer-orders"
+        />
       </div>
 
       {isLoading ? (

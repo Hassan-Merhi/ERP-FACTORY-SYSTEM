@@ -5,7 +5,6 @@
  * unchanged.
  */
 import { SearchField } from "@/components/ui/search-field";
-import {} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { drCrClass } from "@/lib/formatNumber";

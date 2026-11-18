@@ -36,6 +36,7 @@ import { FactorySuppliersDialogBundle } from "./FactorySuppliersDialogBundle";
 import type { SupplierFilter } from "./useFactorySuppliersModel";
 import { Metric, type SuppliersModel } from "./FactorySuppliersDirectoryMetric";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { SuppliersDirectoryExport } from "./SuppliersDirectoryExport";
 
 export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) {
   // Search only narrows displayed rows; balances remain based on all suppliers.
@@ -166,6 +167,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
           Showing {visibleSuppliers.length} of {model.filteredTopLevel.length} suppliers
         </span>
+        <SuppliersDirectoryExport model={model} suppliers={visibleSuppliers} />
       </div>
 
       <div className="space-y-3" aria-label="Supplier directory">

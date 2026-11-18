@@ -17,7 +17,7 @@ export interface PosUserContext {
   currentLocationId?: number | null;
 }
 
-interface PosContainerRow {
+export interface PosContainerRow {
   id: number;
   containerNumber: string;
   supplierName: string | null;

@@ -21,11 +21,6 @@ const pollingCases = [
   ],
   ["client/src/pages/factory/FactoryDispatchBatchScan.tsx", "visibleTabInterval(10_000)", "refetchInterval: 10_000,"],
   ["client/src/pages/factory/FactoryPendingLoadings.tsx", "visibleTabInterval(60_000)", "refetchInterval: 60000,"],
-  [
-    "client/src/pages/properties/PropertiesDashboard.tsx",
-    "visibleTabInterval(5 * 60_000)",
-    "refetchInterval: 5 * 60 * 1000,",
-  ],
   ["client/src/pages/factory/FactoryInvoiceLoadingScan.tsx", "visibleTabInterval(10_000)", "refetchInterval: 10_000,"],
   ["client/src/pages/factory/FactoryDispatchBatchDetail.tsx", "visibleTabInterval(15_000)", "refetchInterval: 15_000,"],
   [

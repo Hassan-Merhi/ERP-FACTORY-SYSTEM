@@ -58,7 +58,7 @@ const DEFAULT_WORKSPACE_ROUTE_GROUPS = [
   {
     workspace: "properties",
     companyCode: "PHASE9-PROPERTIES",
-    routes: ["/properties/dashboard", "/properties/daybook", "/properties/accounts", "/properties/vouchers"],
+    routes: ["/properties/daybook", "/properties/accounts", "/properties/vouchers"],
   },
   {
     workspace: "supplier-partner",

@@ -3,6 +3,7 @@
  * Attendance tab, using the same sheet builders as the Workers Attendance tab.
  */
 import { useToast } from "@/hooks/use-toast";
+import { printDocument } from "@/lib/printDocument";
 import type { AttendancePrintKind } from "../factoryattendance/components/AttendanceActionsMenu";
 import { LanguageChoiceDialog } from "../factoryattendance/components/LanguageChoiceDialog";
 import type { AttendanceStatus, PrintLang, WorkerRow } from "../factoryattendance/types";
@@ -55,15 +56,10 @@ export function AttendanceSheetPrintDialog({
         kind === "blank"
           ? generateWeeklyBlankSheetHtml(rows, weekDays, "", lang, "employee")
           : generateWeeklyResultsSheetHtml(rows, attendanceMap, notesMap, weekDays, selectedDate, "", lang, "employee");
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        toast({ title: "Print failed", description: "Allow pop-ups to print.", variant: "destructive" });
-        return;
-      }
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 400);
+      printDocument(html, {
+        onBlocked: () =>
+          toast({ title: "Print failed", description: "Allow pop-ups to print.", variant: "destructive" }),
+      });
     } else if (kind === "excel-blank" || kind === "excel-results") {
       const results = kind === "excel-results";
       void exportWeeklyExcel(

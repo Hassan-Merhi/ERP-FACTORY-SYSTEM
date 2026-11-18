@@ -25,12 +25,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { keyStartsWith } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UNDO_TIMEOUT_MS, fmtKg } from "./FactoryPendingLoadingsTypes";
+import { UNDO_TIMEOUT_MS } from "./FactoryPendingLoadingsTypes";
+import { formatKg } from "@/lib/formatNumber";
 import { useFactoryPendingLoadingsState } from "./useFactoryPendingLoadingsStatePart2";
 import {
   FactoryPendingLoadingsDialogSection,
   FactoryPendingLoadingsListPendingLoadings,
 } from "./FactoryPendingLoadingsDialogSection";
+import { PendingLoadingsExport } from "./pendingloadings/PendingLoadingsExport";
 import { SearchField } from "@/components/ui/search-field";
 import { ErrorState } from "@/components/ui/page-state";
 
@@ -46,6 +48,7 @@ export default function FactoryPendingLoadings() {
     customerNames,
     deleteTarget,
     dismissUndo,
+    formatDate,
     formatDisplayDate,
     groups,
     handleConfirmDelete,
@@ -150,7 +153,7 @@ export default function FactoryPendingLoadings() {
           },
           {
             label: "Total Weight",
-            value: fmtKg(totalKg),
+            value: formatKg(totalKg),
             icon: Weight,
             accent: "text-primary",
             surface: "bg-primary/10",
@@ -239,6 +242,7 @@ export default function FactoryPendingLoadings() {
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
+        <PendingLoadingsExport rows={[...groups.values()].flatMap((g) => g.loads)} formatStarted={formatDate} />
       </div>
 
       {isLoading ? (

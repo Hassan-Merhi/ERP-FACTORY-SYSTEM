@@ -7,7 +7,6 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { Supplier } from "@shared/schema";
 import { useContainerDetailModel } from "./containerdetail/useContainerDetailModel";
-import { ContainerDetailSpView } from "./containerdetail/components/ContainerDetailSpView";
 import { ContainerDetailErpView } from "./containerdetail/components/ContainerDetailErpView";
 
 export default function ContainerDetail({ id: idProp, forceErp }: { id?: string; forceErp?: boolean }) {
@@ -59,11 +58,6 @@ export default function ContainerDetail({ id: idProp, forceErp }: { id?: string;
         </Link>
       </div>
     );
-  }
-
-  // ── SP early return — all hooks already called above ─────────────────────
-  if (isSupplierPartner) {
-    return <ContainerDetailSpView model={model} />;
   }
 
   const erpModel = {

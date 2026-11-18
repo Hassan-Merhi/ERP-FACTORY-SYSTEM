@@ -5,6 +5,7 @@ import { Package, ChevronRight } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { ErpPage, formatErpFixedQuantity } from "@/erp-core";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { erpCompanyDataKey } from "@/erp-core/erpData";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
 import { ErrorState } from "@/components/ui/page-state";
@@ -65,7 +66,40 @@ export default function OpeningStockSummary() {
       : 0;
 
   return (
-    <ErpPage title="Opening Stock Summary" subtitle={selectedCompany?.name} icon={<Package className="h-5 w-5" />}>
+    <ErpPage
+      title="Opening Stock Summary"
+      subtitle={selectedCompany?.name}
+      icon={<Package className="h-5 w-5" />}
+      headerActions={
+        <RowsExportMenu
+          title="Opening Stock Summary"
+          rows={data?.stockGroups ?? []}
+          columns={[
+            { header: "Particulars", value: (group) => group.name },
+            { header: "Opening Quantity (BL)", value: (group) => group.opening.quantity || null, type: "number" },
+            { header: "Opening Rate", value: (group) => group.opening.rate || null, type: "number" },
+            { header: "Opening Value", value: (group) => group.opening.value || null, type: "number" },
+            { header: "Closing Quantity (BL)", value: (group) => group.closing.quantity || null, type: "number" },
+            { header: "Closing Rate", value: (group) => group.closing.rate || null, type: "number" },
+            { header: "Closing Value", value: (group) => group.closing.value || null, type: "number" },
+          ]}
+          footer={
+            data?.grandTotal
+              ? [
+                  "Grand Total",
+                  data.grandTotal.opening.quantity,
+                  openingRate || null,
+                  data.grandTotal.opening.value || null,
+                  data.grandTotal.closing.quantity,
+                  closingRate || null,
+                  data.grandTotal.closing.value || null,
+                ]
+              : undefined
+          }
+          resource="erp.inventory"
+        />
+      }
+    >
       <Card className="overflow-hidden">
         <div className="bg-primary text-primary-foreground">
           <div className="grid grid-cols-2 p-2 text-xs font-semibold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3 sm:text-sm">

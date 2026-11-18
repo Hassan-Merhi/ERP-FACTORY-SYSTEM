@@ -69,10 +69,10 @@ test suite and a production build pass.
 | # | Phase | What it delivers | Status |
 |---|---|---|---|
 | 0 | Audit and plan | This document and the archived audit | Done |
-| 1 | Shared foundations | `ReportExportMenu` for all company types, `exportFileName`, `downloadFromUrl`, `?tab` + `?section` fallback in `useHubQueryState`, shared quantity/weight format helper, bale/voucher status colour map | In progress (export pieces done) |
-| 2 | Broken and misleading things | Wrong back links, missing Payments Log button, mislabelled export/print buttons, unconfirmed deletes, every `window.confirm`, wrong Shops wording, dead buttons, stale shortcuts and redirects | In progress |
-| 3 | Dead code | Unrouted pages, superseded versions, dead dialogs, unused `lazyPages` exports, unused primitives | In progress (unreferenced code removed; routed legacy pages wait on owner decisions) |
-| 4 | Export and print | Every existing export moved to the standard menu, labels, icon, filename and download helper; exports added to list/report pages that have none | In progress (existing exports migrated; missing exports not yet added) |
+| 1 | Shared foundations | `ReportExportMenu` for all company types, `exportFileName`, `downloadFromUrl`, `?tab` + `?section` fallback in `useHubQueryState`, shared quantity/weight format helper, bale/voucher status colour map | Done — `formatQuantity` / `formatKg` / `formatCount` added in the close-out (see [closeout.md](closeout.md)) |
+| 2 | Broken and misleading things | Wrong back links, missing Payments Log button, mislabelled export/print buttons, unconfirmed deletes, every `window.confirm`, wrong Shops wording, dead buttons, stale shortcuts and redirects | Done |
+| 3 | Dead code | Unrouted pages, superseded versions, dead dialogs, unused `lazyPages` exports, unused primitives | Done except unreachable modules still pinned by source tests or verify scripts (`financial-screen`, `operations-screen`, production-bonus panels, `LedgerBalancePanel` and the others listed in [closeout.md](closeout.md)), kept so those checks keep their subject. The dead Run Payroll step-1 branch went in close-out 2; the POS dashboard, POS settings and the Properties legacy dashboard were retired by owner decision 13 |
+| 4 | Export and print | Every existing export moved to the standard menu, labels, icon, filename and download helper; exports added to list/report pages that have none | Done except server-paged lists (Stock Query, Stock Entry History, audit/login history, Retail inventory and sales history: the full filtered set is never loaded), repair tools (their tables are working sets, not reports), label/barcode print layouts (kept on their own windows on purpose), the V5 allocation workbook styling (5/3, needs a styling-parity check) and the server receipt PDF (7/9, needs server work); see [closeout.md](closeout.md) |
 | 5 | Headers, hubs and tabs | `PageHeader` everywhere, double titles removed, all hubs on default pill tabs with URL state, tab labels match page titles and sidebar labels | Done (Daybook tab state moves with phase 9) |
 | 6 | Actions and wording | Create/save/delete/refresh labels and icons, toast titles, one confirm pattern replacing hand-built `AlertDialog` deletes | Done |
 | 7 | Filters, tables and states | `SearchField`, `PeriodFilter`, shadcn `Select`, shared states and `PaginationBar` on every list page | Done (7a, 7b, 7c) |
@@ -82,7 +82,7 @@ test suite and a production build pass.
 
 ## Owner decisions
 
-Answered by the owner on 2026-11-16.
+Answered by the owner on 2026-11-16 (decision 13 on 2026-11-18).
 
 | # | Question | Decision | Where it lands |
 |---|---|---|---|
@@ -98,6 +98,7 @@ Answered by the owner on 2026-11-16.
 | 10 | Container detail "Print" that saves a PDF | Relabel "Export PDF" | Phase 6 |
 | 11 | "Export PDF" offline falls back to the print dialog | Show "PDF needs a connection" instead | Phase 6 |
 | 12 | Factory bilingual invoice menu without group headings | Fine as is | Done |
+| 13 | Orphan POS dashboard, POS settings (duplicate of My Settings) and the hidden legacy Properties dashboard | Retire all three. Old links redirect: `/pos-dashboard` to the POS sale screen, `/pos-settings` to My Settings, `/properties/dashboard` to the Properties home (Daybook). Server routes, data and permission-catalog entries stay | Close-out (done) |
 
 ## Progress log
 
@@ -121,6 +122,7 @@ Answered by the owner on 2026-11-16.
 | 2026-11-17 | 9e | One `VoucherActionBar` (placement, button order, "Save Voucher" / "Update Voucher", Cancel when editing) and one shortcut hook (Ctrl/⌘+Enter saves, Esc cancels an edit) on every voucher form; Settings sections on one per-section Save model with an unsaved-changes bar (floating widgets, date format, POS receipt and company timezone moved off auto-save; instant toggles and actions kept); ERP payroll sections and tabs in `?section=`/`?tab=`; payroll "Error" toasts name the failed action |
 | 2026-11-17 | 9f | Rental pages in ERP, Factory and Properties use one title source and one `PageHeader` layout; a shared Rentals hub tab row (Properties keeps `?tab=`, ERP and Factory tabs move between their existing guarded routes); the payments log gains an Excel export menu; rental lists use the shared states and `SearchField` |
 | 2026-11-17 | 10 | `npm run audit:ui-unification` (scripts/audit-ui-unification-ratchet.mjs, baseline config/ui-unification-ratchet.json) runs in CI's repository audits: per-file ratchets on native confirms, raw export code outside the export helpers, bare page `<h1>`, hub tabs held only in component state and hand-built `$` amounts. Leftovers fixed: transaction journal pager on `PaginationBar`, the last local status colour maps on `StatusBadge`, about 40 two-decimal USD amounts with thousands separators, Factory Others' redundant `useSearch`, a failure toast on the POS price list export and a pop-up-blocked toast on payroll bulk-bonus print |
+| 2026-11-18 | Close-out | Phases 1–4 checked finding by finding against the audit ([closeout.md](closeout.md): 94 rows, none left for the owner). Round 1: new shared `RowsExportMenu` (one Excel item through `exportOperationalWorkbook` and `exportFileName`, hidden without the export permission the Suppliers export uses, via `useCanExportExcel`) on 33 ERP and Factory list and report pages that had no export, each writing exactly the rows and columns on screen; `formatQuantity` / `formatKg` / `formatCount` in `lib/formatNumber` replace twelve local kg/count formatters with identical output; stale `/location-summary` and `/combined-inventory` redirects fixed; a full-page-reload back link and a duplicate "Bulk Advance" button removed; dead code removed (`ContainerDetailSpView`, Settings' never-opened Delete User dialog, empty imports). Round 2: the same Excel export on about 40 more pages (Factory sales lists, statements, people and finance lists, the nine `/accounting/*` workpapers, Analytics sections, both comparison pages, POS and Retail lists); new `lib/printDocument` drives every report and statement pop-up print with unchanged HTML; "Import PO" label; the never-rendered Run Payroll step-1 branch removed after a behaviour test pinned the screen. Removals (owner decision 13): `POSDashboard`, `POSSettings` and the `PropertiesDashboard` compatibility page deleted with their lazy imports and helper modules; `/pos-dashboard` → `/pos`, `/pos-settings` → `/my-settings` (the POS sidebar and Command Palette now open My Settings), `/properties/dashboard` → `/properties/daybook`, all `<Redirect replace>`; server routes, data and permission-catalog ids kept. Left open on purpose: 5/3 (V5 export styling) and 7/9 (server receipt PDF) |
 
 ### Follow-ups found during phase 4
 

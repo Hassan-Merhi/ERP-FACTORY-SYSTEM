@@ -5,6 +5,8 @@ import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { stockVoucherExportColumns, stockVoucherExportFooter } from "@/pages/stock-ledger/stockVoucherExportColumns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
@@ -168,6 +170,15 @@ export default function StockItemVouchers() {
         }
       >
         <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+        <RowsExportMenu
+          title={`${data?.stockItem.name ?? "Stock Item"} Vouchers`}
+          sheetName="Stock Item Vouchers"
+          rows={data?.transactions ?? []}
+          columns={stockVoucherExportColumns(formatDate)}
+          footer={data && data.transactions.length > 0 ? stockVoucherExportFooter(data.totals) : undefined}
+          resource="erp.stock_items"
+          period={{ from: periodFilter.fromDate, to: periodFilter.toDate }}
+        />
       </PageHeader>
 
       <Card>

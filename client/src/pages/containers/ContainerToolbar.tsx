@@ -39,25 +39,12 @@ export function ContainerToolbar({ onExportExcel, onExportAllFull, propertiesMod
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {propertiesMode && (
-        <Link href="/properties/po-import">
-          <Button className="gap-2" data-testid="button-add-container">
-            <Plus className="h-4 w-4" />
-            Import PO
-          </Button>
-        </Link>
-      )}
-
-      {!propertiesMode && (
-        <>
-          <Link href="/po-import">
-            <Button className="gap-2" data-testid="button-add-container">
-              <Plus className="h-4 w-4" />
-              Add
-            </Button>
-          </Link>
-        </>
-      )}
+      <Link href={propertiesMode ? "/properties/po-import" : "/po-import"}>
+        <Button className="gap-2" data-testid="button-add-container">
+          <Plus className="h-4 w-4" />
+          Import PO
+        </Button>
+      </Link>
     </div>
   );
 }

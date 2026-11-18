@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsExportMenu";
 
 type Severity = "clear" | "review" | "critical" | "expected";
 type Container = {
@@ -142,7 +143,67 @@ export default function FactoryProductionAccounting() {
       <PageHeader
         title="Factory Production & Container Accounting"
         subtitle="Read-only accounting trace: containers → raw materials → mixes → bales → finalized invoices. Existing Factory cost and financial posting engines remain authoritative."
-      />
+      >
+        {report && (
+          <RowsExportMenu
+            title="Factory Production Accounting"
+            period={{ to: date }}
+            filters={[{ label: "Review status", value: show === "all" ? "All" : severityLabel(show) }]}
+            sheetName="Control accounts"
+            rows={Object.entries(report.valuation.ledger)}
+            columns={[
+              { header: "Control account", value: ([code]) => code.replaceAll("_", " ") },
+              { header: "Posted GL (USD)", value: ([, item]) => item.amount, type: "number" },
+              { header: "GL − cost difference", value: ([, item]) => item.difference ?? "Not comparable" },
+            ]}
+            extraSheets={[
+              section === "invoices"
+                ? ({
+                    name: "Customer order invoices",
+                    rows: invoices,
+                    columns: [
+                      { header: "Order", value: (row) => `#${row.orderId}` },
+                      { header: "Invoice / container", value: (row) => row.invoiceNumber || row.containerNumber },
+                      { header: "Status", value: (row) => row.status },
+                      { header: "Date", value: (row) => row.invoiceDate },
+                      { header: "Invoice amount", value: (row) => row.grandTotal, type: "number" },
+                      {
+                        header: "Invoice net",
+                        value: (row) => (row.status === "FINALIZED" ? row.expectedReceivableNative : null),
+                        type: "number",
+                      },
+                      { header: "Bale cost USD", value: (row) => row.costOfBalesUsd, type: "number" },
+                      { header: "Bales", value: (row) => row.bales, type: "number" },
+                      {
+                        header: "Voucher",
+                        value: (row) => (row.postedVoucherId ? `#${row.postedVoucherId}` : "No GL invoice"),
+                      },
+                      { header: "Audit", value: (row) => severityLabel(row.severity) },
+                      { header: "Issues", value: (row) => row.issues.join("; ") },
+                    ],
+                  } satisfies RowsExportSheet<Invoice>)
+                : ({
+                    name: "Supplier containers",
+                    rows: containers,
+                    columns: [
+                      { header: "Container", value: (c) => c.number },
+                      { header: "Status", value: (c) => c.status },
+                      { header: "Native FX", value: (c) => c.currency },
+                      { header: "Rate", value: (c) => (c.rateConfirmed ? "Rate confirmed" : "Unconfirmed") },
+                      { header: "Received KG", value: (c) => c.receiptKg, type: "number" },
+                      { header: "Raw KG", value: (c) => c.rawReceivedKg, type: "number" },
+                      { header: "Receipt USD", value: (c) => c.receiptsUsd ?? "Unverified" },
+                      { header: "Raw remaining USD", value: (c) => c.rawRemainingUsd ?? "Unverified" },
+                      { header: "Audit", value: (c) => severityLabel(c.severity) },
+                      { header: "Issues", value: (c) => c.issues.join("; ") },
+                    ],
+                  } satisfies RowsExportSheet<Container>),
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-factory-production-accounting"
+          />
+        )}
+      </PageHeader>
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-5">
           <div className="space-y-1">

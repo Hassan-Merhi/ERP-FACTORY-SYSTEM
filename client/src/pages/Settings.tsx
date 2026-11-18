@@ -1,13 +1,8 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { PageHeader } from "@/components/PageHeader";
-import { useState } from "react";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Building2,
@@ -54,23 +49,8 @@ import { ScheduledWhatsAppMessagesTab } from "./settings/ScheduledWhatsAppMessag
 import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
 import { FloatingWidgetsSettingsCard } from "./settings/FloatingWidgetsSettingsCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { Company } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
-
-interface SettingsUserToDelete {
-  id: string;
-  username?: string;
-}
 
 interface SettingsSidebarItem {
   key: string;
@@ -82,15 +62,12 @@ interface SettingsSidebarItem {
 }
 
 export default function Settings() {
-  const { toast } = useToast();
   const { language } = useApplicationLanguage();
   const excelAppearanceCopy = getExcelAppearanceCopy(language);
   const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
   const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -98,21 +75,6 @@ export default function Settings() {
 
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string; id: string }>({
     queryKey: ["/api/auth/me"],
-  });
-
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await modeApiRequest("DELETE", `/api/users/${userId}`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "User deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      setUserToDelete(null);
-    },
-    onError: (error: ClientErrorLike) => {
-      toast({ title: "Delete failed", description: error.message || "Failed to delete user", variant: "destructive" });
-    },
   });
 
   const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
@@ -176,7 +138,12 @@ export default function Settings() {
       items:
         appMode === "factory"
           ? [
-              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer, adminOnly: true },
+              {
+                key: "automatic-priority-printing",
+                label: "Automatic Priority Printing",
+                icon: Printer,
+                adminOnly: true,
+              },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
@@ -310,9 +277,7 @@ export default function Settings() {
               <FloatingWidgetsSettingsCard testIdPrefix="settings-" />
             </div>
           )}
-          {activeSection === "users-permissions" && (
-            <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />
-          )}
+          {activeSection === "users-permissions" && <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />}
           {activeSection === "sessions-hub" && isDeveloperMode && (
             <SessionsHub isAdmin={true} isDev={isDeveloperMode} />
           )}
@@ -323,9 +288,7 @@ export default function Settings() {
           {activeSection === "scheduled-whatsapp-messages" && isDeveloperMode && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
-          {activeSection === "pos-setup" && isDeveloperMode && (
-            <PosSetupHub userRole={effectiveRole} />
-          )}
+          {activeSection === "pos-setup" && isDeveloperMode && <PosSetupHub userRole={effectiveRole} />}
           {activeSection === "automatic-priority-printing" && canAccessAdminSections && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
@@ -336,11 +299,14 @@ export default function Settings() {
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && canAccessAdminSections && appMode === "factory" && canManageCompanyTimezone && (
-            <div className="space-y-5 max-w-2xl">
-              <CompanyTimezoneCard />
-            </div>
-          )}
+          {activeSection === "company-timezone" &&
+            canAccessAdminSections &&
+            appMode === "factory" &&
+            canManageCompanyTimezone && (
+              <div className="space-y-5 max-w-2xl">
+                <CompanyTimezoneCard />
+              </div>
+            )}
           {activeSection === "files-export" && <FileStorageAndExport />}
           {activeSection === "export-center" && <ExportCenter />}
           {activeSection === "excel-appearance" && isDeveloperMode && (
@@ -355,26 +321,6 @@ export default function Settings() {
               companies={companies}
             />
           )}
-
-          <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete User</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {userToDelete?.username}?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
     </div>

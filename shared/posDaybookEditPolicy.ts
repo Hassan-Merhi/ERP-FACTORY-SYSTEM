@@ -1,7 +1,7 @@
 /** POS sale-edit eligibility. All dates are YYYY-MM-DD company-local business days. */
 export type PosDaybookEditDecision = {
   allowed: boolean;
-  reason: "enabled" | "disabled" | "not-owner" | "view-only" | "outside-window" | "invalid-date" | "future-date";
+  reason: "enabled" | "disabled" | "view-only" | "outside-window" | "invalid-date" | "future-date";
 };
 
 function utcDay(value: string): number | null {
@@ -14,11 +14,9 @@ export function posDaybookEditEligibility(input: {
   originalDate: string;
   businessDate: string;
   editDays: number;
-  isOwnSale: boolean;
   viewOnly?: boolean;
 }): PosDaybookEditDecision {
   if (input.viewOnly) return { allowed: false, reason: "view-only" };
-  if (!input.isOwnSale) return { allowed: false, reason: "not-owner" };
   if (!Number.isInteger(input.editDays) || input.editDays <= 0) {
     return { allowed: false, reason: "disabled" };
   }
@@ -33,7 +31,6 @@ export function posDaybookEditEligibility(input: {
 
 export const posDaybookEditMessages = {
   disabled: "Daybook sale editing is disabled for this POS account.",
-  ownership: "Only sales belonging to your own POS shift may be edited.",
   date: "This sale is outside your configured Daybook editing window.",
   noRedate: "POS cashiers cannot change the original sale date. Reverse and rebook instead.",
   noPaymentChange: "POS cashiers cannot change an existing sale's payment account or credit status.",
