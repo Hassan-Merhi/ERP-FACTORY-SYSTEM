@@ -80,9 +80,8 @@ export function posSaleLines(input: PosSaleLinesInput): ErpVoucherLine[] {
   const currency = (input.currency || "USD").toUpperCase();
   const rate = toMoney(input.exchangeRate);
   const foreign = currency !== "USD" && rate.gt(0);
-  const exactZmw = currency === "ZMW" && input.nativeZmwTotal != null
-    ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2)
-    : null;
+  const exactZmw =
+    currency === "ZMW" && input.nativeZmwTotal != null ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2) : null;
   if (exactZmw && input.supplierPartner) {
     throw new Error(ZMW_SPLIT_ACCOUNTING_ERROR);
   }
