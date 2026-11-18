@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,15 @@ export function VoucherPhoneActionBar({
  * Daybook, a statement), like the page Back control. A new voucher has no Cancel.
  */
 export function useVoucherEditCancel(isEditing: boolean): (() => void) | undefined {
-  const back = useBackToParent("/daybook");
+  const [location] = useLocation();
+  // The Daybook of the same workspace: /factory/vouchers -> /factory/daybook, /properties/vouchers ->
+  // /properties/daybook, /vouchers -> /daybook. The ERP /daybook is not a Factory or Properties route.
+  const back = useBackToParent(voucherDaybookPath(location));
   return isEditing ? back : undefined;
+}
+
+/** The Daybook in the workspace of a vouchers URL (`/factory/vouchers` → `/factory/daybook`). */
+export function voucherDaybookPath(location: string): string {
+  const index = location.indexOf("/vouchers");
+  return index > 0 ? `${location.slice(0, index)}/daybook` : "/daybook";
 }
