@@ -107,6 +107,7 @@ export interface PosSaleResponseBody {
   location: PosLocation | null;
   items: PosSaleResponseItem[];
   grandTotal: string | number;
+  nativeZmwTotal?: string;
   voucherNumber: string | null;
   saleDate: string | null;
   isCreditSale: boolean | null | undefined;
