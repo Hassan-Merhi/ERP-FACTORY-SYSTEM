@@ -75,3 +75,39 @@ export async function guardFxWalletPaymentSource(req: Request, res: Response, ne
     return res.status(500).json({ message: getErrorMessage(error) });
   }
 }
+
+/**
+ * Never turn an unposted FX wallet draft into an ordinary ledger Payment.
+ * Only the FX settlement finalize route may move EUR and retire the draft.
+ * This also covers legacy PATCH editors which default omitted optional=false.
+ */
+export async function guardFxWalletDraftMutation(req: Request, res: Response, next: NextFunction) {
+  if (req.method !== "PATCH" || req.body?.optional === true) return next();
+  const cid = Number(req.session?.factoryCompanyId || req.session?.currentCompanyId || 0);
+  const id = Number(req.params.id);
+  if (!cid || !Number.isSafeInteger(id) || id < 1) return next();
+  try {
+    const table = await db.execute(sql`SELECT to_regclass('factory_fx_agent_wallets')::text AS name`);
+    if (!table.rows[0]?.name) return next();
+    const matched = await db.execute(sql`
+      SELECT v.id FROM vouchers v
+      JOIN voucher_entries e ON e.voucher_id = v.id
+      JOIN factory_fx_agent_wallets w ON w.company_id = v.company_id
+        AND w.ledger_account_id = e.ledger_account_id
+      WHERE v.id = ${id} AND v.company_id = ${cid}
+        AND v.optional = true AND v.deleted_at IS NULL
+        AND v.voucher_type = 'Payment'
+        AND e.transaction_credit_amount > 0 AND e.transaction_currency = 'EUR'
+      LIMIT 1
+    `);
+    if (matched.rows.length) {
+      return res.status(409).json({
+        code: "FX_WALLET_DRAFT_REQUIRES_SETTLEMENT",
+        message: "This Optional EUR FX voucher must be finalized through the FX settlement workflow, not activated as a regular ledger Payment.",
+      });
+    }
+    return next();
+  } catch (error) {
+    return res.status(500).json({ message: getErrorMessage(error) });
+  }
+}
