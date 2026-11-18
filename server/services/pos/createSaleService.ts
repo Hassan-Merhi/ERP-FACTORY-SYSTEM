@@ -202,9 +202,7 @@ export async function createPosSale(
   // backdated ZMW sale's approved rate differs from the current rate.
   let lockedPosCurrency: { currency: string; exchangeRate: string | null };
   try {
-    // Offline (owner decision 2026-11-02): the cashier's entered rate is the
-    // sale's rate on the factory LAN server, and the cloud replay posts at
-    // that same rate. Online, the company's effective-dated rate is locked.
+    // Offline replays retain the cashier's rate; online uses the dated rate.
     const enteredRate = lanCapture ? offlineEnteredRate(currency, exchangeRate) : null;
     lockedPosCurrency =
       params.lockedCurrency ??
@@ -233,7 +231,7 @@ export async function createPosSale(
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
 
-  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  // Refuse factory bale-mirror items after cut-over.
   const mirrorRefusal = await baleMirrorMovementRefusal(
     db,
     currentCompanyId,
