@@ -129,9 +129,9 @@ async function main() {
         companyId,
         containerNumber: container.containerNumber || `#${containerId}`,
         status: container.status || "UNKNOWN",
-        oldCostPerKg: parseFloat((container as any).ratePerKgUsd || "0"),
+        oldCostPerKg: parseFloat(container.ratePerKgUsd || "0"),
         newCostPerKg: 0,
-        oldCostPerKgUsd: parseFloat((container as any).ratePerKgUsd || "0"),
+        oldCostPerKgUsd: parseFloat(container.ratePerKgUsd || "0"),
         newCostPerKgUsd: 0,
         oldLockedRate: null,
         changeNeeded: false,
@@ -178,10 +178,10 @@ async function main() {
       oldLockedRate = sup?.rate != null ? parseFloat(sup.rate as string) : null;
     }
 
-    const oldCostPerKgUsd = parseFloat((container as any).ratePerKgUsd || "0");
+    const oldCostPerKgUsd = parseFloat(container.ratePerKgUsd || "0");
 
     // Compute correct cost
-    const result = computeCorrectContainerCost(container as any, additionalCharges as any, commissionRecord as any);
+    const result = computeCorrectContainerCost(container, additionalCharges, commissionRecord);
 
     if (result.fxUnresolved) {
       reports.push({
@@ -227,7 +227,7 @@ async function main() {
               finalPayableAmount: String(result.totalCost),
               finalPayableAmountUsd: String(result.totalUsd),
               updatedAt: new Date(),
-            } as any)
+            })
             .where(
               and(
                 eq(factoryContainers.id, containerId),
@@ -254,9 +254,9 @@ async function main() {
         report.openBatches = openBatches;
         report.completedBatches = completedBatches;
         report.bales = cascadeResult.affectedBales.length;
-      } catch (err: any) {
+      } catch (err: unknown) {
         report.appliedOk = false;
-        report.skippedReason = `APPLY ERROR: ${err?.message}`;
+        report.skippedReason = `APPLY ERROR: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
