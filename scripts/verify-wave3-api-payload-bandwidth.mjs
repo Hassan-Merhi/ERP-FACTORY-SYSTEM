@@ -2,9 +2,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 
 function assert(condition, message) {
   if (!condition) {
@@ -28,7 +29,7 @@ const products = read("server/routes/factory/products/productReadRoutes.ts");
 const mixBatches = read("server/routes/factory/mix-batches/reads.ts");
 const accounts = read("server/routes/accounts/all.ts");
 const microcache = read("server/routes/performance/readMicrocache.ts");
-const bandwidth = read("server/middleware/bandwidthDebug.ts");
+const bandwidth = read("server/middleware/bandwidthDebugHelpers.ts");
 const phase4 = read("client/src/lib/phase4BandwidthFetch.ts");
 const phase4Test = read("client/src/lib/phase4BandwidthFetch.test.ts");
 const baleHistory = read("client/src/pages/factory/baleshistory/useBalesHistoryModel.tsx");

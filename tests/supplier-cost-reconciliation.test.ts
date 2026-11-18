@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { transformSalesReportBandwidthSource } from "../build/viteSalesReportBandwidthPlugin";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = path.resolve(__dirname, "..");
-const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
+const read = (relative: string) => readModuleFamily(path.join(root, relative));
 
 describe("Sales Report historical-profit consistency", () => {
   it("calculates the compact summary and all-company comparison from recorded sales minus COGS", () => {

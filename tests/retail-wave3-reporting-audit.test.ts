@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 import { columnDefinition, hasIndex } from "./helpers/schemaManifest";
 
 const root = process.cwd();
-const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const read = (relativePath: string) => readModuleFamily(path.join(root, relativePath));
 
 describe("Retail Wave 3 reporting and reconciliation", () => {
   it("uses stable sale-time cost snapshots for COGS and profit", () => {

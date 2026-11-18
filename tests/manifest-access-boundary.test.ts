@@ -202,7 +202,7 @@ describe("rule resolution", () => {
     rule("GET /api/widgets/export-all#1", { permission: ["exp_excel"] }),
     rule("POST /api/widgets#1", { auth: "inherited" }),
     rule("POST /api/widgets#2", { permission: ["mod_inventory", "act_bulk_operations"] }),
-    rule("POST /api/reference#1", { crossCompany: ["reference-read"] }),
+    rule("POST /api/reference#1", { crossCompany: ["authorized-companies"] }),
     rule("POST /api/reference#2"),
   ]);
   const resolver = new RouteAccessResolver(manifest);

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (file: string) => readFileSync(file, "utf8");
+const read = (file: string) => readModuleFamily(file);
 const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const camera = read("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
@@ -27,8 +27,9 @@ describe("Pressing worker camera-only access", () => {
   it("mounts workers' continuously scanning camera from the Open action without inner settings", () => {
     expect(camera).toContain("useState(simpleControls)");
     expect(camera).toContain("{!simpleControls && running && (");
-    expect(camera).toContain('{!simpleControls && <div className="flex flex-wrap gap-2">');
-    expect(camera).toContain("stream?.getTracks().forEach(track => track.stop())");
+    // Prettier formats the moved JSX as `{!simpleControls && (` + `<div ...>`.
+    expect(camera.replace(/\s+/g, " ")).toContain('{!simpleControls && ( <div className="flex flex-wrap gap-2">');
+    expect(camera).toContain("stream?.getTracks().forEach((track) => track.stop())");
     expect(camera).not.toContain("The camera stays open between reads.");
     expect(camera).not.toContain("Permanent history and filters are below.");
   });

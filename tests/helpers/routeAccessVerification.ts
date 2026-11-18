@@ -200,16 +200,7 @@ export function conventionProblems(rule: RouteAccessRule): string[] {
  * reason. An entry here is a reviewed exception, not a way to silence the
  * check: adding one needs the same review as changing the rule itself.
  */
-export const CONVENTION_EXEMPTIONS: Readonly<Record<string, readonly string[]>> = {
-  // The fast WhatsApp statement sender was registered ahead of the Factory
-  // page/tab boundary and has never been subject to it; the Factory page
-  // registry has no owner for this URL, so declaring the policy would refuse
-  // every caller. It stays bound to the pinned company and to mod_factory.
-  "POST /api/factory/accounts/:accountId/send-statement-whatsapp#1": [
-    "policy factory-company-pin",
-    "policy factory-page-access",
-  ],
-};
+export const CONVENTION_EXEMPTIONS: Readonly<Record<string, readonly string[]>> = {};
 
 export interface ManifestVerification {
   problems: string[];

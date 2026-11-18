@@ -2,9 +2,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 
 const applicationRoutes = read("server/routes/applicationRoutes.ts");
@@ -35,7 +36,7 @@ function collectDeclaredRoutes(relativePath) {
   const routes = [];
   const routePattern = /\bapp\.(?:get|post|put|patch|delete|use)\(\s*["'`]([^"'`]+)["'`]/g;
   for (const file of collectTsFiles(relativePath)) {
-    const source = fs.readFileSync(file, "utf8");
+    const source = readModuleFamily(file);
     for (const match of source.matchAll(routePattern)) {
       routes.push({ file: path.relative(root, file), route: match[1] });
     }

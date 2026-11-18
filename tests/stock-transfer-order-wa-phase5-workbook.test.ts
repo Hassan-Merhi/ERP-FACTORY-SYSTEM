@@ -18,13 +18,13 @@ describe("approved Stock Transfer Order Excel without cost", () => {
     });
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
-    expect(wb.worksheets.map(s => s.name)).toEqual(["Truck Trip", "Approved Orders"]);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(["Truck Trip", "Approved Orders"]);
     const rows = wb.getWorksheet("Truck Trip")!;
     expect(rows.getCell("A1").value).toBe("Factory Company");
     expect(rows.getCell("A4").value).toBe("ITEM  NAME");
-    const values = rows.getColumn(1).values.map(v => String(v || ""));
-    expect(values.some(v => v.includes("TOTAL LOCATION A"))).toBe(true);
-    expect(values.some(v => v.includes("TOTAL LOCATION B"))).toBe(true);
+    const values = rows.getColumn(1).values.map((v) => String(v || ""));
+    expect(values.some((v) => v.includes("TOTAL LOCATION A"))).toBe(true);
+    expect(values.some((v) => v.includes("TOTAL LOCATION B"))).toBe(true);
     const grand = rows.getRow(rows.rowCount);
     expect(grand.getCell(1).value).toBe("TOTAL");
     expect(grand.getCell(3).value).toBe(60);
@@ -41,16 +41,17 @@ describe("approved Stock Transfer Order Excel without cost", () => {
       transferDate: "2026-11-11",
       batchReference: "11111111-1111-4111-8111-111111111111",
       approvedOrders: ["=BAD()", "@item-ref"],
-      items: [{ stockItemName: "=SUM(1,1)", sourceLocationName: "+formula",
-        quantity: 5 }],
+      items: [{ stockItemName: "=SUM(1,1)", sourceLocationName: "+formula", quantity: 5 }],
     });
     const parsed = new ExcelJS.Workbook();
     await parsed.xlsx.load(workbook);
     const allText: string[] = [];
     for (const sheet of parsed.worksheets) {
-      sheet.eachRow(row => row.eachCell(cell => {
-        allText.push(typeof cell.value === "string" ? cell.value : String(cell.value ?? ""));
-      }));
+      sheet.eachRow((row) =>
+        row.eachCell((cell) => {
+          allText.push(typeof cell.value === "string" ? cell.value : String(cell.value ?? ""));
+        })
+      );
     }
     expect(allText).not.toContain("PRICE");
     expect(allText).not.toContain("COST");
@@ -59,21 +60,24 @@ describe("approved Stock Transfer Order Excel without cost", () => {
     expect(parsed.getWorksheet("Truck Trip")?.getCell("A1").value).toBe("'=cmd|fake");
     expect(parsed.getWorksheet("Truck Trip")?.getCell("A5").value).toBe("'=SUM(1,1)");
     expect(parsed.getWorksheet("Approved Orders")?.getCell("A7").value).toBe("'=BAD()");
-    for(const sheet of parsed.worksheets) {
-      sheet.eachRow(row => row.eachCell(cell => {
-        expect(typeof cell.value === "object" && cell.value !== null &&
-          "formula" in cell.value).toBe(false);
-      }));
+    for (const sheet of parsed.worksheets) {
+      sheet.eachRow((row) =>
+        row.eachCell((cell) => {
+          expect(typeof cell.value === "object" && cell.value !== null && "formula" in cell.value).toBe(false);
+        })
+      );
     }
   });
 
   it("does not add approved-order metadata to manual Excel exports", async () => {
     const bytes = await createNoCostExcel({
-      companyName: "Factory", destinationName: "Warehouse", transferDate: "2026-11-11",
+      companyName: "Factory",
+      destinationName: "Warehouse",
+      transferDate: "2026-11-11",
       items: [{ stockItemName: "Article", sourceLocationName: "Location", quantity: 1 }],
     });
     const book = new ExcelJS.Workbook();
     await book.xlsx.load(bytes);
-    expect(book.worksheets.map(x => x.name)).toEqual(["Truck Trip"]);
+    expect(book.worksheets.map((x) => x.name)).toEqual(["Truck Trip"]);
   });
 });

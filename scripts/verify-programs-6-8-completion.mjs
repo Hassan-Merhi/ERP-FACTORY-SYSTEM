@@ -3,10 +3,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const failures = [];
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+// Split modules are read with their extracted siblings ("Extracted from ./…").
+const read = (relativePath) => readModuleFamily(path.join(root, relativePath));
 const exists = (relativePath) => fs.existsSync(path.join(root, relativePath));
 const assert = (condition, message) => {
   if (!condition) failures.push(message);

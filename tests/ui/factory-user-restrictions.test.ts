@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   computeFactoryDefaultPage,
@@ -7,6 +6,7 @@ import {
   type MyAccess,
 } from "@/app/factoryAccessGuard";
 import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 const restrictedAccountsOnly: MyAccess = {
   fullAccess: false,
@@ -91,9 +91,9 @@ describe("Factory per-user page restrictions", () => {
 
 describe("Factory restriction settings wiring", () => {
   it("loads tenant-scoped Factory permission data in Factory mode", () => {
-    const hub = readFileSync("client/src/pages/settings/UsersPermissionsHub.tsx", "utf8");
-    const users = readFileSync("client/src/pages/settings/users/UsersSection.tsx", "utf8");
-    const server = readFileSync("server/routes/factory/docs-users/usersAccessRoutes.ts", "utf8");
+    const hub = readModuleFamily("client/src/pages/settings/UsersPermissionsHub.tsx");
+    const users = readModuleFamily("client/src/pages/settings/users/UsersSection.tsx");
+    const server = readModuleFamily("server/routes/factory/docs-users/usersAccessRoutes.ts");
 
     expect(hub).toContain("<UsersSection appMode={appMode} />");
     expect(users).toContain('appMode === "factory" ? "/api/factory/users" : "/api/users"');
@@ -103,16 +103,16 @@ describe("Factory restriction settings wiring", () => {
   });
 
   it("shows stored Factory tab visibility with checked meaning visible", () => {
-    const restrictions = readFileSync("client/src/pages/settings/users/AdvancedRestrictions.tsx", "utf8");
+    const restrictions = readModuleFamily("client/src/pages/settings/users/AdvancedRestrictions.tsx");
     expect(restrictions).toContain("Checked tabs are <strong>shown</strong> to this user.");
     expect(restrictions).toContain("checked={isFactoryTabVisibleInProfile(tab, hiddenCostFields)}");
     expect(restrictions).toContain("setFactoryTabsVisible([tab], checked === true)");
   });
 
   it("exposes the expanded Factory page and tab catalogs", () => {
-    const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
-    const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
-    const permissionCatalog = readFileSync("shared/factoryPermissionCatalog.ts", "utf8");
+    const sidebar = readModuleFamily("client/src/components/FactorySidebar.tsx");
+    const constants = readModuleFamily("client/src/pages/settings/users/UserManagementConstants.tsx");
+    const permissionCatalog = readModuleFamily("shared/factoryPermissionCatalog.ts");
 
     // The page catalog lives in the access registry; Settings lists every
     // user-level page from it, and the sidebar filters through the same

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { moduleFamilyRoot } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const serverRoot = path.join(root, "server");
@@ -9,6 +10,10 @@ const failOnFindings = process.argv.includes("--fail-on-findings");
 const json = process.argv.includes("--json");
 const reviewConfig = JSON.parse(fs.readFileSync(reviewConfigPath, "utf8"));
 const reviewedFiles = new Map(reviewConfig.reviews.map((review) => [review.path, review]));
+// A module split under the source-size policy keeps its review: findings in an
+// extracted sibling are reviewed when the original (family root) module is.
+const familyRootOf = (file) => relative(moduleFamilyRoot(path.join(root, file)));
+const isReviewed = (finding) => reviewedFiles.has(finding.file) || reviewedFiles.has(familyRootOf(finding.file));
 
 const HIGH_RISK_TABLES = [
   "vouchers",
@@ -142,8 +147,8 @@ for (const file of walk(serverRoot)) {
 }
 
 findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.kind.localeCompare(b.kind));
-const reviewedFindings = findings.filter((finding) => reviewedFiles.has(finding.file));
-const unreviewedFindings = findings.filter((finding) => !reviewedFiles.has(finding.file));
+const reviewedFindings = findings.filter(isReviewed);
+const unreviewedFindings = findings.filter((finding) => !isReviewed(finding));
 const staleReviews = reviewConfig.reviews.filter(
   (review) => !fs.existsSync(path.join(root, review.path)) || !review.reason?.trim()
 );

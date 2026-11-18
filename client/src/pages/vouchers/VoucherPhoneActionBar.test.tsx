@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Book, Receipt } from "lucide-react";
-import { VoucherPhoneActionBar } from "./VoucherPhoneActionBar";
+import { VoucherPhoneActionBar, voucherDaybookPath } from "./VoucherPhoneActionBar";
 import { VoucherMobileTabs } from "./VoucherTabNav";
 
 let phone = true;
@@ -75,5 +75,13 @@ describe("VoucherMobileTabs", () => {
     fireEvent.click(screen.getByTestId("button-voucher-type-select"));
     fireEvent.click(screen.getByTestId("tab-mobile-receipt"));
     expect(setActiveTab).toHaveBeenCalledWith("receipt");
+  });
+});
+
+describe("voucherDaybookPath", () => {
+  it("returns the Daybook of the same workspace", () => {
+    expect(voucherDaybookPath("/vouchers")).toBe("/daybook");
+    expect(voucherDaybookPath("/factory/vouchers")).toBe("/factory/daybook");
+    expect(voucherDaybookPath("/properties/vouchers")).toBe("/properties/daybook");
   });
 });

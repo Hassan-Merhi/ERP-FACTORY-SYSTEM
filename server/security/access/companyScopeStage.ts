@@ -23,7 +23,6 @@ import {
   assertCompaniesAccess,
   CompanyAccessError,
   getAccessibleCompanyIds,
-  isPrivilegedRole,
   sendCompanyAccessError,
 } from "../companyAccessBoundary";
 import {
@@ -396,24 +395,11 @@ export async function establishCompanyScope(
     let explicitAuthorizedCompanyId: number | null = null;
     if (decision.kind === "company") {
       const otherCompany = decision.companyId !== context.companyId;
-      // Legacy admin/configuration pickers that intentionally read reference
-      // data from another assigned company.
-      const crossCompanyReference = otherCompany && access.crossCompany.has("reference-read");
       // Settings -> Users is intentionally a global Developer administration
       // surface, narrowly limited to company-role assignments.
       const developerRoleAdministration =
         otherCompany && context.role === "Developer" && access.crossCompany.has("developer-role-administration");
-      if (crossCompanyReference) {
-        if (!isPrivilegedRole(context.role)) {
-          throw new CompanyAccessError(
-            403,
-            "Cross-company reference access requires Admin, Owner, or Developer",
-            "CROSS_COMPANY_REFERENCE_FORBIDDEN"
-          );
-        }
-        await assertCompaniesAccess(context.userId, [decision.companyId]);
-        explicitAuthorizedCompanyId = decision.companyId;
-      } else if (developerRoleAdministration) {
+      if (developerRoleAdministration) {
         await assertCompaniesAccess(context.userId, [decision.companyId]);
         explicitAuthorizedCompanyId = decision.companyId;
       } else {

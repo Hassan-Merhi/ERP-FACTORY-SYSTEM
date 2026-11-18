@@ -15,9 +15,6 @@ export function isRentRecognitionHeld(notes: string | null | undefined): boolean
  * contract becomes outstanding. The journal writer applies the same hold
  * check under its row lock as the final protection.
  */
-export function isRentMonthReadyToRecognize(
-  notes: string | null | undefined,
-  periodIsDue: boolean
-): boolean {
+export function isRentMonthReadyToRecognize(notes: string | null | undefined, periodIsDue: boolean): boolean {
   return periodIsDue && !isRentRecognitionHeld(notes);
 }

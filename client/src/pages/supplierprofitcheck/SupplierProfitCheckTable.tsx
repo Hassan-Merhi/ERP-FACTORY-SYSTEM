@@ -7,6 +7,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { ProfitCell } from "./components/ProfitCell";
 import { StatusBadge } from "./components/StatusBadge";
 import { fmt } from "./utils";
+import { QuantityCell, QuantityInput } from "./SupplierProfitCheckTableQuantity";
 import type { ComputedRow } from "./types";
 import type { useSupplierProfitCheckModel } from "./useSupplierProfitCheckModel";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -357,34 +358,6 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
         <span className="text-[11px] text-amber-500/80 leading-tight">any supplier</span>
       )}
     </div>
-  );
-}
-
-function QuantityCell({ row, model }: { row: ComputedRow; model: ProfitModel }) {
-  return (
-    <TableCell className="py-2.5">
-      <QuantityInput row={row} model={model} className="w-24 h-7 text-right ml-auto font-mono" />
-    </TableCell>
-  );
-}
-
-function QuantityInput({ row, model, className }: { row: ComputedRow; model: ProfitModel; className: string }) {
-  return (
-    <Input
-      type="number"
-      min="0"
-      step="1"
-      placeholder="0"
-      value={model.qtyMap[row.stockItemId] ?? ""}
-      onChange={(event) => {
-        model.setQtyMap((previous) => ({ ...previous, [row.stockItemId]: event.target.value }));
-        model.setQtyVersion((version) => version + 1);
-      }}
-      onKeyDown={(event) => model.handleArrowNav(event, "data-qty-input")}
-      className={`${className} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
-      data-testid={`input-qty-${row.stockItemId}`}
-      data-qty-input="true"
-    />
   );
 }
 

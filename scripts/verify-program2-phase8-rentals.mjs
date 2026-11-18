@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const files = {
   service: "server/services/rental/rentalPaymentPostingService.ts",
@@ -11,7 +12,7 @@ const files = {
   erpPosting: "server/services/accounting/erpVoucherPosting.ts",
 };
 
-const read = (path) => fs.readFileSync(path, "utf8");
+const read = (path) => readModuleFamily(path);
 const assertHas = (text, marker, label) => {
   if (!text.includes(marker)) throw new Error(`Missing ${label}: ${marker}`);
 };

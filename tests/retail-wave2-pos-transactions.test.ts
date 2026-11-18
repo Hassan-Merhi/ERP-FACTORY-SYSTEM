@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
 import {
   aggregateRetailCartItems,
@@ -8,9 +7,10 @@ import {
   nextRetailTransferQuantities,
   validateRetailReturnQuantity,
 } from "../server/services/retail/retailStockMath";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const read = (relativePath: string) => readModuleFamily(path.join(root, relativePath));
 
 describe("Retail POS Wave 2 transaction invariants", () => {
   it("keeps scan → cart → sale → return stock exact for the selected variant", () => {

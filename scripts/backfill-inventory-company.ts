@@ -24,7 +24,7 @@ async function main() {
     WHERE inv.company_id IS NULL
        OR inv.company_id <> loc.company_id
   `);
-  const affectedCount = Number((countResult.rows[0] as any).cnt);
+  const affectedCount = Number(countResult.rows[0]?.cnt ?? 0);
   console.log(`Rows needing repair: ${affectedCount}`);
 
   if (affectedCount === 0) {
