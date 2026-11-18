@@ -25,6 +25,7 @@ import { useState } from "react";
 
 interface PosMobileLayoutProps {
   posUser?: AuthMe | null;
+  editVoucherId?: string;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -70,6 +71,7 @@ interface PosMobileLayoutProps {
 
 export function PosMobileLayout({
   posUser,
+  editVoucherId,
   activeLocation,
   allLocations,
   posAssignedLocations,
@@ -110,6 +112,7 @@ export function PosMobileLayout({
   formatDisplayAmount,
   isSpCompany,
 }: PosMobileLayoutProps) {
+  const lockedPosEdit = Boolean(posUser && editVoucherId);
   const filteredInventory = getFilteredInventory(inventory, searchTerm).slice(0, 60);
   const validRows = rows.filter((row) => row.stockItemId && row.quantity > 0);
   // A line stays on screen while its quantity is being retyped. Filtering the
@@ -260,6 +263,7 @@ export function PosMobileLayout({
           ) : posAssignedLocations.length > 1 ? (
             <Select
               value={posSelectedLocation?.id?.toString()}
+              disabled={lockedPosEdit}
               onValueChange={(value) => {
                 const location = posAssignedLocations.find((candidate) => candidate.id.toString() === value);
                 if (location) setPosSelectedLocation(location);
@@ -307,12 +311,20 @@ export function PosMobileLayout({
                 id="mobile-credit-sale"
                 checked={isCreditSale}
                 onCheckedChange={setIsCreditSale}
+                disabled={lockedPosEdit}
                 data-testid="toggle-mobile-credit-sale"
               />
             </div>
           )}
 
-          {!isSpCompany && isCreditSale ? (
+          {lockedPosEdit ? (
+            <div
+              className="flex min-h-11 items-center rounded-lg border bg-muted/30 px-3 text-sm"
+              data-testid="pos-mobile-edit-payment-locked"
+            >
+              {isCreditSale ? "Credit" : "Original payment"} — unchanged
+            </div>
+          ) : !isSpCompany && isCreditSale ? (
             <Popover open={mobileCustomerComboOpen} onOpenChange={setMobileCustomerComboOpen}>
               <PopoverTrigger asChild>
                 <Button
