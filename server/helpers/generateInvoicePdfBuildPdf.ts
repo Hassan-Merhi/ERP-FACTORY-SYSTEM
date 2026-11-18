@@ -38,7 +38,6 @@ import {
   wrapText,
   type InvoiceData,
 } from "./generateInvoicePdfWrapText";
-import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "@shared/posZmwMoney";
 import Decimal from "decimal.js";
 
 // ── PDF renderer ──────────────────────────────────────────────────────────────
@@ -72,9 +71,8 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
   const isMali = d.companyName.toLowerCase().includes("mali");
   const isZmwInvoice =
     d.currency === "ZMW" && d.exchangeRate !== null && Number.isFinite(d.exchangeRate) && d.exchangeRate > 0;
-  const formatNative = (amount: number) =>
-    `K${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const formatSaleAmount = (usd: number) => (isZmwInvoice ? formatNative(usd * d.exchangeRate!) : fmtUSD(usd));
+  // The sent invoice is always a USD report, even when the sale was taken in
+  // Kwacha: only the locked sale rate banner mentions the local currency.
 
   // Auto-hide profit columns when no item has a configured price set
   const hasConfiguredPrice = d.items.some((item) => item.configuredPrice > 0);
@@ -207,12 +205,12 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     doc.font("Helvetica-Bold").fontSize(FONT_HDR).fillColor(CLR_WHITE);
     cellText(doc, "DESCRIPTION", X_DESC, COL_DESC_W, atY, THR_H, "left");
     cellText(doc, "QTY", X_QTY, COL_QTY_W, atY, THR_H, "center");
-    cellText(doc, isZmwInvoice ? "RATE (K)" : "RATE", X_RATE, COL_RATE_W, atY, THR_H, "center");
-    cellText(doc, isZmwInvoice ? "AMT (K)" : "AMT", X_AMT, COL_AMT_W, atY, THR_H, "center");
+    cellText(doc, "RATE", X_RATE, COL_RATE_W, atY, THR_H, "center");
+    cellText(doc, "AMT", X_AMT, COL_AMT_W, atY, THR_H, "center");
     if (!hideProfitCols) {
-      cellText(doc, isZmwInvoice ? "CONFIG $" : "CONFIG", X_CFG, COL_CFG_W, atY, THR_H, "center");
-      cellText(doc, isZmwInvoice ? "P/L BALE $" : "P/L BALE", X_PLB, COL_PLB_W, atY, THR_H, "center");
-      cellText(doc, isZmwInvoice ? "TOTAL P/L $" : "TOTAL P/L", X_TPL, COL_TPL_W, atY, THR_H, "center");
+      cellText(doc, "CONFIG", X_CFG, COL_CFG_W, atY, THR_H, "center");
+      cellText(doc, "P/L BALE", X_PLB, COL_PLB_W, atY, THR_H, "center");
+      cellText(doc, "TOTAL P/L", X_TPL, COL_TPL_W, atY, THR_H, "center");
     }
     return atY + THR_H;
   }
@@ -222,24 +220,16 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
   // ── Item rows ─────────────────────────────────────────────────────────────────
   let totalQty = 0;
   let totalAmt = 0;
-  let totalAmtZmw = new Decimal(0);
   let totalPL = 0;
   let rowIndex = 0;
 
   for (const item of d.items) {
     const amtUSD = item.quantity * item.rateUSD;
-    const nativeUnitZmw = isZmwInvoice
-      ? resolveZmwUnitPrice({ quantity: 1, rate: item.rateUSD }, d.exchangeRate!, true).toNumber()
-      : null;
-    const nativeLineZmw = isZmwInvoice
-      ? calculateZmwSaleAmounts([{ quantity: item.quantity, rate: item.rateUSD }], d.exchangeRate!, true).nativeTotal
-      : null;
     const plBale = item.rateUSD - item.configuredPrice;
     const itemPL = plBale * item.quantity;
 
     totalQty += item.quantity;
     totalAmt += amtUSD;
-    if (nativeLineZmw != null) totalAmtZmw = totalAmtZmw.plus(nativeLineZmw);
     totalPL += itemPL;
 
     doc.font("Helvetica-Bold").fontSize(FONT_ROW);
@@ -288,13 +278,13 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
 
     doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
     doc.text(fmtQty(item.quantity), X_QTY + 1, cy, { width: COL_QTY_W - 2, align: "center", lineBreak: false });
-    doc.text(nativeUnitZmw !== null ? formatNative(nativeUnitZmw) : formatSaleAmount(item.rateUSD), X_RATE + 1, cy, {
+    doc.text(fmtUSD(item.rateUSD), X_RATE + 1, cy, {
       width: COL_RATE_W - 2,
       align: "center",
       lineBreak: false,
     });
     doc.font("Helvetica-Bold").fontSize(FONT_ROW).fillColor(CLR_BODY);
-    doc.text(nativeLineZmw !== null ? formatNative(Number(nativeLineZmw)) : formatSaleAmount(amtUSD), X_AMT + 1, cy, {
+    doc.text(fmtUSD(amtUSD), X_AMT + 1, cy, {
       width: COL_AMT_W - 2,
       align: "center",
       lineBreak: false,
@@ -322,7 +312,12 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     doc.x = MARGIN_X;
   }
 
-  const finalNativeZmw = d.nativeZmwTotal ?? totalAmtZmw.toNumber();
+  // A Kwacha sale posts its USD value as the exact Kwacha taken ÷ the locked
+  // rate; show that ledger figure rather than a sum of rounded USD lines.
+  const totalUSD =
+    isZmwInvoice && d.nativeZmwTotal != null
+      ? new Decimal(d.nativeZmwTotal).div(d.exchangeRate!).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+      : totalAmt;
 
   // ── TOTAL + TOTAL PAID + footer — keep together on the same page ─────────────
   const totH = d.compactMode ? 14 : 18;
@@ -344,16 +339,16 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     .fillColor(CLR_WHITE);
   cellText(doc, "TOTAL", X_DESC, COL_DESC_W, y, totH, "left");
   cellText(doc, fmtQty(totalQty), X_QTY, COL_QTY_W, y, totH, "center");
-  cellText(doc, isZmwInvoice ? formatNative(finalNativeZmw) : fmtUSD(totalAmt), X_AMT, COL_AMT_W, y, totH, "center");
+  cellText(doc, fmtUSD(totalUSD), X_AMT, COL_AMT_W, y, totH, "center");
   if (!hideProfitCols) {
-    const plSign = totalPL > 0 ? "+" : totalPL < 0 ? "−" : "";
+    const plSign = totalPL > 0 ? "+" : totalPL < 0 ? "-" : "";
     doc.fillColor(totalPL >= 0 ? CLR_WHITE : "#ffaaaa");
     cellText(doc, plSign + fmtUSD(Math.abs(totalPL)), X_TPL, COL_TPL_W, y, totH, "center");
   }
   y += totH + (d.compactMode ? 5 : 8);
 
   // ── TOTAL PAID block ──────────────────────────────────────────────────────────
-  const paidStr = isZmwInvoice ? formatNative(finalNativeZmw) : formatSaleAmount(totalAmt);
+  const paidStr = fmtUSD(totalUSD);
   doc.save();
   doc.rect(MARGIN_X, y, USABLE_W, paidH).fill(CLR_BRAND);
   doc.restore();
@@ -362,7 +357,7 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     .font("Helvetica")
     .fontSize(d.compactMode ? 7 : 8)
     .fillColor(CLR_MUTED);
-  doc.text(isZmwInvoice ? "TOTAL PAID (ZMW)" : "TOTAL PAID", MARGIN_X + 10, y + (d.compactMode ? 6 : 8), {
+  doc.text("TOTAL PAID", MARGIN_X + 10, y + (d.compactMode ? 6 : 8), {
     lineBreak: false,
   });
 

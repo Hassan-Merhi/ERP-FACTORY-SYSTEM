@@ -57,9 +57,9 @@ export function usePOSStatePart2XX({
   setNotes,
   setPaymentAccountId,
   setPaymentAccountType,
+  setPosSelectedLocation,
   setPendingAutoSend,
   setPendingStockSend,
-  setPosSelectedLocation,
   setRows,
   setSaleDate,
   setSaleJustCompleted,
@@ -133,9 +133,9 @@ export function usePOSStatePart2XX({
   | "setNotes"
   | "setPaymentAccountId"
   | "setPaymentAccountType"
+  | "setPosSelectedLocation"
   | "setPendingAutoSend"
   | "setPendingStockSend"
-  | "setPosSelectedLocation"
   | "setRows"
   | "setSaleDate"
   | "setSaleJustCompleted"
@@ -237,9 +237,9 @@ export function usePOSStatePart2XX({
     setNotes,
     setPaymentAccountId,
     setPaymentAccountType,
+    setPosSelectedLocation,
     setPendingAutoSend,
     setPendingStockSend,
-    setPosSelectedLocation,
     setRows,
     setSaleDate,
     setSaleJustCompleted,

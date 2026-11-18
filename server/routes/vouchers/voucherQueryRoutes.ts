@@ -292,9 +292,7 @@ export function registerVoucherQueryRoutes(app: Express) {
               : scope.displayLocationName,
             destinationLocationId: transferData.destinationLocationId,
             destinationLocationName: transferData.destinationLocationName,
-            // The missing-transfer placeholder (id 0) was rejected above; it is
-            // the only shape without the flag.
-            inventoryApplied: "inventoryApplied" in transferData ? transferData.inventoryApplied : false,
+            inventoryApplied: "inventoryApplied" in transferData ? transferData.inventoryApplied : undefined,
             notes: transferData.notes,
             items: visibleItems.map((item) => ({
               id: item.id,

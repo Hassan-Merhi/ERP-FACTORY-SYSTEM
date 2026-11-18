@@ -63,9 +63,9 @@ export function usePOSStatePart2({
   setNotes,
   setPaymentAccountId,
   setPaymentAccountType,
+  setPosSelectedLocation,
   setPendingAutoSend,
   setPendingStockSend,
-  setPosSelectedLocation,
   setRows,
   setSaleDate,
   setSaleJustCompleted,
@@ -139,9 +139,9 @@ export function usePOSStatePart2({
   | "setNotes"
   | "setPaymentAccountId"
   | "setPaymentAccountType"
+  | "setPosSelectedLocation"
   | "setPendingAutoSend"
   | "setPendingStockSend"
-  | "setPosSelectedLocation"
   | "setRows"
   | "setSaleDate"
   | "setSaleJustCompleted"
@@ -178,6 +178,7 @@ export function usePOSStatePart2({
   // Edit mode: select the voucher's location, populate rows once, infer payment type.
   usePosEditVoucherHydration({
     editVoucherId,
+    activeCurrency,
     editVoucher,
     editVoucherViewEntries,
     allLocations,
