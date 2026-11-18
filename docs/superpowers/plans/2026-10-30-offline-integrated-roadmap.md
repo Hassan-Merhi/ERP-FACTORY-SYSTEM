@@ -194,6 +194,19 @@ the reasons for everything still online-only:
 - Phase 16: offline panel (banner drawer and Factory settings) with counters,
   Sync now, Pause/Resume, conflict decisions, storage and a recovery copy.
 
+## Full offline mode (Tally-style), Phase A (2026-11-17, development)
+
+Every PC keeps a full local copy of its companies; the cloud applies each PC's
+entries once and sends everyone's changes back. Owner decisions and the phase
+plan are in the plan document and the
+[runbook](../../operations/factory-offline-operations-runbook.md#full-offline-mode-phase-a-cloud-change-feed).
+
+- Phase A1 (this change, switched off): table policy for all tables with a CI
+  check, DBA-installed change feed with redaction, and the paged
+  `GET /api/offline/pc-sync/changes` reader (`OFFLINE_PC_SYNC_ENABLED`).
+- Next: A2 initial snapshot; A3 desktop app (Windows and Mac) with a local
+  server and database, read-only offline; then Phases B to E.
+
 ## Resume checklist (next session)
 
 All development in the owner-approved offline plan is merged (#2871, 2026-11-06). The coverage audit (`node scripts/edge/audit-phase9-write-coverage.mjs`) reports 39 captured routes, 17 of them waiting for drill approval, and 1,140 refused; `--require-complete` stays red by design. What remains is rollout and certification:
