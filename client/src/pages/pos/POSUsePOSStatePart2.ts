@@ -178,6 +178,7 @@ export function usePOSStatePart2({
   // Edit mode: select the voucher's location, populate rows once, infer payment type.
   usePosEditVoucherHydration({
     editVoucherId,
+    activeCurrency,
     editVoucher,
     editVoucherViewEntries,
     allLocations,
