@@ -1,4 +1,4 @@
-import { useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
+import { VoucherActionBar, VoucherOptionalSwitch } from "@/pages/vouchers/VoucherActionBar";
 import { useState, useMemo, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -138,7 +137,6 @@ export function PaymentReceiptTab({
   onEffectiveDateChange,
 }: PaymentReceiptTabProps) {
   const { formatAmount } = useCurrencyContext();
-  const cancelEdit = useVoucherEditCancel(!!isEditMode);
 
   // Notes collapse state — auto-open if there is already a notes value
   const [notesOpen, setNotesOpen] = useState<boolean>(() => {
@@ -229,13 +227,22 @@ export function PaymentReceiptTab({
       ? "Add at least one line with an amount"
       : null;
 
-  // ⌘/Ctrl+Enter saves from anywhere in the form, matching the keyboard-first entry flow.
-  const handleFormKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (!saveHint && !isPending) form.handleSubmit(onSubmit)();
-    }
-  };
+  // Same conditions as before the shared action bar; only where they are evaluated moved.
+  const saveDisabled =
+    paymentAccountId === 0 ||
+    total === 0 ||
+    !!fxWalletsLoading ||
+    (isFxPayment &&
+      (!fxWallet?.synchronized ||
+        fxSupplierBalanceLoading ||
+        (!directEurPayment && fxRateValue <= 0) ||
+        (directEurPayment &&
+          (fxSupplierEurBalance === null || fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
+        !Number.isFinite(fxEurRequired) ||
+        fxEurRequired > Number(fxWallet!.state.eur) ||
+        fxUnsupportedEntries));
+  // An FX wallet payment pays out in the payout currency, so its total says which one.
+  const totalLabel = total > 0 ? (isFxPayment ? `${fxPayoutCurrency} ${total.toFixed(2)}` : formatAmount(total)) : "—";
 
   // Projected balance after save.
   // Payment edit: undo the original deduction, apply the new one.
@@ -299,12 +306,7 @@ export function PaymentReceiptTab({
       <div className="flex-1 min-w-0">
         <Card className="voucher-form-card">
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              onKeyDown={handleFormKeyDown}
-              className="flex flex-col"
-              noValidate
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col" noValidate>
               {/* ── Compact header strip ── */}
               <div
                 className="voucher-hero relative flex items-center gap-2 px-4 py-3 border-b border-border/50 overflow-hidden flex-wrap rounded-t-lg"
@@ -404,16 +406,6 @@ export function PaymentReceiptTab({
                       + Effective date
                     </Button>
                   ))}
-
-                {/* Print + Export */}
-                <PaymentReceiptHeaderActions
-                  canPrint={canPrint}
-                  canExport={canExport}
-                  hasExport={hasExport}
-                  printDisabledReason={printDisabledReason}
-                  handlePrint={handlePrint}
-                  handleExportVoucher={handleExportVoucher}
-                />
 
                 {/* Mobile accounts drawer trigger — hidden on sm+ */}
                 <Button
@@ -672,13 +664,17 @@ export function PaymentReceiptTab({
               </div>
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
-              <div
-                className="voucher-action-bar sticky bottom-0 z-20 rounded-b-lg border-t bg-card px-4 sm:px-5 py-3 shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:py-2"
-                data-voucher-sticky-actions=""
-              >
-                <div className="flex items-center justify-between gap-4 flex-wrap">
+              <VoucherActionBar
+                isEditing={!!isEditMode}
+                saving={isPending}
+                disabled={saveDisabled}
+                hint={saveHint ? <span data-testid="text-save-hint">{saveHint}</span> : null}
+                saveTestId="button-save-voucher"
+                data-testid="payment-receipt-actions"
+                className="mt-0"
+                summary={
                   <div className="flex items-center gap-5">
-                    <div className="flex flex-col max-sm:hidden">
+                    <div className="flex flex-col">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Lines
                       </span>
@@ -696,95 +692,37 @@ export function PaymentReceiptTab({
                         style={total > 0 ? { color: accentColor } : undefined}
                         data-testid="text-total-amount"
                       >
-                        {total > 0 ? formatAmount(total) : "—"}
+                        {totalLabel}
                       </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-4 flex-wrap justify-end flex-1 min-w-0">
-                    <FormField
-                      control={form.control}
-                      name="optional"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                          <FormControl>
-                            <Switch
-                              checked={isFxPayment ? false : field.value}
-                              disabled={isFxPayment}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-optional"
-                            />
-                          </FormControl>
-                          <FormLabel
-                            className="cursor-pointer text-xs text-muted-foreground font-normal"
-                            title="Excluded from required balance checks"
-                          >
-                            Optional
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
-                      {/* Phones editing a voucher get Cancel beside Save (back to where they came from). */}
-                      {cancelEdit && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full sm:hidden"
-                          onClick={cancelEdit}
-                          data-testid="button-cancel-voucher-edit"
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                      <Button
-                        type="submit"
-                        size="default"
-                        className="voucher-save-button w-full sm:w-auto"
-                        disabled={
-                          paymentAccountId === 0 ||
-                          total === 0 ||
-                          isPending ||
-                          fxWalletsLoading ||
-                          (isFxPayment &&
-                            (!fxWallet?.synchronized ||
-                              fxSupplierBalanceLoading ||
-                              (!directEurPayment && fxRateValue <= 0) ||
-                              (directEurPayment &&
-                                (fxSupplierEurBalance === null ||
-                                  fxSupplierEurBalance <= 0 ||
-                                  total > fxSupplierEurBalance)) ||
-                              !Number.isFinite(fxEurRequired) ||
-                              fxEurRequired > Number(fxWallet!.state.eur) ||
-                              fxUnsupportedEntries))
-                        }
-                        data-testid="button-save-voucher"
-                      >
-                        {isPending
-                          ? isEditMode
-                            ? "Updating…"
-                            : "Saving…"
-                          : isEditMode
-                            ? `Update Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`
-                            : isFxPayment
-                              ? `Post Payment · ${fxPayoutCurrency} ${total.toFixed(2)}`
-                              : `Save Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`}
-                      </Button>
-                      {saveHint ? (
-                        <span className="text-[11px] text-muted-foreground" data-testid="text-save-hint">
-                          {saveHint}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground hidden sm:block">
-                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">⌘</kbd>
-                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-1">↵</kbd> to save
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                }
+                phoneSummary={`${validEntryCount} ${validEntryCount === 1 ? "line" : "lines"} · ${totalLabel}`}
+                optional={
+                  <FormField
+                    control={form.control}
+                    name="optional"
+                    render={({ field }) => (
+                      <VoucherOptionalSwitch
+                        checked={isFxPayment ? false : field.value}
+                        disabled={isFxPayment}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-optional"
+                      />
+                    )}
+                  />
+                }
+                secondary={
+                  <PaymentReceiptHeaderActions
+                    canPrint={canPrint}
+                    canExport={canExport}
+                    hasExport={hasExport}
+                    printDisabledReason={printDisabledReason}
+                    handlePrint={handlePrint}
+                    handleExportVoucher={handleExportVoucher}
+                  />
+                }
+              />
             </form>
           </Form>
         </Card>

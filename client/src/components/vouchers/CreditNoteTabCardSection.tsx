@@ -7,9 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, Pencil, Plus, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Package, Pencil, Trash2 } from "lucide-react";
 import { AccountAutocomplete } from "@/components/AccountAutocomplete";
+import { VoucherActionBar } from "@/pages/vouchers/VoucherActionBar";
 import { useCreditNoteTabState } from "./useCreditNoteTabState";
 
 export function CreditNoteTabCardSection({
@@ -20,13 +20,11 @@ export function CreditNoteTabCardSection({
   form,
   isEditMode,
   isPending,
-  isPhoneLayout,
   items,
   noteCurrency,
   noteType,
   onSubmit,
   removeItem,
-  resetForm,
   totalInventoryValue,
   totalRefund,
   totalRefundUsd,
@@ -40,18 +38,17 @@ export function CreditNoteTabCardSection({
   | "form"
   | "isEditMode"
   | "isPending"
-  | "isPhoneLayout"
   | "items"
   | "noteCurrency"
   | "noteType"
   | "onSubmit"
   | "removeItem"
-  | "resetForm"
   | "totalInventoryValue"
   | "totalRefund"
   | "totalRefundUsd"
   | "updateItemInventoryCost"
 >) {
+  const creditNoteSummary = `${items.length} items · Refund ${formatNumber(totalRefund)}`;
   return (
     <Card className="flex-1 flex flex-col">
       <CardHeader className="pb-3 shrink-0">
@@ -69,23 +66,6 @@ export function CreditNoteTabCardSection({
               </>
             )}
           </CardTitle>
-          {/* Phones save from the pinned action bar at the bottom of the tab. */}
-          <div className={cn("w-full flex-wrap gap-2 sm:w-auto", isPhoneLayout ? "hidden" : "flex")}>
-            {isEditMode && (
-              <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">
-                Cancel
-              </Button>
-            )}
-            <Button
-              type="button"
-              onClick={form.handleSubmit(onSubmit)}
-              disabled={items.length === 0 || isPending}
-              data-testid="button-create-credit-note"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              {isPending ? "Saving..." : isEditMode ? "Update Note" : "Create Note"}
-            </Button>
-          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
@@ -262,6 +242,21 @@ export function CreditNoteTabCardSection({
           </form>
         </Form>
       </CardContent>
+      <VoucherActionBar
+        isEditing={isEditMode}
+        saving={isPending}
+        disabled={items.length === 0}
+        onSave={form.handleSubmit(onSubmit)}
+        saveTestId="button-create-credit-note"
+        data-testid="credit-note-actions"
+        className="mt-0 shrink-0"
+        summary={
+          <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+            {creditNoteSummary}
+          </span>
+        }
+        phoneSummary={creditNoteSummary}
+      />
     </Card>
   );
 }

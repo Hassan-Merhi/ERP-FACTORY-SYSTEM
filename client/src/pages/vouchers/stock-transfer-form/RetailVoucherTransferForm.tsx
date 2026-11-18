@@ -7,7 +7,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRightLeft, Barcode, Loader2, Search, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Barcode, Search, Trash2 } from "lucide-react";
+import { VoucherActionBar } from "../VoucherActionBar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,13 +18,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
-import {
-  lookupRetailBarcode,
-  makeKey,
-  readJson,
-  scanBeep,
-  type RetailPosItem,
-} from "@/pages/pos/retailPosTypes";
+import { lookupRetailBarcode, makeKey, readJson, scanBeep, type RetailPosItem } from "@/pages/pos/retailPosTypes";
 import { useRetailBarcodeScanner } from "@/pages/pos/useRetailBarcodeScanner";
 
 type Location = { id: number; name: string };
@@ -56,7 +51,11 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
     setSourceId((preferred ?? locations[0]).id);
   }, [sourceId, locations, selectedCompany?.assignedLocationId]);
 
-  const { data: items = [], isFetching: itemsLoading, isError: itemsError } = useQuery<RetailPosItem[]>({
+  const {
+    data: items = [],
+    isFetching: itemsLoading,
+    isError: itemsError,
+  } = useQuery<RetailPosItem[]>({
     queryKey: ["retail-voucher-transfer-items", selectedCompany?.id, sourceId, search.trim()],
     queryFn: () =>
       readJson<RetailPosItem[]>(
@@ -66,10 +65,8 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
     staleTime: 10_000,
   });
 
-  const addedQty = useMemo(
-    () => lines.reduce((sum, line) => sum + line.quantity, 0),
-    [lines]
-  );
+  const addedQty = useMemo(() => lines.reduce((sum, line) => sum + line.quantity, 0), [lines]);
+  const retailSummary = `${lines.length} items · ${addedQty} qty`;
 
   const addItem = useCallback(
     (item: RetailPosItem) => {
@@ -169,10 +166,8 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
       toast({ title: "Add at least one item to transfer", variant: "destructive" });
       return;
     }
-    const invalid = lines.find((line) =>
-      !Number.isInteger(line.quantity) ||
-      line.quantity <= 0 ||
-      line.quantity > availableQty(line.item)
+    const invalid = lines.find(
+      (line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || line.quantity > availableQty(line.item)
     );
     if (invalid) {
       toast({
@@ -244,7 +239,9 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
             </SelectTrigger>
             <SelectContent>
               {locations.map((loc) => (
-                <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
+                <SelectItem key={loc.id} value={String(loc.id)}>
+                  {loc.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -260,9 +257,13 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
               <SelectValue placeholder="Destination location" />
             </SelectTrigger>
             <SelectContent>
-              {locations.filter((loc) => loc.id !== sourceId).map((loc) => (
-                <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
-              ))}
+              {locations
+                .filter((loc) => loc.id !== sourceId)
+                .map((loc) => (
+                  <SelectItem key={loc.id} value={String(loc.id)}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </label>
@@ -275,7 +276,10 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <Card className="min-w-0 overflow-hidden">
             <div className="grid grid-cols-[2rem_minmax(0,1fr)_5.5rem_3rem] gap-2 border-b bg-muted/50 px-3 py-3 text-xs font-semibold sm:grid-cols-[3rem_minmax(0,1fr)_8rem_3rem]">
-              <span>#</span><span>Item</span><span className="text-right">Qty</span><span />
+              <span>#</span>
+              <span>Item</span>
+              <span className="text-right">Qty</span>
+              <span />
             </div>
             <div className="max-h-[56vh] overflow-auto">
               {lines.map((line, index) => (
@@ -318,7 +322,9 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                     variant="ghost"
                     size="icon"
                     disabled={saving}
-                    onClick={() => setLines((current) => current.filter((entry) => entry.item.variantId !== line.item.variantId))}
+                    onClick={() =>
+                      setLines((current) => current.filter((entry) => entry.item.variantId !== line.item.variantId))
+                    }
                     aria-label={`Remove ${line.item.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -332,8 +338,12 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
               )}
             </div>
             <div className="flex justify-end gap-6 border-t bg-muted/30 px-4 py-3 text-sm">
-              <span>Items: <strong>{lines.length}</strong></span>
-              <span>Qty: <strong>{addedQty}</strong></span>
+              <span>
+                Items: <strong>{lines.length}</strong>
+              </span>
+              <span>
+                Qty: <strong>{addedQty}</strong>
+              </span>
             </div>
             <div className="space-y-3 p-3">
               <textarea
@@ -345,21 +355,27 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                 disabled={saving}
                 data-testid="retail-transfer-notes"
               />
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  onClick={() => void save()}
-                  disabled={saving || !sourceId || !destinationId || sourceId === destinationId || lines.length === 0}
-                  data-testid="retail-transfer-save"
-                >
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Transfer
-                </Button>
-              </div>
               <p className="text-xs text-muted-foreground">
-                Transfers move exact retail variants between locations immediately and are recorded in the retail stock ledger.
+                Transfers move exact retail variants between locations immediately and are recorded in the retail stock
+                ledger.
               </p>
             </div>
+            {/* A retail transfer is always new (no edit), so the bar has Save and no Cancel. */}
+            <VoucherActionBar
+              isEditing={false}
+              saving={saving}
+              disabled={!sourceId || !destinationId || sourceId === destinationId || lines.length === 0}
+              onSave={() => void save()}
+              saveTestId="retail-transfer-save"
+              data-testid="retail-transfer-actions"
+              className="mt-0"
+              summary={
+                <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+                  {retailSummary}
+                </span>
+              }
+              phoneSummary={retailSummary}
+            />
           </Card>
           <Card className="flex min-h-72 min-w-0 flex-col overflow-hidden xl:sticky xl:top-4 xl:max-h-[min(70vh,740px)]">
             <div className="space-y-2 border-b p-3">
@@ -370,30 +386,30 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                 </span>
               </div>
               <div className="flex items-center gap-2">
-              <form
-                className="min-w-0 flex-1"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleScan(search);
-                }}
-              >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    ref={scanInput}
-                    autoComplete="off"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Scan barcode or search name / SKU…"
-                    className="pl-9 pr-9"
-                    disabled={!sourceId || saving}
-                    data-testid="retail-transfer-search-scan"
-                    aria-label="Search retail variants or scan barcode"
-                  />
-                  <Barcode className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
-              </form>
-              <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={!sourceId || saving} />
+                <form
+                  className="min-w-0 flex-1"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleScan(search);
+                  }}
+                >
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      ref={scanInput}
+                      autoComplete="off"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Scan barcode or search name / SKU…"
+                      className="pl-9 pr-9"
+                      disabled={!sourceId || saving}
+                      data-testid="retail-transfer-search-scan"
+                      aria-label="Search retail variants or scan barcode"
+                    />
+                    <Barcode className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                </form>
+                <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={!sourceId || saving} />
               </div>
               <div className="text-xs text-muted-foreground">
                 Click an item to add it; click its picture to view all photos. Scanning again adds one more.
@@ -410,32 +426,34 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                 <div className="p-5 text-sm text-destructive">Unable to load inventory for this location.</div>
               ) : !items.length ? (
                 <div className="p-5 text-sm text-muted-foreground">No matching items found at this location.</div>
-              ) : items.map((item) => (
-                <div key={item.variantId} className="flex items-center gap-2 border-b p-2 hover:bg-muted/30">
-                  <RetailPhotoGallery
-                    images={item.imageUrls ?? []}
-                    title={`${item.brand} · ${item.name} · ${item.color} / ${item.size}`}
-                    imageClassName="h-14 w-14 rounded border"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addItem(item)}
-                    disabled={saving || scanning || availableQty(item) < 1}
-                    className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                    data-testid={`retail-transfer-pick-${item.variantId}`}
-                    aria-label={`Add ${item.name} ${item.color} ${item.size} to transfer`}
-                  >
-                    <div className="truncate text-sm font-semibold">{item.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {item.brand} · {item.color} / {item.size}
-                    </div>
-                    <div className="truncate font-mono text-xs text-muted-foreground">{item.barcode}</div>
-                    <div className="text-xs font-medium">
-                      {availableQty(item) > 0 ? `Available: ${availableQty(item)}` : "Out of stock"}
-                    </div>
-                  </button>
-                </div>
-              ))}
+              ) : (
+                items.map((item) => (
+                  <div key={item.variantId} className="flex items-center gap-2 border-b p-2 hover:bg-muted/30">
+                    <RetailPhotoGallery
+                      images={item.imageUrls ?? []}
+                      title={`${item.brand} · ${item.name} · ${item.color} / ${item.size}`}
+                      imageClassName="h-14 w-14 rounded border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addItem(item)}
+                      disabled={saving || scanning || availableQty(item) < 1}
+                      className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                      data-testid={`retail-transfer-pick-${item.variantId}`}
+                      aria-label={`Add ${item.name} ${item.color} ${item.size} to transfer`}
+                    >
+                      <div className="truncate text-sm font-semibold">{item.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {item.brand} · {item.color} / {item.size}
+                      </div>
+                      <div className="truncate font-mono text-xs text-muted-foreground">{item.barcode}</div>
+                      <div className="text-xs font-medium">
+                        {availableQty(item) > 0 ? `Available: ${availableQty(item)}` : "Out of stock"}
+                      </div>
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
             <div className="border-t p-2 text-xs text-muted-foreground">
               {scanning ? "Checking barcode…" : "Scan with a hardware reader or press Enter in the search field."}

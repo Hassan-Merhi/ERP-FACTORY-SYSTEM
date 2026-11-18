@@ -8,7 +8,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Building2,
@@ -53,9 +52,7 @@ import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaults
 import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
 import { ScheduledWhatsAppMessagesTab } from "./settings/ScheduledWhatsAppMessagesTab";
 import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FloatingWidgetsSettingsCard } from "./settings/FloatingWidgetsSettingsCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -91,11 +88,9 @@ export default function Settings() {
   const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
-  const { dateFormat, setDateFormat, isPending: isDateFormatPending } = useDateFormat();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
-  const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -306,54 +301,7 @@ export default function Settings() {
                   Turn the floating AI assistant and My Notes buttons on or off.
                 </p>
               </div>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Floating tools</CardTitle>
-                  <CardDescription>These controls apply to your account across the ERP.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium leading-none">AI Agent Chatbot</p>
-                      <p className="text-xs text-muted-foreground mt-1">Show the floating AI chat bubble.</p>
-                    </div>
-                    <Switch
-                      checked={prefs?.showChatWidget !== false}
-                      disabled={prefsPending}
-                      onCheckedChange={(value) => {
-                        updatePref({ showChatWidget: value });
-                        toast({
-                          title: value ? "AI assistant enabled" : "AI assistant hidden",
-                          description: value
-                            ? "The floating AI chat bubble is now visible."
-                            : "The floating AI chat bubble has been turned off.",
-                        });
-                      }}
-                      data-testid="settings-switch-show-chat-widget"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium leading-none">My Notes</p>
-                      <p className="text-xs text-muted-foreground mt-1">Show the floating My Notes button.</p>
-                    </div>
-                    <Switch
-                      checked={prefs?.showNotesPanel !== false}
-                      disabled={prefsPending}
-                      onCheckedChange={(value) => {
-                        updatePref({ showNotesPanel: value });
-                        toast({
-                          title: value ? "My Notes enabled" : "My Notes hidden",
-                          description: value
-                            ? "The floating My Notes button is now visible."
-                            : "The floating My Notes button has been turned off.",
-                        });
-                      }}
-                      data-testid="settings-switch-show-notes-panel"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              <FloatingWidgetsSettingsCard testIdPrefix="settings-" />
             </div>
           )}
           {activeSection === "users-permissions" && (
@@ -392,13 +340,7 @@ export default function Settings() {
           {activeSection === "excel-appearance" && canManageExcelAppearance && (
             <ExcelAppearanceSettingsTab company={selectedCompany} />
           )}
-          {activeSection === "preferences" && (
-            <PreferencesTab
-              dateFormat={dateFormat}
-              setDateFormat={setDateFormat}
-              isDateFormatPending={isDateFormatPending}
-            />
-          )}
+          {activeSection === "preferences" && <PreferencesTab />}
           {activeSection === "system" && (
             <SystemToolsTab
               appMode={appMode}

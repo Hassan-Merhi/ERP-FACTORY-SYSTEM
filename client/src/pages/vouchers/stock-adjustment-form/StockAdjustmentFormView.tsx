@@ -3,7 +3,6 @@ import { formatNumber } from "@/lib/formatNumber";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,8 +17,7 @@ import type { StockAdjustmentFormModel } from "./useStockAdjustmentFormModel";
 import { AdjustmentMobileRows } from "./AdjustmentMobileRows";
 import { AdjustmentSpreadsheet } from "./AdjustmentSpreadsheet";
 import { AdjustmentItemSidebar } from "./AdjustmentItemSidebar";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
+import { VoucherActionBar, VoucherOptionalSwitch } from "../VoucherActionBar";
 
 export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormModel }) {
   const {
@@ -36,9 +34,8 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
     formatAmount,
     voucherIdToEdit,
   } = model;
-  const isPhone = useErpPhoneLayout();
-  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
   const totalQuantity = adjustmentEntries.reduce((sum, e) => sum + parseFloat(e.quantity || "0"), 0);
+  const adjustmentSummary = `Qty ${formatNumber(totalQuantity)} · Total ${formatAmount(displayAdjustmentTotal)}`;
 
   return (
     <div className="space-y-4">
@@ -187,76 +184,63 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
                 )}
               />
 
-              {/* Optional */}
-              <FormField
-                control={stockAdjustmentForm.control}
-                name="optional"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
+              <VoucherActionBar
+                isEditing={!!voucherIdToEdit}
+                saving={stockAdjustmentMutation.isPending}
+                disabled={adjustmentEntries.length === 0}
+                saveTestId="button-save-adjustment-voucher"
+                data-testid="adjustment-actions"
+                summary={
+                  <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+                    {adjustmentSummary}
+                  </span>
+                }
+                phoneSummary={adjustmentSummary}
+                optional={
+                  <FormField
+                    control={stockAdjustmentForm.control}
+                    name="optional"
+                    render={({ field }) => (
+                      <VoucherOptionalSwitch
                         checked={field.value}
                         onCheckedChange={field.onChange}
                         data-testid="checkbox-adjustment-optional"
                       />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Mark as Optional</FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              {/* Footer Actions */}
-              <div className="flex flex-wrap justify-end gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={
-                        adjustmentEntries.filter((e) => e.stockItemId > 0 && parseFloat(e.quantity) > 0).length === 0
-                      }
-                      data-testid="button-export-production-consumption"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export
-                      <ChevronDown className="h-4 w-4 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => handleExportProductionConsumptionVoucher(false)}
-                      data-testid="export-prod-cons-summary"
-                    >
-                      Summary Export
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleExportProductionConsumptionVoucher(true)}
-                      data-testid="export-prod-cons-detailed"
-                    >
-                      Detailed Export
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {!isPhone && (
-                  <Button
-                    type="submit"
-                    disabled={stockAdjustmentMutation.isPending || adjustmentEntries.length === 0}
-                    data-testid="button-save-adjustment-voucher"
-                  >
-                    {stockAdjustmentMutation.isPending ? "Saving..." : "Save Production/Consumption Voucher"}
-                  </Button>
-                )}
-              </div>
-
-              <VoucherPhoneActionBar
-                summary={`Qty ${formatNumber(totalQuantity)} · Total ${formatAmount(displayAdjustmentTotal)}`}
-                saveLabel="Save Voucher"
-                saving={stockAdjustmentMutation.isPending}
-                disabled={adjustmentEntries.length === 0}
-                onCancel={cancelEdit}
-                data-testid="adjustment-phone-actions"
+                    )}
+                  />
+                }
+                secondary={
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          adjustmentEntries.filter((e) => e.stockItemId > 0 && parseFloat(e.quantity) > 0).length === 0
+                        }
+                        data-testid="button-export-production-consumption"
+                      >
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Export
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => handleExportProductionConsumptionVoucher(false)}
+                        data-testid="export-prod-cons-summary"
+                      >
+                        Summary Export
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleExportProductionConsumptionVoucher(true)}
+                        data-testid="export-prod-cons-detailed"
+                      >
+                        Detailed Export
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                }
               />
             </form>
           </Form>

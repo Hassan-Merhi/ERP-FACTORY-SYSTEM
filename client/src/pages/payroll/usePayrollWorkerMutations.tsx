@@ -40,8 +40,9 @@ export function usePayrollWorkerMutations({
 }: UsePayrollWorkerMutationsArgs) {
   const { toast } = useToast();
   const recordChanges = useExistingRecordChangeAccess();
-  const showError = (error: unknown) =>
-    toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+  // The toast title names the action that failed ("Save failed", "Delete failed", ...).
+  const showError = (title: string) => (error: unknown) =>
+    toast({ title, description: errorMessage(error), variant: "destructive" });
 
   const handleToggleWorker = (id: number) => {
     setWorkerOverrides((previous) => ({
@@ -65,7 +66,7 @@ export function usePayrollWorkerMutations({
           toast({ title: "Deleted", description: "Worker deleted" });
           queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompanyId] });
         })
-        .catch(showError);
+        .catch(showError("Delete failed"));
     }
   };
 
@@ -83,7 +84,7 @@ export function usePayrollWorkerMutations({
       setNewWorkerDialogOpen(false);
       newWorkerForm.reset();
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const updateWorkerMutation = useMutation({
@@ -97,7 +98,7 @@ export function usePayrollWorkerMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompanyId] });
       setEditWorkerDialogOpen(false);
     },
-    onError: showError,
+    onError: showError("Update failed"),
   });
 
   const handleForceDeleteWorker = () => {
@@ -108,7 +109,7 @@ export function usePayrollWorkerMutations({
         queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompanyId] });
         setDeleteWorkerConflict(null);
       })
-      .catch(showError);
+      .catch(showError("Delete failed"));
   };
 
   return {

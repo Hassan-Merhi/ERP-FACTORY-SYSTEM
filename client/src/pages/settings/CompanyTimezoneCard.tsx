@@ -1,7 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { SectionSaveBar } from "@/components/SectionSaveBar";
+import { useSectionSave } from "@/hooks/use-section-save";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -33,7 +34,6 @@ const TIMEZONE_OPTIONS = [
 
 /** The company's business-day timezone, shared by ERP POS Setup and Factory settings. */
 export function CompanyTimezoneCard() {
-  const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const modeApiRequest = getApiRequest(useAppMode());
 
@@ -47,30 +47,23 @@ export function CompanyTimezoneCard() {
     },
   });
 
-  const timezoneMutation = useMutation({
-    mutationFn: async (tz: string) => {
-      const res = await modeApiRequest("POST", "/api/company-settings", {
+  const section = useSectionSave<{ timezone: string }>({
+    saved: { timezone: companySettings?.timezone || "browser" },
+    save: async ({ timezone }) => {
+      await modeApiRequest("POST", "/api/company-settings", {
         companyId: selectedCompany?.id,
-        timezone: tz === "browser" ? null : tz,
+        timezone: timezone === "browser" ? null : timezone,
       });
-      return res.json();
-    },
-    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings", selectedCompany?.id] });
       // A timezone change can change today's business date immediately.
       queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/latest"] });
-      toast({ title: "Updated", description: "Timezone setting has been saved." });
     },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
-    },
+    successTitle: "Timezone saved",
   });
 
   if (!selectedCompany) return null;
-  const currentTimezone = companySettings?.timezone || "browser";
 
   return (
     <Card className="p-6">
@@ -89,9 +82,9 @@ export function CompanyTimezoneCard() {
             </p>
           </div>
           <Select
-            value={currentTimezone}
-            onValueChange={(tz) => timezoneMutation.mutate(tz)}
-            disabled={timezoneMutation.isPending}
+            value={section.draft.timezone}
+            onValueChange={(timezone) => section.update({ timezone })}
+            disabled={section.isSaving}
           >
             <SelectTrigger className="w-full max-w-sm" data-testid="select-company-timezone">
               <SelectValue placeholder="Select timezone…" />
@@ -104,6 +97,13 @@ export function CompanyTimezoneCard() {
               ))}
             </SelectContent>
           </Select>
+          <SectionSaveBar
+            isDirty={section.isDirty}
+            isSaving={section.isSaving}
+            onSave={() => void section.save()}
+            onReset={section.reset}
+            data-testid="company-timezone-save"
+          />
         </div>
       </div>
     </Card>

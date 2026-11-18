@@ -36,8 +36,9 @@ export function usePayrollGroupMutations({
   const assertCanChangeRecords = () => {
     if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
   };
-  const showError = (error: unknown) =>
-    toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+  // The toast title names the action that failed ("Save failed", "Delete failed", ...).
+  const showError = (title: string) => (error: unknown) =>
+    toast({ title, description: errorMessage(error), variant: "destructive" });
 
   const createGroupMutation = useMutation({
     mutationFn: async () =>
@@ -53,7 +54,7 @@ export function usePayrollGroupMutations({
       setNewGroupName("");
       setNewGroupDescription("");
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const { data: groupMembers = [] } = useQuery<Employee[]>({
@@ -79,7 +80,7 @@ export function usePayrollGroupMutations({
         queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
       });
     },
-    onError: showError,
+    onError: showError("Update failed"),
   });
 
   const removeWorkerFromGroupMutation = useMutation({
@@ -92,7 +93,7 @@ export function usePayrollGroupMutations({
         queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
       });
     },
-    onError: showError,
+    onError: showError("Update failed"),
   });
 
   const deleteWorkerGroupMutation = useMutation({
