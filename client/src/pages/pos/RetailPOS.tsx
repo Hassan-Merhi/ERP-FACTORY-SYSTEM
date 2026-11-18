@@ -1,5 +1,9 @@
-import { ShoppingCart, RotateCcw } from "lucide-react";
+import { CalendarDays, MapPin, ShoppingCart, RotateCcw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { PosCheckoutField, PosCheckoutPanel } from "./pos-components/PosCheckoutPanel";
+import { PosSaleHeader, PosSaleSubmitButton } from "./pos-components/PosSaleHeader";
+import { PosSaleScreen } from "./pos-components/PosSaleLayout";
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
 import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions } from "./RetailPaymentAccountSelect";
@@ -69,39 +73,43 @@ export default function RetailPOS() {
     total,
     units,
   } = useRetailPOSState();
+  const { t } = useApplicationLanguage();
 
   if (selectedCompany?.companyType !== "retail") return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
+    <PosSaleScreen variant="retail">
       {receiptPortal}
-      {/* Retail uses the normal ERP POS arrangement; posting stays on variant-aware retail services. */}
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b py-2">
-        <h1 className="border-l-2 border-primary pl-3 text-2xl font-semibold tracking-tight">Point of Sale</h1>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setReturnDialogOpen(true)}
-          disabled={!selectedLocation?.id}
-          data-testid="retail-open-returns"
-        >
-          <RotateCcw className="mr-2 h-4 w-4" /> Return / Exchange
-        </Button>
-        <Button
-          type="button"
-          disabled={!canCompleteSale}
-          onClick={() => saleMutation.mutate()}
-          data-testid="button-save-sale"
-        >
-          {saleMutation.isPending ? "Saving…" : "Save"}
-        </Button>
-      </header>
+      {/* Retail shares the ERP POS header, fields, cart grid and buttons; posting stays on variant-aware retail services. */}
+      <PosSaleHeader
+        title="Point of Sale"
+        subtitle={t("pos.modern.createSale")}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReturnDialogOpen(true)}
+              disabled={!selectedLocation?.id}
+              data-testid="retail-open-returns"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" /> Return / Exchange
+            </Button>
+            <PosSaleSubmitButton
+              type="button"
+              disabled={!canCompleteSale}
+              onClick={() => saleMutation.mutate()}
+              data-testid="button-save-sale"
+              pending={saleMutation.isPending}
+              pendingLabel="Saving…"
+              label="Save"
+            />
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-start gap-3 border-b bg-muted/10 px-1 py-2" aria-label="Retail sale details">
-        <div className="space-y-1">
-          <label htmlFor="retail-pos-location" className="text-xs text-muted-foreground">
-            Location
-          </label>
+      <PosCheckoutPanel ariaLabel={t("pos.modern.saleSettings")}>
+        <PosCheckoutField field="location" icon={MapPin} label={t("pos.modern.location")} htmlFor="retail-pos-location">
           <Select
             disabled={isPosRole}
             value={selectedLocation ? String(selectedLocation.id) : "__none__"}
@@ -122,28 +130,22 @@ export default function RetailPOS() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="retail-pos-date" className="text-xs text-muted-foreground">
-            Date
-          </label>
+        </PosCheckoutField>
+        <PosCheckoutField field="date" icon={CalendarDays} label={t("pos.modern.date")} htmlFor="retail-pos-date">
           <input
             id="retail-pos-date"
             type="date"
-            className="block h-9 rounded-md border bg-muted/40 px-3 font-mono text-sm"
+            className="block h-9 w-full rounded-md border bg-muted/40 px-3 font-mono text-sm"
             value={new Date().toLocaleDateString("sv-SE")}
             readOnly
             aria-label="Sale date (set by server at checkout)"
             title="Retail sales use the actual checkout date; backdated posting is not enabled"
           />
-        </div>
-        <div className="min-w-[200px] space-y-1">
-          <label htmlFor="retail-pos-account" className="text-xs text-muted-foreground">
-            Payment account
-          </label>
+        </PosCheckoutField>
+        <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")} htmlFor="retail-pos-account">
           <select
             id="retail-pos-account"
-            className="block h-9 w-full min-w-[200px] max-w-[340px] rounded-md border bg-background px-3 text-sm"
+            className="block h-9 w-full rounded-md border bg-background px-3 text-sm"
             value={paymentAccountValue(payments[0] ?? { method: "cash", amount: 0 })}
             onChange={(event) => {
               if (!paymentAccounts) return;
@@ -166,7 +168,7 @@ export default function RetailPOS() {
               customerName={customer?.legalName}
             />
           </select>
-        </div>
+        </PosCheckoutField>
         <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
           <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />
         </div>
@@ -178,7 +180,7 @@ export default function RetailPOS() {
             {customer ? `On account: ${money(creditAmount)}` : "Choose a customer to post credit"}
           </span>
         )}
-      </div>
+      </PosCheckoutPanel>
 
       <RetailShiftPanel
         locationId={selectedLocation?.id ?? null}
@@ -239,9 +241,15 @@ export default function RetailPOS() {
               </div>
               <div className="text-lg font-semibold">{money(total)}</div>
             </button>
-            <Button className="h-12 px-6 text-base" disabled={!canCompleteSale} onClick={() => saleMutation.mutate()}>
-              {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
-            </Button>
+            <PosSaleSubmitButton
+              className="h-12 px-6 text-base"
+              disabled={!canCompleteSale}
+              onClick={() => saleMutation.mutate()}
+              pending={saleMutation.isPending}
+              pendingLabel="Completing sale…"
+              label="Complete Sale"
+              showIcon={false}
+            />
           </div>
         </div>
       )}
@@ -303,6 +311,6 @@ export default function RetailPOS() {
           focusScan();
         }}
       />
-    </div>
+    </PosSaleScreen>
   );
 }

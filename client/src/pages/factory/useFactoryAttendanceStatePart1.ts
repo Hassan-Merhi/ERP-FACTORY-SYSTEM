@@ -8,6 +8,8 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
+import { POPUP_BLOCKED_TOAST } from "@/lib/popupBlockedToast";
+import { printDocument } from "@/lib/printDocument";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type {
   AttendanceBulkRecord,
@@ -254,12 +256,7 @@ export function useFactoryAttendanceStatePart1() {
   const [printDialog, setPrintDialog] = useState<"blank" | "results" | "excel-blank" | "excel-results" | null>(null);
 
   const openPrintWindow = (html: string) => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
+    printDocument(html, { onBlocked: () => toast(POPUP_BLOCKED_TOAST) });
   };
   return {
     approvalDates,

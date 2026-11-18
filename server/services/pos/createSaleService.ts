@@ -1,7 +1,7 @@
 /**
  * server/services/pos/createSaleService.ts
  *
- * PHASE 19 — POS Backend Sale Creation Structural Split.
+ * POS sale creation, inventory and accounting posting.
  */
 import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger";
@@ -47,6 +47,7 @@ import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cuto
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
+import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 
@@ -179,8 +180,8 @@ export async function createPosSale(
 
   const grandTotalResult = calculateGrandTotal(items);
   if ("error" in grandTotalResult) return err(grandTotalResult.error);
-  const { grandTotal } = grandTotalResult;
-
+  let { grandTotal } = grandTotalResult;
+  let nativeZmwTotal: string | undefined;
   const salesAccountResult = await getOrCreateSalesRevenueAccount(currentCompanyId);
   if ("error" in salesAccountResult) return err(salesAccountResult.error);
   const { salesAccount } = salesAccountResult;
@@ -201,9 +202,6 @@ export async function createPosSale(
   // backdated ZMW sale's approved rate differs from the current rate.
   let lockedPosCurrency: { currency: string; exchangeRate: string | null };
   try {
-    // Offline (owner decision 2026-11-02): the cashier's entered rate is the
-    // sale's rate on the factory LAN server, and the cloud replay posts at
-    // that same rate. Online, the company's effective-dated rate is locked.
     const enteredRate = lanCapture ? offlineEnteredRate(currency, exchangeRate) : null;
     lockedPosCurrency =
       params.lockedCurrency ??
@@ -216,11 +214,13 @@ export async function createPosSale(
     throw error;
   }
 
-  // Verify original ZMW POS unit prices against the USD line prices at the
-  // exact company/date rate before inventory or voucher writes. This blocks
-  // stale client rates, silent currency substitution, and altered USD prices.
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
+    if (lockedPosCurrency.currency === "ZMW") {
+      const amounts = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+      nativeZmwTotal = amounts.nativeTotal;
+      grandTotal = amounts.usdTotal;
+    }
   } catch (error) {
     if (error instanceof PosZmwRateError) {
       return err({ status: error.statusCode, body: { code: error.code, message: error.message } });
@@ -231,7 +231,6 @@ export async function createPosSale(
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
 
-  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
   const mirrorRefusal = await baleMirrorMovementRefusal(
     db,
     currentCompanyId,
@@ -279,6 +278,7 @@ export async function createPosSale(
       const saleLines = await buildSaleAccountingLines(tx, {
         voucherLabel: location.name,
         grandTotal,
+        nativeZmwTotal,
         isCreditSale,
         accountType,
         accountId,
@@ -291,7 +291,6 @@ export async function createPosSale(
         currency: lockedPosCurrency.currency,
         exchangeRate: lockedPosCurrency.exchangeRate,
       });
-      // Offline sales take the next LAN invoice number, never an SV- number.
       const lanInvoice = lanCapture ? await allocatePhase9PosInvoiceTx(tx) : null;
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
@@ -371,7 +370,7 @@ export async function createPosSale(
           voucherId: txVoucher.id,
           stockItemId: item.stockItemId,
           quantity: inventoryQuantity(qty),
-          sellingPrice: inventoryMoney(sellingPrice),
+          sellingPrice: inventoryUnitCost(sellingPrice),
           costPrice: inventoryUnitCost(costPriceDecimal),
           totalSales: inventoryMoney(totalSales),
           totalCost: inventoryMoney(totalCost),
@@ -539,6 +538,7 @@ export async function createPosSale(
       location,
       items: saleItems,
       grandTotal: grandTotal.toFixed(2),
+      ...(nativeZmwTotal ? { nativeZmwTotal } : {}),
       voucherNumber,
       saleDate: voucherDate,
       isCreditSale,

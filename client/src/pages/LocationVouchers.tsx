@@ -7,6 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { stockVoucherExportColumns, stockVoucherExportFooter } from "@/pages/stock-ledger/stockVoucherExportColumns";
 import type { DisplayRow } from "./LocationVouchersTypes";
 import { useLocationVouchersState } from "./useLocationVouchersState";
 import { LocationVouchersSection, LocationVouchersSection2 } from "./LocationVouchersSection2";
@@ -99,6 +101,15 @@ export default function LocationVouchers(props: { posUser?: unknown }) {
           {showAllMonths ? "This month only" : "Show all months"}
         </Button>
         {!showAllMonths && <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />}
+        <RowsExportMenu
+          title={`${data?.stockItem?.name ?? "Stock Item"} ${data?.location?.name ?? ""} Vouchers`}
+          sheetName="Location Vouchers"
+          rows={displayRows.filter((row: DisplayRow) => !row._isSeparator)}
+          columns={stockVoucherExportColumns(formatDate, !!posUser)}
+          footer={filteredTransactions.length > 0 ? stockVoucherExportFooter(calculatedTotals, !!posUser) : undefined}
+          resource="erp.inventory"
+          period={showAllMonths ? undefined : { from: periodFilter.fromDate, to: periodFilter.toDate }}
+        />
       </PageHeader>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">

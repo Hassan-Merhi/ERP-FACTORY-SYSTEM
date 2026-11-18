@@ -148,13 +148,18 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
   });
 
   const editedCurrency = editVoucherId && editVoucher?.currency;
-  const activeCurrency: Currency = displayCurrency
-    ? (editedCurrency === displayCurrency || editedCurrency === "USD") &&
-      typeof editedCurrency === "string" &&
-      isSupportedAccountingCurrency(editedCurrency)
-      ? editedCurrency
-      : selectedCurrency
-    : "USD";
+  // A Kwacha sale being edited follows the header USD/ZMW switch as a view of
+  // the same sale; it is still saved in Kwacha at its locked rate.
+  const editingZmwSale = editedCurrency === "ZMW" && displayCurrency === "ZMW";
+  const activeCurrency: Currency = editingZmwSale
+    ? selectedCurrency
+    : displayCurrency
+      ? (editedCurrency === displayCurrency || editedCurrency === "USD") &&
+        typeof editedCurrency === "string" &&
+        isSupportedAccountingCurrency(editedCurrency)
+        ? editedCurrency
+        : selectedCurrency
+      : "USD";
   const editLockedRate = editVoucherId && editVoucher?.exchangeRate ? Number(editVoucher.exchangeRate) : null;
   const approvedZmwRate = displayCurrency === "ZMW" && !editVoucherId ? Number(datedZmwRate?.rate) : null;
   const exchangeRate =
@@ -174,7 +179,7 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
   // Do not reinterpret the rows until a valid dated FX rate has resolved.
   const lastDisplayedFx = useRef<{ companyId: number; currency: Currency; rate: number | null } | null>(null);
   useEffect(() => {
-    if (editVoucherId || !selectedCompany?.id) return;
+    if ((editVoucherId && !editingZmwSale) || !selectedCompany?.id) return;
     if (activeCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate))) return;
     const next = { companyId: selectedCompany.id, currency: activeCurrency, rate: exchangeRate };
     const old = lastDisplayedFx.current;
@@ -189,7 +194,9 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
         const newUsd = old.currency === next.currency && next.currency !== "USD" ? row.rate / next.rate! : row.rateUSD;
         const displayRate =
           next.currency === "USD"
-            ? newUsd
+            ? editVoucherId
+              ? Number(newUsd.toFixed(2))
+              : newUsd
             : next.currency === "CFA"
               ? Math.round(newUsd * next.rate!)
               : Number((newUsd * next.rate!).toFixed(2));
@@ -197,7 +204,7 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
       })
     );
     lastDisplayedFx.current = next;
-  }, [activeCurrency, exchangeRate, editVoucherId, selectedCompany?.id, setRows]);
+  }, [activeCurrency, exchangeRate, editVoucherId, editingZmwSale, selectedCompany?.id, setRows]);
 
   // POS view-only is a real write boundary, not just a server-side fallback.
   // Keep every client mutation path quiet so expected denials do not become
@@ -353,12 +360,14 @@ export function usePOSStatePart1Part2({
 >) {
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  // Auto-select first POS location
+  // On edit, wait for the receipt's assigned location instead of defaulting
+  // to the cashier's first shop (which could be a different shop).
   useEffect(() => {
+    if (editVoucherId) return;
     if (posUser && posAssignedLocations.length > 0 && !posSelectedLocation) {
       setPosSelectedLocation(posAssignedLocations[0]);
     }
-  }, [posUser, posAssignedLocations, posSelectedLocation, setPosSelectedLocation]);
+  }, [editVoucherId, posUser, posAssignedLocations, posSelectedLocation, setPosSelectedLocation]);
 
   // Set default cash account for POS users from location mapping — applies to
   // Supplier Partner companies too, same as normal ERP POS.

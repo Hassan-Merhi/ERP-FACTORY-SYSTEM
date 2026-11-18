@@ -198,7 +198,7 @@ export function SupplierPaymentFxDialogs({
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   Total USD payout (${paymentAmtUsd.toFixed(2)}) exceeds the current USD balance ($
                   {paymentBalanceUsd.toFixed(2)}). Remaining{" "}
-                  <span className="font-bold">${overpaymentUsd.toFixed(2)}</span> will be recorded as a credit (CR) on
+                  <span className="font-bold">{formatUsd(overpaymentUsd, 2)}</span> will be recorded as a credit (CR) on
                   the supplier's statement.
                 </p>
               </div>

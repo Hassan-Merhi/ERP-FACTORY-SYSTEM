@@ -22,6 +22,7 @@ export interface PosEditSaleItemInput {
   stockItemId: number;
   quantity: string | number | null | undefined;
   sellingPrice: string | number | null | undefined;
+  originalCurrencyRate?: string | number | null;
   totalSales?: string | number | null;
   [POS_INTERNAL_TOTAL_SALES_OVERRIDE]?: boolean;
 }
@@ -58,6 +59,7 @@ export interface UpdatePosSaleParams {
   username: string;
   userRole: string | undefined;
   canSellNegativeStock: boolean;
+  posDaybookEditAuthorization?: { editDays: number; businessDate: string };
   body: {
     description: unknown;
     items: unknown[];

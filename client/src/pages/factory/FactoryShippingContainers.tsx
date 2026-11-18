@@ -3,7 +3,6 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageCircle, Trash2, Check, CheckCircle2, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +15,7 @@ import {
   LIST_KEY,
   STATUS_ORDER,
   fmtDate,
-  statusColor,
-  statusLabel,
+  ShippingStatusBadge,
   stickyCellBase,
   stickyHeadBase,
   shippingCostUsd,
@@ -33,6 +31,7 @@ import { ScheduledContainersTable } from "./factoryshippingcontainers/components
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
 import { ShippingToolbar } from "./factoryshippingcontainers/components/ShippingToolbar";
+import { ShippingListExport } from "./factoryshippingcontainers/components/ShippingListExport";
 import { DoneContainersSection } from "./factoryshippingcontainers/components/DoneContainersSection";
 import { ShippingConfirmDialogs } from "./factoryshippingcontainers/components/ShippingConfirmDialogs";
 import {
@@ -340,7 +339,6 @@ export default function FactoryShippingContainers() {
           allowNewOrder={Boolean(me?.role && !isExistingRecordReadOnlyRole(me.role))}
           showOrderValue={colVis.containerCost}
         />
-        {/* ── Compact search + controls ── */}
         <ShippingToolbar
           search={search}
           onSearch={setSearch}
@@ -362,9 +360,9 @@ export default function FactoryShippingContainers() {
           toggleCol={toggleCol}
           showAllCols={showAllCols}
           hiddenCount={hiddenCount}
+          exportMenu={<ShippingListExport rows={filtered} colVis={colVis} period={{ from: dateFrom, to: dateTo }} />}
         />
 
-        {/* ── Filter Panel ── */}
         {showFilters && (
           <FilterPanel
             filterDocs={filterDocs}
@@ -499,11 +497,7 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge
-                            className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}
-                          >
-                            {statusLabel(r.status)}
-                          </Badge>
+                          <ShippingStatusBadge status={r.status} />
                         </button>
                       </TableCell>
                     )}

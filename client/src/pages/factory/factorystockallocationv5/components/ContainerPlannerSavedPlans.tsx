@@ -9,7 +9,8 @@ import { ContainerPlannerCustomerAllocation } from "./ContainerPlannerCustomerAl
 import { ContainerPlannerShipments } from "./ContainerPlannerShipments";
 import { ContainerPlannerOptimizer } from "./ContainerPlannerOptimizer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatQty, type Props } from "./ContainerPlannerSavedPlansTypes";
+import { formatCount as formatQty } from "@/lib/formatNumber";
+import { type Props } from "./ContainerPlannerSavedPlansTypes";
 import { useContainerPlannerSavedPlansState } from "./useContainerPlannerSavedPlansState";
 import {
   ContainerPlannerSavedPlansSection,

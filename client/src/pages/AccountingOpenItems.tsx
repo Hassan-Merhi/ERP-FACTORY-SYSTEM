@@ -9,58 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
-
-type Domain = "customer" | "supplier" | "factory_supplier" | "rentals";
-interface Allocation {
-  matchId: number;
-  otherEntryId: number;
-  amount: string;
-}
-interface OpenItem {
-  entryId: number;
-  voucherId: number;
-  voucherNumber: string;
-  voucherType: string;
-  businessDate: string;
-  dueDate: string | null;
-  overdueDays: number | null;
-  side: "charge" | "settlement";
-  currency: string;
-  originalAmount: string;
-  matchedAmount: string;
-  outstandingAmount: string;
-  currencyVerified: boolean;
-  status: string;
-  allocations: Allocation[];
-}
-interface PartyView {
-  items: OpenItem[];
-  openingBalance: { amount: string; side: string | null; includedInMatching: false };
-  currencies: Record<
-    string,
-    {
-      charges: string;
-      settlements: string;
-      unapplied: string;
-      outstanding: string;
-    }
-  >;
-}
-interface RentalView {
-  currency: string;
-  items: Array<{
-    year: number;
-    month: number;
-    dueDate: string;
-    expectedAmount: string;
-    paidAmount: string;
-    outstandingAmount: string;
-    status: string;
-    paymentIds: number[];
-  }>;
-  totals: { expected: string; paidAgainstDue: string; outstanding: string; advanceForOtherMonths: string };
-}
-type Result = PartyView | RentalView;
+import { OpenItemsExportMenu } from "./AccountingOpenItemsExportMenu";
+import type { Domain, RentalView, Result } from "./accountingOpenItemsTypes";
 
 function isRental(view: Result): view is RentalView {
   return "totals" in view;
@@ -175,7 +125,16 @@ export default function AccountingOpenItems() {
       <PageHeader
         title="Open-item reconciliation"
         subtitle="Match payments to posted charges; accounting entries, currencies and balances remain unchanged."
-      />
+      >
+        <OpenItemsExportMenu
+          asOfDate={asOfDate}
+          party={party}
+          partyLabel={optionsLabel[domain]}
+          partyId={partyId}
+          rent={rent}
+          rentalModule={rentalModule}
+        />
+      </PageHeader>
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-4">
           <div className="space-y-1">

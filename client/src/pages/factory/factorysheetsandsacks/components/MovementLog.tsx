@@ -17,6 +17,7 @@ import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarC
 import type { LogEntry, SheetsAndSacksItem } from "../types";
 import { DATE_PRESETS, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 const usd = (value: string | number) => formatUsd(parseFloat(String(value) || "0"), 2);
 
@@ -172,6 +173,25 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
               ))}
             </SelectContent>
           </Select>
+          <RowsExportMenu
+            title="Sheets and Sacks Movements"
+            sheetName="Movements"
+            rows={byDay.flatMap(([, entries]) => entries)}
+            columns={[
+              { header: "Date", value: (e) => fmtDateTime(e.createdAt) },
+              { header: "Item", value: (e) => e.itemName },
+              { header: "Type", value: (e) => e.itemType },
+              { header: "Action", value: (e) => (e.action === "IN" ? "IN" : e.action === "OUT" ? "OUT" : "ADJ") },
+              { header: "Packs", value: (e) => e.packs, type: "number" },
+              { header: "Pcs", value: (e) => e.pieces, type: "number" },
+              { header: "Unit $", value: (e) => e.unitPrice, type: "number" },
+              { header: "Value", value: (e) => e.totalValue, type: "number" },
+              { header: "Notes", value: (e) => e.notes },
+            ]}
+            period={{ from: from || null, to: to || null }}
+            resource="factory.production"
+            className="h-7 text-xs"
+          />
         </div>
       </div>
 

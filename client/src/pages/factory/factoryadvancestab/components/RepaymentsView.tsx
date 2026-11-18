@@ -16,6 +16,7 @@ import type { FactoryWorker } from "@shared/schema";
 
 import type { RepaymentRecord } from "../types";
 import { fmt } from "../utils";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export function RepaymentsView() {
   const { formatDisplayDate } = useDateFormat();
@@ -130,6 +131,21 @@ export function RepaymentsView() {
             ))}
           </SelectContent>
         </Select>
+        <RowsExportMenu
+          title="Advance Repayments"
+          rows={list}
+          columns={[
+            { header: "Worker", value: (r) => r.workerName },
+            { header: "Loan Date", value: (r) => (r.advanceDate ? formatDate(r.advanceDate) : null) },
+            { header: "Repayment Date", value: (r) => (r.repaymentDate ? formatDate(r.repaymentDate) : null) },
+            { header: "Amount Paid (USD)", value: (r) => parseFloat(r.amount || "0"), type: "number" },
+            { header: "Cash Account", value: (r) => r.cashAccountName },
+            { header: "Notes", value: (r) => r.notes },
+          ]}
+          resource="factory.payroll"
+          className="ml-auto"
+          data-testid="button-export-repayments"
+        />
       </div>
 
       <Card>

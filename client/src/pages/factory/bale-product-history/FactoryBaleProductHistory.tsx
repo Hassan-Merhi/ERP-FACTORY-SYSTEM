@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -90,6 +91,23 @@ export function FactoryBaleProductHistory() {
             >
               Show All Months
             </Button>
+            <RowsExportMenu
+              title={`${product?.articleCode || "Bale Product"} History ${year}`}
+              sheetName="Monthly History"
+              rows={monthlyData}
+              columns={[
+                { header: "Month", value: (m) => m.monthName },
+                { header: "Bales In", value: (m) => m.balesIn, type: "number" },
+                { header: "Bales Out", value: (m) => m.balesOut, type: "number" },
+                { header: "Weight (KG)", value: (m) => m.totalWeight, type: "number" },
+              ]}
+              footer={
+                grandTotal
+                  ? ["Grand Total", grandTotal.balesIn, grandTotal.balesOut, grandTotal.totalWeight]
+                  : undefined
+              }
+              resource="factory.bales"
+            />
           </PageHeader>
         </div>
       </div>

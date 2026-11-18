@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportColumn } from "@/components/export/RowsExportMenu";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import type { AuthMe } from "@shared/apiTypes";
-import { useLocationMonthlySummaryState } from "./useLocationMonthlySummaryState";
+import { toSafeNumber, useLocationMonthlySummaryState, type MonthlyData } from "./useLocationMonthlySummaryState";
 import { LocationMonthlySummaryCardContentSection } from "./LocationMonthlySummaryCardContentSection";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
@@ -71,6 +72,42 @@ export default function LocationMonthlySummary(props: { posUser?: AuthMe }) {
   }
 
   const uom = data?.stockItem?.uom || "Units";
+  const blankZero = (value: unknown) => toSafeNumber(value) || null;
+  const exportGroups = [
+    ["Opening", "opening"],
+    ["Stock In", "inward"],
+    ["Stock Out", "outward"],
+    ["Closing", "closing"],
+  ] as const;
+  const exportColumns: RowsExportColumn<MonthlyData>[] = [
+    { header: "Month", value: (month) => month.monthName },
+    ...exportGroups.flatMap(([label, key]): RowsExportColumn<MonthlyData>[] => [
+      { header: `${label} Qty`, value: (month) => blankZero(month[`${key}Qty`]), type: "number" },
+      ...(posUser
+        ? []
+        : [
+            {
+              header: `${label} Rate`,
+              value: (month: MonthlyData) => blankZero(month[`${key}Rate`]),
+              type: "number" as const,
+            },
+            {
+              header: `${label} Value`,
+              value: (month: MonthlyData) => blankZero(month[`${key}Value`]),
+              type: "number" as const,
+            },
+          ]),
+    ]),
+  ];
+  const exportFooter = data?.grandTotal
+    ? [
+        "Total",
+        ...exportGroups.flatMap(([, key]) => [
+          blankZero(data.grandTotal[`${key}Qty`]),
+          ...(posUser ? [] : [blankZero(data.grandTotal[`${key}Rate`]), blankZero(data.grandTotal[`${key}Value`])]),
+        ]),
+      ]
+    : undefined;
 
   return (
     <div className="container mx-auto space-y-4 p-0 sm:p-6">
@@ -132,6 +169,15 @@ export default function LocationMonthlySummary(props: { posUser?: AuthMe }) {
           {showAllMonths ? "Hide empty months" : "Show all months"}
         </Button>
         <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+        <RowsExportMenu
+          title={`${data?.stockItem?.name ?? "Stock Item"} ${isAllLocationsMode ? "All Locations" : (data?.location?.name ?? "")} Monthly Summary`}
+          sheetName="Monthly Summary"
+          rows={visibleRows}
+          columns={exportColumns}
+          footer={exportFooter}
+          resource="erp.inventory"
+          period={{ from: periodFilter.fromDate, to: periodFilter.toDate }}
+        />
       </PageHeader>
 
       {/* KPI Summary Cards */}

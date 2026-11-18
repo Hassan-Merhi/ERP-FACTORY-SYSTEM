@@ -1,11 +1,13 @@
 // Extracted from ./FactoryMonthlyProductionDrilldown.tsx to keep that module under the source-size cap.
 import { useMemo, useState } from "react";
+import { formatQuantity } from "@/lib/formatNumber";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, useSearch } from "wouter";
 import { ArrowLeft, Users } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Button } from "@/components/ui/button";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
@@ -71,7 +73,7 @@ export const monthText = (months: string) =>
 
 export const format = (count: number) => count.toLocaleString();
 
-export const kg = (value: string | number) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 3 });
+export const kg = (value: string | number) => formatQuantity(Number(value));
 
 export const requestJson = async <T,>(url: string): Promise<T> => {
   const response = await fetch(url, { credentials: "include" });
@@ -138,7 +140,39 @@ export function FactoryMonthlyProductionWorkers() {
   return (
     <main className="space-y-4 p-3 sm:p-5" data-testid="monthly-production-workers">
       <DrilldownBack onClick={backToMatrix} label="Back to monthly matrix" />
-      <PageHeader title="Monthly production by worker" subtitle={monthText(validMonths(months) ? months : "")} />
+      <PageHeader title="Monthly production by worker" subtitle={monthText(validMonths(months) ? months : "")}>
+        <RowsExportMenu
+          title={`Monthly Production by Worker ${data?.product.articleCode ?? ""}`}
+          sheetName="Workers"
+          rows={filtered}
+          columns={[
+            { header: "Worker", value: (worker) => worker.workerName },
+            ...(data?.months ?? []).map((month) => ({
+              header: monthText(month),
+              value: (worker: Worker) => worker.monthlyBales[month] ?? 0,
+              type: "number" as const,
+            })),
+            { header: "Weight (kg)", value: (worker) => Number(worker.weightKg), type: "number" },
+            { header: "Total bales", value: (worker) => worker.quantity, type: "number" },
+          ]}
+          footer={
+            data
+              ? [
+                  "Total (all workers)",
+                  ...data.months.map((month) =>
+                    data.workers.reduce((sum, worker) => sum + (worker.monthlyBales[month] ?? 0), 0)
+                  ),
+                  Number(data.totalWeightKg),
+                  data.totalBales,
+                ]
+              : undefined
+          }
+          filters={
+            data ? [{ label: "Product", value: `${data.product.name} (${data.product.articleCode})` }] : undefined
+          }
+          resource="factory.production"
+        />
+      </PageHeader>
       {!enabled ? (
         <p className="rounded-lg border p-6 text-destructive">Invalid item or month selection.</p>
       ) : isLoading ? (

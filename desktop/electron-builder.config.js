@@ -17,12 +17,25 @@ module.exports = {
     "main.js",
     "preload.js",
     "offline.html",
+    "offline/**/*",
     "icons/**/*",
     "package.json",
     "!node_modules/**/*",
     "!dist/**/*",
     "!scripts/**/*",
   ],
+
+  // Full offline mode: the ERP server, migrations and the PC sync agent, staged
+  // for this operating system by `npm run stage:offline` (build/erp-server).
+  // Missing folder = a cloud-only build, exactly as before.
+  extraResources: require("fs").existsSync(require("path").join(__dirname, "build", "erp-server"))
+    ? [{ from: "build/erp-server", to: "erp-server" }]
+    : [],
+
+  mac: {
+    target: [{ target: "dmg", arch: ["x64", "arm64"] }],
+    category: "public.app-category.business",
+  },
 
   extraMetadata: {
     version: process.env.APP_VERSION || require("./package.json").version,

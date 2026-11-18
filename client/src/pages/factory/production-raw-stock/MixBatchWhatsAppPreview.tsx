@@ -1,6 +1,6 @@
 import type { CSSProperties, RefObject } from "react";
 import { formatUsd } from "@/lib/moneyDisplay";
-import { formatNumber } from "@/lib/formatNumber";
+import { formatQuantity } from "@/lib/formatNumber";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
 import {
@@ -21,7 +21,6 @@ interface MixBatchWhatsAppPreviewProps {
 }
 
 const formatMoney = (n: number): string => formatUsd(n, 2);
-const formatWeight = (n: number): string => formatNumber(n, 3);
 const formatRate = (n: number): string => formatUsd(n, 4);
 const cell: CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #334155" };
 
@@ -111,7 +110,7 @@ export function MixBatchWhatsAppPreview({
             </div>
             <div style={{ display: "flex", gap: "12px", marginBottom: "15px" }}>
               {[
-                { label: tr("totalWeight"), value: formatWeight(actualTotal) + " kg" },
+                { label: tr("totalWeight"), value: formatQuantity(actualTotal) + " kg" },
                 { label: tr("recordedCost"), value: formatMoney(historicalTotal) },
                 { label: tr("blendedCost"), value: formatRate(actualTotal > 0 ? historicalTotal / actualTotal : 0) },
               ].map((stat) => (
@@ -157,11 +156,11 @@ export function MixBatchWhatsAppPreview({
                           ? tr("uncategorized")
                           : row.name}
                     </td>
-                    <td style={{ ...cell, textAlign: "right" }}>{formatWeight(row.weightKg)}</td>
+                    <td style={{ ...cell, textAlign: "right" }}>{formatQuantity(row.weightKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatRate(row.averageCostPerKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.totalCost)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>
-                      {row.targetKg === null ? "—" : formatWeight(row.targetKg)}
+                      {row.targetKg === null ? "—" : formatQuantity(row.targetKg)}
                     </td>
                     <td
                       style={{
@@ -181,8 +180,8 @@ export function MixBatchWhatsAppPreview({
                       {row.differenceKg === null
                         ? "—"
                         : row.differenceKg > 0
-                          ? "+" + formatWeight(row.differenceKg)
-                          : formatWeight(row.differenceKg)}
+                          ? "+" + formatQuantity(row.differenceKg)
+                          : formatQuantity(row.differenceKg)}
                     </td>
                   </tr>
                 ))}
@@ -190,12 +189,12 @@ export function MixBatchWhatsAppPreview({
               <tfoot>
                 <tr style={{ backgroundColor: "#293548", fontWeight: 800 }}>
                   <td style={cell}>{tr("total")}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{formatWeight(actualTotal)}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{formatQuantity(actualTotal)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>
                     {formatRate(actualTotal > 0 ? historicalTotal / actualTotal : 0)}
                   </td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatMoney(historicalTotal)}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{hasTargets ? formatWeight(targetTotal) : "—"}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{hasTargets ? formatQuantity(targetTotal) : "—"}</td>
                   <td
                     style={{
                       ...cell,
@@ -211,7 +210,7 @@ export function MixBatchWhatsAppPreview({
                               : "#f9fafb",
                     }}
                   >
-                    {delta === null ? "—" : delta > 0 ? "+" + formatWeight(delta) : formatWeight(delta)}
+                    {delta === null ? "—" : delta > 0 ? "+" + formatQuantity(delta) : formatQuantity(delta)}
                   </td>
                 </tr>
               </tfoot>

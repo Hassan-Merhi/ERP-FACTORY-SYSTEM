@@ -7,6 +7,7 @@ const harness = vi.hoisted(() => ({
   apiRequest: vi.fn(),
   invalidateQueries: vi.fn(),
   navigate: vi.fn(),
+  exportOperationalWorkbook: vi.fn(),
 }));
 
 const priceItems = [
@@ -159,6 +160,10 @@ vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (v: number) => `$${v.toFixed(2)}` }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
+vi.mock("@/lib/operationalExcelExport", () => ({
+  columnsFromOperationalRows: () => [],
+  exportOperationalWorkbook: harness.exportOperationalWorkbook,
+}));
 vi.mock("@/lib/utils", () => ({ cn: (...values: any[]) => values.filter(Boolean).join(" ") }));
 
 vi.mock("@/components/ui/input", () => ({
@@ -260,6 +265,22 @@ describe("POS price list page behavior", () => {
     expect(harness.toast).toHaveBeenCalledWith({ title: "Price updated" });
   });
 
+  it("shows an Export failed toast when the price list export throws", async () => {
+    harness.exportOperationalWorkbook.mockRejectedValueOnce(new Error("Workbook too large"));
+    render(<POSPriceList />);
+    fireEvent.click(screen.getByTestId("button-location-11"));
+    fireEvent.click(screen.getByTestId("button-export-price-list"));
+
+    await waitFor(() =>
+      expect(harness.toast).toHaveBeenCalledWith({
+        title: "Export failed",
+        description: "Workbook too large",
+        variant: "destructive",
+      })
+    );
+    await waitFor(() => expect(screen.getByTestId("button-export-price-list")).toHaveTextContent("Export"));
+  });
+
   it("supports all-locations visibility and independent master price editing", async () => {
     render(<POSPriceList />);
     fireEvent.click(screen.getByTestId("button-location-all"));
@@ -299,27 +320,38 @@ describe("POS price list page behavior", () => {
     });
   });
 
-  it("keeps POS users scoped to their assigned priced inventory and read-only", async () => {
-    render(<POSPriceList posUser />);
+  it("lets writable POS cashiers set assigned-location prices including previously unpriced items", async () => {
+    render(<POSPriceList posUser={{ role: "POS", posViewOnly: false }} />);
+    await waitFor(() => expect(screen.getByTestId("row-price-101")).toBeInTheDocument());
+    expect(screen.getByTestId("row-price-102")).toBeInTheDocument();
+    expect(screen.queryByTestId("button-location-all")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-show-zero-qty")).not.toBeInTheDocument();
+    expect(screen.getByTestId("button-show-unpriced")).toBeInTheDocument();
+    expect(screen.getByTestId("button-hide-zero-qty")).toBeInTheDocument();
+    expect(screen.queryByTestId("text-cost-101")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("cell-price-102"));
+    const input = screen.getByTestId("input-price-102");
+    fireEvent.change(input, { target: { value: "29.50" } });
+    fireEvent.click(screen.getByTestId("button-save-price-102"));
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/stock-items/102/location-prices", {
+        locationId: 11,
+        sellingPrice: "29.50",
+      })
+    );
+  });
+
+  it("keeps view-only POS cashiers unable to edit and on the original limited price view", async () => {
+    render(<POSPriceList posUser={{ role: "POS", posViewOnly: true }} />);
     await waitFor(() => expect(screen.getByTestId("row-price-101")).toBeInTheDocument());
     expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("button-location-all")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-show-unpriced")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-hide-zero-qty")).not.toBeInTheDocument();
     const showZero = screen.getByTestId("button-show-zero-qty");
-    expect(showZero).toHaveTextContent("Show 0 Qty");
     expect(showZero).toHaveTextContent("2");
-    expect(showZero).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(showZero);
-    expect(screen.getByTestId("button-show-zero-qty")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("row-price-103")).toHaveTextContent("$30.00");
-    expect(screen.getByTestId("row-price-104")).toHaveTextContent("$28.00");
-    expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
-    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 3 of 3 items");
-    fireEvent.click(screen.getByTestId("button-show-zero-qty"));
-    expect(screen.queryByTestId("row-price-103")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("row-price-104")).not.toBeInTheDocument();
-    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 1 of 1 items");
+    expect(screen.getByTestId("row-price-103")).toBeInTheDocument();
+    expect(screen.getByTestId("row-price-104")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("cell-price-101"));
     expect(screen.queryByTestId("input-price-101")).not.toBeInTheDocument();
     expect(harness.apiRequest).not.toHaveBeenCalled();

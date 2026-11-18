@@ -3,9 +3,7 @@ import { exportFileName } from "@/lib/exportFile";
 import { getErrorDetails } from "@shared/errorUtils";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
-import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, NotebookPen } from "lucide-react";
-import "@/styles/pos-workspace-premium.css";
+import { ShoppingCart } from "lucide-react";
 import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
 import type { AuthMe } from "@shared/apiTypes";
@@ -15,6 +13,7 @@ import { POSHeader } from "./pos-components/POSHeader";
 import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
 import { PosMobileLayout } from "./pos-components/PosMobileLayout";
 import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
+import { PosSaleGridWrap, PosSaleNotes, PosSalePanel, PosSaleScreen } from "./pos-components/PosSaleLayout";
 
 import { POS_COLUMNS } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
@@ -78,7 +77,9 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
     notes,
     paymentAccountId,
     paymentAccountType,
-    posAssignedLocations,
+    // Always bind a concrete array before rendering the POS location picker.
+    // This also covers initial query hydration for cashier sessions.
+    posAssignedLocations: assignedPosLocations = [],
     posLocationsLoading,
     posSelectedLocation,
     posUser,
@@ -154,7 +155,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         };
         cell.alignment = { horizontal: "center" };
       });
-
       // ── Column widths ────────────────────────────────────────────────────────
       ws.getColumn(1).width = 5; // #
       ws.getColumn(2).width = 30; // Item
@@ -164,7 +164,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       ws.getColumn(6).width = 12; // Amt
       ws.getColumn(7).width = 10; // P/L
       ws.getColumn(8).width = 12; // T.P/L
-
       // ── Data rows ────────────────────────────────────────────────────────────
       validRows.forEach((row, i) => {
         const rateUSD = row.rateUSD ?? row.rate;
@@ -187,7 +186,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
           dataRow.getCell(8).font = { color: { argb: "FFDC2626" } };
         }
       });
-
       // ── Totals row ───────────────────────────────────────────────────────────
       const totalQty = validRows.reduce((s, r) => s + r.quantity, 0);
       const totalAmt = validRows.reduce((s, r) => s + r.amount, 0);
@@ -195,13 +193,11 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         const rateUSD = r.rateUSD ?? r.rate;
         return s + (rateUSD - (r.configuredPrice ?? 0)) * r.quantity;
       }, 0);
-
       const totRow = ws.addRow(["", "TOTAL", "", totalQty, "", totalAmt, "", totalTPL]);
       totRow.font = { bold: true };
       totRow.eachCell((cell) => {
         cell.border = { top: { style: "thin", color: { argb: "FF94A3B8" } } };
       });
-
       // ── Download ─────────────────────────────────────────────────────────────
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -214,7 +210,8 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       toast({ title: "Export failed", description: getErrorDetails(err).optionalMessage, variant: "destructive" });
     }
   }
-
+  // Never enable Update until the original receipt and its location are loaded.
+  const editNotReady = Boolean(editVoucherId && (!editVoucher || activeLocation?.id !== editVoucher.locationId));
   // ── Early returns ─────────────────────────────────────────────────────────
   if (posUser && posLocationsLoading) {
     return (
@@ -224,7 +221,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       </div>
     );
   }
-
   if (inventoryError) {
     return (
       <div className="p-4 md:p-6">
@@ -237,8 +233,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       </div>
     );
   }
-
-  if (posUser && !posLocationsLoading && posAssignedLocations.length === 0) {
+  if (posUser && !posLocationsLoading && assignedPosLocations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 gap-2">
         <p className="font-semibold">No location assigned</p>
@@ -277,7 +272,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div data-pos-modern-workspace="true" className="flex flex-col h-full bg-background overflow-hidden relative">
+    <PosSaleScreen variant="erp">
       <POSHeader
         posUser={posUser}
         editVoucherId={editVoucherId}
@@ -289,7 +284,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         navigate={navigate}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         lastAutosaved={lastAutosaved}
         drafts={drafts}
@@ -306,9 +301,10 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
       <PosCheckoutStrip
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
@@ -334,8 +330,8 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
 
       {/* ── Desktop layout ── */}
       <PosWorkspaceColumns layout="erp">
-        <div data-pos-sale-panel="true" className="flex-1 flex flex-col overflow-y-auto min-w-0">
-          <div data-pos-grid-wrap="true">
+        <PosSalePanel className="flex-1 overflow-y-auto">
+          <PosSaleGridWrap>
             {inventoryLoading ? (
               <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground" aria-busy="true">
                 Loading inventory…
@@ -366,21 +362,16 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
                 isEditMode={!!editVoucherId}
               />
             )}
-          </div>
-          <div data-pos-notes-wrap="true" className="mt-2 px-1 pb-2">
-            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium">
-              <NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")}{" "}
-              <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span>
-            </label>
-            <Textarea
-              id="pos-desktop-notes"
-              placeholder={t("pos.modern.notesPlaceholder")}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="resize-none h-12 min-h-[48px] text-sm"
-              data-testid="input-notes"
-            />
-          </div>
+          </PosSaleGridWrap>
+          <PosSaleNotes
+            id="pos-desktop-notes"
+            label={t("pos.modern.notes")}
+            optionalLabel={t("pos.modern.optional")}
+            placeholder={t("pos.modern.notesPlaceholder")}
+            value={notes}
+            onChange={setNotes}
+            testId="input-notes"
+          />
           {!rows.some((row) => row.stockItemId || row.itemName?.trim()) && (
             <div
               data-pos-empty-state="true"
@@ -393,7 +384,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("pos.modern.addItemsHint")}</p>
             </div>
           )}
-        </div>
+        </PosSalePanel>
         <InventoryPicker
           inventory={inventory}
           // Preserve the row the cashier was typing into. The item-name input
@@ -414,9 +405,10 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
       {/* ── Mobile layout ── */}
       <PosMobileLayout
         posUser={posUser}
+        editVoucherId={editVoucherId}
         activeLocation={activeLocation}
         allLocations={allLocations}
-        posAssignedLocations={posAssignedLocations}
+        posAssignedLocations={assignedPosLocations}
         posSelectedLocation={posSelectedLocation}
         setPosSelectedLocation={setPosSelectedLocation}
         setSelectedLocation={setSelectedLocation}
@@ -449,7 +441,7 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         setNotes={setNotes}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled || editNotReady}
         handleSaveSale={handleSaveSale}
         formatDisplayAmount={fmtAmount}
         isSpCompany={isSpCompany}
@@ -502,6 +494,6 @@ export default function POS(props: { posUser?: AuthMe; editVoucherId?: string })
         fmtPrint={(v) => String(v)}
         fmtPrintCurrency={(v) => String(v)}
       />
-    </div>
+    </PosSaleScreen>
   );
 }

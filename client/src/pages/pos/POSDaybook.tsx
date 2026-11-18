@@ -7,6 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePOSDaybookState } from "./usePOSDaybookState";
 import { POSDaybookDaybookResultsSection } from "./POSDaybookDaybookResultsSection";
 import { POSDaybookDialogSection } from "./POSDaybookDialogSection";
+import {
+  formatPosVoucherAmount,
+  formatPosZmwUnitPrice,
+  formatPosZmwLineTotal,
+  postedPosZmwUnitPrices,
+} from "./posdaybook/zmwDisplay";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 
 const offscreenPrintStyle: React.CSSProperties = {
   position: "fixed",
@@ -72,6 +80,15 @@ export default function POSDaybook() {
     voucherDetails,
     whatsappMutation,
   } = usePOSDaybookState();
+  const { selectedCurrency } = useCurrencyContext();
+  const totalNativeZmw =
+    selectedCurrency === "ZMW" &&
+    salesOnly.length > 0 &&
+    salesOnly.every((sale) => sale.currency === "ZMW" && sale.nativeZmwTotal != null)
+      ? salesOnly.reduce((sum, sale) => sum + Number(sale.nativeZmwTotal), 0)
+      : null;
+  const formatRevenue = (amount: number) =>
+    totalNativeZmw === null ? formatCashAmount(amount) : formatMoneyDisplay(amount, { currency: "ZMW" });
 
   return (
     <DaybookPage className="mx-auto w-full max-w-[1560px] pb-8" data-pos-daybook="modern">
@@ -97,14 +114,14 @@ export default function POSDaybook() {
           {
             id: "revenue",
             label: "Total Revenue",
-            value: kpiValue(formatCashAmount(totalSales)),
+            value: kpiValue(formatRevenue(totalNativeZmw ?? totalSales)),
             icon: DollarSign,
             tone: "value",
           },
           {
             id: "average",
             label: "Avg per Sale",
-            value: kpiValue(formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)),
+            value: kpiValue(formatRevenue(salesOnly.length ? (totalNativeZmw ?? totalSales) / salesOnly.length : 0)),
             icon: ReceiptText,
             tone: "active",
           },
@@ -202,15 +219,20 @@ export default function POSDaybook() {
               </tr>
             </thead>
             <tbody>
-              {(printDetails?.salesItems || []).map((item) => {
+              {(printDetails?.salesItems || []).map((item, index, items) => {
                 const qty = Number(item.quantity || 0);
                 const price = Number(item.sellingPrice || 0);
+                const kwacha = postedPosZmwUnitPrices(printDetails, items)?.[index];
                 return (
                   <tr key={item.id}>
                     <td className="border border-black p-2">{item.stockItemName || `Item ${item.stockItemId}`}</td>
                     <td className="border border-black p-2 text-right">{fmtPrint(qty)}</td>
-                    <td className="border border-black p-2 text-right">${fmtPrint(price)}</td>
-                    <td className="border border-black p-2 text-right">${fmtPrint(qty * price)}</td>
+                    <td className="border border-black p-2 text-right">
+                      {formatPosZmwUnitPrice(printDetails, price, (usd) => `${fmtPrint(usd)}`, kwacha)}
+                    </td>
+                    <td className="border border-black p-2 text-right">
+                      {formatPosZmwLineTotal(printDetails, qty, price, (usd) => `${fmtPrint(usd)}`, kwacha)}
+                    </td>
                   </tr>
                 );
               })}
@@ -218,7 +240,7 @@ export default function POSDaybook() {
           </table>
           <div className="mt-4 flex justify-between border-t-2 border-black pt-3 text-lg font-black">
             <span>TOTAL PAID</span>
-            <span>{formatCashAmount(Number(printDetails?.totalAmount || 0))}</span>
+            <span>{formatPosVoucherAmount(printDetails, formatCashAmount)}</span>
           </div>
           {printDetails?.description && (
             <div className="mt-3 border border-black p-2 text-sm">Note: {printDetails.description}</div>
@@ -229,11 +251,11 @@ export default function POSDaybook() {
 
       <POSDaybookDialogSection
         canEditDaybook={canEditDaybook}
+        currentUser={currentUser}
         canSeeProfitCost={canSeeProfitCost}
         detailsLoading={detailsLoading}
         formatCashAmount={formatCashAmount}
         isAdminOrOwner={isAdminOrOwner}
-        navigate={navigate}
         optionalMutation={optionalMutation}
         recordChanges={recordChanges}
         selectedVoucher={selectedVoucher}

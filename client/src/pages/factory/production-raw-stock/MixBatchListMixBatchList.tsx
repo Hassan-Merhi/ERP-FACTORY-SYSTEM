@@ -5,7 +5,7 @@ import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts
 import { useMixIntegrityAudits } from "./useMixIntegrityAudits";
 import { MixIntegrityAuditControls } from "./MixIntegrityAuditControls";
 import { MixIntegrityAuditResults } from "./MixIntegrityAuditResults";
-import { formatNumber } from "@/lib/formatNumber";
+import { formatNumber, formatQuantity } from "@/lib/formatNumber";
 import { recordedMixBatchCost, summarizeRecordedMixBatches } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,6 @@ export function MixBatchList({
     [mixBatches, showAllMixBatches]
   );
 
-  const fmtKg = (n: number) => formatNumber(n, 3);
   const { totalWeightKg: sumTotal, costPerKg: blendedCost } = summarizeRecordedMixBatches(mixBatches);
   const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
   const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
@@ -214,7 +213,7 @@ export function MixBatchList({
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
                   <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-total">
-                    {fmtKg(sumTotal)} kg
+                    {formatQuantity(sumTotal)} kg
                   </div>
                 </div>
                 <div>
@@ -225,11 +224,11 @@ export function MixBatchList({
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
-                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumUsed)} kg</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{formatQuantity(sumUsed)} kg</div>
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
-                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumRemaining)} kg</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{formatQuantity(sumRemaining)} kg</div>
                 </div>
               </div>
 
@@ -295,11 +294,11 @@ export function MixBatchList({
                       </div>
                       <div className="rounded-lg bg-muted/40 p-2">
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
-                        <div className="mt-0.5 font-mono font-medium">{fmtKg(used)} kg</div>
+                        <div className="mt-0.5 font-mono font-medium">{formatQuantity(used)} kg</div>
                       </div>
                       <div className="rounded-lg bg-muted/40 p-2">
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
-                        <div className="mt-0.5 font-mono font-medium">{fmtKg(remaining)} kg</div>
+                        <div className="mt-0.5 font-mono font-medium">{formatQuantity(remaining)} kg</div>
                       </div>
                     </div>
                   </div>
@@ -417,15 +416,15 @@ export function MixBatchList({
                       Combined Total
                       <div className="text-xs text-muted-foreground font-normal mt-0.5">
                         {mixBatches.length} batch{mixBatches.length !== 1 ? "es" : ""}
-                        {" · "}Used: {fmtKg(sumUsed)}
-                        {" · "}Remaining: {fmtKg(sumRemaining)}
+                        {" · "}Used: {formatQuantity(sumUsed)}
+                        {" · "}Remaining: {formatQuantity(sumRemaining)}
                       </div>
                     </TableCell>
                     <TableCell
                       className="px-4 py-3 text-right font-mono font-semibold text-sm"
                       data-testid="text-mix-summary-total"
                     >
-                      {fmtKg(sumTotal)}
+                      {formatQuantity(sumTotal)}
                     </TableCell>
                     <TableCell
                       className="px-4 py-3 text-right font-mono font-semibold text-sm"

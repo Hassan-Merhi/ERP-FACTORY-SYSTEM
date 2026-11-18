@@ -6,12 +6,10 @@ import {
   LocationMonthlySummary,
   LocationVouchers,
   POSDaybook,
-  POSDashboard,
   POSCustomers,
   POSImport,
   Vouchers,
   Chat,
-  POSSettings,
   POSPriceList,
   PosTransferOrders,
   POSContainerTracking,
@@ -71,12 +69,14 @@ export function PosRoutes({ user, posImportEnabled }: PosRoutesProps) {
         {() => <LocationVouchers posUser={user} />}
       </Route>
       <Route path="/pos-daybook" component={POSDaybook} />
-      <Route path="/pos-dashboard">{() => <POSDashboard posUser={user} />}</Route>
+      {/* Retired orphan POS dashboard (owner decision 13): old links open the sale screen. */}
+      <Route path="/pos-dashboard">{() => <Redirect replace to="/pos" />}</Route>
       <Route path="/pos-customers">{() => <POSCustomers />}</Route>
       <Route path="/pos-import">{() => (posImportEnabled ? <POSImport /> : <Redirect to="/" />)}</Route>
       <Route path="/vouchers">{() => <Vouchers posUser={user} />}</Route>
       <Route path="/pos-chat" component={Chat} />
-      <Route path="/pos-settings" component={POSSettings} />
+      {/* Retired POS settings page (owner decision 13): password changes live in My Settings. */}
+      <Route path="/pos-settings">{() => <Redirect replace to="/my-settings" />}</Route>
       <Route path="/pos-price-list">{() => <POSPriceList posUser={user} />}</Route>
       <Route path="/pos-transfer-orders">{() => <PosTransferOrders posUser={user} />}</Route>
       <Route path="/my-settings" component={MySettings} />

@@ -8,6 +8,8 @@ import { usePayrollWorkerMutations } from "./usePayrollWorkerMutations";
 import { decodeLocationOption } from "./payrollUtils";
 import { type EmployeeFormData, getThisMonthRange } from "./payrollSchemas";
 import { usePayrollModelPart1 } from "./usePayrollModelPart1";
+import { POPUP_BLOCKED_TOAST } from "@/lib/popupBlockedToast";
+import { printDocument } from "@/lib/printDocument";
 
 export function usePayrollModelPart4({
   assertCanChangeRecords,
@@ -160,9 +162,8 @@ export function usePayrollModelPart4({
         return `${emp.firstName} ${emp.lastName}: $${amount.toFixed(2)}${pending?.description ? ` — ${pending.description}` : ""}`;
       });
     const total = employeeStaff.reduce((s, e) => s + parseFloat(bulkBonusAmounts[e.id] || "0"), 0);
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`
+    printDocument(
+      `
       <html><head><title>Bulk Bonus — ${bulkBonusDate}</title>
       <style>body{font-family:sans-serif;padding:24px}h2{margin-bottom:8px}ul{list-style:none;padding:0}li{padding:6px 0;border-bottom:1px solid #eee}.total{font-weight:bold;margin-top:12px}</style>
       </head><body>
@@ -171,9 +172,9 @@ export function usePayrollModelPart4({
       <ul>${rows.map((r) => `<li>${r}</li>`).join("")}</ul>
       <p class="total">Total: $${total.toFixed(2)}</p>
       </body></html>
-    `);
-    win.document.close();
-    win.print();
+    `,
+      { onBlocked: () => toast(POPUP_BLOCKED_TOAST) }
+    );
   };
 
   const handleDeleteEmployee = async (emp: Employee) => {

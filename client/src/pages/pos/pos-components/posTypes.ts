@@ -129,6 +129,8 @@ export type PosSalePayload = {
 
 export type PosEditVoucherEntry = {
   debitAmount?: string | number | null;
+  transactionCurrency?: string | null;
+  transactionDebitAmount?: string | number | null;
   bankAccountId?: number | null;
   ledgerAccountId?: number | null;
   narration?: string | null;
@@ -148,10 +150,13 @@ export type PosEditSalesItem = {
 export type PosEditVoucher = {
   currency?: string | null;
   exchangeRate?: string | number | null;
+  /** Kwacha total the sale posted (cashier-safe voucher response). */
+  nativeZmwTotal?: string | null;
   locationId?: number;
   description?: string | null;
   voucherDate?: string;
   voucherNumber?: string;
+  isCreditSale?: boolean | null;
   salesItems?: PosEditSalesItem[];
   entries?: PosEditVoucherEntry[];
 };

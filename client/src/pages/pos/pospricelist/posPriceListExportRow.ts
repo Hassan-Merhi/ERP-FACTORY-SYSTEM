@@ -45,3 +45,24 @@ export function buildPosPriceListExportRow(
 
   return row;
 }
+
+/** Ordered worksheet headers and their cell types for the POS price list export. */
+export function posPriceListExportColumns(options: {
+  showCostPrice: boolean;
+  isAllMode: boolean;
+  masters: { id: number; name: string }[];
+}): { headers: string[]; types: Record<string, "auto" | "money" | "decimal"> } {
+  const { showCostPrice, isAllMode, masters } = options;
+  const headers = [
+    "Code",
+    "Item Name",
+    "Group",
+    ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
+    ...(isAllMode
+      ? ["Total Qty", ...masters.map((master) => master.name)]
+      : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
+  ];
+  const types: Record<string, "auto" | "money" | "decimal"> = {};
+  for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
+  return { headers, types };
+}

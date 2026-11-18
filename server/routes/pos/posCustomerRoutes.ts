@@ -5,38 +5,18 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
 import { loadCustomerLedgerEntryRows } from "../../services/accounting/balances/customerLedgerStatement";
-import { userCompanyRoles, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
+import { insertCustomerSchema, ledgerAccounts } from "@shared/schema";
+import { requirePosCustomerPermission } from "../../middleware/posCustomerPermission";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { hasZeroOpeningBalance, posCustomerAccessText } from "@shared/posCustomerAccess";
 import { eq, and } from "drizzle-orm";
 
 export function registerPosCustomerRoutes(app: Express): void {
   // POS Customers - GET endpoint (for POS users with canAccessCustomers permission)
-  app.get("/api/pos/customers", requireAuth, async (req, res) => {
+  app.get("/api/pos/customers", requireAuth, requirePosCustomerPermission, async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
-      }
-
-      // If session flag is missing/false, check DB directly as a fallback
-      // (covers stale sessions that predate the canAccessCustomers session field)
-      let hasAccess = req.user?.canAccessCustomers ?? false;
-      if (!hasAccess && req.session.userId && req.session.currentCompanyId) {
-        const [roleRow] = await db
-          .select({ canAccessCustomers: userCompanyRoles.canAccessCustomers })
-          .from(userCompanyRoles)
-          .where(
-            and(
-              eq(userCompanyRoles.userId, String(req.session.userId)),
-              eq(userCompanyRoles.companyId, req.session.currentCompanyId)
-            )
-          );
-        if (roleRow?.canAccessCustomers) {
-          hasAccess = true;
-          req.session.canAccessCustomers = true;
-        }
-      }
-
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied: You do not have permission to access customers" });
       }
 
       // The one balance engine's customer closing, as /api/customers/stats and
@@ -50,20 +30,30 @@ export function registerPosCustomerRoutes(app: Express): void {
   });
 
   // POS Customers - POST endpoint (for POS users with canAccessCustomers permission)
-  app.post("/api/pos/customers", requireAuth, async (req, res) => {
+  app.post("/api/pos/customers", requireAuth, requirePosCustomerPermission, async (req, res) => {
     try {
-      if (!req.user?.canAccessCustomers) {
-        return res.status(403).json({ message: "Access denied: You do not have permission to create customers" });
-      }
-
+      const access = await getActiveCompanyPermissionContext(req);
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const dataWithCompany = {
-        ...req.body,
-        companyId: req.session.currentCompanyId,
-      };
+      if (access.role === "POS" && !hasZeroOpeningBalance(req.body?.openingBalance)) {
+        return res.status(403).json({
+          code: "POS_CUSTOMER_OPENING_BALANCE_DENIED",
+          message: posCustomerAccessText.openingDenied,
+        });
+      }
+      if (access.role === "POS" && req.body?.ledgerAccountId != null) {
+        return res.status(403).json({
+          code: "POS_CUSTOMER_LEDGER_LINK_DENIED",
+          message: posCustomerAccessText.ledgerDenied,
+        });
+      }
+      const safeInput =
+        access.role === "POS"
+          ? { legalName: req.body?.legalName, phone: req.body?.phone, openingBalance: "0", openingBalanceSide: "Dr" }
+          : req.body;
+      const dataWithCompany = { ...safeInput, companyId: access.companyId };
 
       const parsed = insertCustomerSchema.parse(dataWithCompany);
       if (parsed.ledgerAccountId !== undefined) {
@@ -133,7 +123,7 @@ export function registerPosCustomerRoutes(app: Express): void {
   });
 
   // ── POS Customer Transactions (statement) ────────────────────────────────
-  app.get("/api/pos/customers/:id/transactions", requireAuth, async (req, res) => {
+  app.get("/api/pos/customers/:id/transactions", requireAuth, requirePosCustomerPermission, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

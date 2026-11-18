@@ -8,6 +8,7 @@ import { ErpListTable } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePOSDaybookState } from "./usePOSDaybookState";
+import { formatPosVoucherAmount } from "./posdaybook/zmwDisplay";
 
 export function POSDaybookDaybookResultsSection({
   currentUser,
@@ -116,8 +117,7 @@ export function POSDaybookDaybookResultsSection({
           </TableHeader>
           <TableBody>
             {pagination.paginate(searchedVouchers).map((voucher) => {
-              const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
-              const canAct = isOwnVoucher;
+              const canResend = !isPOS || (voucher.userId != null && String(voucher.userId) === String(currentUser?.id));
               const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
               const isPrinting = printVoucherId === voucher.id;
               const isHidden = hiddenRowIds.has(voucher.id);
@@ -144,7 +144,7 @@ export function POSDaybookDaybookResultsSection({
                     {voucher.locationName || `Location ${voucher.locationId}`}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
-                    {formatCashAmount(Number(voucher.totalAmount || 0))}
+                    {voucher.voucherType === "Sales" ? formatPosVoucherAmount(voucher, formatCashAmount) : "—"}
                   </TableCell>
                   <TableCell
                     className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
@@ -160,9 +160,9 @@ export function POSDaybookDaybookResultsSection({
                             variant="ghost"
                             size="icon"
                             className="h-9 w-9 rounded-lg"
-                            disabled={!canAct || isPrinting}
+                            disabled={isPrinting}
                             onClick={() => setPrintVoucherId(voucher.id)}
-                            title={canAct ? "Print receipt" : "You can only print your own sales"}
+                            title="Print receipt"
                             aria-label={`Print receipt ${voucher.voucherNumber}`}
                           >
                             <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
@@ -172,9 +172,9 @@ export function POSDaybookDaybookResultsSection({
                               variant="ghost"
                               size="icon"
                               className="h-9 w-9 rounded-lg"
-                              disabled={!canAct || isSending}
+                              disabled={!canResend || isSending}
                               onClick={() => whatsappMutation.mutate(voucher)}
-                              title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
+                              title={canResend ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
                               aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
                             >
                               <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
@@ -186,9 +186,8 @@ export function POSDaybookDaybookResultsSection({
                         variant="ghost"
                         size="icon"
                         className="h-9 w-9 rounded-lg"
-                        disabled={!canAct}
-                        onClick={() => canAct && setSelectedVoucher(voucher)}
-                        title={canAct ? "View full sale details" : "You can only view your own sales"}
+                        onClick={() => setSelectedVoucher(voucher)}
+                        title="View transaction in popup"
                         aria-label={`View ${voucher.voucherNumber}`}
                       >
                         <Eye className="h-4 w-4" />

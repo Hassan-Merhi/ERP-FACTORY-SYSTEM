@@ -27,6 +27,8 @@ interface AppTopBarProps {
   mobileMoreOpen?: boolean;
   onMobileMoreOpenChange?: (open: boolean) => void;
   simplifyMobileNavigation?: boolean;
+  /** POS sessions have no notifications feed, so their shell hides the bell. */
+  showNotifications?: boolean;
 }
 
 export function AppTopBar({
@@ -40,6 +42,7 @@ export function AppTopBar({
   mobileMoreOpen,
   onMobileMoreOpenChange,
   simplifyMobileNavigation = false,
+  showNotifications = true,
 }: AppTopBarProps) {
   const [currentLocation] = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -130,6 +133,7 @@ export function AppTopBar({
             user={user}
             onLogout={onLogout}
             simplifyMobileNavigation={simplifyMobileNavigation}
+            showNotifications={showNotifications}
           />
         </Suspense>
 
@@ -156,6 +160,7 @@ export function AppTopBar({
             open={mobileMoreOpen}
             onOpenChange={onMobileMoreOpenChange}
             simplifyMobileNavigation={simplifyMobileNavigation}
+            showNotifications={showNotifications}
           />
         </Suspense>
       </div>

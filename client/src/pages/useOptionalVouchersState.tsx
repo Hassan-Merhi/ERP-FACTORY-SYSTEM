@@ -3,6 +3,7 @@ import { ErpRecordAction, useErpDateFormat } from "@/erp-core";
 import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useModePrefix } from "@/contexts/AppModeContext";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ export function useOptionalVouchersState() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const modePrefix = useModePrefix();
   const { formatShortDate } = useErpDateFormat();
   const [typeFilter, setTypeFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
@@ -157,7 +159,7 @@ export function useOptionalVouchersState() {
     };
     const tab = voucherTypeMap[v.voucherType];
     if (tab) {
-      navigate(`/vouchers?edit=${v.id}&tab=${tab}`);
+      navigate(`${modePrefix}/vouchers?edit=${v.id}&tab=${tab}`);
     } else {
       // Sales, Purchase and other types: the same destination as Daybook's Edit.
       void resolveVoucherEditDestination(v).then((path) => navigate(path));

@@ -1,5 +1,6 @@
 import type { HistoryBale, PrintDispatch } from "./optimizedTypes";
 import { fmt, fmtKg } from "./utils";
+import { printDocument } from "@/lib/printDocument";
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -24,9 +25,8 @@ export function printDispatchDocument(dispatch: PrintDispatch, bales: HistoryBal
     )
     .join("");
 
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(`<!doctype html><html><head><title>Waste Disposal — ${escapeHtml(dispatch.dispatchNumber)}</title>
+  printDocument(
+    `<!doctype html><html><head><title>Waste Disposal — ${escapeHtml(dispatch.dispatchNumber)}</title>
     <style>
       body{font-family:Arial,sans-serif;font-size:12px;margin:20px;color:#111}
       h1{font-size:18px;margin:0 0 4px}.sub{color:#555;font-size:11px;margin-bottom:16px}
@@ -38,9 +38,7 @@ export function printDispatchDocument(dispatch: PrintDispatch, bales: HistoryBal
     ${dispatch.notes ? `<div class="note">Note: ${escapeHtml(dispatch.notes)}</div>` : ""}
     <table><thead><tr><th>Reference</th><th>Product</th><th class="num">Weight (kg)</th><th class="num">Cost Written Off</th></tr></thead>
     <tbody>${rows}</tbody><tfoot><tr class="total"><td colspan="2">TOTAL — ${bales.length} bale(s)</td><td class="num">${fmtKg(totalWeight)}</td><td class="num">${fmt(totalCost)}</td></tr></tfoot></table>
-    </body></html>`);
-  win.document.close();
-  win.focus();
-  win.print();
-  win.close();
+    </body></html>`,
+    { closeAfterPrint: true }
+  );
 }

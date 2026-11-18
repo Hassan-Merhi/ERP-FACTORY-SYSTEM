@@ -14,6 +14,11 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
+import {
+  applyPcLocalModeEnvironment,
+  makePcLocalReadOnlyGuard,
+  pcLocalReadOnly,
+} from "./offline/pcLocal/localReadOnlyGuard";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
@@ -71,6 +76,8 @@ import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/app
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 
 registerProcessErrorHandlers();
+// A PC's local read-only copy (desktop app only) runs no background jobs.
+applyPcLocalModeEnvironment();
 
 // and causes the browser to think the app was updated, triggering false reload prompts.
 const BUILD_VERSION = process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || "dev";
@@ -134,6 +141,9 @@ app.use(sessionMiddleware);
 // Read-only LAN edge safety boundary + same-origin server identity endpoint.
 // Cloud stays unchanged; edge requests never silently proxy to cloud.
 registerFactoryEdgeBoundary(app);
+
+// A PC's local copy (OFFLINE_PC_LOCAL_MODE=read-only, desktop app only) refuses writes.
+app.use(makePcLocalReadOnlyGuard());
 
 // Permission monitoring: classify refused API responses (403s and
 // cross-company refusals) into permission signals after they are sent. Reads
@@ -231,7 +241,11 @@ let startupDataReady = false;
   // Valid websocket upgrades are handled by the upgrade path. Plain HTTP GET
   // requests to /ws should fail explicitly instead of falling through to the SPA.
   registerWebSocketHttpFallback(app);
-  if (process.env.ENABLE_SCHEDULERS !== "false" && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+  if (
+    process.env.ENABLE_SCHEDULERS !== "false" &&
+    !pcLocalReadOnly() &&
+    shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())
+  ) {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");
   } else {
@@ -280,6 +294,15 @@ let startupDataReady = false;
   // deployment serving.
   warmupDb()
     .then(async () => {
+      // A PC's local copy must stay byte-for-byte the cloud's: no boot repair,
+      // baseline or provisioning writer runs there (the cloud already ran them
+      // and their results arrive through the change feed).
+      if (pcLocalReadOnly()) {
+        logger.info("[startup] PC local copy: boot data operations skipped");
+        startupDataReady = true;
+        markStartupMigrationsComplete();
+        return;
+      }
       // Data operations formerly embedded in the (removed) runtime schema
       // repairs, kept in their original order. None changes the schema.
       // The payroll daybook pass rewrites the factory daybook mirror only (no
@@ -432,7 +455,7 @@ let startupDataReady = false;
     })
     .then(() => {
       listenWithRetry(server, port, () => {
-        if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        if (!pcLocalReadOnly() && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
           // Run only on the authoritative scheduler, honoring production activation kill switch.
           if (process.env.ENABLE_SCHEDULERS !== "false") {

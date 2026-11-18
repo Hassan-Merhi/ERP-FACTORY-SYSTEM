@@ -27,8 +27,6 @@ export const scheduleHourLabel = (hour: number) =>
 
 type HourlyResponse = PressingHourlySnapshot;
 
-export const formatKg = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 3 });
-
 export function localHour(iso: string): number {
   return Number(
     new Intl.DateTimeFormat("en-GB", {

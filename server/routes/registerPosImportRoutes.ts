@@ -310,7 +310,7 @@ export function registerPosImportRoutes(app: Express) {
               voucherId: voucher.id,
               stockItemId: stockItem.id,
               quantity: inventoryQuantity(quantity),
-              sellingPrice: inventoryMoney(sellingPrice),
+              sellingPrice: inventoryUnitCost(sellingPrice),
               costPrice: inventoryUnitCost(costPrice),
               totalSales: inventoryMoney(itemSales),
               totalCost: inventoryMoney(itemCost),

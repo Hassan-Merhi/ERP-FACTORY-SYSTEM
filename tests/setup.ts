@@ -107,6 +107,8 @@ export interface TestAppOptions {
    * Off by default so existing suites keep their current behaviour.
    */
   productionWriteGuards?: boolean;
+  /** Mount the PC local read-only guard exactly as server/index.ts does. */
+  pcLocalGuard?: boolean;
 }
 
 export async function setupTestApp(options: TestAppOptions = {}): Promise<express.Express> {
@@ -132,6 +134,11 @@ export async function setupTestApp(options: TestAppOptions = {}): Promise<expres
     app.use(blockViewOnlyWrites);
     app.use(blockUnverifiedCreateOnlyWrites);
     app.use(blockErpTesterSettings);
+  }
+
+  if (options.pcLocalGuard) {
+    const { makePcLocalReadOnlyGuard } = await import("../server/offline/pcLocal/localReadOnlyGuard");
+    app.use(makePcLocalReadOnlyGuard());
   }
 
   if (options.edgeBoundary) {

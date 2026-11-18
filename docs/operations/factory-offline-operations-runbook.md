@@ -161,6 +161,129 @@ the full schema; queue, delivery, capture and panel in the browser test
 suite). It has not been run on real laptops or in production, and the staging
 drills do not cover it yet.
 
+### Full offline mode (Phase A): cloud change feed
+
+Every PC will keep a full local copy of its companies and stay current by
+downloading the cloud's change feed. Owner decisions (2026-11-17): stock sold
+twice offline goes negative and is flagged (flags may stay open at month end);
+the same master edited on two PCs is held for Admin/Developer review; customers
+created twice are merged by name; a PC that has not synced for 2 days stops
+taking new entries; Windows and Mac; the shared factory server stays paused.
+The plan document lists the phases.
+
+**What exists (Phase A1, switched off).**
+
+- `config/pc-sync-table-policy.json` says which rows of every table a PC may
+  hold: by `company_id`, through a parent row (a voucher line through its
+  voucher), through company columns (inter-company links), membership (users,
+  password removed), shared reference data, or excluded with a reason (sync
+  bookkeeping, sessions, credentials, mailbox and WhatsApp settings, telemetry).
+  `node scripts/pc-sync/audit-table-policy.mjs` checks it against a database
+  and fails on an unclassified table, a parent link that does not reach a
+  company, a stale rule or a secret-looking column that is not redacted; the
+  same check runs in `tests/pc-sync-table-policy.test.ts`.
+- The change feed is DBA-installed. `node scripts/pc-sync/render-change-feed-sql.mjs
+  <out.sql> --grant-to=<app role>` writes the install script for that exact
+  schema (read-only; it applies nothing). It creates `pc_sync.changes` and one
+  trigger per synced table that records each insert, update or delete with its
+  transaction id and companies, secret columns removed before storage. The
+  application role may only call `pc_sync.watermark()` and
+  `pc_sync.read_changes(...)`. Re-generate and re-run after every schema change.
+- `GET /api/offline/pc-sync/changes?cursor=&limit=` returns pages for every
+  company the signed-in user may open (`authorized-companies` in the route
+  access manifest). It answers 404 unless `OFFLINE_PC_SYNC_ENABLED=1` and 503
+  until the feed is installed.
+
+**Initial full copy (Phase A2, switched off).** A new PC first calls
+`GET /api/offline/pc-sync/snapshot/start`, which returns the feed cursor at the
+current watermark, the synced tables and the cloud's schema version (a PC on a
+different schema must refuse to load). It then reads each table with
+`GET /api/offline/pc-sync/snapshot?table=&after=&limit=`, in key order, only the
+rows of the companies the user may open, secret columns removed, following
+`after` until it is null. Copied rows count as `seq` 0. Finally it replays the
+feed from the start cursor; a row that changed while the copy was being read is
+repaired by the applying rule below. The installer adds
+`pc_sync.snapshot_tables()`, `pc_sync.snapshot_page(...)` and
+`pc_sync.schema_version()` for the application role. Covered by
+`tests/pc-sync-snapshot.test.ts` (off by default, not installed, company
+isolation, child rows through their parent, no password, paging, refusals, and
+copy + replay ending equal to the cloud while rows change).
+
+**Applying rule for every PC.** Changes arrive in transaction order, which is
+not always commit order. The later write to a row always has the higher `seq`
+(writes to one row are serialized by its lock), so a PC applies a change only if
+its `seq` is higher than the last one it applied to that row, deletes included.
+
+**Guarantees, each covered by `tests/pc-sync-change-feed.test.ts`:** only the
+user's companies; a child row's company found through its parent; no password
+stored or sent; a row moved to another company reaches the old company as a
+removal with its key only; a transaction that commits after a newer one is
+never skipped (the cursor stops at the oldest open transaction); paging returns
+every change once, in transaction order.
+
+**Known limits.** A user row is not re-sent when the user joins another
+company; a child row deleted after its parent is gone, with no foreign key,
+reaches no PC; TRUNCATE tells every PC to reload that table (with the full
+copy above). A row moved to other companies (for example a voucher moved by the
+account migration) also tells every PC to reload each table whose rows find
+their company through it (its lines), once per table and transaction; such
+moves are rare, and the reload can be large.
+
+**PC side (Phase A3a, switched off).** `scripts/pc-sync/local/` keeps a PC's
+own PostgreSQL equal to the cloud. The PC database is built with
+`node scripts/db/migrate.mjs apply` (same schema as the cloud);
+`prepareLocalDatabase` adds the PC-only `pc_local` schema. `syncOnce` refuses to
+load if the cloud's schema version differs, copies each table page by page
+(each page commits with its progress, so a PC switched off mid-copy resumes),
+then replays the feed with the applying rule; a TRUNCATE empties the table and
+copies it again. Foreign keys are switched off only while applying, on the PC
+only, because rows of other companies that a row points to are not on the PC.
+The cloud never sends passwords: someone can sign in offline only after signing
+in on that PC while online (`rememberLocalLogin` keeps a bcrypt hash there);
+everyone else gets a password that matches nothing. A password changed in the
+cloud keeps working offline on that PC until the next online sign-in there.
+The copy belongs to the cloud account that connected the PC: connecting a
+different account empties it and copies that account's companies again. Every
+sync checks the schema version again, so after a cloud migration the PC stops
+syncing (`PC_LOCAL_SCHEMA_MISMATCH`) until the desktop app is updated.
+`pcSyncFreshness` gives the owner's rule: warning after 24 hours without a
+completed sync, new entries stopped after 2 days (reading always works).
+`createCloudClient` signs in over HTTPS and keeps only the session cookie.
+
+The ERP server started with `OFFLINE_PC_LOCAL_MODE=read-only` (desktop app
+only, never the cloud) refuses every write except sign-in, sign-out and company
+switch with `423 OFFLINE_PC_LOCAL_READ_ONLY`, runs no boot data operations or
+background jobs (the copy must stay exactly the cloud's), and sends its session
+cookie without the Secure flag because it serves plain http on 127.0.0.1 only.
+Covered by `tests/pc-sync-local-agent.test.ts` (a second database built from
+migrations as the PC).
+
+**Desktop app (Phase A3b, off unless enabled on the PC).** The desktop app
+(`desktop/`, Windows and Mac) reads `<userData>/offline-pc.json`; with
+`"enabled": true` it starts, all on 127.0.0.1 only: an embedded PostgreSQL in
+`<userData>/pc-database`, the sync process (`scripts/pc-sync/local/run-agent.mjs`,
+which builds the schema from `migrations/` and syncs every minute), and, once
+the first copy is complete, the ERP server in read-only local mode (it binds to
+127.0.0.1 in that mode). The window keeps using the cloud; when the cloud cannot
+be reached it opens the local copy instead of the offline page. The **Offline
+copy** menu has *Connect this PC…* (sign in once; the password is never written
+anywhere except as the local bcrypt hash), *Sync now*, *Open offline copy* and
+*Back to the cloud*. The title shows how old the copy is when it is over 24
+hours or when the local copy is open. The database password, session secret and
+cloud cookie are kept with the operating system's protected storage.
+
+Building it: `npm run build` in the repository root, then in `desktop/`
+`npm run stage:offline` (copies the server, migrations and sync agent into
+`build/erp-server` and installs their packages and the embedded PostgreSQL
+for the operating system it runs on), then `npm run build:all` on Windows or
+`npm run build:mac` on a Mac. Without the staging step the build is the
+cloud-only app, exactly as before.
+
+**Not installed anywhere and not verified on real Windows or Mac PCs.** The
+sync process and the staged server were exercised on Linux only; the Electron
+wiring, the embedded PostgreSQL on Windows/Mac and the packaged installers need
+a test on one PC of each kind before any rollout.
+
 ### Entries left in the old browser queues
 
 Some browsers still hold entries saved offline before the current design

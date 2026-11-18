@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { InsuranceMember, LedgerEntry } from "../types";
+import { formatUsd } from "@/lib/moneyDisplay";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export // ─── Member Statement Drawer ──────────────────────────────────────────────────
 function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; onClose: () => void }) {
@@ -57,6 +59,29 @@ function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; o
             {member.positionWorking && <span>{member.positionWorking} · </span>}
             <span>Started {formatDisplayDate(member.startDate)}</span>
           </p>
+          <RowsExportMenu
+            title="Insurance Statement"
+            filters={[{ label: "Member", value: member.name }]}
+            rows={entries}
+            columns={[
+              { header: "Date", value: (e) => formatDisplayDate(e.voucherDate) },
+              { header: "Voucher", value: (e) => e.voucherNumber },
+              { header: "Description", value: (e) => e.narration || e.description },
+              {
+                header: "Credit (USD)",
+                value: (e) => (parseFloat(e.creditAmount || "0") > 0 ? parseFloat(e.creditAmount!) : null),
+                type: "number",
+              },
+              {
+                header: "Debit (USD)",
+                value: (e) => (parseFloat(e.debitAmount || "0") > 0 ? parseFloat(e.debitAmount!) : null),
+                type: "number",
+              },
+            ]}
+            resource="factory.accounting"
+            className="self-start"
+            data-testid="button-export-insurance-statement"
+          />
         </SheetHeader>
 
         <div className="flex-1 overflow-auto p-6">
@@ -72,19 +97,19 @@ function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; o
                 <Card>
                   <CardContent className="pt-3 pb-3">
                     <p className="text-xs text-muted-foreground">Total Credited</p>
-                    <p className="text-lg font-bold">${totalCredit.toFixed(2)}</p>
+                    <p className="text-lg font-bold">{formatUsd(totalCredit, 2)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-3 pb-3">
                     <p className="text-xs text-muted-foreground">Total Debited</p>
-                    <p className="text-lg font-bold">${totalDebit.toFixed(2)}</p>
+                    <p className="text-lg font-bold">{formatUsd(totalDebit, 2)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-3 pb-3">
                     <p className="text-xs text-muted-foreground">Net Balance</p>
-                    <p className="text-lg font-bold">${(totalCredit - totalDebit).toFixed(2)}</p>
+                    <p className="text-lg font-bold">{formatUsd(totalCredit - totalDebit, 2)}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -108,10 +133,10 @@ function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; o
                         {e.narration || e.description || "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {parseFloat(e.creditAmount || "0") > 0 ? `$${parseFloat(e.creditAmount!).toFixed(2)}` : "—"}
+                        {parseFloat(e.creditAmount || "0") > 0 ? formatUsd(parseFloat(e.creditAmount!), 2) : "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {parseFloat(e.debitAmount || "0") > 0 ? `$${parseFloat(e.debitAmount!).toFixed(2)}` : "—"}
+                        {parseFloat(e.debitAmount || "0") > 0 ? formatUsd(parseFloat(e.debitAmount!), 2) : "—"}
                       </TableCell>
                     </TableRow>
                   ))}

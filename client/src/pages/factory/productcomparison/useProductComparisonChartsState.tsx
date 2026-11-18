@@ -216,6 +216,7 @@ export function useProductComparisonChartsState() {
     month,
     period,
     productOptions,
+    ranges,
     selectedCatalogRows,
     selectedCategories,
     selectedGrades,
