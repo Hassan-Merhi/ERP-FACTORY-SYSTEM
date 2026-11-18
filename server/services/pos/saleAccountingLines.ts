@@ -27,6 +27,8 @@ export interface PosLineTarget {
 
 export interface PosSaleLinesInput {
   grandTotal: MoneyInput;
+  /** Original Kwacha total from quantity x typed unit prices. */
+  nativeZmwTotal?: MoneyInput;
   payment: PosLineTarget;
   paymentNarration: string;
   /** Normal ERP companies: the revenue line. */
@@ -76,6 +78,12 @@ export function posSaleLines(input: PosSaleLinesInput): ErpVoucherLine[] {
   const currency = (input.currency || "USD").toUpperCase();
   const rate = toMoney(input.exchangeRate);
   const foreign = currency !== "USD" && rate.gt(0);
+  const exactZmw = currency === "ZMW" && input.nativeZmwTotal != null
+    ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2)
+    : null;
+  if (exactZmw && input.supplierPartner) {
+    throw new Error("Native Kwacha supplier-partner allocation requires explicit split accounting");
+  }
 
   const line = (target: PosLineTarget, amount: Decimal, debitSide: boolean, narration: string): ErpVoucherLine => {
     const debit = debitSide !== isReturn;
@@ -84,7 +92,7 @@ export function posSaleLines(input: PosSaleLinesInput): ErpVoucherLine[] {
       debit: debit ? amount : 0,
       credit: debit ? 0 : amount,
       narration,
-      transaction: foreign ? { currency, amount: amount.times(rate), rate } : null,
+      transaction: foreign ? { currency, amount: exactZmw ?? amount.times(rate), rate } : null,
     };
   };
 
