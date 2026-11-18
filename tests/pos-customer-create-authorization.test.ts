@@ -101,7 +101,7 @@ describe("Phase 2 Zambia POS customer creation", () => {
       companyId: ctx.companyId + 100_000,
     });
     expect(foreign.status).toBe(403);
-    expect(foreign.body.code).toBe("COMPANY_SCOPE_DENIED");
+    expect(foreign.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
   });
 
   it("prevents forged opening balances and arbitrary ledger links", async () => {
