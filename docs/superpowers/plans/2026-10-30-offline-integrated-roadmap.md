@@ -211,8 +211,12 @@ plan are in the plan document and the
   resume, feed replay, TRUNCATE reload, offline sign-in only for people who
   signed in on that PC, 24h warning / 2-day block rule) and the read-only local
   server mode (`OFFLINE_PC_LOCAL_MODE=read-only`).
-- Next: A3b desktop app wiring (Windows and Mac) with the local database,
-  server and sync loop; then Phases B to E.
+- Phase A3b (off unless enabled per PC): desktop app starts an embedded
+  PostgreSQL, the sync process and the read-only local server on 127.0.0.1 and
+  opens the local copy when the cloud cannot be reached; "Connect this PC" and
+  "Sync now" in the menu; staging script and Mac target. Not yet tested on real
+  Windows/Mac PCs.
+- Next: Phase B (vouchers entered offline on a PC, sent to the cloud once).
 
 ## Resume checklist (next session)
 

@@ -249,9 +249,31 @@ switch with `423 OFFLINE_PC_LOCAL_READ_ONLY`, and starts no background jobs.
 Covered by `tests/pc-sync-local-agent.test.ts` (a second database built from
 migrations as the PC).
 
-**Not installed anywhere and not verified on PCs.** Next (A3b): the desktop app
-starts the local database, server and sync loop, and opens the local copy when
-the cloud cannot be reached.
+**Desktop app (Phase A3b, off unless enabled on the PC).** The desktop app
+(`desktop/`, Windows and Mac) reads `<userData>/offline-pc.json`; with
+`"enabled": true` it starts, all on 127.0.0.1 only: an embedded PostgreSQL in
+`<userData>/pc-database`, the sync process (`scripts/pc-sync/local/run-agent.mjs`,
+which builds the schema from `migrations/` and syncs every minute), and, once
+the first copy is complete, the ERP server in read-only local mode (it binds to
+127.0.0.1 in that mode). The window keeps using the cloud; when the cloud cannot
+be reached it opens the local copy instead of the offline page. The **Offline
+copy** menu has *Connect this PC…* (sign in once; the password is never written
+anywhere except as the local bcrypt hash), *Sync now*, *Open offline copy* and
+*Back to the cloud*. The title shows how old the copy is when it is over 24
+hours or when the local copy is open. The database password, session secret and
+cloud cookie are kept with the operating system's protected storage.
+
+Building it: `npm run build` in the repository root, then in `desktop/`
+`npm run stage:offline` (copies the server, migrations and sync agent into
+`build/erp-server` and installs their packages and the embedded PostgreSQL
+for the operating system it runs on), then `npm run build:all` on Windows or
+`npm run build:mac` on a Mac. Without the staging step the build is the
+cloud-only app, exactly as before.
+
+**Not installed anywhere and not verified on real Windows or Mac PCs.** The
+sync process and the staged server were exercised on Linux only; the Electron
+wiring, the embedded PostgreSQL on Windows/Mac and the packaged installers need
+a test on one PC of each kind before any rollout.
 
 ### Entries left in the old browser queues
 

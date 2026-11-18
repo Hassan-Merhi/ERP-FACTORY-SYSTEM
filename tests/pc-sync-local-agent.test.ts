@@ -20,6 +20,8 @@ import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
 import { pcSyncFreshness, rememberLocalLogin, syncOnce } from "../scripts/pc-sync/local/syncAgent.mjs";
 import { createCloudClient } from "../scripts/pc-sync/local/cloudClient.mjs";
 import type { AddressInfo } from "node:net";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { applyPcLocalModeEnvironment } from "../server/offline/pcLocal/localReadOnlyGuard";
 import { applyMigrations, databaseUrlFor } from "./helpers/migrateDisposableDatabase.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, setupTestApp, type TestContext } from "./setup";
@@ -251,6 +253,68 @@ describe("PC local copy: cloud connection", () => {
     });
     return expect(client.get("//evil.example/api/x")).rejects.toMatchObject({ code: "PC_SYNC_CLOUD_PATH_INVALID" });
   });
+});
+
+describe("PC local copy: the agent process the desktop app runs", () => {
+  it("builds the PC database, signs in, copies and reports status without leaking the password", async () => {
+    await admin.query("DROP DATABASE IF EXISTS pcsync_local_agent_proc WITH (FORCE)");
+    await admin.query("CREATE DATABASE pcsync_local_agent_proc");
+    const server = ctx.app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const { port } = server.address() as AddressInfo;
+    const child = spawn(process.execPath, ["scripts/pc-sync/local/run-agent.mjs"], {
+      env: {
+        ...process.env,
+        PC_LOCAL_DATABASE_URL: databaseUrlFor(process.env.DATABASE_URL!, "pcsync_local_agent_proc"),
+        PC_SYNC_CLOUD_URL: `http://127.0.0.1:${port}`,
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const events: any[] = [];
+    let raw = "";
+    const waiters: Array<{ test: (e: any) => boolean; resolve: (e: any) => void }> = [];
+    createInterface({ input: child.stdout! }).on("line", (line) => {
+      raw += line;
+      const event = JSON.parse(line);
+      events.push(event);
+      for (const w of [...waiters]) if (w.test(event)) (waiters.splice(waiters.indexOf(w), 1), w.resolve(event));
+    });
+    const next = (test: (e: any) => boolean) =>
+      new Promise<any>((resolve, reject) => {
+        const found = events.find(test);
+        if (found) return resolve(found);
+        waiters.push({ test, resolve });
+        setTimeout(() => reject(new Error(`no event; got ${JSON.stringify(events)}`)), 60_000).unref();
+      });
+    try {
+      expect(await next((e) => e.event === "status")).toMatchObject({ needsLogin: true });
+      child.stdin!.write(
+        `${JSON.stringify({ cmd: "login", username: `${PREFIX}_testuser`, password: "testpassword123" })}\n`
+      );
+      expect(await next((e) => e.event === "login")).toEqual({ event: "login", ok: true });
+      const done = await next((e) => e.event === "status" && e.copyComplete && e.lastSyncAt);
+      expect(done.freshness.level).toBe("current");
+      expect(raw).not.toContain("testpassword123");
+
+      const pcDb = new Client({
+        connectionString: databaseUrlFor(process.env.DATABASE_URL!, "pcsync_local_agent_proc"),
+        ssl: false,
+      });
+      await pcDb.connect();
+      try {
+        const { rows } = await pcDb.query("SELECT id FROM vouchers ORDER BY id");
+        expect(rows.map((r) => Number(r.id))).toEqual((await cloudVouchers()).map((v) => v.id));
+      } finally {
+        await pcDb.end();
+      }
+      child.stdin!.write(`${JSON.stringify({ cmd: "stop" })}\n`);
+      await new Promise((resolve) => child.once("exit", resolve));
+    } finally {
+      child.kill();
+      await new Promise((resolve) => server.close(resolve));
+      await admin.query("DROP DATABASE IF EXISTS pcsync_local_agent_proc WITH (FORCE)");
+    }
+  }, 120_000);
 });
 
 describe("PC local copy: freshness and read-only server", () => {
