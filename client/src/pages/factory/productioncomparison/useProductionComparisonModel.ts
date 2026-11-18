@@ -104,7 +104,7 @@ export function useProductionComparisonModel() {
     return [customA, customB];
   }, [preset, customA, customB]);
 
-  const labelA =
+  const labelA: "Today" | "This Month" | "This Year" | "Period A" =
     preset === "today-yesterday"
       ? "Today"
       : preset === "month"
@@ -112,7 +112,7 @@ export function useProductionComparisonModel() {
         : preset === "year"
           ? "This Year"
           : "Period A";
-  const labelB =
+  const labelB: "Yesterday" | "Last Month" | "Last Year" | "Period B" =
     preset === "today-yesterday"
       ? "Yesterday"
       : preset === "month"
