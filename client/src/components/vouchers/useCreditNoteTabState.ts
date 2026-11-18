@@ -1,5 +1,4 @@
 // Extracted from ./CreditNoteTab.tsx to keep that module under the source-size cap.
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,8 +26,6 @@ export function useCreditNoteTabState({ allAccounts, editVoucherId }: CreditNote
   const { toast } = useToast();
   const { selectedCurrency, displayCurrency } = useCurrencyContext();
   const { selectedCompany } = useCompany();
-  // Same predicate as the phone save bar, so exactly one save action shows (phone landscape too).
-  const isPhoneLayout = useErpPhoneLayout();
   const [items, setItems] = useState<CreditNoteItem[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState("");
@@ -330,7 +327,8 @@ export function useCreditNoteTabState({ allAccounts, editVoucherId }: CreditNote
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (filteredItems.length === 0) return;
+      // Ctrl/⌘+Enter is the shared voucher Save shortcut, not "add the highlighted item".
+      if (filteredItems.length === 0 || event.ctrlKey || event.metaKey) return;
       const target = event.target;
       const isEditable =
         target instanceof HTMLInputElement ||
@@ -420,7 +418,6 @@ export function useCreditNoteTabState({ allAccounts, editVoucherId }: CreditNote
     highlightedIndex,
     isEditMode,
     isPending,
-    isPhoneLayout,
     itemListRef,
     itemQuantity,
     items,

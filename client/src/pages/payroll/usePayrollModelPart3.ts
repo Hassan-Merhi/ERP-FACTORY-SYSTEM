@@ -154,7 +154,7 @@ export function usePayrollModelPart3({
         queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee.id] });
       setBonusDialogOpen(false);
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const submitSmartBonus = () => {
@@ -228,7 +228,7 @@ export function usePayrollModelPart3({
       setBulkDepositSelections({});
       setBulkDepositAmounts({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkWithdrawalMutation = useMutation({
@@ -252,7 +252,7 @@ export function usePayrollModelPart3({
       setBulkWithdrawalDialogOpen(false);
       setBulkWithdrawalAmounts({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkBonusMutation = useMutation({
@@ -277,7 +277,7 @@ export function usePayrollModelPart3({
       setPendingBonuses({});
       setBulkBonusStep("edit");
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
 
   const bulkPaymentMutation = useMutation({
@@ -302,7 +302,7 @@ export function usePayrollModelPart3({
       bulkPaymentForm.reset();
       setWorkerOverrides({});
     },
-    onError: showError,
+    onError: showError("Save failed"),
   });
   return {
     bulkBonusMutation,

@@ -5,9 +5,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { usePayrollRunTab } from "@/pages/payroll/payrollTabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { exportFileName } from "@/lib/exportFile";
-
 import type {
   Employee,
   LedgerAccount,
@@ -26,7 +26,7 @@ export function useERPRunPayrollModel() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id;
 
-  const [activeTab, setActiveTab] = useState<"run" | "history">("run");
+  const [activeTab, setActiveTab] = usePayrollRunTab(); // Run / History in ?tab=
 
   // ── Step 1: worker selection ──────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");

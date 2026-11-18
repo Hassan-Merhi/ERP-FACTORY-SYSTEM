@@ -75,7 +75,9 @@ const TOP_LEVEL_ROUTES = new Set(
     (match) => match[1],
   ),
 );
-const isTopLevelRoute = (route) => TOP_LEVEL_ROUTES.has(route.split("?")[0]);
+// An open voucher edit (`?edit=`) is a nested state of the Vouchers page, like an open dialog:
+// Escape cancels the edit and returns to the Daybook it came from, so it is not checked as top-level.
+const isTopLevelRoute = (route) => TOP_LEVEL_ROUTES.has(route.split("?")[0]) && !/[?&]edit=/.test(route);
 
 /** Escape navigation is a keyboard contract; it is checked on one phone and on desktop. */
 const ESCAPE_VIEWPORTS = new Set(["phone-390", "desktop-1440"]);

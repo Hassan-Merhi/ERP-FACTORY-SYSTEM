@@ -1,6 +1,6 @@
 // Extracted from ./useFactorySettingsModel.ts to keep that module under the source-size cap.
 import { searchAny } from "@shared/searchNormalization";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
@@ -73,6 +73,15 @@ export function useFactorySettingsModelPart2({
     setReplaceStr(defaults.replace);
     setRenamePreview(null);
   }, [selectedCompany?.id, setCodePrefix, setFindStr, setRenamePreview, setReplaceStr]);
+
+  // The bulk settings as last saved, so the page can show unsaved changes and discard them.
+  const savedSettings = useMemo<FactorySettingsData>(() => {
+    if (!data) return defaultSettings;
+    const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } = data as FactorySettingsData & {
+      automaticPriorityPrintingEnabled?: boolean;
+    };
+    return { ...defaultSettings, ...bulkSettings };
+  }, [data]);
 
   useEffect(() => {
     if (data) {
@@ -257,6 +266,8 @@ export function useFactorySettingsModelPart2({
   };
 
   const handleSave = () => mutation.mutate(settings);
+  const isDirty = Boolean(data) && JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const handleReset = () => setSettings(savedSettings);
   return {
     attendanceWaChats,
     attendanceWaChatsLoading,
@@ -264,8 +275,10 @@ export function useFactorySettingsModelPart2({
     filteredWaChats,
     filteredWeeklyWaChats,
     handleNumberChange,
+    handleReset,
     handleSave,
     handleToggle,
+    isDirty,
     isLoading,
     locations,
     mutation,
