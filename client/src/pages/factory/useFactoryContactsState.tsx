@@ -19,7 +19,7 @@ interface PhoneEntry {
   number: string;
 }
 
-interface Contact {
+export interface Contact {
   id: number;
   companyId: number;
   name: string;
@@ -264,6 +264,7 @@ export function useFactoryContactsState() {
   return {
     addNumber,
     canCreateContact,
+    orderedContacts,
     contactFilter,
     deleteMutation,
     deleteTarget,

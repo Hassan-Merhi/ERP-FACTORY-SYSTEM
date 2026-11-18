@@ -14,6 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,7 @@ import {
   type RetailAudit,
   type RetailDashboardData,
 } from "./RetailDashboardRankingTable";
+import { brandLabel, locationLabel, productLabel, rankingSheet, sizeLabel, stockSheet } from "./retailDashboardExport";
 
 interface Location {
   id: number;
@@ -167,6 +169,26 @@ export default function RetailDashboard() {
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
+        {data && (
+          <RowsExportMenu
+            title="Retail Dashboard"
+            period={{ from, to }}
+            size="default"
+            sheetName="Best-selling products"
+            rows={data.bestSellingProducts}
+            columns={rankingSheet("Best-selling products", data.bestSellingProducts, productLabel, true).columns}
+            extraSheets={[
+              rankingSheet("Best-selling brands", data.bestSellingBrands, brandLabel, true),
+              rankingSheet("Best-selling sizes", data.bestSellingSizes, sizeLabel),
+              rankingSheet("Sales by location", data.salesByLocation, locationLabel, true),
+              stockSheet("Low-stock items", data.lowStock, "low"),
+              stockSheet("Out-of-stock products", data.outOfStock, "out"),
+              stockSheet("Slow-moving inventory", data.slowMoving, "slow"),
+            ]}
+            resource="retail.pos"
+            data-testid="button-export-retail-dashboard"
+          />
+        )}
       </PageHeader>
 
       <Card>
@@ -315,26 +337,12 @@ export default function RetailDashboard() {
             <RankingTable
               title="Best-selling products"
               rows={data.bestSellingProducts}
-              label={(row) => row.product_name ?? row.name ?? "—"}
+              label={productLabel}
               showProfit
             />
-            <RankingTable
-              title="Best-selling brands"
-              rows={data.bestSellingBrands}
-              label={(row) => row.name ?? row.brand_name ?? row.brand ?? "—"}
-              showProfit
-            />
-            <RankingTable
-              title="Best-selling sizes"
-              rows={data.bestSellingSizes}
-              label={(row) => row.name ?? row.size ?? "—"}
-            />
-            <RankingTable
-              title="Sales by location"
-              rows={data.salesByLocation}
-              label={(row) => row.name ?? row.location_name ?? "—"}
-              showProfit
-            />
+            <RankingTable title="Best-selling brands" rows={data.bestSellingBrands} label={brandLabel} showProfit />
+            <RankingTable title="Best-selling sizes" rows={data.bestSellingSizes} label={sizeLabel} />
+            <RankingTable title="Sales by location" rows={data.salesByLocation} label={locationLabel} showProfit />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">

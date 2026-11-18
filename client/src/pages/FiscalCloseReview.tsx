@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import type { ReviewKind } from "./FiscalCloseReviewTypes";
 import { FiscalCloseReviewCardSection, useFiscalCloseReviewState } from "./useFiscalCloseReviewState";
 import { FiscalCloseReviewCardSection2, FiscalCloseReviewCardSection3 } from "./FiscalCloseReviewCardSection2";
@@ -56,7 +57,39 @@ export default function FiscalCloseReview() {
         title="Fiscal Period Closing & Audit Review"
         meta={selectedCompany?.name ?? "Current company"}
         subtitle="Readiness, dual approval, financial audit controls and reviewed close. This screen does not edit old vouchers."
-      />
+      >
+        {tab === "history" && history.data && (
+          <RowsExportMenu
+            title="Reviewed Fiscal Closes"
+            rows={history.data.reviewedClosures}
+            columns={[
+              { header: "Recorded", value: (item) => item.certified_at },
+              { header: "Closure", value: (item) => `Closure #${item.fiscal_closure_id ?? "reopened"}` },
+              { header: "Voucher", value: (item) => `Voucher #${item.closing_voucher_id}` },
+              { header: "Accounting reviewer", value: (item) => item.accounting_reviewer },
+              { header: "Owner reviewer", value: (item) => item.owner_reviewer },
+              { header: "Status", value: (item) => (item.currently_closed ? "Closed" : "Reopened / no longer active") },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-fiscal-review"
+          />
+        )}
+        {tab === "audit" && audit.data && (
+          <RowsExportMenu
+            title="Fiscal Close Audit Trail"
+            rows={audit.data.events}
+            columns={[
+              { header: "Timestamp", value: (e) => e.recorded_at },
+              { header: "Action", value: (e) => e.action },
+              { header: "Source", value: (e) => e.table_name },
+              { header: "Actor", value: (e) => e.username },
+              { header: "Reference", value: (e) => e.record_identifier },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-fiscal-review"
+          />
+        )}
+      </PageHeader>
       <FiscalCloseReviewCardSection2
         changePolicy={changePolicy}
         policy={policy}

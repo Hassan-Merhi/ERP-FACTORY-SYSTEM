@@ -19,7 +19,7 @@ import { useDateJump } from "@/hooks/use-date-jump";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 import { useCompany } from "@/contexts/CompanyContext";
 
-interface StockTransferRow {
+export interface StockTransferRow {
   transferId: number;
   voucherId: number;
   voucherNumber: string;

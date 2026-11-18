@@ -70,7 +70,7 @@ export function ContainerSpView(props: ContainerSpViewProps) {
           />
           {recordChanges.canCreate("POST", "/api/po-import/import") && (
             <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
-              <Plus className="h-4 w-4" /> Add
+              <Plus className="h-4 w-4" /> Import PO
             </Button>
           )}
         </div>

@@ -50,7 +50,7 @@ export function fmtN(n: number) {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
-type SectionKey = "currentStock" | "wasteStock" | "sold" | "wasteDispatched" | "pendingLoading";
+export type SectionKey = "currentStock" | "wasteStock" | "sold" | "wasteDispatched" | "pendingLoading";
 
 interface SectionProps {
   section: SectionKey;
@@ -161,7 +161,7 @@ function BaleDetailRows({
   );
 }
 
-function groupByCategory(rows: BucketRow[]): { category: string; items: BucketRow[] }[] {
+export function groupByCategory(rows: BucketRow[]): { category: string; items: BucketRow[] }[] {
   const map = new Map<string, BucketRow[]>();
   for (const row of rows) {
     const cat = row.categoryName || "—";

@@ -80,7 +80,7 @@ interface Purchase {
   amount: string;
 }
 
-interface Sale {
+export interface Sale {
   voucherNumber: string;
   saleDate: string;
   locationName: string | null;
@@ -91,7 +91,7 @@ interface Sale {
   posStation?: number | null;
 }
 
-interface InventoryLocation {
+export interface InventoryLocation {
   locationId: number;
   locationName: string;
   locationCode: string;

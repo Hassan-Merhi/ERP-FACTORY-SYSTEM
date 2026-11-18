@@ -12,6 +12,7 @@ import { useApiBase } from "../shared";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import type { AuthMe } from "@shared/apiTypes";
 import { POPUP_BLOCKED_TOAST } from "@/lib/popupBlockedToast";
+import { printDocument } from "@/lib/printDocument";
 
 export function useLedgerViewState({
   ledger,
@@ -228,15 +229,7 @@ export function useLedgerViewState({
     }
     </body></html>`;
 
-    const w = window.open("", "_blank", "width=900,height=700");
-    if (!w) {
-      toast(POPUP_BLOCKED_TOAST);
-      return;
-    }
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 300);
+    printDocument(html, { features: "width=900,height=700", onBlocked: () => toast(POPUP_BLOCKED_TOAST) });
   };
 
   const handleExcel = async () => {

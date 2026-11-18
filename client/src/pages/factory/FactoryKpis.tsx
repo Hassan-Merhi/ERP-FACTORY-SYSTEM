@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsExportMenu";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -122,6 +123,44 @@ export default function FactoryKpis() {
     enabled: showMixes && Boolean(selectedCompany?.id),
   });
 
+  // The open tab's table, exactly as shown, for the Export menu.
+  const exportSheet: RowsExportSheet<unknown> | null =
+    activeTab === "daily"
+      ? {
+          name: "Daily Production",
+          rows: dailyQuery.data ?? [],
+          columns: [
+            { header: "Date", value: (row: DailyProduction) => (row.date ? formatDisplayDate(row.date) : "—") },
+            { header: "Bales Produced", value: (row: DailyProduction) => row.balesProduced, type: "number" },
+            { header: "KG Pressed", value: (row: DailyProduction) => row.kgPressed, type: "number" },
+            { header: "Waste KG", value: (row: DailyProduction) => row.wasteKg, type: "number" },
+          ],
+        }
+      : activeTab === "workers"
+        ? {
+            name: "Worker Performance",
+            rows: (workersQuery.data ?? []).map((worker, idx) => ({ ...worker, rank: idx + 1 })),
+            columns: [
+              { header: "#", value: (row: WorkerPerformance & { rank: number }) => row.rank, type: "number" },
+              { header: "Worker Name", value: (row: WorkerPerformance) => row.workerName },
+              { header: "Bales Count", value: (row: WorkerPerformance) => row.balesCount, type: "number" },
+              { header: "Total KG", value: (row: WorkerPerformance) => row.totalKg, type: "number" },
+            ],
+          }
+        : activeTab === "mixes"
+          ? {
+              name: "Mix Efficiency",
+              rows: mixesQuery.data ?? [],
+              columns: [
+                { header: "Mix Batch ID", value: (mix: MixEfficiency) => mix.mixBatchId },
+                { header: "Total Input KG", value: (mix: MixEfficiency) => mix.totalInputKg, type: "number" },
+                { header: "Total Output KG", value: (mix: MixEfficiency) => mix.totalOutputKg, type: "number" },
+                { header: "Waste KG", value: (mix: MixEfficiency) => mix.wasteKg, type: "number" },
+                { header: "Waste %", value: (mix: MixEfficiency) => `${(mix.wastePercent ?? 0).toFixed(1)}%` },
+              ],
+            }
+          : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -149,6 +188,17 @@ export default function FactoryKpis() {
               data-testid="input-date-to"
             />
           </div>
+          {exportSheet && (
+            <RowsExportMenu
+              title={`Factory KPIs ${exportSheet.name}`}
+              sheetName={exportSheet.name}
+              rows={exportSheet.rows}
+              columns={exportSheet.columns}
+              period={{ from, to }}
+              resource="factory.analytics"
+              className="self-end"
+            />
+          )}
         </div>
       </div>
 

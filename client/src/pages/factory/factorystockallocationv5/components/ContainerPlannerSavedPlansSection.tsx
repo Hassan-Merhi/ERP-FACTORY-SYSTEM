@@ -3,7 +3,7 @@ import { Loader2, RefreshCw, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatQty } from "./ContainerPlannerSavedPlansTypes";
+import { formatCount as formatQty } from "@/lib/formatNumber";
 import { useContainerPlannerSavedPlansState } from "./useContainerPlannerSavedPlansState";
 
 export function ContainerPlannerSavedPlansSection({

@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Download, Link, Package, Pencil, Play, Save, Trash2, Weight, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { PriorityScanLoadingControl } from "./PriorityScanLoadingControl";
-import { fmtKg, type PendingLoad } from "./FactoryPendingLoadingsTypes";
+import { type PendingLoad } from "./FactoryPendingLoadingsTypes";
+import { formatKg } from "@/lib/formatNumber";
 import { useFactoryPendingLoadingsStatePart1 } from "./useFactoryPendingLoadingsStatePart1";
 
 export function useFactoryPendingLoadingsState() {
@@ -83,6 +84,7 @@ export function useFactoryPendingLoadingsState() {
     customerNames,
     deleteTarget,
     dismissUndo,
+    formatDate,
     formatDisplayDate,
     groups,
     handleConfirmDelete,
@@ -192,7 +194,7 @@ function useFactoryPendingLoadingsStatePart2({
               <Package className="h-3.5 w-3.5" /> {(load.totalQtyBales || 0).toLocaleString()} bales scanned
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Weight className="h-3.5 w-3.5" /> {fmtKg(load.totalWeightKg)}
+              <Weight className="h-3.5 w-3.5" /> {formatKg(load.totalWeightKg)}
             </span>
           </div>
           {recordChanges.allowed && editingNoteId === load.id ? (

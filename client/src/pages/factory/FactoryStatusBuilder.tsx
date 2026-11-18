@@ -1,5 +1,4 @@
 import { Input } from "@/components/ui/input";
-import {} from "@/components/ui/dialog";
 import { LayoutGrid, Plus, X, Link2, Link2Off } from "lucide-react";
 
 import type { CellValue } from "./factorystatusbuilder/types";

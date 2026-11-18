@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +24,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "@/styles/pos-container-premium.css";
-import { COLUMN_DEFS, type PosUserContext } from "./usePOSContainerTrackingState";
+import { COLUMN_DEFS, supplierLabel, type PosContainerRow, type PosUserContext } from "./usePOSContainerTrackingState";
+import { daysSincePortDeparture } from "./portDeparture";
 import { usePOSContainerTrackingState2 } from "./usePOSContainerTrackingState2";
 import { POSContainerTrackingSection } from "./POSContainerTrackingSection";
 import { POSContainerTrackingPosContainerMobileList } from "./POSContainerTrackingPosContainerMobileList";
@@ -98,7 +100,50 @@ export default function POSContainerTracking(props: { posUser?: PosUserContext }
             </span>
           </>
         }
-      />
+      >
+        <RowsExportMenu
+          title="Containers OTW"
+          rows={visibleContainers}
+          columns={COLUMN_DEFS.filter((column) => isColumnVisible(column.key)).map((column) => ({
+            header: column.label,
+            type: column.key === "daysSinceDeparture" ? ("number" as const) : undefined,
+            value: (container: PosContainerRow) => {
+              switch (column.key) {
+                case "container":
+                  return container.containerNumber;
+                case "supplier":
+                  return supplierLabel(container);
+                case "status":
+                  return container.status;
+                case "eta":
+                  return container.eta ? formatDisplayDate(container.eta) : null;
+                case "portDeparture":
+                  return container.portDepartureDate ? formatDisplayDate(container.portDepartureDate) : null;
+                case "daysSinceDeparture":
+                  return daysSincePortDeparture(container.portDepartureDate, todayISO);
+                case "truck":
+                  return container.numberPlate;
+                case "location":
+                  return container.trackingLocation;
+                case "agent":
+                  return container.agent;
+                case "transporter":
+                  return container.transporter;
+                case "docs":
+                  return container.docReceived ? "Received" : "Pending";
+                case "docsSent":
+                  return container.docsSentDate
+                    ? formatDisplayDate(container.docsSentDate)
+                    : container.docReceived
+                      ? "Not sent"
+                      : null;
+              }
+            },
+          }))}
+          resource="retail.pos"
+          data-testid="button-export-pos-containers"
+        />
+      </PageHeader>
 
       <div className="pos-container-kpis grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
         <div className="pos-container-kpi" data-kpi-tone="violet">

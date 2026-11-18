@@ -12,8 +12,8 @@ import {
   ccySymbol,
   fmt,
   useFactoryBrokerVisualStatementState,
-  type BrokerContainer,
 } from "./useFactoryBrokerVisualStatementState";
+import { BrokerStatementExportMenu, containerGrandTotal } from "./BrokerStatementExportMenu";
 
 function fmtSigned(n: number, decimals = 2) {
   if (!n || n === 0) return "";
@@ -41,18 +41,6 @@ export default function FactoryBrokerVisualStatement() {
     to,
   } = useFactoryBrokerVisualStatementState();
 
-  // Per-container grand total by currency
-  function containerGrandTotal(c: BrokerContainer): Partial<Record<string, number>> {
-    const out: Record<string, number> = {};
-    const add = (cc: string, amt: number) => {
-      out[cc] = (out[cc] || 0) + amt;
-    };
-    if (c.goodsAmount) add(c.goodsCurrency, c.goodsAmount);
-    if (c.freightAmount) add(c.freightCurrency, c.freightAmount);
-    if (c.commissionAmount) add(c.commissionCurrency, c.commissionAmount);
-    return out;
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -64,7 +52,17 @@ export default function FactoryBrokerVisualStatement() {
           <PageHeader
             title="Broker Statement"
             subtitle="Container-level view of goods cost, freight, commission, and payments"
-          />
+          >
+            <BrokerStatementExportMenu
+              allCurrencies={allCurrencies}
+              containerTotals={containerTotals}
+              formatDisplayDate={formatDisplayDate}
+              from={from}
+              paymentTotals={paymentTotals}
+              statement={statement}
+              to={to}
+            />
+          </PageHeader>
         </div>
       </div>
 

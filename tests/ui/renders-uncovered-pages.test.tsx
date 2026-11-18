@@ -225,11 +225,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
   { name: "CombinedInventory", load: () => import("@/pages/CombinedInventory"), landmark: "button-refresh-inventory" },
   { name: "Agents", load: () => import("@/pages/Agents"), landmark: "button-add-agent" },
   { name: "Suppliers", load: () => import("@/pages/Suppliers"), landmark: "text-active-suppliers" },
-  {
-    name: "PropertiesDashboard",
-    load: () => import("@/pages/properties/PropertiesDashboard"),
-    landmark: "kpi-total-income",
-  },
   { name: "FactoryInsurance", load: () => import("@/pages/factory/FactoryInsurance"), landmark: "button-add-member" },
   {
     name: "FactoryReprintLabels",

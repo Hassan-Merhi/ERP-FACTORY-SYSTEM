@@ -6,11 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowRight, ExternalLink, Pencil, X, ArrowLeftRight, DollarSign, Clock } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu, type RowsExportColumn } from "@/components/export/RowsExportMenu";
 import { ErpListFilters, ErpListTable } from "@/erp-core";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import {
   StockTransfersDialogSection,
   useStockTransfersState,
+  type StockTransferRow,
   type StockTransfersProps,
 } from "./useStockTransfersState";
 
@@ -43,13 +45,32 @@ export default function StockTransfers(props: StockTransfersProps) {
     updateNotesMutation,
   } = useStockTransfersState(props);
 
+  const exportColumns: RowsExportColumn<StockTransferRow>[] = [
+    ...(hideVoucherNotes ? [] : [{ header: "Voucher", value: (t: StockTransferRow) => t.voucherNumber }]),
+    { header: "Date", value: (t) => formatVoucherDate(t.voucherDate) },
+    { header: "From", value: (t) => t.sourceLocationName },
+    { header: "To", value: (t) => t.destinationLocationName },
+    { header: "Items", value: (t) => (t.stockItemNames ?? []).join(", ") },
+    { header: "Total", value: (t) => t.totalAmount, type: "number" },
+    { header: "Status", value: (t) => (t.inventoryApplied ? "Applied" : "Pending") },
+    ...(hideVoucherNotes ? [] : [{ header: "Notes", value: (t: StockTransferRow) => t.notes }]),
+  ];
+
   return (
     <div className="p-4 md:p-6 space-y-5 w-full">
       <PageHeader
         title="Stock Transfers"
         subtitle="All stock movement vouchers between locations"
         icon={<ArrowLeftRight className="h-5 w-5" />}
-      />
+      >
+        <RowsExportMenu
+          title="Stock Transfers"
+          rows={filtered}
+          columns={exportColumns}
+          resource="erp.stock_transfers"
+          period={{ from: period.fromDate ?? "", to: period.toDate ?? "" }}
+        />
+      </PageHeader>
 
       {/* Stats pill bar */}
       <div className="flex flex-wrap gap-3">

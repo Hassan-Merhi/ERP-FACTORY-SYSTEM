@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -26,6 +27,8 @@ interface ShippingToolbarProps {
   toggleCol: (id: ShippingColId) => void;
   showAllCols: () => void;
   hiddenCount: number;
+  /** The page's export menu, shown after the column picker. */
+  exportMenu?: ReactNode;
 }
 
 /** Compact search, status/destination/company selects, filter toggle and column picker of the shipping page. */
@@ -47,6 +50,7 @@ export function ShippingToolbar({
   toggleCol,
   showAllCols,
   hiddenCount,
+  exportMenu,
 }: ShippingToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
@@ -155,6 +159,7 @@ export function ShippingToolbar({
           </div>
         </PopoverContent>
       </Popover>
+      {exportMenu}
     </div>
   );
 }

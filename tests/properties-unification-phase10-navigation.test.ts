@@ -84,13 +84,11 @@ describe("Phase 10 Properties navigation and legacy compatibility", () => {
     ).toBe(false);
   });
 
-  it("keeps registered dashboard actions and a directly routed compatibility page", () => {
+  it("sends the retired compatibility dashboard to the Properties home", () => {
     const routeSource = source("../client/src/app/PropertiesRoutes.tsx");
-    const pageSource = source("../client/src/pages/properties/PropertiesDashboard.tsx");
-    expect(routeSource).toContain('<Route path="/properties/dashboard" component={PropertiesDashboard} />');
-    expect(pageSource).toContain("apiRequest");
-    expect(pageSource).toContain("dashboard-cash-accounts");
-    expect(pageSource).toContain("dashboard-payable-accounts");
+    expect(routeSource).toContain(
+      '<Route path="/properties/dashboard">{() => <Redirect replace to="/properties/daybook" />}</Route>'
+    );
     expect(routeSource).toContain("Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map");
     expect(routeSource).toContain("<Redirect replace to={to} />");
     expect(routeSource).toContain('<Redirect replace to="/properties/daybook" />');

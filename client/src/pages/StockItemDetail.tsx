@@ -12,13 +12,20 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { ArrowLeft, Package, TrendingUp, MapPin, X, Calendar, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import {
   PRESET_LABELS,
   StockItemDetailCardSection,
   formatSmartNumber,
   useStockItemDetailState,
   type DatePreset,
+  type InventoryLocation,
+  type Sale,
 } from "./useStockItemDetailState";
+
+function sumField<Row>(rows: readonly Row[] | undefined, key: keyof Row): number {
+  return (rows ?? []).reduce((sum, row) => sum + parseFloat(String(row[key] ?? "0") || "0"), 0);
+}
 
 export default function StockItemDetail() {
   const {
@@ -67,7 +74,51 @@ export default function StockItemDetail() {
         subtitle="Purchase history, sales history, and current inventory locations"
         onBack={handleBack}
         backButtonTestId="button-back-to-stock-query"
-      />
+      >
+        <RowsExportMenu
+          title={`${selectedItem?.name ?? "Stock Item"} Details`}
+          sheetName="Purchases"
+          rows={itemDetails?.purchases ?? []}
+          columns={[
+            { header: "Container", value: (row) => row.containerNumber || row.supplierName || "-" },
+            { header: "Qty", value: (row) => row.quantity, type: "number" },
+            { header: "Rate", value: (row) => row.rate, type: "number" },
+          ]}
+          footer={["Total", sumField(itemDetails?.purchases, "quantity"), sumField(itemDetails?.purchases, "amount")]}
+          extraSheets={[
+            {
+              name: "Sales",
+              rows: filteredSales,
+              columns: [
+                { header: "Date", value: (row: Sale) => formatDisplayDate(new Date(row.saleDate)) },
+                { header: "Location", value: (row: Sale) => row.locationName || "-" },
+                { header: "Qty", value: (row: Sale) => row.quantity, type: "number" },
+                { header: "Rate", value: (row: Sale) => row.sellingPrice, type: "number" },
+              ],
+              footer: ["Total", null, sumField(filteredSales, "quantity"), sumField(filteredSales, "totalSales")],
+            },
+            {
+              name: "Inventory Locations",
+              rows: filteredInventoryLocations,
+              columns: [
+                { header: "Location", value: (row: InventoryLocation) => row.locationName },
+                { header: "Quantity", value: (row: InventoryLocation) => row.quantity, type: "number" },
+                { header: "Avg Rate", value: (row: InventoryLocation) => row.averageRate, type: "number" },
+                { header: "Total Value", value: (row: InventoryLocation) => row.totalValue, type: "number" },
+              ],
+              footer: [
+                "Total",
+                sumField(filteredInventoryLocations, "quantity"),
+                null,
+                sumField(filteredInventoryLocations, "totalValue"),
+              ],
+            },
+          ]}
+          period={{ from: fromDate || null, to: toDate || null }}
+          filters={selectedLocation === "all" ? undefined : [{ label: "Location", value: selectedLocation }]}
+          resource="erp.stock_items"
+        />
+      </PageHeader>
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">

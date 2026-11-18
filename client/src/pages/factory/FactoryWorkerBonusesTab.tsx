@@ -15,6 +15,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import {
   FactoryWorkerBonusesTabDialogSection,
   today,
@@ -92,11 +93,30 @@ export default function FactoryWorkerBonusesTab() {
             </Select>
           </div>
         </div>
-        {recordChanges.canCreate("POST", "/api/factory/worker-bonuses") && (
-          <Button onClick={() => setAddOpen(true)} data-testid="button-add-worker-bonus">
-            <Plus className="h-4 w-4 mr-2" /> Add Bonus
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <RowsExportMenu
+            title="Worker Bonuses"
+            rows={bonuses}
+            columns={[
+              { header: "Worker", value: (b) => b.workerName },
+              { header: "Date", value: (b) => b.bonusDate },
+              { header: "Amount (USD)", value: (b) => parseFloat(b.amount || "0"), type: "number" },
+              {
+                header: "Status",
+                value: (b) => (b.status === "paid" ? "Paid" : b.status === "reversed" ? "Reversed" : "Pending"),
+              },
+              { header: "Notes", value: (b) => (b.notes || "") + (b.voucherId ? ` · Voucher #${b.voucherId}` : "") },
+            ]}
+            resource="factory.payroll"
+            size="default"
+            data-testid="button-export-worker-bonuses"
+          />
+          {recordChanges.canCreate("POST", "/api/factory/worker-bonuses") && (
+            <Button onClick={() => setAddOpen(true)} data-testid="button-add-worker-bonus">
+              <Plus className="h-4 w-4 mr-2" /> Add Bonus
+            </Button>
+          )}
+        </div>
       </div>
 
       {!isLoading && pendingTotal > 0 && (

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 interface SupplierScore {
   supplierName: string;
@@ -88,6 +89,24 @@ export default function FactorySupplierScoreboard() {
               data-testid="input-date-to"
             />
           </div>
+          <RowsExportMenu
+            title="Supplier Scoreboard"
+            period={{ from, to }}
+            rows={Array.isArray(data) ? data : []}
+            columns={[
+              { header: "Rank", value: (s) => data.indexOf(s) + 1, type: "number" },
+              { header: "Supplier Name", value: (s) => s.supplierName },
+              { header: "Total KG", value: (s) => Number(s.totalKg.toFixed(1)), type: "number" },
+              { header: "Waste KG", value: (s) => Number(s.wasteKg.toFixed(1)), type: "number" },
+              { header: "Waste %", value: (s) => Number(s.wastePercent.toFixed(1)), type: "number" },
+              { header: "Avg Cost/KG (USD)", value: (s) => s.avgCostPerKg ?? 0, type: "number" },
+              { header: "Output Bales", value: (s) => s.outputBales, type: "number" },
+              { header: "Score", value: (s) => Number(s.score.toFixed(1)), type: "number" },
+            ]}
+            resource="factory.analytics"
+            className="self-end"
+            data-testid="button-export-supplier-scoreboard"
+          />
         </div>
       </div>
 

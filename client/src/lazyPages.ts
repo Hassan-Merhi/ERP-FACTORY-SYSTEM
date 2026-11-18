@@ -108,9 +108,7 @@ export const POSPage = lazy(() => import("@/pages/pos/POSPage"));
 export const POSImport = lazy(() => import("@/pages/pos/POSImport"));
 export const POSItemReplacement = lazy(() => import("@/pages/POSItemReplacement"));
 export const POSDaybook = lazy(() => import("@/pages/pos/POSDaybook"));
-export const POSDashboard = lazy(() => import("@/pages/pos/POSDashboard"));
 export const POSCustomers = lazy(() => import("@/pages/pos/POSCustomers"));
-export const POSSettings = lazy(() => import("@/pages/pos/POSSettings"));
 export const POSPriceList = lazy(() => import("@/pages/pos/POSPriceList"));
 export const PosTransferOrders = lazy(() => import("@/pages/pos/PosTransferOrders"));
 export const POSContainerTracking = lazy(() => import("@/pages/pos/POSContainerTracking"));
@@ -199,7 +197,6 @@ export const FactoryRentalPayments = lazy(() => import("@/pages/factory/FactoryR
 export const FactoryContacts = lazy(() => import("@/pages/factory/FactoryContacts"));
 
 // ── Properties pages ──────────────────────────────────────────────────────────
-export const PropertiesDashboard = lazy(() => import("@/pages/properties/PropertiesDashboard"));
 export const PropertiesAccounts = lazy(() => import("@/pages/properties/PropertiesAccounts"));
 export const PropertiesVouchers = lazy(() => import("@/pages/properties/PropertiesVouchers"));
 export const PropertiesVoucherDetail = lazy(() => import("@/pages/properties/PropertiesVoucherDetail"));

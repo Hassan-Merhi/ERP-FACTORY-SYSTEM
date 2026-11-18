@@ -31,7 +31,7 @@ type Line = {
   status: "matched" | "unmatched" | "stale";
 };
 
-type BookEntry = {
+export type BookEntry = {
   entryId: number;
   voucherId: number;
   voucherNumber: string;
