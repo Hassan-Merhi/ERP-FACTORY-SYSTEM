@@ -190,6 +190,8 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
         <ErpListTable
           pageKey="factory-daybook-condensed"
           scrollLabel="Condensed factory daybook"
+          // Phones restack rows as cards; the Factory phone regression forbids sideways table scroll.
+          mobileLayout="cards"
           wrapperClassName="max-h-[calc(100dvh-220px)]"
         >
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
