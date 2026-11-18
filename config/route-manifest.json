@@ -1356,7 +1356,7 @@
     "GET /api/stock-items/:id [requireAuth > <anonymous>]",
     "GET /api/stock-item-location-prices/all [requireAuth > <anonymous>]",
     "GET /api/stock-items/:id/location-prices [requireAuth > <anonymous>]",
-    "POST /api/stock-items/:id/location-prices [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/stock-items/:id/location-prices [requireAuth > <anonymous>]",
     "DELETE /api/stock-item-location-prices/:id [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]",
     "PUT /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]",

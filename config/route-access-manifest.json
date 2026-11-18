@@ -1358,7 +1358,7 @@
     {"id":"GET /api/stock-items/:id#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":["mod_inventory"],"policies":["company-resource"]},
     {"id":"GET /api/stock-item-location-prices/all#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":"none"},
     {"id":"GET /api/stock-items/:id/location-prices#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":["mod_inventory"],"policies":["company-resource"]},
-    {"id":"POST /api/stock-items/:id/location-prices#1","guards":"requireAuth > requireNonPOS > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"deny":["POS"]}},"permission":["mod_inventory"],"policies":["company-resource"]},
+    {"id":"POST /api/stock-items/:id/location-prices#1","guards":"requireAuth > <anonymous>","auth":"session","companyScope":"active-company","roles":"any","permission":[{"key":"mod_inventory","bypassRoles":["POS"]}],"policies":["company-resource"]},
     {"id":"DELETE /api/stock-item-location-prices/:id#1","guards":"requireAuth > requireNonPOS > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"deny":["POS"]}},"permission":"none"},
     {"id":"GET /api/location-price-groups#1","guards":"requireAuth > requireNonPOS > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"deny":["POS"]}},"permission":["mod_inventory"]},
     {"id":"PUT /api/location-price-groups#1","guards":"requireAuth > requireNonPOS > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"deny":["POS"]}},"permission":["mod_inventory"]},
