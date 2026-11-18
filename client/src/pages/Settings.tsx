@@ -119,9 +119,9 @@ export default function Settings() {
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
-  const canManageChristmasMode = currentUser?.role === "Developer";
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
-  const canManageExcelAppearance = effectiveRole === "Admin" || effectiveRole === "Developer";
+  const isDeveloperMode = effectiveRole === "Developer";
+  const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
 
   const sidebarGroups = [
     {
@@ -137,24 +137,24 @@ export default function Settings() {
       label: "Users & Access",
       items: [
         { key: "users-permissions", label: "Users & Permissions", icon: Users },
-        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, adminOnly: true },
+        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, devOnly: true },
       ],
     },
     {
       label: "Tracking",
       items: showSupplierTrackingDefaults
-        ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
+        ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin, devOnly: true }]
         : [],
     },
     {
       label: "WhatsApp",
-      items: ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "")
-        ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText }]
+      items: isDeveloperMode
+        ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText, devOnly: true }]
         : [],
     },
     {
       label: "Accounting",
-      items: [{ key: "recurring-journals", label: "Recurring Journals", icon: CalendarClock }],
+      items: [{ key: "recurring-journals", label: "Recurring Journals", icon: CalendarClock, devOnly: true }],
     },
     {
       label: "Tools",
@@ -163,7 +163,7 @@ export default function Settings() {
         { key: "edit-log", label: "Edit Log", icon: History },
         { key: "files-export", label: "Files & Export", icon: Upload },
         { key: "export-center", label: "Export Center", icon: Zap },
-        { key: "excel-appearance", label: excelAppearanceCopy.title, icon: FileSpreadsheet, adminOnly: true },
+        { key: "excel-appearance", label: excelAppearanceCopy.title, icon: FileSpreadsheet, devOnly: true },
       ],
     },
     {
@@ -175,17 +175,17 @@ export default function Settings() {
       items:
         appMode === "factory"
           ? [
-              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
+              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer, devOnly: true },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
                 icon: Images,
                 href: "/factory/label-banners",
-                adminOnly: true,
+                devOnly: true,
               },
-              { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
+              { key: "fx-rates", label: "FX Rates", icon: TrendingUp, devOnly: true },
               ...(canManageCompanyTimezone
-                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock }]
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, devOnly: true }]
                 : []),
             ]
           : [],
@@ -199,11 +199,15 @@ export default function Settings() {
   const allowedItems = (items: SettingsSidebarItem[]) =>
     items.filter(
       (item) =>
-        (!item.devOnly || currentUser?.role === "Developer") &&
+        (!item.devOnly || isDeveloperMode) &&
         (!item.adminOnly || canManageSessions) &&
-        (item.key !== "excel-appearance" || canManageExcelAppearance)
+        (item.key !== "system" || canAccessSystemTools)
     );
-  const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+  // Non-developers should never see headings with no accessible Settings pages.
+  // Developers retain the full Settings taxonomy, including empty groups.
+  const visibleSidebarGroups = sidebarGroups
+    .map((group) => ({ ...group, items: allowedItems(group.items) }))
+    .filter((group) => isDeveloperMode || group.items.length > 0);
 
   // The open section lives in ?section= so a reload or shared link reopens it.
   // Until the signed-in user loads, role-gated sections are kept, not stripped.
@@ -225,16 +229,17 @@ export default function Settings() {
   });
 
   const openSection = (key: string) => {
-    const item = sidebarGroups.flatMap((group) => allowedItems(group.items)).find((entry) => entry.key === key);
-    if (item?.href) {
+    const item = visibleSidebarGroups.flatMap((group) => group.items).find((entry) => entry.key === key);
+    if (!item) return;
+    if (item.href) {
       navigate(item.href);
       return;
     }
     setActiveSection(key);
   };
 
-  const activeSectionLabel = sidebarGroups
-    .flatMap((group) => allowedItems(group.items))
+  const activeSectionLabel = visibleSidebarGroups
+    .flatMap((group) => group.items)
     .find((item) => item.key === activeSection)?.label;
 
   return (
@@ -249,8 +254,8 @@ export default function Settings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {sidebarGroups.map((group) =>
-                allowedItems(group.items).map((item) => (
+              {visibleSidebarGroups.map((group) =>
+                group.items.map((item) => (
                   <SelectItem key={item.key} value={item.key}>
                     {item.label}
                   </SelectItem>
@@ -262,13 +267,13 @@ export default function Settings() {
 
         <nav className="hidden sm:flex sm:flex-col w-56 shrink-0 border-r bg-muted/30 p-3 gap-3 overflow-y-auto">
           <div className="space-y-4">
-            {sidebarGroups.map((group) => (
+            {visibleSidebarGroups.map((group) => (
               <div key={group.label}>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
-                  {allowedItems(group.items).map((item) => {
+                  {group.items.map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
@@ -289,7 +294,7 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
-          {activeSection === "appearance-seasonal" && canManageChristmasMode && <ChristmasModeSettingsCard />}
+          {activeSection === "appearance-seasonal" && isDeveloperMode && <ChristmasModeSettingsCard />}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
               <div>
@@ -305,46 +310,46 @@ export default function Settings() {
             </div>
           )}
           {activeSection === "users-permissions" && (
-            <UsersPermissionsHub userRole={currentUser?.role} appMode={appMode} />
+            <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />
           )}
-          {activeSection === "sessions-hub" && canManageSessions && (
-            <SessionsHub isAdmin={true} isDev={currentUser?.role === "Developer"} />
+          {activeSection === "sessions-hub" && isDeveloperMode && (
+            <SessionsHub isAdmin={true} isDev={isDeveloperMode} />
           )}
-          {activeSection === "supplier-tracking-defaults" && showSupplierTrackingDefaults && (
-            <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
+          {activeSection === "supplier-tracking-defaults" && isDeveloperMode && showSupplierTrackingDefaults && (
+            <SupplierTrackingDefaultsTab canManage={true} />
           )}
-          {activeSection === "recurring-journals" && <RecurringJournalsTab />}
-          {activeSection === "scheduled-whatsapp-messages" && <ScheduledWhatsAppMessagesTab />}
+          {activeSection === "recurring-journals" && isDeveloperMode && <RecurringJournalsTab />}
+          {activeSection === "scheduled-whatsapp-messages" && isDeveloperMode && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
-          {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
-          {activeSection === "pos-setup" && currentUser?.role === "Developer" && (
-            <PosSetupHub userRole={currentUser?.role} />
+          {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
+          {activeSection === "pos-setup" && isDeveloperMode && (
+            <PosSetupHub userRole={effectiveRole} />
           )}
-          {activeSection === "automatic-priority-printing" && appMode === "factory" && (
+          {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
           )}
-          {activeSection === "fx-rates" && appMode === "factory" && (
+          {activeSection === "fx-rates" && isDeveloperMode && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && appMode === "factory" && canManageCompanyTimezone && (
+          {activeSection === "company-timezone" && isDeveloperMode && appMode === "factory" && canManageCompanyTimezone && (
             <div className="space-y-5 max-w-2xl">
               <CompanyTimezoneCard />
             </div>
           )}
           {activeSection === "files-export" && <FileStorageAndExport />}
           {activeSection === "export-center" && <ExportCenter />}
-          {activeSection === "excel-appearance" && canManageExcelAppearance && (
+          {activeSection === "excel-appearance" && isDeveloperMode && (
             <ExcelAppearanceSettingsTab company={selectedCompany} />
           )}
           {activeSection === "preferences" && <PreferencesTab />}
-          {activeSection === "system" && (
+          {activeSection === "system" && canAccessSystemTools && (
             <SystemToolsTab
               appMode={appMode}
-              currentUser={currentUser}
+              currentUser={{ role: effectiveRole }}
               selectedCompany={selectedCompany}
               companies={companies}
             />

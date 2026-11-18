@@ -43,9 +43,8 @@ import {
 } from "./daybookUtils";
 import { formatUsd } from "@/lib/moneyDisplay";
 
-// Stable empty default: `= []` is a new array each render while the query is
-// disabled (entries that are not voucher-backed), and the balance effect below
-// depends on it and resets state with a new {} — an endless re-render loop.
+// Stable empty default: `= []` is a new array each render while the query is disabled (not voucher-backed),
+// and the balance effect below depends on it and resets state with a new {} — an endless re-render loop.
 const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
 
 export function ViewEntryModal({
@@ -84,8 +83,9 @@ export function ViewEntryModal({
   })();
   const metaContainerId: number | undefined = entryMeta.containerId;
 
+  const viewEntriesPath = `/api/vouchers/${entry.referenceId}/view-entries`;
   const { data: rawViewEntries } = useQuery<VoucherViewEntry[] | { entries?: VoucherViewEntry[] }>({
-    queryKey: companyDataKey(`/api/vouchers/${entry.referenceId}/view-entries`, selectedCompany?.id, "factory-daybook-view"),
+    queryKey: companyDataKey(viewEntriesPath, selectedCompany?.id, "factory-daybook-view"),
     enabled: isVoucherBacked && !!entry.referenceId && !!selectedCompany?.id,
     // A voucher may have been revised since it was last viewed.
     staleTime: 0,
@@ -137,9 +137,8 @@ export function ViewEntryModal({
     enabled: isOtherCharge && !!entry.referenceId,
   });
 
-  // Current posted account balances, shared with ERP Daybook's book-balance basis.
-  // The company and voucher IDs are part of the query identity so switching
-  // companies or vouchers never displays a balance from another selection.
+  // Current posted account balances, shared with ERP Daybook's book-balance basis. Company and voucher IDs are
+  // in the query identity so switching companies or vouchers never displays a balance from another selection.
   const isBalanceVoucher = FACTORY_BALANCE_VOUCHER_TYPES.has(entry.txType);
   const {
     data: currentBalances,
@@ -185,7 +184,6 @@ export function ViewEntryModal({
   const { variant: badgeVariant, className: badgeClass } = getFactoryTxTypeBadge(entry.txType);
 
   if (isVoucherBacked) {
-    // Determine voucher type from txType: PAYMENT → Payment, RECEIPT → Receipt, JOURNAL → Journal
     const voucherType =
       entry.txType === "PAYMENT"
         ? "Payment"
@@ -194,7 +192,6 @@ export function ViewEntryModal({
           : entry.txType === "JOURNAL"
             ? "Journal"
             : entry.txType;
-
     const isPayment = voucherType === "Payment";
     const isReceipt = voucherType === "Receipt";
     const isJournal = voucherType === "Journal";
@@ -255,7 +252,10 @@ export function ViewEntryModal({
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">{isPayment ? "Paid From" : "Received In"}</p>
                   <p className="font-medium text-base md:text-lg">{sourceEntry.accountName}</p>
-                  <p className="text-sm font-mono mt-2 text-muted-foreground" data-testid="factory-voucher-source-balance">
+                  <p
+                    className="text-sm font-mono mt-2 text-muted-foreground"
+                    data-testid="factory-voucher-source-balance"
+                  >
                     Current balance: {displayCurrentBalance(sourceBalance)}
                   </p>
                 </div>
