@@ -3,47 +3,12 @@ import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
 import { resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
-
-export interface ProductionWorkerLinkMember {
-  workerId: number;
-  workerName: string;
-}
-
-export interface ProductionWorkerLink {
-  id: number;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  sharedTargetBales: number | null;
-  members: ProductionWorkerLinkMember[];
-}
-
-type LinkRow = {
-  id: number | string;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  sharedTargetBales: string | number | null;
-  members: unknown;
-};
-
-function parseMembers(value: unknown): ProductionWorkerLinkMember[] {
-  let parsed = value;
-  if (typeof parsed === "string") {
-    try {
-      parsed = JSON.parse(parsed);
-    } catch {
-      parsed = [];
-    }
-  }
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed
-    .map((member) => ({
-      workerId: Number(member?.workerId),
-      workerName: String(member?.workerName ?? ""),
-    }))
-    .filter((member) => Number.isInteger(member.workerId) && member.workerId > 0)
-    .sort((a, b) => a.workerId - b.workerId);
-}
+import { parseMembers, type ProductionWorkerLink, type LinkRow } from "./productionWorkerLinksHelpers";
+export {
+  indexProductionWorkerLinks,
+  type ProductionWorkerLinkMember,
+  type ProductionWorkerLink,
+} from "./productionWorkerLinksHelpers";
 
 export async function loadActiveProductionWorkerLinks(
   companyId: number,
@@ -92,14 +57,6 @@ export async function loadActiveProductionWorkerLinks(
     sharedTargetBales: row.sharedTargetBales == null ? null : Number(row.sharedTargetBales),
     members: parseMembers(row.members),
   }));
-}
-
-export function indexProductionWorkerLinks(links: ProductionWorkerLink[]): Map<number, ProductionWorkerLink> {
-  const byWorker = new Map<number, ProductionWorkerLink>();
-  for (const link of links) {
-    for (const member of link.members) byWorker.set(member.workerId, link);
-  }
-  return byWorker;
 }
 
 export async function createProductionWorkerLink(input: {
@@ -277,8 +234,8 @@ export async function unlinkProductionWorkerLink(input: {
           AND target_overridden = true
       `);
 
-    for (const workerId of workerIds) {
-      const existingDefaultResult = await tx.execute(sql`
+      for (const workerId of workerIds) {
+        const existingDefaultResult = await tx.execute(sql`
         SELECT COALESCE(
           (
             SELECT d.category
@@ -298,9 +255,9 @@ export async function unlinkProductionWorkerLink(input: {
           AND w.id = ${workerId}
         LIMIT 1
       `);
-      const category = String(resultRows(existingDefaultResult)[0]?.category ?? "");
+        const category = String(resultRows(existingDefaultResult)[0]?.category ?? "");
 
-      await tx.execute(sql`
+        await tx.execute(sql`
         INSERT INTO factory_worker_production_target_defaults (
           company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
         ) VALUES (
@@ -314,7 +271,7 @@ export async function unlinkProductionWorkerLink(input: {
           created_by = EXCLUDED.created_by,
           updated_at = now()
       `);
-    }
+      }
     }
 
     return true;

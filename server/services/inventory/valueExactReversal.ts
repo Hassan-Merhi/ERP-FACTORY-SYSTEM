@@ -54,48 +54,21 @@ import {
   type InventoryMovementJournalResult,
 } from "../accounting/perpetualInventory/inventoryMovementJournal";
 import { restoreInventoryByExactValue } from "./exactValueInventory";
+import {
+  storedRow,
+  legacyLineCost,
+  type ExactReversalParams,
+  type SaleLineForReversal,
+  type SaleLineValue,
+} from "./valueExactReversalHelpers";
+export type { ExactReversalParams, SaleLineForReversal, SaleLineValue } from "./valueExactReversalHelpers";
 
 const ZERO = new MoneyDecimal(0);
-
-type StoredRow = { id: number; quantity: string; total_value: string };
-
-async function storedRow(
-  tx: DbTransaction,
-  companyId: number,
-  locationId: number,
-  stockItemId: number
-): Promise<StoredRow | undefined> {
-  return firstRow<StoredRow>(
-    await tx.execute(sql`
-      SELECT id, quantity::text AS quantity, total_value::text AS total_value
-        FROM inventory
-       WHERE company_id = ${companyId} AND location_id = ${locationId} AND stock_item_id = ${stockItemId}
-       FOR UPDATE
-    `)
-  );
-}
 
 /** A line's value moved, or its stored total for a legacy line (positive magnitude). */
 export function lineValueMoved(line: { valueMoved?: MoneyInput; total: MoneyInput }): Decimal {
   const value = line.valueMoved === null || line.valueMoved === undefined ? line.total : line.valueMoved;
   return toMoney(value).abs().toDecimalPlaces(2);
-}
-
-export interface ExactReversalParams {
-  companyId: number;
-  locationId: number;
-  stockItemId: number;
-  /** Quantity to move back (positive). */
-  quantity: MoneyInput;
-  /** Value to move back (positive): the line's value moved. */
-  value: MoneyInput;
-  /**
-   * False for a legacy line whose value is only an estimate (no value_moved);
-   * see restoreIssuedValueTx.
-   */
-  exact?: boolean;
-  sourceVoucherType?: string;
-  sourceVoucherId?: number;
 }
 
 /**
@@ -170,26 +143,6 @@ export async function reverseReceivedValueTx(tx: DbTransaction, params: ExactRev
   );
   const after = await storedRow(tx, params.companyId, params.locationId, params.stockItemId);
   return toMoney(after?.total_value).minus(previousValue).toDecimalPlaces(2);
-}
-
-export interface SaleLineForReversal {
-  id: number;
-  quantity: MoneyInput;
-  totalCost?: MoneyInput;
-  costPrice?: MoneyInput;
-  valueMoved?: MoneyInput;
-}
-
-export interface SaleLineValue {
-  value: Decimal;
-  /** True when the value is the line's recorded value_moved. */
-  exact: boolean;
-}
-
-/** A legacy sale line's own cost: total_cost, else quantity × cost_price. */
-function legacyLineCost(line: SaleLineForReversal): Decimal {
-  if (line.totalCost !== null && line.totalCost !== undefined) return toMoney(line.totalCost).abs();
-  return toMoney(line.quantity).abs().times(toMoney(line.costPrice)).abs().toDecimalPlaces(2);
 }
 
 /** What the sale's COGS journal took out of the ledger's Inventory (0 when it has none). */

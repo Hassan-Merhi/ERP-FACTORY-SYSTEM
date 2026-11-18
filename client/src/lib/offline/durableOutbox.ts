@@ -9,43 +9,25 @@ import {
   offlineRetryDelay,
   validateOfflinePayload,
   type OfflineActor,
-  type OfflineMode,
   type OfflineOperation,
   type OfflineOperationState,
 } from "./operationContract";
+import {
+  getDeviceId,
+  getAuthenticatedActor,
+  type QueueOfflineInput,
+  type OfflineDeliverySummary,
+} from "./durableOutboxHelpers";
+export {
+  countLegacyOfflineOperations,
+  type QueueOfflineInput,
+  type OfflineDeliverySummary,
+} from "./durableOutboxHelpers";
 
 const MAX_PAYLOAD_BYTES = 1024 * 1024;
 const LEASE_MS = 10 * 60 * 1000;
-const DEVICE_ID_KEY = "erp_offline_device_id";
 const runnerId = crypto.randomUUID();
 let processing = false;
-
-export interface QueueOfflineInput {
-  actor: OfflineActor;
-  mode: OfflineMode;
-  entityType: string;
-  method: string;
-  url: string;
-  payload: unknown;
-  clientDate: string;
-  dependencies?: string[];
-}
-
-export interface OfflineDeliverySummary {
-  acknowledged: number;
-  conflicts: number;
-  rejected: number;
-  retried: number;
-  paused: boolean;
-}
-
-function getDeviceId(): string {
-  const existing = localStorage.getItem(DEVICE_ID_KEY);
-  if (existing && /^[0-9a-f-]{36}$/i.test(existing)) return existing;
-  const deviceId = crypto.randomUUID();
-  localStorage.setItem(DEVICE_ID_KEY, deviceId);
-  return deviceId;
-}
 
 /**
  * The operation is saved before any HTTP is attempted. Storage errors propagate:
@@ -114,23 +96,6 @@ export async function listOfflineOperations(
   return all
     .filter((item) => item.userId === actor.userId && (!states || states.includes(item.state)))
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-}
-
-/** A user cannot self-assert a different actor/company while syncing. */
-async function getAuthenticatedActor(transport: typeof fetch): Promise<OfflineActor | null> {
-  try {
-    const [userRes, companyRes] = await Promise.all([
-      transport("/api/auth/me", { credentials: "include", cache: "no-store" }),
-      transport("/api/auth/session-company", { credentials: "include", cache: "no-store" }),
-    ]);
-    if (!userRes.ok || !companyRes.ok) return null;
-    const user = (await userRes.json()) as { id?: unknown };
-    const company = (await companyRes.json()) as { companyId?: unknown };
-    const actor = { userId: String(user?.id ?? ""), companyId: Number(company?.companyId) };
-    return isValidOfflineActor(actor) ? actor : null;
-  } catch {
-    return null;
-  }
 }
 
 async function claimOfflineOperation(id: string, actor: OfflineActor): Promise<OfflineOperation | null> {
@@ -315,24 +280,4 @@ export async function deliverOfflineOperations(transport: typeof fetch = fetch):
   } finally {
     processing = false;
   }
-}
-
-/**
- * Old queues may have incomplete IDs or company identity; they are deliberately
- * not migrated/replayed automatically. A future migration must reconcile each
- * entry with the server before clearing either original store.
- */
-export async function countLegacyOfflineOperations(): Promise<{
-  indexedDb: number;
-  localStorage: number;
-}> {
-  const indexedDb = await db.syncQueue.count();
-  let localStorageCount = 0;
-  try {
-    const stored: unknown = JSON.parse(localStorage.getItem("erp_offline_queue") || "[]");
-    if (Array.isArray(stored)) localStorageCount = stored.length;
-  } catch {
-    // Corrupt legacy data stays in place for recovery, never silently cleared.
-  }
-  return { indexedDb, localStorage: localStorageCount };
 }

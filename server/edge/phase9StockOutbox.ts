@@ -44,6 +44,7 @@ import {
   type Phase9TransferRef,
   type Phase9TransferSnapshot,
 } from "./phase9StockTransferWorkflowEnvelope.mjs";
+import { appendStockEventTx, appendStockFollowUpTx } from "./phase9StockOutboxHelpers.ts";
 
 /** Record the committed movement in the SAME transaction; no-op off the LAN primary. */
 export async function capturePhase9StockAdjustTx(
@@ -134,31 +135,6 @@ export async function capturePhase9StockItemEditTx(
   `);
 }
 
-async function appendStockEventTx(
-  tx: DbTransaction,
-  siteId: string,
-  event: { kind: string; requestId: string; companyId: number; actorUserId: string },
-  localRef: number
-): Promise<void> {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
-  await tx.execute(sql`
-    WITH next_sequence AS (
-      INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
-      VALUES (${siteId}::uuid, 1)
-      ON CONFLICT (site_id)
-        DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
-      RETURNING last_sequence
-    )
-    INSERT INTO factory_edge_stock_outbox
-      (site_id, sequence, operation_id, company_id, actor_user_id,
-       local_movement_id, operation_kind, payload, payload_sha256)
-    SELECT ${siteId}::uuid, next_sequence.last_sequence, ${event.requestId}::uuid,
-           ${event.companyId}, ${event.actorUserId}, ${localRef},
-           ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)}
-    FROM next_sequence
-  `);
-}
-
 /** Plan batch 2: a stock item created on the LAN primary; no-op elsewhere. */
 export async function capturePhase9StockItemCreateTx(
   tx: DbTransaction,
@@ -188,34 +164,6 @@ export async function nextPhase9LanStockItemIdTx(tx: DbTransaction): Promise<num
   if (!Number.isSafeInteger(id) || id < PHASE9_LAN_ITEM_ID_BASE)
     throw new EdgeRefusal("PHASE9_LAN_ITEM_ID_RANGE_INVALID");
   return id;
-}
-
-/**
- * Plan batch 3: a follow-up record whose local reference is its own stream
- * sequence (the transfer or revision it changes is named in the payload), so
- * any number of edits of one transfer each get their own record.
- */
-async function appendStockFollowUpTx<
-  T extends { kind: string; requestId: string; companyId: number; actorUserId: string },
->(tx: DbTransaction, siteId: string, build: (localEditId: number) => T): Promise<void> {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
-  const counter = await tx.execute(sql`
-    INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
-    VALUES (${siteId}::uuid, 1)
-    ON CONFLICT (site_id)
-      DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
-    RETURNING last_sequence
-  `);
-  const sequence = Number((counter.rows[0] as { last_sequence: string | number }).last_sequence);
-  const event = build(sequence);
-  await tx.execute(sql`
-    INSERT INTO factory_edge_stock_outbox
-      (site_id, sequence, operation_id, company_id, actor_user_id,
-       local_movement_id, operation_kind, payload, payload_sha256)
-    VALUES (${siteId}::uuid, ${sequence}, ${event.requestId}::uuid,
-            ${event.companyId}, ${event.actorUserId}, ${sequence},
-            ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)})
-  `);
 }
 
 function lanSiteId(): string | null {

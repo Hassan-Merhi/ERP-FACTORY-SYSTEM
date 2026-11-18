@@ -49,9 +49,8 @@ import type Decimal from "decimal.js";
 import type { DatabaseOrTransaction } from "../../../db";
 import { toMoney } from "../../../lib/money";
 import { defaultOpeningSide } from "./openingSide";
-import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { netPositionRecordedThrough } from "../../factory/netPositionAsOf";
-import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
+import { loadPartyMemoLines, memoTotal, type MemoPartyKind } from "./unpostedMemo";
 import {
   ZERO,
   customerLinksCte,
@@ -60,9 +59,10 @@ import {
   type BalanceRow,
   type BalanceRowKind,
   type BalanceScope,
-  type PartyBalanceKind,
   type RawOpeningRow,
 } from "./ledgerBalanceEngineLiveVouchersOf";
+import type { PartyBalance, PartyBalanceQuery, PartyBalanceResult } from "./ledgerBalanceEngineTypes";
+export type { PartyBalance, PartyBalanceQuery, PartyBalanceResult } from "./ledgerBalanceEngineTypes";
 export { PARTY_BALANCE_KINDS, VOUCHER_BOOKED_ON, liveVouchersOf } from "./ledgerBalanceEngineLiveVouchersOf";
 export type { BalanceRow, BalanceRowKind, BalanceScope, PartyBalanceKind } from "./ledgerBalanceEngineLiveVouchersOf";
 
@@ -185,59 +185,6 @@ export async function loadBalanceRows(executor: DatabaseOrTransaction, scope: Ba
 }
 
 export type { PartyBalanceMemoLine } from "./unpostedMemo";
-
-/** A party's ledger balance. Amounts are 2-decimal strings, debit positive. */
-export interface PartyBalance {
-  kind: BalanceRowKind;
-  id: number | null;
-  code: string | null;
-  name: string;
-  accountType: string | null;
-  deleted: boolean;
-  linkedLedgerAccountId: number | null;
-  /** The master record's opening with its side. */
-  masterOpening: string;
-  /** Net movements before `from` (zero without `from`). */
-  carriedForward: string;
-  /** Balance at the start of the period: masterOpening + carriedForward. */
-  opening: string;
-  periodDebit: string;
-  periodCredit: string;
-  /** opening + periodDebit − periodCredit. */
-  closing: string;
-  /** masterOpening + historical base amounts of every line up to `asOf` (USD at posting rates). */
-  historicalBaseClosing: string;
-  openingSideAssumed: boolean;
-  /**
-   * Amounts that are not in the ledger yet (owner rule 3), dated on or before
-   * `asOf`: listed only when the query asks for them (`memo: true`), never
-   * part of `closing`.
-   */
-  memoLines: PartyBalanceMemoLine[];
-  /** Sum of memoLines (debit positive), reported next to `closing`, never in it. */
-  memoTotal: string;
-}
-
-export interface PartyBalanceQuery {
-  knownAt?: FactoryNetPositionAsOf;
-  companyId: number;
-  kind: PartyBalanceKind;
-  ids?: readonly number[];
-  /** Inclusive end; omitted for everything posted. */
-  asOf?: string | null;
-  /** Inclusive start of the period; omitted for opening-to-date. */
-  from?: string | null;
-  /** Attach the "not yet in the ledger" memo lines (customers and factory suppliers). */
-  memo?: boolean;
-}
-
-export interface PartyBalanceResult {
-  companyId: number;
-  kind: PartyBalanceKind;
-  basis: "ledger";
-  period: { from: string | null; to: string | null };
-  parties: PartyBalance[];
-}
 
 function money(value: Decimal): string {
   return value.toFixed(2);

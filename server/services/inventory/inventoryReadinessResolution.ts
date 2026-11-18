@@ -13,7 +13,6 @@ import { assertTransactionCompanyScope } from "../security/transactionCompanySco
 import { createDatabaseStockMovementAdapter } from "./databaseStockMovementAdapter";
 import { postStockMovementTx } from "./stockMovementIntegrityService";
 import {
-  rows,
   planReadinessResolutionTx,
   ReadinessResolutionRefusal,
   READINESS_PLAN_CHANGED_MESSAGE,
@@ -21,42 +20,17 @@ import {
   READINESS_INVALID_ACTIONS_MESSAGE,
   READINESS_LOCATION_SHARED_MESSAGE,
   READINESS_ROW_MISSING_MESSAGE,
-  archivedLocationCode,
   archivedLocationName,
   type ReadinessInventoryRow,
   type ReadinessResolutionPlan,
   type ReadinessAction,
   type ReadinessResolutionResult,
 } from "./inventoryReadinessPlan";
+import { recreateArchivedLocationTx, zeroValueTx, type RowOutcome } from "./inventoryReadinessResolutionHelpers";
 
 export * from "./inventoryReadinessPlan";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 const todayUtc = () => new Date().toISOString().slice(0, 10);
-
-async function recreateArchivedLocationTx(tx: DbTransaction, companyId: number, locationId: number): Promise<string> {
-  let code = archivedLocationCode(locationId);
-  const taken = await rows<{ id: number }>(tx, sql`SELECT id FROM locations WHERE code = ${code}`);
-  if (taken.length > 0) code = `${code}-${companyId}`;
-  await tx.execute(sql`
-    INSERT INTO locations (id, company_id, code, name, active)
-    VALUES (${locationId}, ${companyId}, ${code}, ${archivedLocationName(locationId)}, false)
-  `);
-  // An explicit id can be at or beyond the sequence: move the sequence past it
-  // so the next location never collides with the recreated one.
-  await tx.execute(sql`
-    SELECT setval(pg_get_serial_sequence('locations', 'id'),
-                  GREATEST((SELECT MAX(id) FROM locations), 1), true)
-  `);
-  return code;
-}
-
-interface RowOutcome {
-  inventoryId: number;
-  locationId: number;
-  stockItemId: number;
-  before: { quantity: string; totalValue: string };
-  after: { quantity: string; totalValue: string };
-}
 
 /** Takes a row to zero quantity and zero value, with its canonical movement. */
 async function zeroRowTx(
@@ -122,38 +96,6 @@ async function zeroRowTx(
     },
     valueDelta: reversed.valueDelta,
     quantityDelta: toMoney(reversed.newQuantity).minus(quantity).toFixed(3),
-  };
-}
-
-/** Writes an anomalous value off to zero; the quantity is kept. */
-async function zeroValueTx(
-  tx: DbTransaction,
-  companyId: number,
-  row: ReadinessInventoryRow,
-  runRef: string
-): Promise<{ outcome: RowOutcome; valueDelta: string }> {
-  const reversed = await reverseInventoryByExactValue(
-    tx,
-    row.locationId,
-    row.stockItemId,
-    0,
-    row.totalValue,
-    companyId,
-    `inventory-readiness-anomaly:${runRef}`
-  );
-  if (!reversed) throw new Error(READINESS_ROW_MISSING_MESSAGE);
-  return {
-    outcome: {
-      inventoryId: row.inventoryId,
-      locationId: row.locationId,
-      stockItemId: row.stockItemId,
-      before: { quantity: row.quantity, totalValue: row.totalValue },
-      after: {
-        quantity: toMoney(reversed.newQuantity).toFixed(3),
-        totalValue: toMoney(reversed.newTotalValue).toFixed(2),
-      },
-    },
-    valueDelta: reversed.valueDelta,
   };
 }
 
