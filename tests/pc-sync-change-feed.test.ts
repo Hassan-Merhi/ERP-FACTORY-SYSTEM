@@ -28,7 +28,7 @@ type Change = {
   txid: string;
   table: string;
   op: string;
-  key: Record<string, unknown>;
+  key: Record<string, any>;
   row: Record<string, any> | null;
 };
 
@@ -63,7 +63,7 @@ async function readAll(cursor: string, limit?: number): Promise<{ changes: Chang
 }
 
 const ids = (changes: Change[], table: string) =>
-  changes.filter((c) => c.table === table).map((c) => Number(c.key.id ?? c.key.voucher_id));
+  changes.filter((c) => c.table === table && c.op !== "T").map((c) => Number(c.key.id ?? c.key.voucher_id));
 
 beforeAll(async () => {
   process.env.OFFLINE_PC_SYNC_ENABLED = "1";
@@ -163,8 +163,25 @@ describe("PC sync change feed: installed", () => {
 
     const { changes, cursor: next } = await readAll(cursor);
     cursor = next;
-    const moved = changes.filter((c) => c.table === "vouchers" && Number(c.key.id) === voucherId);
+    const moved = changes.filter((c) => c.table === "vouchers" && Number(c.key?.id) === voucherId);
     expect(moved).toEqual([expect.objectContaining({ op: "D", row: null, key: { id: voucherId } })]);
+    // Rows that find their company through the voucher moved with it: every PC copies that table again.
+    expect(changes.filter((c) => c.op === "T").map((c) => c.table)).toEqual(["stock_transfer_vouchers"]);
+  });
+
+  it("reads a full 1000-change page without ending the window early", async () => {
+    await pool.query(
+      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+       SELECT $1, $2 || '-bulk-' || g, 'Journal', '2026-11-17', 0 FROM generate_series(1, 1001) AS g`,
+      [ctx.companyId, PREFIX]
+    );
+    const first = await page(cursor, 1000);
+    expect(first.status).toBe(200);
+    expect(first.body.changes).toHaveLength(1000);
+    expect(first.body.upToDate).toBe(false);
+    const rest = await readAll(first.body.cursor, 1000);
+    cursor = rest.cursor;
+    expect(first.body.changes.length + rest.changes.length).toBe(1001);
   });
 
   it("never skips a transaction that commits after a later one", async () => {

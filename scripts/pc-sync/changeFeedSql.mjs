@@ -122,6 +122,7 @@ DECLARE
   key_column text;
   companies integer[];
   current_companies integer[] := '{}';
+  old_companies integer[] := '{}';
 BEGIN
   SELECT * INTO rule FROM pc_sync.table_policy WHERE table_name = TG_TABLE_NAME;
   IF NOT FOUND THEN
@@ -138,9 +139,8 @@ BEGIN
     -- An update that moves a row between companies reaches both: the old
     -- company's PCs learn the row left them (the reader sends them only its key).
     current_companies := pc_sync.row_companies(TG_TABLE_NAME, new_row);
-    companies := ARRAY(
-      SELECT DISTINCT unnest(current_companies || pc_sync.row_companies(TG_TABLE_NAME, old_row))
-      ORDER BY 1);
+    old_companies := pc_sync.row_companies(TG_TABLE_NAME, old_row);
+    companies := ARRAY(SELECT DISTINCT unnest(current_companies || old_companies) ORDER BY 1);
     IF cardinality(companies) = 0 THEN
       RETURN NULL; -- belongs to no company: no PC may hold it.
     END IF;
@@ -150,6 +150,24 @@ BEGIN
   END IF;
   INSERT INTO pc_sync.changes (table_name, op, row_key, row_data, company_ids, current_company_ids, shared)
   VALUES (TG_TABLE_NAME, left(TG_OP, 1), key, stored, companies, current_companies, rule.mode = 'shared');
+  -- A row that moved to other companies takes the rows that find their company
+  -- through it along (a voucher's lines through the voucher). Those rows did not
+  -- change, so tell every PC to copy each such table again (once per table and
+  -- transaction). Company moves are rare administrative operations.
+  IF TG_OP = 'UPDATE' AND rule.mode <> 'shared' AND current_companies IS DISTINCT FROM old_companies THEN
+    WITH RECURSIVE descendant(tbl) AS (
+      SELECT p.table_name FROM pc_sync.table_policy p, jsonb_array_elements(p.parents) AS e
+       WHERE e->>'table' = TG_TABLE_NAME
+      UNION
+      SELECT p.table_name FROM descendant d, pc_sync.table_policy p, jsonb_array_elements(p.parents) AS e
+       WHERE e->>'table' = d.tbl
+    )
+    INSERT INTO pc_sync.changes (table_name, op, shared)
+    SELECT d.tbl, 'T', true FROM descendant d
+     WHERE NOT EXISTS (
+       SELECT 1 FROM pc_sync.changes c
+        WHERE c.txid = pg_current_xact_id() AND c.table_name = d.tbl AND c.op = 'T');
+  END IF;
   RETURN NULL;
 END
 $pc_sync$;
@@ -200,9 +218,91 @@ AS $pc_sync$
      AND (c.txid, c.seq) > (p_after_txid::xid8, p_after_seq)
      AND (c.shared OR c.company_ids && p_companies)
    ORDER BY c.txid, c.seq
-   LIMIT least(greatest(p_limit, 1), 1000)
+   -- 1001: the reader asks for one row more than its largest page (1000) to
+   -- know whether the window has more; capping at 1000 would end it early.
+   LIMIT least(greatest(p_limit, 1), 1001)
 $pc_sync$;
 REVOKE ALL ON FUNCTION pc_sync.read_changes(text, text, text, bigint, integer[], integer) FROM PUBLIC;
+
+-- Initial full copy (Phase A2). The cloud's schema version, so a PC with a
+-- different schema refuses to load.
+CREATE OR REPLACE FUNCTION pc_sync.schema_version()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $pc_sync$
+DECLARE
+  version text;
+BEGIN
+  IF to_regclass('public.schema_migrations') IS NULL THEN
+    RETURN NULL;
+  END IF;
+  EXECUTE 'SELECT max(id) FROM public.schema_migrations' INTO version;
+  RETURN version;
+END
+$pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.schema_version() FROM PUBLIC;
+
+-- Every synced table, in name order.
+CREATE OR REPLACE FUNCTION pc_sync.snapshot_tables()
+RETURNS SETOF text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pc_sync
+AS $pc_sync$ SELECT table_name FROM pc_sync.table_policy ORDER BY table_name $pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.snapshot_tables() FROM PUBLIC;
+
+-- One page of a synced table for the given companies, in key order, after the
+-- key p_after (NULL = from the start), secret columns removed.
+CREATE OR REPLACE FUNCTION pc_sync.snapshot_page(p_table text, p_companies integer[], p_after jsonb, p_limit integer)
+RETURNS TABLE (row_key jsonb, row_data jsonb)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pc_sync, public
+AS $pc_sync$
+DECLARE
+  rule pc_sync.table_policy%ROWTYPE;
+  key_list text;
+  after_list text;
+  key_object text;
+  filter text;
+  after_clause text := '';
+BEGIN
+  SELECT * INTO rule FROM pc_sync.table_policy WHERE table_name = p_table;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PC_SYNC_TABLE_NOT_SYNCED' USING ERRCODE = '22023';
+  END IF;
+  SELECT string_agg(format('t.%I', k), ', '), string_agg(format('x.%I', k), ', '),
+         string_agg(format('%L, t.%I', k, k), ', ')
+    INTO key_list, after_list, key_object
+    FROM unnest(rule.key_columns) AS k;
+  filter := CASE rule.mode
+    WHEN 'company' THEN 't.company_id = ANY($1)'
+    WHEN 'self' THEN format('t.%I = ANY($1)', rule.self_column)
+    WHEN 'members' THEN format(
+      'EXISTS (SELECT 1 FROM public.%I m WHERE m.%I::text = t.id::text AND m.company_id = ANY($1))',
+      rule.members_table, rule.members_column)
+    WHEN 'derived' THEN format('pc_sync.row_companies(%L, to_jsonb(t)) && $1', p_table)
+    WHEN 'shared' THEN 'true'
+  END;
+  IF filter IS NULL THEN
+    RAISE EXCEPTION 'PC_SYNC_TABLE_NOT_SYNCED' USING ERRCODE = '22023';
+  END IF;
+  IF p_after IS NOT NULL THEN
+    after_clause := format(' AND (%s) > (SELECT %s FROM jsonb_populate_record(NULL::public.%I, $2) x)',
+                           key_list, after_list, p_table);
+  END IF;
+  RETURN QUERY EXECUTE format(
+    'SELECT jsonb_build_object(%s), to_jsonb(t) - $3 FROM public.%I t WHERE %s%s ORDER BY %s LIMIT $4',
+    key_object, p_table, filter, after_clause, key_list)
+  USING p_companies, p_after, rule.redact, least(greatest(p_limit, 1), 1000);
+END
+$pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.snapshot_page(text, integer[], jsonb, integer) FROM PUBLIC;
 `;
 
 /**
@@ -271,7 +371,7 @@ END
 $pc_sync$;`,
   ];
   if (grantTo) {
-    // The application role may only read pages through these two functions.
+    // The application role may only read through these functions.
     lines.push(
       "",
       `DO $pc_sync$
@@ -281,6 +381,9 @@ BEGIN
   EXECUTE format('GRANT USAGE ON SCHEMA pc_sync TO %I', app_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.watermark() TO %I', app_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.read_changes(text, text, text, bigint, integer[], integer) TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.schema_version() TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.snapshot_tables() TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.snapshot_page(text, integer[], jsonb, integer) TO %I', app_role);
 END
 $pc_sync$;`
     );

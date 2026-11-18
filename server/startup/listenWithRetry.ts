@@ -12,11 +12,14 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { flushRemoteSupportCommandAudits } from "../services/remoteSupportCommandAuditQueue";
 import { log } from "../vite";
+import { pcLocalReadOnly } from "../offline/pcLocal/localReadOnlyGuard";
 
 export function listenWithRetry(server: Server, port: number, onListening: () => void): void {
   // Called only after migrations have completed (see startServer below).
   const doListen = () => {
-    server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+    // A PC's local copy (desktop app) answers only on that PC.
+    const host = pcLocalReadOnly() ? "127.0.0.1" : "0.0.0.0";
+    server.listen({ port, host, reusePort: true }, () => {
       log(`serving on port ${port}`);
       onListening();
     });

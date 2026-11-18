@@ -13,6 +13,7 @@ import type { RequestHandler } from "express";
 import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 import { logger } from "../lib/logger";
 import { SESSION_COOKIE_NAME } from "../services/security/sessionCookiePolicy";
+import { pcLocalReadOnly } from "../offline/pcLocal/localReadOnlyGuard";
 
 export function buildSessionMiddleware(): RequestHandler {
   // Session middleware
@@ -33,8 +34,11 @@ export function buildSessionMiddleware(): RequestHandler {
     saveUninitialized: false,
     rolling: true,
     cookie: {
+      // A PC's local copy is plain http on 127.0.0.1 only (desktop app), so a
+      // secure cookie would never be sent there; everywhere else stays secure.
       secure:
-        process.env.NODE_ENV === "production" || !!process.env.REPL_ID || process.env.CAPACITOR_ENABLED === "true",
+        !pcLocalReadOnly() &&
+        (process.env.NODE_ENV === "production" || !!process.env.REPL_ID || process.env.CAPACITOR_ENABLED === "true"),
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: "/",

@@ -201,11 +201,22 @@ entries once and sends everyone's changes back. Owner decisions and the phase
 plan are in the plan document and the
 [runbook](../../operations/factory-offline-operations-runbook.md#full-offline-mode-phase-a-cloud-change-feed).
 
-- Phase A1 (this change, switched off): table policy for all tables with a CI
+- Phase A1 (#3299, switched off): table policy for all tables with a CI
   check, DBA-installed change feed with redaction, and the paged
   `GET /api/offline/pc-sync/changes` reader (`OFFLINE_PC_SYNC_ENABLED`).
-- Next: A2 initial snapshot; A3 desktop app (Windows and Mac) with a local
-  server and database, read-only offline; then Phases B to E.
+- Phase A2 (switched off): initial full copy, `GET /api/offline/pc-sync/snapshot/start`
+  and `GET /api/offline/pc-sync/snapshot`, table by table in key order, then
+  feed replay from the start cursor.
+- Phase A3a (switched off): PC sync agent (`scripts/pc-sync/local/`: copy,
+  resume, feed replay, TRUNCATE reload, offline sign-in only for people who
+  signed in on that PC, 24h warning / 2-day block rule) and the read-only local
+  server mode (`OFFLINE_PC_LOCAL_MODE=read-only`).
+- Phase A3b (off unless enabled per PC): desktop app starts an embedded
+  PostgreSQL, the sync process and the read-only local server on 127.0.0.1 and
+  opens the local copy when the cloud cannot be reached; "Connect this PC" and
+  "Sync now" in the menu; staging script and Mac target. Not yet tested on real
+  Windows/Mac PCs.
+- Next: Phase B (vouchers entered offline on a PC, sent to the cloud once).
 
 ## Resume checklist (next session)
 
