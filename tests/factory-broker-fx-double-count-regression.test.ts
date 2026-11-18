@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { toMoney, sumMoney } from "../server/lib/money";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 // Every operational supplier view reads FX from factory_supplier_fx_transfers.
 // The newly posted FACTORY-SFX voucher is a ledger mirror of the same event,
@@ -17,7 +17,7 @@ const operationalPaths = [
 describe("NASRA / broker FX source is counted exactly once", () => {
   for (const file of operationalPaths) {
     it(`excludes source-backed FX vouchers from the payment read in ${file}`, () => {
-      const source = readFileSync(resolve(process.cwd(), file), "utf8");
+      const source = readModuleFamily(resolve(process.cwd(), file));
       expect(source).toContain("factorySupplierFxTransfers");
       expect(source).toContain("NOT LIKE 'FACTORY-PAY-%'");
       expect(source).toContain("NOT LIKE 'FACTORY-SFX-%'");
@@ -27,9 +27,8 @@ describe("NASRA / broker FX source is counted exactly once", () => {
   }
 
   it("does not exclude the FX journals from the authoritative ledger", () => {
-    const ledger = readFileSync(
-      resolve(process.cwd(), "server/routes/factory/suppliers/balance/factorySupplierLedger.ts"),
-      "utf8"
+    const ledger = readModuleFamily(
+      resolve(process.cwd(), "server/routes/factory/suppliers/balance/factorySupplierLedger.ts")
     );
     expect(ledger).not.toContain("NOT LIKE 'FACTORY-SFX-%'");
     expect(ledger).not.toContain("NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'");
@@ -67,9 +66,7 @@ describe("NASRA / broker FX source is counted exactly once", () => {
   });
 
   it("leaves NASRA USD pool unaltered while its separate 97-cent discrepancy is audited", () => {
-    const usd = sumMoney([
-      "627705.9665", "32500", "10500", "16873", "-19999", "-1", "-506081.28",
-    ]);
+    const usd = sumMoney(["627705.9665", "32500", "10500", "16873", "-19999", "-1", "-506081.28"]);
     expect(usd.toFixed(2)).toBe("161497.69");
     expect(usd.minus("161496.72").toFixed(2)).toBe("0.97");
   });

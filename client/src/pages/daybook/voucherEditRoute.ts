@@ -23,7 +23,10 @@ export function voucherEditPath(
   voucher: { id: number; voucherType: string },
   vouchersBase = "/vouchers"
 ): string | null {
-  if (voucher.voucherType === "Sales" || voucher.voucherType === "POS") return `/pos/edit/${voucher.id}`;
+  if (voucher.voucherType === "Sales" || voucher.voucherType === "POS") {
+    // The POS editor is an ERP route; Factory and Properties open the read-only voucher instead.
+    return vouchersBase === "/vouchers" ? `/pos/edit/${voucher.id}` : voucherDetailPath(voucher.id, vouchersBase);
+  }
   if (voucher.voucherType === "Purchase") return `${vouchersBase}?edit=${voucher.id}&tab=purchase&from=daybook`;
   const tab = VOUCHER_EDIT_TABS[voucher.voucherType];
   return tab ? `${vouchersBase}?edit=${voucher.id}&tab=${tab}&from=daybook` : null;

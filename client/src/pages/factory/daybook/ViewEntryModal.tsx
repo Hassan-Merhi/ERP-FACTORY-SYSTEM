@@ -8,7 +8,6 @@ import { useState, useEffect } from "react";
 import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry } from "./types";
@@ -27,6 +26,7 @@ import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
 import { LoadingCreatedView } from "./entry-views/LoadingCreatedView";
+import { OpenContainerButton } from "./entry-views/OpenContainerButton";
 import {
   parseBalesMeta,
   formatDaybookDescription,
@@ -544,17 +544,7 @@ export function ViewEntryModal({
                   </p>
                   {c.origin && <p className="text-xs text-muted-foreground">Origin: {c.origin}</p>}
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${metaContainerId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
@@ -600,17 +590,7 @@ export function ViewEntryModal({
                   <p className="font-semibold text-base">{c.containerNumber}</p>
                   {c.supplierName && <p className="text-xs text-muted-foreground">Supplier: {c.supplierName}</p>}
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${metaContainerId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={metaContainerId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             ) : null}
           </div>
@@ -682,17 +662,7 @@ export function ViewEntryModal({
                     Container: <span className="font-mono">{c.containerNumber}</span>
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(`/factory/containers?edit=${entry.referenceId}`);
-                  }}
-                  data-testid="button-open-container"
-                >
-                  Open Container
-                </Button>
+                <OpenContainerButton containerId={entry.referenceId} onClose={onClose} onNavigate={onNavigate} />
               </div>
             </div>
           )}

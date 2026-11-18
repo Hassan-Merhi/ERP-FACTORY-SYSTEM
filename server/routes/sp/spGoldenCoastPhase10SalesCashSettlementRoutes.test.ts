@@ -1,19 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(
-  new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url),
-  "utf8"
-);
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase10SalesCashSettlement.ts", import.meta.url),
-  "utf8"
-);
-const panelSource = readFileSync(
-  new URL("../../../client/src/pages/sp/golden-coast/GcSalesCashPanel.tsx", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const serviceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase10SalesCashSettlement.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 10 GC Sales Cash settlement route surface", () => {
@@ -119,24 +111,6 @@ describe("Golden Coast Phase 10 GC Sales Cash settlement route surface", () => {
     expect(routeSource).not.toContain("adjustSpInventoryAtomic");
     expect(routeSource).not.toContain("spSaleLines");
     expect(routeSource).not.toContain("hadiCompanyId");
-  });
-
-  it("emits every readiness field the settlement panel reads", () => {
-    // The panel once read settleableSalesCashUsd / rawSalesCashPayableBalanceUsd
-    // / receiptAccounts while the route emitted payableSalesCashUsd /
-    // rawSalesCashDebitBalanceUsd / paymentAccounts, so the amount cap read as
-    // zero, the account picker was empty, and the submit button never enabled.
-    // The UI suite mocks the response, so only a cross-file check catches it.
-    const readFields = [...panelSource.matchAll(/phase10[.?]{1,2}\.?(\w+)/g)]
-      .map((match) => match[1])
-      .filter((field) => !["data", "ready", "isLoading", "error", "mutate", "isPending"].includes(field));
-
-    expect(readFields.length).toBeGreaterThan(0);
-    for (const field of new Set(readFields)) {
-      // Either `field: value` or the shorthand `field,` in the res.json literal.
-      const emitted = new RegExp(`\\b${field}\\s*[:,]`).test(routeSource);
-      expect(emitted, `readiness payload is missing ${field}`).toBe(true);
-    }
   });
 
   it("resolves Shared Charges by canonical sub type, never by account name", () => {

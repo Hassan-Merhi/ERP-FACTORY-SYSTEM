@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 
 const boundary = read("server/security/companyAccessBoundary.ts");

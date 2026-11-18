@@ -263,7 +263,7 @@ async function main() {
         totalPosted += rows.length;
       } catch (e) {
         await client.query("ROLLBACK");
-        console.error(`[Tenant]   company=${companyId} FAILED:`, (e as any).message);
+        console.error("[Tenant]   company=%s FAILED:", companyId, e instanceof Error ? e.message : String(e));
       }
     }
 
@@ -326,7 +326,7 @@ async function main() {
         totalPosted += rows.length;
       } catch (e) {
         await client.query("ROLLBACK");
-        console.error(`[Landlord] company=${companyId} FAILED:`, (e as any).message);
+        console.error("[Landlord] company=%s FAILED:", companyId, e instanceof Error ? e.message : String(e));
       }
     }
 

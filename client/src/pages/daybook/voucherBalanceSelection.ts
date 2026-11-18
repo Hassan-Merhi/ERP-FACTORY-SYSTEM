@@ -58,8 +58,8 @@ export function selectBalanceDisplayEntries(
 }
 
 export function entryBalanceUrl(entry: ViewVoucherEntry): string | null {
-  if (entry.ledgerAccountId) return `/api/accounts/ledger/${entry.ledgerAccountId}/balance`;
-  if (entry.bankAccountId) return `/api/accounts/ledger/${entry.bankAccountId}/balance`;
+  if (entry.ledgerAccountId) return `/api/accounts/ledger/${entry.ledgerAccountId}/balance?balanceBasis=book`;
+  if (entry.bankAccountId) return `/api/accounts/ledger/${entry.bankAccountId}/balance?balanceBasis=book`;
   if (entry.customerId) return `/api/customers/${entry.customerId}/balance`;
   if (entry.employeeId) return `/api/employees/${entry.employeeId}/balance`;
   if (entry.supplierId) return `/api/suppliers/${entry.supplierId}/balance`;

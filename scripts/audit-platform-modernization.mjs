@@ -2,9 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 const readJson = (file) => JSON.parse(read(file));
 const major = (spec) => Number(String(spec ?? "").match(/\d+/)?.[0] ?? NaN);
 const capture = (text, pattern) => text.match(pattern)?.[1] ?? null;

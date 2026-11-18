@@ -254,7 +254,7 @@ export const factoryContainers = pgTable(
     commissionFxRateToUsd: decimal("commission_fx_rate_to_usd", { precision: 20, scale: 8 }),
     commissionFxRateConfirmed: boolean("commission_fx_rate_confirmed").notNull().default(false),
     commissionFxRateDate: date("commission_fx_rate_date"),
-    dutyAmount: decimal("duty_amount", { precision: 20, scale: 2 }),
+    dutyAmount: decimal("duty_amount", { precision: 20, scale: 2 }).default("0"),
     dutyAccountId: integer("duty_account_id"),
     dutyStatus: text("duty_status").notNull().default("NONE"),
     dutyNotes: text("duty_notes"),

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = (path: string) => readModuleFamily(new URL(`../${path}`, import.meta.url));
 
 function count(source: string, needle: string): number {
   return source.split(needle).length - 1;
@@ -23,14 +23,14 @@ function routeSlice(source: string, marker: string): string {
 describe("Phase 3 proforma capacity mutation lock coverage", () => {
   it("manual scans lock proforma capacity before order and bale row locks", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
-    expectBefore(source, "acquireProformaCapacityTransactionLock(tx", 'const [currentOrder] = await tx');
-    expectBefore(source, 'const [currentOrder] = await tx', 'const [bale] = await tx');
+    expectBefore(source, "acquireProformaCapacityTransactionLock(tx", "const [currentOrder] = await tx");
+    expectBefore(source, "const [currentOrder] = await tx", "const [bale] = await tx");
   });
 
   it("both bulk import mutation modes acquire the proforma lock", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/bulk-import.ts");
     expect(count(source, "acquireProformaCapacityTransactionLock(tx")).toBe(2);
-    expect(count(source, 'const [currentOrder] = await tx')).toBe(2);
+    expect(count(source, "const [currentOrder] = await tx")).toBe(2);
   });
 
   it("automatic loading creation is one locked transaction with physical bale row locks", () => {

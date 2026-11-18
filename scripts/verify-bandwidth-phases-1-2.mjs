@@ -2,9 +2,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 const requireText = (source, text, message) => {
   if (!source.includes(text)) failures.push(message);
@@ -27,7 +28,7 @@ const operationalEvents = read("server/lib/operationalEvents.ts");
 const hotspotGuard = read("client/src/lib/bandwidthPhase1HotspotGuard.ts");
 const payloadGuard = read("client/src/lib/bandwidthPhase2PayloadGuard.ts");
 const accountingGuard = read("client/src/lib/accountingRequestFetchGuard.ts");
-const apiBridge = read("server/apiPaginationBridge.mjs");
+const apiBridge = read("server/runtime/apiPagination.mjs");
 const inventoryRoutes = [
   read("server/routes/inventoryRoutes.ts"),
   read("server/routes/inventory/inventoryQueryService.ts"),
@@ -312,7 +313,7 @@ if (fs.existsSync(distAssets)) {
   for (const name of jsFiles) {
     const filePath = path.join(distAssets, name);
     const size = fs.statSync(filePath).size;
-    const source = fs.readFileSync(filePath, "utf8");
+    const source = readModuleFamily(filePath);
     if (source.includes(embeddedLogoSignature)) {
       failures.push(`${name} still contains the full embedded HMD label PNG.`);
     }

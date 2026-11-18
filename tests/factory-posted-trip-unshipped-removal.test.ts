@@ -4,18 +4,24 @@
  * without database access; the live database/financial posting still requires
  * an end-to-end acceptance check before claiming production verification.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 const middleware = read("server/routes/factoryRoutes.ts");
 const removal = read("server/routes/factory/customer-orders/bale-scanning/remove.ts");
 const databaseGuard = read("docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql");
 
 describe("Factory delete one unshipped bale after a trip has posted", () => {
   const handlerStart = removal.indexOf('app.delete("/api/factory/customer-orders/:id/bales/:baleId"');
-  const handlerEnd = removal.indexOf("// POST /api/factory/bales/:id/release-from-loading", handlerStart);
+  // The handler ends at the next route's marker comment or, now that remove.ts is
+  // split into registrar modules, at the end of the module that registers it.
+  const nextRoute = removal.indexOf("// POST /api/factory/bales/:id/release-from-loading", handlerStart);
+  const nextModule = removal.indexOf("// Extracted from ./", handlerStart);
+  const handlerEnd = [nextRoute, nextModule, removal.length]
+    .filter((index) => index > handlerStart)
+    .sort((a, b) => a - b)[0];
   const handler = removal.slice(handlerStart, handlerEnd);
 
   it("does not short circuit normal single-bale deletion at the global financial gate", () => {

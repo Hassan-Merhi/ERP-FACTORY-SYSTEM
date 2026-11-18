@@ -1,6 +1,6 @@
-import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PERMISSION_BY_KEY } from "../shared/permissionConfig";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const REQUIRED_PERMISSIONS = [
   "remote_support_view",
@@ -21,10 +21,10 @@ describe("remote support permission contract", () => {
   });
 
   it("enforces view, mouse, keyboard and audit permissions server-side", () => {
-    const screenRoutes = fs.readFileSync("server/routes/screenFeedRoutes.ts", "utf8");
-    const mouseRoutes = fs.readFileSync("server/routes/remoteControlSessionRoutes.ts", "utf8");
-    const keyboardRoutes = fs.readFileSync("server/routes/remoteKeyboardControlRoutes.ts", "utf8");
-    const auditRoutes = fs.readFileSync("server/routes/remoteSupportAuditRoutes.ts", "utf8");
+    const screenRoutes = readModuleFamily("server/routes/screenFeedRoutes.ts");
+    const mouseRoutes = readModuleFamily("server/routes/remoteControlSessionRoutes.ts");
+    const keyboardRoutes = readModuleFamily("server/routes/remoteKeyboardControlRoutes.ts");
+    const auditRoutes = readModuleFamily("server/routes/remoteSupportAuditRoutes.ts");
 
     expect(screenRoutes).toContain('requireActionAccess("remote_support_view")');
     expect(mouseRoutes).toContain('requireActionAccess("remote_support_view")');
@@ -34,7 +34,7 @@ describe("remote support permission contract", () => {
   });
 
   it("keeps the permanent audit endpoint company scoped and remote-support only", () => {
-    const auditRoutes = fs.readFileSync("server/routes/remoteSupportAuditRoutes.ts", "utf8");
+    const auditRoutes = readModuleFamily("server/routes/remoteSupportAuditRoutes.ts");
     expect(auditRoutes).toContain("getSessionCompanyId(req)");
     expect(auditRoutes).toContain('eq(auditLog.tableName, "remote_support_sessions")');
     expect(auditRoutes).toContain("eq(auditLog.companyId, companyId)");

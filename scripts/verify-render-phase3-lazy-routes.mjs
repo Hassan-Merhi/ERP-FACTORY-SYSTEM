@@ -1,14 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const applicationRoutesPath = path.join(root, "server/routes/applicationRoutes.ts");
 const lazyRegistrarPath = path.join(root, "server/routes/lazyRouteRegistrar.ts");
 const aiLazyRoutesPath = path.join(root, "server/routes/applicationAiLazyRoutes.ts");
 
-const applicationRoutes = fs.readFileSync(applicationRoutesPath, "utf8");
-const lazyRegistrar = fs.readFileSync(lazyRegistrarPath, "utf8");
-const aiLazyRoutes = fs.readFileSync(aiLazyRoutesPath, "utf8");
+const applicationRoutes = readModuleFamily(applicationRoutesPath);
+const lazyRegistrar = readModuleFamily(lazyRegistrarPath);
+const aiLazyRoutes = readModuleFamily(aiLazyRoutesPath);
 
 // Route composition is split across applicationRoutes.ts and the extracted
 // per-domain composition modules it delegates to. The lazy-route invariants
@@ -95,7 +96,7 @@ function collectDeclaredRoutes(relativePath) {
   const routes = [];
   const routePattern = /\bapp\.(?:get|post|put|patch|delete|use)\(\s*["'`]([^"'`]+)["'`]/g;
   for (const file of collectTsFiles(relativePath)) {
-    const source = fs.readFileSync(file, "utf8");
+    const source = readModuleFamily(file);
     for (const match of source.matchAll(routePattern)) {
       routes.push({ file: path.relative(root, file), route: match[1] });
     }

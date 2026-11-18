@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
@@ -14,7 +14,7 @@ const expectCode = (code: string, expected: string) => expect(normalizeCode(code
 const expectNoCode = (code: string, unexpected: string) =>
   expect(normalizeCode(code)).not.toContain(normalizeCode(unexpected));
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Production Bonuses dedicated page and audited Daybook deletion", () => {
   it("moves compensation controls off the daily Production Targets table", () => {

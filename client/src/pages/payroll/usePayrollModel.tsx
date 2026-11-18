@@ -1,843 +1,301 @@
-import { confirmAction } from "@/components/ConfirmHost";
-import { useMemo, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@/lib/form-resolver";
-import { queryClient } from "@/lib/queryClient";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import type { Employee } from "@shared/schema";
-import { usePayrollState } from "./usePayrollState";
-import { usePayrollData } from "./usePayrollData";
-import { usePayrollGroupMutations } from "./usePayrollGroupMutations";
-import { usePayrollWorkerMutations } from "./usePayrollWorkerMutations";
-import { cleanTxnDesc, decodeLocationOption, errorMessage } from "./payrollUtils";
-import type { BaleRateResponse, SalesPreview } from "./payrollTypes";
-import {
-  depositSchema,
-  withdrawalSchema,
-  bulkPaymentSchema,
-  getThisMonthRange,
-  type DepositFormData,
-  type WithdrawalFormData,
-  type BulkPaymentFormData,
-  type EmployeeFormData,
-  type WorkerFormData,
-} from "./payrollSchemas";
+import { cleanTxnDesc } from "./payrollUtils";
+import { usePayrollModelPart1 } from "./usePayrollModelPart1";
+import { usePayrollModelPart2 } from "./usePayrollModelPart2";
+import { usePayrollModelPart3 } from "./usePayrollModelPart3";
+import { usePayrollModelPart4 } from "./usePayrollModelPart4";
+import { usePayrollModelPart5 } from "./usePayrollModelPart5";
 
 export function usePayrollModel() {
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { toast } = useToast();
-  const { selectedCompany, companies } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const assertCanChangeRecords = () => {
-    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-  };
-  const showError = (error: unknown) =>
-    toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
-
-  const state = usePayrollState();
   const {
-    empSearch,
-    empStatusFilter,
-    setDepositDialogOpen,
-    setBonusDialogOpen,
-    bonusTab,
-    setBonusTab,
-    bonusSalesPeriod,
-    setBonusSalesPeriod,
-    bonusSalesLocationId,
-    setBonusSalesLocationId,
-    bonusSalesStart,
-    setBonusSalesStart,
-    bonusSalesEnd,
-    setBonusSalesEnd,
-    bonusSalesPreview,
-    setBonusSalesPreview,
-    setBonusSalesLoading,
-    bonusSalesCustomPct,
-    setBonusSalesCustomPct,
-    bonusDate,
-    setBonusDate,
-    bonusNotes,
-    setBonusNotes,
-    balesRows,
-    setBalesRows,
-    balesPeriod,
-    setBalesPeriod,
-    balesStart,
+    allCompanyLocations,
+    assertCanChangeRecords,
     balesEnd,
-    setWithdrawalDialogOpen,
-    setBulkPaymentDialogOpen,
-    selectedEmployee,
-    setSelectedEmployee,
-    setNewWorkerDialogOpen,
-    setEditWorkerDialogOpen,
-    selectedWorkerForEdit,
-    workerOverrides,
-    setWorkerOverrides,
-    setCreateEmployeeDialogOpen,
-    deleteConflict,
-    setDeleteConflict,
-    deleteWorkerConflict,
-    setDeleteWorkerConflict,
-    statementEmployee,
-    setStatementExpanded,
-    setEditEmployeeDialogOpen,
-    editingEmployee,
-    setEditingEmployee,
-    workerDeductionTarget,
-    setWorkerDeductionTarget,
-    workerDeductionAmount,
-    setWorkerDeductionAmount,
-    workerDeductionReason,
-    setWorkerDeductionReason,
-    workerDeductionDate,
-    bulkDepositSelections,
-    setBulkDepositSelections,
-    bulkDepositAmounts,
-    setBulkDepositAmounts,
-    setBulkDepositDialogOpen,
-    bulkDepositDate,
-    bulkDepositNotes,
-    editBaleRates,
-    setEditBaleRates,
-    editBalePctRates,
-    setEditBalePctRates,
-    bulkBonusAutoMonth,
-    bulkBonusAutoStart,
+    balesPeriod,
+    balesRows,
+    balesStart,
+    bonusDate,
+    bonusNotes,
+    bonusSalesCustomPct,
+    bonusSalesEnd,
+    bonusSalesLocationId,
+    bonusSalesPeriod,
+    bonusSalesPreview,
+    bonusSalesStart,
+    bonusTab,
+    bulkBonusAmounts,
     bulkBonusAutoEnd,
-    setBulkBonusAutoLoading,
+    bulkBonusAutoMonth,
     bulkBonusAutoPctLocationId,
-    setBulkBonusDialogOpen,
+    bulkBonusAutoStart,
+    bulkBonusBreakdowns,
     bulkBonusDate,
     bulkBonusNotes,
-    bulkBonusAmounts,
-    setBulkBonusAmounts,
-    bulkBonusBreakdowns,
-    setBulkBonusBreakdowns,
-    setBulkBonusStep,
-    pendingBonuses,
-    setPendingBonuses,
-    setBulkWithdrawalDialogOpen,
+    bulkDepositAmounts,
+    bulkDepositDate,
+    bulkDepositNotes,
+    bulkDepositSelections,
+    bulkPaymentForm,
+    bulkWithdrawalAccountId,
+    bulkWithdrawalAccountType,
+    bulkWithdrawalAmounts,
     bulkWithdrawalDate,
     bulkWithdrawalNotes,
-    bulkWithdrawalAmounts,
-    setBulkWithdrawalAmounts,
-    bulkWithdrawalAccountType,
-    bulkWithdrawalAccountId,
-    newGroupName,
-    setNewGroupName,
-    newGroupDescription,
-    setNewGroupDescription,
-    setCreateGroupDialogOpen,
-    selectedGroupForMembers,
-  } = state;
-
-  const data = usePayrollData({
-    selectedCompany,
-    companies,
-    statementEmployee,
-    workerOverrides,
-    empSearch,
-    empStatusFilter,
-  });
-  const { locations, allCompanyLocations, employeeStaff, workerPayments, selectedPayments } = data;
-  const employeeGroups = useMemo(
-    () => data.employeeGroups.filter((group) => group.groupType !== "Worker"),
-    [data.employeeGroups]
-  );
-
-  // Forms
-  const depositForm = useForm<DepositFormData>({ resolver: zodResolver(depositSchema) });
-  const withdrawalForm = useForm<WithdrawalFormData>({ resolver: zodResolver(withdrawalSchema) });
-  const bulkPaymentForm = useForm<BulkPaymentFormData>({ resolver: zodResolver(bulkPaymentSchema) });
-  const newWorkerForm = useForm<WorkerFormData>();
-  const editWorkerForm = useForm<WorkerFormData>();
-
-  // Pre-populate edit worker form when a worker is selected for editing
-  useEffect(() => {
-    if (selectedWorkerForEdit) {
-      editWorkerForm.reset({
-        firstName: selectedWorkerForEdit.firstName ?? "",
-        lastName: selectedWorkerForEdit.lastName ?? "",
-        code: selectedWorkerForEdit.code ?? "",
-        monthlySalary: selectedWorkerForEdit.monthlySalary ?? "",
-        department: selectedWorkerForEdit.department ?? "",
-        active: selectedWorkerForEdit.active ?? true,
-      });
-    }
-  }, [editWorkerForm, selectedWorkerForEdit]);
-  const createEmployeeForm = useForm<EmployeeFormData>();
-  const editEmployeeForm = useForm<EmployeeFormData>();
-
-  // Reset statementExpanded whenever a new employee statement is opened
-  useEffect(() => {
-    if (statementEmployee) setStatementExpanded(false);
-  }, [setStatementExpanded, statementEmployee]);
-
-  // Pre-populate every editable employee field so opening the dialog never
-  // replaces persisted values with react-hook-form defaults on save.
-  useEffect(() => {
-    if (!editingEmployee) return;
-    let cancelled = false;
-
-    editEmployeeForm.reset({
-      firstName: editingEmployee.firstName ?? "",
-      lastName: editingEmployee.lastName ?? "",
-      code: editingEmployee.code ?? "",
-      monthlySalary: editingEmployee.monthlySalary ?? "0",
-      department: editingEmployee.department ?? "",
-      joinDate: editingEmployee.joinDate ? String(editingEmployee.joinDate).slice(0, 10) : "",
-      active: editingEmployee.active ?? true,
-      employeeGroupId: "none",
-      salesBonusPct:
-        editingEmployee.salesBonusPct !== null && editingEmployee.salesBonusPct !== undefined
-          ? String(editingEmployee.salesBonusPct)
-          : "",
-      salesBonusPctLocationId:
-        editingEmployee.salesBonusPctLocationId !== null && editingEmployee.salesBonusPctLocationId !== undefined
-          ? String(editingEmployee.salesBonusPctLocationId)
-          : "",
-      salesBonusPctSourceCompanyId:
-        editingEmployee.salesBonusPctSourceCompanyId !== null &&
-        editingEmployee.salesBonusPctSourceCompanyId !== undefined
-          ? String(editingEmployee.salesBonusPctSourceCompanyId)
-          : "",
-    });
-
-    // Employee group membership lives in employee_group_members rather than on
-    // the employees row. Resolve the selected employee's current group through
-    // the existing group-members API so the edit dropdown reflects saved data.
-    void Promise.all(
-      employeeGroups.map(async (group) => {
-        const response = await fetch(`/api/employee-groups/${group.id}/members`, { credentials: "include" });
-        if (!response.ok) return null;
-        const members = (await response.json()) as Array<{ employeeId?: number | null }>;
-        return members.some((member) => member.employeeId === editingEmployee.id) ? group.id : null;
-      })
-    )
-      .then((groupIds) => {
-        if (cancelled) return;
-        const groupId = groupIds.find((value): value is number => value !== null);
-        editEmployeeForm.setValue("employeeGroupId", groupId ? String(groupId) : "none");
-      })
-      .catch(() => {
-        if (!cancelled) editEmployeeForm.setValue("employeeGroupId", "none");
-      });
-
-    // Load bale rates
-    fetch(`/api/employees/${editingEmployee.id}/bale-rates`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rateRows: BaleRateResponse[]) => {
-        if (cancelled) return;
-        setEditBaleRates(
-          rateRows.map((rateRow) => ({
-            locationId: String(rateRow.locationId),
-            rate: String(rateRow.rate),
-            sourceCompanyId: rateRow.sourceCompanyId ? String(rateRow.sourceCompanyId) : "",
-          }))
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setEditBaleRates([]);
-      });
-
-    // Load pct rates
-    fetch(`/api/employees/${editingEmployee.id}/bale-pct-rates`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rateRows: BaleRateResponse[]) => {
-        if (cancelled) return;
-        setEditBalePctRates(
-          rateRows.map((rateRow) => ({
-            locationId: String(rateRow.locationId),
-            pct: String(rateRow.pct),
-            sourceCompanyId: rateRow.sourceCompanyId ? String(rateRow.sourceCompanyId) : "",
-          }))
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setEditBalePctRates([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [editEmployeeForm, editingEmployee, employeeGroups, setEditBalePctRates, setEditBaleRates]);
-
-  // Mutations (Logic simplified for orchestrator)
-  const depositMutation = useMutation({
-    mutationFn: async (data: DepositFormData) => {
-      assertCanChangeRecords();
-      if (!selectedEmployee) throw new Error("No employee selected");
-      return await modeApiRequest("POST", "/api/payroll/deposit-employee", {
-        employeeId: selectedEmployee.id,
-        amount: data.amount,
-        date: data.date,
-        notes: data.notes || "",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: "Deposit recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
-      setDepositDialogOpen(false);
-      depositForm.reset();
-    },
-  });
-
-  const withdrawalMutation = useMutation({
-    mutationFn: async (data: WithdrawalFormData) => {
-      assertCanChangeRecords();
-      if (!selectedEmployee) throw new Error("No employee selected");
-      return await modeApiRequest("POST", "/api/payroll/withdraw-employee", {
-        employeeId: selectedEmployee.id,
-        amount: data.amount,
-        paymentAccountType: data.paymentAccountType,
-        paymentAccountId: data.paymentAccountId,
-        date: data.date,
-        notes: data.notes || "",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: "Withdrawal recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee?.id] });
-      setWithdrawalDialogOpen(false);
-      withdrawalForm.reset();
-    },
-  });
-
-  // Handlers
-  const handleDeposit = (emp: Employee) => {
-    setSelectedEmployee(emp);
-    depositForm.reset({ amount: emp.monthlySalary || "", date: new Date().toLocaleDateString("en-CA"), notes: "" });
-    setDepositDialogOpen(true);
-  };
-
-  const handleWithdrawal = (emp: Employee) => {
-    setSelectedEmployee(emp);
-    withdrawalForm.reset({
-      amount: "",
-      paymentAccountType: "cash",
-      paymentAccountId: "",
-      date: new Date().toLocaleDateString("en-CA"),
-      notes: "",
-    });
-    setWithdrawalDialogOpen(true);
-  };
-
-  const handleBonus = (emp: Employee) => {
-    setSelectedEmployee(emp);
-    setBonusTab("sales");
-    setBonusSalesPreview(null);
-    setBonusSalesCustomPct(emp.salesBonusPct ? String(emp.salesBonusPct) : "");
-    setBonusSalesLocationId(emp.salesBonusPctLocationId ? String(emp.salesBonusPctLocationId) : "");
-    setBonusSalesPeriod("thisMonth");
-    setBonusSalesStart("");
-    setBonusSalesEnd("");
-    setBalesRows([
-      {
-        locationId: "",
-        sourceCompanyId: "",
-        qty: "",
-        rate: emp.balesBonusRate != null ? String(emp.balesBonusRate) : "",
-        preview: null,
-        loading: false,
-      },
-    ]);
-    setBalesPeriod("thisMonth");
-    setBonusDate(new Date().toLocaleDateString("en-CA"));
-    setBonusNotes("");
-    setBonusDialogOpen(true);
-  };
-
-  const fetchSalesPreview = async () => {
-    if (!bonusSalesLocationId) return;
-    setBonusSalesLoading(true);
-    setBonusSalesPreview(null);
-    try {
-      const range =
-        bonusSalesPeriod === "thisMonth" ? getThisMonthRange() : { start: bonusSalesStart, end: bonusSalesEnd };
-      const { locationId, sourceCompanyId } = decodeLocationOption(bonusSalesLocationId);
-      const sourceParam = sourceCompanyId ? `&sourceCompanyId=${sourceCompanyId}` : "";
-      const res = await fetch(
-        `/api/payroll/sales-summary?locationId=${locationId}&startDate=${range.start}&endDate=${range.end}${sourceParam}`,
-        { credentials: "include" }
-      );
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as SalesPreview;
-      setBonusSalesPreview(data);
-    } catch (error: unknown) {
-      showError(error);
-    } finally {
-      setBonusSalesLoading(false);
-    }
-  };
-
-  const fetchBalesQty = async (idx: number) => {
-    const row = balesRows[idx];
-    if (!row.locationId) return;
-    setBalesRows((previous) => previous.map((row, index) => (index === idx ? { ...row, loading: true } : row)));
-    try {
-      const range = balesPeriod === "thisMonth" ? getThisMonthRange() : { start: balesStart, end: balesEnd };
-      const sourceParam = row.sourceCompanyId ? `&sourceCompanyId=${row.sourceCompanyId}` : "";
-      const res = await fetch(
-        `/api/payroll/sales-summary?locationId=${row.locationId}&startDate=${range.start}&endDate=${range.end}${sourceParam}`,
-        { credentials: "include" }
-      );
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as SalesPreview;
-      setBalesRows((previous) =>
-        previous.map((row, index) => (index === idx ? { ...row, qty: data.totalQuantity, loading: false } : row))
-      );
-    } catch (error: unknown) {
-      setBalesRows((previous) => previous.map((row, index) => (index === idx ? { ...row, loading: false } : row)));
-      toast({ title: "Error fetching qty", description: errorMessage(error), variant: "destructive" });
-    }
-  };
-
-  const getBonusAmount = (): number => {
-    if (bonusTab === "sales") {
-      if (!bonusSalesPreview) return 0;
-      return (parseFloat(bonusSalesPreview.totalSalesAmount || "0") * parseFloat(bonusSalesCustomPct || "0")) / 100;
-    } else {
-      return balesRows.reduce((sum, row) => sum + parseFloat(row.qty || "0") * parseFloat(row.rate || "0"), 0);
-    }
-  };
-
-  const saveBonusToPending = () => {
-    if (!selectedEmployee) return;
-    const amount = getBonusAmount();
-    if (amount <= 0) return;
-    const descParts: string[] = [];
-    if (bonusTab === "sales" && bonusSalesPreview) {
-      descParts.push(`Sales bonus ${bonusSalesCustomPct}% on ${bonusSalesPreview.locationName}`);
-    } else {
-      balesRows
-        .filter((row) => parseFloat(row.qty || "0") > 0 && parseFloat(row.rate || "0") > 0)
-        .forEach((row) => {
-          const loc =
-            locations.find((location) => location.id === parseInt(row.locationId)) ??
-            allCompanyLocations.find((location) => location.id === parseInt(row.locationId));
-          descParts.push(`${parseFloat(row.qty)} bales @ ${row.rate} (${loc?.name ?? row.locationId})`);
-        });
-    }
-    setPendingBonuses((previous) => ({
-      ...previous,
-      [selectedEmployee.id]: {
-        amount,
-        description: descParts.join(", ") || "Bonus",
-        employeeName: `${selectedEmployee.firstName} ${selectedEmployee.lastName}`,
-      },
-    }));
-    setBonusDialogOpen(false);
-    toast({
-      title: "Saved to bulk",
-      description: `Bonus of ${amount.toFixed(2)} saved for ${selectedEmployee.firstName}`,
-    });
-  };
-
-  const bonusMutation = useMutation({
-    mutationFn: async ({ employeeId, amount }: { employeeId: number; amount: number }) => {
-      assertCanChangeRecords();
-      return await modeApiRequest("POST", "/api/payroll/bonus-employee", {
-        employeeId,
-        amount: amount.toFixed(2),
-        date: bonusDate,
-        notes: bonusNotes || "",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: "Bonus recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      if (selectedEmployee)
-        queryClient.invalidateQueries({ queryKey: ["/api/accounts/employee", selectedEmployee.id] });
-      setBonusDialogOpen(false);
-    },
-    onError: showError,
-  });
-
-  const submitSmartBonus = () => {
-    if (!selectedEmployee) return;
-    const amount = getBonusAmount();
-    if (amount <= 0) return;
-    bonusMutation.mutate({ employeeId: selectedEmployee.id, amount });
-  };
-
-  // ── Bulk deposit helpers ─────────────────────────────────────────────────
-  const getBulkDepositAmount = (employee: Employee): string =>
-    bulkDepositAmounts[employee.id] ?? employee.monthlySalary ?? "";
-
-  const handleSelectAllEmployees = (checked: boolean | "indeterminate") => {
-    if (checked) {
-      const all: Record<number, boolean> = {};
-      const amounts: Record<number, string> = { ...bulkDepositAmounts };
-      employeeStaff.forEach((e) => {
-        all[e.id] = true;
-        if (amounts[e.id] === undefined) amounts[e.id] = e.monthlySalary ?? "";
-      });
-      setBulkDepositSelections(all);
-      setBulkDepositAmounts(amounts);
-    } else {
-      setBulkDepositSelections({});
-    }
-  };
-
-  const handleToggleEmployeeDeposit = (id: number) => {
-    const employee = employeeStaff.find((e) => e.id === id);
-    setBulkDepositSelections((prev: Record<number, boolean>) => ({ ...prev, [id]: !prev[id] }));
-    if (employee && bulkDepositAmounts[id] === undefined) {
-      setBulkDepositAmounts((prev) => ({ ...prev, [id]: employee.monthlySalary ?? "" }));
-    }
-  };
-
-  const validSelectedEmployees = useMemo(
-    () =>
-      employeeStaff.filter(
-        (e) => bulkDepositSelections[e.id] && parseFloat(bulkDepositAmounts[e.id] ?? e.monthlySalary ?? "0") > 0
-      ),
-    [employeeStaff, bulkDepositSelections, bulkDepositAmounts]
-  );
-
-  const bulkDepositTotal = useMemo(
-    () =>
-      validSelectedEmployees.reduce(
-        (sum, employee) => sum + parseFloat(bulkDepositAmounts[employee.id] ?? employee.monthlySalary ?? "0"),
-        0
-      ),
-    [validSelectedEmployees, bulkDepositAmounts]
-  );
-
-  const bulkDepositMutation = useMutation({
-    mutationFn: async () => {
-      assertCanChangeRecords();
-      const deposits = validSelectedEmployees.map((employee) => ({
-        employeeId: employee.id,
-        amount: getBulkDepositAmount(employee),
-      }));
-      return modeApiRequest("POST", "/api/payroll/bulk-deposit-employees", {
-        deposits,
-        date: bulkDepositDate,
-        notes: bulkDepositNotes || "",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: `Deposited salary for ${validSelectedEmployees.length} employees` });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setBulkDepositDialogOpen(false);
-      setBulkDepositSelections({});
-      setBulkDepositAmounts({});
-    },
-    onError: showError,
-  });
-
-  const bulkWithdrawalMutation = useMutation({
-    mutationFn: async () => {
-      assertCanChangeRecords();
-      const withdrawals = Object.entries(bulkWithdrawalAmounts)
-        .filter(([, amt]) => parseFloat(amt) > 0)
-        .map(([empId, amount]) => ({ employeeId: parseInt(empId), amount }));
-      return modeApiRequest("POST", "/api/payroll/bulk-withdraw-employees", {
-        withdrawals,
-        date: bulkWithdrawalDate,
-        notes: bulkWithdrawalNotes || "",
-        paymentAccountType: bulkWithdrawalAccountType,
-        paymentAccountId: bulkWithdrawalAccountId,
-      });
-    },
-    onSuccess: () => {
-      const count = Object.values(bulkWithdrawalAmounts).filter((amt) => parseFloat(amt) > 0).length;
-      toast({ title: "Saved", description: `Processed withdrawals for ${count} employees` });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setBulkWithdrawalDialogOpen(false);
-      setBulkWithdrawalAmounts({});
-    },
-    onError: showError,
-  });
-
-  const bulkBonusMutation = useMutation({
-    mutationFn: async () => {
-      assertCanChangeRecords();
-      const bonuses = Object.entries(bulkBonusAmounts)
-        .filter(([, amt]) => parseFloat(amt) > 0)
-        .map(([empId, amount]) => ({ employeeId: parseInt(empId), amount }));
-      return modeApiRequest("POST", "/api/payroll/bulk-bonus-employees", {
-        bonuses,
-        date: bulkBonusDate,
-        notes: bulkBonusNotes || "",
-      });
-    },
-    onSuccess: () => {
-      const count = Object.values(bulkBonusAmounts).filter((amt) => parseFloat(amt) > 0).length;
-      toast({ title: "Saved", description: `Bonus deposited for ${count} employees` });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setBulkBonusDialogOpen(false);
-      setBulkBonusAmounts({});
-      setBulkBonusBreakdowns({});
-      setPendingBonuses({});
-      setBulkBonusStep("edit");
-    },
-    onError: showError,
-  });
-
-  const bulkPaymentMutation = useMutation({
-    mutationFn: async (data: BulkPaymentFormData) => {
-      assertCanChangeRecords();
-      const payments = selectedPayments.map((w) => ({
-        workerId: w.id,
-        amount: workerPayments[w.id]?.amount || "0",
-      }));
-      return modeApiRequest("POST", "/api/payroll/bulk-pay-workers", {
-        payments,
-        paymentAccountType: data.paymentAccountType,
-        paymentAccountId: data.paymentAccountId,
-        date: data.date,
-        notes: data.notes || "",
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Saved", description: `Paid ${selectedPayments.length} workers` });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setBulkPaymentDialogOpen(false);
-      bulkPaymentForm.reset();
-      setWorkerOverrides({});
-    },
-    onError: showError,
-  });
-
-  const autoCalculateBonuses = async () => {
-    setBulkBonusAutoLoading(true);
-    try {
-      const range =
-        bulkBonusAutoMonth === "thisMonth" ? getThisMonthRange() : { start: bulkBonusAutoStart, end: bulkBonusAutoEnd };
-
-      // The picker stores "locationId:companyId" so the % bonus is computed from
-      // the sales of the company that sells at the location, which is not always
-      // the company that owns the location row (GC-LSHI).
-      const { locationId: pctLocationId, sourceCompanyId: pctSourceCompanyId } =
-        decodeLocationOption(bulkBonusAutoPctLocationId);
-      const res = await modeApiRequest("POST", "/api/payroll/auto-calculate-bonuses", {
-        startDate: range.start,
-        endDate: range.end,
-        pctLocationId: pctLocationId || null,
-        pctSourceCompanyId: pctSourceCompanyId || null,
-      });
-      const { results } = (await res.json()) as {
-        results: Array<{ employeeId: number; amount: string; breakdown: string[] }>;
-      };
-
-      const amounts: Record<number, string> = { ...bulkBonusAmounts };
-      const breakdowns: Record<number, string[]> = { ...bulkBonusBreakdowns };
-
-      for (const r of results) {
-        if (parseFloat(r.amount) > 0) {
-          amounts[r.employeeId] = r.amount;
-          breakdowns[r.employeeId] = r.breakdown;
-        }
-      }
-
-      setBulkBonusAmounts(amounts);
-      setBulkBonusBreakdowns(breakdowns);
-      const calculatedCount = results.filter((r) => parseFloat(r.amount) > 0).length;
-      if (calculatedCount === 0) {
-        toast({
-          title: "Nothing calculated",
-          description:
-            "No sales found for the configured locations in this date range. Check the date range, the saved bonus rates, and the Sales % location selection.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Done",
-          description: `Bonuses calculated for ${calculatedCount} employee${calculatedCount !== 1 ? "s" : ""}`,
-        });
-      }
-    } catch (error: unknown) {
-      showError(error);
-    } finally {
-      setBulkBonusAutoLoading(false);
-    }
-  };
-
-  const handlePrintBulkBonus = () => {
-    const rows = employeeStaff
-      .filter((emp) => parseFloat(bulkBonusAmounts[emp.id] || "0") > 0)
-      .map((emp) => {
-        const pending = pendingBonuses[emp.id];
-        const amount = parseFloat(bulkBonusAmounts[emp.id] || "0");
-        return `${emp.firstName} ${emp.lastName}: $${amount.toFixed(2)}${pending?.description ? ` — ${pending.description}` : ""}`;
-      });
-    const total = employeeStaff.reduce((s, e) => s + parseFloat(bulkBonusAmounts[e.id] || "0"), 0);
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`
-      <html><head><title>Bulk Bonus — ${bulkBonusDate}</title>
-      <style>body{font-family:sans-serif;padding:24px}h2{margin-bottom:8px}ul{list-style:none;padding:0}li{padding:6px 0;border-bottom:1px solid #eee}.total{font-weight:bold;margin-top:12px}</style>
-      </head><body>
-      <h2>Bulk Bonus Deposit</h2>
-      <p>Date: ${bulkBonusDate}${bulkBonusNotes ? ` &nbsp;·&nbsp; ${bulkBonusNotes}` : ""}</p>
-      <ul>${rows.map((r) => `<li>${r}</li>`).join("")}</ul>
-      <p class="total">Total: $${total.toFixed(2)}</p>
-      </body></html>
-    `);
-    win.document.close();
-    win.print();
-  };
-
-  const handleDeleteEmployee = async (emp: Employee) => {
-    if (!recordChanges.allowed) return;
-    if (await confirmAction({ title: `Are you sure you want to delete ${emp.firstName}?`, tone: "destructive" })) {
-      modeApiRequest("DELETE", `/api/employees/${emp.id}`, undefined)
-        .then(() => {
-          toast({ title: "Deleted", description: "Employee deleted" });
-          queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-        })
-        .catch(showError);
-    }
-  };
-
-  const handleForceDeleteEmployee = () => {
-    if (!deleteConflict || !recordChanges.allowed) return;
-    modeApiRequest("DELETE", `/api/employees/${deleteConflict.employee.id}?force=true`, undefined)
-      .then(() => {
-        toast({ title: "Deleted", description: "Employee force-deleted" });
-        queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-        setDeleteConflict(null);
-      })
-      .catch(showError);
-  };
-
-  const editEmployeeMutation = useMutation({
-    mutationFn: async (data: EmployeeFormData) => {
-      assertCanChangeRecords();
-      if (!editingEmployee) throw new Error("No employee selected");
-      const { employeeGroupId, ...employeeDetails } = data;
-
-      // employeeGroupId is not a column on employees; membership is stored in
-      // employee_group_members. Sending it through the employee PATCH caused
-      // the entire details update to fail at the database layer.
-      await modeApiRequest("PATCH", `/api/employees/${editingEmployee.id}`, employeeDetails);
-
-      const baleRates = editBaleRates
-        .filter((row) => row.locationId && row.rate)
-        .map((row) => ({
-          locationId: parseInt(row.locationId),
-          rate: parseFloat(row.rate),
-          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
-        }));
-      const balePctRates = editBalePctRates
-        .filter((row) => row.locationId && row.pct)
-        .map((row) => ({
-          locationId: parseInt(row.locationId),
-          pct: parseFloat(row.pct),
-          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
-        }));
-
-      // These endpoints expect an object containing `rates`. Using the shared
-      // request helper also makes a failed rate save reject the mutation instead
-      // of closing the dialog and falsely reporting success.
-      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-rates`, { rates: baleRates });
-      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-pct-rates`, { rates: balePctRates });
-
-      // The employee editor models one employee group. Remove stale membership
-      // from employee groups, then add the selected group when one is chosen.
-      await Promise.all(
-        employeeGroups.map((group) =>
-          modeApiRequest("DELETE", `/api/employee-groups/${group.id}/members/${editingEmployee.id}`, undefined)
-        )
-      );
-      if (employeeGroupId && employeeGroupId !== "none") {
-        const groupId = Number(employeeGroupId);
-        if (!Number.isInteger(groupId) || !employeeGroups.some((group) => group.id === groupId)) {
-          throw new Error("Invalid employee group");
-        }
-        await modeApiRequest("POST", `/api/employee-groups/${groupId}/members/${editingEmployee.id}`, undefined);
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Employee updated", description: "All employee details were saved successfully." });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setEditEmployeeDialogOpen(false);
-      setEditingEmployee(null);
-    },
-    onError: showError,
-  });
-
-  const createEmployeeMutation = useMutation({
-    mutationFn: async (data: EmployeeFormData) =>
-      modeApiRequest("POST", "/api/employees", {
-        ...data,
-        companyId: selectedCompany?.id,
-        employeeType: "Employee",
-      }),
-    onSuccess: () => {
-      toast({ title: "Employee created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setCreateEmployeeDialogOpen(false);
-      createEmployeeForm.reset();
-    },
-    onError: showError,
-  });
-
-  const {
-    createGroupMutation,
-    groupMembers,
-    addWorkerToGroupMutation,
-    removeWorkerFromGroupMutation,
-    deleteWorkerGroupMutation,
-    addWorkerToWorkerGroupMutation,
-    removeWorkerFromWorkerGroupMutation,
-  } = usePayrollGroupMutations({
+    createEmployeeForm,
+    data,
+    deleteConflict,
+    deleteWorkerConflict,
+    depositForm,
+    editBalePctRates,
+    editBaleRates,
+    editEmployeeForm,
+    editWorkerForm,
+    editingEmployee,
+    employeeGroups,
+    employeeStaff,
+    locations,
     modeApiRequest,
-    selectedCompanyId: selectedCompany?.id,
-    newGroupName,
     newGroupDescription,
-    setCreateGroupDialogOpen,
-    setNewGroupName,
-    setNewGroupDescription,
+    newGroupName,
+    newWorkerForm,
+    pendingBonuses,
+    recordChanges,
+    selectedCompany,
+    selectedEmployee,
     selectedGroupForMembers,
-  });
-
+    selectedPayments,
+    selectedWorkerForEdit,
+    setBalesPeriod,
+    setBalesRows,
+    setBonusDate,
+    setBonusDialogOpen,
+    setBonusNotes,
+    setBonusSalesCustomPct,
+    setBonusSalesEnd,
+    setBonusSalesLoading,
+    setBonusSalesLocationId,
+    setBonusSalesPeriod,
+    setBonusSalesPreview,
+    setBonusSalesStart,
+    setBonusTab,
+    setBulkBonusAmounts,
+    setBulkBonusAutoLoading,
+    setBulkBonusBreakdowns,
+    setBulkBonusDialogOpen,
+    setBulkBonusStep,
+    setBulkDepositAmounts,
+    setBulkDepositDialogOpen,
+    setBulkDepositSelections,
+    setBulkPaymentDialogOpen,
+    setBulkWithdrawalAmounts,
+    setBulkWithdrawalDialogOpen,
+    setCreateEmployeeDialogOpen,
+    setCreateGroupDialogOpen,
+    setDeleteConflict,
+    setDeleteWorkerConflict,
+    setDepositDialogOpen,
+    setEditBalePctRates,
+    setEditBaleRates,
+    setEditEmployeeDialogOpen,
+    setEditWorkerDialogOpen,
+    setEditingEmployee,
+    setNewGroupDescription,
+    setNewGroupName,
+    setNewWorkerDialogOpen,
+    setPendingBonuses,
+    setSelectedEmployee,
+    setWithdrawalDialogOpen,
+    setWorkerDeductionAmount,
+    setWorkerDeductionReason,
+    setWorkerDeductionTarget,
+    setWorkerOverrides,
+    showError,
+    state,
+    toast,
+    withdrawalForm,
+    workerDeductionAmount,
+    workerDeductionDate,
+    workerDeductionReason,
+    workerDeductionTarget,
+    workerPayments,
+  } = usePayrollModelPart1();
   const {
+    depositMutation,
+    fetchBalesQty,
+    fetchSalesPreview,
+    handleBonus,
+    handleDeposit,
+    handleWithdrawal,
+    withdrawalMutation,
+  } = usePayrollModelPart2({
+    assertCanChangeRecords,
+    balesEnd,
+    balesPeriod,
+    balesRows,
+    balesStart,
+    bonusSalesEnd,
+    bonusSalesLocationId,
+    bonusSalesPeriod,
+    bonusSalesStart,
+    depositForm,
+    editEmployeeForm,
+    editingEmployee,
+    employeeGroups,
+    modeApiRequest,
+    selectedCompany,
+    selectedEmployee,
+    setBalesPeriod,
+    setBalesRows,
+    setBonusDate,
+    setBonusDialogOpen,
+    setBonusNotes,
+    setBonusSalesCustomPct,
+    setBonusSalesEnd,
+    setBonusSalesLoading,
+    setBonusSalesLocationId,
+    setBonusSalesPeriod,
+    setBonusSalesPreview,
+    setBonusSalesStart,
+    setBonusTab,
+    setDepositDialogOpen,
+    setEditBalePctRates,
+    setEditBaleRates,
+    setSelectedEmployee,
+    setWithdrawalDialogOpen,
+    showError,
+    toast,
+    withdrawalForm,
+  });
+  const {
+    bulkBonusMutation,
+    bulkDepositMutation,
+    bulkDepositTotal,
+    bulkPaymentMutation,
+    bulkWithdrawalMutation,
+    handleSelectAllEmployees,
+    handleToggleEmployeeDeposit,
+    saveBonusToPending,
+    submitSmartBonus,
+    validSelectedEmployees,
+  } = usePayrollModelPart3({
+    allCompanyLocations,
+    assertCanChangeRecords,
+    balesRows,
+    bonusDate,
+    bonusNotes,
+    bonusSalesCustomPct,
+    bonusSalesPreview,
+    bonusTab,
+    bulkBonusAmounts,
+    bulkBonusDate,
+    bulkBonusNotes,
+    bulkDepositAmounts,
+    bulkDepositDate,
+    bulkDepositNotes,
+    bulkDepositSelections,
+    bulkPaymentForm,
+    bulkWithdrawalAccountId,
+    bulkWithdrawalAccountType,
+    bulkWithdrawalAmounts,
+    bulkWithdrawalDate,
+    bulkWithdrawalNotes,
+    employeeStaff,
+    locations,
+    modeApiRequest,
+    selectedCompany,
+    selectedEmployee,
+    selectedPayments,
+    setBonusDialogOpen,
+    setBulkBonusAmounts,
+    setBulkBonusBreakdowns,
+    setBulkBonusDialogOpen,
+    setBulkBonusStep,
+    setBulkDepositAmounts,
+    setBulkDepositDialogOpen,
+    setBulkDepositSelections,
+    setBulkPaymentDialogOpen,
+    setBulkWithdrawalAmounts,
+    setBulkWithdrawalDialogOpen,
+    setPendingBonuses,
+    setWorkerOverrides,
+    showError,
+    toast,
+    workerPayments,
+  });
+  const {
+    addWorkerToGroupMutation,
+    addWorkerToWorkerGroupMutation,
+    autoCalculateBonuses,
+    createEmployeeMutation,
+    createGroupMutation,
+    createWorkerMutation,
+    deleteWorkerGroupMutation,
+    editEmployeeMutation,
+    groupMembers,
+    handleDeleteEmployee,
+    handleDeleteWorker,
+    handleForceDeleteEmployee,
+    handleForceDeleteWorker,
+    handlePrintBulkBonus,
     handleToggleWorker,
     handleUpdateAmount,
-    handleDeleteWorker,
-    createWorkerMutation,
+    removeWorkerFromGroupMutation,
+    removeWorkerFromWorkerGroupMutation,
     updateWorkerMutation,
-    handleForceDeleteWorker,
-  } = usePayrollWorkerMutations({
-    modeApiRequest,
-    selectedCompanyId: selectedCompany?.id,
-    setWorkerOverrides,
-    setNewWorkerDialogOpen,
-    newWorkerForm,
-    selectedWorkerForEdit,
-    setEditWorkerDialogOpen,
+  } = usePayrollModelPart4({
+    assertCanChangeRecords,
+    bulkBonusAmounts,
+    bulkBonusAutoEnd,
+    bulkBonusAutoMonth,
+    bulkBonusAutoPctLocationId,
+    bulkBonusAutoStart,
+    bulkBonusBreakdowns,
+    bulkBonusDate,
+    bulkBonusNotes,
+    createEmployeeForm,
+    deleteConflict,
     deleteWorkerConflict,
+    editBalePctRates,
+    editBaleRates,
+    editingEmployee,
+    employeeGroups,
+    employeeStaff,
+    modeApiRequest,
+    newGroupDescription,
+    newGroupName,
+    newWorkerForm,
+    pendingBonuses,
+    recordChanges,
+    selectedCompany,
+    selectedGroupForMembers,
+    selectedWorkerForEdit,
+    setBulkBonusAmounts,
+    setBulkBonusAutoLoading,
+    setBulkBonusBreakdowns,
+    setCreateEmployeeDialogOpen,
+    setCreateGroupDialogOpen,
+    setDeleteConflict,
     setDeleteWorkerConflict,
+    setEditEmployeeDialogOpen,
+    setEditWorkerDialogOpen,
+    setEditingEmployee,
+    setNewGroupDescription,
+    setNewGroupName,
+    setNewWorkerDialogOpen,
+    setWorkerOverrides,
+    showError,
+    toast,
   });
-
-  const workerDeductionMutation = useMutation({
-    mutationFn: async () => {
-      assertCanChangeRecords();
-      if (!workerDeductionTarget) throw new Error("No worker selected");
-      return await modeApiRequest("POST", `/api/factory/workers/${workerDeductionTarget.id}/deductions`, {
-        amount: workerDeductionAmount,
-        reason: workerDeductionReason || null,
-        deductionDate: workerDeductionDate,
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Deduction added", description: "Pending deduction saved." });
-      setWorkerDeductionTarget(null);
-      setWorkerDeductionAmount("");
-      setWorkerDeductionReason("");
-    },
+  const { workerDeductionMutation } = usePayrollModelPart5({
+    assertCanChangeRecords,
+    modeApiRequest,
+    setWorkerDeductionAmount,
+    setWorkerDeductionReason,
+    setWorkerDeductionTarget,
+    toast,
+    workerDeductionAmount,
+    workerDeductionDate,
+    workerDeductionReason,
+    workerDeductionTarget,
   });
   return {
     ...data,

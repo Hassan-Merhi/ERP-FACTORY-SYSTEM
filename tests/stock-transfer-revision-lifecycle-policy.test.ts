@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const service = fs.readFileSync("server/services/immutableStockTransferRevisionLifecycle.ts", "utf8");
-const routes = fs.readFileSync("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts", "utf8");
+const service = readModuleFamily("server/services/immutableStockTransferRevisionLifecycle.ts");
+const routes = readModuleFamily("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts");
 
 describe("stock transfer revision lifecycle policy", () => {
   it("locks lifecycle rows and guards status transitions", () => {

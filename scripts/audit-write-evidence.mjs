@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isExtractedModule, readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const baselinePath = path.join(projectRoot, "config/write-evidence-baseline.json");
@@ -158,7 +159,10 @@ export function auditWriteEvidence() {
   let voucherWritesWithRequestIdentity = 0;
 
   for (const file of files) {
-    const source = fs.readFileSync(path.join(projectRoot, file), "utf8");
+    // Modules split under the source-size policy are audited as one family:
+    // extracted siblings are attributed to their original module.
+    if (isExtractedModule(path.join(projectRoot, file))) continue;
+    const source = readModuleFamily(path.join(projectRoot, file));
 
     if (mutatesStock(file, source)) {
       if (JOURNAL_WRITER.test(source)) journalledStockWrites += 1;

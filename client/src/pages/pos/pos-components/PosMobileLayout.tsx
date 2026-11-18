@@ -2,7 +2,7 @@ import { Search, ShoppingCart, Trash2, MapPin, User, ChevronDown, Check, Minus, 
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { PosMobileNotes } from "./PosMobileNotes";
 import { PosSaleSubmitButton } from "./PosSaleHeader";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -520,19 +520,7 @@ export function PosMobileLayout({
         )}
       </section>
 
-      <section className="px-3 pb-4 sm:px-4" aria-label="Sale notes">
-        <Label htmlFor="input-mobile-notes" className="mb-1.5 block text-xs text-muted-foreground">
-          Notes
-        </Label>
-        <Textarea
-          id="input-mobile-notes"
-          placeholder="Optional notes"
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          className="min-h-24 resize-y text-base"
-          data-testid="input-mobile-notes"
-        />
-      </section>
+      <PosMobileNotes notes={notes} setNotes={setNotes} />
 
       <PosMobileItemSheet
         item={sheetItem}

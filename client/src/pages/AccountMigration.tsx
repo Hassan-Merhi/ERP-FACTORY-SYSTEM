@@ -1,12 +1,7 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import {
   Dialog,
@@ -16,461 +11,45 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle,
-  ChevronsUpDown,
-  Check,
-  Undo2,
-  X,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Company, LedgerAccount } from "@shared/schema";
-
-interface AccountPreviewItem {
-  account: LedgerAccount;
-  entryCount: number;
-  postedEntryCount: number;
-  closingBalance: number;
-  totalDebit: number;
-  totalCredit: number;
-  touchedVoucherCount: number;
-  exclusiveVoucherCount: number;
-  sharedVoucherCount: number;
-  codeConflict: { id: number; name: string } | null;
-}
-
-interface PreviewResult {
-  accounts: AccountPreviewItem[];
-  srcCompany: Company;
-  destCompany: Company;
-  grandTotalEntries: number;
-  grandHistoryEntries: number;
-  grandClosing: number;
-  grandTotalDebit: number;
-  grandTotalCredit: number;
-}
-
-interface ExecuteAccountResult {
-  accountId: number;
-  accountName: string;
-  originalCode: string;
-  finalCode: string;
-  entryCount: number;
-  wasRenamed: boolean;
-}
-
-interface PendingMigration {
-  migrationId: string;
-  srcCompanyId: number;
-  destCompanyId: number;
-  accountIds: number[];
-  movedVoucherIds: number[];
-  accounts: Array<{ accountId: number; originalCode: string; finalCode: string }>;
-}
-
-interface ExecuteResult {
-  success: boolean;
-  srcCompanyId: number;
-  destCompanyId: number;
-  totalEntries: number;
-  movedVoucherIds: number[];
-  movedVoucherCount: number;
-  sharedVoucherCount: number;
-  accounts: ExecuteAccountResult[];
-}
-
-function fmt(n: number) {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtSigned(n: number) {
-  return `$ ${fmt(Math.abs(n))} ${n < 0 ? "Cr" : "Dr"}`;
-}
-
-function CompanyBadge({ company }: { company?: Company }) {
-  if (!company) return null;
-  const typeColors: Record<string, string> = {
-    erp: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-    factory: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    factory_v2: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    properties: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  };
-  const label =
-    company.companyType === "erp"
-      ? "ERP"
-      : company.companyType === "factory" || company.companyType === "factory_v2"
-        ? "Factory"
-        : "Properties";
-  return (
-    <span
-      className={`text-xs font-medium px-1.5 py-0.5 rounded-sm ${typeColors[company.companyType] ?? typeColors.erp}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-interface AccountMultiSelectProps {
-  accounts: LedgerAccount[];
-  selectedIds: number[];
-  onChange: (ids: number[]) => void;
-  disabled?: boolean;
-}
-
-function AccountMultiSelect({ accounts, selectedIds, onChange, disabled }: AccountMultiSelectProps) {
-  const [open, setOpen] = useState(false);
-  const selectedSet = new Set(selectedIds);
-  const sorted = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
-
-  function toggle(id: number) {
-    if (selectedSet.has(id)) onChange(selectedIds.filter((x) => x !== id));
-    else onChange([...selectedIds, id]);
-  }
-
-  return (
-    <div className="space-y-2">
-      <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            disabled={disabled}
-            className="w-full justify-between font-normal"
-            data-testid="select-accounts"
-          >
-            <span className="text-muted-foreground">
-              {selectedIds.length === 0
-                ? "Search and select accounts…"
-                : `${selectedIds.length} account${selectedIds.length === 1 ? "" : "s"} selected`}
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[560px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Type account name or code…" />
-            <CommandList className="max-h-80">
-              <CommandEmpty>No accounts found.</CommandEmpty>
-              <CommandGroup>
-                {sorted.map((a) => {
-                  const selected = selectedSet.has(a.id);
-                  return (
-                    <CommandItem
-                      key={a.id}
-                      value={`${a.code} ${a.name} ${a.accountType}`}
-                      onSelect={() => toggle(a.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <div
-                        className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
-                          selected ? "bg-primary border-primary" : "border-muted-foreground/40"
-                        )}
-                      >
-                        {selected && <Check className="h-3 w-3 text-primary-foreground" />}
-                      </div>
-                      <span className="flex-1 truncate">{a.name}</span>
-                      <Badge variant="secondary" className="text-xs shrink-0">
-                        {a.accountType}
-                      </Badge>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-          {selectedIds.length > 0 && (
-            <div className="border-t p-2 flex justify-end">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-xs text-muted-foreground"
-                onClick={() => {
-                  onChange([]);
-                  setOpen(false);
-                }}
-              >
-                Clear all
-              </Button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-
-      {selectedIds.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedIds.map((id) => {
-            const acc = accounts.find((a) => a.id === id);
-            if (!acc) return null;
-            return (
-              <div key={id} className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm max-w-[240px]">
-                <span className="font-mono text-xs text-muted-foreground shrink-0">{acc.code}</span>
-                <span className="truncate">{acc.name}</span>
-                <button
-                  onClick={() => toggle(id)}
-                  className="ml-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-                  data-testid={`remove-account-${id}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AccountPreviewRow({ item }: { item: AccountPreviewItem }) {
-  const [expanded, setExpanded] = useState(false);
-  const ob = parseFloat(item.account.openingBalance || "0");
-  return (
-    <div className="rounded-md border">
-      <button
-        className="w-full flex items-center justify-between gap-2 p-3 text-left hover-elevate"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="font-medium truncate">{item.account.name}</span>
-          <span className="font-mono text-xs text-muted-foreground shrink-0">{item.account.code}</span>
-          {item.codeConflict && (
-            <Badge
-              variant="outline"
-              className="text-xs text-amber-700 border-amber-300 dark:text-amber-300 dark:border-amber-700 shrink-0"
-            >
-              Renamed
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted-foreground">{item.postedEntryCount} posted / {item.entryCount} historical</span>
-          {expanded ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
-        </div>
-      </button>
-      {expanded && (
-        <div className="px-3 pb-3 space-y-2 border-t pt-3">
-          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Debits</p>
-              <p className="font-mono font-medium">{fmt(item.totalDebit)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Credits</p>
-              <p className="font-mono font-medium">{fmt(item.totalCredit)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Opening balance</p>
-              <p className="font-mono font-medium">
-                {ob !== 0 ? `${fmt(ob)} ${item.account.openingBalanceSide}` : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Closing balance to transfer</p>
-              <p className="font-mono font-semibold">{fmtSigned(item.closingBalance)}</p>
-            </div>
-          </div>
-          {item.postedEntryCount !== item.entryCount && (
-            <p className="text-xs text-muted-foreground">
-              {item.entryCount - item.postedEntryCount} excluded/non-posted historical entries are not
-              included in the closing balance.
-            </p>
-          )}
-          {item.touchedVoucherCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {item.exclusiveVoucherCount} voucher{item.exclusiveVoucherCount !== 1 ? "s" : ""} will move
-              {item.sharedVoucherCount > 0 && `, ${item.sharedVoucherCount} shared (stay in source)`}
-            </p>
-          )}
-          {item.codeConflict && (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Code <span className="font-mono">{item.account.code}</span> conflicts with existing account "
-              {item.codeConflict.name}" — will be renamed to{" "}
-              <span className="font-mono">{item.account.code}-MIGRATED</span>
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { ArrowRight, CheckCircle, Undo2 } from "lucide-react";
+import { AccountMultiSelect, CompanyBadge, fmtSigned } from "./AccountMultiSelect";
+import { AccountPreviewRow } from "./AccountPreviewRow";
+import { useAccountMigrationState } from "./useAccountMigrationState";
 
 export default function AccountMigration() {
-  const { toast } = useToast();
-
-  const [srcCompanyId, setSrcCompanyId] = useState<string>("");
-  const [destCompanyId, setDestCompanyId] = useState<string>("");
-  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [undoTarget, setUndoTarget] = useState<PendingMigration | null>(null);
-
   const {
-    data: companies = [],
-    isLoading: loadingCompanies,
-    isError: companiesError,
-    refetch: refetchCompanies,
-  } = useQuery<Company[]>({
-    queryKey: ["/api/admin/account-migration/companies"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/account-migration/companies", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Failed to load companies (${res.status})`);
-      }
-      const body = await res.json();
-      return Array.isArray(body) ? body : Array.isArray(body?.companies) ? body.companies : [];
-    },
-    staleTime: 0,
-  });
-
-  const {
-    data: srcAccounts = [],
-    isLoading: loadingSrcAccounts,
-    isError: srcAccountsError,
-    error: srcAccountsQueryError,
-    refetch: refetchSrcAccounts,
-  } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/admin/account-migration/accounts", srcCompanyId],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Failed to load accounts (${res.status})`);
-      }
-      const body = await res.json();
-      return Array.isArray(body) ? body : Array.isArray(body?.accounts) ? body.accounts : [];
-    },
-    enabled: !!srcCompanyId,
-  });
-
-  const {
-    data: pendingMigrationsResponse,
-    isLoading: loadingPending,
-    isError: pendingError,
-    refetch: refetchPendingMigrations,
-  } = useQuery<PendingMigration[]>({
-    queryKey: ["/api/admin/account-migration/pending"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/account-migration/pending", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Failed to load active migrations (${res.status})`);
-      }
-      // Keep only well-formed rows: a malformed payload must not crash the page.
-      const data: unknown = await res.json();
-      return Array.isArray(data)
-        ? (data.filter(
-            (row) => row && typeof row === "object" && Array.isArray((row as PendingMigration).accounts)
-          ) as PendingMigration[])
-        : [];
-    },
-    staleTime: 0,
-  });
-
-  const pendingMigrations: PendingMigration[] = Array.isArray(pendingMigrationsResponse)
-    ? pendingMigrationsResponse
-    : [];
-
-  const previewMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/account-migration/preview", {
-        accountIds: selectedAccountIds,
-        srcCompanyId: parseInt(srcCompanyId),
-        destCompanyId: parseInt(destCompanyId),
-      });
-      return res.json() as Promise<PreviewResult>;
-    },
-    onSuccess: (data) => setPreview(data),
-    onError: (err: Error) => {
-      if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Preview failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const executeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/account-migration/execute", {
-        accountIds: selectedAccountIds,
-        srcCompanyId: parseInt(srcCompanyId),
-        destCompanyId: parseInt(destCompanyId),
-      });
-      return res.json() as Promise<ExecuteResult>;
-    },
-    onSuccess: (data) => {
-      void refetchPendingMigrations();
-      setConfirmOpen(false);
-      setPreview(null);
-      setSelectedAccountIds([]);
-      setSrcCompanyId("");
-      setDestCompanyId("");
-      const count = data.accounts.length;
-      toast({
-        title: "Migration complete",
-        description: `${count} account${count === 1 ? "" : "s"} moved with ${data.totalEntries} entries.`,
-      });
-    },
-    onError: (err: Error) => {
-      if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      setConfirmOpen(false);
-      toast({ title: "Migration failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const undoMutation = useMutation({
-    mutationFn: async () => {
-      if (!undoTarget) throw new Error("Select a migration to move back");
-      const res = await apiRequest("POST", "/api/admin/account-migration/undo", {
-        accounts: undoTarget.accounts.map((a) => ({
-          accountId: a.accountId,
-          originalCode: a.originalCode,
-        })),
-        movedVoucherIds: undoTarget.movedVoucherIds,
-        srcCompanyId: undoTarget.srcCompanyId,
-        destCompanyId: undoTarget.destCompanyId,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      const returnedCount = undoTarget?.accounts.length ?? 0;
-      setUndoTarget(null);
-      void refetchPendingMigrations();
-      toast({
-        title: "Account moved back",
-        description: `${returnedCount} account${returnedCount === 1 ? "" : "s"} returned to the original company.`,
-      });
-    },
-    onError: (err: Error) => {
-      if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Move back failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const srcCompany = companies.find((c) => String(c.id) === srcCompanyId);
-  const destCompany = companies.find((c) => String(c.id) === destCompanyId);
-  const canPreview =
-    !!srcCompanyId && !!destCompanyId && selectedAccountIds.length > 0 && srcCompanyId !== destCompanyId;
+    canPreview,
+    companies,
+    companiesError,
+    confirmOpen,
+    destCompany,
+    destCompanyId,
+    executeMutation,
+    loadingCompanies,
+    loadingPending,
+    loadingSrcAccounts,
+    pendingError,
+    pendingMigrations,
+    preview,
+    previewMutation,
+    refetchCompanies,
+    refetchPendingMigrations,
+    refetchSrcAccounts,
+    selectedAccountIds,
+    setConfirmOpen,
+    setDestCompanyId,
+    setPreview,
+    setSelectedAccountIds,
+    setSrcCompanyId,
+    setUndoTarget,
+    srcAccounts,
+    srcAccountsError,
+    srcAccountsQueryError,
+    srcCompany,
+    srcCompanyId,
+    undoMutation,
+    undoTarget,
+  } = useAccountMigrationState();
 
   return (
     <div className="space-y-6">
@@ -643,9 +222,7 @@ export default function AccountMigration() {
               </div>
               <div className="rounded-md border p-3">
                 <p className="text-xs text-muted-foreground">Closing balance to transfer</p>
-                <p className="text-xl font-semibold font-mono">
-                  {fmtSigned(preview.grandClosing)}
-                </p>
+                <p className="text-xl font-semibold font-mono">{fmtSigned(preview.grandClosing)}</p>
               </div>
             </div>
             <div className="space-y-2">

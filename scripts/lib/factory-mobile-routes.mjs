@@ -145,7 +145,9 @@ export const SEEDED_ROUTES = [
   { key: "account", path: (s) => `/factory/ledger-monthly/${s.account}` },
   { key: "account", path: (s) => `/factory/ledger-vouchers/${s.account}/2026/9` },
   { key: "voucher", path: (s) => `/factory/voucher-detail/${s.voucher}` },
-  { key: "voucher", path: (s) => `/factory/vouchers/${s.voucher}/edit` },
+  // The separate /factory/vouchers/:id/edit page is retired (UI unification phase 9a); old links
+  // forward to the Vouchers editor the Daybook Edit button opens, so the editor is checked directly.
+  { key: "voucher", path: (s) => `/factory/vouchers?edit=${s.voucher}&tab=journal&from=daybook` },
   { key: "openingBalance", path: (s) => `/factory/raw-stock/opening-balance/${s.openingBalance}/edit` },
 ];
 

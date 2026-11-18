@@ -7,10 +7,10 @@
  * voucher), and expose safe staged SQLSTATE diagnostics if PostgreSQL refuses
  * a snapshot. Never change inventory or auto-approve as a fallback.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (p: string) => readModuleFamily(path.join(process.cwd(), p));
 const batch = read("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
 const route = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const workbook = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
@@ -45,11 +45,19 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
 
   it("labels every snapshot database operation and logs safe PostgreSQL type diagnostics", () => {
     for (const step of [
-      "read_approval_settings", "read_destination_recipient", "lock_and_read_eligible_orders",
-      "check_active_reservations", "read_pending_revisions", "read_current_stock_transfer_lines",
-      "insert_batch_header", "insert_batch_order_item", "insert_batch_revision",
-      "insert_draft_audit_event", "commit_snapshot_transaction",
-    ]) expect(batch).toContain("failedStep = \"" + step + "\"");
+      "read_approval_settings",
+      "read_destination_recipient",
+      "lock_and_read_eligible_orders",
+      "check_active_reservations",
+      "read_pending_revisions",
+      "read_current_stock_transfer_lines",
+      "insert_batch_header",
+      "insert_batch_order_item",
+      "insert_batch_revision",
+      "insert_draft_audit_event",
+      "commit_snapshot_transaction",
+    ])
+      expect(batch).toContain('failedStep = "' + step + '"');
     expect(route).toContain("function stockTransferApprovalSqlFailure(error: unknown)");
     expect(route).toContain("sqlFailure.sqlState");
     expect(route).toContain("sqlFailure.dataType");
@@ -66,7 +74,7 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
   it("preserves duplicate prevention, uncertain sends and human review", () => {
     expect(route).toContain('sent.outcome==="failed"');
     expect(route).toContain("sendUncertain=true");
-    expect(route).toContain("await setBatchStatus(a.companyId,draft.batchId,\"requested\"");
+    expect(route).toContain('await setBatchStatus(a.companyId,draft.batchId,"requested"');
     expect(route).not.toContain("approveImmutableStockTransferRevision(");
     expect(route).not.toContain("UPDATE stock_transfer_revisions SET status");
     expect(route).not.toContain("sendWhatsAppFileToChatId(");

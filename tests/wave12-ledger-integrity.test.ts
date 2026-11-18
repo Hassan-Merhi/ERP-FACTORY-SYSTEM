@@ -16,26 +16,24 @@
  *     and is audited.
  */
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 
 import { pool } from "../server/db";
 import { accountTypeNamesOf } from "../server/services/accounting/accountClassification";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
-import { ensureLedgerIntegrityGuard } from "../server/services/accounting/ledgerIntegrityGuard";
 import {
-  ensureOpeningBalanceLock,
+  installedOpeningBalanceLockVersion,
   OPENING_BALANCE_LOCK_TABLES,
+  OPENING_BALANCE_LOCK_VERSION,
   openingBalanceLockTriggerName,
 } from "../server/services/accounting/openingBalanceLock";
-import { ensureInventoryCutoverSchema } from "../server/services/accounting/perpetualInventory/cutover";
 import {
-  ensureVoucherBalanceGuard,
   installedVoucherBalanceGuardVersion,
   VOUCHER_BALANCE_GUARD_TRIGGERS,
   VOUCHER_BALANCE_GUARD_VERSION,
 } from "../server/services/accounting/voucherBalanceGuard";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { hasTrigger } from "./helpers/schemaManifest";
 import { normalizedLineFields } from "./helpers/normalizedVoucherLine";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -136,11 +134,6 @@ async function setRole(role: string) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  expect(await ensureInventoryCutoverSchema(pool)).toBe(true);
-  await ensureClosedPeriodGuard(pool);
-  expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
-  expect(await ensureOpeningBalanceLock(pool)).toBe(true);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
@@ -149,13 +142,6 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
-  // The rest of the suite writes fixtures freely: remove the guards this file installed.
-  for (const [table, trigger] of VOUCHER_BALANCE_GUARD_TRIGGERS) {
-    await pool.query(`DROP TRIGGER IF EXISTS ${trigger} ON ${table}`);
-  }
-  for (const table of OPENING_BALANCE_LOCK_TABLES) {
-    await pool.query(`DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table}`);
-  }
   const companies = [ctx.companyId, importCompanyId].filter(Boolean);
   await withFixtureTransaction(async (client) => {
     await client.query(`SET LOCAL app.closed_period_override = 'on'`);
@@ -651,25 +637,15 @@ describe("company import", () => {
   });
 });
 
-describe("installers", () => {
-  it("are idempotent", async () => {
-    expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
-    expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
+describe("schema-defined guards", () => {
+  it("are present at their current versions (defined by the schema migrations)", async () => {
     expect(await installedVoucherBalanceGuardVersion(pool)).toBe(VOUCHER_BALANCE_GUARD_VERSION);
-    expect(await ensureOpeningBalanceLock(pool)).toBe(true);
-  });
-
-  it("are fatal on failure, rolling back and releasing the connection", async () => {
-    for (const install of [ensureVoucherBalanceGuard, ensureOpeningBalanceLock]) {
-      const release = vi.fn();
-      const query = vi.fn(async (text: string) => {
-        if (/CREATE|ALTER|DO \$/.test(text)) throw new Error("lock timeout");
-        return { rows: [] };
-      });
-      const fakePool = { connect: async () => ({ query, release }) } as never;
-      await expect(install(fakePool)).rejects.toThrow(/lock timeout/);
-      expect(query).toHaveBeenCalledWith("ROLLBACK");
-      expect(release).toHaveBeenCalledTimes(1);
+    expect(await installedOpeningBalanceLockVersion(pool)).toBe(OPENING_BALANCE_LOCK_VERSION);
+    for (const [table, trigger] of VOUCHER_BALANCE_GUARD_TRIGGERS) {
+      expect(hasTrigger(table, trigger), `${table}.${trigger}`).toBe(true);
+    }
+    for (const table of OPENING_BALANCE_LOCK_TABLES) {
+      expect(hasTrigger(table, openingBalanceLockTriggerName(table)), table).toBe(true);
     }
   });
 });

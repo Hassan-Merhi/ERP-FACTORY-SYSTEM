@@ -15,7 +15,7 @@ const scripts = [
   "001_intercompany_phase1_foundation",
   "002_intercompany_phase2_import",
   "003_intercompany_phase3_sync",
-].map((name) => readFileSync(join(process.cwd(), "migrations", "20261105_" + name + ".sql"), "utf8"));
+].map((name) => readFileSync(join(process.cwd(), "migrations/archive/legacy", "20261105_" + name + ".sql"), "utf8"));
 
 describe("Phase 3 intercompany linked edit migration guards", () => {
   it("registers every source/destination revision and shared-charge table", () => {
@@ -29,7 +29,7 @@ describe("Phase 3 intercompany linked edit migration guards", () => {
       expect(getTableConfig(table).name).toBe(name);
       expect(scripts[2]).toContain("CREATE TABLE IF NOT EXISTS " + name);
     }
-    const journal = JSON.parse(readFileSync("migrations/meta/_journal.json", "utf8"));
+    const journal = JSON.parse(readFileSync("migrations/archive/legacy/meta/_journal.json", "utf8"));
     expect(
       journal.entries.filter((e: { tag: string }) => e.tag === "20261105_003_intercompany_phase3_sync")
     ).toHaveLength(1);

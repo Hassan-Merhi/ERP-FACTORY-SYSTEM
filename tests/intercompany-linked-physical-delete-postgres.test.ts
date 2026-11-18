@@ -10,7 +10,7 @@ const migrations = [
   "20261105_004_intercompany_phase4_payments.sql",
   "20261105_005_intercompany_phase5_lifecycle.sql",
   "20261113_001_intercompany_pristine_physical_delete.sql",
-].map((name) => readFileSync(join(process.cwd(), "migrations", name), "utf8"));
+].map((name) => readFileSync(join(process.cwd(), "migrations/archive/legacy", name), "utf8"));
 
 describe("pristine linked PO deletion in both companies", () => {
   it("physically removes original source and destination POs/vouchers without reversal, preserving unrelated records", async () => {

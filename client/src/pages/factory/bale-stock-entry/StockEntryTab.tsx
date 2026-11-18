@@ -1,735 +1,142 @@
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { History, Plus, Package } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
-import { queryClient } from "@/lib/queryClient";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useFormDraft } from "@/hooks/useFormDraft";
-import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
 import { getPaperFormat } from "@/components/LabelPrintSettings";
-import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import {
-  generateCombinedLabelsHtml,
-  generateA5LabelsHtml,
-  prefetchBannersForPrint,
-  type LabelData,
-} from "@/lib/labelHtml";
-import type { FactoryBaleProduct, Location, FactoryCategory } from "@shared/schema";
-import { productMatchesSearch } from "@shared/factoryProductSearch";
-
-import { StockEntryCart } from "./StockEntryCart";
-import type { WorkerCategoryRow, WorkerOption } from "./types";
+import { generateCombinedLabelsHtml, generateA5LabelsHtml, prefetchBannersForPrint } from "@/lib/labelHtml";
 import {
   ConfirmStockEntryDialog,
   QuickCreateProductDialog,
   DesignPickerDialog,
   AdminAuthDialog,
 } from "./StockEntryDialogs";
-import { StockEntryScanner } from "./StockEntryScanner";
 import { StockEntrySidebar } from "./StockEntrySidebar";
-import { openBrowserPrint, printLabels } from "./StockEntryPrinting";
-import {
-  StockEntryProductionPositions,
-  eligibleProductionPositions,
-  type StockEntryProductionPosition,
-} from "./StockEntryProductionPositions";
+import { openBrowserPrint } from "./StockEntryPrinting";
+import type { StockEntryTabProps } from "./useStockEntryTabStatePart1";
+import { useStockEntryTabState } from "./useStockEntryTabState";
+import { StockEntryTabSection } from "./StockEntryTabSection";
 
-interface CartItem {
-  productId: number;
-  product: FactoryBaleProduct;
-  qty: number;
-  weightPerBaleKg: number;
-  finalizedBy: number | null;
-  overrideLogoId: number | null;
-}
-
-const MAX_ITEMS_PER_ENTRY = 2;
-
-function capCartToItemLimit(items: CartItem[]): CartItem[] {
-  return items.filter((item) => item.qty > 0).slice(0, MAX_ITEMS_PER_ENTRY);
-}
-
-interface StockEntryTabProps {
-  showHistory?: boolean;
-  onOpenHistory?: () => void;
-}
-
-export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntryTabProps) {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [scanInput, setScanInput] = useState("");
-  const [scanError, setScanError] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [entryDate, setEntryDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("none");
-  const [selectedLogoId, setSelectedLogoId] = useState<number | null>(null);
-  const [productionPositionByProduct, setProductionPositionByProduct] = useState<Record<number, number | null>>({});
-  const scanRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  const { language } = useApplicationLanguage();
-  const tr = (key: ApplicationTranslationKey) => translateApplicationText(key, language);
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { selectedCompany } = useCompany();
-  const { colors: designColors } = useLabelDesignColors();
-
+export function StockEntryTab(props: StockEntryTabProps) {
   const {
-    hasDraft: hasCartDraft,
-    draftAge: cartDraftAge,
-    draft: cartDraft,
-    scheduleSave: scheduleCartSave,
-    discardDraft: discardCartDraft,
-  } = useFormDraft({
-    entityType: "factory-stock-entry-cart",
-    mode: "factory",
-    companyId: selectedCompany?.id ?? null,
-  });
-
-  useEffect(() => {
-    if (cart.length > 0 || selectedLocationId) {
-      scheduleCartSave({
-        cart: cart.map((i) => ({
-          productId: i.productId,
-          productName: i.product.name,
-          qty: i.qty,
-          weightPerBaleKg: i.weightPerBaleKg,
-          finalizedBy: i.finalizedBy,
-          overrideLogoId: i.overrideLogoId,
-        })),
-        productionPositionByProduct,
-        selectedLocationId,
-        entryDate,
-        selectedCustomerId,
-        selectedLogoId,
-      });
-    }
-  }, [
+    activeCategories,
+    activeLocations,
+    adminAuthOpen,
+    allCustomers,
+    assignProductionPosition,
+    assignWorker,
+    baleProducts,
     cart,
-    productionPositionByProduct,
-    selectedLocationId,
+    cartDraft,
+    cartDraftAge,
+    confirmDialogOpen,
+    designColors,
+    designPickerOpen,
+    discardCartDraft,
     entryDate,
+    filteredProducts,
+    filteredWorkers,
+    handleConfirmClick,
+    handleScan,
+    handleScanKeyDown,
+    hasCartDraft,
+    logoPickerOpen,
+    onOpenHistory,
+    pendingCreateName,
+    pendingPrintLabels,
+    preOpenedWindowsRef,
+    productionPositionByProduct,
+    productionPositions,
+    quickCreateCategoryId,
+    quickCreateGrade,
+    quickCreateMutation,
+    quickCreateName,
+    quickCreateOpen,
+    quickCreateWeight,
+    removeItem,
+    scanError,
+    scanInput,
+    scanRef,
+    selectProduct,
     selectedCustomerId,
+    selectedLocationId,
     selectedLogoId,
-    scheduleCartSave,
-  ]);
-
-  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products?profile=picker"],
-  });
-  useQuery({ queryKey: ["/api/auth/me"] });
-  const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data: categories } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
-
-  const { data: workers = [] } = useQuery<WorkerOption[]>({
-    queryKey: ["/api/factory/workers?profile=picker"],
-    enabled: cart.length > 0,
-  });
-  const { data: workerCategoryGroups = [] } = useQuery<WorkerCategoryRow[]>({
-    queryKey: ["/api/factory/worker-categories"],
-    queryFn: () => fetch("/api/factory/worker-categories", { credentials: "include" }).then((r) => r.json()),
-    enabled: cart.length > 0,
-  });
-  const { data: productionPositions = [], isLoading: productionPositionsLoading } = useQuery<
-    StockEntryProductionPosition[]
-  >({
-    queryKey: ["/api/factory/production-positions", entryDate],
-    queryFn: async () => {
-      const response = await fetch(`/api/factory/production-positions?asOf=${encodeURIComponent(entryDate)}`, {
-        credentials: "include",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.message || "Failed to load production positions");
-      return payload as StockEntryProductionPosition[];
-    },
-    enabled: cart.length > 0,
-    staleTime: 30000,
-  });
-  const { data: allCustomers = [] } = useQuery({
-    queryKey: ["/api/factory/customers"],
-    queryFn: () => fetch("/api/factory/customers", { credentials: "include" }).then((r) => r.json()),
-  });
-
-  const [workerCategoryFilter, setWorkerCategoryFilter] = useState("all");
-  const [workerCategoryFilterManual, setWorkerCategoryFilterManual] = useState(false);
-
-  useEffect(() => {
-    if (workerCategoryGroups.length > 0 && !workerCategoryFilterManual) {
-      const pressing = workerCategoryGroups.find((c) => c.name?.toLowerCase().includes("pressing"));
-      if (pressing) {
-        setWorkerCategoryFilter(String(pressing.id));
-      }
-    }
-  }, [workerCategoryGroups, workerCategoryFilterManual]);
-
-  const filteredWorkers =
-    workerCategoryFilter === "all"
-      ? workers.filter((w) => w.active !== false)
-      : (() => {
-          const cat = workerCategoryGroups.find((c) => String(c.id) === workerCategoryFilter);
-          if (!cat) return workers.filter((w) => w.active !== false);
-          const ids = Array.isArray(cat.workerIds) ? cat.workerIds : [];
-          return workers.filter((w) => w.active !== false && ids.includes(w.id));
-        })();
-
-  // Keep attribution valid when the entry date, membership configuration, cart,
-  // or selected worker changes. While a new date is loading we preserve the
-  // current choice; once its memberships arrive, invalid choices are cleared and
-  // a single eligible position is selected automatically.
-  useEffect(() => {
-    if (productionPositionsLoading) return;
-    setProductionPositionByProduct((current) => {
-      const next = { ...current };
-      let changed = false;
-      const productIds = new Set(cart.map((item) => item.productId));
-
-      for (const key of Object.keys(next)) {
-        const productId = Number(key);
-        if (!productIds.has(productId)) {
-          delete next[productId];
-          changed = true;
-        }
-      }
-
-      for (const item of cart) {
-        const eligible = eligibleProductionPositions(productionPositions, item.finalizedBy);
-        const existing = next[item.productId] ?? null;
-        const existingIsValid = existing != null && eligible.some((position) => position.id === existing);
-        const desired = !item.finalizedBy
-          ? null
-          : existingIsValid
-            ? existing
-            : eligible.length === 1
-              ? eligible[0].id
-              : null;
-        if (existing !== desired) {
-          next[item.productId] = desired;
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [cart, productionPositions, productionPositionsLoading]);
-
-  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-  const [quickCreateName, setQuickCreateName] = useState("");
-  const [quickCreateCategoryId, setQuickCreateCategoryId] = useState("");
-  const [quickCreateWeight, setQuickCreateWeight] = useState("");
-  const [quickCreateGrade, setQuickCreateGrade] = useState("");
-  const [adminAuthOpen, setAdminAuthOpen] = useState(false);
-  const [pendingAdminAuth, setPendingAdminAuth] = useState<{ username: string; password: string } | null>(null);
-  const [pendingCreateName, setPendingCreateName] = useState("");
-
-  const activeCategories = (categories || []).filter((c) => c.isActive);
-
-  const quickCreateMutation = useMutation({
-    mutationFn: async () => {
-      const body: {
-        name: string;
-        categoryId?: number;
-        weightPerBaleKg?: string;
-        grade?: string;
-        adminAuth?: { username: string; password: string };
-      } = {
-        name: quickCreateName,
-      };
-      if (quickCreateCategoryId) body.categoryId = parseInt(quickCreateCategoryId);
-      if (quickCreateWeight) body.weightPerBaleKg = quickCreateWeight;
-      if (quickCreateGrade) body.grade = quickCreateGrade;
-      if (pendingAdminAuth) body.adminAuth = pendingAdminAuth;
-      const response = await modeApiRequest("POST", "/api/factory/bale-products", body);
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || "Failed to create product");
-      }
-      return await response.json();
-    },
-    onSuccess: (newProduct: FactoryBaleProduct) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products?profile=picker"] });
-      toast({
-        title: "Product Created",
-        description: `"${newProduct.name}" created with article code ${newProduct.articleCode}`,
-      });
-      setQuickCreateOpen(false);
-      setQuickCreateName("");
-      setQuickCreateCategoryId("");
-      setQuickCreateWeight("");
-      setQuickCreateGrade("");
-      setPendingAdminAuth(null);
-      setPendingCreateName("");
-      setScanInput("");
-      setShowDropdown(false);
-      const defaultWeight = newProduct.weightPerBaleKg ? parseFloat(newProduct.weightPerBaleKg) : 25;
-      if (cart.length >= MAX_ITEMS_PER_ENTRY) {
-        toast({
-          title: tr("factory.stockEntry.baleLimitReached"),
-          description: tr("factory.stockEntry.finishBeforeAdding"),
-          variant: "destructive",
-        });
-        return;
-      }
-      setCart((prev) => {
-        if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
-        return [
-          ...prev,
-          {
-            productId: newProduct.id,
-            product: newProduct,
-            qty: 1,
-            weightPerBaleKg: defaultWeight,
-            finalizedBy: null,
-            overrideLogoId: null,
-          },
-        ];
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const activeProducts = (baleProducts || []).filter((p) => p.active);
-  const activeLocations = (locations || []).filter((l) => l.active);
-
-  useEffect(() => {
-    if (activeLocations && activeLocations.length === 1 && !selectedLocationId) {
-      setSelectedLocationId(activeLocations[0].id.toString());
-    }
-  }, [activeLocations, selectedLocationId]);
-
-  useEffect(() => {
-    const active = document.activeElement;
-    const isOtherInputFocused =
-      active &&
-      active !== scanRef.current &&
-      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
-    if (scanRef.current && !isOtherInputFocused) scanRef.current.focus();
-  }, [cart]);
-
-  const handleScan = (value: string) => {
-    if (!value.trim()) return;
-    setScanError("");
-
-    const trimmed = value.trim().toLowerCase();
-    const product = activeProducts?.find(
-      (p) => p.articleCode?.toLowerCase() === trimmed || p.code.toLowerCase() === trimmed
-    );
-
-    if (!product) {
-      setScanError(`Unknown product: "${value}"`);
-      setScanInput("");
-      return;
-    }
-
-    const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
-    const existingInCart = cart.some((item) => item.productId === product.id);
-    if (!existingInCart && cart.length >= MAX_ITEMS_PER_ENTRY) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
-        variant: "destructive",
-      });
-      setScanInput("");
-      return;
-    }
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id);
-      if (existing) {
-        return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
-      }
-      if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          product,
-          qty: 1,
-          weightPerBaleKg: defaultWeight,
-          finalizedBy: null,
-          overrideLogoId: null,
-        },
-      ];
-    });
-
-    setScanInput("");
-  };
-
-  const handleScanKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleScan(scanInput);
-    }
-  };
-
-  const filteredProducts =
-    scanInput.trim().length > 0
-      ? (activeProducts || []).filter((p) => productMatchesSearch(p, scanInput)).slice(0, 1000)
-      : [];
-
-  const selectProduct = (product: FactoryBaleProduct) => {
-    const existingInCart = cart.some((item) => item.productId === product.id);
-    if (!existingInCart && cart.length >= MAX_ITEMS_PER_ENTRY) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
-        variant: "destructive",
-      });
-      setScanInput("");
-      setScanError("");
-      setShowDropdown(false);
-      return;
-    }
-    const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id);
-      if (existing) {
-        return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
-      }
-      if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          product,
-          qty: 1,
-          weightPerBaleKg: defaultWeight,
-          finalizedBy: null,
-          overrideLogoId: null,
-        },
-      ];
-    });
-    setScanInput("");
-    setScanError("");
-    setShowDropdown(false);
-  };
-
-  const updateQty = (productId: number, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((item) => (item.productId === productId ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
-        .filter((item) => item.qty > 0)
-    );
-  };
-
-  const setQty = (productId: number, qty: number) => {
-    if (qty <= 0) {
-      setCart((prev) => prev.filter((item) => item.productId !== productId));
-      setProductionPositionByProduct((prev) => {
-        if (!(productId in prev)) return prev;
-        const next = { ...prev };
-        delete next[productId];
-        return next;
-      });
-    } else {
-      setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)));
-    }
-  };
-
-  const updateWeight = (productId: number, weight: number) => {
-    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, weightPerBaleKg: weight } : item)));
-  };
-
-  const removeItem = (productId: number) => {
-    setCart((prev) => prev.filter((item) => item.productId !== productId));
-    setProductionPositionByProduct((prev) => {
-      if (!(productId in prev)) return prev;
-      const next = { ...prev };
-      delete next[productId];
-      return next;
-    });
-  };
-
-  const assignWorker = (productId: number, workerId: number | null) => {
-    const eligible = eligibleProductionPositions(productionPositions, workerId);
-    const autoPositionId = eligible.length === 1 ? eligible[0].id : null;
-    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, finalizedBy: workerId } : item)));
-    setProductionPositionByProduct((prev) => ({ ...prev, [productId]: autoPositionId }));
-  };
-
-  const assignProductionPosition = (productId: number, positionId: number | null) => {
-    setProductionPositionByProduct((prev) => ({ ...prev, [productId]: positionId }));
-  };
-
-  const setLogoOverride = (productId: number, logoId: number | null) => {
-    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, overrideLogoId: logoId } : item)));
-  };
-
-  const [logoPickerOpen, setLogoPickerOpen] = useState<number | null>(null);
-
-  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-  const totalKg = cart.reduce((sum, item) => sum + item.qty * item.weightPerBaleKg, 0);
-
-  const handleConfirmClick = () => {
-    if (!selectedLocationId) {
-      toast({
-        title: "Missing information",
-        description: "Please select a warehouse location",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (cart.length === 0) {
-      toast({ title: "Missing information", description: "Please add items to the cart", variant: "destructive" });
-      return;
-    }
-    if (cart.length > MAX_ITEMS_PER_ENTRY) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimitReduceQuantity"),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (cart.some((item) => !!item.finalizedBy) && productionPositionsLoading) {
-      toast({
-        title: "Production positions are still loading",
-        description: "The worker-to-position assignments must be loaded before Stock Entry can be saved.",
-        variant: "destructive",
-      });
-      return;
-    }
-    for (const item of cart) {
-      if (!item.finalizedBy) continue;
-      const eligible = eligibleProductionPositions(productionPositions, item.finalizedBy);
-      const selectedId = productionPositionByProduct[item.productId] ?? null;
-      const selectedIsValid = selectedId != null && eligible.some((position) => position.id === selectedId);
-      if (eligible.length > 1 && !selectedIsValid) {
-        toast({
-          title: "Production Position required",
-          description: `${item.product.name} is assigned to a worker who belongs to multiple production positions. Choose the correct position first.`,
-          variant: "destructive",
-        });
-        return;
-      }
-      if (selectedId != null && !selectedIsValid) {
-        toast({
-          title: "Production Position changed",
-          description: `The saved position for ${item.product.name} is no longer valid on ${entryDate}. Choose it again.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-    setConfirmDialogOpen(true);
-  };
-
-  const [designPickerOpen, setDesignPickerOpen] = useState(false);
-  const [pendingPrintLabels, setPendingPrintLabels] = useState<LabelData[] | null>(null);
-  const preOpenedWindowsRef = useRef<{ a4: Window | null; sticker: Window | null } | null>(null);
-
-  const stockEntryMutation = useMutation({
-    mutationFn: async () => {
-      if (cart.length > MAX_ITEMS_PER_ENTRY) {
-        throw new Error(tr("factory.stockEntry.baleLimit"));
-      }
-      const response = await modeApiRequest("POST", "/api/factory/stock-entry", {
-        erpLocationId: parseInt(selectedLocationId),
-        items: cart.map((item) => ({
-          productId: item.productId,
-          qty: item.qty,
-          weightPerBaleKg: item.weightPerBaleKg,
-          finalizedBy: item.finalizedBy,
-          productionPositionId: productionPositionByProduct[item.productId] ?? null,
-        })),
-        entryDate,
-        customerId: selectedCustomerId !== "none" ? parseInt(selectedCustomerId) : null,
-        logoId: selectedLogoId,
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || "Failed to record stock entry");
-      }
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
-      const allocated = Number(data.autoPrioritySummary?.allocated ?? 0);
-      const leftInStock = Number(data.autoPrioritySummary?.leftInStock ?? data.bales.length - allocated);
-      toast({
-        title: "Stock Entry Recorded",
-        description:
-          allocated > 0
-            ? `${data.bales.length} bale(s) received; ${allocated} automatically loaded, ${leftInStock} kept unallocated in stock.`
-            : `${data.bales.length} bale(s) received into inventory; no automatic loading required.`,
-      });
-      if (data.automaticPriorityModeEnabled && allocated > 0) {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"],
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-route"],
-        });
-        void queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
-      }
-      void printLabels(
-        data.bales,
-        cart,
-        baleProducts,
-        selectedLogoId,
-        modeApiRequest,
-        toast,
-        preOpenedWindowsRef,
-        data.autoPriorityAllocations ?? [],
-        data.automaticPriorityModeEnabled === true
-      );
-      setCart([]);
-      setProductionPositionByProduct({});
-      setConfirmDialogOpen(false);
-      discardCartDraft();
-    },
-    onError: (error: Error) => {
-      // Printing windows were opened before the asynchronous Stock Entry request.
-      // Close them on failure instead of leaving two permanent about:blank tabs.
-      const preOpened = preOpenedWindowsRef.current;
-      preOpenedWindowsRef.current = null;
-      if (preOpened?.a4 && !preOpened.a4.closed) preOpened.a4.close();
-      if (preOpened?.sticker && !preOpened.sticker.closed) preOpened.sticker.close();
-      toast({ title: "Stock Entry failed — labels not printed", description: error.message, variant: "destructive" });
-    },
-  });
+    setAdminAuthOpen,
+    setCart,
+    setConfirmDialogOpen,
+    setDesignPickerOpen,
+    setEntryDate,
+    setLogoOverride,
+    setLogoPickerOpen,
+    setPendingAdminAuth,
+    setPendingCreateName,
+    setPendingPrintLabels,
+    setProductionPositionByProduct,
+    setQty,
+    setQuickCreateCategoryId,
+    setQuickCreateGrade,
+    setQuickCreateName,
+    setQuickCreateOpen,
+    setQuickCreateWeight,
+    setScanInput,
+    setSelectedCustomerId,
+    setSelectedLocationId,
+    setSelectedLogoId,
+    setShowDropdown,
+    setWorkerCategoryFilter,
+    setWorkerCategoryFilterManual,
+    showDropdown,
+    showHistory,
+    stockEntryMutation,
+    totalKg,
+    totalQty,
+    updateQty,
+    updateWeight,
+    workerCategoryFilter,
+    workerCategoryGroups,
+    workers,
+  } = useStockEntryTabState(props);
 
   return (
     <div className="stock-entry-workspace grid grid-cols-1 items-start gap-5 xl:grid-cols-12 xl:gap-6">
-      <div className="stock-entry-main min-w-0 space-y-4 xl:col-span-8">
-        <Card className="border-none shadow-none bg-transparent">
-          <CardHeader className="stock-entry-page-heading px-0 pb-4 pt-0">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <div className="stock-entry-heading-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sky-500">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-lg font-extrabold tracking-tight sm:text-xl">
-                    New Production Entry
-                  </CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Scan products to add production bales</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {showHistory && onOpenHistory && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="stock-entry-toolbar-button h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold"
-                    onClick={onOpenHistory}
-                    data-testid="button-stock-entry-history"
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    History
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="stock-entry-toolbar-button h-9 gap-1.5 rounded-xl border px-3 text-xs font-semibold"
-                  onClick={() => {
-                    setAdminAuthOpen(true);
-                    setPendingCreateName("");
-                  }}
-                  data-testid="button-quick-create"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Quick Create Product
-                </Button>
-                {hasCartDraft && (
-                  <DraftRestorePrompt
-                    draftAge={cartDraftAge ?? ""}
-                    onRestore={() => {
-                      const draftData = cartDraft?.data as
-                        | {
-                            cart?: CartItem[];
-                            productionPositionByProduct?: Record<number, number | null>;
-                            selectedLocationId?: string;
-                            entryDate?: string;
-                            selectedCustomerId?: string;
-                            selectedLogoId?: number | null;
-                          }
-                        | undefined;
-                      if (draftData?.cart) {
-                        const restored = draftData.cart
-                          .map((i) => {
-                            const p = baleProducts?.find((bp) => bp.id === i.productId);
-                            return {
-                              ...i,
-                              finalizedBy: i.finalizedBy ?? null,
-                              overrideLogoId: i.overrideLogoId ?? null,
-                              product: p,
-                            };
-                          })
-                          .filter((i): i is CartItem => !!i.product);
-                        setCart(capCartToItemLimit(restored));
-                      }
-                      if (draftData?.productionPositionByProduct) {
-                        setProductionPositionByProduct(draftData.productionPositionByProduct);
-                      }
-                      if (draftData?.selectedLocationId) setSelectedLocationId(draftData.selectedLocationId);
-                      if (draftData?.entryDate) setEntryDate(draftData.entryDate);
-                      if (draftData?.selectedCustomerId) setSelectedCustomerId(draftData.selectedCustomerId);
-                      if (draftData && "selectedLogoId" in draftData)
-                        setSelectedLogoId(draftData.selectedLogoId ?? null);
-                      discardCartDraft();
-                    }}
-                    onDiscard={discardCartDraft}
-                  />
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="stock-entry-content space-y-4 px-0">
-            <div className="stock-entry-scan-shell">
-              <StockEntryScanner
-                scanRef={scanRef}
-                scanInput={scanInput}
-                onScanInputChange={(val) => {
-                  setScanInput(val);
-                  setShowDropdown(true);
-                }}
-                onScanKeyDown={handleScanKeyDown}
-                onCameraScan={handleScan}
-                scanError={scanError}
-                showDropdown={showDropdown}
-                filteredProducts={filteredProducts}
-                onSelectProduct={selectProduct}
-              />
-            </div>
-
-            <div className="stock-entry-cart-shell">
-              <StockEntryCart
-                cart={cart}
-                workers={workers}
-                workerCategoryFilter={workerCategoryFilter}
-                onUpdateQty={updateQty}
-                onSetQty={setQty}
-                onUpdateWeight={updateWeight}
-                onRemoveItem={removeItem}
-                onAssignWorker={assignWorker}
-                onSetLogoOverride={setLogoOverride}
-                allCustomers={allCustomers}
-                logoPickerOpen={logoPickerOpen}
-                onLogoPickerOpenChange={setLogoPickerOpen}
-                filteredWorkers={filteredWorkers}
-              />
-            </div>
-
-            <StockEntryProductionPositions
-              cart={cart}
-              workers={workers}
-              positions={productionPositions}
-              selectedByProduct={productionPositionByProduct}
-              onSelect={assignProductionPosition}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <StockEntryTabSection
+        allCustomers={allCustomers}
+        assignProductionPosition={assignProductionPosition}
+        assignWorker={assignWorker}
+        baleProducts={baleProducts}
+        cart={cart}
+        cartDraft={cartDraft}
+        cartDraftAge={cartDraftAge}
+        discardCartDraft={discardCartDraft}
+        filteredProducts={filteredProducts}
+        filteredWorkers={filteredWorkers}
+        handleScan={handleScan}
+        handleScanKeyDown={handleScanKeyDown}
+        hasCartDraft={hasCartDraft}
+        logoPickerOpen={logoPickerOpen}
+        onOpenHistory={onOpenHistory}
+        productionPositionByProduct={productionPositionByProduct}
+        productionPositions={productionPositions}
+        removeItem={removeItem}
+        scanError={scanError}
+        scanInput={scanInput}
+        scanRef={scanRef}
+        selectProduct={selectProduct}
+        setAdminAuthOpen={setAdminAuthOpen}
+        setCart={setCart}
+        setEntryDate={setEntryDate}
+        setLogoOverride={setLogoOverride}
+        setLogoPickerOpen={setLogoPickerOpen}
+        setPendingCreateName={setPendingCreateName}
+        setProductionPositionByProduct={setProductionPositionByProduct}
+        setQty={setQty}
+        setScanInput={setScanInput}
+        setSelectedCustomerId={setSelectedCustomerId}
+        setSelectedLocationId={setSelectedLocationId}
+        setSelectedLogoId={setSelectedLogoId}
+        setShowDropdown={setShowDropdown}
+        showDropdown={showDropdown}
+        showHistory={showHistory}
+        updateQty={updateQty}
+        updateWeight={updateWeight}
+        workerCategoryFilter={workerCategoryFilter}
+        workers={workers}
+      />
 
       <div className="stock-entry-options min-w-0 space-y-6 xl:col-span-4">
         <StockEntrySidebar
