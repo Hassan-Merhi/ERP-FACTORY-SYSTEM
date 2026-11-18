@@ -288,6 +288,10 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
       const id = Number(req.params.id);
       if (!cid || !Number.isSafeInteger(id) || id < 1) return next();
       try {
+        const walletTable = await db.execute(sql`
+          SELECT to_regclass('factory_fx_agent_wallets')::text AS name
+        `);
+        if (!walletTable.rows[0]?.name) return next();
         const draft = await db.execute(sql`
           SELECT v.id, to_char(v.voucher_date, 'YYYY-MM-DD') AS date,
             v.description, v.currency,
