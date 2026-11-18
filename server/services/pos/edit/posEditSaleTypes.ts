@@ -59,6 +59,7 @@ export interface UpdatePosSaleParams {
   username: string;
   userRole: string | undefined;
   canSellNegativeStock: boolean;
+  posDaybookEditAuthorization?: { editDays: number; businessDate: string };
   body: {
     description: unknown;
     items: unknown[];
