@@ -17,8 +17,9 @@ for (const token of [
   'data-pos-workspace="true"',
   "max-sm:[&_button]:min-h-11",
   "max-sm:[&_input]:text-base",
-  "pt-[max(0.5rem,env(safe-area-inset-top))]",
-  "pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+  // Phase 9d: POS renders inside the shared shell chrome (#root already pads the safe areas).
+  "<AppTopBar",
+  "<PosSidebar",
 ]) {
   if (!shell.includes(token)) failures.push(`POS shell contract missing: ${token}`);
 }

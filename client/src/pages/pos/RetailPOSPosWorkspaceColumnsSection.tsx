@@ -1,9 +1,10 @@
 // Extracted from ./RetailPOS.tsx to keep that module under the source-size cap.
 import { Percent } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
+import { PosSaleSubmitButton } from "./pos-components/PosSaleHeader";
+import { PosSaleGridWrap, PosSaleNotes, PosSalePanel } from "./pos-components/PosSaleLayout";
 import { RetailErpPosItemPicker, RetailErpPosSaleGrid } from "./RetailErpPosWorkspace";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
 import { RetailLastSaleSummary } from "./RetailPOSPanels";
@@ -87,39 +88,44 @@ export function RetailPOSPosWorkspaceColumnsSection({
   | "total"
   | "units"
 >) {
+  const { t } = useApplicationLanguage();
   return (
     <PosWorkspaceColumns layout="retail">
-      <div className="flex min-w-0 flex-col gap-3">
-        <RetailErpPosSaleGrid
-          cart={cart}
-          pricingLines={ladder?.lines ?? []}
-          units={units}
-          total={total}
-          onDecrease={(variantId) =>
-            setCart((current) =>
-              current.map((line) =>
-                line.variantId === variantId ? { ...line, cartQuantity: Math.max(1, line.cartQuantity - 1) } : line
+      <PosSalePanel className="gap-1">
+        <PosSaleGridWrap>
+          <RetailErpPosSaleGrid
+            cart={cart}
+            pricingLines={ladder?.lines ?? []}
+            units={units}
+            total={total}
+            onDecrease={(variantId) =>
+              setCart((current) =>
+                current.map((line) =>
+                  line.variantId === variantId ? { ...line, cartQuantity: Math.max(1, line.cartQuantity - 1) } : line
+                )
               )
-            )
-          }
-          onIncrease={(line) => {
-            const outcome = addItem(line);
-            setLastScan(outcome);
-            if (outcome.status !== "added") scanBeep(false);
-          }}
-          onAdjust={setAdjustLine}
-          onRemove={(variantId) => setCart((current) => current.filter((line) => line.variantId !== variantId))}
-        />
-        <Textarea
-          placeholder="Notes (optional)"
+            }
+            onIncrease={(line) => {
+              const outcome = addItem(line);
+              setLastScan(outcome);
+              if (outcome.status !== "added") scanBeep(false);
+            }}
+            onAdjust={setAdjustLine}
+            onRemove={(variantId) => setCart((current) => current.filter((line) => line.variantId !== variantId))}
+          />
+        </PosSaleGridWrap>
+        <PosSaleNotes
+          id="retail-pos-notes"
+          label={t("pos.modern.notes")}
+          optionalLabel={t("pos.modern.optional")}
+          placeholder={t("pos.modern.notesPlaceholder")}
           value={notes}
           maxLength={2000}
-          onChange={(event) => setNotes(event.target.value)}
-          className="min-h-12 resize-y text-sm"
-          aria-label="Sale notes"
-          data-testid="retail-pos-notes"
+          onChange={setNotes}
+          testId="retail-pos-notes"
+          className="px-3"
         />
-        <div className="rounded-lg border p-3" aria-label="Retail checkout">
+        <div className="mx-3 mb-3 rounded-lg border bg-background p-3" aria-label="Retail checkout">
           <div className="space-y-2 border-t pt-3">
             <div className="rounded-lg border p-2">
               <button
@@ -250,15 +256,16 @@ export function RetailPOSPosWorkspaceColumnsSection({
               Open a cashier shift before completing this sale.
             </div>
           )}
-          <Button
+          <PosSaleSubmitButton
             type="button"
             size="lg"
             className="mt-3 h-11 w-full"
             disabled={!canCompleteSale}
             onClick={() => saleMutation.mutate()}
-          >
-            {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
-          </Button>
+            pending={saleMutation.isPending}
+            pendingLabel="Completing sale…"
+            label="Complete Sale"
+          />
           {lastSale && (
             <RetailLastSaleSummary
               sale={lastSale}
@@ -268,7 +275,7 @@ export function RetailPOSPosWorkspaceColumnsSection({
             />
           )}
         </div>
-      </div>
+      </PosSalePanel>
       <RetailErpPosItemPicker
         items={itemsQuery.data ?? []}
         loading={itemsQuery.isLoading}

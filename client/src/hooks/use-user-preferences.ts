@@ -31,6 +31,8 @@ export function useUserPreferences() {
     prefs: data,
     isLoading,
     updatePref: (patch: Partial<UserPrefs>) => mutation.mutate(patch),
+    /** Same write as updatePref, awaited, for sections that save on an explicit Save button. */
+    savePrefs: (patch: Partial<UserPrefs>) => mutation.mutateAsync(patch),
     isPending: mutation.isPending,
   };
 }

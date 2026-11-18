@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { PeopleHubTabStrip } from "@/pages/factory/people/PeopleHubTabStrip";
 import { Users, DollarSign, CalendarDays, Banknote, Gift, ArrowDownCircle } from "lucide-react";
 import FactoryEmployees from "@/pages/factory/FactoryEmployees";
 import FactoryEmployeePayrollTab from "@/pages/factory/FactoryEmployeePayrollTab";
@@ -59,31 +60,7 @@ export default function FactoryEmployeesHub() {
 
   return (
     <Tabs value={effectiveTab} onValueChange={(value) => setTab(value as TabValue)}>
-      <div className="erp-mobile-scroll-tabs mb-4 pb-1">
-        <TabsList
-          className="w-max min-w-full gap-1.5 rounded-2xl border-blue-500/15 bg-card/80 p-1.5 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70 sm:min-w-0 sm:w-fit"
-          aria-label="Employee sections"
-          data-testid="tabs-employees-section"
-        >
-          {visibleOptions.map(({ value, label, icon: ItemIcon }) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              data-testid={`tab-employees-${value}`}
-              className={
-                effectiveTab === value
-                  ? value === "employees"
-                    ? "border border-emerald-400/50 bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:text-white"
-                    : "border border-blue-400/50 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white"
-                  : "hover:bg-blue-500/10"
-              }
-            >
-              <ItemIcon className="h-4 w-4 shrink-0" />
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </div>
+      <PeopleHubTabStrip tabs={visibleOptions} ariaLabel="Employee sections" testIdPrefix="employees" />
 
       {visibleValues.includes("employees") && (
         <TabsContent value="employees" className="mt-0">

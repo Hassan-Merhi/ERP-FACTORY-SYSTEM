@@ -5,6 +5,7 @@ export interface WorkerDetailTabSettings {
   workerDetailTabAdvancesEnabled?: boolean;
   workerDetailTabBalesEnabled?: boolean;
   workerDetailTabDocumentsEnabled?: boolean;
+  workersTabAttendanceEnabled?: boolean;
 }
 
 export function isHandledGlobally(error: unknown): boolean {

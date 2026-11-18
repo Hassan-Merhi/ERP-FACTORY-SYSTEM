@@ -1,14 +1,17 @@
 // Extracted from ./FactoryWorkersRosterPanel.tsx to keep that module under the source-size cap.
-import { Info, Pencil, UserCheck, Users, UserX } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Info } from "lucide-react";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarColor, getInitials } from "./utils";
-import { useFactoryWorkersRosterPanelState } from "./useFactoryWorkersRosterPanelState";
 import { formatUsd } from "@/lib/moneyDisplay";
+import {
+  PEOPLE_TABLE_HEAD_CLASS,
+  PeopleEmptyRow,
+  PeopleRowActions,
+  PersonNameCell,
+  PersonStatusBadge,
+} from "../people/PeopleRoster";
+import { useFactoryWorkersRosterPanelState } from "./useFactoryWorkersRosterPanelState";
 
 export function FactoryWorkersRosterPanelTableBodySection({
   amountDue,
@@ -72,28 +75,20 @@ export function FactoryWorkersRosterPanelTableBodySection({
           </TableRow>
         ))
       ) : filteredWorkers.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={11}>
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                <Users className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium" data-testid="text-empty">
-                No workers found
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {searchQuery || statusFilter !== "All"
-                  ? "Try adjusting your search or filters"
-                  : "Add your first worker to get started"}
-              </p>
-            </div>
-          </TableCell>
-        </TableRow>
+        <PeopleEmptyRow
+          colSpan={11}
+          title="No workers found"
+          hint={
+            searchQuery || statusFilter !== "All"
+              ? "Try adjusting your search or filters"
+              : "Add your first worker to get started"
+          }
+        />
       ) : (
         filteredWorkers.map((worker, idx) => (
           <TableRow
             key={worker.id}
-            className="group cursor-pointer transition-colors hover:bg-primary/5 dark:hover:bg-blue-400/[0.08]"
+            className="group cursor-pointer transition-colors hover:bg-primary/5"
             onClick={() => setLocation(`/factory/workers/${worker.id}`)}
             data-testid={`row-worker-${worker.id}`}
           >
@@ -101,14 +96,12 @@ export function FactoryWorkersRosterPanelTableBodySection({
               {idx + 1}
             </TableCell>
             <TableCell className="py-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <Avatar className={`h-8 w-8 text-xs font-semibold ${getAvatarColor(worker.fullName)}`}>
-                    {worker.photoUrl ? <AvatarImage src={worker.photoUrl} /> : null}
-                    <AvatarFallback className={getAvatarColor(worker.fullName)}>
-                      {getInitials(worker.fullName)}
-                    </AvatarFallback>
-                  </Avatar>
+              <PersonNameCell
+                name={worker.fullName}
+                code={worker.employeeCode}
+                photoUrl={worker.photoUrl}
+                testIdSuffix={worker.id}
+                badge={
                   <span
                     className={`absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-background ${(docCounts[worker.id] ?? 0) > 0 ? "bg-emerald-500" : "bg-red-400"}`}
                     title={
@@ -118,24 +111,8 @@ export function FactoryWorkersRosterPanelTableBodySection({
                     }
                     data-testid={`dot-docs-${worker.id}`}
                   />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  {worker.employeeCode && (
-                    <span
-                      className="text-xs font-mono text-muted-foreground leading-tight"
-                      data-testid={`text-code-${worker.id}`}
-                    >
-                      {worker.employeeCode}
-                    </span>
-                  )}
-                  <span
-                    className="font-medium text-sm leading-snug wrap-break-word"
-                    data-testid={`text-name-${worker.id}`}
-                  >
-                    {worker.fullName}
-                  </span>
-                </div>
-              </div>
+                }
+              />
             </TableCell>
             <TableCell className="py-3 text-sm text-muted-foreground truncate">
               {worker.position || <span className="text-muted-foreground/40">—</span>}
@@ -154,14 +131,14 @@ export function FactoryWorkersRosterPanelTableBodySection({
                 <span className="text-muted-foreground/40">—</span>
               )}
             </TableCell>
-            <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
+            <TableCell className="py-3 text-right font-mono text-sm tabular-nums text-muted-foreground">
               {worker.baseSalary ? (
                 formatUsd(parseFloat(worker.baseSalary), 0, 3)
               ) : (
                 <span className="text-muted-foreground/40">—</span>
               )}
             </TableCell>
-            <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
+            <TableCell className="py-3 text-right font-mono text-sm tabular-nums text-muted-foreground">
               {parseFloat(worker.transportAllowance || "0") > 0 ? (
                 formatUsd(parseFloat(worker.transportAllowance || "0"), 0, 3)
               ) : (
@@ -254,53 +231,22 @@ export function FactoryWorkersRosterPanelTableBodySection({
             </TableCell>
 
             <TableCell className="py-3">
-              <Badge
-                variant="secondary"
-                className={`text-xs no-default-active-elevate ${
-                  worker.active
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : "bg-muted text-muted-foreground"
-                }`}
-                data-testid={`badge-status-${worker.id}`}
-              >
-                {worker.active ? "Active" : "Inactive"}
-              </Badge>
+              <PersonStatusBadge active={worker.active} data-testid={`badge-status-${worker.id}`} />
             </TableCell>
             <TableCell className="py-3">
               {canChangeExistingRecords && (
-                <div
-                  className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => openEdit(worker)}
-                    data-testid={`button-edit-worker-${worker.id}`}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  {worker.active ? (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => openEndContract(worker)}
-                      data-testid={`button-end-contract-${worker.id}`}
-                    >
-                      <UserX className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => reactivateMutation.mutate(worker.id)}
-                      disabled={reactivateMutation.isPending}
-                      data-testid={`button-reactivate-${worker.id}`}
-                    >
-                      <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                    </Button>
-                  )}
-                </div>
+                <PeopleRowActions
+                  active={worker.active}
+                  onEdit={() => openEdit(worker)}
+                  onEndContract={() => openEndContract(worker)}
+                  onReactivate={() => reactivateMutation.mutate(worker.id)}
+                  reactivating={reactivateMutation.isPending}
+                  testIdSuffix={{
+                    edit: `button-edit-worker-${worker.id}`,
+                    end: `button-end-contract-${worker.id}`,
+                    reactivate: `button-reactivate-${worker.id}`,
+                  }}
+                />
               )}
             </TableCell>
           </TableRow>
@@ -313,38 +259,20 @@ export function FactoryWorkersRosterPanelTableBodySection({
 export function FactoryWorkersRosterPanelTableHeaderSection() {
   return (
     <TableHeader className="sticky top-0 z-30">
-      <TableRow className="border-b border-border/70 bg-muted/65 dark:bg-slate-900/80 hover:bg-muted/65 dark:hover:bg-slate-900/80">
-        <TableHead className="w-10 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2 pl-3 pr-1">
-          #
+      <TableRow className="border-b border-border/70 bg-muted/65 hover:bg-muted/65">
+        <TableHead className={`w-10 text-center pl-3 pr-1 ${PEOPLE_TABLE_HEAD_CLASS}`}>#</TableHead>
+        <TableHead className={`w-[18%] ${PEOPLE_TABLE_HEAD_CLASS}`}>Worker</TableHead>
+        <TableHead className={`w-[16%] ${PEOPLE_TABLE_HEAD_CLASS}`}>Position</TableHead>
+        <TableHead className={`w-[11%] ${PEOPLE_TABLE_HEAD_CLASS}`}>Nationality</TableHead>
+        <TableHead className={`w-[12%] ${PEOPLE_TABLE_HEAD_CLASS}`}>Location</TableHead>
+        <TableHead className={`w-[10%] text-right ${PEOPLE_TABLE_HEAD_CLASS}`}>Salary</TableHead>
+        <TableHead className={`w-[8%] text-right ${PEOPLE_TABLE_HEAD_CLASS}`}>Transport</TableHead>
+        <TableHead className={`w-[8%] text-right ${PEOPLE_TABLE_HEAD_CLASS}`}>Advance</TableHead>
+        <TableHead className={`w-[10%] text-right ${PEOPLE_TABLE_HEAD_CLASS}`}>Due Today</TableHead>
+        <TableHead className={`w-[80px] ${PEOPLE_TABLE_HEAD_CLASS}`}>Status</TableHead>
+        <TableHead className="w-[64px] py-2">
+          <span className="sr-only">Worker actions</span>
         </TableHead>
-        <TableHead className="w-[18%] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Worker
-        </TableHead>
-        <TableHead className="w-[16%] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Position
-        </TableHead>
-        <TableHead className="w-[11%] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Nationality
-        </TableHead>
-        <TableHead className="w-[12%] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Location
-        </TableHead>
-        <TableHead className="w-[10%] text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Salary
-        </TableHead>
-        <TableHead className="w-[8%] text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Transport
-        </TableHead>
-        <TableHead className="w-[8%] text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Advance
-        </TableHead>
-        <TableHead className="w-[10%] text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Due Today
-        </TableHead>
-        <TableHead className="w-[80px] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-          Status
-        </TableHead>
-        <TableHead className="w-[64px] py-2"></TableHead>
       </TableRow>
     </TableHeader>
   );

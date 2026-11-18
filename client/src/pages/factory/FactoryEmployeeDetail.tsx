@@ -11,19 +11,27 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fmt, getAvatarColor, getInitials } from "./FactoryEmployeeDetailTypes";
+import { getAvatarColor, getInitials } from "@/pages/factory/factoryworkers/utils";
+import { PersonStatusBadge } from "@/pages/factory/people/PeopleRoster";
+import { fmt } from "./FactoryEmployeeDetailTypes";
 import { useFactoryEmployeeDetailState } from "./useFactoryEmployeeDetailState";
 import { FactoryEmployeeDetailDialogSection, FactoryEmployeeDetailSection } from "./FactoryEmployeeDetailDialogSection";
 
 export default function FactoryEmployeeDetail() {
   const {
+    activeTab,
+    exportBusy,
+    exportStatement,
+    setRequestedTab,
+    showAdvancesTab,
+    showAttendanceTab,
+    statementRows,
     stmtError,
     refetchStatement,
     AdminDialog,
@@ -98,8 +106,6 @@ export default function FactoryEmployeeDetail() {
   const avatarColor = getAvatarColor(fullName);
   const balance = parseFloat(employee.currentBalance || "0");
 
-  // Deposits and withdrawals from statement
-
   return (
     <div className="space-y-4">
       <Button
@@ -107,13 +113,14 @@ export default function FactoryEmployeeDetail() {
         size="icon"
         onClick={() => navigate("/factory/payroll-hub?section=employees")}
         data-testid="button-back"
+        aria-label="Back to Employees"
       >
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
       <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
         {/* Left Summary Card */}
-        <div className="w-full lg:w-64 shrink-0 space-y-4">
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
           <Card>
             <CardContent className="p-5 space-y-4">
               <div className="flex flex-col items-center text-center gap-3">
@@ -128,39 +135,33 @@ export default function FactoryEmployeeDetail() {
                   </h2>
                   {employee.department && <p className="text-sm text-muted-foreground mt-0.5">{employee.department}</p>}
                 </div>
-                <Badge
-                  variant={employee.active ? "default" : "secondary"}
-                  className="no-default-active-elevate"
-                  data-testid="badge-employee-status"
-                >
-                  {employee.active ? "Active" : "Inactive"}
-                </Badge>
+                <PersonStatusBadge active={employee.active} data-testid="badge-employee-status" />
               </div>
 
-              <div className="border-t pt-3 space-y-1.5">
-                <div className="flex justify-between text-sm">
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground text-xs">Code</span>
-                  <span className="font-mono text-xs" data-testid="text-employee-code">
+                  <span className="font-mono text-xs ml-auto" data-testid="text-employee-code">
                     {employee.code}
                   </span>
                 </div>
                 {employee.phone && (
-                  <div className="flex justify-between text-sm">
-                    <Phone className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <span className="text-xs" data-testid="text-employee-phone">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs ml-auto" data-testid="text-employee-phone">
                       {employee.phone}
                     </span>
                   </div>
                 )}
                 {employee.joinDate && (
-                  <div className="flex justify-between text-sm">
-                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <span className="text-xs">Joined {formatDate(employee.joinDate)}</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs ml-auto">Joined {formatDate(employee.joinDate)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm">
-                  <DollarSign className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                  <span className="text-xs font-mono">{fmt(employee.monthlySalary)} / mo</span>
+                <div className="flex items-center gap-2 text-sm">
+                  <DollarSign className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-mono ml-auto">{fmt(employee.monthlySalary)} / mo</span>
                 </div>
               </div>
 
@@ -195,7 +196,6 @@ export default function FactoryEmployeeDetail() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    size="sm"
                     onClick={() => {
                       setEditForm({
                         firstName: employee.firstName,
@@ -215,7 +215,6 @@ export default function FactoryEmployeeDetail() {
                     <Button
                       variant="outline"
                       className="w-full"
-                      size="sm"
                       onClick={() => wrapAdminAction(() => recalcMutation.mutate(), "Recalculate Balance")}
                       disabled={recalcMutation.isPending}
                       data-testid="button-recalculate-balance"
@@ -234,17 +233,24 @@ export default function FactoryEmployeeDetail() {
           </Card>
         </div>
 
-        {/* Statement */}
         <FactoryEmployeeDetailSection
-          stmtError={stmtError}
-          refetchStatement={refetchStatement}
+          activeTab={activeTab}
+          employee={employee}
+          exportBusy={exportBusy}
+          exportStatement={exportStatement}
           formatDate={formatDate}
+          fullName={fullName}
+          refetchStatement={refetchStatement}
+          setRequestedTab={setRequestedTab}
+          showAdvancesTab={showAdvancesTab}
+          showAttendanceTab={showAttendanceTab}
           statement={statement}
+          statementRows={statementRows}
+          stmtError={stmtError}
           stmtLoading={stmtLoading}
         />
       </div>
 
-      {/* Edit Employee Dialog */}
       <FactoryEmployeeDetailDialogSection
         editForm={editForm}
         editOpen={editOpen}

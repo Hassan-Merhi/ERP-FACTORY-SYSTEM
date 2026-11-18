@@ -163,6 +163,7 @@ html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-ba
 
 [data-pos-modern-workspace] .pos-checkout-field [role="combobox"],
 [data-pos-modern-workspace] .pos-checkout-field input,
+[data-pos-modern-workspace] .pos-checkout-field select,
 [data-pos-modern-workspace] .pos-checkout-field > div:not(.pos-checkout-field-label) {
   width: 100%;
   height: 2rem;
@@ -178,7 +179,8 @@ html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-ba
 }
 
 [data-pos-modern-workspace] .pos-checkout-field [role="combobox"]:focus-visible,
-[data-pos-modern-workspace] .pos-checkout-field input:focus-visible {
+[data-pos-modern-workspace] .pos-checkout-field input:focus-visible,
+[data-pos-modern-workspace] .pos-checkout-field select:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 3px;
   border-radius: 0.3rem;

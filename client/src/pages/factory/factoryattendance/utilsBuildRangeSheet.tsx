@@ -121,6 +121,54 @@ export const LABELS = {
   },
 } as const;
 
+export type AttendancePersonKind = "worker" | "employee";
+
+/** Name column, count and sheet labels for worker or employee attendance sheets. */
+export const PERSON_LABELS: Record<
+  AttendancePersonKind,
+  Record<
+    PrintLang,
+    { name: string; total: string; active: string; inactive: string; activeSheet: string; inactiveSheet: string }
+  >
+> = {
+  worker: {
+    en: {
+      name: LABELS.en.workerName,
+      total: LABELS.en.totalWorkers,
+      active: "Active Workers",
+      inactive: "Inactive Workers",
+      activeSheet: "Active Workers",
+      inactiveSheet: "Inactive Workers",
+    },
+    ar: {
+      name: LABELS.ar.workerName,
+      total: LABELS.ar.totalWorkers,
+      active: "العمال النشطون",
+      inactive: "العمال غير النشطين",
+      activeSheet: "نشط",
+      inactiveSheet: "غير نشط",
+    },
+  },
+  employee: {
+    en: {
+      name: "Employee Name",
+      total: "Total Employees",
+      active: "Active Employees",
+      inactive: "Inactive Employees",
+      activeSheet: "Active Employees",
+      inactiveSheet: "Inactive Employees",
+    },
+    ar: {
+      name: "اسم الموظف",
+      total: "مجموع الموظفين",
+      active: "الموظفون النشطون",
+      inactive: "الموظفون غير النشطين",
+      activeSheet: "نشط",
+      inactiveSheet: "غير نشط",
+    },
+  },
+};
+
 export function weekLabel(weekDays: WeekDay[]): string {
   const first = weekDays[0].date;
   const last = weekDays[weekDays.length - 1].date;
@@ -181,11 +229,13 @@ export function buildWeeklySheet(
   attendanceMap: Record<number, AttendanceStatus>,
   notesMap: Record<number, string>,
   selectedDate: string,
-  sheetLabel: string
+  sheetLabel: string,
+  kind: AttendancePersonKind = "worker"
 ) {
   const L = LABELS[lang];
+  const P = PERSON_LABELS[kind][lang];
   const dayColHeaders = weekDays.map((d) => `${lang === "ar" ? d.dayNameAr : d.dayName} ${d.dayNum}`);
-  const headers = ["#", L.workerName, ...dayColHeaders, L.notes];
+  const headers = ["#", P.name, ...dayColHeaders, L.notes];
 
   const dataRows = workers.map((w, i) => {
     const dayCells = weekDays.map((d) => {
@@ -202,7 +252,7 @@ export function buildWeeklySheet(
   const totalCols = 2 + weekDays.length + 1;
   const colWidths = [{ wch: 4 }, { wch: 30 }, ...weekDays.map(() => ({ wch: 10 })), { wch: 22 }];
 
-  const subtitle = `${sheetLabel}  |  ${L.week}: ${weekLabel(weekDays)}${shift ? `  |  ${L.shift}: ${shift}` : ""}  |  ${L.totalWorkers}: ${workers.length}`;
+  const subtitle = `${sheetLabel}  |  ${L.week}: ${weekLabel(weekDays)}${shift ? `  |  ${L.shift}: ${shift}` : ""}  |  ${P.total}: ${workers.length}`;
   const allRows = [[L.title], [subtitle], headers, ...dataRows];
   const ws = XLSX.utils.aoa_to_sheet(allRows);
   ws["!cols"] = colWidths;
@@ -221,9 +271,11 @@ export async function exportWeeklyExcel(
   type: "blank" | "results",
   attendanceMap: Record<number, AttendanceStatus>,
   notesMap: Record<number, string>,
-  selectedDate: string
+  selectedDate: string,
+  kind: AttendancePersonKind = "worker"
 ) {
   const wb = XLSX.utils.book_new();
+  const P = PERSON_LABELS[kind][lang];
 
   const activeWorkers = workers.filter((w) => w.active !== false);
   const inactiveWorkers = workers.filter((w) => w.active === false);
@@ -237,9 +289,10 @@ export async function exportWeeklyExcel(
     attendanceMap,
     notesMap,
     selectedDate,
-    lang === "ar" ? "العمال النشطون" : "Active Workers"
+    P.active,
+    kind
   );
-  XLSX.utils.book_append_sheet(wb, activeSheet, lang === "ar" ? "نشط" : "Active Workers");
+  XLSX.utils.book_append_sheet(wb, activeSheet, P.activeSheet);
 
   const inactiveSheet = buildWeeklySheet(
     inactiveWorkers,
@@ -250,16 +303,18 @@ export async function exportWeeklyExcel(
     {},
     {},
     selectedDate,
-    lang === "ar" ? "العمال غير النشطين" : "Inactive Workers"
+    P.inactive,
+    kind
   );
-  XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
+  XLSX.utils.book_append_sheet(wb, inactiveSheet, P.inactiveSheet);
 
   const weekRange = weekLabel(weekDays).replace(/[^a-z0-9]/gi, "-");
   styleFactoryOperationalWorkbook(wb, [
-    { name: lang === "ar" ? "نشط" : "Active Workers", titleRow: 1, headerRow: 3 },
-    { name: lang === "ar" ? "غير نشط" : "Inactive Workers", titleRow: 1, headerRow: 3 },
+    { name: P.activeSheet, titleRow: 1, headerRow: 3 },
+    { name: P.inactiveSheet, titleRow: 1, headerRow: 3 },
   ]);
-  await XLSX.writeFile(wb, `attendance-${type}-${weekRange}.xlsx`);
+  const prefix = kind === "employee" ? "employee-attendance" : "attendance";
+  await XLSX.writeFile(wb, `${prefix}-${type}-${weekRange}.xlsx`);
 }
 
 export function buildRangeSheet(

@@ -30,8 +30,9 @@ export function usePayrollModelPart1() {
   const assertCanChangeRecords = () => {
     if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
   };
-  const showError = (error: unknown) =>
-    toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
+  // The toast title names the action that failed ("Save failed", "Delete failed", ...).
+  const showError = (title: string) => (error: unknown) =>
+    toast({ title, description: errorMessage(error), variant: "destructive" });
 
   const state = usePayrollState();
   const {

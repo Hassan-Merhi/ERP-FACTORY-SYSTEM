@@ -1,7 +1,5 @@
 // Extracted from ./JournalEntriesEditor.tsx to keep that module under the source-size cap.
 import { useEffect, useRef } from "react";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { useVoucherEditCancel } from "../VoucherPhoneActionBar";
 import type { useJournalFormModel } from "./useJournalFormModel";
 
 export type Model = ReturnType<typeof useJournalFormModel>;
@@ -44,8 +42,6 @@ export function useJournalEntriesEditorState({ model }: { model: Model }) {
     journalMutation,
     voucherIdToEdit,
   } = model;
-  const isPhone = useErpPhoneLayout();
-  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
   const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
 
   const pendingBlurTimeouts = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -71,7 +67,6 @@ export function useJournalEntriesEditorState({ model }: { model: Model }) {
   return {
     activeJournalRow,
     appendJournal,
-    cancelEdit,
     convertToUSD,
     filteredJournalAccounts,
     formatAmount,
@@ -81,7 +76,6 @@ export function useJournalEntriesEditorState({ model }: { model: Model }) {
     handleJournalKeyDown,
     handleJournalTypeChange,
     isBalanced,
-    isPhone,
     journalAccountHighlightedIndex,
     journalAccountSearchTerm,
     journalEntries,
@@ -99,5 +93,6 @@ export function useJournalEntriesEditorState({ model }: { model: Model }) {
     setShowAccountSidebar,
     totalCredit,
     totalDebit,
+    voucherIdToEdit,
   };
 }

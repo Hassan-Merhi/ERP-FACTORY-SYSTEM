@@ -8,6 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import type { AttendancePrintKind } from "./factoryattendance/components/AttendanceActionsMenu";
 import {
   type AttendanceAdminCredentials,
   attendancePastDates,
@@ -147,7 +148,7 @@ export function useFactoryEmployeeAttendanceTabState() {
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [approvalDates, setApprovalDates] = useState<string[]>([]);
   const [pendingApprovalRecords, setPendingApprovalRecords] = useState<EmployeeAttendanceBulkRecord[] | null>(null);
-  const [shift, setShift] = useState("");
+  const [printDialog, setPrintDialog] = useState<AttendancePrintKind | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
   const { data, isLoading, isError, refetch } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
@@ -274,7 +275,7 @@ export function useFactoryEmployeeAttendanceTabState() {
     setMode,
     setNotesMap,
     setSelectedDate,
-    setShift,
-    shift,
+    printDialog,
+    setPrintDialog,
   };
 }

@@ -1,6 +1,5 @@
 import { AlertTriangle, CheckCircle, ChevronDown, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +9,7 @@ import {
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { VoucherPhoneActionBar } from "../VoucherPhoneActionBar";
+import { VoucherActionBar, VoucherOptionalSwitch } from "../VoucherActionBar";
 import { useJournalEntriesEditorState, type Model } from "./useJournalEntriesEditorState";
 import { JournalEntriesEditorSection } from "./JournalEntriesEditorSection";
 import { JournalEntriesEditorSection2 } from "./JournalEntriesEditorSection2";
@@ -19,7 +18,6 @@ export function JournalEntriesEditor(props: { model: Model }) {
   const {
     activeJournalRow,
     appendJournal,
-    cancelEdit,
     convertToUSD,
     filteredJournalAccounts,
     formatAmount,
@@ -29,7 +27,6 @@ export function JournalEntriesEditor(props: { model: Model }) {
     handleJournalKeyDown,
     handleJournalTypeChange,
     isBalanced,
-    isPhone,
     journalAccountHighlightedIndex,
     journalAccountSearchTerm,
     journalEntries,
@@ -47,6 +44,7 @@ export function JournalEntriesEditor(props: { model: Model }) {
     setShowAccountSidebar,
     totalCredit,
     totalDebit,
+    voucherIdToEdit,
   } = useJournalEntriesEditorState(props);
 
   return (
@@ -153,24 +151,32 @@ export function JournalEntriesEditor(props: { model: Model }) {
         )}
       />
 
-      <div className="voucher-journal-actions flex flex-wrap items-center justify-between gap-3">
-        <FormField
-          control={journalForm.control}
-          name="optional"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center gap-2.5 space-y-0">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  data-testid="checkbox-journal-optional"
-                />
-              </FormControl>
-              <FormLabel className="text-sm font-normal cursor-pointer">Mark as Optional</FormLabel>
-            </FormItem>
-          )}
-        />
-        <div className="flex items-center gap-2">
+      <VoucherActionBar
+        isEditing={!!voucherIdToEdit}
+        saving={journalMutation.isPending}
+        disabled={Math.abs(totalDebit - totalCredit) > 0.01}
+        saveTestId="button-save-journal-voucher"
+        data-testid="journal-actions"
+        phoneSummary={`Dr ${formatAmount(totalDebit)} · Cr ${formatAmount(totalCredit)}`}
+        // The totals and balance state are already shown above the notes; phones repeat them in the bar.
+        phoneStatus={{
+          ok: isBalanced,
+          label: isBalanced ? "Balanced" : `Off by ${formatAmount(Math.abs(totalDebit - totalCredit))}`,
+        }}
+        optional={
+          <FormField
+            control={journalForm.control}
+            name="optional"
+            render={({ field }) => (
+              <VoucherOptionalSwitch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-journal-optional"
+              />
+            )}
+          />
+        }
+        secondary={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -195,30 +201,7 @@ export function JournalEntriesEditor(props: { model: Model }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {!isPhone && (
-            <Button
-              type="submit"
-              disabled={journalMutation.isPending || Math.abs(totalDebit - totalCredit) > 0.01}
-              className="voucher-journal-save-button"
-              data-testid="button-save-journal-voucher"
-            >
-              {journalMutation.isPending ? "Saving..." : "Save Journal Voucher"}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <VoucherPhoneActionBar
-        summary={`Dr ${formatAmount(totalDebit)} · Cr ${formatAmount(totalCredit)}`}
-        status={{
-          ok: isBalanced,
-          label: isBalanced ? "Balanced" : `Off by ${formatAmount(Math.abs(totalDebit - totalCredit))}`,
-        }}
-        saveLabel="Save Journal Voucher"
-        saving={journalMutation.isPending}
-        disabled={!isBalanced}
-        onCancel={cancelEdit}
-        data-testid="journal-phone-actions"
+        }
       />
     </>
   );
