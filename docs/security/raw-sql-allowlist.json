@@ -6555,6 +6555,795 @@
       "reason": "COMMENT ON FUNCTION interpolates a code-constant version marker (no quotes) into a string literal. Test file run only by vitest against the disposable test database (server/db.ts NODE_ENV=test); no request data reaches it."
     },
     {
+      "id": "0ac1dc92346b365329a9",
+      "path": "tests/db-guards-cost-centers.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "expectInsertRefused",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "expectInsertRefused callers in tests/db-guards-cost-centers.test.ts pass string-literal table names",
+          "validation": "Every caller passes a literal such as \"cost_center_allocations\" written in the test; the name is double-quoted as an identifier."
+        },
+        {
+          "expression": "names.map((name) => `\"${name}\"`).join(\", \")",
+          "source": "Object.keys of a row object built in the test file (the values argument of expectInsertRefused)",
+          "validation": "Column names come from object literals written in the test source; each is double-quoted or listed verbatim, and every value is bound as a $n parameter, never interpolated."
+        },
+        {
+          "expression": "names.map((_, index) => `$${index + 1}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "Guard test helper builds an INSERT from a literal table name and the keys of a test-written row object; every value is bound as a parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "1e2e89e8b8aff5d528cf",
+      "path": "tests/db-guards-factory-workflow.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "refusedSource",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "names.join(\", \")",
+          "source": "Object.keys of a row object built in the test file (refusedSource callers in tests/db-guards-factory-workflow.test.ts)",
+          "validation": "Column names come from object literals written in the test source; each is double-quoted or listed verbatim, and every value is bound as a $n parameter, never interpolated."
+        },
+        {
+          "expression": "names.map((_, index) => `$${index + 1}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "INSERT into a fixed table with column names taken from the keys of object literals written in the test; values are bound parameters. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "c9b7b6d9ae9e6c6406f1",
+      "path": "tests/db-guards-immutability.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "it.each table rows in tests/db-guards-immutability.test.ts:~400-461 (string literals)",
+          "validation": "Each row's first element is a literal table name in the test source; it is double-quoted and the id is bound as $1."
+        }
+      ],
+      "reason": "UPDATE/DELETE against one of the immutable tables listed literally in the it.each table; the change text is a literal from the same table. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "5b7f395b9d6f49f6e11d",
+      "path": "tests/db-guards-immutability.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "it.each table rows in tests/db-guards-immutability.test.ts:~400-461 (string literals)",
+          "validation": "Each row's first element is a literal table name in the test source; it is double-quoted and the id is bound as $1."
+        }
+      ],
+      "reason": "UPDATE/DELETE against one of the immutable tables listed literally in the it.each table; the change text is a literal from the same table. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "f55996ef217a67269640",
+      "path": "tests/db-guards-immutability.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "it.each rows at tests/db-guards-immutability.test.ts:476-478",
+          "validation": "Two literal table names (stock_transfer_order_approval_batch_revisions, stock_transfer_order_approval_events); double-quoted, id bound as $1."
+        }
+      ],
+      "reason": "UPDATE/DELETE against one of two approval-evidence tables named literally in the it.each table; the row id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "158b0add6066d6a4d3a7",
+      "path": "tests/db-guards-immutability.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "it.each rows at tests/db-guards-immutability.test.ts:476-478",
+          "validation": "Two literal table names (stock_transfer_order_approval_batch_revisions, stock_transfer_order_approval_events); double-quoted, id bound as $1."
+        }
+      ],
+      "reason": "UPDATE/DELETE against one of two approval-evidence tables named literally in the it.each table; the row id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "23c0cec3a88010bce24a",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "softDelete",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "softDelete callers in tests/db-guards-ledger-accounts.test.ts pass literal table names",
+          "validation": "Callers pass \"ledger_accounts\" or \"banks\" literals; the name is double-quoted and the id bound as $1."
+        }
+      ],
+      "reason": "Soft-delete statement built for a literal ledger table name chosen in the test; the row id is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "ab87db8e1a723cee2127",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "fd5e4bd3e1786f02fcc3",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "e07c2250eb013b964eef",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "7aaffa7cf5d67540e255",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "223f003f43f0cc09d9ce",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "19be52efa2567eb4278e",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "c31d7df93185a9d09e76",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "8015640f9ab28b1990f3",
+      "path": "tests/db-guards-ledger-accounts.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over OPENING_BALANCE_TABLES at tests/db-guards-ledger-accounts.test.ts:387 (array of literal table names)",
+          "validation": "The table comes from a constant array of seven literal table names in the test; it is double-quoted and all values are bound parameters."
+        }
+      ],
+      "reason": "Opening-balance lock attacks run against each table in a constant, code-owned list; only bound parameters carry values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "39739c387ae33c6d0bb4",
+      "path": "tests/db-guards-ledger-posting.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "insertLine",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "columns.join(\", \")",
+          "source": "insertLine callers in tests/db-guards-ledger-posting.test.ts pass string-literal column arrays",
+          "validation": "Arrays such as [\"ledger_account_id\", \"customer_id\"] are written in the test; values are bound as $2..$n."
+        },
+        {
+          "expression": "columns.map((_, index) => `$${index + 2}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "INSERT into voucher_entries with column names from literal arrays in the test; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "50713fb967161724f5d4",
+      "path": "tests/db-guards-ledger-vouchers.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "insertVoucher",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "extraColumns .map((column) => `, ${column}`) .join(\"\")",
+          "source": "insertVoucher callers in tests/db-guards-ledger-vouchers.test.ts pass string-literal column arrays",
+          "validation": "Column names are literals written in the test; their values are bound as $3..$n."
+        },
+        {
+          "expression": "extraColumns.map((_, index) => `, $${index + 3}`).join(\"\")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "INSERT into vouchers with extra column names from literal arrays in the test; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "1237e069a55997993593",
+      "path": "tests/db-guards-offline-sync-evidence.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over EVIDENCE_TABLES at tests/db-guards-offline-sync-evidence.test.ts:79 (literal table names)",
+          "validation": "Constant list of literal factory_edge_* table names in the test; double-quoted."
+        },
+        {
+          "expression": "key",
+          "source": "keyColumn() at tests/db-guards-offline-sync-evidence.test.ts:126 reads the primary-key column name from pg_index/pg_attribute",
+          "validation": "A catalog identifier of a table the test itself named; double-quoted, and the key value is bound as $1."
+        }
+      ],
+      "reason": "Update/delete attacks on offline-sync evidence tables from a constant list, keyed by the primary-key column read from the catalog; values are bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "3cb9cfadd1de6c677ca7",
+      "path": "tests/db-guards-offline-sync-evidence.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over EVIDENCE_TABLES at tests/db-guards-offline-sync-evidence.test.ts:79 (literal table names)",
+          "validation": "Constant list of literal factory_edge_* table names in the test; double-quoted."
+        },
+        {
+          "expression": "key",
+          "source": "keyColumn() at tests/db-guards-offline-sync-evidence.test.ts:126 reads the primary-key column name from pg_index/pg_attribute",
+          "validation": "A catalog identifier of a table the test itself named; double-quoted, and the key value is bound as $1."
+        }
+      ],
+      "reason": "Update/delete attacks on offline-sync evidence tables from a constant list, keyed by the primary-key column read from the catalog; values are bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "ff22168c4f6bdfb02f89",
+      "path": "tests/db-guards-offline-sync-evidence.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over EVIDENCE_TABLES at tests/db-guards-offline-sync-evidence.test.ts:79 (literal table names)",
+          "validation": "Constant list of literal factory_edge_* table names in the test; double-quoted."
+        },
+        {
+          "expression": "key",
+          "source": "keyColumn() at tests/db-guards-offline-sync-evidence.test.ts:126 reads the primary-key column name from pg_index/pg_attribute",
+          "validation": "A catalog identifier of a table the test itself named; double-quoted, and the key value is bound as $1."
+        }
+      ],
+      "reason": "Update/delete attacks on offline-sync evidence tables from a constant list, keyed by the primary-key column read from the catalog; values are bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "bf5dd11a17efcabf0462",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "expectedCompany",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "audited.companyVia.parent",
+          "source": "AUDITED_TABLES constant at tests/db-guards-row-history.test.ts:25 (literal parent table names)",
+          "validation": "Literal table name from the constant list; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Reads company_id from a parent table named in the test's constant AUDITED_TABLES list; the id is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "fdabf43f40d3158a63f1",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over AUDITED_TABLES at tests/db-guards-row-history.test.ts:25 (literal table names)",
+          "validation": "Literal table name from the constant list; double-quoted."
+        },
+        {
+          "expression": "column",
+          "source": "AUDITED_TABLES entries name a literal text column per table",
+          "validation": "Literal column name from the same constant; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Row-history updates against tables and columns named in the test's constant AUDITED_TABLES list; the id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "01faaf960b9b70299daf",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over AUDITED_TABLES at tests/db-guards-row-history.test.ts:25 (literal table names)",
+          "validation": "Literal table name from the constant list; double-quoted."
+        },
+        {
+          "expression": "column",
+          "source": "AUDITED_TABLES entries name a literal text column per table",
+          "validation": "Literal column name from the same constant; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Row-history updates against tables and columns named in the test's constant AUDITED_TABLES list; the id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "591309f55d469c810c9b",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over AUDITED_TABLES at tests/db-guards-row-history.test.ts:25 (literal table names)",
+          "validation": "Literal table name from the constant list; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Row-history delete against a table named in the test's constant AUDITED_TABLES list; the id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "f541f2db49835c1f2c29",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over AUDITED_TABLES at tests/db-guards-row-history.test.ts:25 (literal table names)",
+          "validation": "Literal table name from the constant list; double-quoted."
+        },
+        {
+          "expression": "column",
+          "source": "AUDITED_TABLES entries name a literal text column per table",
+          "validation": "Literal column name from the same constant; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Row-history updates against tables and columns named in the test's constant AUDITED_TABLES list; the id is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "829831efc5347ea303b7",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "catalog-identifier",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "tracking",
+          "source": "pg_attribute query at tests/db-guards-row-history.test.ts:~225-233 returning a tracking_% text column of factory_containers",
+          "validation": "A column name read from the system catalog for a fixed table; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Column name comes from the database catalog for factory_containers, filtered to tracking_% text columns; values are bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "09dc99fc22af9cd5992e",
+      "path": "tests/db-guards-row-history.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "catalog-identifier",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "tracking",
+          "source": "pg_attribute query at tests/db-guards-row-history.test.ts:~225-233 returning a tracking_% text column of factory_containers",
+          "validation": "A column name read from the system catalog for a fixed table; double-quoted, the id bound as $1."
+        }
+      ],
+      "reason": "Column name comes from the database catalog for factory_containers, filtered to tracking_% text columns; values are bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "79a544218513d9dd2580",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "becomeOrdinaryRole",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "d7a90521ba71eec28d5e",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "visibleCompanies",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "812b83dce22628f54105",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "dropCheckConstraints",
+      "classification": "catalog-identifier",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "row.table_name",
+          "source": "pg_constraint query at tests/db-guards-row-level-security.test.ts:98-109 (conrelid::regclass::text)",
+          "validation": "regclass text output is already a correctly quoted identifier produced by PostgreSQL for a table the test named."
+        },
+        {
+          "expression": "row.conname",
+          "source": "Same pg_constraint query (check constraint names)",
+          "validation": "Catalog constraint name, double-quoted in the statement."
+        }
+      ],
+      "reason": "Drops check constraints whose names and tables come from the system catalog for a table in the test's constant list, inside a rolled-back transaction. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "49b1f1fe15ed4c5dd074",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "08f9ed4f56b432350c82",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "a2220d0135b46b3d4576",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "e6e6c9195fad8150cf27",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "query-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "c9498cc70a0a8d39f54d",
+      "path": "tests/db-guards-row-level-security.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "<module>",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "describe.each over ISOLATED_TABLES at tests/db-guards-row-level-security.test.ts:26 (literal table names)",
+          "validation": "Constant list of literal table names in the test; double-quoted, company ids bound as parameters."
+        }
+      ],
+      "reason": "Row-level security probes on tables from a constant, code-owned list; the probe role name is a constant and every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "4f8aa63dfc31424d2327",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "query-text",
+      "context": "seedParents",
+      "classification": "catalog-identifier",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "key.parentTable",
+          "source": "foreignKeysOf() at tests/helpers/dbGuardHarness.ts:97 reads parent table names from pg_constraint",
+          "validation": "Catalog identifier; double-quoted in the statement."
+        },
+        {
+          "expression": "conditions",
+          "source": "Built at tests/helpers/dbGuardHarness.ts:181 from catalog parent column names",
+          "validation": "Each column is double-quoted and paired with a $n placeholder; the key values are bound."
+        }
+      ],
+      "reason": "Parent lookup built only from foreign-key metadata read from the system catalog; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "9f89356431277979d501",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "assembled-sql-text",
+      "context": "seedRow",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "seedRow(table) callers across the db-guards suites pass literal table names or catalog names",
+          "validation": "Double-quoted identifier; tests name tables literally and the harness only recurses with catalog parent names."
+        }
+      ],
+      "reason": "INSERT DEFAULT VALUES into a table named by the test or by foreign-key catalog metadata; no values are interpolated. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "cf8322e867e772d09939",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "assembled-sql-text",
+      "context": "seedRow",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "seedRow(table) callers across the db-guards suites pass literal table names or catalog names",
+          "validation": "Double-quoted identifier from test literals or pg_constraint."
+        },
+        {
+          "expression": "names.map((name) => `\"${name}\"`).join(\", \")",
+          "source": "Keys of the row: test-written values plus placeholder columns read from information_schema at tests/helpers/dbGuardHarness.ts:~205-215",
+          "validation": "Each name is double-quoted; all values bound as $n."
+        },
+        {
+          "expression": "names.map((_, index) => `$${index + 1}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "Seeding INSERT built from a literal or catalog table name and column names from test literals or the catalog; every value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "57ecf37fa7245a89cda4",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "indirect-query-text",
+      "context": "seedRow",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sequence",
+          "source": "text assembled at tests/helpers/dbGuardHarness.ts:219-223 (reviewed separately as entries 9f89356431277979d501 and cf8322e867e772d09939)",
+          "validation": "The text is that reviewed INSERT; its parameters are the row values, passed separately as bind values."
+        }
+      ],
+      "reason": "Executes the seeding INSERT reviewed above with its values as bound parameters; nothing else reaches the text. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "072ad161684319978daf",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "indirect-query-text",
+      "context": "expectRefused",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sequence",
+          "source": "text parameter of the exported harness helper (tests/helpers/dbGuardHarness.ts:287); callers are the db-guards test suites",
+          "validation": "Callers pass SQL literals or the reviewed test builders in the same suites; parameters are passed separately as bind values."
+        }
+      ],
+      "reason": "Harness helper that runs the attack statement a guard test wrote; every caller is test code with literal or reviewed SQL and bound values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "12ef3e6a966905cc27a8",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "indirect-query-text",
+      "context": "expectAccepted",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "sequence",
+          "source": "text parameter of the exported harness helper (tests/helpers/dbGuardHarness.ts:332); callers are the db-guards test suites",
+          "validation": "Callers pass SQL literals or the reviewed test builders in the same suites; parameters are passed separately as bind values."
+        }
+      ],
+      "reason": "Harness helper that runs the attack statement a guard test wrote; every caller is test code with literal or reviewed SQL and bound values. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "1ac9ac8a5a9970eaf5cd",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "query-text",
+      "context": "reread",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "reread(table) callers in the db-guards suites pass literal table names",
+          "validation": "Double-quoted identifier from a test literal; the id is bound as $1."
+        }
+      ],
+      "reason": "Re-reads a row from a table the test named literally; the id is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "6c7521abb7a252100483",
+      "path": "tests/helpers/dbGuardHarness.ts",
+      "kind": "query-text",
+      "context": "dropTriggers",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "trigger",
+          "source": "dropTriggers callers pass constant [table, trigger] tuples defined in the db-guards suites",
+          "validation": "Literal trigger names owned by the suite (only those it installed); double-quoted."
+        },
+        {
+          "expression": "table",
+          "source": "Same constant tuples",
+          "validation": "Literal table names; double-quoted."
+        }
+      ],
+      "reason": "Removes only triggers a suite installed, named in constant tuples in the test source; nothing external reaches the identifiers. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "7096c80277f6d76c5f53",
+      "path": "tests/helpers/ledgerGuardFixtures.ts",
+      "kind": "query-text",
+      "context": "addLine",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "names.map((name) => `\"${name}\"`).join(\", \")",
+          "source": "Object.keys of a row object built in the test file (addLine callers in the ledger guard suites)",
+          "validation": "Column names come from object literals written in the test source; each is double-quoted or listed verbatim, and every value is bound as a $n parameter, never interpolated."
+        },
+        {
+          "expression": "names.map((_, index) => `$${index + 1}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "INSERT into voucher_entries with column names from test-written objects; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
       "id": "6cf382fdc37033749e0c",
       "path": "tests/intercompany-linked-physical-delete-postgres.test.ts",
       "kind": "query-text",

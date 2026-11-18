@@ -6,6 +6,7 @@
  * unchanged.
  */
 import type { Express } from "express";
+import { requireAuth } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
@@ -20,7 +21,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
 
 function registerCreditSalesImportRoutesPart3(app: Express) {
   // Download sample Credit Sales import template
-  app.get("/api/credit-sales-import/template", async (_req, res) => {
+  app.get("/api/credit-sales-import/template", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         {

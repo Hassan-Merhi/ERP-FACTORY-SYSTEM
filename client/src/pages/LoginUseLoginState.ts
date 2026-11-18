@@ -213,9 +213,18 @@ export function useLoginState() {
     },
     [loginMutation, toast]
   );
+  // useMutation returns a new object on every render, so triggerBiometric does
+  // too. Reading it through a ref keeps the launch check below from re-running
+  // on each render, which queued one device prompt and one sign-in per render.
+  const triggerBiometricRef = useRef(triggerBiometric);
+  useEffect(() => {
+    triggerBiometricRef.current = triggerBiometric;
+  }, [triggerBiometric]);
 
   useEffect(() => {
     if (!isNative) return;
+    let cancelled = false;
+    let launchPrompt: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       try {
         const [{ BiometricAuth, BiometryType }, Preferences] = await Promise.all([
@@ -223,8 +232,7 @@ export function useLoginState() {
           loadNativePreferences(),
         ]);
         const info = await BiometricAuth.checkBiometry();
-        if (!info.isAvailable) return;
-
+        if (cancelled || !info.isAvailable) return;
         const primaryType = info.biometryTypes?.[0];
         setBiometryAvailable(true);
         if (primaryType === BiometryType.faceId) {
@@ -240,18 +248,21 @@ export function useLoginState() {
         }
 
         const creds = await loadBiometricCredentials();
-        if (!creds) return;
+        if (cancelled || !creds) return;
         setHasSavedCreds(true);
         const { value: optIn } = await Preferences.get({ key: OPT_IN_KEY });
-        if (optIn === "yes") {
-          setTimeout(() => triggerBiometric(creds), 600);
+        if (!cancelled && optIn === "yes") {
+          launchPrompt = setTimeout(() => void triggerBiometricRef.current(creds), 600);
         }
       } catch {
         /* biometrics not available */
       }
     })();
-  }, [isNative, triggerBiometric]);
-
+    return () => {
+      cancelled = true;
+      if (launchPrompt) clearTimeout(launchPrompt);
+    };
+  }, [isNative]);
   const handleRegisterPasskey = async () => {
     setPasskeyRegPending(true);
     try {

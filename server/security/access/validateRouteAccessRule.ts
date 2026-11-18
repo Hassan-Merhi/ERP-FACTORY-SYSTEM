@@ -48,8 +48,6 @@ export type CompanyScope = (typeof COMPANY_SCOPES)[number];
  *
  * - `authorized-companies`: the database scope covers every company the user
  *   is a member of (global transactions, consolidated reports, parent PO sync).
- * - `reference-read`: Admin/Owner/Developer may read reference data of another
- *   company they are a member of.
  * - `developer-role-administration`: a Developer may create or change a
  *   company-role assignment in another company they can access.
  * - `developer-user-location`: a Developer may configure user locations of the
@@ -59,7 +57,6 @@ export type CompanyScope = (typeof COMPANY_SCOPES)[number];
  */
 export const CROSS_COMPANY_SCOPES = [
   "authorized-companies",
-  "reference-read",
   "developer-role-administration",
   "developer-user-location",
   "account-migration-source",

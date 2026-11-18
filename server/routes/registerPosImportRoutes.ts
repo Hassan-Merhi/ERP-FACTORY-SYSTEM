@@ -446,8 +446,7 @@ export function registerPosImportRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
-
-  app.get("/api/pos-import/template", async (_req, res) => {
+  app.get("/api/pos-import/template", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         { Barcode: "BC001", Quantity: 5, Rate: 25.0 },
