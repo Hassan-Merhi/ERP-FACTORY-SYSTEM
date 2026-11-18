@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
-import { posShifts, vouchers } from "@shared/schema";
+import { posShifts, userLocations, vouchers } from "@shared/schema";
 import { db } from "../db";
 import { canModifyDate } from "../auth";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
@@ -22,6 +22,7 @@ declare global {
 export async function requirePosSaleEditWindow(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const context = await getActiveCompanyPermissionContext(req);
+    if (req.user) req.user.role = context.role;
     if (context.role !== "POS") {
       canModifyDate("voucherDate")(req, res, next);
       return;
@@ -70,6 +71,22 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
       return;
     }
 
+    const [locationAccess] = await db
+      .select({ id: userLocations.id })
+      .from(userLocations)
+      .where(
+        and(
+          eq(userLocations.userId, context.userId),
+          eq(userLocations.companyId, context.companyId),
+          eq(userLocations.locationId, Number(sale.locationId))
+        )
+      )
+      .limit(1);
+    if (!sale.locationId || (!locationAccess && context.assignedLocationId !== sale.locationId)) {
+      res.status(403).json({ code: "POS_SALE_LOCATION_DENIED", message: "Sale location is not assigned to this cashier." });
+      return;
+    }
+
     const businessDate = await companyBusinessDate(context.companyId);
     const eligibility = posDaybookEditEligibility({
       originalDate: String(sale.voucherDate),
@@ -97,7 +114,8 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
     }
 
     if (
-      (req.body?.isCreditSale !== undefined && req.body.isCreditSale !== sale.isCreditSale) ||
+      typeof req.body?.isCreditSale !== "boolean" ||
+      req.body.isCreditSale !== Boolean(sale.isCreditSale) ||
       req.body?.paymentAccountType != null ||
       req.body?.paymentAccountId != null
     ) {
