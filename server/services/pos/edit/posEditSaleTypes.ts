@@ -22,6 +22,7 @@ export interface PosEditSaleItemInput {
   stockItemId: number;
   quantity: string | number | null | undefined;
   sellingPrice: string | number | null | undefined;
+  originalCurrencyRate?: string | number | null;
   totalSales?: string | number | null;
   [POS_INTERNAL_TOTAL_SALES_OVERRIDE]?: boolean;
 }
