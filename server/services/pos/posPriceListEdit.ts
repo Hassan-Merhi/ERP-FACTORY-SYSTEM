@@ -70,7 +70,9 @@ export async function saveLocationPrice(
   const [item] = await db
     .select({ id: stockItems.id, code: stockItems.code })
     .from(stockItems)
-    .where(and(eq(stockItems.id, stockItemId), eq(stockItems.companyId, context.companyId), isNull(stockItems.deletedAt)))
+    .where(
+      and(eq(stockItems.id, stockItemId), eq(stockItems.companyId, context.companyId), isNull(stockItems.deletedAt))
+    )
     .limit(1);
   if (!item) throw new PosPriceWriteError(404, "POS_PRICE_ITEM_NOT_FOUND", "Stock item not found.");
 
@@ -91,7 +93,11 @@ export async function saveLocationPrice(
       )
       .limit(1);
     if (!assigned) {
-      throw new PosPriceWriteError(403, "POS_PRICE_LOCATION_DENIED", "Price editing is restricted to assigned locations.");
+      throw new PosPriceWriteError(
+        403,
+        "POS_PRICE_LOCATION_DENIED",
+        "Price editing is restricted to assigned locations."
+      );
     }
   }
 
