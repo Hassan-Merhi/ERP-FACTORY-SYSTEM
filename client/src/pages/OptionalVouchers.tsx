@@ -18,6 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileText, Pencil, Check, Trash2, X, Eye } from "lucide-react";
 import { OptionalVoucherDetailsDialog } from "./optional-vouchers/OptionalVoucherDetailsDialog";
 import type { Voucher } from "./daybook/types";
+import { resolveVoucherEditDestination } from "./daybook/voucherEditRoute";
 
 export default function OptionalVouchers() {
   const [, navigate] = useLocation();
@@ -164,7 +165,8 @@ export default function OptionalVouchers() {
     if (tab) {
       navigate(`/vouchers?edit=${v.id}&tab=${tab}`);
     } else {
-      navigate(`/vouchers/${v.id}/edit`);
+      // Sales, Purchase and other types: the same destination as Daybook's Edit.
+      void resolveVoucherEditDestination(v).then((path) => navigate(path));
     }
   };
 

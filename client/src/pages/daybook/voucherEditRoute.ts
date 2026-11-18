@@ -28,3 +28,35 @@ export function voucherEditPath(
   const tab = VOUCHER_EDIT_TABS[voucher.voucherType];
   return tab ? `${vouchersBase}?edit=${voucher.id}&tab=${tab}&from=daybook` : null;
 }
+
+/** The read-only voucher view in the same workspace as `vouchersBase`. */
+export function voucherDetailPath(id: number, vouchersBase = "/vouchers"): string {
+  return `${vouchersBase.replace(/\/vouchers$/, "")}/voucher-detail/${id}`;
+}
+
+/**
+ * Edit destination for a voucher reached outside Daybook (old `/vouchers/:id/edit` links, Optional
+ * Vouchers). Same as Daybook's Edit: a purchase opens its container and every other type goes
+ * through voucherEditPath. Where there is no editor to open (a purchase without a container, or a
+ * type voucherEditPath does not edit) the read-only voucher opens instead.
+ */
+export async function resolveVoucherEditDestination(
+  voucher: { id: number; voucherType: string },
+  vouchersBase = "/vouchers"
+): Promise<string> {
+  if (voucher.voucherType === "Purchase") {
+    // Containers are ERP pages; Factory and Properties purchases open the read-only voucher.
+    if (vouchersBase === "/vouchers") {
+      try {
+        const response = await fetch(`/api/vouchers/${voucher.id}/view-entries`, { credentials: "include" });
+        const data = response.ok ? await response.json() : null;
+        const containerId = data && !Array.isArray(data) ? data.purchaseOrder?.containerId : null;
+        if (containerId) return `/containers/${containerId}`;
+      } catch {
+        // Fall through to the read-only voucher.
+      }
+    }
+    return voucherDetailPath(voucher.id, vouchersBase);
+  }
+  return voucherEditPath(voucher, vouchersBase) ?? voucherDetailPath(voucher.id, vouchersBase);
+}

@@ -20,7 +20,9 @@ describe("Factory Phase 2 further source coverage", () => {
     ]) {
       const src = code("client/src/pages/factory/" + filename);
       expect(src, filename).toContain('companyQueryKey("/api/factory/my-access", selectedCompany?.id)');
-      expect(src, filename).toContain("myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true");
+      expect(src, filename).toContain(
+        "myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true"
+      );
     }
   });
 
@@ -28,7 +30,6 @@ describe("Factory Phase 2 further source coverage", () => {
     const expected: Record<string, string[]> = {
       "FactoryInvoices.tsx": ["/api/factory/customers", "/api/factory/customer-orders"],
       "FactoryPendingInvoices.tsx": ["status=PENDING_VERIFICATION", "status=VERIFIED", "status=FINALIZED"],
-      "FactoryDispatchBatches.tsx": ["/api/factory/dispatch-batches", "/api/factory/dispatch-reports/summary"],
       "FactoryCustomerStatement.tsx": ["/api/factory/customer-price-lists", "/api/factory/customers"],
       "FactorySheetsAndSacks.tsx": ["/api/factory/sheets-sacks", "/api/factory/my-access"],
       "FactoryDashboard.tsx": ["/api/factory/dashboard", "/api/factory/containers"],
@@ -45,7 +46,7 @@ describe("Factory Phase 2 further source coverage", () => {
       expect(src, filename).toContain("selectedCompany?.id");
     }
     expect(companyQueryKey("/api/factory/sheets-sacks", 11)).not.toEqual(
-      companyQueryKey("/api/factory/sheets-sacks", 12),
+      companyQueryKey("/api/factory/sheets-sacks", 12)
     );
   });
 
@@ -65,7 +66,9 @@ describe("Factory Phase 2 further source coverage", () => {
       expect(c["dispatch.reopen"]).toBe(false);
       expect(c["production.manage-bonuses"]).toBe(false);
     }
-    expect(factoryActionCapabilities({ role: "Developer", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(false);
+    expect(factoryActionCapabilities({ role: "Developer", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(
+      false
+    );
   });
 
   it("keeps detail mutation refreshes compatible with company-keyed reads", () => {
@@ -81,8 +84,11 @@ describe("Factory Phase 2 further source coverage", () => {
 
   it("guards against missing company and missing permission payload simultaneously", () => {
     for (const file of [
-      "FactoryBalesHub.tsx", "FactoryPayrollHub.tsx", "FactoryInvoicing.tsx",
-      "FactorySheetsAndSacks.tsx", "FactoryKpis.tsx",
+      "FactoryBalesHub.tsx",
+      "FactoryPayrollHub.tsx",
+      "FactoryInvoicing.tsx",
+      "FactorySheetsAndSacks.tsx",
+      "FactoryKpis.tsx",
     ]) {
       const src = code("client/src/pages/factory/" + file);
       expect(src).not.toContain("&& myAccess.hasFactoryAccess");

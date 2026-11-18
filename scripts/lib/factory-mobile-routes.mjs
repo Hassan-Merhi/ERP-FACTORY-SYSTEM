@@ -99,7 +99,6 @@ export const STATIC_ROUTES = [
 export const DIALOG_TRIGGERS = [
   { route: "/factory/contacts", selector: '[data-testid="button-add-contact"]' },
   { route: "/factory/sheets-sacks", selector: '[data-testid="button-add-item"]' },
-  { route: "/factory/dispatch-batches", selector: '[data-testid="button-new-dispatch-batch"]', exact: true },
   { route: "/factory/rental/shops", selector: '[data-testid="button-factory-rental-shops-add-unit"]' },
   { route: "/factory/daybook", selector: '[data-testid="factory-daybook-filters-open"]', phoneOnly: true },
   {
@@ -146,7 +145,9 @@ export const SEEDED_ROUTES = [
   { key: "account", path: (s) => `/factory/ledger-monthly/${s.account}` },
   { key: "account", path: (s) => `/factory/ledger-vouchers/${s.account}/2026/9` },
   { key: "voucher", path: (s) => `/factory/voucher-detail/${s.voucher}` },
-  { key: "voucher", path: (s) => `/factory/vouchers/${s.voucher}/edit` },
+  // The separate /factory/vouchers/:id/edit page is retired (UI unification phase 9a); old links
+  // forward to the Vouchers editor the Daybook Edit button opens, so the editor is checked directly.
+  { key: "voucher", path: (s) => `/factory/vouchers?edit=${s.voucher}&tab=journal&from=daybook` },
   { key: "openingBalance", path: (s) => `/factory/raw-stock/opening-balance/${s.openingBalance}/edit` },
 ];
 

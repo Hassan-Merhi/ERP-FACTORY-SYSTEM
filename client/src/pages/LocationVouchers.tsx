@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { MapPin, Eye, ArrowDownToLine, ArrowUpFromLine, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -231,9 +232,12 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
     if (txn.isOpeningBalance) return null;
     const vchType = (txn.vchType || "").toLowerCase();
     if (vchType === "production" || vchType === "consumption")
-      return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+      return txn.voucherId
+        ? voucherEditPath({ id: txn.voucherId, voucherType: vchType === "production" ? "Production" : "Consumption" })
+        : null;
     if (vchType === "pos") return txn.voucherId ? `/pos/edit/${txn.voucherId}` : null;
-    if (vchType === "stock transfer") return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+    if (vchType === "stock transfer")
+      return txn.voucherId ? voucherEditPath({ id: txn.voucherId, voucherType: "Stock Transfer" }) : null;
     if (vchType === "credit note" || vchType === "debit note")
       return txn.voucherId ? `/vouchers?tab=creditnote&edit=${txn.voucherId}` : null;
     if (vchType === "po offload") return txn.poId ? `/purchase-orders/${txn.poId}` : null;

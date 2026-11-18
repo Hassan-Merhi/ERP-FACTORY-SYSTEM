@@ -16,7 +16,7 @@ export default function SpSetup() {
   const role = user?.currentRole ?? user?.role;
   const canSetup = role === "Admin" || role === "Developer";
 
-  if (!canSetup) return <Redirect replace to="/sp" />;
+  if (!canSetup) return <Redirect replace to="/sp/reports" />;
 
   return (
     <div className="space-y-4" data-testid="sp-administration-hub">
