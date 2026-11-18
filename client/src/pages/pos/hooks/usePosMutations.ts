@@ -153,6 +153,7 @@ export function usePosMutations({
             stockItemId: item.stockItemId,
             quantity: String(item.quantity),
             sellingPrice: String(item.rate),
+            ...(saleData.currency === "ZMW" ? { originalCurrencyRate: item.originalCurrencyRate } : {}),
           })),
         };
         const res = await apiRequest("PUT", `/api/vouchers/${editVoucherId}/sales`, {

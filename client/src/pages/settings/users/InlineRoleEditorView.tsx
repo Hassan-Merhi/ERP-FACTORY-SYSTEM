@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Check, X, Zap } from "lucide-react";
 import { ConfirmPasswordDialog, PermissionSummaryCard } from "./InlineRoleEditorSections";
 import { PosLocationManager } from "./PosLocationManager";
+import { PosCustomerPermissionSwitch } from "./PosCustomerPermissionSwitch";
 import type { LedgerAccount, Location } from "@shared/schema";
 import {
   CREATE_ONLY_ROLE,
@@ -41,6 +42,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
   const [daybookEditDays, setDaybookEditDays] = useState(0);
   const [canSellNegativeStock, setCanSellNegativeStock] = useState(false);
   const [posViewOnly, setPosViewOnly] = useState(false);
+  const [canAccessCustomers, setCanAccessCustomers] = useState(false);
   const [canDeleteRecords, setCanDeleteRecords] = useState(false);
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false);
 
@@ -57,7 +59,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
     permissionCatalog?.createOnlyAssignable === true || editingRole?.role === CREATE_ONLY_ROLE
       ? [...ROLE_OPTIONS, CREATE_ONLY_ROLE]
       : ROLE_OPTIONS;
-  // Determine if the current save action needs password re-confirmation
   const isDangerousSave = role === "Admin" || ((role === "Manager" || isTester) && canDeleteRecords);
 
   const handleSave = () => {
@@ -85,6 +86,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       setDaybookEditDays(editingRole.daybookEditDays ?? 0);
       setCanSellNegativeStock(editingRole.canSellNegativeStock ?? false);
       setPosViewOnly(editingRole.posViewOnly ?? false);
+      setCanAccessCustomers(editingRole.canAccessCustomers ?? false);
       setCanDeleteRecords(editingRole.canDeleteRecords ?? false);
 
       if (editingRole.role === "POS") {
@@ -129,6 +131,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       setDaybookEditDays(0);
       setCanSellNegativeStock(false);
       setPosViewOnly(false);
+      setCanAccessCustomers(false);
       setCanDeleteRecords(false);
     }
   }, [activeCompanyId, companies, editingRole, editingRole?.id]);
@@ -185,6 +188,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         cashAccountId: undefined,
         canSellNegativeStock: canSellNegativeStock,
         posViewOnly: isPOS ? posViewOnly : false,
+        canAccessCustomers: isPOS ? canAccessCustomers : Boolean(editingRole?.canAccessCustomers),
         canDeleteRecords: role === "Manager" || isTester ? canDeleteRecords : false,
       };
 
@@ -223,7 +227,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         {isEditing ? "Edit Role" : "Add Role"}
       </p>
 
-      {/* Group 1: Basic Role */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs">Company</Label>
@@ -299,12 +302,10 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         </p>
       )}
 
-      {/* Group 2: POS Settings */}
       {isPOS && (
         <div className="space-y-3 rounded-md border border-border/60 bg-background p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">POS Settings</p>
 
-          {/* Locations with per-location cash accounts */}
           <PosLocationManager
             locations={locations}
             selectedLocationIds={selectedLocationIds}
@@ -316,7 +317,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             cashAccounts={cashAccounts}
           />
 
-          {/* POS Station + Daybook Days */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">POS Station</Label>
@@ -345,7 +345,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             </div>
           </div>
 
-          {/* Multi-Location Stock View */}
           <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
             <Switch
               checked={posViewOnly}
@@ -361,7 +360,8 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             </div>
           </div>
 
-          {/* Allow 0-stock sales */}
+          <PosCustomerPermissionSwitch enabled={canAccessCustomers} onChange={setCanAccessCustomers} />
+
           <div className="flex items-center gap-2">
             <Switch
               checked={canSellNegativeStock}
@@ -373,7 +373,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         </div>
       )}
 
-      {/* Non-POS daybook days */}
       {!isPOS && (role === "Manager" || role === "Owner" || role === "Normal User") && (
         <div className="space-y-1.5">
           <Label className="text-xs">Daybook Edit Days</Label>
@@ -394,7 +393,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         </div>
       )}
 
-      {/* Manager-only: allow delete/void/archive */}
       {(role === "Manager" || isTester) && (
         <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
           <Switch
@@ -411,7 +409,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         </div>
       )}
 
-      {/* Presets */}
       {activePresets.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -436,15 +433,14 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         </div>
       )}
 
-      {/* Permission preview */}
       <PermissionSummaryCard
         role={role}
         canDeleteRecords={canDeleteRecords}
         canSellNegativeStock={canSellNegativeStock}
+        canAccessCustomers={isPOS ? canAccessCustomers : Boolean(editingRole?.canAccessCustomers)}
         daybookEditDays={daybookEditDays}
       />
 
-      {/* Footer */}
       <div className="flex items-center justify-end gap-2 border-t pt-3">
         <Button
           type="button"

@@ -3,13 +3,15 @@ import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { getPosDaybookLocations, scopePosDaybookVouchers } from "../../services/pos/posDaybookTransferAccess";
 import { hasCostCenterErpPageAccess } from "../../middleware/costCenterErpPageAccess";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { userLocations, vouchers } from "@shared/schema";
+import { vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
+import { withPosZmwNativeTotals } from "../../services/pos/posVoucherNativeTotals";
 import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import {
   filterRoutineCorrection,
@@ -55,16 +57,6 @@ function applyPaginationHeaders(res: Response, total: number, page: number, limi
   res.setHeader("X-Page-Size", String(limit));
   res.setHeader("X-Total-Pages", String(totalPages));
   res.setHeader("Access-Control-Expose-Headers", "X-Total-Count, X-Page, X-Page-Size, X-Total-Pages");
-}
-
-function sanitizeForPos(rows: Record<string, unknown>[]) {
-  return rows.map((voucher) => {
-    const voucherType = String(voucher.voucherType || "").toLowerCase();
-    if (voucherType === "stock transfer" || voucherType === "stocktransfer" || voucherType.includes("stock transfer")) {
-      return { ...voucher, totalAmount: "0" };
-    }
-    return voucher;
-  });
 }
 
 export function registerVoucherPaginationRoutes(app: Express): void {
@@ -146,24 +138,47 @@ export function registerVoucherPaginationRoutes(app: Express): void {
         )`);
       }
 
+      const liveContext = await getActiveCompanyPermissionContext(req);
+      const isPos = liveContext.role === "POS";
+      // Transfer values are hidden from POS: numeric filters must use the same
+      // zero amount, or a cashier could infer costs by varying min/max ranges.
+      const amountForFilter = isPos
+        ? sql`CASE WHEN ${vouchers.voucherType} IN ('Stock Transfer', 'StockTransfer', 'Transfer')
+              THEN 0 ELSE ${vouchers.totalAmount}::numeric END`
+        : sql`${vouchers.totalAmount}::numeric`;
       const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
       const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
-      if (Number.isFinite(minAmount)) {
-        conditions.push(sql`${vouchers.totalAmount}::numeric >= ${minAmount}`);
-      }
-      if (Number.isFinite(maxAmount)) {
-        conditions.push(sql`${vouchers.totalAmount}::numeric <= ${maxAmount}`);
-      }
-
-      const isPos = req.session.currentRole === "POS";
-      if (isPos && req.user?.id) {
-        const assignedLocations = await db
-          .select({ locationId: userLocations.locationId })
-          .from(userLocations)
-          .where(and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, companyId)));
-        const allowedLocationIds = assignedLocations.map((row) => row.locationId);
-        if (allowedLocationIds.length > 0) {
-          conditions.push(or(isNull(vouchers.locationId), inArray(vouchers.locationId, allowedLocationIds)));
+      if (Number.isFinite(minAmount)) conditions.push(sql`${amountForFilter} >= ${minAmount}`);
+      if (Number.isFinite(maxAmount)) conditions.push(sql`${amountForFilter} <= ${maxAmount}`);
+      if (isPos) {
+        const allowed = [...(await getPosDaybookLocations(liveContext)).keys()];
+        if (!allowed.length) {
+          conditions.push(sql`false`);
+        } else {
+          const ids = sql.join(allowed.map((id) => sql`${id}`), sql`, `);
+          // Apply the stock-leg predicate BEFORE counting and pagination.
+          // A receiving location sees an incoming transfer regardless of
+          // which warehouse was used as the voucher's header location.
+          conditions.push(
+            or(
+              and(
+                eq(vouchers.voucherType, "Sales"),
+                inArray(vouchers.locationId, allowed)
+              ),
+              and(
+                sql`${vouchers.voucherType} IN ('Stock Transfer', 'StockTransfer', 'Transfer')`,
+                sql`EXISTS (
+                  SELECT 1 FROM stock_transfer_vouchers stv
+                  LEFT JOIN stock_transfer_items sti ON sti.transfer_id = stv.id
+                  WHERE stv.voucher_id = ${vouchers.id}
+                    AND (
+                      stv.destination_location_id IN (${ids})
+                      OR COALESCE(sti.source_location_id, stv.source_location_id) IN (${ids})
+                    )
+                )`
+              )
+            )
+          );
         }
       }
 
@@ -190,7 +205,8 @@ export function registerVoucherPaginationRoutes(app: Express): void {
       const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
       const narrated = await withStockTransferNarrations(companyId, data);
       const withTenants = await withPropertiesRentalTenantNames(companyId, narrated);
-      const items = isPos ? sanitizeForPos(withTenants) : withTenants;
+      const scoped = isPos ? await scopePosDaybookVouchers(withTenants, liveContext) : withTenants;
+      const items = await withPosZmwNativeTotals(scoped);
       applyPaginationHeaders(res, total, page, limit, totalPages);
       return res.json({
         items,

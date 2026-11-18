@@ -38,6 +38,8 @@ import {
   wrapText,
   type InvoiceData,
 } from "./generateInvoicePdfWrapText";
+import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import Decimal from "decimal.js";
 
 // ── PDF renderer ──────────────────────────────────────────────────────────────
 export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: number }> {
@@ -70,10 +72,9 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
   const isMali = d.companyName.toLowerCase().includes("mali");
   const isZmwInvoice =
     d.currency === "ZMW" && d.exchangeRate !== null && Number.isFinite(d.exchangeRate) && d.exchangeRate > 0;
-  const formatSaleAmount = (usd: number) =>
-    isZmwInvoice
-      ? `K${(usd * d.exchangeRate!).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : fmtUSD(usd);
+  const formatNative = (amount: number) =>
+    `K${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatSaleAmount = (usd: number) => (isZmwInvoice ? formatNative(usd * d.exchangeRate!) : fmtUSD(usd));
 
   // Auto-hide profit columns when no item has a configured price set
   const hasConfiguredPrice = d.items.some((item) => item.configuredPrice > 0);
@@ -221,16 +222,24 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
   // ── Item rows ─────────────────────────────────────────────────────────────────
   let totalQty = 0;
   let totalAmt = 0;
+  let totalAmtZmw = new Decimal(0);
   let totalPL = 0;
   let rowIndex = 0;
 
   for (const item of d.items) {
     const amtUSD = item.quantity * item.rateUSD;
+    const nativeUnitZmw = isZmwInvoice
+      ? resolveZmwUnitPrice({ quantity: 1, rate: item.rateUSD }, d.exchangeRate!, true).toNumber()
+      : null;
+    const nativeLineZmw = isZmwInvoice
+      ? calculateZmwSaleAmounts([{ quantity: item.quantity, rate: item.rateUSD }], d.exchangeRate!, true).nativeTotal
+      : null;
     const plBale = item.rateUSD - item.configuredPrice;
     const itemPL = plBale * item.quantity;
 
     totalQty += item.quantity;
     totalAmt += amtUSD;
+    if (nativeLineZmw != null) totalAmtZmw = totalAmtZmw.plus(nativeLineZmw);
     totalPL += itemPL;
 
     doc.font("Helvetica-Bold").fontSize(FONT_ROW);
@@ -279,13 +288,17 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
 
     doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
     doc.text(fmtQty(item.quantity), X_QTY + 1, cy, { width: COL_QTY_W - 2, align: "center", lineBreak: false });
-    doc.text(formatSaleAmount(item.rateUSD), X_RATE + 1, cy, {
+    doc.text(nativeUnitZmw !== null ? formatNative(nativeUnitZmw) : formatSaleAmount(item.rateUSD), X_RATE + 1, cy, {
       width: COL_RATE_W - 2,
       align: "center",
       lineBreak: false,
     });
     doc.font("Helvetica-Bold").fontSize(FONT_ROW).fillColor(CLR_BODY);
-    doc.text(formatSaleAmount(amtUSD), X_AMT + 1, cy, { width: COL_AMT_W - 2, align: "center", lineBreak: false });
+    doc.text(nativeLineZmw !== null ? formatNative(Number(nativeLineZmw)) : formatSaleAmount(amtUSD), X_AMT + 1, cy, {
+      width: COL_AMT_W - 2,
+      align: "center",
+      lineBreak: false,
+    });
 
     if (!hideProfitCols) {
       doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
@@ -309,6 +322,8 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     doc.x = MARGIN_X;
   }
 
+  const finalNativeZmw = d.nativeZmwTotal ?? totalAmtZmw.toNumber();
+
   // ── TOTAL + TOTAL PAID + footer — keep together on the same page ─────────────
   const totH = d.compactMode ? 14 : 18;
   const paidH = d.compactMode ? 24 : 32;
@@ -329,7 +344,7 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     .fillColor(CLR_WHITE);
   cellText(doc, "TOTAL", X_DESC, COL_DESC_W, y, totH, "left");
   cellText(doc, fmtQty(totalQty), X_QTY, COL_QTY_W, y, totH, "center");
-  cellText(doc, fmtUSD(totalAmt), X_AMT, COL_AMT_W, y, totH, "center");
+  cellText(doc, isZmwInvoice ? formatNative(finalNativeZmw) : fmtUSD(totalAmt), X_AMT, COL_AMT_W, y, totH, "center");
   if (!hideProfitCols) {
     const plSign = totalPL > 0 ? "+" : totalPL < 0 ? "−" : "";
     doc.fillColor(totalPL >= 0 ? CLR_WHITE : "#ffaaaa");
@@ -338,7 +353,7 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
   y += totH + (d.compactMode ? 5 : 8);
 
   // ── TOTAL PAID block ──────────────────────────────────────────────────────────
-  const paidStr = formatSaleAmount(totalAmt);
+  const paidStr = isZmwInvoice ? formatNative(finalNativeZmw) : formatSaleAmount(totalAmt);
   doc.save();
   doc.rect(MARGIN_X, y, USABLE_W, paidH).fill(CLR_BRAND);
   doc.restore();
