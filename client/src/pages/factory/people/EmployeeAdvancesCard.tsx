@@ -23,6 +23,20 @@ interface EmployeeAdvanceRow {
   notes: string | null;
 }
 
+type RawAdvanceRow = Record<string, unknown>;
+
+/** The advances endpoint returns raw rows (snake_case); accept either spelling. */
+export function toEmployeeAdvanceRow(row: RawAdvanceRow): EmployeeAdvanceRow {
+  return {
+    id: Number(row.id),
+    advanceDate: String(row.advanceDate ?? row.advance_date ?? ""),
+    amount: String(row.amount ?? "0"),
+    remainingBalance: String(row.remainingBalance ?? row.remaining_balance ?? "0"),
+    fullyPaid: Boolean(row.fullyPaid ?? row.fully_paid),
+    notes: (row.notes as string | null | undefined) ?? null,
+  };
+}
+
 export function EmployeeAdvancesCard({
   employeeId,
   formatDate,
@@ -44,7 +58,8 @@ export function EmployeeAdvancesCard({
     queryFn: async () => {
       const res = await fetch(`/api/factory/employee-advances?employeeId=${employeeId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load advances");
-      return res.json();
+      const rows = (await res.json()) as RawAdvanceRow[];
+      return rows.map(toEmployeeAdvanceRow);
     },
   });
 
