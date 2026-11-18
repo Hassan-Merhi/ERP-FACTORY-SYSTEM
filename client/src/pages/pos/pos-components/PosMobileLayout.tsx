@@ -186,7 +186,6 @@ export function PosMobileLayout({
               </button>
             )}
           </div>
-
           {searchTerm && filteredInventory.length > 0 && (
             <div
               id={resultsId}
@@ -237,7 +236,6 @@ export function PosMobileLayout({
           )}
         </div>
       </section>
-
       <section className="border-b bg-muted/10 px-3 py-3 sm:px-4" aria-label="Sale settings">
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {!posUser ? (
@@ -287,7 +285,6 @@ export function PosMobileLayout({
               <span className="min-w-0 truncate font-medium">{activeLocation?.name}</span>
             </div>
           )}
-
           <input
             type="date"
             value={saleDate}
@@ -300,7 +297,6 @@ export function PosMobileLayout({
             data-testid="input-mobile-sale-date"
           />
         </div>
-
         <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {!isSpCompany && (
             <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background px-3">
@@ -316,7 +312,6 @@ export function PosMobileLayout({
               />
             </div>
           )}
-
           {lockedPosEdit ? (
             <div
               className="flex min-h-11 items-center rounded-lg border bg-muted/30 px-3 text-sm"
@@ -419,7 +414,6 @@ export function PosMobileLayout({
           )}
         </div>
       </section>
-
       <section className="min-w-0 space-y-3 px-3 py-4 sm:px-4" aria-labelledby="pos-mobile-cart-title">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
@@ -432,7 +426,6 @@ export function PosMobileLayout({
           </div>
           <ShoppingCart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         </div>
-
         {cartRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center text-muted-foreground">
             <ShoppingCart className="h-12 w-12 opacity-30" />
@@ -460,7 +453,6 @@ export function PosMobileLayout({
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-
                 <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                   <div className="min-w-0 space-y-1">
                     <Label htmlFor={`input-mobile-qty-${actualIndex}`} className="text-xs text-muted-foreground">
@@ -501,7 +493,6 @@ export function PosMobileLayout({
                       </Button>
                     </div>
                   </div>
-
                   <div className="grid min-w-0 grid-cols-2 gap-3">
                     <div className="min-w-0 space-y-1">
                       <Label htmlFor={`input-mobile-rate-${actualIndex}`} className="text-xs text-muted-foreground">
