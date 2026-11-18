@@ -11,7 +11,8 @@ export async function companyImportRoutesStep({ req, res }: { req: Request; res:
   const targetCompanyId = req.session.currentCompanyId;
   if (!targetCompanyId) return { done: true as const, value: res.status(400).json({ message: "No company selected" }) };
 
-  const jsonStr = req.file.buffer.toString("utf-8");
+  // The route has already refused a request without a file.
+  const jsonStr = req.file?.buffer.toString("utf-8") ?? "";
   let payload: CompanyExportPayload;
   try {
     payload = JSON.parse(jsonStr) as CompanyExportPayload;

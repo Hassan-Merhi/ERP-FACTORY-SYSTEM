@@ -223,10 +223,11 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             );
           });
 
+          const { totalRecords } = ci1;
           res.json({
             success: true,
-            message: `Successfully imported ${ci1.totalRecords} records across ${Object.keys(summary).length} tables`,
-            totalRecords: ci1.totalRecords,
+            message: `Successfully imported ${totalRecords} records across ${Object.keys(summary).length} tables`,
+            totalRecords,
             details: summary,
           });
         } catch (importError: unknown) {

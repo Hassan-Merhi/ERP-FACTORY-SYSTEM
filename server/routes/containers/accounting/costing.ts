@@ -328,23 +328,24 @@ export function registerContainerCostingRoutes(app: Express) {
         }
 
         const scannedContainers = containerIds.length;
+        const { scannedPOs, updatedLocalVouchers, updatedParentVouchers, updatedFreightVouchers } = poCounts;
         logger.info(
-          `[SyncAll] Done. POs=${poCounts.scannedPOs} Containers=${scannedContainers} LocalVouchers=${poCounts.updatedLocalVouchers} ParentVouchers=${poCounts.updatedParentVouchers} FreightVouchers=${poCounts.updatedFreightVouchers} ContainerCharges=${updatedContainerCharges} ContainerTotals=${updatedContainers} Skipped=${skipped.length} NotFound=${notFoundParentVouchers.length} Errors=${errors.length}`
+          `[SyncAll] Done. POs=${scannedPOs} Containers=${scannedContainers} LocalVouchers=${updatedLocalVouchers} ParentVouchers=${updatedParentVouchers} FreightVouchers=${updatedFreightVouchers} ContainerCharges=${updatedContainerCharges} ContainerTotals=${updatedContainers} Skipped=${skipped.length} NotFound=${notFoundParentVouchers.length} Errors=${errors.length}`
         );
 
         res.json({
-          scannedPOs: poCounts.scannedPOs,
+          scannedPOs,
           scannedContainers,
-          updatedLocalVouchers: poCounts.updatedLocalVouchers,
-          updatedParentVouchers: poCounts.updatedParentVouchers,
-          updatedFreightVouchers: poCounts.updatedFreightVouchers,
+          updatedLocalVouchers,
+          updatedParentVouchers,
+          updatedFreightVouchers,
           updatedContainerCharges,
           updatedContainers,
           skipped,
           notFoundParentVouchers,
           missingParentFreightAccount,
           errors,
-          message: `Scanned ${poCounts.scannedPOs} POs. Updated ${poCounts.updatedLocalVouchers} local vouchers, ${poCounts.updatedParentVouchers} parent JVs, ${updatedContainers} container totals.`,
+          message: `Scanned ${scannedPOs} POs. Updated ${updatedLocalVouchers} local vouchers, ${updatedParentVouchers} parent JVs, ${updatedContainers} container totals.`,
         });
       } catch (error: unknown) {
         logger.error("[SyncAll] Fatal error:", { error });

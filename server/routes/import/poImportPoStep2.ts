@@ -83,7 +83,7 @@ export async function poImportPoStep2({
       creditAmount: poGrandTotal.toFixed(2),
       narration: `PO ${poNumber} - Container ${containerNumber}`,
     });
-  } else if (isSubsidiary) {
+  } else if (isSubsidiary && parentCompanyId !== null) {
     // Get the subsidiary's company settings for parent credit account
     let parentCreditAccountId = configuredIntercompanyCreditAccountId;
 

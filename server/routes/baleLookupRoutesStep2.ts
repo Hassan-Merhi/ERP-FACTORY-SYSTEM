@@ -27,6 +27,7 @@ export async function baleLookupRoutesStep2({
   res: Response;
 }) {
   const { labelPrint, companyId, normalizedBaleReferenceMatch, referenceNumber, bookingInfoVisible } = blr1;
+  let factoryBale: typeof factoryBales.$inferSelect | undefined;
   let baleInfo: BaleLookupInfo | null = null;
   let locationInfo = null;
   let pressingBatch = null;
@@ -34,14 +35,14 @@ export async function baleLookupRoutesStep2({
   let containers_used: unknown[] = [];
 
   if (labelPrint.productionBaleId) {
-    [blr1.factoryBale] = await db
+    [factoryBale] = await db
       .select()
       .from(factoryBales)
       .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, labelPrint.productionBaleId)))
       .limit(1);
   }
 
-  if (!blr1.factoryBale) {
+  if (!factoryBale) {
     const fallbackFactoryBales = await db
       .select()
       .from(factoryBales)
@@ -54,58 +55,58 @@ export async function baleLookupRoutesStep2({
         value: res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" }),
       };
     }
-    blr1.factoryBale = fallbackFactoryBales[0];
+    factoryBale = fallbackFactoryBales[0];
   }
 
-  if (blr1.factoryBale) {
+  if (factoryBale) {
     // Use the name stored on the bale row directly — this matches what the bale history page shows.
-    const resolvedProductName = blr1.factoryBale.productName;
+    const resolvedProductName = factoryBale.productName;
 
     // Use stored workerName first (denormalized); fall back to join if not yet populated
-    let workerName: string | null = blr1.factoryBale.workerName ?? null;
-    if (!workerName && blr1.factoryBale.finalizedBy) {
+    let workerName: string | null = factoryBale.workerName ?? null;
+    if (!workerName && factoryBale.finalizedBy) {
       const [wk] = await db
         .select({ fullName: factoryWorkers.fullName })
         .from(factoryWorkers)
-        .where(eq(factoryWorkers.id, blr1.factoryBale.finalizedBy))
+        .where(eq(factoryWorkers.id, factoryBale.finalizedBy))
         .limit(1);
       if (wk) workerName = wk.fullName;
     }
 
     baleInfo = {
-      id: blr1.factoryBale.id,
-      baleCode: blr1.factoryBale.baleCode,
+      id: factoryBale.id,
+      baleCode: factoryBale.baleCode,
       productName: resolvedProductName,
-      status: blr1.factoryBale.status,
-      weightKg: blr1.factoryBale.weightKg,
-      costPerKg: blr1.factoryBale.costPerKg,
-      totalCost: blr1.factoryBale.totalCost,
-      grade: blr1.factoryBale.grade,
-      stockEntryDate: blr1.factoryBale.stockEntryDate,
-      pressedAt: blr1.factoryBale.pressedAt,
-      finalizedAt: blr1.factoryBale.finalizedAt,
+      status: factoryBale.status,
+      weightKg: factoryBale.weightKg,
+      costPerKg: factoryBale.costPerKg,
+      totalCost: factoryBale.totalCost,
+      grade: factoryBale.grade,
+      stockEntryDate: factoryBale.stockEntryDate,
+      pressedAt: factoryBale.pressedAt,
+      finalizedAt: factoryBale.finalizedAt,
       workerName,
-      createdAt: blr1.factoryBale.createdAt,
-      updatedAt: blr1.factoryBale.updatedAt,
-      deletedAt: blr1.factoryBale.deletedAt,
+      createdAt: factoryBale.createdAt,
+      updatedAt: factoryBale.updatedAt,
+      deletedAt: factoryBale.deletedAt,
     };
 
     // Get location
-    if (blr1.factoryBale.erpLocationId) {
+    if (factoryBale.erpLocationId) {
       const [loc] = await db
         .select({ id: locations.id, name: locations.name, city: locations.city, state: locations.state })
         .from(locations)
-        .where(eq(locations.id, blr1.factoryBale.erpLocationId))
+        .where(eq(locations.id, factoryBale.erpLocationId))
         .limit(1);
       if (loc) locationInfo = loc;
     }
 
     // Get pressing batch
-    if (blr1.factoryBale.pressingBatchId) {
+    if (factoryBale.pressingBatchId) {
       const [pb] = await db
         .select()
         .from(factoryPressingBatches)
-        .where(eq(factoryPressingBatches.id, blr1.factoryBale.pressingBatchId))
+        .where(eq(factoryPressingBatches.id, factoryBale.pressingBatchId))
         .limit(1);
       if (pb) {
         pressingBatch = {

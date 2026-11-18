@@ -233,7 +233,6 @@ export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Re
   // ── Enrich with factory_bales data (stable id first, normalized reference fallback) ──
 
   const normalizedBaleReferenceMatch = sql`LOWER(TRIM(${factoryBales.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`;
-  let factoryBale: typeof factoryBales.$inferSelect | undefined;
 
   return {
     done: false as const,
@@ -245,6 +244,5 @@ export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Re
     scannedByName,
     product,
     normalizedBaleReferenceMatch,
-    factoryBale,
   };
 }

@@ -205,7 +205,8 @@ export async function rawStockOffloadRoutesStep({ req, res }: { req: Request; re
   }
 
   // ── Commission computation (DB insert deferred into the transaction) ──────
-  let commissionRecord: typeof factoryContainerCommissions.$inferSelect | null = null;
+  // Assigned by the offload transaction once the commission row is inserted.
+  const commissionRecord = null as typeof factoryContainerCommissions.$inferSelect | null;
   const costing = await computeOffloadCosting({
     companyId,
     containerId,
