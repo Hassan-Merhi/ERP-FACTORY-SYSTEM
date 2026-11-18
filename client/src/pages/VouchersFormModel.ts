@@ -57,11 +57,12 @@ export function useVouchersFormModel({ posUser }: { posUser: { posUser: Vouchers
   const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
     ...erpPageAccessQueryOptions(selectedCompany?.id, !isPOS && appMode === "erp"),
   });
-  const showOptionalDrafts = !isPOS && (
-    (appMode === "factory" && isFactoryCompany) ||
-    (appMode === "erp" && !isRetailCompany &&
-      (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true))
-  );
+  const showOptionalDrafts =
+    !isPOS &&
+    ((appMode === "factory" && isFactoryCompany) ||
+      (appMode === "erp" &&
+        !isRetailCompany &&
+        (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true)));
   const posLocationId = posUser?.assignedLocationId;
 
   const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
