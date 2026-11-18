@@ -38,7 +38,7 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
 
     const voucherId = Number(req.params.id);
     if (!Number.isSafeInteger(voucherId) || voucherId <= 0) {
-      res.status(400).json({ code: "POS_SALE_ID_INVALID", message: "Invalid sale ID" });
+      res.status(400).json({ code: "POS_SALE_ID_INVALID", message: posDaybookEditMessages.invalidSaleId });
       return;
     }
 
@@ -76,7 +76,7 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
     }
 
     if (sale.optional) {
-      res.status(403).json({ code: "POS_SALE_OPTIONAL", message: "Optional sales cannot be edited from Daybook." });
+      res.status(403).json({ code: "POS_SALE_OPTIONAL", message: posDaybookEditMessages.optionalSale });
       return;
     }
 
@@ -92,7 +92,7 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
       )
       .limit(1);
     if (!sale.locationId || (!locationAccess && context.assignedLocationId !== sale.locationId)) {
-      res.status(403).json({ code: "POS_SALE_LOCATION_DENIED", message: "Sale location is not assigned to this cashier." });
+      res.status(403).json({ code: "POS_SALE_LOCATION_DENIED", message: posDaybookEditMessages.locationNotAssigned });
       return;
     }
 
@@ -133,7 +133,7 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
     }
 
     if (req.body?.locationId !== undefined && Number(req.body.locationId) !== sale.locationId) {
-      res.status(403).json({ code: "POS_SALE_EDIT_LOCATION_LOCKED", message: "POS cashiers cannot change the sale location." });
+      res.status(403).json({ code: "POS_SALE_EDIT_LOCATION_LOCKED", message: posDaybookEditMessages.locationLocked });
       return;
     }
 

@@ -16,6 +16,7 @@ export const posCustomerAccessText = {
   createDenied: "Access denied: this account cannot create customers.",
   openingDenied: "POS users cannot assign opening balances when creating customers.",
   ledgerDenied: "POS users cannot link a customer to an existing ledger account.",
+  summary: "View and create customers",
 } as const;
 
 export function canViewPosCustomers(flags: PosCustomerAccessFlags): boolean {

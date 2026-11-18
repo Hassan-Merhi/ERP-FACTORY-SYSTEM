@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,11 +40,11 @@ export function POSDaybookEditPanel({
       void queryClient.invalidateQueries({ queryKey: [`/api/vouchers/${sale.id}`] });
       void queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       invalidateLocationInventoryQueries(sale.locationId);
-      toast({ title: "Sale updated", description: `Receipt ${sale.voucherNumber} was saved.` });
+      toast({ title: "Sale updated", description: posDaybookEditMessages.savedReceipt(sale.voucherNumber) });
       onSaved();
     },
     onError: (error: Error) => {
-      toast({ title: "Unable to update sale", description: error.message, variant: "destructive" });
+      toast({ title: posDaybookEditMessages.updateFailed, description: error.message, variant: "destructive" });
     },
   });
 
@@ -132,7 +133,7 @@ export function POSDaybookEditPanel({
           }}
         >
           <SelectTrigger id="pos-daybook-add-item" data-testid="pos-daybook-add-item" className="max-w-sm">
-            <SelectValue placeholder="Choose a stock item..." />
+            <SelectValue placeholder={posDaybookEditMessages.chooseStockItem} />
           </SelectTrigger>
           <SelectContent>
             {availableItems.map((item) => (
@@ -152,7 +153,7 @@ export function POSDaybookEditPanel({
       </div>
       <div className="flex justify-end gap-2 border-t pt-3">
         <Button type="button" variant="outline" onClick={onCancel} disabled={mutation.isPending}>
-          Cancel editing
+          {posDaybookEditMessages.cancelEditing}
         </Button>
         <Button
           type="button"

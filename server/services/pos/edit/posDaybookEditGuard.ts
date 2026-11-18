@@ -81,7 +81,7 @@ export async function validateLockedPosDaybookEdit(
   }
 
   if (voucher.optional) {
-    return { status: 403, body: { code: "POS_SALE_OPTIONAL", message: "Optional sales cannot be edited from Daybook." } };
+    return { status: 403, body: { code: "POS_SALE_OPTIONAL", message: posDaybookEditMessages.optionalSale } };
   }
 
   const body = params.body;
@@ -96,7 +96,7 @@ export async function validateLockedPosDaybookEdit(
     return { status: 403, body: { code: "POS_SALE_EDIT_PAYMENT_LOCKED", message: posDaybookEditMessages.noPaymentChange } };
   }
   if (body.locationId != null && Number(body.locationId) !== voucher.locationId) {
-    return { status: 403, body: { code: "POS_SALE_EDIT_LOCATION_LOCKED", message: "POS cashiers cannot change the sale location." } };
+    return { status: 403, body: { code: "POS_SALE_EDIT_LOCATION_LOCKED", message: posDaybookEditMessages.locationLocked } };
   }
   return null;
 }

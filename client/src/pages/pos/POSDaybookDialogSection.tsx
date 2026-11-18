@@ -3,7 +3,7 @@ import { Lock, MessageCircle, Pencil, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
-import { posDaybookEditEligibility } from "@shared/posDaybookEditPolicy";
+import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
 import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -59,7 +59,7 @@ export function POSDaybookDialogSection({
     enabled: Boolean(selectedCompany?.id && selectedVoucher),
     queryFn: async () => {
       const response = await fetch("/api/pos/daybook-edit-status", { credentials: "include" });
-      if (!response.ok) throw new Error("Unable to check Daybook edit permissions");
+      if (!response.ok) throw new Error(posDaybookEditMessages.accessCheckFailed);
       return response.json();
     },
     refetchInterval: 30_000,

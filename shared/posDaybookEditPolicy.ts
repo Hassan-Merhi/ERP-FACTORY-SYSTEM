@@ -42,4 +42,13 @@ export const posDaybookEditMessages = {
   invalidRate: "This sale has no valid historical Kwacha exchange rate.",
   invalidLine: "Quantity and selling price must both be positive.",
   invalidKwachaPrecision: "Kwacha prices cannot have more than two decimals.",
+  accessCheckFailed: "Unable to check Daybook edit permissions",
+  chooseStockItem: "Choose a stock item...",
+  cancelEditing: "Cancel editing",
+  savedReceipt: (voucherNumber: string | number) => `Receipt ${voucherNumber} was saved.`,
+  updateFailed: "Unable to update sale",
+  invalidSaleId: "Invalid sale ID",
+  optionalSale: "Optional sales cannot be edited from Daybook.",
+  locationNotAssigned: "Sale location is not assigned to this cashier.",
+  locationLocked: "POS cashiers cannot change the sale location.",
 } as const;
