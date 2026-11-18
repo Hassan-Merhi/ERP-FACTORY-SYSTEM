@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Factory Phase 2 follow-up isolation on main", () => {
   const scopedPages: Record<string, string[]> = {

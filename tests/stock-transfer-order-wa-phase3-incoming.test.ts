@@ -80,56 +80,91 @@ describe("Stock Transfer Order GREEN API reply validation", () => {
       command: "DONE",
       quotedMessageId: incoming.messageData.quotedMessage.stanzaId,
     });
-    expect(parseStockTransferOrderWaReply({
-      ...outgoing, typeWebhook: "outgoingAPIMessageReceived",
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...outgoing, senderData: { ...outgoing.senderData, sender: "96170123456@c.us" },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...outgoing, instanceData: { ...outgoing.instanceData, wid: "96170123456@c.us" },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...outgoing,
-      messageData: { typeMessage: "textMessage", textMessageData: { textMessage: "DONE" } },
-    })).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...outgoing,
+        typeWebhook: "outgoingAPIMessageReceived",
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...outgoing,
+        senderData: { ...outgoing.senderData, sender: "96170123456@c.us" },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...outgoing,
+        instanceData: { ...outgoing.instanceData, wid: "96170123456@c.us" },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...outgoing,
+        messageData: { typeMessage: "textMessage", textMessageData: { textMessage: "DONE" } },
+      })
+    ).toBeNull();
   });
 
   it("ignores general chat chatter, unquoted commands and unexpected message types", () => {
     const payload = groupReply();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, messageData: { typeMessage: "textMessage", textMessageData: { textMessage: "DONE" } },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, messageData: { ...payload.messageData, textMessageData: { textMessage: "DONE ALL" } },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, messageData: { ...payload.messageData, typeMessage: "documentMessage" },
-    })).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        messageData: { typeMessage: "textMessage", textMessageData: { textMessage: "DONE" } },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        messageData: { ...payload.messageData, textMessageData: { textMessage: "DONE ALL" } },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        messageData: { ...payload.messageData, typeMessage: "documentMessage" },
+      })
+    ).toBeNull();
     expect(parseStockTransferOrderWaReply({ ...payload, typeWebhook: "outgoingAPIMessageReceived" })).toBeNull();
   });
 
   it("ignores private chats, group senders masquerading as phone numbers and LID senders", () => {
     const payload = groupReply();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, senderData: { ...payload.senderData, chatId: "96170123456@c.us" },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, senderData: { ...payload.senderData, sender: "123456789012@lid" },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, senderData: { ...payload.senderData, sender: "120363369140947676@g.us" },
-    })).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        senderData: { ...payload.senderData, chatId: "96170123456@c.us" },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        senderData: { ...payload.senderData, sender: "123456789012@lid" },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        senderData: { ...payload.senderData, sender: "120363369140947676@g.us" },
+      })
+    ).toBeNull();
   });
 
   it("fails closed for missing instance ID, invalid message IDs and malformed notification body", () => {
     const payload = groupReply();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, instanceData: { typeInstance: "whatsapp" },
-    })).toBeNull();
-    expect(parseStockTransferOrderWaReply({
-      ...payload, idMessage: " ",
-    })).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        instanceData: { typeInstance: "whatsapp" },
+      })
+    ).toBeNull();
+    expect(
+      parseStockTransferOrderWaReply({
+        ...payload,
+        idMessage: " ",
+      })
+    ).toBeNull();
     expect(parseStockTransferOrderWaReply({})).toBeNull();
     expect(parseStockTransferOrderWaReply("DONE")).toBeNull();
   });

@@ -2,9 +2,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
-const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
+const read = (file) => readModuleFamily(path.join(ROOT, file));
 const failures = [];
 
 const sources = {

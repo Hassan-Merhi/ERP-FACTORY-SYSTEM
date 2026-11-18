@@ -2,12 +2,12 @@
  * Guard the dispatch-managed loading UX and the consolidated invoice display.
  * Structural coverage is deliberately separate from live posted-voucher QA.
  */
-import fs from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MoneyDecimal, sumMoney } from "../server/lib/money";
 
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 
 describe("posted dispatch loading priorities and one customer-facing charge", () => {
   const middleware = read("server/routes/factoryRoutes.ts");
@@ -38,7 +38,7 @@ describe("posted dispatch loading priorities and one customer-facing charge", ()
     expect(markSold).toBeGreaterThan(guard);
     expect(loading).toContain('code: "DISPATCH_CONSOLIDATION_REQUIRED"');
     expect(client).toContain('error.message.includes("DISPATCH_CONSOLIDATION_REQUIRED")');
-    expect(client).toContain('navigate(`/factory/sales/loading/dispatch/${orderId}/compare`)');
+    expect(client).toContain("navigate(`/factory/sales/loading/dispatch/${orderId}/compare`)");
   });
 
   it("renders exactly one net fee line from signed customer-billable trip charges", () => {

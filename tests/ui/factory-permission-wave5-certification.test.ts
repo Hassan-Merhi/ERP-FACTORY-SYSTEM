@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -48,7 +49,7 @@ function guardedRedirect(access: MyAccess, currentLocation: string, userRole = "
 
 describe("Wave 5 Factory permission registry certification", () => {
   it("covers every mounted Factory route, including detail and compatibility routes", () => {
-    const routesSource = readFileSync("client/src/components/FactoryRoutes.tsx", "utf8");
+    const routesSource = readModuleFamily("client/src/components/FactoryRoutes.tsx");
     const mountedRoutes = [...routesSource.matchAll(/<Route\s+path="(\/factory\/[^"]+)"/g)].map((match) => match[1]);
 
     expect(mountedRoutes.length).toBeGreaterThan(100);
@@ -73,8 +74,8 @@ describe("Wave 5 Factory permission registry certification", () => {
       // Hub tab keys live in the shared Factory navigation config since the
       // Factory unification; the hubs read them from there.
       readTree("client/src/factory"),
-      readFileSync("client/src/pages/AccountsLegacy.tsx", "utf8"),
-      readFileSync("client/src/pages/Vouchers.tsx", "utf8"),
+      readModuleFamily("client/src/pages/AccountsLegacy.tsx"),
+      readModuleFamily("client/src/pages/Vouchers.tsx"),
     ].join("\n");
 
     const usedKeys = new Set(
@@ -96,7 +97,7 @@ describe("Wave 5 Factory permission registry certification", () => {
   });
 
   it("keeps backend page/tab ownership keys aligned with the shared registries", () => {
-    const backend = readFileSync("server/middleware/factoryBackendAccessBoundary.ts", "utf8");
+    const backend = readModuleFamily("server/middleware/factoryBackendAccessBoundary.ts");
     const pageKeys = new Set(
       [...backend.matchAll(/requirement\("(factory\/[a-z0-9_\/-]+)"/g)].map((match) => match[1])
     );

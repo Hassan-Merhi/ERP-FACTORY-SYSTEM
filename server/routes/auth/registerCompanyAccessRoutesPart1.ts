@@ -1,0 +1,298 @@
+// Extracted from ./companyAccessRoutes.ts to keep that module under the source-size cap.
+import type { Express } from "express";
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import { hashPassword } from "../helpers/passwordHelpers";
+import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE, ERP_TESTER_ROLE_PERMISSIONS } from "@shared/erpTestCompanyAccess";
+import { requireAuth, requireRole } from "../../auth";
+import { db, pool } from "../../db";
+import { getErrorMessage } from "../../lib/httpHandlers";
+import { logger } from "../../lib/logger";
+import {
+  CompanyAccessError,
+  getAccessibleCompanyIds,
+  resolveAuthorizedCompanyId,
+  sendCompanyAccessError,
+} from "../../security/companyAccessBoundary";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../../services/security/databaseScopeRuntimeContext";
+import { storage } from "../../storage";
+import { CompanyHasHistoryError } from "../../storage/company-deletion";
+import { companies, erpUserPageAccess, roleFeaturePermissions, userCompanyRoles, users } from "@shared/schema";
+import { disableSessionResponseCaching, prepareCompanyPayload } from "./prepareCompanyPayload";
+
+export function registerCompanyAccessRoutesPart1(app: Express) {
+  app.get("/api/companies", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const accessible = await getAccessibleCompanyIds(req.user.id);
+      const allCompanies = await storage.getAllCompanies();
+      res.json(allCompanies.filter((company) => accessible.has(Number(company.id))));
+    } catch (error: unknown) {
+      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/user/companies", requireAuth, async (req, res) => {
+    disableSessionResponseCaching(res);
+    try {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      if (req.user.role === "Developer") {
+        const allCompanies = await storage.getAllCompanies();
+        return res.json(
+          allCompanies
+            .filter((company) => company.active)
+            .map((company) => ({
+              id: -1,
+              userId: req.user!.id,
+              companyId: company.id,
+              role: "Developer",
+              assignedLocationId: null,
+              cashAccountId: null,
+              posStation: null,
+              canSellNegativeStock: true,
+              daybookEditDays: 9999,
+              canAccessCustomers: true,
+              createdAt: new Date(),
+              companyCode: company.code,
+              companyName: company.name,
+              companyActive: company.active,
+              companyType: company.companyType || "erp",
+            }))
+        );
+      }
+
+      const { rows } = await pool.query(
+        `SELECT
+           ucr.id,
+           ucr.user_id                  AS "userId",
+           ucr.company_id               AS "companyId",
+           ucr.role,
+           ucr.assigned_location_id     AS "assignedLocationId",
+           ucr.cash_account_id          AS "cashAccountId",
+           ucr.pos_station              AS "posStation",
+           ucr.can_sell_negative_stock  AS "canSellNegativeStock",
+           ucr.daybook_edit_days        AS "daybookEditDays",
+           ucr.can_access_customers     AS "canAccessCustomers",
+           ucr.can_delete_records       AS "canDeleteRecords",
+           ucr.pos_view_only            AS "posViewOnly",
+           ucr.created_at               AS "createdAt",
+           c.code                       AS "companyCode",
+           c.name                       AS "companyName",
+           c.active                     AS "companyActive",
+           COALESCE(c.company_type, 'erp') AS "companyType"
+         FROM user_company_roles ucr
+         INNER JOIN companies c ON c.id = ucr.company_id
+         WHERE ucr.user_id = $1 AND c.active = true
+         ORDER BY c.name`,
+        [req.user.id]
+      );
+      res.json(rows);
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Provision a fresh standalone ERP company and a non-admin tester atomically.
+  // No fixtures, ledger entries, stock, or production records are created.
+  app.post("/api/companies/erp-test", requireAuth, requireRole("Admin"), async (req, res) => {
+    const inputSchema = z
+      .object({
+        companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
+        username: z
+          .string()
+          .trim()
+          .regex(/^[a-zA-Z0-9._-]{3,48}$/)
+          .optional(),
+      })
+      .strict();
+
+    const parsed = inputSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        message:
+          "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
+      });
+    }
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const suffix = randomBytes(5).toString("hex");
+    const code = `ERPTEST-${suffix.toUpperCase()}`;
+    const username = parsed.data.username || `erp_tester_${suffix}`;
+    // No default or checked-in password. Show this value once to the administrator.
+    const password = randomBytes(24).toString("base64url");
+
+    try {
+      const passwordHash = await hashPassword(password);
+      const created = await db.transaction(async (tx) => {
+        const [company] = await tx
+          .insert(companies)
+          .values({
+            code,
+            name: parsed.data.companyName,
+            companyType: "erp",
+            parentCompanyId: null,
+            baseCurrency: "USD",
+            active: true,
+          })
+          .returning({ id: companies.id, name: companies.name, code: companies.code });
+
+        const [tester] = await tx
+          .insert(users)
+          .values({
+            username,
+            password: passwordHash,
+            active: true,
+          })
+          .returning({ id: users.id, username: users.username });
+
+        await tx.insert(userCompanyRoles).values({
+          userId: tester.id,
+          companyId: company.id,
+          role: ERP_TESTER_ROLE,
+          canAccessCustomers: true,
+          canDeleteRecords: true,
+          daybookEditDays: 3650,
+        });
+
+        // An Admin provisioning the sandbox must be able to switch into it to
+        // administer the tester. Developer already has global company access.
+        if (req.user!.role !== "Developer") {
+          await tx.insert(userCompanyRoles).values({
+            userId: req.user!.id,
+            companyId: company.id,
+            role: "Admin",
+          });
+        }
+
+        await tx.insert(erpUserPageAccess).values(
+          ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+            companyId: company.id,
+            userId: tester.id,
+            pageKey,
+          }))
+        );
+
+        await tx.insert(roleFeaturePermissions).values(
+          ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => ({
+            companyId: company.id,
+            role: ERP_TESTER_ROLE,
+            featureKey,
+            enabled,
+          }))
+        );
+
+        return { company, tester };
+      });
+
+      res.setHeader("Cache-Control", "no-store");
+      res.status(201).json({
+        company: created.company,
+        tester: { username: created.tester.username, role: ERP_TESTER_ROLE },
+        password,
+        settingsAccess: false,
+      });
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+        return res
+          .status(409)
+          .json({ message: "Company code or tester username already exists. Try again with a different username." });
+      }
+      logger.error("Failed to provision ERP test company", { error });
+      res.status(500).json({ message: "Failed to provision ERP test company; no partial data was saved." });
+    }
+  });
+
+  app.post("/api/companies", requireAuth, requireRole("Admin"), async (req, res) => {
+    try {
+      const payload = await prepareCompanyPayload(req.body, undefined, true);
+      res.status(201).json(await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0]));
+    } catch (error: unknown) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/companies/:id", requireAuth, async (req, res) => {
+    try {
+      const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+      const company = await storage.getCompanyById(companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      res.json(company);
+    } catch (error: unknown) {
+      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.patch("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+    try {
+      const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+      const payload = await prepareCompanyPayload(req.body, companyId);
+      res.json(await storage.updateCompany(companyId, payload as Parameters<typeof storage.updateCompany>[1]));
+    } catch (error: unknown) {
+      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Only inactive companies are eligible for deletion. Admins and Developers
+  // may manage companies, but the storage layer still refuses protected history.
+  app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+    try {
+      const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+      const targetCompany = await storage.getCompanyById(companyId);
+      if (!targetCompany) return res.status(404).json({ message: "Company not found" });
+      if (targetCompany.active) {
+        return res
+          .status(409)
+          .json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
+      }
+      if (Number(req.session.currentCompanyId) === companyId) {
+        return res.status(409).json({
+          message: "Switch to a different company before deleting the company that is currently active.",
+          code: "ACTIVE_COMPANY_DELETE_FORBIDDEN",
+        });
+      }
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      // Company Management is intentionally cross-company for Admin/Developer.
+      // The request's normal DB scope is still pinned to the active company, so
+      // run this one operation under the already-authorized target scope. This is
+      // required for forced RLS tables such as vouchers, customers and inventory.
+      const forceDeleteWithHistory = req.body?.forceDeleteWithHistory === true;
+      const confirmedCompanyCode =
+        typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
+      if (forceDeleteWithHistory && confirmedCompanyCode !== targetCompany.code) {
+        return res
+          .status(400)
+          .json({ message: "Enter the exact company code to permanently delete its accounting history." });
+      }
+      const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
+      await runWithDatabaseScopeRuntimeContext(
+        createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
+        () =>
+          storage.deleteCompany(companyId, {
+            userId: req.user?.id,
+            username: req.user?.username,
+            forceDeleteWithHistory,
+            confirmedCompanyCode,
+          })
+      );
+
+      res.json({ message: "Company deleted successfully" });
+    } catch (error: unknown) {
+      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      if (error instanceof CompanyHasHistoryError) {
+        return res.status(409).json({ message: error.message, code: error.code, blockers: error.blockers });
+      }
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/auth/session-company", requireAuth, (req, res) => {
+    disableSessionResponseCaching(res);
+    res.json({ companyId: req.session.currentCompanyId ?? null });
+  });
+}

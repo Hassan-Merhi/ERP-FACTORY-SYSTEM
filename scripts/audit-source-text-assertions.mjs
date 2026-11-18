@@ -41,7 +41,9 @@ const CONFIG_PATH_PATTERN = /["'`](config\/[^"'`\s]+\.json)["'`]/g;
 // ratchet measured a smaller quantity than the repository actually contained.
 const RELATIVE_SOURCE_PATTERN =
   /new URL\(\s*["'`](\.\.?\/[^"'`\s]+\.(?:ts|tsx|mjs|cjs|js|jsx))["'`]/g;
-const READS_FILE_PATTERN = /\breadFileSync\b|\breadFile\b/;
+// readModuleFamily (scripts/lib/readModuleFamily.mjs) reads a module and its
+// extracted siblings, so it is a source read like readFileSync.
+const READS_FILE_PATTERN = /\breadFileSync\b|\breadFile\b|\breadModuleFamily\b/;
 const TEXT_ASSERTION_PATTERN = /\.(?:toContain|toMatch)\(/g;
 const EXISTENCE_PATTERN = /\bexistsSync\b/;
 

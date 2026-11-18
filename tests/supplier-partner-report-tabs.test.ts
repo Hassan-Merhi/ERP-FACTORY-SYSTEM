@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const reportsPath = path.resolve(process.cwd(), "client/src/pages/sp/SpReports.tsx");
-const reportsSource = fs.readFileSync(reportsPath, "utf8");
+const reportsSource = readModuleFamily(reportsPath);
 
 describe("Supplier Partner report tab navigation", () => {
   it("uses validated URL-backed tab state", () => {

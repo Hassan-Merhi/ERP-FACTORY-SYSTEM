@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 describe("Historical Replay atomic audit", () => {
   it("persists undo and audit from the apply transaction callback", () => {
-    const route = readFileSync(
-      resolve(process.cwd(), "server/routes/factory/raw-stock/historicalReplayRoutesV4.ts"),
-      "utf8"
+    const route = readModuleFamily(
+      resolve(process.cwd(), "server/routes/factory/raw-stock/historicalReplayRoutesV4.ts")
     );
     expect(route).toContain("onCommit: async (client, applyResult, snapshots)");
     expect(route).toContain("INSERT INTO factory_recalc_undo_log");

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const requiredFiles = [
   "server/services/accounting/centralPostingEngine.ts",
@@ -18,7 +19,7 @@ const requiredFiles = [
   "docs/archive/program-2-phase-2-manual-journals-vouchers.md",
 ];
 for (const file of requiredFiles) if (!fs.existsSync(file)) throw new Error(`Program 2 Phase 2 missing required file: ${file}`);
-const read = (file) => fs.readFileSync(file, "utf8");
+const read = (file) => readModuleFamily(file);
 const engine = read(requiredFiles[0]);
 const deps = read(requiredFiles[1]);
 const manual = read(requiredFiles[2]);

@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function source(file: string): string {
-  return readFileSync(join(process.cwd(), file), "utf8");
+  return readModuleFamily(join(process.cwd(), file));
 }
 
 const scanRoutes = source("server/routes/factory/customer-orders/loadingDispatchScanRoutes.ts");
@@ -23,7 +23,9 @@ describe("Factory dispatch bulk scan removal", () => {
   });
 
   it("removes exact active scans in one transaction, refuses stale selections, and writes audit evidence", () => {
-    const handler = scanRoutes.slice(scanRoutes.indexOf('app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove'));
+    const handler = scanRoutes.slice(
+      scanRoutes.indexOf('app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove')
+    );
     expect(handler).toContain("canCorrect(role)");
     expect(handler).toContain("db.transaction(async (tx) =>");
     expect(handler).toContain("FOR UPDATE");
@@ -46,7 +48,9 @@ describe("Factory dispatch deletion", () => {
   });
 
   it("soft-cancels only open unfinalized trips without deleting business or audit records", () => {
-    const start = dispatchRoutes.indexOf('app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel"');
+    const start = dispatchRoutes.indexOf(
+      'app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel"'
+    );
     const end = dispatchRoutes.indexOf("// Phase 1 create endpoint.", start);
     const handler = dispatchRoutes.slice(start, end);
     expect(start).toBeGreaterThan(-1);

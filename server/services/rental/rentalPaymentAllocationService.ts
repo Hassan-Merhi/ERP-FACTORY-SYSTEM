@@ -108,9 +108,7 @@ export async function findEarliestOutstandingMonth(
     // A future prepaid month may still have a zero expected_amount cache
     // when it becomes due. Match the allocation builder's existing fallback
     // to the contract rent until its due-month upsert populates the amount.
-    const expected = persistedExpected.isZero()
-      ? toMoney(contractRow?.rentalAmount ?? 0)
-      : persistedExpected;
+    const expected = persistedExpected.isZero() ? toMoney(contractRow?.rentalAmount ?? 0) : persistedExpected;
     if (expected.minus(posted).gt("0.005")) {
       return { year: row.year, month: row.month };
     }

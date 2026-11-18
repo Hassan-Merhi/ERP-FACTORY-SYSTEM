@@ -1,366 +1,70 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { CalendarDays, Save, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
-
-import type {
-  AttendanceBulkRecord,
-  AttendanceRecord,
-  AttendanceStatus,
-  ViewMode,
-  WorkerRow,
-} from "./factoryattendance/types";
-import {
-  STATUS_COLORS,
-  STATUS_OPTIONS,
-  exportRangeExcel,
-  exportWeeklyExcel,
-  formatDate,
-  generateDateRange,
-  generateRangePrintHtml,
-  generateWeeklyBlankSheetHtml,
-  generateWeeklyResultsSheetHtml,
-  getInitialMode,
-  getWeekDays,
-  setModeInUrl,
-} from "./factoryattendance/utils";
+import { CalendarDays, Save, FileDown, Loader2, MessageCircle } from "lucide-react";
+import { formatDate } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { AttendanceActionsMenu } from "./factoryattendance/components/AttendanceActionsMenu";
 import { AttendanceSummaryGrid } from "./factoryattendance/components/AttendanceSummaryGrid";
 import { AttendanceReportImage } from "./factoryattendance/components/AttendanceReportImage";
 import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageChoiceDialog";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import {
-  attendancePastDates,
-  canSkipAttendanceApproval,
-  attendanceToday,
-  type AttendanceAdminCredentials,
-} from "./factoryattendance/attendanceEditPolicy";
+import { attendanceToday } from "./factoryattendance/attendanceEditPolicy";
 import "./factoryTrackingModern.css";
 import "./factoryAttendanceRefresh.css";
 import { ExportButton } from "@/components/export/ReportExportMenu";
-import { SearchField } from "@/components/ui/search-field";
-
-interface AttendanceWhatsappSettings {
-  attendanceWhatsappGroupId?: string | null;
-}
+import { useFactoryAttendanceState } from "./useFactoryAttendanceStatePart2";
+import { FactoryAttendanceCardSection } from "./FactoryAttendanceCardSection";
 
 export default function FactoryAttendance() {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  // View Only / Create Only roles read attendance but never save or bulk-mark it.
-  const recordChanges = useExistingRecordChangeAccess();
-  const companyRole = selectedCompany?.role;
-  const canEditPastWithoutPassword = useCallback(
-    (dates: string[]) => canSkipAttendanceApproval(companyRole, dates),
-    [companyRole]
-  );
-  const [mode, setMode] = useState<ViewMode>(getInitialMode);
-
-  const showDailyAttendance = () => {
-    setMode("daily");
-    setModeInUrl("daily");
-  };
-
-  // ── Daily attendance state ────────────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<string>(attendanceToday);
-  const [approvalOpen, setApprovalOpen] = useState(false);
-  const [approvalDates, setApprovalDates] = useState<string[]>([]);
-  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<AttendanceBulkRecord[] | null>(null);
-  // Shift is no longer user-selectable on this screen. Keep an empty value for existing save/export payloads.
-  const shift = "";
-
-  // ── Range export state ────────────────────────────────────────
-  const [rangeStart, setRangeStart] = useState<string>(attendanceToday);
-  const [rangeEnd, setRangeEnd] = useState<string>(attendanceToday);
-  const [isExportingRange, setIsExportingRange] = useState(false);
-  const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
-  const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
-  const [notesMap, setNotesMap] = useState<Record<number, string>>({});
-  const [workerSearch, setWorkerSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "other">("all");
-  const attendanceReportRef = useRef<HTMLDivElement>(null);
-
-  const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
-    queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/attendance?date=${selectedDate}`, { credentials: "include" });
-      if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch attendance");
-      return res.json();
-    },
-  });
-
-  const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
-    queryKey: companyQueryKey("/api/factory/settings?scope=attendance", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
-      if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    if (!data) return;
-    const newMap: Record<number, AttendanceStatus> = {};
-    const newNotes: Record<number, string> = {};
-    for (const w of data.workers) {
-      newMap[w.id] = w.active === false ? "Absent" : "Present";
-    }
-    for (const a of data.attendance) {
-      newMap[a.workerId] = a.status as AttendanceStatus;
-      newNotes[a.workerId] = a.notes || "";
-    }
-    setAttendanceMap(newMap);
-    setNotesMap(newNotes);
-  }, [data]);
-
-  const attendanceWaGroupId = attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "";
-
-  const sendWhatsappImageMutation = useMutation({
-    mutationFn: async () => {
-      if (!attendanceReportRef.current) throw new Error("Attendance image is not ready");
-
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(attendanceReportRef.current, {
-        backgroundColor: "#111315",
-        scale: 2,
-        logging: false,
-      });
-
-      const title = `Attendance Report — ${selectedDate}`;
-      const res = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
-        imageBase64: canvas.toDataURL("image/png"),
-        date: selectedDate,
-        fileName: `Attendance_${selectedDate}.png`,
-        caption: title,
-        reportLabel: title,
-        destination: "attendance",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to send attendance image");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Attendance image sent to WhatsApp" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to send WhatsApp image", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
-      apiRequest("POST", "/api/factory/attendance/bulk", {
-        records: payload.records,
-        ...payload.credentials,
-      }),
-    onSuccess: () => {
-      setApprovalOpen(false);
-      setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate),
-      });
-      toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
-    },
-    onError: (err: ClientErrorLike) => {
-      if (err?._handledGlobally) return;
-      toast({ title: "Save failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const handleSave = useCallback(() => {
-    if (!data?.workers.length) return;
-    const records = data.workers
-      .filter((w) => w.active !== false)
-      .map((w) => ({
-        workerId: w.id,
-        attendanceDate: selectedDate,
-        shift: shift || undefined,
-        status: attendanceMap[w.id] ?? "Present",
-        notes: notesMap[w.id] || undefined,
-      }));
-    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !canEditPastWithoutPassword(priorDates)) {
-      setApprovalDates(priorDates);
-      setPendingApprovalRecords(records);
-      setApprovalOpen(true);
-    } else {
-      saveMutation.mutate({ records });
-    }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, canEditPastWithoutPassword]);
-
-  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
-  };
-
-  const markAll = (status: AttendanceStatus) => {
-    if (!data?.workers) return;
-    const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = status;
-    setAttendanceMap(next);
-  };
-
-  const reset = () => {
-    if (!data?.workers) return;
-    const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = "Present";
-    setAttendanceMap(next);
-    setNotesMap({});
-  };
-
-  const setStatus = (workerId: number, status: AttendanceStatus) => {
-    setAttendanceMap((prev) => ({ ...prev, [workerId]: status }));
-  };
-
-  const setNotes = (workerId: number, notes: string) => {
-    setNotesMap((prev) => ({ ...prev, [workerId]: notes }));
-  };
-
-  const handleRangeExport = async (lang: "en" | "ar", mode: "excel" | "print") => {
-    if (!rangeStart || !rangeEnd) return;
-    if (rangeStart > rangeEnd) {
-      toast({
-        title: "Invalid date range",
-        description: "The From date must be before or the same as the To date.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsExportingRange(true);
-    setRangePrintDialog(null);
-    try {
-      const res = await fetch(`/api/factory/attendance/range?startDate=${rangeStart}&endDate=${rangeEnd}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch range data");
-      const { workers: rangeWorkers, attendance: rangeAttendance } = await res.json();
-      const dates = generateDateRange(rangeStart, rangeEnd);
-      if (mode === "excel") {
-        exportRangeExcel(rangeWorkers, rangeAttendance, dates, rangeStart, rangeEnd, lang);
-      } else {
-        // Print should only show active workers — inactive ones have no records
-        // and would incorrectly default to "Present" for every day.
-        const activeOnly = (rangeWorkers as WorkerRow[]).filter((w) => w.active !== false);
-        const html = generateRangePrintHtml(activeOnly, rangeAttendance, dates, rangeStart, rangeEnd, lang);
-        openPrintWindow(html);
-      }
-    } catch (err) {
-      toast({
-        title: mode === "print" ? "Print failed" : "Export failed",
-        description: getErrorDetails(err).message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsExportingRange(false);
-    }
-  };
-
-  const [printDialog, setPrintDialog] = useState<"blank" | "results" | "excel-blank" | "excel-results" | null>(null);
-
-  const openPrintWindow = (html: string) => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
-  };
-
-  const handlePrintWithLang = (lang: "en" | "ar") => {
-    const weekDays = getWeekDays(selectedDate);
-    if (printDialog === "blank") {
-      // Print only active workers — inactive ones should not appear
-      const html = generateWeeklyBlankSheetHtml(workers, weekDays, shift, lang);
-      openPrintWindow(html);
-    } else if (printDialog === "results") {
-      const html = generateWeeklyResultsSheetHtml(
-        workers, // active workers only
-        attendanceMap,
-        notesMap,
-        weekDays,
-        selectedDate,
-        shift,
-        lang
-      );
-      openPrintWindow(html);
-    } else if (printDialog === "excel-blank") {
-      exportWeeklyExcel(data?.workers ?? [], weekDays, shift, lang, "blank", {}, {}, selectedDate);
-    } else if (printDialog === "excel-results") {
-      exportWeeklyExcel(data?.workers ?? [], weekDays, shift, lang, "results", attendanceMap, notesMap, selectedDate);
-    }
-    // Note: data?.workers now contains all workers (active + inactive);
-    // exportWeeklyExcel splits them into two sheets internally.
-    setPrintDialog(null);
-  };
-
-  // All workers (active + inactive) — used only by the Excel export
-  const allWorkers = data?.workers ?? [];
-  // UI only shows active workers in the attendance grid, sorted by employee code (HMD001, HMD002…)
-  const workers = [...allWorkers.filter((w) => w.active !== false)].sort((a, b) => {
-    const codeA = a.employeeCode ?? "";
-    const codeB = b.employeeCode ?? "";
-    if (!codeA && !codeB) return a.fullName.localeCompare(b.fullName);
-    if (!codeA) return 1;
-    if (!codeB) return -1;
-    // Extract trailing numeric portion for natural sort (HMD001 < HMD002 < HMD010)
-    const numA = parseInt(codeA.replace(/\D/g, ""), 10) || 0;
-    const numB = parseInt(codeB.replace(/\D/g, ""), 10) || 0;
-    if (numA !== numB) return numA - numB;
-    return codeA.localeCompare(codeB);
-  });
-
-  const counts = {
-    total: workers.length,
-    present: workers.filter((w) => (attendanceMap[w.id] ?? "Present") === "Present").length,
-    absent: workers.filter((w) => attendanceMap[w.id] === "Absent").length,
-    other: workers.filter((w) => {
-      const s = attendanceMap[w.id] ?? "Present";
-      return s !== "Present" && s !== "Absent";
-    }).length,
-  };
-
-  const reportAbsentWorkers = workers
-    .filter((worker) => attendanceMap[worker.id] === "Absent")
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
-  const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
-  const rangeInvalid = Boolean(rangeStart && rangeEnd && rangeStart > rangeEnd);
-  const workerSearchNeedle = workerSearch.trim().toLowerCase();
-  const visibleWorkers = workers.filter((worker) => {
-    const status = attendanceMap[worker.id] ?? "Present";
-    const matchesSearch =
-      !workerSearchNeedle ||
-      worker.fullName.toLowerCase().includes(workerSearchNeedle) ||
-      (worker.employeeCode ?? "").toLowerCase().includes(workerSearchNeedle) ||
-      (worker.position ?? "").toLowerCase().includes(workerSearchNeedle) ||
-      (worker.department ?? "").toLowerCase().includes(workerSearchNeedle);
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "present" && status === "Present") ||
-      (statusFilter === "absent" && status === "Absent") ||
-      (statusFilter === "other" && status !== "Present" && status !== "Absent");
-    return matchesSearch && matchesStatus;
-  });
+  const {
+    approvalDates,
+    approvalOpen,
+    approveAttendanceSave,
+    attendanceMap,
+    attendancePct,
+    attendanceReportRef,
+    attendanceWaGroupId,
+    canEditPastWithoutPassword,
+    counts,
+    handlePrintWithLang,
+    handleRangeExport,
+    handleSave,
+    isExportingRange,
+    isLoading,
+    markAll,
+    mode,
+    notesMap,
+    printDialog,
+    rangeEnd,
+    rangeInvalid,
+    rangePrintDialog,
+    rangeStart,
+    recordChanges,
+    reportAbsentWorkers,
+    reset,
+    saveMutation,
+    selectedDate,
+    sendWhatsappImageMutation,
+    setApprovalOpen,
+    setNotes,
+    setPrintDialog,
+    setRangeEnd,
+    setRangePrintDialog,
+    setRangeStart,
+    setSelectedDate,
+    setStatus,
+    setStatusFilter,
+    setWorkerSearch,
+    showDailyAttendance,
+    statusFilter,
+    visibleWorkers,
+    workerSearch,
+    workers,
+  } = useFactoryAttendanceState();
 
   return (
     <div className="factory-tracking-modern factory-tracking-attendance factory-attendance-refresh">
@@ -528,272 +232,25 @@ export default function FactoryAttendance() {
             {workers.length > 0 && <AttendanceSummaryGrid counts={counts} />}
 
             {/* Attendance Table */}
-            <Card className="attendance-register overflow-hidden border-border/70 bg-card/75 shadow-none">
-              <CardHeader className="attendance-register-header gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      Workers
-                    </CardTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
-                  </div>
-                  {workers.length > 0 && (
-                    <div className="flex items-center gap-3">
-                      <div className="hidden text-right sm:block">
-                        <p className="text-sm font-semibold tabular-nums">{attendancePct}%</p>
-                        <p className="text-[11px] text-muted-foreground">present today</p>
-                      </div>
-                      <Badge variant="outline" className="rounded-full bg-background/60 px-3 py-1">
-                        {workers.length} worker{workers.length !== 1 ? "s" : ""}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-
-                {workers.length > 0 && (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <SearchField
-                      value={workerSearch}
-                      onValueChange={setWorkerSearch}
-                      placeholder="Search worker, code, position…"
-                      wrapperClassName="w-full sm:max-w-sm"
-                      className="h-9 rounded-xl bg-background/70"
-                      data-testid="input-attendance-worker-search"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select
-                        value={statusFilter}
-                        onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
-                      >
-                        <SelectTrigger
-                          className="h-9 w-[145px] rounded-xl bg-background/70"
-                          data-testid="select-attendance-status-filter"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All statuses</SelectItem>
-                          <SelectItem value="present">Present</SelectItem>
-                          <SelectItem value="absent">Absent</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span className="text-[11px] text-muted-foreground">
-                        Showing {visibleWorkers.length} of {workers.length}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent className="p-0">
-                {isLoading ? (
-                  <div className="p-4 space-y-2">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <Skeleton key={i} className="h-10 w-full rounded-md" />
-                    ))}
-                  </div>
-                ) : workers.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    No active workers found for this company.
-                  </div>
-                ) : visibleWorkers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                    <Search className="mb-2 h-5 w-5 text-muted-foreground" />
-                    <p className="text-sm font-medium">No workers match these filters</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 rounded-xl"
-                      onClick={() => {
-                        setWorkerSearch("");
-                        setStatusFilter("all");
-                      }}
-                    >
-                      Clear filters
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop table */}
-                    <div className="attendance-table-scroll hidden overflow-x-auto sm:block">
-                      <table className="attendance-table w-full text-sm">
-                        <thead className="sticky top-0 z-30 bg-muted">
-                          <tr className="border-b border-border/60">
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Worker Name</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground w-44">Status</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleWorkers.map((worker) => {
-                            const idx = workers.findIndex((item) => item.id === worker.id);
-                            const status = attendanceMap[worker.id] ?? "Present";
-                            return (
-                              <tr
-                                key={worker.id}
-                                data-testid={`row-worker-${worker.id}`}
-                                className="attendance-table-row border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20"
-                              >
-                                <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
-                                <td
-                                  className="attendance-worker-code px-4 py-2 font-mono text-xs text-muted-foreground"
-                                  data-testid={`text-worker-code-${worker.id}`}
-                                >
-                                  {worker.employeeCode ?? "—"}
-                                </td>
-                                <td className="px-4 py-2" dir="auto">
-                                  <div
-                                    className="attendance-worker-name font-medium"
-                                    data-testid={`text-worker-name-${worker.id}`}
-                                  >
-                                    {worker.fullName}
-                                  </div>
-                                  {(worker.position || worker.department) && (
-                                    <div className="attendance-worker-position mt-0.5 text-[11px] text-muted-foreground">
-                                      {worker.position || worker.department}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2">
-                                  <Select
-                                    value={status}
-                                    onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}
-                                  >
-                                    <SelectTrigger
-                                      data-testid={`select-status-${worker.id}`}
-                                      data-attendance-status={status}
-                                      className={`attendance-status-trigger h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
-                                    >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {STATUS_OPTIONS.map((s) => (
-                                        <SelectItem key={s} value={s}>
-                                          {s}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="px-4 py-2">
-                                  <Input
-                                    data-testid={`input-notes-${worker.id}`}
-                                    placeholder="Optional notes"
-                                    value={notesMap[worker.id] ?? ""}
-                                    onChange={(e) => setNotes(worker.id, e.target.value)}
-                                    className="attendance-notes-input h-9 rounded-lg bg-background/70 text-xs"
-                                    dir="auto"
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Mobile cards */}
-                    <div className="space-y-2.5 p-3 sm:hidden">
-                      {visibleWorkers.map((worker) => {
-                        const idx = workers.findIndex((item) => item.id === worker.id);
-                        const status = attendanceMap[worker.id] ?? "Present";
-                        return (
-                          <div
-                            key={worker.id}
-                            data-testid={`card-worker-${worker.id}`}
-                            className="attendance-worker-mobile space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-xs"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p
-                                  className="font-medium text-sm"
-                                  dir="auto"
-                                  data-testid={`text-worker-name-mobile-${worker.id}`}
-                                >
-                                  {worker.fullName}
-                                </p>
-                                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                  {worker.employeeCode && (
-                                    <span className="font-mono" data-testid={`text-worker-code-mobile-${worker.id}`}>
-                                      {worker.employeeCode}
-                                    </span>
-                                  )}
-                                  {(worker.position || worker.department) && (
-                                    <span>{worker.position || worker.department}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="text-xs text-muted-foreground shrink-0">{idx + 1}</span>
-                            </div>
-                            <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
-                              <SelectTrigger
-                                data-testid={`select-status-mobile-${worker.id}`}
-                                data-attendance-status={status}
-                                className={`attendance-status-trigger h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {STATUS_OPTIONS.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {s}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              data-testid={`input-notes-mobile-${worker.id}`}
-                              placeholder="Notes (optional)"
-                              value={notesMap[worker.id] ?? ""}
-                              onChange={(e) => setNotes(worker.id, e.target.value)}
-                              className="attendance-notes-input h-9 rounded-lg bg-background/70 text-xs"
-                              dir="auto"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {workers.length > 0 && (
-                  <div className="attendance-save-bar sticky bottom-0 z-20 flex flex-col gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>
-                        <strong className="text-foreground">{counts.present}</strong> present
-                      </span>
-                      <span>
-                        <strong className="text-foreground">{counts.absent}</strong> absent
-                      </span>
-                      {counts.other > 0 && (
-                        <span>
-                          <strong className="text-foreground">{counts.other}</strong> other
-                        </span>
-                      )}
-                      <span>{attendancePct}% attendance</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="rounded-xl shadow-xs sm:min-w-36"
-                      data-testid="button-save-attendance-sticky"
-                      onClick={handleSave}
-                      disabled={saveMutation.isPending || selectedDate > attendanceToday() || !recordChanges.allowed}
-                      title={recordChanges.reason ?? undefined}
-                    >
-                      {saveMutation.isPending ? (
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="mr-1.5 h-4 w-4" />
-                      )}
-                      {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <FactoryAttendanceCardSection
+              attendanceMap={attendanceMap}
+              attendancePct={attendancePct}
+              counts={counts}
+              handleSave={handleSave}
+              isLoading={isLoading}
+              notesMap={notesMap}
+              recordChanges={recordChanges}
+              saveMutation={saveMutation}
+              selectedDate={selectedDate}
+              setNotes={setNotes}
+              setStatus={setStatus}
+              setStatusFilter={setStatusFilter}
+              setWorkerSearch={setWorkerSearch}
+              statusFilter={statusFilter}
+              visibleWorkers={visibleWorkers}
+              workerSearch={workerSearch}
+              workers={workers}
+            />
           </>
         )}
 
@@ -834,5 +291,3 @@ export default function FactoryAttendance() {
     </div>
   );
 }
-
-// ── Per Worker View ────────────────────────────────────────────────────────────

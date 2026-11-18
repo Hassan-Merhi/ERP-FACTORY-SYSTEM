@@ -1,673 +1,201 @@
-/**
- * Controller hook for the factory container loading scan page.
- *
- * Owns the loading order lifecycle (create / resume / finalize), the bale
- * scanner with its two-scan bypass rules, the Excel bulk import, the removal
- * log, and the proforma-vs-loaded comparison the floor loader works against.
- */
-import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ChangeEvent } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation, useSearch } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import type { CameraScanFeedback } from "@/components/MobileBarcodeScanner";
-import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
-import { queryClient } from "@/lib/queryClient";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import {
-  translateFactoryContainerLoadingText,
-  type FactoryContainerLoadingTranslationKey,
-} from "@/i18n/factoryContainerLoadingTranslations";
-import { getApiRequest } from "@/lib/factoryApi";
-import { getErrorDetails } from "@shared/errorUtils";
-import { applyCurrentOrderBalesToCapacity, type ProformaCapacitySnapshot } from "@/lib/proformaCapacity";
-import {
-  OPEN_ORDER_STATUSES,
-  type AddLoadingBaleInput,
-  type AddLoadingBaleResponse,
-  type BaleRemoval,
-  type CreateLoadingOrderResponse,
-  type Customer,
-  type Location,
-  type OrderDetail,
-  type Proforma,
-} from "./types";
-import {
-  SCAN_NOT_IN_PROFORMA_TONE,
-  SCAN_OVERLOAD_TONE,
-  SCAN_SUCCESS_TONE,
-  playScanBeep,
-  playScanErrorSweep,
-  useScanFlashReset,
-} from "./scanFeedback";
-import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
-import { useProformaComparison } from "./useProformaComparison";
-import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
-import { useLoadingOrderMutations } from "./useLoadingOrderMutations";
+import { useFactoryContainerLoadingScanModelPart1 } from "./useFactoryContainerLoadingScanModelPart1";
+import { useFactoryContainerLoadingScanModelPart2 } from "./useFactoryContainerLoadingScanModelPart2";
+import { useFactoryContainerLoadingScanModelPart3 } from "./useFactoryContainerLoadingScanModelPart3";
 
 export type { BaleGroup } from "./loadedBales";
 
-const PENDING_LOADINGS_SUMMARY_QUERY = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
-const PRIORITY_SCAN_CONFIGS_QUERY = "/api/factory/customer-orders/loading-list/priority-scan-configs";
-
 export function useFactoryContainerLoadingScanModel() {
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const search = useSearch();
-  const appMode = useAppMode();
-  const { language } = useApplicationLanguage();
-  const tr = useCallback(
-    (key: FactoryContainerLoadingTranslationKey, params?: Record<string, string | number>) =>
-      translateFactoryContainerLoadingText(key, language, params),
-    [language]
-  );
-  const modeApiRequest = getApiRequest(appMode);
-  // Scanning bales, notes, import, removal and finalize all change an existing
-  // loading; starting a loading creates one via POST /api/factory/customer-orders-loading.
-  const recordChanges = useExistingRecordChangeAccess();
-  const canCreateLoading = recordChanges.canCreate("POST", "/api/factory/customer-orders-loading");
-  const continuationFromOrderId = new URLSearchParams(search).get("continuationFromOrderId");
-
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
-  const [orderDate] = useState(() => new Date().toLocaleDateString("en-CA"));
-  const [orderId, setOrderId] = useState<number | null>(null);
-  const [isResuming, setIsResuming] = useState(false);
-  const [loadingNote, setLoadingNote] = useState<string>("");
-  const [scanCode, setScanCode] = useState("");
-  const [scanFlash, setScanFlash] = useState<"success" | "error" | null>(null);
-  const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
-  const [showScanSuccessPopup, setShowScanSuccessPopup] = useState(false);
-  const [showScanErrorPopup, setShowScanErrorPopup] = useState(false);
-  const [pendingBypassBaleRef, setPendingBypassBaleRef] = useState<string | null>(null);
-  const [pendingBypassOverloadRef, setPendingBypassOverloadRef] = useState<string | null>(null);
-  const [ignoreProforma, setIgnoreProforma] = useState(false);
-  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
-  const [finalizeDate, setFinalizeDate] = useState(new Date().toLocaleDateString("en-CA"));
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<"detailed" | "condensed">("detailed");
-  const [lastScannedRef, setLastScannedRef] = useState<{
-    baleReference: string;
-    baleName: string;
-    articleCode: string;
-  } | null>(null);
-  const [showLastScannedPopup, setShowLastScannedPopup] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [importMode, setImportMode] = useState<"articleCode" | "refNumber">("articleCode");
-  const [importPreview, setImportPreview] = useState<Array<{ articleCode: string; qty: number }>>([]);
-  const [importRefNumbers, setImportRefNumbers] = useState<string[]>([]);
-  const [showPendingWarning, setShowPendingWarning] = useState(false);
-  const [pendingOrders, setPendingOrders] = useState<
-    Array<{ id: number; invoiceNumber: string | null; status: string; totalQtyBales: number }>
-  >([]);
-  const [baleToDelete, setBaleToDelete] = useState<{ id: number; baleReference: string } | null>(null);
-  const [showEmptyContainerConfirm, setShowEmptyContainerConfirm] = useState(false);
-  const [showRemovalLog, setShowRemovalLog] = useState(false);
-  const [selectedProformaId, setSelectedProformaId] = useState<string>("");
-  const scannerRef = useRef<HTMLInputElement>(null);
-  const importFileRef = useRef<HTMLInputElement>(null);
-  const ignoreProformaRef = useRef(false);
-  const scanSubmissionInFlightRef = useRef(false);
-  const scheduleFlashReset = useScanFlashReset();
-
-  const toggleIgnoreProforma = useCallback(() => {
-    const enabled = !ignoreProformaRef.current;
-    // Update the ref synchronously so a hardware scanner that fires immediately
-    // after the click cannot submit with the previous render's toggle value.
-    ignoreProformaRef.current = enabled;
-    setIgnoreProforma(enabled);
-    setPendingBypassBaleRef(null);
-    setTimeout(() => scannerRef.current?.focus(), 0);
-  }, []);
-
-  const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
-
-  // Keep the active order synchronized with the URL. Navigating from
-  // ?orderId=<old> back to the plain /new route must clear the old loading;
-  // otherwise the same mounted page silently keeps scanning into the old order.
-  useEffect(() => {
-    const params = new URLSearchParams(search);
-    const resumeOrderId = params.get("orderId");
-    if (!resumeOrderId) {
-      setOrderId(null);
-      setIsResuming(false);
-      setSelectedCustomerId("");
-      setSelectedLocationId("");
-      setSelectedProformaId("");
-      setLoadingNote("");
-      setLastScannedRef(null);
-      setPendingBypassBaleRef(null);
-      setPendingBypassOverloadRef(null);
-      scanSubmissionInFlightRef.current = false;
-      return;
-    }
-
-    const id = parseInt(resumeOrderId);
-    if (!isNaN(id)) {
-      setOrderId(id);
-      setIsResuming(true);
-    }
-  }, [search]);
-
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
-  });
-
-  const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
-  });
-
-  // Auto-select when there's exactly one location
-  useEffect(() => {
-    if (orderId) return; // don't override when resuming an existing order
-    if (locations.length === 1) {
-      setSelectedLocationId(String(locations[0].id));
-    }
-  }, [locations, orderId]);
-
-  const { data: proformas = [] } = useQuery<Proforma[]>({
-    queryKey: [`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch proformas");
-      return res.json();
-    },
-    enabled: !!customerId,
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
-  });
-
-  // All starred (active) proformas for this customer
-  const activeProformas = useMemo(() => proformas.filter((p) => p.isActive), [proformas]);
-
-  // Auto-select when there's exactly one starred proforma; clear when customer changes
-  useEffect(() => {
-    if (orderId) return;
-    if (activeProformas.length === 1) {
-      setSelectedProformaId(String(activeProformas[0].id));
-    } else {
-      setSelectedProformaId("");
-    }
-  }, [activeProformas, orderId]);
-
-  const { data: orderDetail } = useQuery<OrderDetail>({
-    queryKey: ["/api/factory/customer-orders", orderId],
-    queryFn: async () => {
-      const effectiveContinuationFromOrderId = continuationFromOrderId || String(orderId);
-      const continuationQuery = `?continuationFromOrderId=${effectiveContinuationFromOrderId}`;
-      const res = await fetch(`/api/factory/customer-orders/${orderId}${continuationQuery}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch order");
-      return res.json();
-    },
-    enabled: !!orderId,
-    staleTime: 15_000,
-  });
-
-  // Reopened orders retain the original confirmed loading date. Show that
-  // same date when re-opening Validate Loading instead of displaying today.
-  useEffect(() => {
-    if (!showFinalizeDialog) return;
-    setFinalizeDate(orderDetail?.loadingFinalizedAt?.slice(0, 10) ?? new Date().toLocaleDateString("en-CA"));
-  }, [showFinalizeDialog, orderDetail?.loadingFinalizedAt]);
-
-  const selectedCapacityProformaId =
-    selectedProformaId && selectedProformaId !== "none" ? Number(selectedProformaId) : null;
-  const capacityProformaId = orderDetail?.proformaIdUsed ?? selectedCapacityProformaId;
-  const capacityQuery = useQuery<ProformaCapacitySnapshot>({
-    queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (orderId) params.set("currentOrderId", String(orderId));
-      const suffix = params.size ? `?${params.toString()}` : "";
-      const res = await fetch(`/api/factory/customer-proformas/${capacityProformaId}/capacity${suffix}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch proforma capacity");
-      const snapshot = (await res.json()) as ProformaCapacitySnapshot;
-      if (orderId && snapshot.currentOrderId !== orderId) {
-        throw new Error("Proforma capacity returned for the wrong loading order");
-      }
-      return snapshot;
-    },
-    enabled: !!capacityProformaId,
-    staleTime: 0,
-  });
-  const proformaCapacity = capacityQuery.data ?? null;
-  const selectedProformaExhausted =
-    !!selectedCapacityProformaId &&
-    proformaCapacity?.proformaId === selectedCapacityProformaId &&
-    proformaCapacity.remainingTotalQty <= 0;
-
-  const refreshSharedLoadingQueues = useCallback(() => {
-    void queryClient.invalidateQueries({
-      queryKey: [PENDING_LOADINGS_SUMMARY_QUERY],
-      refetchType: "active",
-    });
-    void queryClient.invalidateQueries({
-      queryKey: [PRIORITY_SCAN_CONFIGS_QUERY],
-      refetchType: "active",
-    });
-  }, []);
-
-  const { data: baleRemovals = [] } = useQuery<BaleRemoval[]>({
-    queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-orders/${orderId}/bale-removals`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch removal log");
-      return res.json();
-    },
-    // Load the log while the order is active so the collapsed section can
-    // discover that it has entries and render itself.
-    enabled: !!orderId,
-    staleTime: 30_000,
-  });
-
-  // When resuming: restore customer/location and show last scanned popup
-  useEffect(() => {
-    if (isResuming && orderDetail && !selectedCustomerId) {
-      setSelectedCustomerId(String(orderDetail.customerId));
-      setSelectedLocationId(String(orderDetail.locationId || ""));
-      setLoadingNote(orderDetail.containerNotes || "");
-      setTimeout(() => scannerRef.current?.focus(), 200);
-    }
-  }, [isResuming, orderDetail, selectedCustomerId]);
-
-  const createOrderMutation = useMutation({
-    mutationFn: async (data: {
-      customerId: number;
-      proformaIdUsed: number | null;
-      locationId: number;
-      orderDate: string;
-      containerNotes?: string;
-    }) => {
-      const res = await modeApiRequest("POST", "/api/factory/customer-orders-loading", data);
-      return await res.json();
-    },
-    onSuccess: (data: CreateLoadingOrderResponse) => {
-      setOrderId(data.id);
-      setIsResuming(false);
-      // Canonicalize the newly-created loading in the URL. This prevents a
-      // refresh or same-route navigation from snapping back to an older order.
-      navigate(`/factory/sales/loading/new?orderId=${data.id}`);
-      toast({
-        title: "Loading order created",
-        description: `Loading #${data.id} is separate and ready for scanning`,
-      });
-      setTimeout(() => scannerRef.current?.focus(), 100);
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Save failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const addBaleMutation = useMutation({
-    mutationFn: async (data: {
-      scanCode: string;
-      locationId: number;
-      allowBypassProforma?: boolean;
-      allowBypassOverload?: boolean;
-    }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales`, data);
-      return await res.json();
-    },
-    onSuccess: (data: AddLoadingBaleResponse, variables: AddLoadingBaleInput) => {
-      setPendingBypassBaleRef(null);
-      setPendingBypassOverloadRef(null);
-      setScanFlash("success");
-      setShowScanSuccessPopup(true);
-      setCameraScanFeedback({
-        type: "success",
-        referenceNumber: variables.scanCode,
-        message: translateCameraScanMessage("loadingSuccess", language),
-      });
-      playScanBeep(SCAN_SUCCESS_TONE.frequency, SCAN_SUCCESS_TONE.durationMs);
-      scheduleFlashReset(() => {
-        setScanFlash(null);
-        setShowScanSuccessPopup(false);
-      }, 500);
-      if (orderId) {
-        const scanned = variables.scanCode;
-        const newestForRef = [...(data?.bales || [])].sort((a, b) => b.id - a.id)[0];
-        const lastScanned = {
-          baleReference: newestForRef?.baleReference || scanned,
-          baleName: newestForRef?.baleName || "",
-          articleCode: newestForRef?.articleCode || "",
-        };
-        setLastScannedRef(lastScanned);
-      }
-      const newest = [...(data?.bales || [])].sort((a, b) => b.id - a.id)[0];
-      if (newest?.articleCode) {
-        setExpandedGroups((prev) => {
-          const next = new Set(prev);
-          next.add(newest.articleCode);
-          return next;
-        });
-      }
-      queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], data);
-      refreshSharedLoadingQueues();
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/factory/bale-stock-count"],
-        refetchType: "active",
-      });
-      if (capacityProformaId) {
-        queryClient.setQueryData<ProformaCapacitySnapshot>(
-          ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
-          (current) => applyCurrentOrderBalesToCapacity(current, data.bales) ?? current
-        );
-      }
-      setScanCode("");
-    },
-    onError: (error: Error, variables: AddLoadingBaleInput) => {
-      const handledGlobally = (error as { _handledGlobally?: boolean })?._handledGlobally === true;
-      // Overload and not-in-proforma are soft rejections: arm a bypass so the
-      // same code scanned a second time goes through.
-      if ((error as unknown as Error & { overloaded: unknown }).overloaded) {
-        setPendingBypassOverloadRef(variables.scanCode);
-        setPendingBypassBaleRef(null);
-        setCameraScanFeedback({
-          type: "warn",
-          referenceNumber: variables.scanCode,
-          message: translateCameraScanMessage("overload", language),
-        });
-        setScanFlash("error");
-        playScanBeep(SCAN_OVERLOAD_TONE.frequency, SCAN_OVERLOAD_TONE.durationMs);
-        scheduleFlashReset(() => setScanFlash(null), 600);
-        setScanCode("");
-        return;
-      }
-      if ((error as unknown as Error & { notInProforma: unknown }).notInProforma) {
-        setPendingBypassBaleRef(variables.scanCode);
-        setPendingBypassOverloadRef(null);
-        setCameraScanFeedback({
-          type: "warn",
-          referenceNumber: variables.scanCode,
-          message: translateCameraScanMessage("notRequested", language),
-        });
-        setScanFlash("error");
-        playScanBeep(SCAN_NOT_IN_PROFORMA_TONE.frequency, SCAN_NOT_IN_PROFORMA_TONE.durationMs);
-        scheduleFlashReset(() => setScanFlash(null), 600);
-        setScanCode("");
-        return;
-      }
-      setScanFlash("error");
-      setShowScanErrorPopup(true);
-      setCameraScanFeedback({
-        type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(error.message)
-          ? "duplicate"
-          : "error",
-        referenceNumber: variables.scanCode,
-        message: error.message || translateCameraScanMessage("unableToAdd", language),
-      });
-      playScanErrorSweep();
-      scheduleFlashReset(() => {
-        setScanFlash(null);
-        setShowScanErrorPopup(false);
-      }, 1500);
-      if (!handledGlobally) {
-        toast({
-          title: "Scan Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-      setScanCode("");
-    },
-    onSettled: () => {
-      scanSubmissionInFlightRef.current = false;
-    },
-  });
-
-  // Restore focus to the scan input whenever the mutation finishes (success or error).
-  // Using a useEffect keyed on isPending is more reliable than setTimeout because
-  // it fires after React re-enables the input (disabled={isPending}), so focus
-  // is never called on a disabled element.
-  const wasPending = useRef(false);
-  useEffect(() => {
-    const justFinished = wasPending.current && !addBaleMutation.isPending;
-    wasPending.current = addBaleMutation.isPending;
-    if (justFinished && scannerRef.current) {
-      scannerRef.current.focus();
-    }
-  }, [addBaleMutation.isPending]);
-
   const {
-    removeBaleMutation,
-    emptyContainerMutation,
-    bulkImportMutation,
-    finalizeMutation,
-    saveNoteMutation,
-    canChangeExistingRecords,
-  } = useLoadingOrderMutations({
-    orderId,
-    selectedLocationId,
+    activeProformas,
+    baleRemovals,
+    baleToDelete,
+    cameraScanFeedback,
+    canCreateLoading,
     capacityProformaId,
-    modeApiRequest,
-    toast,
-    tr,
-    navigate,
-    refreshSharedLoadingQueues,
-    scannerRef,
+    capacityQuery,
+    customerId,
+    customers,
+    expandedGroups,
+    finalizeDate,
+    ignoreProforma,
     ignoreProformaRef,
+    importFileRef,
+    importMode,
+    importPreview,
+    importRefNumbers,
+    isResuming,
+    language,
+    lastScannedRef,
+    loadingNote,
+    locations,
+    modeApiRequest,
+    navigate,
+    orderDate,
+    orderDetail,
+    orderId,
+    pendingBypassBaleRef,
+    pendingBypassOverloadRef,
+    pendingOrders,
+    proformaCapacity,
+    proformas,
+    recordChanges,
+    refreshSharedLoadingQueues,
+    scanCode,
+    scanFlash,
+    scanSubmissionInFlightRef,
+    scannerRef,
+    scheduleFlashReset,
+    selectedCustomerId,
+    selectedLocationId,
+    selectedProformaExhausted,
+    selectedProformaId,
     setBaleToDelete,
-    setShowEmptyContainerConfirm,
-    setLastScannedRef,
-    setShowLastScannedPopup,
-    setPendingBypassBaleRef,
-    setPendingBypassOverloadRef,
+    setCameraScanFeedback,
     setExpandedGroups,
-    setScanCode,
-    setShowImportDialog,
+    setFinalizeDate,
+    setImportMode,
     setImportPreview,
     setImportRefNumbers,
-    setOrderId,
     setIsResuming,
+    setLastScannedRef,
     setLoadingNote,
+    setOrderId,
+    setPendingBypassBaleRef,
+    setPendingBypassOverloadRef,
+    setPendingOrders,
+    setScanCode,
+    setScanFlash,
+    setSelectedCustomerId,
+    setSelectedLocationId,
+    setSelectedProformaId,
+    setShowEmptyContainerConfirm,
     setShowFinalizeDialog,
-  });
-
-  const chosenProforma = useCallback(
-    () =>
-      selectedProformaId && selectedProformaId !== "none"
-        ? proformas.find((p) => p.id === parseInt(selectedProformaId)) || null
-        : null,
-    [selectedProformaId, proformas]
-  );
-
-  const handleStartLoading = useCallback(async () => {
-    if (!customerId || !selectedLocationId || !canCreateLoading) return;
-    const proforma = chosenProforma();
-
-    // A reusable proforma is a per-loading reference. Aggregate quantities from
-    // older/sibling loadings must never prevent creation of a fresh loading.
-    if (proforma) {
-      try {
-        const res = await fetch(`/api/factory/customer-orders?customerId=${customerId}&proformaId=${proforma.id}`, {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const allOrders = await res.json();
-          const pending = allOrders.filter((o: { status: string }) => OPEN_ORDER_STATUSES.includes(o.status));
-          if (pending.length > 0) {
-            setPendingOrders(pending);
-            setShowPendingWarning(true);
-            return;
-          }
-        }
-      } catch {
-        // If check fails, proceed with creation anyway
-      }
-    }
-
-    createOrderMutation.mutate({
-      customerId,
-      proformaIdUsed: proforma?.id || null,
-      locationId: parseInt(selectedLocationId),
-      orderDate,
-      containerNotes: loadingNote.trim() || undefined,
-    });
-  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation, canCreateLoading]);
-
-  /** Create a separate loading from the pending-orders warning. */
-  const startNewLoadingAnyway = () => {
-    setShowPendingWarning(false);
-    if (!canCreateLoading) return;
-    const proforma = chosenProforma();
-    createOrderMutation.mutate({
-      customerId: customerId!,
-      proformaIdUsed: proforma?.id || null,
-      locationId: parseInt(selectedLocationId),
-      orderDate,
-      containerNotes: loadingNote.trim() || undefined,
-    });
-  };
-
-  const downloadTemplate = useCallback((mode: "ref" | "articleCode") => downloadBaleImportTemplate(mode), []);
-
-  const submitScannedCode = useCallback(
-    (code: string) => {
-      if (!code.trim() || !orderId || !selectedLocationId || !recordChanges.allowed) return;
-
-      // Hardware scanners can emit duplicate Enter events before React renders
-      // mutation.isPending=true. Lock synchronously so one scan yields one POST.
-      if (scanSubmissionInFlightRef.current || addBaleMutation.isPending) return;
-
-      // Avoid posting into a stale/non-scannable loading from an old UI state.
-      if (!orderDetail) return;
-      const orderIsScannable =
-        orderDetail.status === "DRAFT" ||
-        orderDetail.status === "LOADING" ||
-        (orderDetail.status === "PENDING_VERIFICATION" && !orderDetail.proformaIdUsed);
-      if (!orderIsScannable) {
-        toast({
-          title: "Loading is no longer scannable",
-          description: "Refresh or reopen the loading before scanning another bale.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const trimmed = code.trim();
-      const isBypassProforma = pendingBypassBaleRef !== null && pendingBypassBaleRef === trimmed;
-      const isBypassOverload = pendingBypassOverloadRef !== null && pendingBypassOverloadRef === trimmed;
-      if (pendingBypassBaleRef !== null && !isBypassProforma) setPendingBypassBaleRef(null);
-      if (pendingBypassOverloadRef !== null && !isBypassOverload) setPendingBypassOverloadRef(null);
-      scanSubmissionInFlightRef.current = true;
-      addBaleMutation.mutate({
-        scanCode: trimmed,
-        locationId: parseInt(selectedLocationId),
-        // When ignoreProforma is ON, always bypass the proforma check so the
-        // first scan succeeds immediately (item still appears as "Not in Proforma"
-        // in the comparison table — only the double-scan requirement is skipped).
-        allowBypassProforma: ignoreProformaRef.current ? true : isBypassProforma || undefined,
-        allowBypassOverload: isBypassOverload || undefined,
-      });
-    },
-    [
-      orderId,
-      selectedLocationId,
-      recordChanges.allowed,
-      orderDetail,
-      pendingBypassBaleRef,
-      pendingBypassOverloadRef,
-      addBaleMutation,
-      toast,
-    ]
-  );
-
-  const handleScan = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      submitScannedCode(scanCode);
-    },
-    [scanCode, submitScannedCode]
-  );
-
-  const handleImportFile = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        try {
-          const result = await parseBaleImportWorkbook(evt.target?.result as ArrayBuffer);
-          if (baleImportRowCount(result) === 0) {
-            toast({
-              title: "No valid rows found",
-              description: BALE_IMPORT_EMPTY_HINT[result.mode],
-              variant: "destructive",
-            });
-            return;
-          }
-          setImportMode(result.mode);
-          setImportRefNumbers(result.mode === "refNumber" ? result.refNumbers : []);
-          setImportPreview(result.mode === "articleCode" ? result.rows : []);
-          setShowImportDialog(true);
-        } catch (err) {
-          toast({ title: "Parse error", description: getErrorDetails(err).message, variant: "destructive" });
-        }
-      };
-      reader.readAsArrayBuffer(file);
-      e.target.value = "";
-    },
-    [toast]
-  );
-
-  const toggleGroup = useCallback((articleCode: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(articleCode)) next.delete(articleCode);
-      else next.add(articleCode);
-      return next;
-    });
-  }, []);
-
-  const closeImportDialog = () => {
-    setShowImportDialog(false);
-    setImportPreview([]);
-    setImportRefNumbers([]);
-  };
-
-  const submitImport = () => {
-    if (importMode === "refNumber") {
-      bulkImportMutation.mutate({ mode: "refNumber", refNumbers: importRefNumbers });
-    } else {
-      bulkImportMutation.mutate({ mode: "articleCode", items: importPreview });
-    }
-  };
-
-  const bales = orderDetail?.bales || [];
-
-  const { groupedBalesMap, orderedGroups, totalWeight, loadedByArticle } = summarizeLoadedBales(bales);
-
+    setShowImportDialog,
+    setShowLastScannedPopup,
+    setShowPendingWarning,
+    setShowRemovalLog,
+    setShowScanErrorPopup,
+    setShowScanSuccessPopup,
+    setViewMode,
+    showEmptyContainerConfirm,
+    showFinalizeDialog,
+    showImportDialog,
+    showLastScannedPopup,
+    showPendingWarning,
+    showRemovalLog,
+    showScanErrorPopup,
+    showScanSuccessPopup,
+    toast,
+    toggleIgnoreProforma,
+    tr,
+    viewMode,
+  } = useFactoryContainerLoadingScanModelPart1();
   const {
+    addBaleMutation,
+    bulkImportMutation,
+    canChangeExistingRecords,
+    chosenProforma,
+    createOrderMutation,
+    emptyContainerMutation,
+    finalizeMutation,
+    removeBaleMutation,
+    saveNoteMutation,
+  } = useFactoryContainerLoadingScanModelPart2({
+    capacityProformaId,
+    ignoreProformaRef,
+    language,
+    modeApiRequest,
+    navigate,
+    orderId,
+    proformas,
+    recordChanges,
+    refreshSharedLoadingQueues,
+    scanSubmissionInFlightRef,
+    scannerRef,
+    scheduleFlashReset,
+    selectedLocationId,
+    selectedProformaId,
+    setBaleToDelete,
+    setCameraScanFeedback,
+    setExpandedGroups,
+    setImportPreview,
+    setImportRefNumbers,
+    setIsResuming,
+    setLastScannedRef,
+    setLoadingNote,
+    setOrderId,
+    setPendingBypassBaleRef,
+    setPendingBypassOverloadRef,
+    setScanCode,
+    setScanFlash,
+    setShowEmptyContainerConfirm,
+    setShowFinalizeDialog,
+    setShowImportDialog,
+    setShowLastScannedPopup,
+    setShowScanErrorPopup,
+    setShowScanSuccessPopup,
+    toast,
+    tr,
+  });
+  const {
+    bales,
+    closeImportDialog,
+    downloadTemplate,
+    extraArticles,
+    fulfilledCount,
+    groupedBalesMap,
+    handleImportFile,
+    handleScan,
+    handleStartLoading,
+    linkedProforma,
+    loadedByArticle,
+    orderedGroups,
+    proformaProgress,
+    remainingProformaBales,
+    scanInputClass,
+    startNewLoadingAnyway,
     stockCounts,
     stockLocationId,
-    linkedProforma,
-    proformaProgress,
-    fulfilledCount,
+    submitImport,
+    submitScannedCode,
+    toggleGroup,
     totalLines,
-    remainingProformaBales,
-    extraArticles,
-  } = useProformaComparison({ proformaCapacity, proformas, orderDetail, selectedLocationId, loadedByArticle });
-
-  const scanInputClass =
-    scanFlash === "success"
-      ? "ring-2 ring-green-500 bg-green-50 dark:bg-green-950 transition-all"
-      : scanFlash === "error"
-        ? "ring-2 ring-red-500 bg-red-50 dark:bg-red-950 transition-all"
-        : "";
+    totalWeight,
+  } = useFactoryContainerLoadingScanModelPart3({
+    addBaleMutation,
+    bulkImportMutation,
+    canCreateLoading,
+    chosenProforma,
+    createOrderMutation,
+    customerId,
+    ignoreProformaRef,
+    importMode,
+    importPreview,
+    importRefNumbers,
+    loadingNote,
+    orderDate,
+    orderDetail,
+    orderId,
+    pendingBypassBaleRef,
+    pendingBypassOverloadRef,
+    proformaCapacity,
+    proformas,
+    recordChanges,
+    scanCode,
+    scanFlash,
+    scanSubmissionInFlightRef,
+    selectedLocationId,
+    setExpandedGroups,
+    setImportMode,
+    setImportPreview,
+    setImportRefNumbers,
+    setPendingBypassBaleRef,
+    setPendingBypassOverloadRef,
+    setPendingOrders,
+    setShowImportDialog,
+    setShowPendingWarning,
+    toast,
+  });
 
   return {
     navigate,

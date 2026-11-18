@@ -1,301 +1,84 @@
-import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Columns3,
-  History,
-  Loader2,
-  Package,
-  ShoppingCart,
-  SlidersHorizontal,
-  UserRound,
-  UsersRound,
-} from "lucide-react";
+import { Loader2, ShoppingCart, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { apiRequest } from "@/lib/queryClient";
-import type { V5Data } from "./factorystockallocationv5/types";
-import {
-  buildAvailableStockMap,
-  resolveAvailableStock,
-  shouldIncludeAvailableStock,
-} from "./customerLoadingAvailability";
+import { resolveAvailableStock } from "./customerLoadingAvailability";
 import { CustomerLoadingSummaryCards } from "./CustomerLoadingSummaryCards";
 import { CustomerLoadingColumnsDialog } from "./CustomerLoadingColumnsDialog";
 import { CustomerLoadingProformaDialog } from "./CustomerLoadingProformaDialog";
 import { CustomerLoadingHistoryDialog } from "./CustomerLoadingHistoryDialog";
 import { formatDate, formatMoney, formatNumber } from "./customerLoadingFormat";
-import {
-  COLUMN_OPTIONS,
-  type AvailableNegativeFilter,
-  type AvailableZeroFilter,
-  type ColumnKey,
-  type CustomerLoadingProduct,
-  type CustomerLoadingResponse,
-  type CustomerOption,
-  type HistoryResponse,
-  type LoadingFilter,
-} from "./customerLoadingTypes";
-import { COLUMN_PREFERENCE_KEY, initialVisibleColumns, PAGE_SIZE, readJson } from "./customerLoadingHelpers";
-import { SearchField } from "@/components/ui/search-field";
+import { COLUMN_OPTIONS } from "./customerLoadingTypes";
+import { useCustomerLoadingState } from "./useCustomerLoadingState";
+import { CustomerLoadingSection, CustomerLoadingSection2, CustomerLoadingSection3 } from "./CustomerLoadingSection2";
+import { CustomerLoadingCardSection } from "./CustomerLoadingCardSection";
 
 export default function CustomerLoading() {
-  const mhd = useFactoryMhdView();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const recordChanges = useExistingRecordChangeAccess();
-  const canCreateProforma = recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk");
-  const [customerId, setCustomerId] = useState("");
-  const [search, setSearch] = useState("");
-  const [loadingFilter, setLoadingFilter] = useState<LoadingFilter>("ALL");
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [weightFilter, setWeightFilter] = useState("ALL");
-  const [availableZeroFilter, setAvailableZeroFilter] = useState<AvailableZeroFilter>("SHOW_ZERO");
-  const [availableNegativeFilter, setAvailableNegativeFilter] = useState<AvailableNegativeFilter>("SHOW_NEGATIVE");
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(new Set());
-  const [draftQuantities, setDraftQuantities] = useState<Record<number, string>>({});
-  const [draftPrices, setDraftPrices] = useState<Record<number, string>>({});
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [proformaName, setProformaName] = useState("");
-  const [proformaDestination, setProformaDestination] = useState("");
-  const [historyProduct, setHistoryProduct] = useState<CustomerLoadingProduct | null>(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(initialVisibleColumns);
-  const [page, setPage] = useState(1);
-  const qtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(COLUMN_PREFERENCE_KEY, JSON.stringify([...visibleColumns]));
-    } catch {
-      // Preferences are optional when storage is blocked.
-    }
-  }, [visibleColumns]);
-
-  const customersQuery = useQuery<CustomerOption[]>({
-    queryKey: ["/api/factory/customers", "customer-loading-picker"],
-    queryFn: () => readJson<CustomerOption[]>("/api/factory/customers"),
-    staleTime: 60_000,
-  });
-  const loadingQuery = useQuery<CustomerLoadingResponse>({
-    queryKey: ["/api/factory/customer-loading/products", customerId],
-    queryFn: () =>
-      readJson<CustomerLoadingResponse>(
-        `/api/factory/customer-loading/products?customerId=${encodeURIComponent(customerId)}`
-      ),
-    enabled: Boolean(customerId),
-    staleTime: 30_000,
-  });
-  const stockAllocationQuery = useQuery<V5Data>({
-    queryKey: ["/api/factory/v5/stock-allocation", "customer-loading"],
-    queryFn: () => readJson<V5Data>("/api/factory/v5/stock-allocation"),
-    enabled: Boolean(customerId),
-    retry: 1,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
-  const historyQuery = useQuery<HistoryResponse>({
-    queryKey: ["/api/factory/customer-loading/history", customerId, historyProduct?.id],
-    queryFn: () =>
-      readJson<HistoryResponse>(
-        `/api/factory/customer-loading/history?customerId=${encodeURIComponent(customerId)}&productId=${historyProduct!.id}`
-      ),
-    enabled: Boolean(customerId && historyProduct),
-    staleTime: 30_000,
-  });
-
-  const products = useMemo(() => loadingQuery.data?.products ?? [], [loadingQuery.data?.products]);
-  const availableStockByCode = useMemo(
-    () => buildAvailableStockMap(stockAllocationQuery.data?.rows ?? []),
-    [stockAllocationQuery.data?.rows]
-  );
-  const categories = useMemo(
-    () =>
-      [...new Set(products.map((p) => p.categoryName).filter((v): v is string => Boolean(v)))].sort((a, b) =>
-        a.localeCompare(b)
-      ),
-    [products]
-  );
-  const weights = useMemo(
-    () =>
-      [...new Set(products.map((p) => p.weightPerBaleKg).filter((v): v is string => Boolean(v)))].sort(
-        (a, b) => Number(a) - Number(b)
-      ),
-    [products]
-  );
-  const filteredProducts = useMemo(() => {
-    const needle = search.trim().toLocaleLowerCase();
-    return products.filter((product) => {
-      if (loadingFilter !== "ALL" && product.loadingStatus !== loadingFilter) return false;
-      if (categoryFilter !== "ALL" && product.categoryName !== categoryFilter) return false;
-      if (weightFilter !== "ALL" && product.weightPerBaleKg !== weightFilter) return false;
-      const availableStock = resolveAvailableStock(product, availableStockByCode);
-      if (
-        !shouldIncludeAvailableStock(availableStock, {
-          showZeroStock: availableZeroFilter === "SHOW_ZERO",
-          showNegativeStock: availableNegativeFilter === "SHOW_NEGATIVE",
-        })
-      )
-        return false;
-      if (!needle) return true;
-      return [
-        product.name,
-        mhd.nameFor(product.articleCode || product.code, product.name),
-        product.nameAr,
-        product.code,
-        product.articleCode,
-        product.categoryName,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLocaleLowerCase().includes(needle));
-    });
-  }, [
-    products,
-    loadingFilter,
-    categoryFilter,
-    weightFilter,
-    availableZeroFilter,
+  const {
+    allVisibleSelected,
     availableNegativeFilter,
     availableStockByCode,
-    search,
+    availableZeroFilter,
+    canCreateProforma,
+    categories,
+    categoryFilter,
+    columnsOpen,
+    createProformaMutation,
+    customerId,
+    customersQuery,
+    draftPrices,
+    draftQuantities,
+    filteredProducts,
+    hasInvalidSelectedLine,
+    historyProduct,
+    historyQuery,
+    isColumnVisible,
+    loadingFilter,
+    loadingQuery,
     mhd,
-  ]);
-
-  const displayedProducts = mhd.sortRows(filteredProducts, (product) => product.articleCode || product.code);
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const visibleProducts = displayedProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  const selectedLines = useMemo(
-    () =>
-      products
-        .filter((p) => selectedProductIds.has(p.id))
-        .map((product) => {
-          const quantity = Math.max(0, Number.parseInt(draftQuantities[product.id] || "0", 10) || 0);
-          const rawPrice = draftPrices[product.id] ?? product.sellingPrice ?? "0";
-          const parsedPrice = Number(rawPrice);
-          const pricePerBale = Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0;
-          const weightPerBale = Number(product.weightPerBaleKg ?? 0) || 0;
-          return {
-            product,
-            quantity,
-            rawPrice,
-            pricePerBale,
-            priceValid: rawPrice !== "" && Number.isFinite(parsedPrice) && parsedPrice >= 0,
-            totalKg: quantity * weightPerBale,
-            lineTotal: quantity * pricePerBale,
-          };
-        }),
-    [products, selectedProductIds, draftQuantities, draftPrices]
-  );
-  const validSelectedLines = selectedLines.filter(
-    (line) => line.quantity > 0 && line.priceValid && (line.product.articleCode || line.product.code)
-  );
-  const hasInvalidSelectedLine = selectedLines.some(
-    (line) => line.quantity <= 0 || !line.priceValid || !(line.product.articleCode || line.product.code)
-  );
-  const selectedTotals = validSelectedLines.reduce(
-    (t, line) => ({
-      lines: t.lines + 1,
-      quantity: t.quantity + line.quantity,
-      kg: t.kg + line.totalKg,
-      amount: t.amount + line.lineTotal,
-    }),
-    { lines: 0, quantity: 0, kg: 0, amount: 0 }
-  );
-
-  const createProformaMutation = useMutation({
-    mutationFn: async () => {
-      if (!customerId || validSelectedLines.length === 0 || hasInvalidSelectedLine)
-        throw new Error("Every selected product needs a quantity and a valid non-negative price.");
-      const name = proformaName.trim();
-      if (!name) throw new Error("Proforma name is required.");
-      if (!proformaDestination.trim()) throw new Error("Proforma destination is required.");
-      const response = await apiRequest("POST", "/api/factory/customer-proformas/bulk", {
-        customerId: Number(customerId),
-        name,
-        destination: proformaDestination.trim(),
-        isActive: true,
-        lines: validSelectedLines.map(({ product, quantity, pricePerBale }) => ({
-          articleCode: product.articleCode || product.code,
-          productName: product.name,
-          quantity,
-          pricePerBale: String(pricePerBale),
-          productionPricePerBale: String(product.productionPrice ?? "0"),
-          pricingMode: "per_bale",
-        })),
-      });
-      return response.json();
-    },
-    onSuccess: (created) => {
-      setPreviewOpen(false);
-      resetSelection();
-      setProformaName("");
-      setProformaDestination("");
-      void queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-proformas"] });
-      void queryClient.invalidateQueries({ queryKey: ["/api/factory/v2/stock-allocation"] });
-      void queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
-      toast({
-        title: "Proforma created",
-        description: created?.name
-          ? `${created.name} was created successfully.`
-          : "The proforma was created successfully.",
-      });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Failed to create proforma", description: error.message, variant: "destructive" }),
-  });
-
-  const summary = loadingQuery.data?.summary;
-  const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every((p) => selectedProductIds.has(p.id));
-  const isColumnVisible = (key: ColumnKey) => visibleColumns.has(key);
-
-  function resetSelection() {
-    setSelectedProductIds(new Set());
-    setDraftQuantities({});
-    setDraftPrices({});
-  }
-  function resetFilters() {
-    setSearch("");
-    setLoadingFilter("ALL");
-    setCategoryFilter("ALL");
-    setWeightFilter("ALL");
-    setAvailableZeroFilter("SHOW_ZERO");
-    setAvailableNegativeFilter("SHOW_NEGATIVE");
-    setPage(1);
-  }
-  function toggleProduct(product: CustomerLoadingProduct, checked: boolean) {
-    setSelectedProductIds((current) => {
-      const next = new Set(current);
-      checked ? next.add(product.id) : next.delete(product.id);
-      return next;
-    });
-    if (checked && !draftQuantities[product.id]) setDraftQuantities((current) => ({ ...current, [product.id]: "1" }));
-  }
-  function selectProductFromQuantity(productId: number) {
-    setSelectedProductIds((current) => {
-      if (current.has(productId)) return current;
-      const next = new Set(current);
-      next.add(productId);
-      return next;
-    });
-  }
-  function toggleColumn(key: ColumnKey, checked: boolean) {
-    setVisibleColumns((current) => {
-      const next = new Set(current);
-      checked ? next.add(key) : next.delete(key);
-      return next;
-    });
-  }
+    pageCount,
+    previewOpen,
+    products,
+    proformaDestination,
+    proformaName,
+    qtyRefs,
+    resetFilters,
+    resetSelection,
+    safePage,
+    search,
+    selectProductFromQuantity,
+    selectedProductIds,
+    selectedTotals,
+    setAvailableNegativeFilter,
+    setAvailableZeroFilter,
+    setCategoryFilter,
+    setColumnsOpen,
+    setCustomerId,
+    setDraftPrices,
+    setDraftQuantities,
+    setHistoryProduct,
+    setLoadingFilter,
+    setPage,
+    setPreviewOpen,
+    setProformaDestination,
+    setProformaName,
+    setSearch,
+    setSelectedProductIds,
+    setVisibleColumns,
+    setWeightFilter,
+    stockAllocationQuery,
+    summary,
+    toast,
+    toggleColumn,
+    toggleProduct,
+    validSelectedLines,
+    visibleColumns,
+    visibleProducts,
+    weightFilter,
+    weights,
+  } = useCustomerLoadingState();
   function openPreview() {
     if (validSelectedLines.length === 0 || hasInvalidSelectedLine) {
       toast({
@@ -327,68 +110,18 @@ export default function CustomerLoading() {
     >
       {/* Rendered as the Bales hub "Customer Loading" tab; the hub PageHeader titles the page. */}
 
-      <Card className="overflow-hidden rounded-2xl border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 shadow-sm dark:border-indigo-400/35 dark:from-[hsl(var(--factory-hue)_55%_22%)] dark:via-[hsl(var(--factory-hue)_49%_21%)] dark:to-[hsl(var(--factory-hue)_35%_22%)]">
-        <CardContent className="flex flex-col gap-4 p-4 sm:p-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200 sm:flex">
-              <UserRound className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 w-full max-w-xl space-y-2">
-              <div className="text-sm font-semibold text-slate-800 dark:text-blue-100">Customer</div>
-              <Select
-                value={customerId}
-                onValueChange={(value) => {
-                  setCustomerId(value);
-                  resetFilters();
-                  resetSelection();
-                  setProformaName("");
-                  setHistoryProduct(null);
-                }}
-              >
-                <SelectTrigger
-                  className="h-11 w-full border-indigo-200 bg-white/90 font-medium shadow-sm focus:ring-indigo-500 dark:border-indigo-400/50 dark:bg-[hsl(var(--factory-hue)_54%_14%)]/90 dark:text-white"
-                  data-testid="customer-loading-customer-select"
-                >
-                  <SelectValue placeholder={customersQuery.isLoading ? "Loading customers…" : "Choose a customer"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(customersQuery.data ?? []).map((customer) => (
-                    <SelectItem key={customer.id} value={String(customer.id)}>
-                      {customer.legalName}
-                      {customer.code ? ` · ${customer.code}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:justify-end">
-            <div className="flex min-w-0 items-center gap-2 text-sm">
-              <History className="h-4 w-4 shrink-0 text-indigo-600 dark:text-violet-200" />
-              <div className="min-w-0">
-                <div className="text-xs text-muted-foreground dark:text-blue-100/65">Viewing product history for</div>
-                <div className="truncate font-semibold text-slate-800 dark:text-white">
-                  {loadingQuery.data?.customer?.legalName || "Select a customer to begin"}
-                </div>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!customerId}
-              onClick={() => {
-                setLoadingFilter("LOADED");
-                setPage(1);
-              }}
-              className="shrink-0 border-violet-300 bg-violet-100/80 text-violet-900 hover:bg-violet-200 dark:border-violet-400/65 dark:bg-violet-500/25 dark:text-violet-100 dark:hover:bg-violet-500/40"
-              title="Filter to loaded products; click a Loaded status to inspect its history"
-            >
-              <History className="mr-2 h-4 w-4" />
-              Browse Loading History
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <CustomerLoadingCardSection
+        customerId={customerId}
+        customersQuery={customersQuery}
+        loadingQuery={loadingQuery}
+        resetFilters={resetFilters}
+        resetSelection={resetSelection}
+        setCustomerId={setCustomerId}
+        setHistoryProduct={setHistoryProduct}
+        setLoadingFilter={setLoadingFilter}
+        setPage={setPage}
+        setProformaName={setProformaName}
+      />
 
       {!customerId ? (
         <Card>
@@ -417,192 +150,37 @@ export default function CustomerLoading() {
           <CustomerLoadingSummaryCards summary={summary} formatNumber={formatNumber} />
 
           <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_45%_13%)]">
-            <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60 p-4 dark:border-slate-700/70 dark:from-[hsl(var(--factory-hue)_45%_17%)] dark:to-[hsl(var(--factory-hue)_46%_18%)] sm:p-5">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200">
-                    <Package className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Product List</h2>
-                      <span className="rounded-full border border-violet-200 bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:border-violet-400/30 dark:bg-violet-500/20 dark:text-violet-200">
-                        {formatNumber(filteredProducts.length)} products
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {filteredProducts.length} of {products.length} products · {selectedProductIds.size} selected
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => setColumnsOpen(true)}
-                  className="border-slate-300 bg-white shadow-sm dark:border-slate-500 dark:bg-slate-800/60"
-                  data-testid="customer-loading-columns-button"
-                >
-                  <Columns3 className="mr-2 h-4 w-4" />
-                  Columns
-                </Button>
-              </div>
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <SlidersHorizontal className="h-3.5 w-3.5" /> Search & filters
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(16rem,1.6fr)_repeat(5,minmax(8rem,1fr))]">
-                <SearchField
-                  value={search}
-                  onValueChange={(v) => {
-                    setSearch(v);
-                    setPage(1);
-                  }}
-                  placeholder="Search name, Arabic, or code..."
-                  wrapperClassName="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
-                  className="h-10 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-                  data-testid="customer-loading-search"
-                />
-                <Select
-                  value={loadingFilter}
-                  onValueChange={(v) => {
-                    setLoadingFilter(v as LoadingFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger
-                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-                    data-testid="customer-loading-status-filter"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All statuses</SelectItem>
-                    <SelectItem value="LOADED">Loaded</SelectItem>
-                    <SelectItem value="NEVER_LOADED">Never loaded</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={categoryFilter}
-                  onValueChange={(v) => {
-                    setCategoryFilter(v);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All categories</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={weightFilter}
-                  onValueChange={(v) => {
-                    setWeightFilter(v);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All weights</SelectItem>
-                    {weights.map((weight) => (
-                      <SelectItem key={weight} value={weight}>
-                        {formatNumber(Number(weight), 2)} kg
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={availableZeroFilter}
-                  onValueChange={(v) => {
-                    setAvailableZeroFilter(v as AvailableZeroFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger
-                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-                    data-testid="customer-loading-zero-stock-filter"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SHOW_ZERO">Show 0</SelectItem>
-                    <SelectItem value="HIDE_ZERO">Hide 0</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={availableNegativeFilter}
-                  onValueChange={(v) => {
-                    setAvailableNegativeFilter(v as AvailableNegativeFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger
-                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-                    data-testid="customer-loading-negative-stock-filter"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SHOW_NEGATIVE">Show Negative</SelectItem>
-                    <SelectItem value="HIDE_NEGATIVE">Hide Negative</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CustomerLoadingSection2
+              availableNegativeFilter={availableNegativeFilter}
+              availableZeroFilter={availableZeroFilter}
+              categories={categories}
+              categoryFilter={categoryFilter}
+              filteredProducts={filteredProducts}
+              loadingFilter={loadingFilter}
+              products={products}
+              search={search}
+              selectedProductIds={selectedProductIds}
+              setAvailableNegativeFilter={setAvailableNegativeFilter}
+              setAvailableZeroFilter={setAvailableZeroFilter}
+              setCategoryFilter={setCategoryFilter}
+              setColumnsOpen={setColumnsOpen}
+              setLoadingFilter={setLoadingFilter}
+              setPage={setPage}
+              setSearch={setSearch}
+              setWeightFilter={setWeightFilter}
+              weightFilter={weightFilter}
+              weights={weights}
+            />
 
             <div className="max-h-[62vh] overflow-auto bg-white dark:bg-[hsl(var(--factory-hue)_45%_13%)]">
               <table className="w-full min-w-[1280px] border-collapse text-sm">
-                <thead className="sticky top-0 z-30 bg-slate-100 shadow-[0_1px_0_hsl(var(--border))] dark:bg-[hsl(var(--factory-hue)_39%_24%)]">
-                  <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-blue-100/85">
-                    <th className="sticky left-0 z-40 w-12 bg-slate-100 px-3 py-3 dark:bg-[hsl(var(--factory-hue)_39%_24%)]">
-                      <Checkbox
-                        checked={allVisibleSelected}
-                        onCheckedChange={(checked) => {
-                          setSelectedProductIds((current) => {
-                            const next = new Set(current);
-                            for (const p of visibleProducts) checked ? next.add(p.id) : next.delete(p.id);
-                            return next;
-                          });
-                          if (checked)
-                            setDraftQuantities((current) => {
-                              const next = { ...current };
-                              visibleProducts.forEach((p) => {
-                                if (!next[p.id]) next[p.id] = "1";
-                              });
-                              return next;
-                            });
-                        }}
-                        aria-label="Select visible products"
-                      />
-                    </th>
-                    {isColumnVisible("articleCode") && (
-                      <th className="min-w-[130px] px-4 py-3 font-medium">Article Code</th>
-                    )}
-                    {isColumnVisible("product") && <th className="min-w-[220px] px-4 py-3 font-medium">Product</th>}
-                    {isColumnVisible("arabicName") && (
-                      <th className="min-w-[180px] px-4 py-3 font-medium">Arabic Name</th>
-                    )}
-                    {isColumnVisible("category") && <th className="px-4 py-3 font-medium">Category</th>}
-                    {isColumnVisible("weight") && <th className="px-4 py-3 text-right font-medium">Wt/Bale</th>}
-                    {isColumnVisible("sellPrice") && <th className="px-4 py-3 text-right font-medium">Sell Price</th>}
-                    {isColumnVisible("availableStock") && (
-                      <th className="px-4 py-3 text-right font-medium">Available Stock</th>
-                    )}
-                    {isColumnVisible("status") && <th className="px-4 py-3 font-medium">Status</th>}
-                    {isColumnVisible("totalLoaded") && (
-                      <th className="px-4 py-3 text-right font-medium">Total Loaded</th>
-                    )}
-                    {isColumnVisible("totalKg") && <th className="px-4 py-3 text-right font-medium">Total KG</th>}
-                    {isColumnVisible("lastLoaded") && <th className="px-4 py-3 font-medium">Last Loaded</th>}
-                    {isColumnVisible("qty") && <th className="px-4 py-3 text-right font-medium">Qty</th>}
-                  </tr>
-                </thead>
+                <CustomerLoadingSection
+                  allVisibleSelected={allVisibleSelected}
+                  isColumnVisible={isColumnVisible}
+                  setDraftQuantities={setDraftQuantities}
+                  setSelectedProductIds={setSelectedProductIds}
+                  visibleProducts={visibleProducts}
+                />
                 <tbody>
                   {visibleProducts.map((product) => {
                     const selected = selectedProductIds.has(product.id);
@@ -757,13 +335,11 @@ export default function CustomerLoading() {
                 </div>
               )}
             </div>
-            <PaginationBar
-              page={safePage}
-              totalPages={pageCount}
-              total={filteredProducts.length}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-              noun="products"
+            <CustomerLoadingSection3
+              filteredProducts={filteredProducts}
+              pageCount={pageCount}
+              safePage={safePage}
+              setPage={setPage}
             />
           </Card>
         </>

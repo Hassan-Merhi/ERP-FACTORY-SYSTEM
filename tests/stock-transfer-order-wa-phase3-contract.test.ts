@@ -3,11 +3,11 @@
  * immutable first-decision writes, and zero stock approval side effects.
  */
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
 
 import { indexDefinition } from "./helpers/schemaManifest";
-const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (p: string) => readModuleFamily(path.join(process.cwd(), p));
 
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");
 const parser = read("server/services/stockTransferOrderWhatsAppReplyParser.ts");

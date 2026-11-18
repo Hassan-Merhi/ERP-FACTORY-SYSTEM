@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
-const service = fs.readFileSync("server/services/immutableStockTransferRevisionLifecycle.ts", "utf8");
+const service = readModuleFamily("server/services/immutableStockTransferRevisionLifecycle.ts");
 const routes = fs.readFileSync("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts", "utf8");
 const registry = fs.readFileSync("server/routes/voucherRoutes.ts", "utf8");
 

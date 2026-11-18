@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function source(path: string): string {
-  return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+  return readModuleFamily(new URL(`../${path}`, import.meta.url));
 }
 
 describe("company deletion safety contract", () => {

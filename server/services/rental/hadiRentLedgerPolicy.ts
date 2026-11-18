@@ -1,4 +1,3 @@
-
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 
@@ -33,21 +32,26 @@ export function isFutureHadiLinkedRentMonth(
   year: number,
   month: number
 ): boolean {
-  return companyId === HADI_LINKED_RENT.payerCompanyId &&
-    module === "ERP" && linkedContract &&
-    Number.isInteger(year) && month >= 1 && month <= 12 &&
-    year * 100 + month >= 202612;
+  return (
+    companyId === HADI_LINKED_RENT.payerCompanyId &&
+    module === "ERP" &&
+    linkedContract &&
+    Number.isInteger(year) &&
+    month >= 1 &&
+    month <= 12 &&
+    year * 100 + month >= 202612
+  );
 }
 
-export function isHadiProtectedRentMonth(
-  companyId: number,
-  module: string,
-  year: number,
-  month: number
-): boolean {
-  return isHadiHistoricAccrualRepair(companyId, module) &&
-    Number.isInteger(year) && Number.isInteger(month) &&
-    month >= 1 && month <= 12 && year * 100 + month <= 202611;
+export function isHadiProtectedRentMonth(companyId: number, module: string, year: number, month: number): boolean {
+  return (
+    isHadiHistoricAccrualRepair(companyId, module) &&
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    month >= 1 &&
+    month <= 12 &&
+    year * 100 + month <= 202611
+  );
 }
 
 /** Keep overpayment as a separate credit, never reduce an unrelated month's due. */
@@ -122,10 +126,10 @@ export function isHadiDuplicateLinkedRentExpenseJournal(
 ): boolean {
   if (companyId !== HADI_RENT_ACCOUNT_POLICY.companyId || voucherType !== "Journal") return false;
   const expenseDebit = entries.some(
-    e => e.ledgerAccountId === HADI_RENT_ACCOUNT_POLICY.rentExpenseAccountId && positive(e.debitAmount)
+    (e) => e.ledgerAccountId === HADI_RENT_ACCOUNT_POLICY.rentExpenseAccountId && positive(e.debitAmount)
   );
   const ownerOrSettlementCredit = entries.some(
-    e =>
+    (e) =>
       (e.ledgerAccountId === HADI_RENT_ACCOUNT_POLICY.ownerCreditAccountId ||
         e.ledgerAccountId === HADI_RENT_ACCOUNT_POLICY.settlementAccountId) &&
       positive(e.creditAmount)

@@ -25,6 +25,13 @@ import { formatNumber } from "@/lib/formatNumber";
 import type { Location } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatUsd } from "@/lib/moneyDisplay";
+import type {
+  AdditionalCharge,
+  LedgerAccountOption,
+  SpSetupStatusData,
+  ParentAgentOption,
+  ContainerOffloadData,
+} from "./offloadDialogTypes";
 
 interface OffloadDialogProps {
   open: boolean;
@@ -32,41 +39,6 @@ interface OffloadDialogProps {
   containerId: number;
   containerNumber: string;
   totalBales: number;
-}
-
-interface AdditionalCharge {
-  id: string;
-  description: string;
-  amount: string;
-  ledgerAccountId: string;
-}
-
-interface LedgerAccountOption {
-  id: string | number;
-  name: string;
-}
-
-interface SpSetupAccountOption {
-  id: string | number;
-  subType: string;
-  name?: string | null;
-}
-
-interface SpSetupStatusData {
-  spAccounts?: SpSetupAccountOption[];
-}
-
-interface ParentAgentOption {
-  ledger_account_id: string | number;
-  account_name: string;
-}
-
-interface ContainerCharge {
-  amount?: string | number | null;
-}
-
-interface ContainerOffloadData {
-  charges?: ContainerCharge[];
 }
 
 interface AccountComboboxProps {

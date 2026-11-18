@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url), "utf8");
-const indexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase11MonthlyClose.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url));
+const indexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const serviceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase11MonthlyClose.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 11 monthly close route surface", () => {
@@ -53,7 +52,6 @@ describe("Golden Coast Phase 11 monthly close route surface", () => {
     expect(routeSource).toContain("pendingAfter");
     expect(routeSource).toContain("Profit Pending Distribution did not return to zero");
   });
-
 
   it("allows only developers to edit an unfinalized month and keeps corrections auditable", () => {
     expect(routeSource).toContain('"/api/sp/golden-coast/profit-correction"');
