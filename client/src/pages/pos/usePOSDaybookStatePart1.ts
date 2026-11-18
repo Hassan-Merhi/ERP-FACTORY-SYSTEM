@@ -102,7 +102,7 @@ export function usePOSDaybookStatePart1() {
     () =>
       vouchers
         .filter((voucher) => {
-          const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer"].includes(voucher.voucherType);
+          const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer", "Transfer"].includes(voucher.voucherType);
           if (!isSupportedType || voucher.optional) return false;
           if (!isPOS) return true;
           // The server already validates each transfer's source/destination
