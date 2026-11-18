@@ -32,12 +32,12 @@ which that status appears at all. Counts as of the second close-out
 
 | Status | Rows (first status) | Rows mentioning it |
 |---|---|---|
-| Done (earlier phases) | 54 | 54 |
+| Done (earlier phases and owner decision 13) | 56 | 56 |
 | Fixed now (first close-out) | 10 | 11 |
 | Close-out 2 | 5 | 8 |
 | Kept | 21 | 24 |
 | Open | 2 | 10 |
-| Owner | 2 | 2 |
+| Owner | 0 | 0 |
 
 The two rows still open first are kept open on purpose: 5/3 (the styled V5
 allocation workbook needs a styling-parity check) and 7/9 (one receipt source
@@ -113,7 +113,7 @@ needs the server PDF).
 | 7 | 24 | `RetailNav` points to a non-POS route | 2 | Kept | `/retail/inventory` is matched by `routes/AppRoutes.tsx` before the POS routes and works for retail users |
 | 7 | D | Retail dead pages (~1,800 lines) | 3 | Done | Phase 3 |
 | 7 | D | `goldenCoastPhase6Pos.ts` | 3 | Kept | Pinned by `tests/ui/golden-coast-pos-phase6-contract.test.ts` |
-| 7 | D | `POSDashboard` orphan, `POSSettings` vs `MySettings` | 3 | Owner | Routed pages; retiring them is a product decision |
+| 7 | D | `POSDashboard` orphan, `POSSettings` vs `MySettings` | 3 | Done | Owner decision 13 (2026-11-18): both pages and their lazy imports removed (with the dashboard's state and dialog modules); `/pos-dashboard` redirects to the POS sale screen (`/pos`) and `/pos-settings` to My Settings (`/my-settings`), which the POS sidebar and Command Palette now open. Server routes, data and the `pos.role-workspace` catalog paths kept |
 | 7 | D | `InvoiceTemplate.tsx` | 3 | Kept | Still imported by six files (see 7/9) |
 | 8 | 3 | Payments Log has no export | 4 | Done | Phase 9f |
 | 8 | 4 | Payments Log button missing on warehouses | 2 | Done | Phase 2 |
@@ -126,7 +126,7 @@ needs the server PDF).
 | 8 | D | `WatchUserDialog` component never rendered | 3 | Kept | Module still supplies `getPageLabel` to two live components and is pinned by three suites |
 | 8 | D | Settings Delete User mutation/dialog that can never open | 3 | Fixed now | Removed from `pages/Settings.tsx` (state, mutation, dialog and their imports) |
 | 8 | D | Split shims, Properties wrappers, lazy rental exports | 3 | Kept | Thin pass-throughs, harmless; renames |
-| 8 | D | `PropertiesDashboard` compatibility route | 3 | Owner | Kept on purpose per the Properties handoff; retire only on owner confirmation |
+| 8 | D | `PropertiesDashboard` compatibility route | 3 | Done | Owner decision 13 (2026-11-18): the page, its section/state modules and `propertiesdashboard/` removed; `/properties/dashboard` redirects to the Properties home (`/properties/daybook`). The hidden navigation entry and the `properties.dashboard` catalog id stay so stored permissions and old bookmarks keep working; server routes and data kept |
 | 9 | 3 | `?tab` vs `?section` | 1 | Done | Phase 1 fallback + phase 5 |
 | 9 | 6 | Export menu adopted by 5 files | 1/4 | Done | `ReportExportMenu` for every company type (phase 1/4); now 80+ files |
 | 9 | 7 | Same export action, five labels/icons | 4 | Done | Phase 4 |
@@ -247,10 +247,7 @@ every filtered row, not just the page on screen.
 
 ## Needs the owner
 
-These two are the only owner items left (owner decision 12 already answered
-the Factory bilingual invoice menu, 5/1).
-
-| Item | Question |
-|---|---|
-| `POSDashboard`, `POSSettings` vs `MySettings` (7/D) | Retire the orphan POS dashboard and the duplicate password page? |
-| `PropertiesDashboard` compatibility route (8/D) | Retire the hidden legacy Properties dashboard? |
+None. Owner decision 13 (2026-11-18) answered the last two items: the orphan
+POS dashboard, the POS settings page (7/D) and the legacy Properties dashboard
+(8/D) are retired, with their routes kept as redirects. Owner decision 12
+answered the Factory bilingual invoice menu (5/1).

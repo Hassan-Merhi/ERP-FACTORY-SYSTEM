@@ -269,7 +269,6 @@ const PAGES: PageCase[] = [
     landmark: "tab-supplier-hub-report",
     factory: true,
   },
-  { name: "POSSettings", load: () => import("@/pages/pos/POSSettings"), landmark: "input-current-password" },
   {
     name: "PropertiesAccounts",
     load: () => import("@/pages/properties/PropertiesAccounts"),

@@ -148,9 +148,9 @@ describe("POS sidebar on the shared shell", () => {
   });
 
   it("opens More tools when a tool page is the current page", () => {
-    pageState.location = "/pos-settings";
+    pageState.location = "/my-settings";
     renderSidebar();
-    expect(screen.getByTestId("button-settings-tab")).toBeInTheDocument();
+    expect(screen.getByTestId("button-pos-my-settings-tab")).toHaveAttribute("href", "/my-settings");
   });
 
   it("shows only the retail POS items for retail companies", () => {
