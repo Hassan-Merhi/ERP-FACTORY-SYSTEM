@@ -189,7 +189,7 @@ export function POSDaybookDaybookResultsSection({
                         className="h-9 w-9 rounded-lg"
                         disabled={!canAct}
                         onClick={() => canAct && setSelectedVoucher(voucher)}
-                        title={canAct ? "View full sale details" : "You can only view your own sales"}
+                        title={canAct ? "View transaction in popup" : "You can only view your own sales"}
                         aria-label={`View ${voucher.voucherNumber}`}
                       >
                         <Eye className="h-4 w-4" />

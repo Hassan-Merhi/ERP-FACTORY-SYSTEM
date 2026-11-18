@@ -245,11 +245,11 @@ export default function POSDaybook() {
 
       <POSDaybookDialogSection
         canEditDaybook={canEditDaybook}
+        currentUser={currentUser}
         canSeeProfitCost={canSeeProfitCost}
         detailsLoading={detailsLoading}
         formatCashAmount={formatCashAmount}
         isAdminOrOwner={isAdminOrOwner}
-        navigate={navigate}
         optionalMutation={optionalMutation}
         recordChanges={recordChanges}
         selectedVoucher={selectedVoucher}
