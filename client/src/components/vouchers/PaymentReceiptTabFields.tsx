@@ -171,12 +171,10 @@ export function PaymentReceiptTabFields({
                   </div>
                 </div>
               </FormControl>
-
               <FormMessage />
             </FormItem>
           )}
         />
-
         {/* Running total — stated up front, not discovered at the bottom */}
         <div className="voucher-total-card rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -233,7 +231,6 @@ export function PaymentReceiptTabFields({
       {m.isPayment && fxWalletsLoading && (
         <p className="text-xs text-muted-foreground">Loading FX wallet status before payment…</p>
       )}
-
       {/* ── Entries table ── */}
       <VoucherEntriesTable
         amountCurrencyOverride={m.directEurPayment ? "EUR" : undefined}
@@ -265,7 +262,6 @@ export function PaymentReceiptTabFields({
         onAutoCreateAccount={onAutoCreateAccount}
         isAutoCreating={isAutoCreating}
       />
-
       {/* ── Validation — held back until the form has been touched or submitted ── */}
       {m.showValidation && (m.missingAccount || m.missingEntries) && (
         <div className="flex flex-col gap-1" data-testid="voucher-validation">
@@ -283,7 +279,6 @@ export function PaymentReceiptTabFields({
           )}
         </div>
       )}
-
       {/* ── Notes (collapsible) ── */}
       <Collapsible open={m.notesOpen} onOpenChange={m.setNotesOpen}>
         <div className="flex items-center justify-between gap-2">

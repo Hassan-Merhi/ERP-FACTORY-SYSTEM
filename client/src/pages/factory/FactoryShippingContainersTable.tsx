@@ -1,14 +1,12 @@
 // Extracted from ./FactoryShippingContainers.tsx
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageCircle, Trash2, Check, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   INV_LEFT,
   fmtDate,
-  statusColor,
-  statusLabel,
+  ShippingStatusBadge,
   stickyCellBase,
   stickyHeadBase,
   shippingCostUsd,
@@ -125,9 +123,7 @@ export function FactoryShippingContainersTable({ m }: { m: FactoryShippingContai
                     }}
                     data-testid={`button-status-${r.id}`}
                   >
-                    <Badge className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}>
-                      {statusLabel(r.status)}
-                    </Badge>
+                    <ShippingStatusBadge status={r.status} />
                   </button>
                 </TableCell>
               )}

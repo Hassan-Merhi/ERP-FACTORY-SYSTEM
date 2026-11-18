@@ -56,6 +56,10 @@ export type StatusKind =
   | "arrived"
   | "offloaded"
   | "closed"
+  | "dispatched"
+  | "repacked"
+  | "removed"
+  | "deleted"
   | "neutral";
 
 interface StatusMeta {
@@ -120,6 +124,11 @@ const STATUS_MAP: Record<StatusKind, StatusMeta> = {
   arrived: { label: "Arrived", variant: "warning", icon: CircleDot },
   offloaded: { label: "Offloaded", variant: "success", icon: CheckCircle2 },
   closed: { label: "Closed", variant: "success", icon: CheckCircle2 },
+  // Bale lifecycle tail: dispatched out, repacked into another bale, or removed.
+  dispatched: { label: "Dispatched", variant: "warning", icon: Clock },
+  repacked: { label: "Repacked", variant: "secondary", icon: CircleDot },
+  removed: { label: "Removed", variant: "destructive", icon: XCircle },
+  deleted: { label: "Deleted", variant: "destructive", icon: XCircle },
   neutral: { label: "—", variant: "muted", icon: CircleDot },
 };
 

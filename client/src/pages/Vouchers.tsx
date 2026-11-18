@@ -43,11 +43,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
         />
       ) : (
-        // One header for ERP, Factory and Properties; the drafts link is ERP-only via showOptionalDrafts.
+        // Shared voucher header; drafts are available in authorized ERP and Factory workflows.
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {m.showOptionalDrafts && (
             <Link
-              href="/optional-vouchers"
+              href={m.appMode === "factory" ? "/factory/optional-vouchers" : "/optional-vouchers"}
               className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
               data-testid="link-vouchers-optional-drafts"
             >
@@ -265,7 +265,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
         </div>
       </div>
-
       <CreateAccountModal
         open={m.showCreateAccountModal}
         onClose={() => {
@@ -276,7 +275,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         onAccountCreated={m.handleAccountCreated}
         apiRequestFn={m.modeApiRequest}
       />
-
       <AlertDialog
         open={!!m.waPendingPrompt}
         onOpenChange={(open) => {

@@ -106,11 +106,14 @@ export function usePaymentReceiptTabModel({
 
   const isPayment = activeTab === "payment";
   const isFxPayment = isPayment && !!fxWallet && !isEditMode;
-  useEffect(() => {
-    if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
-  }, [isFxPayment, form]);
-  const fxRateValue = Number(fxPaymentRate);
   const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
+  const fxOptionalDraft = directEurPayment && form.watch("optional");
+  // A USD FX draft needs a durable negotiated rate. EUR supplier drafts can use
+  // the wallet's native currency and are finalized through the atomic FX path.
+  useEffect(() => {
+    if (isFxPayment && !directEurPayment && form.getValues("optional")) form.setValue("optional", false);
+  }, [isFxPayment, directEurPayment, form]);
+  const fxRateValue = Number(fxPaymentRate);
   const fxEurRequired =
     isFxPayment && total > 0 ? (directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0) : 0;
   const fxUnsupportedEntries =
@@ -170,15 +173,18 @@ export function usePaymentReceiptTabModel({
     paymentAccountId === 0 ||
     total === 0 ||
     !!fxWalletsLoading ||
+    (isFxPayment && fxUnsupportedEntries) ||
+    (fxOptionalDraft &&
+      (!fxWallet?.synchronized || Number(fxWallet.state.eur) <= 0 || Number(fxWallet.state.totalBookUsd) <= 0)) ||
     (isFxPayment &&
+      !fxOptionalDraft &&
       (!fxWallet?.synchronized ||
         fxSupplierBalanceLoading ||
         (!directEurPayment && fxRateValue <= 0) ||
         (directEurPayment &&
           (fxSupplierEurBalance === null || fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
         !Number.isFinite(fxEurRequired) ||
-        fxEurRequired > Number(fxWallet!.state.eur) ||
-        fxUnsupportedEntries));
+        fxEurRequired > Number(fxWallet!.state.eur)));
   // An FX wallet payment pays out in the payout currency, so its total says which one.
   const totalLabel = total > 0 ? (isFxPayment ? `${fxPayoutCurrency} ${total.toFixed(2)}` : formatAmount(total)) : "—";
 
@@ -257,6 +263,7 @@ export function usePaymentReceiptTabModel({
     isFxPayment,
     fxRateValue,
     directEurPayment,
+    fxOptionalDraft,
     fxEurRequired,
     fxUnsupportedEntries,
     Icon,

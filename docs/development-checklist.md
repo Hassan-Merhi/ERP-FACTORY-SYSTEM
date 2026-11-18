@@ -15,6 +15,7 @@ npm run audit:write-routes
 npm run audit:write-evidence
 npm run audit:toolchain
 npm run audit:scripts
+npm run audit:ui-unification
 
 # 2. TypeScript type-check
 npm run check

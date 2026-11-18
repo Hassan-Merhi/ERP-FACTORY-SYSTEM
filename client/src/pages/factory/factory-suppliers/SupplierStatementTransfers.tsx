@@ -26,7 +26,6 @@ export function SupplierStatementTransfers({
   displayedRows,
   balanceByKey,
   typeBadge,
-  statusColor,
   statusDisplayLabel,
   onEditPayment,
   onDeletePayment,
@@ -51,7 +50,6 @@ export function SupplierStatementTransfers({
   displayedRows: SupplierStatementProps["displayedRows"];
   balanceByKey: SupplierStatementProps["balanceByKey"];
   typeBadge: SupplierStatementProps["typeBadge"];
-  statusColor: SupplierStatementProps["statusColor"];
   statusDisplayLabel: SupplierStatementProps["statusDisplayLabel"];
   onEditPayment: SupplierStatementProps["onEditPayment"];
   onDeletePayment: SupplierStatementProps["onDeletePayment"];
@@ -158,7 +156,6 @@ export function SupplierStatementTransfers({
               formatDate={formatDate}
               formatNum={formatNum}
               typeBadge={typeBadge}
-              statusColor={statusColor}
               statusDisplayLabel={statusDisplayLabel}
               onEditPayment={onEditPayment}
               onDeletePayment={onDeletePayment}

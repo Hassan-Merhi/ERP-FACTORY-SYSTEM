@@ -158,7 +158,6 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Preview Dialog */}
       <PayrollPreviewDialog payroll={payroll} />
     </>

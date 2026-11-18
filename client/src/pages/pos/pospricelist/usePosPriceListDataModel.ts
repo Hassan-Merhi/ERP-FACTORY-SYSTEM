@@ -1,4 +1,4 @@
-// Extracted from ./usePosPriceListModel.ts: price-list queries, filters and selection state.
+// Extracted from ./usePosPriceListModel.ts: queries and price edits for usePosPriceListModel.
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -46,6 +46,9 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
 
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isPrivileged = PRIVILEGED_ROLES.includes(currentUser?.role || "");
+  const posViewOnly = Boolean((posUser as { posViewOnly?: boolean } | undefined)?.posViewOnly);
+  const canEdit = !posViewOnly;
+  const canEditPrices = canEdit && recordChanges.allowed;
 
   const { data: posAssignedLocations = [], isLoading: posLocationsLoading } = useQuery<Location[]>({
     queryKey: ["/api/my-locations"],
@@ -126,7 +129,7 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
 
   const locationPricedList = useMemo<PriceListRow[]>(() => {
     if (isAllMode) return masterItems;
-    if (!posUser) return priceList;
+    if (!posUser || canEditPrices) return priceList;
     return priceList.filter((item) => {
       // Keep the usual POS view limited to stocked items with a custom price.
       if (item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0) {
@@ -136,7 +139,7 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
       // The base-price fallback is valid here; unpriced items remain hidden.
       return showZeroQty && Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0;
     });
-  }, [priceList, masterItems, posUser, isAllMode, showZeroQty]);
+  }, [priceList, masterItems, posUser, isAllMode, showZeroQty, canEditPrices]);
 
   const stockGroups = useMemo(() => {
     const groups = new Set<string>();
@@ -192,14 +195,14 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
   );
 
   const zeroQtyCount = useMemo(() => {
-    if (posUser && !isAllMode) {
+    if (posUser && !isAllMode && !canEditPrices) {
       // Count the additional zero-stock, priced rows even before they are shown.
       return priceList.filter(
         (item) => Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0
       ).length;
     }
     return locationPricedList.filter((item) => itemQty(item) === 0).length;
-  }, [itemQty, locationPricedList, priceList, posUser, isAllMode]);
+  }, [itemQty, locationPricedList, priceList, posUser, isAllMode, canEditPrices]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -239,7 +242,7 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
       locationId: number;
       sellingPrice: string;
     }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!canEditPrices) throw new Error(recordChanges.reason ?? "Price editing is disabled.");
       const res = await apiRequest("POST", `/api/stock-items/${stockItemId}/location-prices`, {
         locationId,
         sellingPrice,
@@ -275,7 +278,7 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
   });
 
   const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
-    if (posUser || !recordChanges.allowed) return;
+    if (!canEditPrices) return;
     lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
     const hasValue = currentPrice && parseFloat(currentPrice) > 0;
     setEditingItem({ stockItemId, locationId, value: hasValue ? currentPrice : "" });
@@ -342,22 +345,6 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
     }
   };
 
-  const commitEdit = (): boolean => {
-    if (!editingItem || updatePriceMutation.isPending) return false;
-    const val = editingItem.value.trim();
-    if (!val || !Number.isFinite(Number(val)) || Number(val) < 0) {
-      toast({ title: "Invalid price", description: "Enter a valid number.", variant: "destructive" });
-      return false;
-    }
-    lastSavedRef.current = { stockItemId: editingItem.stockItemId, locationId: editingItem.locationId };
-    updatePriceMutation.mutate({
-      stockItemId: editingItem.stockItemId,
-      locationId: editingItem.locationId,
-      sellingPrice: val,
-    });
-    return true;
-  };
-
   return {
     formatAmount,
     toast,
@@ -388,6 +375,8 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
     skipBlurSaveRef,
     currentUser,
     isPrivileged,
+    canEdit,
+    canEditPrices,
     locations,
     locationsLoading,
     isAllMode,
@@ -410,6 +399,5 @@ export function usePosPriceListDataModel({ posUser }: { posUser: POSPriceListPro
     masterPriceFor,
     navigateEdit,
     navigateHorizontal,
-    commitEdit,
   };
 }

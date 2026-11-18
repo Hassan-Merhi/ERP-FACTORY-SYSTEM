@@ -1,15 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { addDays, format } from "date-fns";
-export const BALE_STATUS_COLORS: Readonly<Record<string, string>> = {
-  PENDING_PRESSING: "outline",
-  LABEL_PRINTED: "secondary",
-  PRESSED: "default",
-  FINALIZED: "default",
-  IN_STOCK: "default",
-  RESERVED: "outline",
-  SOLD: "destructive",
-  REPACKED: "secondary",
-};
 export function useBalesHistoryDateKeyboard(setDateFilter: Dispatch<SetStateAction<string>>): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

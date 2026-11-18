@@ -68,7 +68,6 @@ export interface SupplierStatementProps {
   onEditPayment: (payment: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;
   setEditObComm: SuppliersModel["setEditObComm"];
-  statusColor: SuppliersModel["statusColor"];
   statusDisplayLabel: (status: string) => string;
   typeBadge: (type: string) => React.ReactNode;
   displayedRows: StatementDisplayRow[];
@@ -114,7 +113,6 @@ export function SupplierStatement({
   setStatDateFilter,
   onEditPayment,
   onDeletePayment,
-  statusColor,
   statusDisplayLabel,
   typeBadge,
   displayedRows,
@@ -361,7 +359,6 @@ export function SupplierStatement({
         displayedRows={displayedRows}
         balanceByKey={balanceByKey}
         typeBadge={typeBadge}
-        statusColor={statusColor}
         statusDisplayLabel={statusDisplayLabel}
         onEditPayment={onEditPayment}
         onDeletePayment={onDeletePayment}

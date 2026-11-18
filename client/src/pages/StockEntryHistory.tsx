@@ -1,6 +1,7 @@
 import { AlignJustify, ChevronDown, ChevronRight, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/page-state";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import type { StockEntryHistoryProps } from "./stockentryhistory/types";
@@ -8,7 +9,7 @@ import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
 import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
 import { groupKey } from "./stockentryhistory/groupBaleHelpers";
-import { STATUS_COLORS, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
+import { formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
 import { useStockEntryHistoryModel } from "./StockEntryHistoryModel";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
@@ -319,11 +320,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                                   {formatDailyNum(parseFloat(bale.weightKg || "0"))}
                                                 </td>
                                                 <td className="py-1 pr-4">
-                                                  <span
-                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
-                                                  >
-                                                    {bale.status}
-                                                  </span>
+                                                  <StatusBadge
+                                                    status={bale.status}
+                                                    label={bale.status}
+                                                    showIcon={false}
+                                                    className="px-1.5 py-0.5 text-[11px]"
+                                                  />
                                                 </td>
                                                 <td className="py-1">{formatHistoryTime(bale.finalizedAt)}</td>
                                               </tr>

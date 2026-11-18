@@ -153,7 +153,7 @@ export function FactoryWorkerDetailTabs({
                       className={`text-xl font-bold ${model.netBalance >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}
                       data-testid="stat-net-balance"
                     >
-                      ${model.netBalance.toFixed(2)}
+                      {fmt(model.netBalance)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Paid + Bonus − Outstanding Advances</p>
                   </CardContent>
@@ -186,7 +186,7 @@ export function FactoryWorkerDetailTabs({
                       className={`text-xl font-bold ${model.advancesLeft > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}
                       data-testid="stat-advances-left"
                     >
-                      ${model.advancesLeft.toFixed(2)}
+                      {fmt(model.advancesLeft)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Outstanding balance</p>
                   </CardContent>

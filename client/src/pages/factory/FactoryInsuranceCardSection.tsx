@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFactoryInsuranceState } from "./useFactoryInsuranceState";
 import { EmptyState, LoadingState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactoryInsuranceCardSection({
   filteredMembers,
@@ -127,7 +128,7 @@ export function FactoryInsuranceCardSection({
                   <TableCell>{formatDisplayDate(m.startDate)}</TableCell>
                   <TableCell>{m.dob ? formatDisplayDate(m.dob) : "—"}</TableCell>
                   <TableCell className="text-right font-mono font-semibold text-slate-900 dark:text-slate-100">
-                    ${parseFloat(m.amount).toFixed(2)}
+                    {formatUsd(parseFloat(m.amount), 2)}
                   </TableCell>
                   <TableCell>
                     {m.active ? (

@@ -188,7 +188,12 @@ export function PaymentReceiptTab({
                 >
                   <m.Icon className="h-4 w-4" />
                 </div>
-
+                {m.fxOptionalDraft && (
+                  <p className="text-xs text-muted-foreground px-1" data-testid="text-fx-optional-draft">
+                    Optional EUR draft: no wallet or supplier balance changes now. Finalizing later settles both
+                    balances atomically after validating the live EUR payable.
+                  </p>
+                )}
                 {/* Title + badges */}
                 {/* min-w keeps the title readable: the row wraps the date input instead of covering it. */}
                 <div className="voucher-hero-heading flex flex-col gap-0.5 flex-1 min-w-[9rem]">
@@ -209,7 +214,6 @@ export function PaymentReceiptTab({
                     {m.isPayment ? "Create a new payment entry" : "Record incoming funds"}
                   </span>
                 </div>
-
                 {/* Entry Date input */}
                 <FormField
                   control={form.control}
@@ -237,7 +241,6 @@ export function PaymentReceiptTab({
                     </FormItem>
                   )}
                 />
-
                 {/* Effective Date — optional, revealed on demand */}
                 {onEffectiveDateChange &&
                   (m.showEffectiveDate ? (
@@ -264,7 +267,6 @@ export function PaymentReceiptTab({
                       + Effective date
                     </Button>
                   ))}
-
                 {/* Mobile accounts drawer trigger — hidden on sm+ */}
                 <Button
                   type="button"
@@ -281,7 +283,6 @@ export function PaymentReceiptTab({
                   )}
                 </Button>
               </div>
-
               {/* ── Form fields ── */}
               <PaymentReceiptTabFields
                 m={m}
@@ -320,7 +321,6 @@ export function PaymentReceiptTab({
                 onAutoCreateAccount={onAutoCreateAccount}
                 isAutoCreating={isAutoCreating}
               />
-
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <VoucherActionBar
                 isEditing={!!isEditMode}
@@ -362,8 +362,8 @@ export function PaymentReceiptTab({
                     name="optional"
                     render={({ field }) => (
                       <VoucherOptionalSwitch
-                        checked={m.isFxPayment ? false : field.value}
-                        disabled={m.isFxPayment}
+                        checked={m.isFxPayment && !m.directEurPayment ? false : field.value}
+                        disabled={m.isFxPayment && !m.directEurPayment}
                         onCheckedChange={field.onChange}
                         data-testid="checkbox-optional"
                       />
@@ -385,7 +385,6 @@ export function PaymentReceiptTab({
           </Form>
         </Card>
       </div>
-
       {/* ── Right column: Account Sidebar — hidden on mobile, visible on sm+ ── */}
       <div
         className="hidden sm:block w-full xl:w-[40%] xl:sticky xl:top-4 h-fit"
@@ -393,7 +392,6 @@ export function PaymentReceiptTab({
       >
         <AccountSidebar {...m.sidebarProps} />
       </div>
-
       {/* ── Mobile Account Drawer (Sheet) — entry rows ── */}
       <Sheet open={m.sheetOpen} onOpenChange={m.setSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col" data-testid="sheet-accounts-drawer">
@@ -407,7 +405,6 @@ export function PaymentReceiptTab({
           </div>
         </SheetContent>
       </Sheet>
-
       {/* ── Mobile Pay From / Receive Into Sheet ── */}
       <PayFromAccountSheet
         open={m.payFromSheetOpen}

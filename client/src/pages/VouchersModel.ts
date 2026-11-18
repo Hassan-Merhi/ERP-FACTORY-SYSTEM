@@ -107,6 +107,14 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
     activeTab: f.activeTab,
     voucherIdToEdit: f.voucherIdToEdit,
     isWalletPayment,
+    fxWalletDraft:
+      isWalletPayment && selectedFxWallet
+        ? {
+            eurBalance: selectedFxWallet.state.eur,
+            bookUsd: selectedFxWallet.state.totalBookUsd,
+            payoutCurrency: fxPayoutCurrency,
+          }
+        : null,
     postWalletPayment,
     resetWalletPayment,
     selectedCurrency: f.selectedCurrency,
@@ -182,7 +190,11 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
     exportVoucherHelper({ formData: f.form.getValues(), activeTab: f.activeTab, toast: f.toast, detailed });
 
   const onSubmit = async (data: VoucherFormData) => {
-    if (f.paymentPostingCurrency === "ZMW" && (!f.paymentPostingRate || f.paymentPostingRate <= 0)) {
+    if (
+      !(isWalletPayment && data.optional) &&
+      f.paymentPostingCurrency === "ZMW" &&
+      (!f.paymentPostingRate || f.paymentPostingRate <= 0)
+    ) {
       f.toast({
         title: "Approved USD/ZMW rate required",
         description: "Enter a company exchange rate effective on the voucher date before posting.",
@@ -230,7 +242,7 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
       });
       return;
     }
-    if (isWalletPayment && !(await confirmWalletPayment(validEntries, f.toast))) return;
+    if (isWalletPayment && !data.optional && !(await confirmWalletPayment(validEntries, f.toast))) return;
     saveMutation.mutate({
       ...data,
       entries: validEntries,
@@ -242,6 +254,7 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
     selectedCompany: f.selectedCompany,
     modeApiRequest: f.modeApiRequest,
     isFactoryCompany: f.isFactoryCompany,
+    appMode: f.appMode,
     isAutoCreating: f.isAutoCreating,
     formatAmount: f.formatAmount,
     selectedCurrency: f.selectedCurrency,
@@ -327,5 +340,4 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
     onSubmit,
   };
 }
-
 export type VouchersModel = ReturnType<typeof useVouchersModel>;

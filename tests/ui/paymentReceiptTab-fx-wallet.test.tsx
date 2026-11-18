@@ -173,6 +173,28 @@ describe("PaymentReceiptTab — FX wallet, USD payout at an agreed rate", () => 
     expect(optional).toHaveAttribute("aria-checked", "false");
   });
 
+  it("enables Optional for a direct EUR supplier draft without posting balances", async () => {
+    renderWithProviders(
+      <Harness
+        paymentAccountId={13}
+        entries={[SUPPLIER_ROW]}
+        fxWallet={WALLET}
+        fxPayoutCurrency="EUR"
+        fxSupplierEurBalance={800}
+      />
+    );
+    const optional = await screen.findByTestId("checkbox-optional");
+    expect(optional).toBeEnabled();
+    expect(optional).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByTestId("text-fx-optional-draft")).toHaveTextContent("no wallet or supplier balance changes");
+    expect(screen.getByTestId("button-save-voucher")).toBeEnabled();
+
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "true"));
+  });
+
   it("warns and blocks when the wallet ledger is out of sync or short of EUR", async () => {
     renderWithProviders(
       <Harness

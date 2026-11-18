@@ -11,6 +11,7 @@ import { zodResolver } from "@/lib/form-resolver";
 import { useReactToPrint } from "react-to-print";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
+import { canCreatePosCustomers } from "@shared/posCustomerAccess";
 
 interface POSCustomer {
   id: number;
@@ -33,6 +34,20 @@ export function usePOSCustomersState() {
   const { toast } = useToast();
   const { formatCashAmount, formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
+  const { data: authUser } = useQuery<{
+    role?: string;
+    currentRole?: string;
+    canAccessCustomers?: boolean;
+    posViewOnly?: boolean;
+  }>({ queryKey: ["/api/auth/me"] });
+  const isPosCashier = (authUser?.currentRole ?? authUser?.role) === "POS";
+  const canCreateCustomer =
+    authUser != null &&
+    canCreatePosCustomers({
+      role: authUser.currentRole ?? authUser.role ?? "",
+      canAccessCustomers: authUser.canAccessCustomers === true,
+      posViewOnly: authUser.posViewOnly === true,
+    });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const {
     filters: { searchQuery },
@@ -110,6 +125,8 @@ export function usePOSCustomersState() {
   const openingBalance = closingBalance - totalDr + totalCr;
   return {
     customers,
+    isPosCashier,
+    canCreateCustomer,
     refetch,
     isError,
     closingBalance,

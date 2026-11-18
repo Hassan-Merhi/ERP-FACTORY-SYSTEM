@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { InsuranceMember } from "./factoryinsurance/types";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface LedgerAccountOption {
   id: number;
@@ -188,7 +189,7 @@ export function useFactoryInsuranceState() {
         title: `Insurance entries posted — ${data.period}`,
         description: (
           <span>
-            {data.membersCount} member(s) · Total ${parseFloat(data.totalAmount).toFixed(2)}{" "}
+            {data.membersCount} member(s) · Total {formatUsd(parseFloat(data.totalAmount), 2)}{" "}
             <button className="underline font-medium ml-1" onClick={() => navigate("/factory/daybook")}>
               View in Daybook
             </button>

@@ -1,9 +1,7 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 import { getFinalizedSaleReturnCopy } from "@/i18n/factoryFinalizedSaleReturnTranslations";
-import { useSearch } from "wouter";
 import { BarChart3, GitCompareArrows, PackageMinus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,29 +24,18 @@ export default function FactoryOthers() {
   const returnCopy = getFinalizedSaleReturnCopy(language);
   const { data: user } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const mayReturnToSupplier = user?.role === "Admin" || user?.role === "Developer";
-  const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = ALL_TABS.filter((tab) =>
     tab === "supplier-returns" || tab === "sale-returns"
       ? mayReturnToSupplier
       : !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
-  const visibleTabsKey = visibleTabs.join(",");
   const [activeTab, setActiveTab] = useHubQueryState<OthersTab>({
     key: "tab",
     allowedValues: ready ? visibleTabs : ALL_TABS,
     knownValues: ALL_TABS,
     defaultValue: visibleTabs[0] ?? "comparison",
   });
-
-  // Sidebar links can change the query while this hub stays mounted.
-  // Sync that navigation as well as the tab strip's own clicks.
-  useEffect(() => {
-    const requested = new URLSearchParams(search).get("tab") as OthersTab | null;
-    if (ready && requested && visibleTabsKey.split(",").includes(requested) && requested !== activeTab) {
-      setActiveTab(requested);
-    }
-  }, [search, ready, visibleTabsKey, activeTab, setActiveTab]);
 
   if (!ready) return <LoadingSkeleton variant="page" className="p-4" />;
   if (visibleTabs.length === 0) {

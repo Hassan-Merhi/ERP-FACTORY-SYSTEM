@@ -1,13 +1,13 @@
 /**
- * The All Daybook voucher list: header controls (hide amounts, hidden rows,
- * top pagination), the desktop table, the mobile card list and the pagination
- * footer.
+ * The All Daybook voucher list: header controls (hide amounts, hidden rows),
+ * the desktop table, the mobile card list and the shared PaginationBar.
  *
  * Keeps the original test IDs, actions and conditional Amount column while
  * displaying company and voucher-type headers over server-grouped rows.
  */
 import { Fragment } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, Pencil, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronRight, Eye, EyeOff, ListFilter, Pencil, RefreshCw, X } from "lucide-react";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,16 +60,24 @@ function RowActions({
   if (voucher.entryType === "offload") {
     return (
       <>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
           onClick={() => model.openInCompany(voucher.companyId, `/offloads/${voucher.offloadId}`)}
           data-testid={`button-view-offload${suffix}-${voucher.offloadId}`}
-          title="View offload">
+          title="View offload"
+        >
           <Eye className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
           onClick={() => model.openInCompany(voucher.companyId, `/containers/${voucher.containerId}`)}
           data-testid={`button-open-offload-container${suffix}-${voucher.offloadId}`}
-          title="Open container">
+          title="Open container"
+        >
           <Pencil className="h-4 w-4" />
         </Button>
       </>
@@ -120,12 +128,26 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
         <Table mobileLayout="cards" className="overflow-hidden rounded-xl text-sm">
           <TableHeader className="bg-slate-100/90 dark:bg-white/[0.055]">
             <TableRow className="border-b border-slate-200 dark:border-white/10">
-              <TableHead className="w-[110px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Date</TableHead>
-              <TableHead className="w-[150px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Company</TableHead>
-              <TableHead className="w-[160px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Type</TableHead>
-              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Description</TableHead>
-              {!hideAmounts && <TableHead className="w-[130px] text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Amount</TableHead>}
-              <TableHead className="w-[120px] text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Actions</TableHead>
+              <TableHead className="w-[110px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Date
+              </TableHead>
+              <TableHead className="w-[150px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Company
+              </TableHead>
+              <TableHead className="w-[160px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Type
+              </TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Description
+              </TableHead>
+              {!hideAmounts && (
+                <TableHead className="w-[130px] text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                  Amount
+                </TableHead>
+              )}
+              <TableHead className="w-[120px] text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -152,17 +174,28 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                 return (
                   <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                     {newCompany && (
-                      <TableRow className="border-t-2 border-violet-200 bg-gradient-to-r from-violet-100 via-purple-50 to-violet-50 hover:from-violet-100 hover:to-violet-50 dark:border-violet-400/20 dark:from-violet-500/25 dark:via-purple-500/15 dark:to-violet-500/10 dark:hover:from-violet-500/25" data-testid={`row-company-group-${v.companyId}`}>
+                      <TableRow
+                        className="border-t-2 border-violet-200 bg-gradient-to-r from-violet-100 via-purple-50 to-violet-50 hover:from-violet-100 hover:to-violet-50 dark:border-violet-400/20 dark:from-violet-500/25 dark:via-purple-500/15 dark:to-violet-500/10 dark:hover:from-violet-500/25"
+                        data-testid={`row-company-group-${v.companyId}`}
+                      >
                         <TableCell colSpan={hideAmounts ? 5 : 6} className="py-2.5">
-                          <span className={`inline-block rounded-md px-2.5 py-1 text-xs font-bold ${companyColor(v.companyId)}`}>
+                          <span
+                            className={`inline-block rounded-md px-2.5 py-1 text-xs font-bold ${companyColor(v.companyId)}`}
+                          >
                             {v.companyName}
                           </span>
                         </TableCell>
                       </TableRow>
                     )}
                     {newType && (
-                      <TableRow className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-white/[0.035] dark:hover:bg-white/[0.035]" data-testid={`row-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}>
-                        <TableCell colSpan={hideAmounts ? 5 : 6} className="py-1.5 pl-6 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <TableRow
+                        className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-white/[0.035] dark:hover:bg-white/[0.035]"
+                        data-testid={`row-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}
+                      >
+                        <TableCell
+                          colSpan={hideAmounts ? 5 : 6}
+                          className="py-1.5 pl-6 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                        >
                           {voucherGroupLabel(v.voucherType)}
                         </TableCell>
                       </TableRow>
@@ -246,15 +279,22 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
             return (
               <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                 {newCompany && (
-                  <div className="border-t border-violet-200 bg-violet-100/80 px-3 py-2 dark:border-violet-400/20 dark:bg-violet-500/15" data-testid={`card-company-group-${v.companyId}`}>
-                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}>
+                  <div
+                    className="border-t border-violet-200 bg-violet-100/80 px-3 py-2 dark:border-violet-400/20 dark:bg-violet-500/15"
+                    data-testid={`card-company-group-${v.companyId}`}
+                  >
+                    <span
+                      className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}
+                    >
                       {v.companyName}
                     </span>
                   </div>
                 )}
                 {newType && (
-                  <div className="bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:bg-white/[0.035] dark:text-slate-400"
-                    data-testid={`card-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}>
+                  <div
+                    className="bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:bg-white/[0.035] dark:text-slate-400"
+                    data-testid={`card-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}
+                  >
                     {voucherGroupLabel(v.voucherType)}
                   </div>
                 )}
@@ -282,7 +322,9 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
                           {v.companyName}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">{v.description || v.narration || "—"}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {v.description || v.narration || "—"}
+                      </div>
                       <div className="text-xs text-muted-foreground mt-0.5">{fmtDate(v.voucherDate)}</div>
                     </div>
                     <div className="text-right shrink-0">
@@ -308,11 +350,13 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
 }
 
 function ListHeader({ model }: { model: TransactionJournalModel }) {
-  const { hideAmounts, hiddenRowIds, showHidden, page, totalPages } = model;
+  const { hideAmounts, hiddenRowIds, showHidden } = model;
   return (
     <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300"><ListFilter className="h-4 w-4" /></span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">
+          <ListFilter className="h-4 w-4" />
+        </span>
         <CardTitle className="text-base font-bold tracking-tight">
           Transactions
           {!model.isLoading && (
@@ -364,64 +408,22 @@ function ListHeader({ model }: { model: TransactionJournalModel }) {
           </Button>
         )}
       </div>
-      {totalPages > 1 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => model.setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            data-testid="button-prev-page"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => model.setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            data-testid="button-next-page"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
     </CardHeader>
   );
 }
 
 function PaginationFooter({ model }: { model: TransactionJournalModel }) {
-  const { page, totalPages, totalVouchers, limit } = model;
-  if (totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 dark:border-white/10">
-      <span className="text-sm text-muted-foreground">
-        Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalVouchers)} of {totalVouchers.toLocaleString()}
-      </span>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="default"
-          onClick={() => model.setPage((p) => Math.max(1, p - 1))}
-          disabled={page === 1}
-          data-testid="button-prev-page-footer"
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="default"
-          onClick={() => model.setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-          data-testid="button-next-page-footer"
-        >
-          Next <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
-    </div>
+    <PaginationBar
+      page={model.page}
+      totalPages={model.totalPages}
+      total={model.totalVouchers}
+      pageSize={model.limit}
+      onPageChange={(next) => model.setPage(next)}
+      noun="transactions"
+      ariaLabel="Transactions pages"
+      data-testid="journal-pagination"
+    />
   );
 }
 
