@@ -5,22 +5,21 @@ const base = {
   originalDate: "2026-11-17",
   businessDate: "2026-11-18",
   editDays: 2,
-  isOwnSale: true,
 };
 
 describe("Zambia POS Daybook edit authorization", () => {
-  it("permits an own shift's sale from yesterday when enabled for two days", () => {
+  it("permits assigned-location sales from yesterday when enabled for two days", () => {
     expect(posDaybookEditEligibility(base)).toEqual({ allowed: true, reason: "enabled" });
     expect(posDaybookEditEligibility({ ...base, originalDate: "2026-11-16" }).allowed).toBe(true);
   });
 
-  it("blocks disabled permissions including today's own sale", () => {
+  it("blocks disabled permissions including today's sale", () => {
     expect(posDaybookEditEligibility({ ...base, originalDate: "2026-11-18", editDays: 0 }))
       .toMatchObject({ allowed: false, reason: "disabled" });
   });
 
-  it("blocks other cashiers' sales and view-only cashiers", () => {
-    expect(posDaybookEditEligibility({ ...base, isOwnSale: false }).reason).toBe("not-owner");
+  it("allows assigned-location sales regardless of shift, but blocks view-only cashiers", () => {
+    expect(posDaybookEditEligibility(base).allowed).toBe(true);
     expect(posDaybookEditEligibility({ ...base, viewOnly: true }).reason).toBe("view-only");
   });
 

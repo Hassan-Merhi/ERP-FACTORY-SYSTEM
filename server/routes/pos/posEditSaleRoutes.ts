@@ -77,6 +77,42 @@ export async function handlePosSaleEdit(
       // Phase 21 (B): updatePosSale writes the edit audit inside the edit's
       // transaction; the duplicate after-commit summary row here is gone.
     }
+    // Editing another cashier's assigned-location sale must not expose COGS,
+    // profits, ledger accounts or internal stock valuations in the response.
+    if (req.user?.role === "POS" && result.status === 200 && result.body?.voucher) {
+      const voucher = result.body.voucher;
+      const safeVoucher = {
+        id: voucher.id,
+        voucherNumber: voucher.voucherNumber,
+        voucherType: voucher.voucherType,
+        voucherDate: voucher.voucherDate,
+        locationId: voucher.locationId,
+        totalAmount: voucher.totalAmount,
+        currency: voucher.currency,
+        exchangeRate: voucher.exchangeRate,
+        isCreditSale: voucher.isCreditSale,
+      };
+      const items = Array.isArray(result.body.items) ? result.body.items : [];
+      return res.status(200).json({
+        ...(options.includeLegacyTopLevelVoucher ? safeVoucher : {}),
+        voucher: safeVoucher,
+        location: { id: voucher.locationId },
+        items: items.map((item: Record<string, unknown>) => ({
+          id: item.id,
+          stockItemId: item.stockItemId,
+          stockItemName: item.stockItemName,
+          quantity: item.quantity,
+          sellingPrice: item.sellingPrice,
+          rate: item.rate,
+          rateUSD: item.rateUSD,
+          totalSales: item.totalSales,
+        })),
+        grandTotal: result.body.grandTotal,
+        voucherNumber: result.body.voucherNumber,
+        saleDate: result.body.saleDate,
+        isCreditSale: result.body.isCreditSale,
+      });
+    }
     const responseBody =
       options.includeLegacyTopLevelVoucher && result.body?.voucher
         ? { ...result.body.voucher, ...result.body }

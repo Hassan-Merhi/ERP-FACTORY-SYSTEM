@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
-import { posShifts, userLocations, vouchers } from "@shared/schema";
+import { userLocations, vouchers } from "@shared/schema";
 import { db } from "../db";
 import { canModifyDate } from "../auth";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
@@ -49,17 +49,8 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
         voucherDate: vouchers.voucherDate,
         isCreditSale: vouchers.isCreditSale,
         optional: vouchers.optional,
-        shiftId: vouchers.shiftId,
-        shiftUserId: posShifts.userId,
       })
       .from(vouchers)
-      .leftJoin(
-        posShifts,
-        and(
-          eq(posShifts.id, vouchers.shiftId),
-          eq(posShifts.companyId, context.companyId)
-        )
-      )
       .where(
         and(
           eq(vouchers.id, voucherId),
@@ -101,18 +92,12 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
       originalDate: String(sale.voucherDate),
       businessDate,
       editDays: context.daybookEditDays,
-      isOwnSale: sale.shiftId != null && sale.shiftUserId === context.userId,
       viewOnly: context.posViewOnly,
     });
     if (!eligibility.allowed) {
       res.status(403).json({
         code: `POS_SALE_EDIT_${eligibility.reason.toUpperCase().replace(/-/g, "_")}`,
-        message:
-          eligibility.reason === "not-owner"
-            ? posDaybookEditMessages.ownership
-            : eligibility.reason === "disabled"
-              ? posDaybookEditMessages.disabled
-              : posDaybookEditMessages.date,
+        message: eligibility.reason === "disabled" ? posDaybookEditMessages.disabled : posDaybookEditMessages.date,
       });
       return;
     }
