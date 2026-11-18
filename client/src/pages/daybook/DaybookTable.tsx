@@ -11,6 +11,7 @@ import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVouche
 import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { EmptyState } from "@/components/ui/page-state";
+import { DaybookTableState } from "@/components/daybook/DaybookFrame";
 import type { DaybookTableProps } from "./daybookTableProps";
 
 export function DaybookTable({
@@ -54,27 +55,16 @@ export function DaybookTable({
   // Loading, failure and empty are three different situations. Rendering a bare
   // header for all three makes a failed request look like a day with no
   // transactions, so each one gets its own visible state.
-  const statusMessage: React.JSX.Element | null = errorMessage ? (
-    <div className="flex flex-col items-center gap-2 py-10 text-center" data-testid="daybook-error">
-      <p className="text-sm text-destructive">{errorMessage}</p>
-      {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry} data-testid="button-daybook-retry">
-          Try again
-        </Button>
-      )}
-    </div>
-  ) : isLoading ? (
-    <div className="space-y-2 py-4" data-testid="daybook-loading">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <Skeleton key={index} className="h-8 w-full" />
-      ))}
-    </div>
-  ) : visibleRows.length === 0 ? (
-    <EmptyState title="No transactions found for the selected period and filters." data-testid="daybook-empty" />
-  ) : null;
-
-  if (statusMessage) return statusMessage;
-
+  if (errorMessage || isLoading || visibleRows.length === 0) {
+    return (
+      <DaybookTableState
+        isLoading={isLoading}
+        errorMessage={errorMessage}
+        onRetry={onRetry}
+        isEmpty={visibleRows.length === 0}
+      />
+    );
+  }
   if (viewMode === "condensed") {
     // Build date → type → rows structure (preserving date order from visibleRows)
     const dateOrder: string[] = [];

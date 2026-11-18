@@ -3,9 +3,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useReactToPrint } from "react-to-print";
-import { addDays, format, isValid, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -17,7 +17,9 @@ import { sendInvoicePdfWithRetry } from "./utils/posPrintHelpers";
 import type { AuthMe } from "@shared/apiTypes";
 import type { Voucher, VoucherWithItems } from "./posdaybook/types";
 
-export function usePOSDaybookState() {
+const POS_DAYBOOK_PAGE_SIZE = 100;
+
+export function usePOSDaybookStatePart1() {
   const { formatDisplayDate } = useDateFormat();
   const { formatCashAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
@@ -76,7 +78,13 @@ export function usePOSDaybookState() {
   });
   const assignedLocationIds = useMemo(() => new Set(myLocations.map((location) => location.id)), [myLocations]);
 
-  const { data: vouchers = [], isLoading } = useQuery<Voucher[]>({
+  const {
+    data: vouchers = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Voucher[]>({
     queryKey: ["/api/vouchers", periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -125,6 +133,11 @@ export function usePOSDaybookState() {
       );
     return matchesKind && matchesSearch;
   });
+  const pagination = useClientTablePagination(searchedVouchers.length, POS_DAYBOOK_PAGE_SIZE);
+  const { resetPage } = pagination;
+  useEffect(() => {
+    resetPage();
+  }, [resetPage, periodFilter.fromDate, periodFilter.toDate, transactionKind, transactionSearch, showHidden]);
 
   const { data: voucherDetails, isLoading: detailsLoading } = useQuery<VoucherWithItems>({
     queryKey: selectedVoucher ? [`/api/vouchers/${selectedVoucher.id}`] : ["pos-daybook-no-selection"],
@@ -210,83 +223,33 @@ export function usePOSDaybookState() {
       });
     },
   });
-
-  const optionalMutation = useMutation({
-    mutationFn: async (voucher: Voucher) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await apiRequest("PATCH", `/api/vouchers/${voucher.id}/optional`, { optional: true });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || "Could not make this POS sale optional");
-      }
-      return voucher;
-    },
-    onSuccess: (voucher) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/pos"] });
-      setOptionalVoucher(null);
-      setSelectedVoucher(null);
-      toast({
-        title: "POS sale made optional",
-        description: `Sale ${voucher.voucherNumber} is now optional. Its inventory has been restored; restore the sale from Optional Vouchers when needed.`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "POS optional change failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const salesOnly = filteredVouchers.filter((voucher) => voucher.voucherType === "Sales" && !voucher.optional);
-  const transfersOnly = filteredVouchers.filter((voucher) => voucher.voucherType !== "Sales");
-  const totalSales = salesOnly.reduce((sum, voucher) => sum + Number(voucher.totalAmount || 0), 0);
-
-  const shiftDay = (days: number) => {
-    const from = addDays(new Date(`${periodFilter.fromDate}T00:00:00`), days);
-    const to = addDays(new Date(`${periodFilter.toDate}T00:00:00`), days);
-    setFilter("periodFilter", {
-      fromDate: format(from, "yyyy-MM-dd"),
-      toDate: format(to, "yyyy-MM-dd"),
-      preset: "custom",
-    });
-  };
-
-  const subtitle =
-    periodFilter.fromDate === periodFilter.toDate
-      ? `Sales transactions - ${formatDisplayDate(new Date(`${periodFilter.fromDate}T00:00:00`))}`
-      : `Sales transactions - ${formatDisplayDate(new Date(`${periodFilter.fromDate}T00:00:00`))} to ${formatDisplayDate(new Date(`${periodFilter.toDate}T00:00:00`))}`;
-
-  const fmtPrint = (value: number) => {
-    const fixed = Math.abs(value).toFixed(2);
-    return fixed.endsWith(".00") ? fixed.slice(0, -3) : fixed;
-  };
   return {
     canEditDaybook,
     canSeeProfitCost,
     christmasSetting,
     currentUser,
     detailsLoading,
-    fmtPrint,
+    error,
+    filteredVouchers,
     formatCashAmount,
+    formatDisplayDate,
     hasActiveFilters,
     hiddenRowIds,
     isAdminOrOwner,
+    isError,
     isLoading,
     isLoadingUser,
     isPOS,
     navigate,
-    optionalMutation,
     optionalVoucher,
+    pagination,
     periodFilter,
     printDetails,
     printRef,
     printVoucherId,
     recordChanges,
+    refetch,
     resetFilters,
-    salesOnly,
     searchedVouchers,
     selectedCompany,
     selectedVoucher,
@@ -297,13 +260,10 @@ export function usePOSDaybookState() {
     setSelectedVoucher,
     setTransactionKind,
     setTransactionSearch,
-    shiftDay,
     showHidden,
-    subtitle,
-    totalSales,
+    toast,
     transactionKind,
     transactionSearch,
-    transfersOnly,
     visibleVouchers,
     voucherDetails,
     whatsappMutation,

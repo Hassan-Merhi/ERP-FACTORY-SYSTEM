@@ -1,15 +1,20 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AuditLog } from "@/pages/settings/AuditLog";
-import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { PageHeader } from "@/components/PageHeader";
+import {
+  DaybookHeader,
+  DaybookPage,
+  DaybookResults,
+  DaybookShowHiddenButton,
+  DaybookTabs,
+} from "@/components/daybook/DaybookFrame";
+import { DAYBOOK_TABS, useDaybookTab } from "@/components/daybook/useDaybookTab";
+import { useDaybookDayKeys } from "@/components/daybook/useDaybookDayKeys";
 import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -20,7 +25,6 @@ import {
   invalidateCompanyApiFamily,
 } from "@/lib/frontendDataArchitecture";
 import { useToast } from "@/hooks/use-toast";
-import { ErpReportExportMenu } from "@/erp-core";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { DaybookOverview } from "./daybook/DaybookOverview";
 import { exportDaybookDetail, exportDaybookSummary } from "./daybook/exportDaybook";
@@ -34,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EyeOff, Plus, LayoutList, Layers, BookOpen } from "lucide-react";
+import { Plus, LayoutList, Layers } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
@@ -67,7 +71,6 @@ import {
 } from "./useDaybookIntercompany";
 import { DaybookFilters } from "./daybook/DaybookFilters";
 import { DaybookTable } from "./daybook/DaybookTable";
-import "./daybook/daybook-premium.css";
 import { VoucherDetailsDialog } from "./daybook/VoucherDetailsDialog";
 import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
@@ -89,7 +92,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   });
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
-  const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
+  const [activeDaybookTab, setActiveDaybookTab] = useDaybookTab();
   const [isExportingReport, setIsExportingReport] = useState(false);
   const {
     periodFilter,
@@ -114,24 +117,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     [setPeriodFilter]
   );
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (hasAnyOpenDialog()) return;
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      const isBack = e.key === "-" || e.code === "Minus";
-      const isForward = (e.key === "+" && e.shiftKey) || (e.code === "Equal" && e.shiftKey) || e.key === "=";
-      if (isBack) {
-        e.preventDefault();
-        shiftDay(-1);
-      } else if (isForward) {
-        e.preventDefault();
-        shiftDay(1);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [shiftDay]);
+  useDaybookDayKeys(shiftDay);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [selectedDialogRow, setSelectedDialogRow] = useState<number | null>(null);
@@ -635,166 +621,96 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   };
 
   return (
-    <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
-      <section className="daybook-hero" aria-label="Daybook heading">
-        <PageHeader
-          title="Daybook"
-          subtitle={
-            routineAccountingViewFiltered
-              ? "Operational activity view"
-              : "View all accounting transactions chronologically"
-          }
-          icon={<BookOpen className="h-6 w-6" />}
-          showBackButton
-        >
-          <ErpReportExportMenu
-            className="daybook-export gap-2"
-            busy={isExportingReport}
-            options={[
-              {
-                id: "daybook-summary",
-                label: "Summary",
-                kind: "excel",
-                onSelect: () => runDaybookExport(handleExportToExcel),
-              },
-              {
-                id: "daybook-detail",
-                label: "Detailed",
-                kind: "excel",
-                onSelect: () => runDaybookExport(handleExportDetailedToExcel),
-              },
-            ]}
-          />
-          {recordChanges.canCreate("POST", "/api/vouchers") && (
-            <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
-              <Plus className="w-4 h-4" />
-              New Voucher
-            </Button>
-          )}
-        </PageHeader>
-      </section>
+    <DaybookPage className="p-3 md:p-6">
+      <DaybookHeader
+        title="Daybook"
+        subtitle={
+          routineAccountingViewFiltered
+            ? "Operational activity view"
+            : "View all accounting transactions chronologically"
+        }
+        exportBusy={isExportingReport}
+        exportOptions={[
+          {
+            id: "daybook-summary",
+            label: "Summary",
+            kind: "excel",
+            onSelect: () => runDaybookExport(handleExportToExcel),
+          },
+          {
+            id: "daybook-detail",
+            label: "Detailed",
+            kind: "excel",
+            onSelect: () => runDaybookExport(handleExportDetailedToExcel),
+          },
+        ]}
+      >
+        {recordChanges.canCreate("POST", "/api/vouchers") && (
+          <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
+            <Plus className="w-4 h-4" />
+            New Voucher
+          </Button>
+        )}
+      </DaybookHeader>
 
       <DaybookOverview stats={overviewStats} hideAmounts={hideAmounts} formatAmount={formatAmount} />
 
-      {/* Tab selector: Transactions / Edits & Activity */}
-      <Tabs
-        value={activeDaybookTab}
-        onValueChange={(value) => setActiveDaybookTab(value as "transactions" | "activity")}
-      >
-        <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList className="daybook-tab-list" aria-label="Daybook sections">
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="activity">Edits &amp; Activity</TabsTrigger>
-          </TabsList>
-        </div>
+      <DaybookTabs value={activeDaybookTab} onValueChange={setActiveDaybookTab} tabs={DAYBOOK_TABS}>
+        <DaybookFilters
+          periodFilter={periodFilter}
+          setPeriodFilter={setPeriodFilter}
+          filters={filters}
+          setFilters={setFilters}
+          hasActiveFilters={hasActiveDaybookFilters}
+          onResetFilters={resetDaybookFilters}
+          onPrevDay={() => shiftDay(-1)}
+          onNextDay={() => shiftDay(1)}
+        />
 
-        <TabsContent value="transactions" className="space-y-4 mt-0">
-          <div className="daybook-filter-panel">
-            <DaybookFilters
-              periodFilter={periodFilter}
-              setPeriodFilter={setPeriodFilter}
-              filters={filters}
-              setFilters={setFilters}
-              hasActiveFilters={hasActiveDaybookFilters}
-              onResetFilters={resetDaybookFilters}
-              onPrevDay={() => shiftDay(-1)}
-              onNextDay={() => shiftDay(1)}
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-              <div>
-                <h2 className="daybook-results-title">Transactions</h2>
-                <p className="text-sm text-muted-foreground">All accounting vouchers and transactions</p>
-              </div>
-              <div className="flex items-center gap-2">
+        <DaybookResults
+          description="All accounting vouchers and transactions"
+          tools={
+            <>
+              <DaybookShowHiddenButton
+                showHidden={showHidden}
+                onToggle={() => setShowHidden(!showHidden)}
+                hiddenCount={hiddenRowIds.size}
+              />
+              <div className="daybook-view-toggle" role="group" aria-label="Transaction layout">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowHidden(!showHidden)}
-                  disabled={hiddenRowIds.size === 0}
-                  className={cn("gap-1.5", showHidden && "text-foreground")}
-                  data-testid="button-show-hidden"
+                  onClick={() => {
+                    setViewMode("detailed");
+                    saveDaybookState({ viewMode: "detailed" });
+                  }}
+                  className={cn("gap-1.5", viewMode === "detailed" && "daybook-toggle-active")}
+                  data-testid="button-view-detailed"
+                  data-remote-control-safe="true"
+                  data-remote-control-action="toggle-view"
                 >
-                  <EyeOff className="w-4 h-4" />
-                  {showHidden ? "Showing hidden" : "Show hidden"}
+                  <LayoutList className="w-4 h-4" />
+                  Detailed
                 </Button>
-                <div className="daybook-view-toggle" role="group" aria-label="Transaction layout">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setViewMode("detailed");
-                      saveDaybookState({ viewMode: "detailed" });
-                    }}
-                    className={cn("gap-1.5", viewMode === "detailed" && "daybook-toggle-active")}
-                    data-testid="button-view-detailed"
-                    data-remote-control-safe="true"
-                    data-remote-control-action="toggle-view"
-                  >
-                    <LayoutList className="w-4 h-4" />
-                    Detailed
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setViewMode("condensed");
-                      saveDaybookState({ viewMode: "condensed" });
-                    }}
-                    className={cn("gap-1.5", viewMode === "condensed" && "daybook-toggle-active")}
-                    data-testid="button-view-condensed"
-                    data-remote-control-safe="true"
-                    data-remote-control-action="toggle-view"
-                  >
-                    <Layers className="w-4 h-4" />
-                    Condensed
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setViewMode("condensed");
+                    saveDaybookState({ viewMode: "condensed" });
+                  }}
+                  className={cn("gap-1.5", viewMode === "condensed" && "daybook-toggle-active")}
+                  data-testid="button-view-condensed"
+                  data-remote-control-safe="true"
+                  data-remote-control-action="toggle-view"
+                >
+                  <Layers className="w-4 h-4" />
+                  Condensed
+                </Button>
               </div>
-            </div>
-            <div className="daybook-table-shell">
-              <DaybookTable
-                displayedRows={displayedRows}
-                visibleRows={visibleRows}
-                offloadAlphabetical={filters.voucherType === "Offload"}
-                viewMode={viewMode}
-                selectedRowId={selectedRowId}
-                setSelectedRowId={setSelectedRowId}
-                hiddenRowIds={hiddenRowIds}
-                setHiddenRowIds={setHiddenRowIds}
-                showHidden={showHidden}
-                expandedVoucherId={expandedVoucherId}
-                setExpandedVoucherId={setExpandedVoucherId}
-                expandedCondensedGroups={expandedCondensedGroups}
-                setExpandedCondensedGroups={setExpandedCondensedGroups}
-                hideAmounts={hideAmounts}
-                accountNameCache={accountNameCache}
-                expandedLoading={expandedLoading}
-                expandedEntries={expandedEntries}
-                formatAmount={formatAmount}
-                formatTransactionAmount={formatTransactionAmount}
-                formatDisplayDate={formatDisplayDate}
-                formatDisplayTime={formatDisplayTime}
-                handleView={handleView}
-                handleEdit={handleEdit}
-                handleDelete={(v) => {
-                  setVoucherToDelete(v);
-                  setDeleteDialogOpen(true);
-                }}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                linkedVoucherIds={linkedVoucherIds}
-                daybookRowLimit={daybookRowLimit}
-                setDaybookRowLimit={setDaybookRowLimit}
-                DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
-                navigate={navigate}
-                isLoading={isLoading}
-                errorMessage={daybookErrorMessage}
-                onRetry={() => void refetchVouchers()}
-              />
-            </div>
+            </>
+          }
+          footer={
             <PaginationBar
               page={voucherPageResponse?.page ?? voucherPage}
               totalPages={voucherPageResponse?.totalPages ?? 0}
@@ -806,64 +722,100 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
               }}
               noun="vouchers"
             />
-          </div>
-
-          <VoucherDetailsDialog
-            open={viewDialogOpen}
-            onOpenChange={setViewDialogOpen}
-            selectedVoucher={selectedVoucher}
-            viewEntriesLoading={viewEntriesLoading}
-            viewVoucherEntries={viewVoucherEntries}
-            isStockTransferVoucher={isStockTransferVoucher}
-            voucherRevisions={voucherRevisions}
-            revisionsLoading={revisionsLoading}
-            revisionsError={revisionsError}
-            revisionsErrorMessage={revisionsErrorDetail instanceof Error ? revisionsErrorDetail.message : undefined}
-            retryVoucherRevisions={() => void retryVoucherRevisions()}
+          }
+        >
+          <DaybookTable
+            displayedRows={displayedRows}
+            visibleRows={visibleRows}
+            offloadAlphabetical={filters.voucherType === "Offload"}
+            viewMode={viewMode}
+            selectedRowId={selectedRowId}
+            setSelectedRowId={setSelectedRowId}
+            hiddenRowIds={hiddenRowIds}
+            setHiddenRowIds={setHiddenRowIds}
+            showHidden={showHidden}
+            expandedVoucherId={expandedVoucherId}
+            setExpandedVoucherId={setExpandedVoucherId}
+            expandedCondensedGroups={expandedCondensedGroups}
+            setExpandedCondensedGroups={setExpandedCondensedGroups}
+            hideAmounts={hideAmounts}
+            accountNameCache={accountNameCache}
+            expandedLoading={expandedLoading}
+            expandedEntries={expandedEntries}
             formatAmount={formatAmount}
+            formatTransactionAmount={formatTransactionAmount}
             formatDisplayDate={formatDisplayDate}
             formatDisplayTime={formatDisplayTime}
-            cashAccountBalance={cashAccountBalance}
-            entryBalances={entryBalances}
-            purchaseOrderData={purchaseOrderData}
-            poSupplierBalance={poSupplierBalance}
-            selectedDialogRow={selectedDialogRow}
-            setSelectedDialogRow={setSelectedDialogRow}
-            viewProfitFilter={viewProfitFilter}
-            setViewProfitFilter={setViewProfitFilter}
-            user={user}
+            handleView={handleView}
             handleEdit={handleEdit}
+            handleDelete={(v) => {
+              setVoucherToDelete(v);
+              setDeleteDialogOpen(true);
+            }}
             canEdit={canEdit}
+            canDelete={canDelete}
+            linkedVoucherIds={linkedVoucherIds}
+            daybookRowLimit={daybookRowLimit}
+            setDaybookRowLimit={setDaybookRowLimit}
+            DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
             navigate={navigate}
-            employees={employees}
-            ledgerAccounts={ledgerAccounts}
-            bankAccounts={bankAccounts}
+            isLoading={isLoading}
+            errorMessage={daybookErrorMessage}
+            onRetry={() => void refetchVouchers()}
           />
+        </DaybookResults>
 
-          <VoucherEditDialog
-            open={editDialogOpen}
-            onOpenChange={setEditDialogOpen}
-            voucherToEdit={voucherToEdit}
-            entriesLoading={entriesLoading}
-            editForm={editForm}
-            editFields={editFields}
-            editAppend={editAppend}
-            editRemove={editRemove}
-            handleSaveEdit={(d) => voucherToEdit && editMutation.mutate({ id: voucherToEdit.id, updates: d })}
-            editMutationPending={editMutation.isPending}
-            ledgerAccounts={ledgerAccounts}
-            bankAccounts={bankAccounts}
-            suppliers={suppliers}
-            employees={employees}
-            fixedAssets={fixedAssets}
-            formatAmount={formatAmount}
-          />
-        </TabsContent>
+        <VoucherDetailsDialog
+          open={viewDialogOpen}
+          onOpenChange={setViewDialogOpen}
+          selectedVoucher={selectedVoucher}
+          viewEntriesLoading={viewEntriesLoading}
+          viewVoucherEntries={viewVoucherEntries}
+          isStockTransferVoucher={isStockTransferVoucher}
+          voucherRevisions={voucherRevisions}
+          revisionsLoading={revisionsLoading}
+          revisionsError={revisionsError}
+          revisionsErrorMessage={revisionsErrorDetail instanceof Error ? revisionsErrorDetail.message : undefined}
+          retryVoucherRevisions={() => void retryVoucherRevisions()}
+          formatAmount={formatAmount}
+          formatDisplayDate={formatDisplayDate}
+          formatDisplayTime={formatDisplayTime}
+          cashAccountBalance={cashAccountBalance}
+          entryBalances={entryBalances}
+          purchaseOrderData={purchaseOrderData}
+          poSupplierBalance={poSupplierBalance}
+          selectedDialogRow={selectedDialogRow}
+          setSelectedDialogRow={setSelectedDialogRow}
+          viewProfitFilter={viewProfitFilter}
+          setViewProfitFilter={setViewProfitFilter}
+          user={user}
+          handleEdit={handleEdit}
+          canEdit={canEdit}
+          navigate={navigate}
+          employees={employees}
+          ledgerAccounts={ledgerAccounts}
+          bankAccounts={bankAccounts}
+        />
 
-        <TabsContent value="activity" className="daybook-activity-panel mt-2">
-          {activeDaybookTab === "activity" && <AuditLog context="daybook" defaultActions="all" />}
-        </TabsContent>
-      </Tabs>
+        <VoucherEditDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          voucherToEdit={voucherToEdit}
+          entriesLoading={entriesLoading}
+          editForm={editForm}
+          editFields={editFields}
+          editAppend={editAppend}
+          editRemove={editRemove}
+          handleSaveEdit={(d) => voucherToEdit && editMutation.mutate({ id: voucherToEdit.id, updates: d })}
+          editMutationPending={editMutation.isPending}
+          ledgerAccounts={ledgerAccounts}
+          bankAccounts={bankAccounts}
+          suppliers={suppliers}
+          employees={employees}
+          fixedAssets={fixedAssets}
+          formatAmount={formatAmount}
+        />
+      </DaybookTabs>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -887,6 +839,6 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </DaybookPage>
   );
 }

@@ -427,6 +427,11 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
   { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
+  // Phase 9b: shared Daybook frame (ERP, Factory, POS).
+  { en: "Avg per Sale", ar: "متوسط البيع", fr: "Moyenne par vente" },
+  { en: "Search factory transactions", ar: "البحث في معاملات المصنع", fr: "Rechercher les transactions de l’usine" },
+  { en: "Daybook heading", ar: "عنوان دفتر اليومية", fr: "En-tête du journal" },
+  { en: "Loading transactions", ar: "جارٍ تحميل المعاملات", fr: "Chargement des transactions" },
   { en: "On the Way", ar: "في الطريق", fr: "En route" },
   // Shared period filter: open-ended custom ranges.
   { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },

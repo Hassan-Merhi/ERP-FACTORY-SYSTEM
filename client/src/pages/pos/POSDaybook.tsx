@@ -1,22 +1,11 @@
-import {
-  ArrowRight,
-  BookOpen,
-  ReceiptText,
-  Snowflake,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  Package,
-  X,
-} from "lucide-react";
+import { ArrowRight, ReceiptText, Snowflake, DollarSign, Package } from "lucide-react";
 import "@/styles/pos-daybook-modern.css";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { PeriodFilter } from "@/components/ui/period-filter";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DaybookHeader, DaybookKpiStrip, DaybookPage } from "@/components/daybook/DaybookFrame";
+import { DaybookFilterBar } from "@/components/daybook/DaybookFilterBar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePOSDaybookState } from "./usePOSDaybookState";
-import { POSDaybookSection } from "./POSDaybookSection";
+import { POSDaybookDaybookResultsSection } from "./POSDaybookDaybookResultsSection";
 import { POSDaybookDialogSection } from "./POSDaybookDialogSection";
 
 const offscreenPrintStyle: React.CSSProperties = {
@@ -34,26 +23,33 @@ export default function POSDaybook() {
     canEditDaybook,
     canSeeProfitCost,
     christmasSetting,
+    clearAllFilters,
     currentUser,
     detailsLoading,
+    error,
     fmtPrint,
     formatCashAmount,
     hasActiveFilters,
     hiddenRowIds,
     isAdminOrOwner,
+    isError,
     isLoading,
     isLoadingUser,
     isPOS,
+    kindLabels,
+    kpiValue,
     navigate,
     optionalMutation,
     optionalVoucher,
+    pagination,
     periodFilter,
     printDetails,
     printRef,
     printVoucherId,
     recordChanges,
-    resetFilters,
+    refetch,
     salesOnly,
+    searchTerm,
     searchedVouchers,
     selectedCompany,
     selectedVoucher,
@@ -66,6 +62,7 @@ export default function POSDaybook() {
     setTransactionSearch,
     shiftDay,
     showHidden,
+    showState,
     subtitle,
     totalSales,
     transactionKind,
@@ -77,10 +74,9 @@ export default function POSDaybook() {
   } = usePOSDaybookState();
 
   return (
-    <div className="pos-daybook mx-auto w-full min-w-0 max-w-[1560px] space-y-5 pb-8" data-pos-daybook="modern">
-      <PageHeader
+    <DaybookPage className="mx-auto w-full max-w-[1560px] pb-8" data-pos-daybook="modern">
+      <DaybookHeader
         title="POS Daybook"
-        icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
         meta={
           <>
             <span>{subtitle}</span>
@@ -92,93 +88,93 @@ export default function POSDaybook() {
             )}
           </>
         }
+      />
+
+      <DaybookKpiStrip
+        label="Sales summary"
+        items={[
+          { id: "sales", label: "Sales", value: kpiValue(String(salesOnly.length)), icon: Package, tone: "count" },
+          {
+            id: "revenue",
+            label: "Total Revenue",
+            value: kpiValue(formatCashAmount(totalSales)),
+            icon: DollarSign,
+            tone: "value",
+          },
+          {
+            id: "average",
+            label: "Avg per Sale",
+            value: kpiValue(formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)),
+            icon: ReceiptText,
+            tone: "active",
+          },
+          {
+            id: "transfers",
+            label: "Transfers",
+            value: kpiValue(String(transfersOnly.length)),
+            icon: ArrowRight,
+            tone: "optional",
+          },
+        ]}
+      />
+
+      <DaybookFilterBar
+        period={periodFilter}
+        onPeriodChange={(next) => setFilter("periodFilter", next)}
+        periodTestId="pos-daybook-period-filter"
+        onPrevDay={() => shiftDay(-1)}
+        onNextDay={() => shiftDay(1)}
+        search={transactionSearch}
+        onSearchChange={setTransactionSearch}
+        searchPlaceholder="Search transactions..."
+        searchLabel="Search POS transactions"
+        searchTestId="pos-daybook-search"
+        activeCount={transactionKind !== "all" ? 1 : 0}
+        chips={[
+          ...(transactionKind !== "all"
+            ? [{ id: "type", label: kindLabels[transactionKind], onRemove: () => setTransactionKind("all") }]
+            : []),
+          ...(searchTerm
+            ? [{ id: "search", label: <>Search: {searchTerm}</>, onRemove: () => setTransactionSearch("") }]
+            : []),
+        ]}
+        hasActiveFilters={hasActiveFilters || !!searchTerm || transactionKind !== "all"}
+        onClearFilters={clearAllFilters}
+        data-testid="pos-daybook-filters"
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-xl"
-          onClick={() => shiftDay(-1)}
-          aria-label="Previous day"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <PeriodFilter
-          value={periodFilter}
-          onChange={(next) => setFilter("periodFilter", next)}
-          data-testid="pos-daybook-period-filter"
-        />
-        <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(1)} aria-label="Next day">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        {(hasActiveFilters || transactionSearch.trim() || transactionKind !== "all") && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl"
-            onClick={() => {
-              resetFilters();
-              setTransactionSearch("");
-              setTransactionKind("all");
-            }}
-            data-testid="button-reset-filters"
-          >
-            <X className="mr-1 h-4 w-4" />
-            Reset
-          </Button>
-        )}
-      </PageHeader>
+        <Select value={transactionKind} onValueChange={(value) => setTransactionKind(value as typeof transactionKind)}>
+          <SelectTrigger className="daybook-filter-control w-full" aria-label="Transaction type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="sales">Sales</SelectItem>
+            <SelectItem value="transfers">Transfers</SelectItem>
+          </SelectContent>
+        </Select>
+      </DaybookFilterBar>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Sales summary">
-        <Stat
-          label="Sales"
-          value={String(salesOnly.length)}
-          icon={<Package className="h-5 w-5" />}
-          tone="blue"
-          loading={isLoading}
-        />
-        <Stat
-          label="Total Revenue"
-          value={formatCashAmount(totalSales)}
-          icon={<DollarSign className="h-5 w-5" />}
-          tone="violet"
-          loading={isLoading}
-        />
-        <Stat
-          label="Avg per Sale"
-          value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)}
-          icon={<ReceiptText className="h-5 w-5" />}
-          tone="cyan"
-          loading={isLoading}
-        />
-        <Stat
-          label="Transfers"
-          value={String(transfersOnly.length)}
-          icon={<ArrowRight className="h-5 w-5" />}
-          tone="slate"
-          loading={isLoading}
-        />
-      </section>
-
-      <POSDaybookSection
+      <POSDaybookDaybookResultsSection
         currentUser={currentUser}
+        error={error}
         formatCashAmount={formatCashAmount}
         hiddenRowIds={hiddenRowIds}
+        isError={isError}
         isLoading={isLoading}
         isLoadingUser={isLoadingUser}
         isPOS={isPOS}
         navigate={navigate}
+        pagination={pagination}
         printVoucherId={printVoucherId}
         recordChanges={recordChanges}
+        refetch={refetch}
         searchedVouchers={searchedVouchers}
         setFilter={setFilter}
         setHiddenRowIds={setHiddenRowIds}
         setPrintVoucherId={setPrintVoucherId}
         setSelectedVoucher={setSelectedVoucher}
-        setTransactionKind={setTransactionKind}
-        setTransactionSearch={setTransactionSearch}
         showHidden={showHidden}
-        transactionKind={transactionKind}
-        transactionSearch={transactionSearch}
+        showState={showState}
         visibleVouchers={visibleVouchers}
         whatsappMutation={whatsappMutation}
       />
@@ -262,43 +258,6 @@ export default function POSDaybook() {
           await optionalMutation.mutateAsync(optionalVoucher);
         }}
       />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-  loading,
-  tone,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  loading: boolean;
-  tone: "blue" | "violet" | "cyan" | "slate";
-}) {
-  return (
-    <div
-      className={`pos-daybook-stat pos-daybook-stat--${tone} relative min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
-        <span
-          className="pos-daybook-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-      </div>
-      {loading ? (
-        <Skeleton className="mt-4 h-7 w-24" />
-      ) : (
-        <p className="mt-4 truncate text-xl font-bold tracking-tight tabular-nums sm:text-2xl" title={value}>
-          {value}
-        </p>
-      )}
-    </div>
+    </DaybookPage>
   );
 }
