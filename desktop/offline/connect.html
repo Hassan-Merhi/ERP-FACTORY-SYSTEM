@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'" />
+    <title>Connect this PC</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      p { font-size: 13px; color: #94a3b8; margin: 0 0 16px; }
+      label { display: block; font-size: 13px; margin: 12px 0 4px; }
+      input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: inherit; }
+      button { margin-top: 16px; padding: 8px 16px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+      #result { margin-top: 12px; font-size: 13px; min-height: 1em; }
+    </style>
+  </head>
+  <body>
+    <h1>Connect this PC</h1>
+    <p>Sign in with your ERP account. This PC then keeps a copy of your companies and you can open it, read-only, when the internet is down.</p>
+    <form id="form">
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" required />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required />
+      <button type="submit">Connect</button>
+    </form>
+    <div id="result" role="status"></div>
+    <script src="connect.js"></script>
+  </body>
+</html>

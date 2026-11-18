@@ -2160,7 +2160,7 @@
       "dynamicInputs": [
         {
           "expression": "column",
-          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) — server/services/accounting/accountHistoryPolicy.ts:97-103",
+          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) \u2014 server/services/accounting/accountHistoryPolicy.ts:97-103",
           "validation": "LINE_COLUMNS.has(column) membership test at accountHistoryPolicy.ts:104 (7 fixed column names), then quoted by sql.identifier"
         }
       ],
@@ -4543,7 +4543,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4559,7 +4559,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4575,7 +4575,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4591,7 +4591,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4607,7 +4607,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4623,7 +4623,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4655,12 +4655,12 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         },
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4676,7 +4676,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4692,7 +4692,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4708,7 +4708,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4724,7 +4724,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4740,7 +4740,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4756,7 +4756,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4846,7 +4846,7 @@
         {
           "expression": "deletedAt ?? \"NULL\"",
           "source": "deletedAt param of w.item() tests/soft-delete-purge-db.test.ts:43; callers :66-69 pass OLD, OLD, RECENT, null (consts :14-15).",
-          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null → literal \"NULL\"."
+          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null \u2192 literal \"NULL\"."
         }
       ],
       "reason": "Only hard-coded SQL timestamp expressions from file constants reach the text; code/name bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
@@ -5133,7 +5133,7 @@
       "dynamicInputs": [
         {
           "expression": "ctx.companyId",
-          "source": "ctx.companyId from seedTestData(PREFIX) tests/wave12-audit-trail.test.ts:86 → tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
+          "source": "ctx.companyId from seedTestData(PREFIX) tests/wave12-audit-trail.test.ts:86 \u2192 tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
           "validation": "Integer serial primary key returned by PostgreSQL; cannot contain SQL syntax."
         }
       ],
@@ -9600,7 +9600,7 @@
       "reason": "Generates a DBA-reviewed install file and never runs against a request: the only dynamic part is a quoted JSON constant of repository policy and catalog names, unpacked by PostgreSQL and turned into identifiers only through format('%I')."
     },
     {
-      "id": "3482ba0aec2f77e0f571",
+      "id": "ee9418b406fceb6ec7e6",
       "path": "scripts/pc-sync/changeFeedSql.mjs",
       "kind": "assembled-sql-text",
       "context": "renderChangeFeedInstallSql",
@@ -9614,6 +9614,54 @@
         }
       ],
       "reason": "The application role name comes from the DBA's command line, is pattern-checked, sits in a quoted constant and becomes an identifier only through format('%I') inside the generated DO block; no application user can supply it."
+    },
+    {
+      "id": "5bc4d13368b6edbd3863",
+      "path": "scripts/pc-sync/changeFeedSql.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'SELECT jsonb_build_object(%s), to_jsonb(t) - $3 FROM public.%I t WHERE %s%s ORDER BY %s LIMIT $4', key_object, p_table, filter, after_clause, key_list) USING p_companies, p_after, rule.redact",
+          "source": "p_table is the table name a signed-in user asks for; every other part comes from the DBA-installed pc_sync.table_policy row for that table (key columns, mode, member table and column); the bound values are companies from getAccessibleCompanyIds of the signed-in user; the after key decoded and shape-checked by snapshotReader.ts; redacted columns from the policy",
+          "validation": "the function raises PC_SYNC_TABLE_NOT_SYNCED unless p_table has a policy row (and the route first checks ^[a-z_][a-z0-9_]{0,62}$); every identifier goes through format('%I') and the table name inside row_companies through format('%L'); an unknown mode raises instead of reading the table; bound parameters, never concatenated; the after key is cast through jsonb_populate_record of the same table"
+        }
+      ],
+      "reason": "Generated install SQL for a SECURITY DEFINER function: the only request input is a table name that must already be listed in the DBA's policy table, identifiers are quoted with format('%I'), and the user's companies, page key and limit are bound parameters."
+    },
+    {
+      "id": "419368e7e7fa76e80392",
+      "path": "scripts/pc-sync/local/localStore.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'INSERT INTO public.%I (%s) OVERRIDING SYSTEM VALUE SELECT %s FROM jsonb_populate_record(NULL::public.%I, $1) ON CONFLICT (%s) DO UPDATE SET %s', p_table, cols, cols, p_table, keys, sets) USIN",
+          "source": "p_table and the row's column names come from the cloud's change feed or full copy for the signed-in user; the column list is read from this PC's own catalog (pg_attribute) for that table",
+          "validation": "to_regclass(format('public.%I')) must find the table on this PC; only columns that exist in the PC's table and are present in the row are used, each quoted with format('%I'); the row values are a bound parameter cast through jsonb_populate_record"
+        }
+      ],
+      "reason": "Runs only inside the PC's own local database: table and column identifiers are checked against the local catalog and quoted with format('%I'), and every value is bound, so nothing from the cloud reaches the SQL text unquoted."
+    },
+    {
+      "id": "de5a9266c276505e3b30",
+      "path": "scripts/pc-sync/local/localStore.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'DELETE FROM public.%I t WHERE (%s) = (SELECT %s FROM jsonb_populate_record(NULL::public.%I, $1) x)', p_table, t_list, x_list, p_table) USING p_key",
+          "source": "p_table and the key column names of a removal from the cloud's change feed for the signed-in user",
+          "validation": "to_regclass(format('public.%I')) must find the table on this PC; key columns are quoted with format('%I') and the key values are a bound parameter cast through jsonb_populate_record of the same table"
+        }
+      ],
+      "reason": "Runs only inside the PC's own local database; identifiers are quoted with format('%I') and the key values are bound."
     }
   ]
 }

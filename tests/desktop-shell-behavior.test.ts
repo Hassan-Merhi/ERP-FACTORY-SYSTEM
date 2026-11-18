@@ -68,6 +68,7 @@ function createElectronStub() {
       openDevTools: vi.fn(),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),
+      getURL: vi.fn(() => "https://www.hmdinternationalgroup.com/"),
       getZoomFactor: vi.fn(() => zoom),
       setZoomFactor: vi.fn((value: number) => {
         zoom = value;
@@ -93,6 +94,10 @@ function createElectronStub() {
       getVersion: vi.fn(() => "9.9.9"),
       quit: vi.fn(),
       whenReady: vi.fn(() => whenReady),
+      // The offline-copy module reads its settings from here; a folder with no
+      // offline-pc.json leaves it switched off, as on every PC by default.
+      getPath: vi.fn(() => "/nonexistent-user-data"),
+      isPackaged: false,
     },
     BrowserWindow,
     Menu: {
@@ -107,6 +112,8 @@ function createElectronStub() {
     nativeTheme: {},
     contextBridge: { exposeInMainWorld: vi.fn() },
     ipcRenderer: { send: vi.fn(), invoke: vi.fn(), on: vi.fn() },
+    ipcMain: { handle: vi.fn() },
+    safeStorage: { isEncryptionAvailable: vi.fn(() => false), encryptString: vi.fn(), decryptString: vi.fn() },
   };
 
   return {
