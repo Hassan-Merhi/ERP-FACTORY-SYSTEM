@@ -46,10 +46,10 @@ import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
-import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices, calculateZmwSaleAmounts } from "./posZmwRatePolicy";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
-import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
+
 
 /** The rate a cashier entered for a non-USD sale on the factory LAN server. */
 function offlineEnteredRate(
@@ -182,7 +182,6 @@ export async function createPosSale(
   if ("error" in grandTotalResult) return err(grandTotalResult.error);
   let { grandTotal } = grandTotalResult;
   let nativeZmwTotal: string | undefined;
-
   const salesAccountResult = await getOrCreateSalesRevenueAccount(currentCompanyId);
   if ("error" in salesAccountResult) return err(salesAccountResult.error);
   const { salesAccount } = salesAccountResult;
@@ -218,15 +217,11 @@ export async function createPosSale(
     throw error;
   }
 
-  // Verify original ZMW POS unit prices against the USD line prices at the
-  // exact company/date rate before inventory or voucher writes. This blocks
-  // stale client rates, silent currency substitution, and altered USD prices.
+  // Verify native ZMW prices at the locked sale-date rate before writes.
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
     if (lockedPosCurrency.currency === "ZMW") {
-      const native = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
-      nativeZmwTotal = native.nativeTotal;
-      grandTotal = native.usdTotal;
+      ({ nativeTotal: nativeZmwTotal, usdTotal: grandTotal } = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!));
     }
   } catch (error) {
     if (error instanceof PosZmwRateError) {
