@@ -5,16 +5,16 @@
  * migrated schema that defines them, route registration, the approval-token wiring,
  * the client UI entry points, and the EN/AR/FR translations for the new screens.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import { hasColumn, hasTable } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 function read(relativePath: string): string {
-  return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
+  return readModuleFamily(path.join(process.cwd(), relativePath));
 }
 
 describe("Retail Wave 2 — schema", () => {

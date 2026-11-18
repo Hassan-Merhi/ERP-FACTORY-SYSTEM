@@ -1,144 +1,50 @@
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Package, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
+import { Package, ArrowLeft, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { cn } from "@/lib/utils";
 import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { PeriodFilter } from "@/components/ui/period-filter";
-import type {
-  StockMovementDrillResponse,
-  StockMovementItem,
-  StockMovementMonth,
-  StockMovementPeriod,
-  StockMovementResponse,
-} from "./locationInventoryTypes";
-import { useMobileCardTable } from "@/components/ui/mobile-card-table";
+import {
+  StockMovementDialogSection,
+  useStockMovementDialogState,
+  type StockMovementDialogProps,
+} from "./useStockMovementDialogState";
+import { StockMovementDialogSection2 } from "./StockMovementDialogSection2";
 
-interface StockMovementDialogProps {
-  stockMovementOpen: boolean;
-  setStockMovementOpen: (o: boolean) => void;
-  stockMovementItem: StockMovementItem | null;
-  setStockMovementItem: (item: StockMovementItem | null) => void;
-  stockMovementPeriod: StockMovementPeriod;
-  setStockMovementPeriod: (period: StockMovementPeriod) => void;
-  drillMonth: StockMovementMonth | null;
-  setDrillMonth: (month: StockMovementMonth | null) => void;
-  formatAmount: (amt: number) => string;
-  navigate: (path: string) => void;
-}
-
-const MOVEMENT_EPSILON = 0.000001;
-
-export function StockMovementDialog({
-  stockMovementOpen,
-  setStockMovementOpen,
-  stockMovementItem,
-  setStockMovementItem,
-  stockMovementPeriod,
-  setStockMovementPeriod,
-  drillMonth,
-  setDrillMonth,
-  formatAmount,
-  navigate,
-}: StockMovementDialogProps) {
-  const mobileCards = useMobileCardTable();
-  const mobileCardsSecondary = useMobileCardTable();
-  const toSafeNumber = (value: unknown): number => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const fmtN = (value: unknown, dec = 2) => {
-    const n = toSafeNumber(value);
-    return n === 0 ? (
-      <span className="text-muted-foreground/35">—</span>
-    ) : (
-      <>{n.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })}</>
-    );
-  };
-
-  const fmtA = (value: unknown) => {
-    const n = toSafeNumber(value);
-    return n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
-  };
-
+export function StockMovementDialog(props: StockMovementDialogProps) {
   const {
-    data: stockMovementData,
-    isLoading: stockMovementLoading,
-    isError: stockMovementError,
-    refetch: refetchStockMovement,
-  } = useQuery<StockMovementResponse>({
-    queryKey: stockMovementItem
-      ? ["/api/inventory/movement", stockMovementItem.stockItemId, stockMovementItem.locationId, stockMovementPeriod]
-      : [],
-    enabled: stockMovementOpen && !!stockMovementItem,
-    queryFn: async () => {
-      if (!stockMovementItem) throw new Error("No item");
-      let url = `/api/inventory/movement?stockItemId=${stockMovementItem.stockItemId}`;
-      if (stockMovementItem.locationId != null) url += `&locationId=${stockMovementItem.locationId}`;
-      if (stockMovementPeriod?.fromDate) url += `&startDate=${stockMovementPeriod.fromDate}`;
-      if (stockMovementPeriod?.toDate) url += `&endDate=${stockMovementPeriod.toDate}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-  });
-
-  const {
-    data: smDrillData,
-    isLoading: smDrillLoading,
-    isError: smDrillError,
-    refetch: refetchSmDrill,
-  } = useQuery<StockMovementDrillResponse>({
-    queryKey:
-      stockMovementItem && drillMonth
-        ? [
-            "/api/inventory/movement/drill",
-            stockMovementItem.stockItemId,
-            stockMovementItem.locationId,
-            drillMonth.year,
-            drillMonth.month,
-          ]
-        : [],
-    enabled: stockMovementOpen && !!stockMovementItem && !!drillMonth,
-    queryFn: async () => {
-      if (!stockMovementItem || !drillMonth) throw new Error("No item or month");
-      let url = `/api/inventory/movement/drill?stockItemId=${stockMovementItem.stockItemId}&year=${drillMonth.year}&month=${drillMonth.month}`;
-      if (stockMovementItem.locationId != null) url += `&locationId=${stockMovementItem.locationId}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-  });
-
-  const monthlyRows = stockMovementData?.months ?? [];
-  const isAllTime = stockMovementPeriod.preset === "all_time";
-  const smRowsWithYear = isAllTime
-    ? monthlyRows.filter((month) => {
-        const inwardQty = Math.abs(toSafeNumber(month.inwardQty));
-        const outwardQty = Math.abs(toSafeNumber(month.outwardQty));
-        const openingQty = toSafeNumber(month.openingQty);
-        const closingQty = toSafeNumber(month.closingQty);
-        const openingValue = toSafeNumber(month.openingValue);
-        const closingValue = toSafeNumber(month.closingValue);
-
-        return (
-          inwardQty > MOVEMENT_EPSILON ||
-          outwardQty > MOVEMENT_EPSILON ||
-          Math.abs(closingQty - openingQty) > MOVEMENT_EPSILON ||
-          Math.abs(closingValue - openingValue) > MOVEMENT_EPSILON
-        );
-      })
-    : monthlyRows;
-
-  const numberCell = "px-4 py-3.5 text-right tabular-nums whitespace-nowrap text-[13px]";
-  const mutedNumberCell = cn(numberCell, "text-muted-foreground");
-  const inNumberCell = cn(numberCell, "text-emerald-600 dark:text-emerald-400");
-  const outNumberCell = cn(numberCell, "text-rose-600 dark:text-rose-400");
-  const closingNumberCell = cn(numberCell, "font-semibold text-blue-600 dark:text-blue-400");
+    stockMovementError,
+    smDrillError,
+    refetchStockMovement,
+    refetchSmDrill,
+    closingNumberCell,
+    drillMonth,
+    fmtA,
+    fmtN,
+    formatAmount,
+    inNumberCell,
+    isAllTime,
+    mobileCards,
+    mobileCardsSecondary,
+    mutedNumberCell,
+    navigate,
+    outNumberCell,
+    setDrillMonth,
+    setStockMovementItem,
+    setStockMovementOpen,
+    setStockMovementPeriod,
+    smDrillData,
+    smDrillLoading,
+    smRowsWithYear,
+    stockMovementData,
+    stockMovementItem,
+    stockMovementLoading,
+    stockMovementOpen,
+    stockMovementPeriod,
+  } = useStockMovementDialogState(props);
 
   return (
     <Dialog open={stockMovementOpen} onOpenChange={setStockMovementOpen}>
@@ -208,64 +114,7 @@ export function StockMovementDialog({
                   className="w-full border-separate border-spacing-0 text-sm"
                   style={{ minWidth: 1240 }}
                 >
-                  <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
-                    <tr className="bg-muted/95 backdrop-blur-sm">
-                      <th
-                        rowSpan={2}
-                        className="w-24 border-r border-border/50 px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                      >
-                        Date
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="min-w-[190px] border-r border-border/50 px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                      >
-                        Particulars
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="w-32 border-r border-border/50 px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                      >
-                        Vch Type
-                      </th>
-                      <th
-                        colSpan={3}
-                        className="border-r border-border/50 bg-emerald-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
-                      >
-                        Inward
-                      </th>
-                      <th
-                        colSpan={3}
-                        className="border-r border-border/50 bg-rose-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
-                      >
-                        Outward
-                      </th>
-                      <th
-                        colSpan={3}
-                        className="bg-blue-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
-                      >
-                        Closing
-                      </th>
-                    </tr>
-                    <tr className="bg-muted/95 text-[11px] backdrop-blur-sm">
-                      {["Qty", "Rate", "Value", "Qty", "Rate", "Value", "Qty", "Rate", "Value"].map((h, i) => (
-                        <th
-                          key={`${h}-${i}`}
-                          className={cn(
-                            "min-w-[92px] whitespace-nowrap px-4 py-2.5 text-right font-medium",
-                            i < 3
-                              ? "bg-emerald-500/[0.035] text-emerald-600 dark:text-emerald-400"
-                              : i < 6
-                                ? "bg-rose-500/[0.035] text-rose-600 dark:text-rose-400"
-                                : "bg-blue-500/[0.035] text-blue-600 dark:text-blue-400",
-                            i === 2 || i === 5 ? "border-r border-border/50" : ""
-                          )}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
+                  <StockMovementDialogSection />
                   <tbody>
                     {(!smDrillData?.transactions || smDrillData.transactions.length === 0) && (
                       <tr>
@@ -410,181 +259,20 @@ export function StockMovementDialog({
                 className="rounded-none border-0 p-6"
               />
             ) : (
-              <table
-                {...mobileCardsSecondary.tableProps}
-                className="w-full border-separate border-spacing-0 text-sm"
-                style={{ minWidth: 1180 }}
-              >
-                <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
-                  <tr className="bg-muted/95 backdrop-blur-sm">
-                    <th
-                      rowSpan={2}
-                      className="w-36 border-r border-border/50 px-5 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                    >
-                      Month
-                    </th>
-                    <th
-                      colSpan={3}
-                      className="border-r border-border/50 bg-muted/35 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                    >
-                      Opening
-                    </th>
-                    <th
-                      colSpan={3}
-                      className="border-r border-border/50 bg-emerald-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
-                    >
-                      Stock In
-                    </th>
-                    <th
-                      colSpan={3}
-                      className="border-r border-border/50 bg-rose-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
-                    >
-                      Stock Out
-                    </th>
-                    <th
-                      colSpan={3}
-                      className="bg-blue-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
-                    >
-                      Closing
-                    </th>
-                  </tr>
-                  <tr className="bg-muted/95 text-[11px] backdrop-blur-sm">
-                    {[
-                      "Qty",
-                      "Rate",
-                      "Value",
-                      "Qty",
-                      "Rate",
-                      "Value",
-                      "Qty",
-                      "Rate",
-                      "Value",
-                      "Qty",
-                      "Rate",
-                      "Value",
-                    ].map((h, i) => (
-                      <th
-                        key={`${h}-${i}`}
-                        className={cn(
-                          "min-w-[86px] whitespace-nowrap px-4 py-2.5 text-right font-medium",
-                          i < 3
-                            ? "bg-muted/20 text-muted-foreground"
-                            : i < 6
-                              ? "bg-emerald-500/[0.035] text-emerald-600 dark:text-emerald-400"
-                              : i < 9
-                                ? "bg-rose-500/[0.035] text-rose-600 dark:text-rose-400"
-                                : "bg-blue-500/[0.035] text-blue-600 dark:text-blue-400",
-                          i === 2 || i === 5 || i === 8 ? "border-r border-border/50" : ""
-                        )}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {smRowsWithYear.length === 0 && (
-                    <tr>
-                      <td colSpan={13} className="px-6 py-20 text-center">
-                        <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <p className="font-medium text-foreground">No stock movement for this period</p>
-                          <p className="text-xs text-muted-foreground">
-                            {isAllTime
-                              ? "Months with no stock activity are hidden from All Time view."
-                              : "Try another period to see movement history."}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-
-                  {smRowsWithYear.map((m) => {
-                    const fmtQ = (value: unknown) => fmtN(value, 0);
-                    const fmtR = (value: unknown) => fmtN(value, 2);
-                    const fmtV = (value: unknown) => fmtA(value);
-
-                    return (
-                      <tr
-                        key={`${m.year}-${m.month}`}
-                        data-testid={`row-sm-month-${m.month}`}
-                        className="group cursor-pointer bg-background transition-colors hover:bg-muted/30"
-                        onClick={() => setDrillMonth({ year: m.year, month: m.month, monthName: m.monthName })}
-                      >
-                        <td className="border-r border-t border-border/40 px-5 py-4 font-semibold whitespace-nowrap">
-                          <span className="flex items-center justify-between gap-3">
-                            <span>{m.monthName}</span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/70" />
-                          </span>
-                        </td>
-                        <td className={cn(mutedNumberCell, "border-t border-border/40")}>{fmtQ(m.openingQty)}</td>
-                        <td className={cn(mutedNumberCell, "border-t border-border/40")}>{fmtR(m.openingRate)}</td>
-                        <td className={cn(mutedNumberCell, "border-r border-t border-border/40")}>
-                          {fmtV(m.openingValue)}
-                        </td>
-                        <td className={cn(inNumberCell, "border-t border-border/40")}>{fmtQ(m.inwardQty)}</td>
-                        <td className={cn(inNumberCell, "border-t border-border/40")}>{fmtR(m.inwardRate)}</td>
-                        <td className={cn(inNumberCell, "border-r border-t border-border/40")}>
-                          {fmtV(m.inwardValue)}
-                        </td>
-                        <td className={cn(outNumberCell, "border-t border-border/40")}>{fmtQ(m.outwardQty)}</td>
-                        <td className={cn(outNumberCell, "border-t border-border/40")}>{fmtR(m.outwardRate)}</td>
-                        <td className={cn(outNumberCell, "border-r border-t border-border/40")}>
-                          {fmtV(m.outwardValue)}
-                        </td>
-                        <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtQ(m.closingQty)}</td>
-                        <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtR(m.closingRate)}</td>
-                        <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtV(m.closingValue)}</td>
-                      </tr>
-                    );
-                  })}
-
-                  {smRowsWithYear.length > 0 &&
-                    stockMovementData?.grandTotal &&
-                    (() => {
-                      const gt = stockMovementData.grandTotal;
-                      const inRate = gt.inwardQty > 0 ? gt.inwardValue / gt.inwardQty : 0;
-                      const outRate = gt.outwardQty > 0 ? gt.outwardValue / gt.outwardQty : 0;
-                      const clsRate = gt.closingQty > 0 ? gt.closingValue / gt.closingQty : 0;
-                      const fmtQ = (n: number) =>
-                        n === 0 ? (
-                          <span className="text-muted-foreground/35">—</span>
-                        ) : (
-                          <>{n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</>
-                        );
-                      const fmtR = (n: number) =>
-                        n === 0 ? (
-                          <span className="text-muted-foreground/35">—</span>
-                        ) : (
-                          <>{n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
-                        );
-                      const fmtV = (n: number) =>
-                        n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
-
-                      return (
-                        <tr className="sticky bottom-0 z-10 bg-card/95 font-semibold shadow-[0_-1px_0_0_hsl(var(--border))] backdrop-blur-sm">
-                          <td className="border-r border-border/50 px-5 py-4 text-sm">Total</td>
-                          <td className={mutedNumberCell}>{fmtQ(smRowsWithYear[0]?.openingQty ?? 0)}</td>
-                          <td className={mutedNumberCell}>{fmtR(smRowsWithYear[0]?.openingRate ?? 0)}</td>
-                          <td className={cn(mutedNumberCell, "border-r border-border/50")}>
-                            {fmtV(smRowsWithYear[0]?.openingValue ?? 0)}
-                          </td>
-                          <td className={inNumberCell}>{fmtQ(gt.inwardQty)}</td>
-                          <td className={inNumberCell}>{fmtR(inRate)}</td>
-                          <td className={cn(inNumberCell, "border-r border-border/50")}>{fmtV(gt.inwardValue)}</td>
-                          <td className={outNumberCell}>{fmtQ(gt.outwardQty)}</td>
-                          <td className={outNumberCell}>{fmtR(outRate)}</td>
-                          <td className={cn(outNumberCell, "border-r border-border/50")}>{fmtV(gt.outwardValue)}</td>
-                          <td className={closingNumberCell}>{fmtQ(gt.closingQty)}</td>
-                          <td className={closingNumberCell}>{fmtR(clsRate)}</td>
-                          <td className={closingNumberCell}>{fmtV(gt.closingValue)}</td>
-                        </tr>
-                      );
-                    })()}
-                </tbody>
-              </table>
+              <StockMovementDialogSection2
+                closingNumberCell={closingNumberCell}
+                fmtA={fmtA}
+                fmtN={fmtN}
+                formatAmount={formatAmount}
+                inNumberCell={inNumberCell}
+                isAllTime={isAllTime}
+                mobileCardsSecondary={mobileCardsSecondary}
+                mutedNumberCell={mutedNumberCell}
+                outNumberCell={outNumberCell}
+                setDrillMonth={setDrillMonth}
+                smRowsWithYear={smRowsWithYear}
+                stockMovementData={stockMovementData}
+              />
             )}
           </div>
         </div>

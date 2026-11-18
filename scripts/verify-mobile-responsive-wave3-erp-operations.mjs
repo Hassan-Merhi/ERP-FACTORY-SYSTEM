@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const failures = [];
-const read = (file) => fs.readFileSync(file, "utf8");
+const read = (file) => readModuleFamily(file);
 const expectTokens = (file, tokens) => {
   const source = read(file);
   for (const token of tokens) {

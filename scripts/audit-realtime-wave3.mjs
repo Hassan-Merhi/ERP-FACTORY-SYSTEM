@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -45,7 +46,7 @@ const phase5Targets = [
 
 export function auditRealtimeWave3(root = repoRoot) {
   const errors = [];
-  const readAtRoot = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+  const readAtRoot = (relativePath) => readModuleFamily(path.join(root, relativePath));
 
   for (const target of phase5Targets) {
     const source = readAtRoot(target.path);

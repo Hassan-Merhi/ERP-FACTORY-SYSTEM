@@ -20,8 +20,14 @@ import { ActiveCompanyPermissionContextError } from "../server/services/security
 
 function responseDouble() {
   const res: any = { statusCode: 200, body: null };
-  res.status = vi.fn((status: number) => { res.statusCode = status; return res; });
-  res.json = vi.fn((body: unknown) => { res.body = body; return res; });
+  res.status = vi.fn((status: number) => {
+    res.statusCode = status;
+    return res;
+  });
+  res.json = vi.fn((body: unknown) => {
+    res.body = body;
+    return res;
+  });
   return res;
 }
 
@@ -87,9 +93,13 @@ describe("Phase 7 rental active-company authorization", () => {
   });
 
   it("fails closed when there is no valid active company", async () => {
-    permissionContext.get.mockRejectedValue(new ActiveCompanyPermissionContextError(
-      "You no longer have access to the active company.", 403, "ACTIVE_COMPANY_ROLE_REQUIRED",
-    ));
+    permissionContext.get.mockRejectedValue(
+      new ActiveCompanyPermissionContextError(
+        "You no longer have access to the active company.",
+        403,
+        "ACTIVE_COMPANY_ROLE_REQUIRED"
+      )
+    );
     const next = vi.fn();
     const res = responseDouble();
     await requireRentalDeletePermission(requestDouble(), res, next);
@@ -111,16 +121,21 @@ function source(path: string) {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
+const compact = (text: string) => text.replace(/\s+/g, "");
+
 describe("Phase 7 rental route wiring", () => {
   it("protects posted and scheduled payment deletion after authentication", () => {
-    expect(source("../server/routes/rental/centralRentalPaymentDeletionRoute.ts"))
-      .toContain('app.delete(`${urlPrefix}/payments/:id`, requireAuth, requireRentalDeletePermission,');
-    expect(source("../server/routes/rental/rentalPaymentsAccrualRoutes.ts"))
-      .toContain('app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission,');
+    expect(source("../server/routes/rental/centralRentalPaymentDeletionRoute.ts")).toContain(
+      "app.delete(`${urlPrefix}/payments/:id`, requireAuth, requireRentalDeletePermission,"
+    );
+    expect(compact(source("../server/routes/rental/rentalPaymentsAccrualRoutes.ts"))).toContain(
+      compact("app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission,")
+    );
   });
 
   it("protects reconciliation with the active company role", () => {
-    expect(source("../server/routes/rentalRouteFactory.ts"))
-      .toContain('app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRentalReconciliationPermission,');
+    expect(source("../server/routes/rentalRouteFactory.ts")).toContain(
+      "app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRentalReconciliationPermission,"
+    );
   });
 });

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = (path: string) => readModuleFamily(new URL(`../${path}`, import.meta.url));
 
 describe("factory invoice revert workflow", () => {
   it("records Draft and Loading workflow origins before invoice finalization", () => {

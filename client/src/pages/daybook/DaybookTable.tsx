@@ -12,43 +12,7 @@ import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { EmptyState } from "@/components/ui/page-state";
 import { DaybookTableState } from "@/components/daybook/DaybookFrame";
-
-interface DaybookTableProps {
-  displayedRows: DaybookRow[];
-  visibleRows: DaybookRow[];
-  offloadAlphabetical?: boolean;
-  viewMode: "detailed" | "condensed";
-  selectedRowId: string | null;
-  setSelectedRowId: (id: string | null) => void;
-  hiddenRowIds: Set<string>;
-  setHiddenRowIds: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
-  showHidden: boolean;
-  expandedVoucherId: number | null;
-  setExpandedVoucherId: (id: number | null) => void;
-  expandedCondensedGroups: Set<string>;
-  setExpandedCondensedGroups: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
-  hideAmounts: boolean;
-  accountNameCache: Record<number, string>;
-  expandedLoading: boolean;
-  expandedEntries: ViewVoucherEntry[];
-  formatAmount: (amt: number | string | null | undefined) => string;
-  formatTransactionAmount?: (amt: number | string | null | undefined, currency: string) => string;
-  formatDisplayDate: (date: Date | string) => string;
-  formatDisplayTime: (date: string) => string;
-  handleView: (v: Voucher) => void;
-  handleEdit: (v: Voucher) => void;
-  handleDelete: (v: Voucher) => void;
-  canEdit: (v: Voucher) => boolean;
-  canDelete: () => boolean;
-  linkedVoucherIds: ReadonlySet<number>;
-  daybookRowLimit: number;
-  setDaybookRowLimit: (n: number | ((prev: number) => number)) => void;
-  DAYBOOK_PAGE_SIZE: number;
-  navigate: (path: string) => void;
-  isLoading?: boolean;
-  errorMessage?: string | null;
-  onRetry?: () => void;
-}
+import type { DaybookTableProps } from "./daybookTableProps";
 
 export function DaybookTable({
   displayedRows,
@@ -101,7 +65,6 @@ export function DaybookTable({
       />
     );
   }
-
   if (viewMode === "condensed") {
     // Build date → type → rows structure (preserving date order from visibleRows)
     const dateOrder: string[] = [];

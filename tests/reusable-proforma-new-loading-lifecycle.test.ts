@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function read(relativePath: string): string {
-  return readFileSync(resolve(process.cwd(), relativePath), "utf8");
+  return readModuleFamily(resolve(process.cwd(), relativePath));
 }
 
 const factoryModelPath = "client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts";

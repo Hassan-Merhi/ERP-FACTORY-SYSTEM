@@ -1,6 +1,5 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
@@ -32,8 +31,10 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
+import { ALL_VOUCHER_TABS, FACTORY_VOUCHER_HIDDEN_KEYS, useSendWaStatementMutation } from "./vouchersPageSupport";
+import type { VoucherTab, VouchersProps } from "./vouchersPageSupport";
 import { getApiRequest } from "@/lib/factoryApi";
-import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import StockTransferOrder from "@/pages/StockTransferOrder.tsx";
 import { PrintTemplate } from "@/components/vouchers/PrintTemplate";
@@ -63,31 +64,6 @@ import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from 
 import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
-
-type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
-
-const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
-  payment: "hide_tab_vouchers_payment",
-  receipt: "hide_tab_vouchers_receipt",
-  journal: "hide_tab_vouchers_journal",
-  transfer: "hide_tab_vouchers_transfer",
-  transferorder: "hide_tab_vouchers_transferorder",
-  adjustment: "hide_tab_vouchers_adjustment",
-  creditnote: "hide_tab_vouchers_creditnote",
-};
-const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
-  "payment",
-  "receipt",
-  "journal",
-  "transfer",
-  "transferorder",
-  "adjustment",
-  "creditnote",
-];
-
-interface VouchersProps {
-  posUser?: Pick<AuthMe, "assignedLocationId"> | null;
-}
 
 export default function Vouchers({ posUser }: VouchersProps = {}) {
   const { toast } = useToast();
@@ -439,27 +415,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     discardPaymentDraft,
   });
 
-  const sendWaStatementMutation = useMutation({
-    mutationFn: async ({ accountId, month }: { accountId: number; month: string }) => {
-      const url =
-        appMode === "factory"
-          ? `/api/factory/accounts/${accountId}/send-statement-whatsapp`
-          : `/api/accounts/${accountId}/send-statement-whatsapp`;
-      const res = await modeApiRequest("POST", url, { month });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Failed to send WhatsApp");
-      return json;
-    },
-    onSuccess: () => {
-      toast({ title: "Statement sent to WhatsApp" });
-      setWaPendingPrompt(null);
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "WhatsApp send failed", description: error.message, variant: "destructive" });
-      setWaPendingPrompt(null);
-    },
-  });
+  const sendWaStatementMutation = useSendWaStatementMutation({ appMode, modeApiRequest, toast, setWaPendingPrompt });
 
   const handleOpenCreateAccountModal = (tab: "payment" | "receipt" | "journal", rowIndex?: number) => {
     setCreateAccountContext({ tab, rowIndex });

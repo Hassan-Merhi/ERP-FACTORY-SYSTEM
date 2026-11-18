@@ -1,30 +1,36 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const adminRoutes = readFileSync("server/routes/adminRoutes.ts", "utf8");
-const safeRoutes = readFileSync("server/routes/admin/accountMigrationSafeRoutes.ts", "utf8");
-const controlReferences = readFileSync(
-  "server/routes/admin/accountMigrationControlReferences.ts",
-  "utf8",
-);
+const adminRoutes = readModuleFamily("server/routes/adminRoutes.ts");
+const safeRoutes = readModuleFamily("server/routes/admin/accountMigrationSafeRoutes.ts");
+const controlReferences = readModuleFamily("server/routes/admin/accountMigrationControlReferences.ts");
 
 describe("account migration POS control safety", () => {
   it("registers the safe execute and undo handlers before the legacy migration routes", () => {
     expect(adminRoutes).toContain("registerAccountMigrationSafeRoutes(app)");
     expect(adminRoutes.indexOf("registerAccountMigrationSafeRoutes(app)")).toBeLessThan(
-      adminRoutes.indexOf("registerImportExportRoutes(app)"),
+      adminRoutes.indexOf("registerImportExportRoutes(app)")
     );
   });
 
   it("detaches source-company cash-account references before moving ledger accounts", () => {
     expect(controlReferences).toContain("set({ cashAccountId: null })");
     expect(controlReferences).toContain("delete(userLocationCashAccounts)");
+    // Scope to the execute handler. (Previously this matched the *undo* handler's
+    // account move further down the single file, which only held by layout.)
+    // Execute moves the accounts first (the ledger integrity guard requires it),
+    // then detaches the source-company control references in the same transaction.
+    const executeStart = safeRoutes.indexOf('"/api/admin/account-migration/execute"');
+    const transactionStart = safeRoutes.indexOf(".transaction(", executeStart);
+    const accountMove = safeRoutes.indexOf(".update(ledgerAccounts)", transactionStart);
     const detachCall = safeRoutes.indexOf(
       "const controls = await detachAccountMigrationControlReferences",
+      accountMove
     );
-    const accountMove = safeRoutes.indexOf(".update(ledgerAccounts)", detachCall);
-    expect(detachCall).toBeGreaterThan(-1);
-    expect(accountMove).toBeGreaterThan(detachCall);
+    expect(executeStart).toBeGreaterThan(-1);
+    expect(transactionStart).toBeGreaterThan(executeStart);
+    expect(accountMove).toBeGreaterThan(transactionStart);
+    expect(detachCall).toBeGreaterThan(accountMove);
   });
 
   it("persists the control snapshot and restores it during undo", () => {

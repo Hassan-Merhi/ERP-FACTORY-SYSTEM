@@ -1,9 +1,9 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file: string) => readModuleFamily(path.join(root, file));
 
 describe("audit detail completeness", () => {
   it("keeps stock-transfer revision items in create, approve and reject audit payloads", () => {

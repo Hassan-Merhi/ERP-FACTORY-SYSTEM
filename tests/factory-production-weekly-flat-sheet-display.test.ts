@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { allocateWeeklyExtraBales } from "../shared/productionBonusCheckoutMath";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Production Bonuses sheet — weekly flat amounts", () => {
   it("detects a 52/50 weekly surplus across five days without multiplying the fee", () => {

@@ -1,22 +1,9 @@
-/**
- * Phase 9 — responsive financial reporting surface on the existing dispatch
- * management page. Supervisor-only; factory workers retain physical dispatch
- * controls but never see sensitive receivables, rates or ledger accounts.
- */
-import { useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
-  Activity,
   AlertTriangle,
-  CheckCheck,
-  ChevronDown,
-  ClipboardList,
   FileSpreadsheet,
   FileText,
-  History,
   Loader2,
   Package,
-  ReceiptText,
   RefreshCw,
   ShieldCheck,
   Truck,
@@ -25,296 +12,57 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { ExportButton } from "@/components/export/ReportExportMenu";
-import { useToast } from "@/hooks/use-toast";
-import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fmtAmount, fmtCount, headerButton, type Props, type Source } from "./FactoryDispatchOrderDashboardTypes";
+import {
+  FactoryDispatchOrderDashboardSection,
+  FactoryDispatchOrderDashboardSection2,
+  useFactoryDispatchOrderDashboardState,
+} from "./useFactoryDispatchOrderDashboardState";
+import { FactoryDispatchOrderDashboardSection3 } from "./FactoryDispatchOrderDashboardSection3";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
-type Section = "TRIPS" | "CHARGES" | "PO_FILES" | "HISTORY";
-type Source = "ALL" | "PHYSICAL" | "FINANCIAL" | "CLOSURE";
-interface Trip {
-  id: string;
-  dispatchNumber: number;
-  status: string;
-  notes: string | null;
-  closedAt: string | null;
-  scannedBales: number;
-  scannedWeightKg: string;
-  financialStatus: string;
-  postingRevision: number;
-  postingId: string | null;
-  goodsSubtotal: string | null;
-  billableCharges: string | null;
-  discounts: string | null;
-  customerTotal: string | null;
-  postedAt: string | null;
-  exportedAt: string | null;
-  poNumber: string | null;
-  erpContainerNumber: string | null;
-  supplierCode: string | null;
-  erpImportStatus: "NOT_TRACKED_MANUAL" | "NOT_EXPORTED";
-}
-interface Charge {
-  id: string;
-  dispatchId: string | null;
-  dispatchNumber: number | null;
-  name: string;
-  kind: "BILLABLE" | "DISCOUNT" | "INTERNAL" | "ORDER";
-  amount: string;
-  accountCode: string | null;
-  accountName: string | null;
-  offsetAccountCode: string | null;
-  postedVoucherId: string | null;
-  status: "POSTED" | "DRAFT" | "UNLINKED";
-}
-interface Overview {
-  generatedAt: string;
-  schemaReady: boolean;
-  companyId: number;
-  order: {
-    id: number;
-    status: string;
-    containerNumber: string | null;
-    customerName: string | null;
-    invoiceNumber: string | null;
-    grandTotal: string;
-    deleted: boolean;
-  };
-  summary: {
-    tripCount: number;
-    closedTrips: number;
-    openTrips: number;
-    originalLoadingBales: number;
-    scannedBales: number;
-    uniqueScannedBales: number;
-    unshippedBales: number;
-    unexpectedScannedBales: number;
-    goodsSubtotal: string | null;
-    billableCharges: string | null;
-    discounts: string | null;
-    tripCustomerTotal: string | null;
-    originalOrderCharges: string | null;
-    invoiceTotal: string | null;
-    internalExpenses: string | null;
-    generatedPoFiles: number;
-    signed: boolean;
-    finalized: boolean;
-    invoiceConsistent: boolean;
-  };
-  invoice: null | {
-    status: string;
-    invoiceNumber: string | null;
-    signedAt: string | null;
-    signedBy: string | null;
-    finalizedAt: string | null;
-    includedPostingIds: string[];
-    finalizationVoucherIds: string[];
-  };
-  trips: Trip[];
-  charges: Charge[];
-  notices: string[];
-}
-interface ReleaseGate {
-  reconciliation: { ready: boolean; missing: string[]; checkedAt: string };
-  invoice: { ready: boolean; missing: string[]; checkedAt: string };
-  integrity: null | {
-    finalized: boolean;
-    signedReconciliation: boolean;
-    passed: boolean;
-    verifiedAt: string;
-    checks: Array<{
-      code: string;
-      state: "PASS" | "BLOCK" | "INFO" | "NOT_APPLICABLE";
-      message: string;
-      expected?: string;
-      observed?: string;
-    }>;
-  };
-}
-interface HistoryEntry {
-  source: "PHYSICAL" | "FINANCIAL" | "CLOSURE";
-  id: string;
-  dispatchId: string | null;
-  eventType: string;
-  actorUsername: string;
-  createdAt: string;
-  reason: string | null;
-  details: Record<string, unknown>;
-}
-interface HistoryPage {
-  entries: HistoryEntry[];
-  nextCursor: string | null;
-  hasMore: boolean;
-  financialSchemaInstalled: boolean;
-}
-interface Props {
-  orderId: number;
-  companyId: number | null | undefined;
-  onOpenTrip: (dispatchId: number) => void;
-  onCompareAll: () => void;
-  onPhysicalReport: () => void;
-}
-const fmtAmount = (v: string | null | undefined): string =>
-  v === null || v === undefined
-    ? "—"
-    : Number(v).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-const fmtCount = (v: number) => v.toLocaleString();
-async function json<T>(url: string): Promise<T> {
-  const result = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json", "Cache-Control": "no-cache" },
-  });
-  const type = (result.headers.get("content-type") ?? "").toLowerCase();
-  if (!type.includes("application/json")) {
-    throw new Error("The dispatch reporting API did not return JSON. Confirm the correct backend is deployed.");
-  }
-  const data = await result.json();
-  if (!result.ok) throw new Error(data.message || "Dispatch reporting failed");
-  return data as T;
-}
-const headerButton = (active: boolean) =>
-  active
-    ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-    : "border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground";
-export default function FactoryDispatchOrderDashboard({
-  orderId,
-  companyId,
-  onOpenTrip,
-  onCompareAll,
-  onPhysicalReport,
-}: Props) {
-  const { formatDisplayDateTime } = useDateFormat();
-  const [section, setSection] = useState<Section>("TRIPS");
-  const [source, setSource] = useState<Source>("ALL");
-  const [filterTrip, setFilterTrip] = useState("ALL");
-  const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const base = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-overview";
-  const { toast } = useToast();
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const exportOrderExcel = async () => {
-    setExportingExcel(true);
-    try {
-      await downloadFromUrl(base + "/report.xlsx", { fileName: exportFileName("dispatch order " + orderId, "xlsx") });
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setExportingExcel(false);
-    }
-  };
-  const scopeKey = companyQueryKey(base, companyId);
-  const info = useQuery<Overview>({
-    queryKey: scopeKey,
-    queryFn: () => json<Overview>(base),
-    enabled: Boolean(companyId) && Number.isSafeInteger(orderId) && orderId > 0,
-    refetchInterval: 20000,
-  });
-  const gate = useQuery<ReleaseGate>({
-    queryKey: companyQueryKey(base.replace("/order-overview", "/release-readiness"), companyId),
-    queryFn: () => json<ReleaseGate>(base.replace("/order-overview", "/release-readiness")),
-    enabled: Boolean(companyId) && Number.isSafeInteger(orderId) && orderId > 0,
-    // Run automatically and refresh after the order-level evidence changes.
-    staleTime: 0,
-    refetchInterval: 20000,
-    refetchOnWindowFocus: true,
-  });
-  const value = info.data;
-  const history = useInfiniteQuery<HistoryPage, Error>({
-    queryKey: [...scopeKey, "history", source, filterTrip],
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ source, limit: "25" });
-      if (pageParam) params.set("cursor", String(pageParam));
-      if (filterTrip !== "ALL") params.set("dispatchId", filterTrip);
-      return json<HistoryPage>(base + "/history?" + params.toString());
-    },
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: Boolean(companyId) && section === "HISTORY",
-  });
-  const historyRows = useMemo(() => history.data?.pages.flatMap((page) => page.entries) ?? [], [history.data]);
-  const filteredTrips = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (value?.trips ?? []).filter(
-      (t) =>
-        !q ||
-        [String(t.dispatchNumber), t.status, t.financialStatus, t.notes, t.poNumber, t.supplierCode].some((v) =>
-          String(v ?? "")
-            .toLowerCase()
-            .includes(q)
-        )
-    );
-  }, [value?.trips, search]);
-  const date = (s: string | null | undefined) => (s ? formatDisplayDateTime(s) : "—");
-  const label = (s: string) =>
-    s
-      .replaceAll("_", " ")
-      .toLowerCase()
-      .replace(/(^|\s)\S/g, (v) => v.toUpperCase());
-  const sectionItems: Array<{ id: Section; title: string; count?: number; icon: typeof Truck }> = [
-    { id: "TRIPS", title: "Trucks", count: value?.trips.length, icon: Truck },
-    { id: "CHARGES", title: "Charges", count: value?.charges.length, icon: ReceiptText },
-    { id: "PO_FILES", title: "ERP PO files", count: value?.summary.generatedPoFiles, icon: FileSpreadsheet },
-    { id: "HISTORY", title: "History", icon: History },
-  ];
+export default function FactoryDispatchOrderDashboard(props: Props) {
+  const {
+    date,
+    expanded,
+    exportOrderExcel,
+    exportingExcel,
+    filterTrip,
+    filteredTrips,
+    gate,
+    history,
+    historyRows,
+    info,
+    label,
+    onCompareAll,
+    onOpenTrip,
+    onPhysicalReport,
+    orderId,
+    search,
+    section,
+    sectionItems,
+    setExpanded,
+    setFilterTrip,
+    setSearch,
+    setSection,
+    setSource,
+    source,
+    value,
+  } = useFactoryDispatchOrderDashboardState(props);
   return (
     <Card
       className="overflow-hidden border-slate-200 bg-background shadow-sm dark:border-blue-500/20"
       data-testid="factory-dispatch-order-financial-dashboard"
     >
       <CardContent className="space-y-4 p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-blue-600/10 p-2.5 text-blue-700 dark:text-blue-300">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="font-bold text-base sm:text-lg">Order-wide dispatch dashboard</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Financial truck postings, original loading charges and one final invoice all stay under Loading #
-                {orderId}.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void info.refetch()}
-              disabled={info.isFetching}
-              data-testid="button-refresh-dispatch-overview"
-            >
-              <RefreshCw className={"mr-1.5 h-4 w-4 " + (info.isFetching ? "animate-spin" : "")} /> Refresh
-            </Button>
-            <Button size="sm" variant="outline" onClick={onPhysicalReport}>
-              <FileText className="mr-1.5 h-4 w-4" /> Physical report
-            </Button>
-            <Button size="sm" variant="outline" onClick={onCompareAll}>
-              <CheckCheck className="mr-1.5 h-4 w-4" /> Verify all trips
-            </Button>
-            <ExportButton
-              size="sm"
-              variant="default"
-              busy={exportingExcel}
-              onClick={() => {
-                // GET download with the browser's existing session.
-                // It only exports evidence; never posts an ERP import or voucher.
-                void exportOrderExcel();
-              }}
-              data-testid="button-export-dispatch-order-excel"
-            />
-          </div>
-        </div>
+        <FactoryDispatchOrderDashboardSection3
+          exportOrderExcel={exportOrderExcel}
+          exportingExcel={exportingExcel}
+          info={info}
+          onCompareAll={onCompareAll}
+          onPhysicalReport={onPhysicalReport}
+          orderId={orderId}
+        />
         {info.isPending && (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading order-level financial evidence…
@@ -487,76 +235,14 @@ export default function FactoryDispatchOrderDashboard({
               ))}
             </div>
             {section === "TRIPS" && (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    One row per physical trip, with separate live POST accounting evidence.
-                  </p>
-                  <Input
-                    className="h-9 w-full sm:w-60"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search trip, PO or status…"
-                    aria-label="Search financial trip reports"
-                  />
-                </div>
-                {!filteredTrips.length && (
-                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    No matching trips.
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {filteredTrips.map((t) => (
-                    <div
-                      key={t.id}
-                      className="rounded-xl border border-border bg-card p-3"
-                      data-testid={"dispatch-overview-trip-" + t.id}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-blue-600" />
-                          <span className="font-semibold text-sm">
-                            Trip #{String(t.dispatchNumber).padStart(3, "0")}
-                          </span>
-                          <Badge variant="outline">{label(t.status)}</Badge>
-                          <Badge variant="secondary">{label(t.financialStatus)}</Badge>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => onOpenTrip(Number(t.id))}>
-                          Open trip
-                        </Button>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs md:grid-cols-4">
-                        <div>
-                          <span className="text-muted-foreground">Scanned</span>
-                          <p className="font-mono font-medium">
-                            {t.scannedBales} bales · {fmtAmount(t.scannedWeightKg)} kg
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Posted goods</span>
-                          <p className="font-mono font-medium">$ {fmtAmount(t.goodsSubtotal)}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Customer charges / discounts</span>
-                          <p className="font-mono font-medium">
-                            + {fmtAmount(t.billableCharges)} / − {fmtAmount(t.discounts)}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Previously posted receivable</span>
-                          <p className="font-mono font-semibold">$ {fmtAmount(t.customerTotal)}</p>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
-                        <span>
-                          Closed: {date(t.closedAt)} · POST ID: {t.postingId ?? "Not posted"}
-                        </span>
-                        <span>PO Excel: {t.exportedAt ? "Generated — import not confirmed" : "Not generated"}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <FactoryDispatchOrderDashboardSection2
+                date={date}
+                filteredTrips={filteredTrips}
+                label={label}
+                onOpenTrip={onOpenTrip}
+                search={search}
+                setSearch={setSearch}
+              />
             )}
             {section === "CHARGES" && (
               <div className="space-y-2">
@@ -711,41 +397,13 @@ export default function FactoryDispatchOrderDashboard({
                     No history events match this filter.
                   </p>
                 )}
-                <div className="space-y-2">
-                  {historyRows.map((evt) => {
-                    const key = evt.source + ":" + evt.id;
-                    return (
-                      <div key={key} className="rounded-lg border border-border p-3 text-xs">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Activity className="h-4 w-4 text-blue-600" />
-                            <span className="font-semibold">{label(evt.eventType)}</span>
-                            <Badge variant="outline">{label(evt.source)}</Badge>
-                          </div>
-                          <span className="text-muted-foreground">{date(evt.createdAt)}</span>
-                        </div>
-                        <div className="mt-1 text-muted-foreground">
-                          {evt.dispatchId ? "Trip ID #" + evt.dispatchId + " · " : "Order-wide · "}
-                          {evt.actorUsername}
-                          {evt.reason ? " · Reason: " + evt.reason : ""}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExpanded(expanded === key ? null : key)}
-                          className="mt-2 inline-flex items-center gap-1 text-blue-700 hover:underline dark:text-blue-300"
-                          aria-expanded={expanded === key}
-                        >
-                          <ChevronDown className="h-3.5 w-3.5" /> Original event details
-                        </button>
-                        {expanded === key && (
-                          <pre className="mt-2 max-h-60 overflow-auto rounded-lg bg-muted/60 p-2 text-[11px] leading-relaxed">
-                            {JSON.stringify(evt.details, null, 2)}
-                          </pre>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <FactoryDispatchOrderDashboardSection
+                  date={date}
+                  expanded={expanded}
+                  historyRows={historyRows}
+                  label={label}
+                  setExpanded={setExpanded}
+                />
                 {history.hasNextPage && (
                   <Button
                     variant="outline"

@@ -1,48 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/page-state";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Check,
-  ChevronDown,
-  ChevronsUpDown,
-  RotateCcw,
-  Ship,
-  Truck,
-  AlertTriangle,
-  CheckCircle,
-  Package,
-  Trash2,
-  Plus,
-  Wrench,
-  RefreshCw,
-  FileText,
-  DollarSign,
-  FileSpreadsheet,
-  GitCompare,
-  Hammer,
-} from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { Check, AlertTriangle, CheckCircle, Package, Wrench, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { fmtNum } from "./factorypendinginvoiceverify/utils";
-import { useFactoryPendingInvoiceVerifyModel } from "./factorypendinginvoiceverify/useFactoryPendingInvoiceVerifyModel";
 import { FactoryPendingInvoiceVerifyDialog1 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog1";
 import { FactoryPendingInvoiceVerifyDialog2 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog2";
 import { FactoryPendingInvoiceVerifyDialog3 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog3";
@@ -51,78 +14,86 @@ import { FactoryPendingInvoiceVerifyDialog5 } from "./factorypendinginvoiceverif
 import { FactoryPendingInvoiceVerifyDialog6 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog6";
 import { FactoryPendingInvoiceVerifyDialog7 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog7";
 import { FactoryPendingInvoiceVerifyDetailCard } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDetailCard";
+import {
+  FactoryPendingInvoiceVerifyPageHeaderSection,
+  useFactoryPendingInvoiceVerifyState,
+} from "./FactoryPendingInvoiceVerifyPageHeaderSection";
+import {
+  FactoryPendingInvoiceVerifyCardSection,
+  FactoryPendingInvoiceVerifyCardSection2,
+  FactoryPendingInvoiceVerifySection,
+} from "./FactoryPendingInvoiceVerifyCardSection";
 
 export default function FactoryPendingInvoiceVerify() {
-  const model = useFactoryPendingInvoiceVerifyModel();
-  // View Only / Create Only roles review the loading but never approve, finalize, reprice or edit it.
-  const recordChanges = useExistingRecordChangeAccess();
-  const canChange = recordChanges.allowed;
   const {
-    navigate,
-    orderId,
-    containerNumber,
-    setContainerNumber,
-    shippingCompany,
-    setShippingCompany,
-    containerNotes,
-    setContainerNotes,
-    bookingInfo,
-    setBookingInfo,
-    destination,
-    setDestination,
-    chargeName,
-    setChargeName,
-    chargeAmount,
-    setChargeAmount,
-    chargeType,
-    setChargeType,
-    chargeLedgerAccountId,
-    setChargeLedgerAccountId,
-    chargeAccountOpen,
-    setChargeAccountOpen,
-    setShowApproveDialog,
-    setShowReturnDialog,
-    previewLoading,
-    setShowFixBalesDialog,
-    setShowProformaDialog,
-    showViewProformaDialog,
-    setShowViewProformaDialog,
-    viewedMasterProforma,
-    setSelectedProformaId,
-    setShowRecoverDialog,
-    verification,
-    verificationLoading,
-    orderDetail,
-    currentUser,
-    isAdminOrOwner,
-    isDeveloper,
-    ledgerAccounts,
-    proformas,
-    verifyMutation,
-    returnToLoadingMutation,
-    assignContainerMutation,
     addChargeMutation,
-    removeChargeMutation,
+    applyProductionPricesMutation,
+    applyProformaMutation,
+    applySellingPricesMutation,
+    assignContainerMutation,
+    bookingInfo,
+    canChange,
+    chargeAccountOpen,
+    chargeAmount,
+    chargeLedgerAccountId,
+    chargeName,
+    chargeType,
+    charges,
+    containerNotes,
+    containerNumber,
+    currentUser,
+    destination,
+    fetchFinalizePreview,
     finalizeMutation,
     forceSyncMutation,
-    applyProformaMutation,
-    applyProductionPricesMutation,
-    applySellingPricesMutation,
-    fetchFinalizePreview,
     handleAddCharge,
-    isLoading,
-    charges,
-    isPending,
-    isVerified,
-    isLoadingStatus,
-    totalNotLoadedBales,
-    totalNotLoadedWeight,
     handleExportExcel,
     handleExportExcelNoCharges,
+    handleExportLoadingStatus,
     handleExportPdf,
     handleExportPdfNoCharges,
-    handleExportLoadingStatus,
-  } = model;
+    isAdminOrOwner,
+    isDeveloper,
+    isLoading,
+    isLoadingStatus,
+    isPending,
+    isVerified,
+    ledgerAccounts,
+    model,
+    navigate,
+    orderDetail,
+    orderId,
+    previewLoading,
+    proformas,
+    recordChanges,
+    removeChargeMutation,
+    returnToLoadingMutation,
+    setBookingInfo,
+    setChargeAccountOpen,
+    setChargeAmount,
+    setChargeLedgerAccountId,
+    setChargeName,
+    setChargeType,
+    setContainerNotes,
+    setContainerNumber,
+    setDestination,
+    setSelectedProformaId,
+    setShippingCompany,
+    setShowApproveDialog,
+    setShowFixBalesDialog,
+    setShowProformaDialog,
+    setShowRecoverDialog,
+    setShowReturnDialog,
+    setShowViewProformaDialog,
+    shippingCompany,
+    showViewProformaDialog,
+    totalNotLoadedBales,
+    totalNotLoadedWeight,
+    verification,
+    verificationLoading,
+    verifyMutation,
+    viewedMasterProforma,
+  } = useFactoryPendingInvoiceVerifyState();
 
   if (isLoading) {
     return (
@@ -141,149 +112,27 @@ export default function FactoryPendingInvoiceVerify() {
     <div
       className={`flex h-full flex-col overflow-y-auto sm:p-4 lg:p-6 ${isPending || isVerified ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-4 lg:pb-6` : ""}`}
     >
-      <PageHeader
-        title={`Verify Order #${orderId}`}
-        subtitle="Review loaded bales against proforma"
-        backTarget="/factory/invoicing?tab=invoices"
-      >
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-verification-actions">
-                Actions
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {isVerified ? (
-                <>
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">View</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => navigate(`/factory/sales/pending-invoices/${orderId}/verify`)}
-                    data-testid="menu-proforma-vs-loaded"
-                  >
-                    <GitCompare className="h-4 w-4" />
-                    Proforma vs Loaded
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowViewProformaDialog(true)} data-testid="menu-view-proforma">
-                    <FileText className="h-4 w-4" />
-                    View Proforma
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-
-                  {isAdminOrOwner && canChange && (
-                    <>
-                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                        Pricing
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={() => applyProductionPricesMutation.mutate()}
-                        disabled={applyProductionPricesMutation.isPending}
-                        data-testid="menu-apply-production-prices"
-                      >
-                        <Hammer
-                          className={`h-4 w-4 ${applyProductionPricesMutation.isPending ? "animate-spin" : ""}`}
-                        />
-                        Apply Production Prices
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => applySellingPricesMutation.mutate()}
-                        disabled={applySellingPricesMutation.isPending}
-                        data-testid="menu-apply-selling-prices"
-                      >
-                        <RefreshCw
-                          className={`h-4 w-4 ${applySellingPricesMutation.isPending ? "animate-spin" : ""}`}
-                        />
-                        Apply Selling Prices
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedProformaId("");
-                          setShowProformaDialog(true);
-                        }}
-                        disabled={applyProformaMutation.isPending}
-                        data-testid="menu-apply-proforma-prices"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Apply Proforma Prices
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Export Excel
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="menu-export-excel-no-charges">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Export Excel (No Charges)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportPdf} data-testid="menu-export-pdf">
-                    <FileText className="h-4 w-4" />
-                    Export PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="menu-export-pdf-no-charges">
-                    <FileText className="h-4 w-4" />
-                    Export PDF (No Charges)
-                  </DropdownMenuItem>
-                  {isAdminOrOwner && (
-                    <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="menu-export-loading-status">
-                      <FileSpreadsheet className="h-4 w-4" />
-                      Export Excel (Loading Status)
-                    </DropdownMenuItem>
-                  )}
-
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => setShowReturnDialog(true)}
-                    disabled={returnToLoadingMutation.isPending || !canChange}
-                    data-testid="menu-return-to-loading"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Return to Loading
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem
-                    onClick={() => setShowReturnDialog(true)}
-                    disabled={returnToLoadingMutation.isPending || !canChange}
-                    data-testid="menu-return-to-loading"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Return to Loading
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowViewProformaDialog(true)} data-testid="menu-view-proforma">
-                    <FileText className="mr-2 h-4 w-4" />
-                    View Proforma
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {isLoadingStatus && (
-            <Badge
-              variant="outline"
-              className="border-blue-300 text-blue-700 dark:border-blue-600 dark:text-blue-400"
-              data-testid="badge-order-status"
-            >
-              Loading
-            </Badge>
-          )}
-          {isVerified && (
-            <Badge
-              variant="outline"
-              className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-              data-testid="badge-order-status"
-            >
-              Verified
-            </Badge>
-          )}
-        </div>
-      </PageHeader>
+      <FactoryPendingInvoiceVerifyPageHeaderSection
+        applyProductionPricesMutation={applyProductionPricesMutation}
+        applyProformaMutation={applyProformaMutation}
+        applySellingPricesMutation={applySellingPricesMutation}
+        canChange={canChange}
+        handleExportExcel={handleExportExcel}
+        handleExportExcelNoCharges={handleExportExcelNoCharges}
+        handleExportLoadingStatus={handleExportLoadingStatus}
+        handleExportPdf={handleExportPdf}
+        handleExportPdfNoCharges={handleExportPdfNoCharges}
+        isAdminOrOwner={isAdminOrOwner}
+        isLoadingStatus={isLoadingStatus}
+        isVerified={isVerified}
+        navigate={navigate}
+        orderId={orderId}
+        returnToLoadingMutation={returnToLoadingMutation}
+        setSelectedProformaId={setSelectedProformaId}
+        setShowProformaDialog={setShowProformaDialog}
+        setShowReturnDialog={setShowReturnDialog}
+        setShowViewProformaDialog={setShowViewProformaDialog}
+      />
 
       {/* Fallback notice — shown only to Developer role when bale records are missing but order lines cover the data */}
       {!verificationLoading && verification?.dataSource === "order_lines" && currentUser?.role === "Developer" && (
@@ -356,283 +205,50 @@ export default function FactoryPendingInvoiceVerify() {
           </div>
         )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Loaded Bales</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-loaded-bales">
-              {verification?.totalLoadedBales ?? 0} bales
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Weight</CardTitle>
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-weight">
-              {fmtNum(verification?.totalLoadedWeight ?? 0)} kg
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Not Loaded</CardTitle>
-            <Package className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div
-              className="text-2xl font-bold text-amber-600 dark:text-amber-400"
-              data-testid="text-total-not-loaded-bales"
-            >
-              {totalNotLoadedBales} bales
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Not Loaded Weight</CardTitle>
-            <Truck className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div
-              className="text-2xl font-bold text-amber-600 dark:text-amber-400"
-              data-testid="text-total-not-loaded-weight"
-            >
-              {fmtNum(totalNotLoadedWeight)} kg
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <FactoryPendingInvoiceVerifySection
+        totalNotLoadedBales={totalNotLoadedBales}
+        totalNotLoadedWeight={totalNotLoadedWeight}
+        verification={verification}
+      />
 
       <FactoryPendingInvoiceVerifyDetailCard model={model} />
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Ship className="h-5 w-5" />
-            Container / Shipping
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Container Number</label>
-              <Input
-                value={containerNumber}
-                onChange={(e) => setContainerNumber(e.target.value)}
-                placeholder="e.g. MSCU1234567"
-                data-testid="input-container-number"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Shipping Company</label>
-              <Input
-                value={shippingCompany}
-                onChange={(e) => setShippingCompany(e.target.value)}
-                placeholder="e.g. MSC, Maersk"
-                data-testid="input-shipping-company"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Destination</label>
-              <Input
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="e.g. Rotterdam, UK"
-                data-testid="input-destination"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1 block">Booking Info</label>
-            <Input
-              type="text"
-              value={bookingInfo}
-              onChange={(e) => setBookingInfo(e.target.value)}
-              placeholder="Quotation price or booking details..."
-              data-testid="input-booking-info"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1 block">Container Notes</label>
-            <Textarea
-              value={containerNotes}
-              onChange={(e) => setContainerNotes(e.target.value)}
-              placeholder="Additional notes..."
-              data-testid="input-container-notes"
-            />
-          </div>
-          <Button
-            variant="outline"
-            onClick={() =>
-              assignContainerMutation.mutate({
-                containerNumber,
-                shippingCompany,
-                containerNotes,
-                bookingInfo,
-                destination,
-              })
-            }
-            disabled={assignContainerMutation.isPending || !canChange}
-            title={recordChanges.reason ?? undefined}
-            data-testid="button-save-container"
-          >
-            <Ship className="mr-2 h-4 w-4" />
-            Save Container Info
-          </Button>
-        </CardContent>
-      </Card>
+      <FactoryPendingInvoiceVerifyCardSection2
+        assignContainerMutation={assignContainerMutation}
+        bookingInfo={bookingInfo}
+        canChange={canChange}
+        containerNotes={containerNotes}
+        containerNumber={containerNumber}
+        destination={destination}
+        recordChanges={recordChanges}
+        setBookingInfo={setBookingInfo}
+        setContainerNotes={setContainerNotes}
+        setContainerNumber={setContainerNumber}
+        setDestination={setDestination}
+        setShippingCompany={setShippingCompany}
+        shippingCompany={shippingCompany}
+      />
 
       {(isPending || isVerified || isLoadingStatus) && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-sm">Freight &amp; Charges</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              These will be billed to the customer and posted to the selected account
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {charges.length > 0 && (
-              <div className="space-y-1">
-                {charges.map((charge) => {
-                  const acct = ledgerAccounts.find((a) => a.id === charge.ledgerAccountId);
-                  return (
-                    <div
-                      key={charge.id}
-                      className="flex items-center justify-between gap-2"
-                      data-testid={`row-charge-${charge.id}`}
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium">{charge.name}</span>
-                        {acct && <span className="text-xs text-muted-foreground">{acct.name}</span>}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="font-mono text-sm" data-testid={`text-charge-amount-${charge.id}`}>
-                          {fmtNum(parseFloat(charge.amount))}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeChargeMutation.mutate(charge.id)}
-                          disabled={removeChargeMutation.isPending || !canChange}
-                          title={recordChanges.reason ?? undefined}
-                          data-testid={`button-remove-charge-${charge.id}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="space-y-2 pt-2 border-t">
-              <p className="text-xs font-medium text-muted-foreground">Add Charge</p>
-              <Select value={chargeType} onValueChange={setChargeType}>
-                <SelectTrigger data-testid="select-charge-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="FREIGHT">Freight</SelectItem>
-                  <SelectItem value="OTHER">Other</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {chargeType === "OTHER" && (
-                <Input
-                  value={chargeName}
-                  onChange={(e) => setChargeName(e.target.value)}
-                  placeholder="Charge name..."
-                  data-testid="input-charge-name"
-                />
-              )}
-
-              <Popover open={chargeAccountOpen} onOpenChange={setChargeAccountOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={chargeAccountOpen}
-                    className="w-full justify-between font-normal"
-                    data-testid="select-charge-account"
-                  >
-                    <span className="truncate text-left">
-                      {chargeLedgerAccountId
-                        ? (ledgerAccounts.find((a) => String(a.id) === chargeLedgerAccountId)?.name ??
-                          "Select account...")
-                        : chargeType !== "FREIGHT"
-                          ? "Select account (required)..."
-                          : "Select account (optional)..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[min(320px,calc(100vw-2rem))] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search accounts..." data-testid="input-charge-account-search" />
-                    <CommandList>
-                      <CommandEmpty>No account found.</CommandEmpty>
-                      <CommandGroup>
-                        {ledgerAccounts.map((acct) => (
-                          <CommandItem
-                            key={acct.id}
-                            value={`${acct.name} ${acct.code}`}
-                            onSelect={() => {
-                              setChargeLedgerAccountId(String(acct.id));
-                              setChargeAccountOpen(false);
-                            }}
-                            data-testid={`option-account-${acct.id}`}
-                          >
-                            <Check
-                              className={`mr-2 h-4 w-4 shrink-0 ${String(acct.id) === chargeLedgerAccountId ? "opacity-100" : "opacity-0"}`}
-                            />
-                            <span className="flex-1 truncate">{acct.name}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  A ledger account is required so the charge posts to accounting.
-                </p>
-              )}
-
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={chargeAmount}
-                  onChange={(e) => setChargeAmount(e.target.value)}
-                  placeholder="Amount"
-                  data-testid="input-charge-amount"
-                />
-                <Button
-                  variant="outline"
-                  onClick={handleAddCharge}
-                  disabled={
-                    !canChange ||
-                    !chargeAmount ||
-                    (chargeType !== "FREIGHT" && !chargeLedgerAccountId) ||
-                    addChargeMutation.isPending
-                  }
-                  title={recordChanges.reason ?? undefined}
-                  data-testid="button-add-charge"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <FactoryPendingInvoiceVerifyCardSection
+          addChargeMutation={addChargeMutation}
+          canChange={canChange}
+          chargeAccountOpen={chargeAccountOpen}
+          chargeAmount={chargeAmount}
+          chargeLedgerAccountId={chargeLedgerAccountId}
+          chargeName={chargeName}
+          chargeType={chargeType}
+          charges={charges}
+          handleAddCharge={handleAddCharge}
+          ledgerAccounts={ledgerAccounts}
+          recordChanges={recordChanges}
+          removeChargeMutation={removeChargeMutation}
+          setChargeAccountOpen={setChargeAccountOpen}
+          setChargeAmount={setChargeAmount}
+          setChargeLedgerAccountId={setChargeLedgerAccountId}
+          setChargeName={setChargeName}
+          setChargeType={setChargeType}
+        />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">

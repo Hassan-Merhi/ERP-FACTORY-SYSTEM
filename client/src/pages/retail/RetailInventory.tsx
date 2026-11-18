@@ -1,264 +1,77 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLocation, useRoute } from "wouter";
-import {
-  ArrowLeft,
-  Boxes,
-  ChevronDown,
-  ChevronRight,
-  FolderOpen,
-  MapPin,
-  Pencil,
-  Plus,
-  Printer,
-  Upload,
-} from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronRight, MapPin, Pencil, Plus, Upload } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SearchField } from "@/components/ui/search-field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RetailSupplierImportDialog } from "./RetailSupplierImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ProductImageGallery } from "./RetailProductImage";
-import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
-import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
-import { confirmAction } from "@/components/ConfirmHost";
+import { RetailCatalogList } from "./RetailCatalogList";
+import { useRetailInventoryState } from "./useRetailInventoryState";
 import {
-  getJson,
-  type Brand,
-  type Location,
-  type RetailCatalogFacets,
-  type RetailCatalogNavigation,
-  type RetailCatalogPage,
-  type RetailProduct,
-  type RetailVariant,
-} from "./retailInventoryTypes";
+  RetailInventorySection,
+  RetailInventorySection2,
+  RetailInventorySection3,
+  RetailInventorySection4,
+} from "./RetailInventorySection";
 
 export default function RetailInventory() {
-  const { selectedCompany } = useCompany();
-  const [, navigate] = useLocation();
-  // View Only and Create Only roles cannot edit, archive or import into existing products.
-  const recordChanges = useExistingRecordChangeAccess();
-  const [detailMatch, detailParams] = useRoute("/retail/products/:id");
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [supplierImportOpen, setSupplierImportOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<RetailProduct | null>(null);
-  const [search, setSearch] = useState("");
-  const [color, setColor] = useState("");
-  const [size, setSize] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [categoryKey, setCategoryKey] = useState<string | null>(null);
-  const [expandedBrandKey, setExpandedBrandKey] = useState<string | null>(null);
-  const [stockStatus, setStockStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [labelItems, setLabelItems] = useState<RetailLabelRequestItem[]>([]);
-  const [labelOpen, setLabelOpen] = useState(false);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, color, size, categoryKey, expandedBrandKey, locationId, stockStatus, showArchived]);
-
-  const retailEnabled = selectedCompany?.companyType === "retail";
-  const companyKey = selectedCompany?.id ?? 0;
-  useEffect(() => {
-    setLocationId("");
-    setCategoryKey(null);
-    setExpandedBrandKey(null);
-    setSelected(new Set());
-  }, [companyKey]);
-  const { data: brands = [] } = useQuery<Brand[]>({
-    queryKey: ["retail-brands", companyKey],
-    queryFn: () => getJson("/api/retail/brands"),
-    enabled: retailEnabled,
-  });
-  const { data: locations = [], isLoading: locationsLoading } = useQuery<Location[]>({
-    queryKey: ["retail-locations", companyKey],
-    queryFn: () => getJson("/api/locations"),
-    enabled: retailEnabled,
-  });
-  const { data: catalogFacets } = useQuery<RetailCatalogFacets>({
-    queryKey: ["retail-catalog-facets", companyKey],
-    queryFn: () => getJson("/api/retail/catalog-facets"),
-    enabled: retailEnabled,
-    staleTime: 60_000,
-  });
-
-  // Only fetch the paginated product cards when a brand is expanded. The
-  // independent navigation endpoint enumerates *all* matching categories and
-  // brands, so pagination cannot hide a group.
-  const navigationParams = useMemo(() => {
-    const params = new URLSearchParams({ stockStatus });
-    if (locationId) params.set("locationId", locationId);
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (color) params.set("color", color);
-    if (size) params.set("size", size);
-    if (showArchived) params.set("archived", "include");
-    return params.toString();
-  }, [locationId, debouncedSearch, color, size, stockStatus, showArchived]);
-
   const {
-    data: navigationData,
-    isLoading: navigationLoading,
-    isError: navigationFailed,
-  } = useQuery<RetailCatalogNavigation>({
-    queryKey: ["retail-catalog-navigation", companyKey, navigationParams],
-    queryFn: () => getJson(`/api/retail/catalog-navigation?${navigationParams}`),
-    enabled: retailEnabled && Boolean(locationId),
-  });
-  const selectedLocation = locations.find((entry) => String(entry.id) === locationId);
-  const selectedCategory = navigationData?.categories.find((entry) => entry.key === categoryKey);
-  const expandedBrand = selectedCategory?.brands.find((entry) => entry.key === expandedBrandKey);
-
-  const catalogParams = useMemo(() => {
-    const params = new URLSearchParams({ page: String(page), pageSize: "60", stockStatus });
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (color) params.set("color", color);
-    if (size) params.set("size", size);
-    if (categoryKey) params.set("category", categoryKey);
-    if (expandedBrandKey) params.set("brandId", expandedBrandKey);
-    if (locationId) params.set("locationId", locationId);
-    if (showArchived) params.set("archived", "include");
-    return params.toString();
-  }, [page, debouncedSearch, color, size, categoryKey, expandedBrandKey, locationId, stockStatus, showArchived]);
-
-  const {
-    data: catalogPage,
+    actionDialogs,
+    brands,
+    bulkBar,
+    catalogFailed,
+    catalogFilters,
+    catalogPage,
+    categoryKey,
+    color,
+    colors,
+    detailFailed,
+    detailMatch,
+    detailProduct,
+    editingProduct,
+    editorOpen,
+    expandedBrandKey,
+    handleVariantAction,
     isLoading,
-    isError: catalogFailed,
-  } = useQuery<RetailCatalogPage>({
-    queryKey: ["retail-products", "page", companyKey, catalogParams],
-    queryFn: () => getJson(`/api/retail/products-page?${catalogParams}`),
-    enabled: retailEnabled && Boolean(locationId && selectedCategory && expandedBrand),
-  });
-  const products = catalogPage?.items ?? [];
-  const colors = catalogFacets?.colors ?? [];
-  const sizes = catalogFacets?.sizes ?? [];
-
-  const productId = detailMatch ? Number(detailParams?.id) : 0;
-  const { data: detailProduct, isError: detailFailed } = useQuery<RetailProduct>({
-    queryKey: ["retail-product", companyKey, productId],
-    queryFn: () => getJson(`/api/retail/products/${productId}`),
-    enabled: retailEnabled && productId > 0,
-  });
-
-  const catalogFilters: RetailCatalogFilters = { color, size, locationId, stockStatus, showArchived };
-  const knownVariants = new Map<number, { product: RetailProduct; variant: RetailVariant }>();
-  for (const product of [...products, ...(detailProduct ? [detailProduct] : [])]) {
-    for (const variant of product.variants) knownVariants.set(variant.id, { product, variant });
-  }
-  const labelItemFor = (product: RetailProduct, variant: RetailVariant): RetailLabelRequestItem => ({
-    variantId: variant.id,
-    title: `${product.brand.name} · ${product.name} · ${variant.color} · ${variant.size}`,
-    barcode: variant.barcode,
-    stockQuantity: variant.quantity,
-  });
-  const toggleVariant = (variantId: number) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(variantId)) next.delete(variantId);
-      else next.add(variantId);
-      return next;
-    });
-  const toggleVariants = (variantIds: number[], select: boolean) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      for (const id of variantIds) {
-        if (select) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
-  const openEditor = (product: RetailProduct) => {
-    if (!recordChanges.allowed) return;
-    setEditingProduct(product);
-    setEditorOpen(true);
-  };
-  const refreshCatalog = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-catalog-navigation"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
-    ]);
-  const setProductActive = async (product: RetailProduct, active: boolean) => {
-    if (!recordChanges.allowed) return;
-    if (!active && !(await confirmAction({ title: `Archive ${product.name}? Its sales and stock history are kept.` })))
-      return;
-    try {
-      await apiRequest("PATCH", `/api/retail/products/${product.id}/active`, { active });
-      await refreshCatalog();
-      toast({ title: active ? "Style restored" : "Style archived" });
-    } catch (error) {
-      toast({ title: "Could not update style", description: (error as Error).message, variant: "destructive" });
-    }
-  };
-  const handleVariantAction = async (action: RetailVariantAction, product: RetailProduct, variant: RetailVariant) => {
-    if (action === "print") {
-      setLabelItems([labelItemFor(product, variant)]);
-      setLabelOpen(true);
-    } else {
-      if (!recordChanges.allowed) return;
-      const active = action === "restore";
-      try {
-        await apiRequest("PATCH", `/api/retail/variants/${variant.id}/active`, { active });
-        await refreshCatalog();
-        toast({
-          title: active ? "Variant restored" : "Variant archived",
-          description: `${variant.color} / ${variant.size}`,
-        });
-      } catch (error) {
-        toast({ title: "Could not update variant", description: (error as Error).message, variant: "destructive" });
-      }
-    }
-  };
-
-  const bulkBar =
-    selected.size > 0 ? (
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
-          <span className="flex-1 text-sm" data-i18n-ui>
-            Selected for labels: {selected.size}
-          </span>
-          <Button variant="ghost" onClick={() => setSelected(new Set())}>
-            Clear
-          </Button>
-          <Button
-            onClick={() => {
-              setLabelItems(
-                [...selected]
-                  .map((id) => knownVariants.get(id))
-                  .filter((entry): entry is { product: RetailProduct; variant: RetailVariant } => Boolean(entry))
-                  .map(({ product, variant }) => labelItemFor(product, variant))
-              );
-              setLabelOpen(true);
-            }}
-          >
-            <Printer className="mr-2 h-4 w-4" /> Print labels
-          </Button>
-        </div>
-      </div>
-    ) : null;
-
-  const actionDialogs = (
-    <>
-      <RetailLabelPrintDialog open={labelOpen} onOpenChange={setLabelOpen} items={labelItems} />
-    </>
-  );
+    locationId,
+    locations,
+    locationsLoading,
+    navigate,
+    navigationData,
+    navigationFailed,
+    navigationLoading,
+    openEditor,
+    page,
+    products,
+    recordChanges,
+    retailEnabled,
+    search,
+    selected,
+    selectedCategory,
+    selectedLocation,
+    setCategoryKey,
+    setColor,
+    setEditingProduct,
+    setEditorOpen,
+    setExpandedBrandKey,
+    setLocationId,
+    setPage,
+    setProductActive,
+    setSearch,
+    setSelected,
+    setShowArchived,
+    setSize,
+    setStockStatus,
+    setSupplierImportOpen,
+    showArchived,
+    size,
+    sizes,
+    stockStatus,
+    supplierImportOpen,
+    toggleVariant,
+    toggleVariants,
+  } = useRetailInventoryState();
 
   if (!retailEnabled) {
     return (
@@ -385,56 +198,18 @@ export default function RetailInventory() {
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-5 sm:p-4">
-        <SearchField
-          placeholder="Search style, brand, barcode, SKU, color or size…"
-          value={search}
-          onValueChange={setSearch}
-          className="h-11 rounded-xl bg-background/60"
-          wrapperClassName="sm:col-span-2 lg:col-span-2"
-          aria-label="Search retail inventory"
-        />
-        <Select value={color || "__all__"} onValueChange={(v) => setColor(v === "__all__" ? "" : v)}>
-          <SelectTrigger
-            className="h-11 rounded-xl border-border/70 bg-background/60 px-3 text-sm"
-            aria-label="Filter by color"
-          >
-            <SelectValue placeholder="All colors" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All colors</SelectItem>
-            {colors.map((value) => (
-              <SelectItem key={value} value={value}>
-                {value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={size || "__all__"} onValueChange={(v) => setSize(v === "__all__" ? "" : v)}>
-          <SelectTrigger className="h-10 px-2 text-sm" aria-label="Filter by size">
-            <SelectValue placeholder="All sizes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All sizes</SelectItem>
-            {sizes.map((value) => (
-              <SelectItem key={value} value={value}>
-                {value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={stockStatus} onValueChange={setStockStatus}>
-          <SelectTrigger className="h-10 px-2 text-sm" aria-label="Filter by stock status">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All stock</SelectItem>
-            <SelectItem value="in">In stock</SelectItem>
-            <SelectItem value="low">Low stock</SelectItem>
-            <SelectItem value="out">Out of stock</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <RetailInventorySection4
+        color={color}
+        colors={colors}
+        search={search}
+        setColor={setColor}
+        setSearch={setSearch}
+        setSize={setSize}
+        setStockStatus={setStockStatus}
+        size={size}
+        sizes={sizes}
+        stockStatus={stockStatus}
+      />
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)} />
         <span>Show archived items</span>
@@ -484,45 +259,14 @@ export default function RetailInventory() {
       </nav>
 
       {!locationId ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Choose a location</h2>
-          {locationsLoading ? (
-            <p className="p-5 text-sm text-muted-foreground">Loading locations…</p>
-          ) : locations.filter((entry) => entry.active !== false).length === 0 ? (
-            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No active locations are available.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {locations
-                .filter((entry) => entry.active !== false)
-                .map((location) => (
-                  <button
-                    key={location.id}
-                    type="button"
-                    className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                    onClick={() => {
-                      setLocationId(String(location.id));
-                      setCategoryKey(null);
-                      setExpandedBrandKey(null);
-                      setSelected(new Set());
-                    }}
-                  >
-                    <MapPin className="h-5 w-5 shrink-0 text-primary" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold" data-no-translate>
-                        {location.name}
-                      </span>
-                      <span className="block text-xs text-muted-foreground" data-no-translate>
-                        {location.code}
-                      </span>
-                    </span>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </button>
-                ))}
-            </div>
-          )}
-        </section>
+        <RetailInventorySection3
+          locations={locations}
+          locationsLoading={locationsLoading}
+          setCategoryKey={setCategoryKey}
+          setExpandedBrandKey={setExpandedBrandKey}
+          setLocationId={setLocationId}
+          setSelected={setSelected}
+        />
       ) : navigationLoading ? (
         <p className="p-6 text-sm text-muted-foreground">Loading inventory groups…</p>
       ) : navigationFailed ? (
@@ -530,40 +274,13 @@ export default function RetailInventory() {
           Could not load inventory categories. Try again.
         </p>
       ) : !categoryKey ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold" data-no-translate>
-            Categories in {selectedLocation?.name ?? "selected location"}
-          </h2>
-          {(navigationData?.categories.length ?? 0) === 0 ? (
-            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No categories match the selected location and filters.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {navigationData?.categories.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                  onClick={() => {
-                    setCategoryKey(item.key);
-                    setExpandedBrandKey(null);
-                    setSelected(new Set());
-                  }}
-                >
-                  <FolderOpen className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold" data-no-translate>
-                      {item.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">{item.productCount} products</span>
-                  </span>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <RetailInventorySection2
+          navigationData={navigationData}
+          selectedLocation={selectedLocation}
+          setCategoryKey={setCategoryKey}
+          setExpandedBrandKey={setExpandedBrandKey}
+          setSelected={setSelected}
+        />
       ) : (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold tracking-tight" data-no-translate>
@@ -603,61 +320,23 @@ export default function RetailInventory() {
                     </span>
                   </button>
                   {expandedBrandKey === brand.key && (
-                    <div className="space-y-4 border-t border-border/60 p-3 sm:p-5">
-                      {isLoading ? (
-                        <p className="p-6 text-sm text-muted-foreground">Loading products…</p>
-                      ) : catalogFailed ? (
-                        <p className="p-6 text-sm text-destructive">Could not load products. Try again.</p>
-                      ) : products.length === 0 ? (
-                        <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                          No products match these filters.
-                        </p>
-                      ) : (
-                        <RetailCatalogList
-                          products={products}
-                          filters={catalogFilters}
-                          selected={selected}
-                          onToggle={toggleVariant}
-                          onToggleProduct={toggleVariants}
-                          onOpenProduct={(product) => navigate(`/retail/products/${product.id}`)}
-                          onEdit={openEditor}
-                          onArchiveProduct={(product, active) => void setProductActive(product, active)}
-                          onVariantAction={handleVariantAction}
-                          showBrandHeadings={false}
-                          changeDisabledReason={recordChanges.reason}
-                        />
-                      )}
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-muted-foreground">
-                          {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
-                          {(catalogPage?.totalPages ?? 0) > 0
-                            ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}`
-                            : ""}
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={(catalogPage?.page ?? page) <= 1 || isLoading}
-                            onClick={() => setPage((current) => Math.max(1, current - 1))}
-                          >
-                            Previous
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={
-                              isLoading ||
-                              (catalogPage?.totalPages ?? 0) === 0 ||
-                              (catalogPage?.page ?? page) >= (catalogPage?.totalPages ?? 0)
-                            }
-                            onClick={() => setPage((current) => current + 1)}
-                          >
-                            Next
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
+                    <RetailInventorySection
+                      catalogFailed={catalogFailed}
+                      catalogFilters={catalogFilters}
+                      catalogPage={catalogPage}
+                      handleVariantAction={handleVariantAction}
+                      isLoading={isLoading}
+                      navigate={navigate}
+                      openEditor={openEditor}
+                      page={page}
+                      products={products}
+                      recordChanges={recordChanges}
+                      selected={selected}
+                      setPage={setPage}
+                      setProductActive={setProductActive}
+                      toggleVariant={toggleVariant}
+                      toggleVariants={toggleVariants}
+                    />
                   )}
                 </div>
               ))}

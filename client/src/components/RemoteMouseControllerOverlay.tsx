@@ -1,543 +1,127 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, LockKeyhole, MousePointer2, ShieldCheck, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  RemoteControllerRequestError,
-  remoteControllerRequestJson,
-  useRemoteControllerSession,
-} from "@/components/RemoteControllerSessionContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import {
-  applyRemoteControlRateLimit,
-  clearRemoteControlRateLimit,
-  createRemoteControlRateGate,
-  decideRemoteControlCommand,
-  isRemoteControlRateLimitError,
-  remoteControlSendDelayMs,
-  type RemoteControlRateGate,
-} from "@/hooks/remote-control-command-flow";
-import {
-  normalizeRemoteMousePoint,
-  normalizeRemoteWheelDelta,
-  parseFrameViewportFromDataset,
-  type RemoteMouseCommandType,
-  type RemoteMouseFrameSize,
-  type RemoteMouseFrameViewport,
-} from "@/hooks/remote-mouse-control-policy";
 import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { useRemoteMouseControllerOverlayStatePart1 } from "./useRemoteMouseControllerOverlayStatePart1";
 import {
-  RemoteControlRealtimeError,
-  requestRemoteControlRealtime,
-  subscribeRemoteControlRealtime,
-  subscribeRemoteControlRealtimeReady,
-} from "@/lib/remote-control-session-transport";
+  useRemoteMouseControllerOverlayStatePart2,
+  useRemoteMouseControllerOverlayStatePart3,
+} from "./useRemoteMouseControllerOverlayStatePart2";
 
-interface CommandResultView {
-  commandId: string;
-  sessionId: string;
-  status: "executed" | "blocked" | "ignored";
-  reason: string | null;
-  completedAt: string;
-}
-
-interface MouseCommandPayload {
-  type: RemoteMouseCommandType;
-  x: number;
-  y: number;
-  deltaX?: number;
-  deltaY?: number;
-  frameViewport?: RemoteMouseFrameViewport;
-}
-
-const POINTER_COALESCE_MS = 125;
-const SCROLL_COALESCE_MS = 100;
-
-function authorizationIsFresh(expiresAt: string | null | undefined): boolean {
-  if (!expiresAt) return false;
-  const value = new Date(expiresAt).getTime();
-  return Number.isFinite(value) && value > Date.now();
+function useRemoteMouseControllerOverlayState() {
+  const {
+    activeSessionIdRef,
+    authorizeCombined,
+    authorizeMouse,
+    busy,
+    combinedEnabled,
+    commandTailRef,
+    confirmPasswordAndAuthorize,
+    confirmPasswordAndAuthorizeCombined,
+    controlEnabled,
+    error,
+    keyboardActive,
+    language,
+    lastResult,
+    password,
+    passwordOpen,
+    pointerLatestRef,
+    pointerQueueActiveRef,
+    pointerQueueSessionRef,
+    pointerTimerRef,
+    portalHost,
+    rateGateRef,
+    refreshSession,
+    schedulePointerDrainRef,
+    screenImage,
+    scrollPendingRef,
+    scrollTimerRef,
+    session,
+    sessionId,
+    sessionTargetUserId,
+    setBusy,
+    setError,
+    setLastResult,
+    setPassword,
+    setPasswordOpen,
+    setScreenImage,
+    stopMouse,
+    t,
+    target,
+  } = useRemoteMouseControllerOverlayStatePart1();
+  const { stopCombined } = useRemoteMouseControllerOverlayStatePart2({
+    activeSessionIdRef,
+    busy,
+    commandTailRef,
+    controlEnabled,
+    keyboardActive,
+    pointerLatestRef,
+    pointerQueueActiveRef,
+    pointerQueueSessionRef,
+    pointerTimerRef,
+    portalHost,
+    rateGateRef,
+    refreshSession,
+    schedulePointerDrainRef,
+    screenImage,
+    scrollPendingRef,
+    scrollTimerRef,
+    sessionId,
+    sessionTargetUserId,
+    setBusy,
+    setError,
+    setLastResult,
+    setPasswordOpen,
+    setScreenImage,
+    t,
+  });
+  useRemoteMouseControllerOverlayStatePart3({ controlEnabled, sessionId, setError, setLastResult, t });
+  return {
+    authorizeCombined,
+    authorizeMouse,
+    busy,
+    combinedEnabled,
+    confirmPasswordAndAuthorize,
+    confirmPasswordAndAuthorizeCombined,
+    controlEnabled,
+    error,
+    language,
+    lastResult,
+    password,
+    passwordOpen,
+    portalHost,
+    session,
+    setPassword,
+    stopCombined,
+    stopMouse,
+    t,
+    target,
+  };
 }
 
 export function RemoteMouseControllerOverlay() {
-  const { language } = useApplicationLanguage();
-  const { target, session, portalHost, refreshSession } = useRemoteControllerSession();
-  const [passwordOpen, setPasswordOpen] = useState(false);
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<CommandResultView | null>(null);
-  const commandTailRef = useRef<Promise<void>>(Promise.resolve());
-  const activeSessionIdRef = useRef<string | null>(null);
-  const pointerLatestRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerTimerRef = useRef<number | null>(null);
-  const pointerQueueActiveRef = useRef(false);
-  const pointerQueueSessionRef = useRef<string | null>(null);
-  const schedulePointerDrainRef = useRef<() => void>(() => undefined);
-  const scrollPendingRef = useRef<{ x: number; y: number; deltaX: number; deltaY: number } | null>(null);
-  const scrollTimerRef = useRef<number | null>(null);
-  const rateGateRef = useRef<RemoteControlRateGate>(createRemoteControlRateGate());
-  const t = useCallback((value: string) => translateRemoteSupportPhase5Text(value, language), [language]);
-  const [screenImage, setScreenImage] = useState<HTMLImageElement | null>(null);
-
-  const sessionId = session?.id ?? null;
-  const sessionTargetUserId = session?.targetUserId ?? null;
-  const authorized = authorizationIsFresh(session?.mouseAuthorization?.expiresAt);
-  const controlEnabled = !!sessionId && !!session?.capabilities.mouse && authorized;
-  const keyboardActive = !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
-  const combinedEnabled = controlEnabled && keyboardActive;
-
-  useEffect(() => {
-    activeSessionIdRef.current = sessionId;
-    commandTailRef.current = Promise.resolve();
-    rateGateRef.current = createRemoteControlRateGate();
-    pointerQueueActiveRef.current = false;
-    pointerQueueSessionRef.current = null;
-    setError(null);
-    setLastResult(null);
-    setPasswordOpen(false);
-    setPassword("");
-    pointerLatestRef.current = null;
-    scrollPendingRef.current = null;
-    if (pointerTimerRef.current !== null) window.clearTimeout(pointerTimerRef.current);
-    if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
-    pointerTimerRef.current = null;
-    scrollTimerRef.current = null;
-  }, [sessionId]);
-
-  const requestMouseAuthorization = useCallback(async () => {
-    if (!sessionId) return;
-    await remoteControllerRequestJson(
-      `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization`,
-      { method: "POST", body: JSON.stringify({}) }
-    );
-    await refreshSession();
-    setPasswordOpen(false);
-    setPassword("");
-  }, [refreshSession, sessionId]);
-
-  const authorizeMouse = useCallback(async () => {
-    if (!sessionId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await requestMouseAuthorization();
-    } catch (requestError) {
-      if (
-        requestError instanceof RemoteControllerRequestError &&
-        (requestError.status === 428 || requestError.code === "PASSWORD_CONFIRMATION_REQUIRED")
-      ) {
-        setPasswordOpen(true);
-      } else {
-        setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable mouse control."));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, requestMouseAuthorization, sessionId, t]);
-
-  const confirmPasswordAndAuthorize = useCallback(async () => {
-    if (!password || busy || !sessionId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await remoteControllerRequestJson("/api/auth/confirm-password", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      });
-      await requestMouseAuthorization();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? t(requestError.message) : t("Password confirmation failed."));
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, password, requestMouseAuthorization, sessionId, t]);
-
-  const stopMouse = useCallback(async () => {
-    if (!sessionId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await remoteControllerRequestJson(
-        `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
-        { method: "POST", body: JSON.stringify({}) }
-      );
-      setLastResult(null);
-      await refreshSession();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? t(requestError.message) : t("Mouse command failed."));
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, refreshSession, sessionId, t]);
-
-  // A single explicit action enables both guarded capabilities. Each separate
-  // permission, password, audit, tenant and exact-tab check stays on the server.
-  const authorizeCombined = useCallback(async () => {
-    if (!sessionId || busy) return;
-    setBusy(true);
-    setError(null);
-    let mouseGrantedHere = false;
-    try {
-      if (!controlEnabled) {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization`,
-          { method: "POST", body: JSON.stringify({}) }
-        );
-        mouseGrantedHere = true;
-      }
-      if (!keyboardActive) {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization`,
-          { method: "POST", body: JSON.stringify({}) }
-        );
-      }
-      await refreshSession();
-      setPasswordOpen(false);
-      setPassword("");
-    } catch (requestError) {
-      // Do not leave a newly activated mouse session on when keyboard is blocked.
-      if (mouseGrantedHere) {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
-          { method: "POST", body: JSON.stringify({}) }
-        ).catch(() => undefined);
-      }
-      await refreshSession().catch(() => undefined);
-      if (
-        requestError instanceof RemoteControllerRequestError &&
-        (requestError.status === 428 || requestError.code === "PASSWORD_CONFIRMATION_REQUIRED")
-      ) {
-        setPasswordOpen(true);
-      } else {
-        setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable mouse control."));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, controlEnabled, keyboardActive, refreshSession, sessionId, t]);
-
-  const confirmPasswordAndAuthorizeCombined = useCallback(async () => {
-    if (!password || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await remoteControllerRequestJson("/api/auth/confirm-password", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      });
-      // Authorization is deliberately a separate action after password confirmation.
-      // Release busy first via the callback below rather than bypassing the server.
-      setPasswordOpen(false);
-      setPassword("");
-      if (sessionId) {
-        let grantedMouse = false;
-        try {
-          if (!controlEnabled) {
-            await remoteControllerRequestJson(
-              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization`,
-              { method: "POST", body: JSON.stringify({}) }
-            );
-            grantedMouse = true;
-          }
-          if (!keyboardActive) {
-            await remoteControllerRequestJson(
-              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization`,
-              { method: "POST", body: JSON.stringify({}) }
-            );
-          }
-          await refreshSession();
-        } catch (error) {
-          if (grantedMouse) {
-            await remoteControllerRequestJson(
-              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
-              { method: "POST", body: JSON.stringify({}) }
-            ).catch(() => undefined);
-          }
-          await refreshSession().catch(() => undefined);
-          throw error;
-        }
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? t(requestError.message) : t("Password confirmation failed."));
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, controlEnabled, keyboardActive, password, refreshSession, sessionId, t]);
-
-  const stopCombined = useCallback(async () => {
-    if (!sessionId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (keyboardActive) {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization/revoke`,
-          { method: "POST", body: JSON.stringify({}) }
-        );
-      }
-      if (controlEnabled) {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
-          { method: "POST", body: JSON.stringify({}) }
-        );
-      }
-      setLastResult(null);
-      await refreshSession();
-    } catch (requestError) {
-      await refreshSession().catch(() => undefined);
-      setError(requestError instanceof Error ? t(requestError.message) : t("Mouse command failed."));
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, controlEnabled, keyboardActive, refreshSession, sessionId, t]);
-
-  const sendCommandNow = useCallback(
-    async (payload: MouseCommandPayload, expectedSessionId: string) => {
-      if (activeSessionIdRef.current !== expectedSessionId) return;
-      const decision = decideRemoteControlCommand({ kind: payload.type, gate: rateGateRef.current, now: Date.now() });
-      if (decision === "supersede") return;
-      if (decision === "defer") {
-        const delay = remoteControlSendDelayMs(rateGateRef.current, Date.now());
-        await new Promise((resolve) => window.setTimeout(resolve, delay));
-        if (activeSessionIdRef.current !== expectedSessionId) return;
-      }
-
-      try {
-        await requestRemoteControlRealtime({
-          type: "remote-control:mouse-command",
-          sessionId: expectedSessionId,
-          command: payload,
-        });
-        rateGateRef.current = clearRemoteControlRateLimit(rateGateRef.current);
-      } catch (requestError) {
-        if (activeSessionIdRef.current !== expectedSessionId) return;
-        if (requestError instanceof RemoteControlRealtimeError) {
-          if (isRemoteControlRateLimitError(requestError)) {
-            rateGateRef.current = applyRemoteControlRateLimit(
-              rateGateRef.current,
-              Date.now(),
-              requestError.retryAfterMs
-            );
-            return;
-          }
-          if (requestError.code === "TRANSPORT_NOT_READY" || requestError.code === "TRANSPORT_DISCONNECTED") {
-            rateGateRef.current = applyRemoteControlRateLimit(rateGateRef.current, Date.now(), 300);
-            return;
-          }
-          if (requestError.status === 428 || requestError.code === "MOUSE_AUTHORIZATION_REQUIRED") {
-            setPasswordOpen(true);
-            void refreshSession().catch(() => undefined);
-          }
-        }
-        setError(requestError instanceof Error ? t(requestError.message) : t("Mouse command failed."));
-      }
-    },
-    [refreshSession, t]
-  );
-
-  const enqueueOrderedCommand = useCallback(
-    (payload: MouseCommandPayload) => {
-      if (!sessionId || !controlEnabled) return;
-      const expectedSessionId = sessionId;
-      const frameViewport = screenImage ? parseFrameViewportFromDataset(screenImage.dataset) : undefined;
-      const command: MouseCommandPayload = frameViewport ? { ...payload, frameViewport } : payload;
-      commandTailRef.current = commandTailRef.current
-        .catch(() => undefined)
-        .then(() => sendCommandNow(command, expectedSessionId));
-    },
-    [controlEnabled, screenImage, sendCommandNow, sessionId]
-  );
-
-  const schedulePointerDrain = useCallback(() => {
-    if (!sessionId || !controlEnabled || pointerQueueActiveRef.current || !pointerLatestRef.current) return;
-    const expectedSessionId = sessionId;
-    pointerQueueActiveRef.current = true;
-    pointerQueueSessionRef.current = expectedSessionId;
-    const nextTail = commandTailRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (activeSessionIdRef.current !== expectedSessionId) return;
-        const point = pointerLatestRef.current;
-        pointerLatestRef.current = null;
-        if (point) await sendCommandNow({ type: "pointer-move", ...point }, expectedSessionId);
-      });
-    commandTailRef.current = nextTail;
-    void nextTail.finally(() => {
-      if (pointerQueueSessionRef.current !== expectedSessionId) return;
-      pointerQueueActiveRef.current = false;
-      pointerQueueSessionRef.current = null;
-      if (pointerLatestRef.current && activeSessionIdRef.current === expectedSessionId)
-        schedulePointerDrainRef.current();
-    });
-  }, [controlEnabled, sendCommandNow, sessionId]);
-
-  useEffect(() => {
-    schedulePointerDrainRef.current = schedulePointerDrain;
-  }, [schedulePointerDrain]);
-
-  const flushPointer = useCallback(() => {
-    pointerTimerRef.current = null;
-    schedulePointerDrain();
-  }, [schedulePointerDrain]);
-
-  const flushScroll = useCallback(() => {
-    scrollTimerRef.current = null;
-    const pending = scrollPendingRef.current;
-    scrollPendingRef.current = null;
-    if (pending && (pending.deltaX !== 0 || pending.deltaY !== 0))
-      enqueueOrderedCommand({ type: "scroll", ...pending });
-  }, [enqueueOrderedCommand]);
-
-  useEffect(() => {
-    if (!sessionTargetUserId || !portalHost) {
-      setScreenImage(null);
-      return;
-    }
-    const dialog = portalHost.closest<HTMLElement>("[data-testid='dialog-watch-user']");
-    if (!dialog || dialog.dataset.watchedUserId !== sessionTargetUserId) {
-      setScreenImage(null);
-      return;
-    }
-    const syncImage = () => {
-      const next = dialog.querySelector<HTMLImageElement>("[data-testid='img-screen-feed']");
-      setScreenImage((current) => (current === next ? current : next));
-    };
-    syncImage();
-    const observer = new MutationObserver(syncImage);
-    observer.observe(dialog, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      setScreenImage(null);
-    };
-  }, [portalHost, sessionTargetUserId]);
-
-  useEffect(() => {
-    if (!controlEnabled) return;
-    const image = screenImage;
-    if (!image) return;
-    image.style.cursor = "crosshair";
-    image.style.touchAction = "none";
-
-    const pointFromEvent = (clientX: number, clientY: number) => {
-      const frameSize: RemoteMouseFrameSize | null =
-        image.naturalWidth > 0 && image.naturalHeight > 0
-          ? { width: image.naturalWidth, height: image.naturalHeight }
-          : (() => {
-              const frame = parseFrameViewportFromDataset(image.dataset);
-              return frame ? { width: frame.width, height: frame.height } : null;
-            })();
-      return normalizeRemoteMousePoint(clientX, clientY, image.getBoundingClientRect(), frameSize);
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      const point = pointFromEvent(event.clientX, event.clientY);
-      if (!point) return;
-      pointerLatestRef.current = point;
-      if (pointerTimerRef.current === null)
-        pointerTimerRef.current = window.setTimeout(flushPointer, POINTER_COALESCE_MS);
-    };
-    const onClick = (event: MouseEvent) => {
-      if (event.button !== 0) return;
-      const point = pointFromEvent(event.clientX, event.clientY);
-      if (!point) return;
-      event.preventDefault();
-      event.stopPropagation();
-      pointerLatestRef.current = null;
-      if (pointerTimerRef.current !== null) window.clearTimeout(pointerTimerRef.current);
-      pointerTimerRef.current = null;
-      enqueueOrderedCommand({ type: "click", ...point });
-    };
-    const onWheel = (event: WheelEvent) => {
-      const point = pointFromEvent(event.clientX, event.clientY);
-      if (!point) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const frame = parseFrameViewportFromDataset(image.dataset);
-      const delta = normalizeRemoteWheelDelta(event.deltaX, event.deltaY, event.deltaMode, frame?.width, frame?.height);
-      const previous = scrollPendingRef.current;
-      scrollPendingRef.current = {
-        ...point,
-        deltaX: Math.max(-1200, Math.min(1200, (previous?.deltaX ?? 0) + delta.deltaX)),
-        deltaY: Math.max(-1200, Math.min(1200, (previous?.deltaY ?? 0) + delta.deltaY)),
-      };
-      if (scrollTimerRef.current === null) scrollTimerRef.current = window.setTimeout(flushScroll, SCROLL_COALESCE_MS);
-    };
-
-    image.addEventListener("pointermove", onPointerMove);
-    image.addEventListener("click", onClick, true);
-    image.addEventListener("wheel", onWheel, { capture: true, passive: false });
-    return () => {
-      image.style.cursor = "";
-      image.style.touchAction = "";
-      image.removeEventListener("pointermove", onPointerMove);
-      image.removeEventListener("click", onClick, true);
-      image.removeEventListener("wheel", onWheel, true);
-      pointerLatestRef.current = null;
-      scrollPendingRef.current = null;
-      if (pointerTimerRef.current !== null) window.clearTimeout(pointerTimerRef.current);
-      if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
-      pointerTimerRef.current = null;
-      scrollTimerRef.current = null;
-    };
-  }, [controlEnabled, enqueueOrderedCommand, flushPointer, flushScroll, screenImage]);
-
-  const getMouseErrorForReason = useCallback(
-    (reason: string | null, status: string): string | null => {
-      if (status === "executed") return null;
-      if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
-      if (reason === "action-not-allowlisted")
-        return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
-      if (reason === "frame-point-offscreen")
-        return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
-      if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
-      if (reason === "no-target") return t("No element at that position.");
-      if (reason === "no-clickable-target") return t("No clickable control at that position.");
-      if (reason === "click-failed") return t("Click failed to activate the control.");
-      if (reason === "empty-scroll") return t("Empty scroll ignored.");
-      if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
-      if (reason === "duplicate-command") return t("Duplicate command ignored.");
-      if (reason) return t(`Action ${status}: ${reason}`);
-      return t(
-        status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored."
-      );
-    },
-    [t]
-  );
-
-  useEffect(() => {
-    if (!controlEnabled || !sessionId) return;
-    let cancelled = false;
-    const bind = () => {
-      if (cancelled) return;
-      void requestRemoteControlRealtime({ type: "remote-control:bind-mouse-controller", sessionId }).catch(
-        (bindError) => {
-          if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0)
-            setError(t(bindError.message));
-        }
-      );
-    };
-    const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
-      if (ready) bind();
-    });
-    const unsubscribeMessages = subscribeRemoteControlRealtime((message) => {
-      if (message.type !== "remote-control:mouse-result") return;
-      const result = message.result as CommandResultView | undefined;
-      if (!result || result.sessionId !== sessionId) return;
-      setLastResult(result);
-      const text = getMouseErrorForReason(result.reason, result.status);
-      if (text && result.status !== "executed") setError(text);
-      else if (result.status === "executed") setError(null);
-    });
-    bind();
-    return () => {
-      cancelled = true;
-      unsubscribeReady();
-      unsubscribeMessages();
-    };
-  }, [controlEnabled, getMouseErrorForReason, sessionId, t]);
+  const {
+    authorizeCombined,
+    authorizeMouse,
+    busy,
+    combinedEnabled,
+    confirmPasswordAndAuthorize,
+    confirmPasswordAndAuthorizeCombined,
+    controlEnabled,
+    error,
+    language,
+    lastResult,
+    password,
+    passwordOpen,
+    portalHost,
+    session,
+    setPassword,
+    stopCombined,
+    stopMouse,
+    t,
+    target,
+  } = useRemoteMouseControllerOverlayState();
 
   if (!target || !session || !portalHost) return null;
 
@@ -547,9 +131,16 @@ export function RemoteMouseControllerOverlay() {
 
   if (portalHost.dataset.remoteControlPanelMode === "unified") {
     return createPortal(
-      <section className="space-y-2 text-sm" data-screenfeed-ignore="true" data-testid="remote-mouse-controller-overlay" data-remote-control-panel-section="mouse">
+      <section
+        className="space-y-2 text-sm"
+        data-screenfeed-ignore="true"
+        data-testid="remote-mouse-controller-overlay"
+        data-remote-control-panel-section="mouse"
+      >
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 text-xs text-slate-300">{combinedEnabled ? t("Mouse and keyboard active") : t("Read-only until explicitly enabled")}</p>
+          <p className="min-w-0 text-xs text-slate-300">
+            {combinedEnabled ? t("Mouse and keyboard active") : t("Read-only until explicitly enabled")}
+          </p>
           <button
             type="button"
             role="switch"
@@ -560,15 +151,25 @@ export function RemoteMouseControllerOverlay() {
             onClick={() => void (combinedEnabled ? stopCombined() : authorizeCombined())}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 disabled:cursor-wait disabled:opacity-50 ${combinedEnabled ? "border-blue-400 bg-blue-600" : "border-slate-600 bg-slate-700"}`}
           >
-            <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${combinedEnabled ? "translate-x-6" : "translate-x-1"}`} />
+            <span
+              className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${combinedEnabled ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
         <p className="text-[11px] leading-relaxed text-slate-400">
           {t("ERP tab only")} · {t("Only safe search, filter and explicitly approved fields can be edited.")}
         </p>
         {passwordOpen && !combinedEnabled && (
-          <form className="space-y-2 border-t border-slate-700 pt-3" onSubmit={(event) => { event.preventDefault(); void confirmPasswordAndAuthorizeCombined(); }}>
-            <p className="text-xs text-slate-200">{t("Confirm your password to enable mouse control for up to 5 minutes.")}</p>
+          <form
+            className="space-y-2 border-t border-slate-700 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmPasswordAndAuthorizeCombined();
+            }}
+          >
+            <p className="text-xs text-slate-200">
+              {t("Confirm your password to enable mouse control for up to 5 minutes.")}
+            </p>
             <div className="flex gap-2">
               <Input
                 autoFocus
@@ -587,7 +188,11 @@ export function RemoteMouseControllerOverlay() {
           </form>
         )}
         {statusLabel ? <p className="text-[11px] text-slate-400">{statusLabel}</p> : null}
-        {error ? <p className="text-xs text-red-300" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-red-300" role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>,
       portalHost
     );

@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 function source(path: string): string {
-  return readFileSync(path, "utf8");
+  return readModuleFamily(path);
 }
 
 // Guard page-level polling sites against steady hidden-tab background traffic.

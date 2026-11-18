@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readModuleFamily(path);
 
 describe("customer order analytics official loading date", () => {
   const analyticsSource = read("server/routes/factory/docs-users/analyticsRoutes.ts");
