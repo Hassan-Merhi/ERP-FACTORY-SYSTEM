@@ -72,9 +72,7 @@ describe("Wave 4 shared Factory API ownership", () => {
       ["/api/ledger-accounts/42", "PUT"],
       ["/api/ledger-accounts/bulk-assign-parent", "PATCH"],
     ]) {
-      expect(await resolveSharedFactoryRequirements(req(path, method))).toEqual(
-        expect.arrayContaining([groupPage])
-      );
+      expect(await resolveSharedFactoryRequirements(req(path, method))).toEqual(expect.arrayContaining([groupPage]));
     }
 
     // A page-scoped group manager must not unlock unrelated write routes.
