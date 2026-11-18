@@ -72,7 +72,7 @@ function getPermissions(
   }
 
   if (flags.canAccessCustomers) {
-    perms.push({ label: "Access customer balances and ledger", dangerous: false });
+    perms.push({ label: "View and create customers", dangerous: false });
   }
 
   if ((flags.daybookEditDays ?? 0) > 0) {
