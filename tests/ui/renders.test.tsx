@@ -5,7 +5,7 @@
  * All network calls are intercepted; real DB is never hit.
  */
 import React from "react";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { renderWithProviders, stubFetch } from "./helpers";
 import { FACTORY_MY_ACCESS_URL, factoryFullAccess } from "./pageMocks";
 
@@ -207,7 +207,7 @@ describe("Settings", () => {
     expect(screen.queryByRole("button", { name: "Appearance & Seasonal" })).not.toBeInTheDocument();
   });
 
-  it.each(["Admin", "Owner", "User", "POS", "View Only"])(
+  it.each(["Owner", "User", "POS", "View Only"])(
     "hides internal Settings pages and empty category headings for %s",
     async (role) => {
       const { default: Settings } = await import("@/pages/Settings");
@@ -231,6 +231,24 @@ describe("Settings", () => {
       expect(within(nav).getByRole("button", { name: "Users & Permissions" })).toBeInTheDocument();
     }
   );
+
+  it("restores only the standard System Tools to Admin", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-admin", role: "Admin", currentRole: "Admin" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    fireEvent.click(within(nav).getByRole("button", { name: "System Tools" }));
+    expect(await screen.findByText("Deleted Items")).toBeInTheDocument();
+    expect(screen.getByText("Import Cycle Diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Net Position Details")).toBeInTheDocument();
+    expect(screen.getByText("Group Net Position")).toBeInTheDocument();
+    for (const advanced of ["Master parent company", "Reset company data", "Clean empty accounts"]) {
+      expect(screen.queryByText(advanced)).not.toBeInTheDocument();
+    }
+    expect(within(nav).queryByRole("button", { name: "Sessions & Users" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "Recurring Journals" })).not.toBeInTheDocument();
+  });
 
   it("keeps internal Settings sections and headings visible in Developer mode", async () => {
     const { default: Settings } = await import("@/pages/Settings");
@@ -261,7 +279,10 @@ describe("Settings", () => {
     const nav = screen.getByRole("navigation");
     expect(within(nav).queryByRole("button", { name: "Sessions & Users" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: "Excel Export Appearance" })).not.toBeInTheDocument();
-    expect(within(nav).queryByText("System", { exact: true })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "System Tools" })).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "System Tools" }));
+    expect(screen.queryByText("Master parent company")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reset company data")).not.toBeInTheDocument();
   });
 
   it("renders settings shell with non-empty content", async () => {
