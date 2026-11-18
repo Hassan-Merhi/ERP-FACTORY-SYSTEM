@@ -728,19 +728,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && (
             <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {(isPOS || (canShowVoucherTab("transfer") && activeTab === "transfer")) && (
             <StockTransferForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} posUser={posUser ?? undefined} />
           )}
-
           {!isPOS && canShowVoucherTab("adjustment") && activeTab === "adjustment" && (
             <StockAdjustmentForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {!isPOS && canShowVoucherTab("creditnote") && activeTab === "creditnote" && (
             <div className="space-y-4">
               <CreditNoteTab
@@ -749,7 +745,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("transferorder") && activeTab === "transferorder" && (
             <StockTransferOrder
               onSwitchToNormalView={() => {
@@ -762,7 +757,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
         </div>
       </div>
-
       <CreateAccountModal
         open={showCreateAccountModal}
         onClose={() => {
@@ -773,7 +767,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         onAccountCreated={handleAccountCreated}
         apiRequestFn={modeApiRequest}
       />
-
       <AlertDialog
         open={!!waPendingPrompt}
         onOpenChange={(open) => {
