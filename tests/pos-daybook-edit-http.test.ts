@@ -159,6 +159,10 @@ describe("Phase 3 Zambia POS Daybook sale editing HTTP", () => {
 
       const edited = await cashier.put(`/api/vouchers/${voucherId}/sales`).send(editBody());
       expect(edited.status, edited.text).toBe(200);
+      expect(edited.body.items[0]).not.toHaveProperty("costPrice");
+      expect(edited.body.items[0]).not.toHaveProperty("totalCost");
+      expect(edited.body.items[0]).not.toHaveProperty("profit");
+      expect(edited.body.voucher).not.toHaveProperty("shiftId");
     } finally {
       await pool.query("UPDATE vouchers SET shift_id = $1 WHERE id = $2", [shiftId, voucherId]);
     }
