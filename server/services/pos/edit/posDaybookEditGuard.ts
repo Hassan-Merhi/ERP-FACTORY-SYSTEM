@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { posShifts, userCompanyRoles, userLocations } from "@shared/schema";
+import { userCompanyRoles, userLocations } from "@shared/schema";
 import { companyBusinessDate } from "../../accounting/companyBusinessDate";
 import type { DbTransaction } from "../../../db";
 import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
@@ -51,31 +51,22 @@ export async function validateLockedPosDaybookEdit(
   if (!voucher.locationId || (!location && role.assignedLocationId !== voucher.locationId)) {
     return {
       status: 403,
-      body: { code: "POS_SALE_EDIT_LOCATION_REVOKED", message: posDaybookEditMessages.ownership },
+      body: { code: "POS_SALE_EDIT_LOCATION_REVOKED", message: posDaybookEditMessages.locationNotAssigned },
     };
   }
   const businessDate = await companyBusinessDate(params.currentCompanyId, tx);
-
-  const [shift] = voucher.shiftId
-    ? await tx
-        .select({ userId: posShifts.userId })
-        .from(posShifts)
-        .where(and(eq(posShifts.id, voucher.shiftId), eq(posShifts.companyId, params.currentCompanyId)))
-        .limit(1)
-    : [];
 
   const eligibility = posDaybookEditEligibility({
     originalDate: String(voucher.voucherDate),
     businessDate,
     editDays: role.editDays ?? 0,
-    isOwnSale: shift?.userId === params.userId,
   });
   if (!eligibility.allowed) {
     return {
       status: 403,
       body: {
         code: "POS_SALE_EDIT_WINDOW_DENIED",
-        message: eligibility.reason === "not-owner" ? posDaybookEditMessages.ownership : posDaybookEditMessages.date,
+        message: eligibility.reason === "disabled" ? posDaybookEditMessages.disabled : posDaybookEditMessages.date,
       },
     };
   }
