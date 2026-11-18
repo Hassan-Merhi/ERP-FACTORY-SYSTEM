@@ -48,6 +48,7 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
         locationId: vouchers.locationId,
         voucherDate: vouchers.voucherDate,
         isCreditSale: vouchers.isCreditSale,
+        optional: vouchers.optional,
         shiftId: vouchers.shiftId,
         shiftUserId: posShifts.userId,
       })
@@ -71,6 +72,11 @@ export async function requirePosSaleEditWindow(req: Request, res: Response, next
 
     if (!sale) {
       res.status(404).json({ code: "POS_SALE_NOT_FOUND", message: "Sale not found" });
+      return;
+    }
+
+    if (sale.optional) {
+      res.status(403).json({ code: "POS_SALE_OPTIONAL", message: "Optional sales cannot be edited from Daybook." });
       return;
     }
 

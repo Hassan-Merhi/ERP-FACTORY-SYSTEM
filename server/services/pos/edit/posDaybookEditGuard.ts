@@ -37,12 +37,16 @@ export async function validateLockedPosDaybookEdit(
     };
   }
 
+  if (voucher.optional) {
+    return { status: 403, body: { code: "POS_SALE_OPTIONAL", message: "Optional sales cannot be edited from Daybook." } };
+  }
+
   const body = params.body;
   if (body.voucherDate !== undefined && body.voucherDate !== voucher.voucherDate) {
     return { status: 403, body: { code: "POS_SALE_EDIT_DATE_LOCKED", message: posDaybookEditMessages.noRedate } };
   }
   if (
-    (body.isCreditSale !== undefined && body.isCreditSale !== voucher.isCreditSale) ||
+    (body.isCreditSale !== undefined && Boolean(body.isCreditSale) !== Boolean(voucher.isCreditSale)) ||
     body.paymentAccountType != null ||
     body.paymentAccountId != null
   ) {
