@@ -73,7 +73,6 @@ export function POSDaybookDialogSection({
     originalDate: selectedVoucher?.voucherDate || "",
     businessDate: liveAccess?.businessDate ?? "",
     editDays: Number(liveAccess?.daybookEditDays ?? 0),
-    isOwnSale: Boolean(selectedVoucher && String(selectedVoucher.userId) === String(currentUser?.id)),
     viewOnly: Boolean(liveAccess?.posViewOnly ?? currentUser?.posViewOnly),
   });
   const canEditSelected = Boolean(
@@ -202,7 +201,7 @@ export function POSDaybookDialogSection({
             disabled={!voucherDetails}
             onClick={() => voucherDetails && setPrintVoucherId(voucherDetails.id)}
           />}
-          {!isTransfer && recordChanges.allowed && (
+          {!isTransfer && recordChanges.allowed && (!posUser || (selectedVoucher?.userId != null && String(selectedVoucher.userId) === String(currentUser?.id))) && (
             <Button
               variant="outline"
               disabled={!voucherDetails || whatsappMutation.isPending}
