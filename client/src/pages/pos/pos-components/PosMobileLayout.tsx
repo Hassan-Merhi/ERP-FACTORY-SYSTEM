@@ -124,19 +124,16 @@ export function PosMobileLayout({
   const resultsId = "pos-mobile-product-results";
   // Tapping a result opens the item sheet (quantity + price) instead of adding a line at once.
   const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
-
   const openItemSheet = (item: InventoryItem) => {
     if (!ensureItemSellable(item)) return;
     setSheetItem(item);
   };
-
   const addFromSheet = (item: InventoryItem, quantity: number, rate: number) => {
     // Same row placement, stock rule and currency handling as every other POS add; the search
     // is cleared by selectItem and focus returns to it when the sheet closes.
     selectItem(item, undefined, { quantity, rate });
     setSheetItem(null);
   };
-
   return (
     <div
       data-pos-mobile-page="true"
