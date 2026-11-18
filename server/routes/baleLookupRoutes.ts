@@ -15,24 +15,17 @@ import { requireAuth, requireRole } from "../auth";
 import { writeAuditEvent } from "../services/audit/auditService";
 import { deletePhysicalFactoryBalesTx, PhysicalBaleDeletionError } from "./factory/stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./factory/customer-orders/priorityScanQueue";
-import { canViewBookingInfo } from "./factory/customer-orders/bookingInfo";
 import { registerBaleLookupArticleRoutes } from "./baleLookupArticleRoutes";
 import {
   auditLog,
   baleLabelPrints,
   customerOrderBales,
   customerOrders,
-  customers,
   factoryBaleProducts,
   factoryBales,
-  factoryContainers,
-  factoryMixBatchSources,
-  factoryMixBatches,
-  factoryPressingBatches,
-  factorySuppliers,
-  factoryWorkers,
-  locations,
 } from "@shared/schema";
+import { baleLookupRoutesStep } from "./baleLookupRoutesStep";
+import { baleLookupRoutesStep2 } from "./baleLookupRoutesStep2";
 
 export function registerBaleLookupRoutes(app: Express) {
   registerBaleLookupArticleRoutes(app);
@@ -40,437 +33,12 @@ export function registerBaleLookupRoutes(app: Express) {
   // Lookup by REFERENCE number
   app.get("/api/lookup/reference/:referenceNumber", requireAuth, async (req, res) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const referenceNumber = decodeURIComponent(req.params.referenceNumber).trim().toUpperCase();
-      const bookingInfoVisible = canViewBookingInfo(req.session);
-      const labelPrint = await storage.getBaleLabelPrintByReference(referenceNumber, companyId);
-
-      // If no label print exists, try to find the bale directly in factory_bales
-      // (bales can exist without a label print if entered manually / imported)
-      // Use normalized comparison for legacy lowercase/whitespace references, but
-      // reject ambiguous normalized duplicates rather than returning an arbitrary bale.
-      if (!labelPrint) {
-        const directBaleMatches = await db
-          .select()
-          .from(factoryBales)
-          .where(
-            and(
-              eq(factoryBales.companyId, companyId),
-              sql`LOWER(TRIM(${factoryBales.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`
-            )
-          )
-          .limit(2);
-
-        if (directBaleMatches.length === 0) {
-          return res.status(404).json({ message: "Reference number not found" });
-        }
-        if (directBaleMatches.length > 1) {
-          return res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" });
-        }
-        const directBale = directBaleMatches[0];
-
-        // Build a minimal response from the bale row alone
-        let locationInfo = null;
-        if (directBale.erpLocationId) {
-          const [loc] = await db
-            .select({ id: locations.id, name: locations.name, city: locations.city, state: locations.state })
-            .from(locations)
-            .where(eq(locations.id, directBale.erpLocationId))
-            .limit(1);
-          if (loc) locationInfo = loc;
-        }
-
-        let product = null;
-        if (directBale.productId) {
-          product = await storage.getBaleProductById(directBale.productId);
-        } else if (directBale.articleCode) {
-          product = await storage.getBaleProductByArticleCode(directBale.articleCode, companyId);
-        }
-
-        // Use stored workerName first (denormalized); fall back to join if not yet populated
-        let directWorkerName: string | null = directBale.workerName ?? null;
-        if (!directWorkerName && directBale.finalizedBy) {
-          const [wk] = await db
-            .select({ fullName: factoryWorkers.fullName })
-            .from(factoryWorkers)
-            .where(eq(factoryWorkers.id, directBale.finalizedBy))
-            .limit(1);
-          if (wk) directWorkerName = wk.fullName;
-        }
-
-        // Check if this bale is in a non-deleted outbound order.
-        // Soft-deleted orders are historical records only and must not make a bale look loaded.
-        const [directOrderBale] = await db
-          .select({
-            orderId: customerOrderBales.orderId,
-            status: customerOrders.status,
-            invoiceNumber: customerOrders.invoiceNumber,
-            orderDate: customerOrders.orderDate,
-            containerNumber: customerOrders.containerNumber,
-            shippingCompany: customerOrders.shippingCompany,
-            containerNotes: customerOrders.containerNotes,
-            destination: customerOrders.destination,
-            bookingInfo: customerOrders.bookingInfo,
-            loadingStartedAt: customerOrders.loadingStartedAt,
-            loadingFinalizedAt: customerOrders.loadingFinalizedAt,
-            grandTotal: customerOrders.grandTotal,
-            totalQtyBales: customerOrders.totalQtyBales,
-            customerName: customers.legalName,
-            priceUsed: customerOrderBales.priceUsed,
-            baleWeight: customerOrderBales.weight,
-            scannedBy: customerOrderBales.scannedBy,
-          })
-          .from(customerOrderBales)
-          .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
-          .leftJoin(customers, eq(customerOrders.customerId, customers.id))
-          .where(
-            and(
-              sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`,
-              eq(customerOrders.companyId, companyId),
-              isNull(customerOrders.deletedAt)
-            )
-          )
-          .orderBy(
-            sql`CASE ${customerOrders.status}
-            WHEN 'FINALIZED' THEN 0 WHEN 'SOLD' THEN 1
-            WHEN 'DISPATCHED' THEN 2 WHEN 'VERIFIED' THEN 3
-            WHEN 'PENDING_VERIFICATION' THEN 4 WHEN 'LOADING' THEN 5
-            ELSE 9 END`
-          )
-          .limit(1);
-        let directLoadedOnOrder = null;
-        let directIsInLoadingOrder = false;
-        if (directOrderBale) {
-          if (directOrderBale.status === "LOADING") directIsInLoadingOrder = true;
-          directLoadedOnOrder = {
-            ...directOrderBale,
-            bookingInfo: bookingInfoVisible ? directOrderBale.bookingInfo : null,
-            canViewBookingInfo: bookingInfoVisible,
-          };
-        }
-
-        // If the bale's stored status is IN_STOCK but it's already on a finalized order,
-        // derive the correct effective status so the Bale Explorer shows it accurately.
-        const directOrderStatus = directLoadedOnOrder?.status;
-        const directEffectiveStatus =
-          directBale.status !== "IN_STOCK" || !directOrderStatus
-            ? directBale.status
-            : ["FINALIZED", "DISPATCHED", "SOLD"].includes(directOrderStatus)
-              ? "SOLD"
-              : directOrderStatus === "LOADING"
-                ? "LOADING"
-                : ["PENDING_VERIFICATION", "VERIFIED"].includes(directOrderStatus)
-                  ? "RESERVED_FOR_ORDER"
-                  : directBale.status;
-
-        // Fetch audit history for this bale
-        const directAuditHistory = await db
-          .select({
-            id: auditLog.id,
-            action: auditLog.action,
-            username: auditLog.username,
-            changes: auditLog.changes,
-            createdAt: auditLog.createdAt,
-          })
-          .from(auditLog)
-          .where(and(eq(auditLog.tableName, "factory_bales"), eq(auditLog.recordId, directBale.id)))
-          .orderBy(desc(auditLog.createdAt))
-          .limit(30);
-
-        return res.json({
-          labelPrint: null,
-          product: product || null,
-          baleInfo: {
-            id: directBale.id,
-            baleCode: directBale.baleCode,
-            articleCode: product?.articleCode || directBale.articleCode || null,
-            productName: directBale.productName,
-            status: directEffectiveStatus,
-            isInLoadingOrder: directIsInLoadingOrder,
-            weightKg: directBale.weightKg,
-            costPerKg: directBale.costPerKg,
-            totalCost: directBale.totalCost,
-            grade: directBale.grade,
-            stockEntryDate: directBale.stockEntryDate,
-            pressedAt: directBale.pressedAt,
-            finalizedAt: directBale.finalizedAt,
-            workerName: directWorkerName,
-            createdAt: directBale.createdAt,
-            updatedAt: directBale.updatedAt,
-            deletedAt: directBale.deletedAt,
-          },
-          locationInfo,
-          pressingBatch: null,
-          mixBatch: null,
-          containers_used: [],
-          loadedOnOrder: directLoadedOnOrder,
-          auditHistory: directAuditHistory,
-        });
-      }
-
-      let printedByName = null;
-      let scannedByName = null;
-      if (labelPrint.printedByUserId) {
-        const printedUser = await storage.getUser(labelPrint.printedByUserId);
-        printedByName = printedUser?.username || null;
-      }
-      if (labelPrint.scannedByUserId) {
-        const scannedUser = await storage.getUser(labelPrint.scannedByUserId);
-        scannedByName = scannedUser?.username || null;
-      }
-
-      let product = null;
-      if (labelPrint.productId) {
-        product = await storage.getBaleProductById(labelPrint.productId);
-      } else {
-        product = await storage.getBaleProductByArticleCode(labelPrint.articleCode, companyId);
-      }
-
-      // ── Enrich with factory_bales data (stable id first, normalized reference fallback) ──
-      type BaleLookupInfo = Pick<
-        typeof factoryBales.$inferSelect,
-        | "id"
-        | "baleCode"
-        | "productName"
-        | "status"
-        | "weightKg"
-        | "costPerKg"
-        | "totalCost"
-        | "grade"
-        | "stockEntryDate"
-        | "pressedAt"
-        | "finalizedAt"
-        | "workerName"
-        | "createdAt"
-        | "updatedAt"
-        | "deletedAt"
-      > & { isInLoadingOrder?: boolean };
-      let baleInfo: BaleLookupInfo | null = null;
-      let locationInfo = null;
-      let pressingBatch = null;
-      let mixBatch = null;
-      let containers_used: unknown[] = [];
-
-      const normalizedBaleReferenceMatch = sql`LOWER(TRIM(${factoryBales.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`;
-      let factoryBale: typeof factoryBales.$inferSelect | undefined;
-
-      if (labelPrint.productionBaleId) {
-        [factoryBale] = await db
-          .select()
-          .from(factoryBales)
-          .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, labelPrint.productionBaleId)))
-          .limit(1);
-      }
-
-      if (!factoryBale) {
-        const fallbackFactoryBales = await db
-          .select()
-          .from(factoryBales)
-          .where(and(eq(factoryBales.companyId, companyId), normalizedBaleReferenceMatch))
-          .limit(2);
-
-        if (fallbackFactoryBales.length > 1) {
-          return res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" });
-        }
-        factoryBale = fallbackFactoryBales[0];
-      }
-
-      if (factoryBale) {
-        // Use the name stored on the bale row directly — this matches what the bale history page shows.
-        const resolvedProductName = factoryBale.productName;
-
-        // Use stored workerName first (denormalized); fall back to join if not yet populated
-        let workerName: string | null = factoryBale.workerName ?? null;
-        if (!workerName && factoryBale.finalizedBy) {
-          const [wk] = await db
-            .select({ fullName: factoryWorkers.fullName })
-            .from(factoryWorkers)
-            .where(eq(factoryWorkers.id, factoryBale.finalizedBy))
-            .limit(1);
-          if (wk) workerName = wk.fullName;
-        }
-
-        baleInfo = {
-          id: factoryBale.id,
-          baleCode: factoryBale.baleCode,
-          productName: resolvedProductName,
-          status: factoryBale.status,
-          weightKg: factoryBale.weightKg,
-          costPerKg: factoryBale.costPerKg,
-          totalCost: factoryBale.totalCost,
-          grade: factoryBale.grade,
-          stockEntryDate: factoryBale.stockEntryDate,
-          pressedAt: factoryBale.pressedAt,
-          finalizedAt: factoryBale.finalizedAt,
-          workerName,
-          createdAt: factoryBale.createdAt,
-          updatedAt: factoryBale.updatedAt,
-          deletedAt: factoryBale.deletedAt,
-        };
-
-        // Get location
-        if (factoryBale.erpLocationId) {
-          const [loc] = await db
-            .select({ id: locations.id, name: locations.name, city: locations.city, state: locations.state })
-            .from(locations)
-            .where(eq(locations.id, factoryBale.erpLocationId))
-            .limit(1);
-          if (loc) locationInfo = loc;
-        }
-
-        // Get pressing batch
-        if (factoryBale.pressingBatchId) {
-          const [pb] = await db
-            .select()
-            .from(factoryPressingBatches)
-            .where(eq(factoryPressingBatches.id, factoryBale.pressingBatchId))
-            .limit(1);
-          if (pb) {
-            pressingBatch = {
-              id: pb.id,
-              status: pb.status,
-              expectedCount: pb.expectedCount,
-              finalizedAt: pb.finalizedAt,
-              notes: pb.notes,
-            };
-
-            // Get mix batch
-            if (pb.mixBatchId) {
-              const [mb] = await db
-                .select()
-                .from(factoryMixBatches)
-                .where(eq(factoryMixBatches.id, pb.mixBatchId))
-                .limit(1);
-              if (mb) {
-                mixBatch = {
-                  id: mb.id,
-                  batchCode: mb.batchCode,
-                  batchNumber: mb.batchNumber,
-                  name: mb.name,
-                  batchDate: mb.batchDate,
-                  totalWeightKg: mb.totalWeightKg,
-                  costPerKg: mb.costPerKg,
-                  status: mb.status,
-                  operatorUser: mb.operatorUser,
-                };
-
-                // Get container sources for this mix batch
-                const sources = await db
-                  .select()
-                  .from(factoryMixBatchSources)
-                  .where(eq(factoryMixBatchSources.mixBatchId, mb.id));
-
-                const containerIds = [...new Set(sources.filter((s) => s.containerId).map((s) => s.containerId!))];
-                if (containerIds.length > 0) {
-                  const containerRows = await db
-                    .select()
-                    .from(factoryContainers)
-                    .where(inArray(factoryContainers.id, containerIds));
-
-                  const supplierIds = [...new Set(containerRows.filter((c) => c.supplierId).map((c) => c.supplierId!))];
-                  const supplierRows =
-                    supplierIds.length > 0
-                      ? await db.select().from(factorySuppliers).where(inArray(factorySuppliers.id, supplierIds))
-                      : [];
-                  const supplierMap = new Map(supplierRows.map((s) => [s.id, s.name]));
-
-                  containers_used = containerRows.map((c) => {
-                    const src = sources.find((s) => s.containerId === c.id);
-                    return {
-                      id: c.id,
-                      containerNumber: c.containerNumber,
-                      origin: c.origin,
-                      arrivalDate: c.arrivalDate,
-                      status: c.status,
-                      supplierName: c.supplierId ? supplierMap.get(c.supplierId) || null : null,
-                      weightKgUsed: src?.weightKg || null,
-                      currencyCode: c.currencyCode,
-                      ratePerKg: c.ratePerKg,
-                    };
-                  });
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // ── Check if this bale was loaded onto an outbound customer order ──
-      // Fetch ALL assignments for this bale reference and pick the best-status one.
-      // A bale can appear in multiple orders (e.g. moved from a cancelled order to a
-      // finalized invoice). Deleted orders are historical only and are excluded.
-      const statusPriority: Record<string, number> = {
-        FINALIZED: 0,
-        SOLD: 1,
-        DISPATCHED: 2,
-        VERIFIED: 3,
-        PENDING_VERIFICATION: 4,
-        LOADING: 5,
-        DRAFT: 6,
-        CANCELLED: 7,
-      };
-      let loadedOnOrder = null;
-      const orderBaleRows = await db
-        .select()
-        .from(customerOrderBales)
-        .where(sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`);
-
-      if (orderBaleRows.length > 0) {
-        // Fetch all matching non-deleted orders for the current company in one query.
-        const orderIds = [...new Set(orderBaleRows.map((r) => r.orderId))];
-        const orders = await db
-          .select()
-          .from(customerOrders)
-          .leftJoin(customers, eq(customerOrders.customerId, customers.id))
-          .where(
-            and(
-              inArray(customerOrders.id, orderIds),
-              eq(customerOrders.companyId, companyId),
-              isNull(customerOrders.deletedAt)
-            )
-          );
-
-        if (orders.length > 0) {
-          // Pick the order with the best (lowest priority number) status
-          const bestOrder = orders.sort((a, b) => {
-            const pa = statusPriority[a.customer_orders.status] ?? 99;
-            const pb = statusPriority[b.customer_orders.status] ?? 99;
-            return pa - pb;
-          })[0];
-          const matchingBaleRow = orderBaleRows.find((r) => r.orderId === bestOrder.customer_orders.id);
-          if (matchingBaleRow) {
-            loadedOnOrder = {
-              orderId: bestOrder.customer_orders.id,
-              invoiceNumber: bestOrder.customer_orders.invoiceNumber,
-              orderDate: bestOrder.customer_orders.orderDate,
-              status: bestOrder.customer_orders.status,
-              containerNumber: bestOrder.customer_orders.containerNumber,
-              shippingCompany: bestOrder.customer_orders.shippingCompany,
-              containerNotes: bestOrder.customer_orders.containerNotes,
-              destination: bestOrder.customer_orders.destination,
-              bookingInfo: bookingInfoVisible ? bestOrder.customer_orders.bookingInfo : null,
-              canViewBookingInfo: bookingInfoVisible,
-              loadingStartedAt: bestOrder.customer_orders.loadingStartedAt,
-              loadingFinalizedAt: bestOrder.customer_orders.loadingFinalizedAt,
-              grandTotal: bestOrder.customer_orders.grandTotal,
-              totalQtyBales: bestOrder.customer_orders.totalQtyBales,
-              customerName: bestOrder.customers?.legalName || null,
-              priceUsed: matchingBaleRow.priceUsed,
-              baleWeight: matchingBaleRow.weight,
-              scannedBy: matchingBaleRow.scannedBy || null,
-            };
-          }
-        }
-      }
-
-      // Mark isInLoadingOrder on baleInfo so callers (e.g. Ground Scan) can show the right status
-      if (baleInfo && loadedOnOrder?.status === "LOADING") {
-        baleInfo.isInLoadingOrder = true;
-      }
+      const blr1 = await baleLookupRoutesStep({ req, res });
+      if (blr1.done) return blr1.value;
+      const { labelPrint, printedByName, scannedByName, product } = blr1;
+      const blr2 = await baleLookupRoutesStep2({ blr1, res });
+      if (blr2.done) return blr2.value;
+      const { loadedOnOrder, baleInfo, locationInfo, pressingBatch, mixBatch, containers_used } = blr2;
 
       // If the bale's stored status is IN_STOCK but it's already on a finalized order,
       // derive the correct effective status so the Bale Explorer shows it accurately.
@@ -513,7 +81,7 @@ export function registerBaleLookupRoutes(app: Express) {
         auditHistory,
       });
     } catch (error: unknown) {
-      logger.error("Error looking up reference:", { error: error });
+      logger.error("Error looking up reference:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -557,7 +125,7 @@ export function registerBaleLookupRoutes(app: Express) {
       const scannedUser = await storage.getUser(req.session.userId!);
       res.json({ ...updated, scannedByName: scannedUser?.username || null });
     } catch (error: unknown) {
-      logger.error("Error scanning label:", { error: error });
+      logger.error("Error scanning label:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -656,7 +224,7 @@ export function registerBaleLookupRoutes(app: Express) {
         if (error instanceof PhysicalBaleDeletionError) {
           return res.status(error.status).json({ message: error.message });
         }
-        logger.error("Error deleting bale everywhere:", { error: error });
+        logger.error("Error deleting bale everywhere:", { error });
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }
@@ -795,7 +363,7 @@ export function registerBaleLookupRoutes(app: Express) {
 
         res.json({ message: "Bale product changed", newArticleCode, newProductName });
       } catch (error: unknown) {
-        logger.error("Error changing bale product:", { error: error });
+        logger.error("Error changing bale product:", { error });
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }

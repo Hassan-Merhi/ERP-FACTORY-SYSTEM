@@ -9,9 +9,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const read = (relativePath) => readModuleFamily(path.join(root, relativePath));
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);

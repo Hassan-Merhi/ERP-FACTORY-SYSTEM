@@ -1,57 +1,30 @@
 import type { Request } from "express";
 import { eq, and } from "drizzle-orm";
 
-import {
-  containers,
-  containerOffloads,
-  containerCharges,
-  purchaseOrders,
-  poLineItems,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { containers, containerCharges, purchaseOrders, poLineItems, vouchers, voucherEntries } from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
 import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
-import { isUnsupportedNativeZmwPurchase } from "../../services/accounting/zambiaPurchaseCurrencyGuard";
-import { valueZmwPurchaseAtLockedRate } from "../../services/accounting/zambiaPurchaseCosting";
-import type Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { toMoney } from "../../lib/money";
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
 import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
-import {
-  assertOffloadedPurchaseOrderChargesUnchanged,
-  assertOffloadedPurchaseOrderCostBasisUnchanged,
-} from "./offloadedPurchaseOrderCostBasisGuard";
+import { cents } from "./purchaseOrderItemsUpdateHelpers";
+import { purchaseOrderItemsUpdateStep } from "./purchaseOrderItemsUpdateStep";
+import { purchaseOrderItemsUpdateStep2 } from "./purchaseOrderItemsUpdateStep2";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
-
-/**
- * A request amount as an exact Decimal, read as parseFloat reads it. A blank
- * value is zero, as the edit form treats it; anything else that does not
- * parse is rejected, where it used to be written as NaN.
- */
-function amountInput(value: unknown): Decimal {
-  if (typeof value === "string" && value.trim() === "") return new MoneyDecimal(0);
-  const parsed = parseMoneyInput(value);
-  if (!parsed) throw new HttpError(400, "Invalid amount");
-  return parsed;
-}
-
-/** Cents as a numeric(…, 2) column stores them (half away from zero). */
-const cents = (value: Decimal) => value.toFixed(2);
 
 /**
  * A line item as the client sends it. Every field is optional and loosely typed
  * because the handler falls back to the stored row whenever one is missing or
  * blank, and accepts both string and number for the numeric fields.
  */
-interface PurchaseOrderItemInput {
+export interface PurchaseOrderItemInput {
   id?: number | string | null;
   stockItemId?: number | string | null;
   itemName?: string | null;
@@ -84,94 +57,9 @@ export async function applyPurchaseOrderItemsUpdate(
   req: Request,
   ctx: PurchaseOrderItemsUpdateContext
 ): Promise<Record<string, unknown>> {
-  const { id, existingPO } = ctx;
-  const nativeZmw = isUnsupportedNativeZmwPurchase(existingPO.currency);
-  if (
-    (nativeZmw || isUnsupportedNativeZmwPurchase(req.body.currency)) &&
-    String(req.body.currency ?? existingPO.currency).toUpperCase() !== String(existingPO.currency).toUpperCase()
-  ) {
-    throw new HttpError(409, "PO currency is locked after posting. Reverse and rebook instead.");
-  }
-  if (nativeZmw && (!existingPO.historicalExchangeRate || !existingPO.historicalRateDate)) {
-    throw new HttpError(409, "Native Kwacha PO has no recoverable locked rate; reconcile before editing.");
-  }
-
-  // Get existing line items to preserve values when only name changes
-  const existingLineItems = await storage.getLineItemsByPO(id);
-  const existingItemsMap = new Map(existingLineItems.map((item) => [item.id, item]));
-
-  // Calculate new items total, preserving existing quantity/rate if not provided
-  let itemsTotal = new MoneyDecimal(0);
-  const newItems = (req.body.items as PurchaseOrderItemInput[]).map((item) => {
-    // Find existing item by id to preserve values
-    // Convert item.id to number for consistent Map lookup (request may send string or number)
-    const itemIdNum = item.id ? Number(item.id) : null;
-    const existingItem = itemIdNum ? existingItemsMap.get(itemIdNum) : null;
-
-    // Use provided values, or fall back to existing values, or default to "0"
-    // Also handle empty string as missing value
-    const quantity =
-      item.quantity !== undefined && item.quantity !== null && item.quantity !== ""
-        ? item.quantity.toString()
-        : (existingItem?.quantity ?? "0");
-    const rate =
-      item.rate !== undefined && item.rate !== null && item.rate !== ""
-        ? item.rate.toString()
-        : nativeZmw
-          ? (existingItem?.nativeRate ?? "")
-          : (existingItem?.rate ?? "0");
-    if (nativeZmw && !rate) throw new HttpError(409, "Missing original native PO line price");
-    const lineTotal = amountInput(quantity).times(amountInput(rate));
-    itemsTotal = itemsTotal.plus(lineTotal);
-
-    return {
-      poId: id,
-      stockItemId: (item.stockItemId ?? existingItem?.stockItemId) as number,
-      itemName: (item.itemName ?? existingItem?.itemName) as string,
-      quantity: quantity,
-      rate: rate,
-      lineTotal: cents(lineTotal),
-    };
-  });
-
-  // Native ZMW is revalued at the ORIGINAL purchase rate, never a current rate.
-  const nativeCost = nativeZmw
-    ? valueZmwPurchaseAtLockedRate({
-        date: existingPO.historicalRateDate!,
-        historicalRate: String(existingPO.historicalExchangeRate),
-        lines: newItems.map((item) => ({ quantity: item.quantity, rate: item.rate })),
-        charges: {
-          freight: req.body.freight ?? existingPO.nativeFreight,
-          surcharge: req.body.surcharge ?? existingPO.nativeSurcharge,
-          fumigation: req.body.fumigation ?? existingPO.nativeFumigation,
-          documentCharges: req.body.documentCharges ?? existingPO.nativeDocumentCharges,
-          discount: req.body.discount ?? existingPO.nativeDiscount,
-          otherCharges: req.body.otherCharges ?? existingPO.nativeOtherCharges,
-        },
-      })
-    : null;
-  const valuedItems = nativeCost
-    ? newItems.map((item, index) => ({
-        ...item,
-        rate: nativeCost.lines[index].rate,
-        lineTotal: nativeCost.lines[index].lineTotal,
-        nativeRate: nativeCost.lines[index].nativeRate,
-        nativeLineTotal: nativeCost.lines[index].nativeLineTotal,
-      }))
-    : newItems;
-  if (nativeCost) itemsTotal = new MoneyDecimal(nativeCost.itemsTotal);
-
-  // Use ?? to correctly handle explicit zero values from the request
-  const freight = amountInput(nativeCost?.freight ?? req.body.freight ?? existingPO.freight ?? "0");
-  const surcharge = amountInput(nativeCost?.surcharge ?? req.body.surcharge ?? existingPO.surcharge ?? "0");
-  const fumigation = amountInput(nativeCost?.fumigation ?? req.body.fumigation ?? existingPO.fumigation ?? "0");
-  const documentCharges = amountInput(
-    nativeCost?.documentCharges ?? req.body.documentCharges ?? existingPO.documentCharges ?? "0"
-  );
-  const discount = amountInput(nativeCost?.discount ?? req.body.discount ?? existingPO.discount ?? "0");
-  const otherCharges = amountInput(nativeCost?.otherCharges ?? req.body.otherCharges ?? existingPO.otherCharges ?? "0");
-  // Every charge but the freight, net of the discount.
-  const nonFreightCharges = sumMoney([surcharge, fumigation, documentCharges, otherCharges]).minus(discount);
+  const poi1 = await purchaseOrderItemsUpdateStep({ ctx, req });
+  const { existingPO, freight, id, surcharge, fumigation, documentCharges, discount, otherCharges, existingLineItems } =
+    poi1;
 
   // Delete existing line items and create new ones in a transaction.
   // Lock order intentionally matches the offload lifecycle: container -> purchase order.
@@ -179,227 +67,15 @@ export async function applyPurchaseOrderItemsUpdate(
   // and the line-item rewrite.
   await runWithVerifiedPoParentScope(existingPO.companyId, (linkedParentCompanyId) =>
     db.transaction(async (tx) => {
-      // FOR UPDATE is the serialization boundary shared with executeContainerOffloadLifecycle.
-      // A purchase order without a container has no offload to race with, so only
-      // the PO row is locked for it.
-      let lockedContainer: { id: number; status: string | null } | undefined;
-      if (existingPO.containerId != null) {
-        [lockedContainer] = await tx
-          .select({ id: containers.id, status: containers.status })
-          .from(containers)
-          .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
-          .limit(1)
-          .for("update");
-
-        if (!lockedContainer) {
-          throw new HttpError(404, "Container not found for this purchase order");
-        }
-      }
-
-      // Take the PO row second, matching the offload lifecycle's container -> PO lock
-      // order and making every item rewrite for this PO serialize behind the same row.
-      const [lockedPO] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.companyId, existingPO.companyId)))
-        .limit(1)
-        .for("update");
-
-      if (!lockedPO || lockedPO.containerId !== existingPO.containerId) {
-        throw new HttpError(409, "Purchase order changed concurrently. Reload and try again.");
-      }
-
-      // The route performs a fast user-facing check before entering the transaction.
-      // Re-check here after the container lock so an offload that won the race cannot
-      // be followed by a stock-item swap against inventory that was already materialized.
-      const hasActiveOffload = lockedContainer
-        ? (
-            await tx
-              .select({ id: containerOffloads.id })
-              .from(containerOffloads)
-              .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
-              .limit(1)
-          ).length > 0
-        : false;
-      // The materialized receipt remains posted even after status advances beyond OFFLOADED.
-      const receiptPosted = lockedContainer?.status === "OFFLOADED" || hasActiveOffload;
-      if (nativeZmw && receiptPosted) {
-        throw new HttpError(409, "Reverse the offload before editing native Kwacha purchase quantities or prices.");
-      }
-      if (receiptPosted) {
-        if (String(req.body.currency ?? lockedPO.currency).toUpperCase() !== String(lockedPO.currency).toUpperCase()) {
-          throw new HttpError(409, "Cannot change purchase currency after stock has been received.");
-        }
-        if (!toMoney(lockedPO.itemsTotal).toDecimalPlaces(2).equals(itemsTotal.toDecimalPlaces(2))) {
-          throw new HttpError(
-            409,
-            "Cannot change an offloaded purchase order item total without reversing the receipt."
-          );
-        }
-        assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
-          freight: freight.toFixed(2),
-          surcharge: surcharge.toFixed(2),
-          fumigation: fumigation.toFixed(2),
-          documentCharges: documentCharges.toFixed(2),
-          discount: discount.toFixed(2),
-          otherCharges: otherCharges.toFixed(2),
-        });
-        const currentLineItems = await tx
-          .select({
-            id: poLineItems.id,
-            stockItemId: poLineItems.stockItemId,
-            itemName: poLineItems.itemName,
-            quantity: poLineItems.quantity,
-            rate: poLineItems.rate,
-            lineTotal: poLineItems.lineTotal,
-          })
-          .from(poLineItems)
-          .where(eq(poLineItems.poId, id));
-
-        assertOffloadedPurchaseOrderCostBasisUnchanged(currentLineItems, valuedItems);
-
-        // The posted rows are historical evidence. Preserve their IDs and only
-        // allow a label edit when the caller supplies the original line ID.
-        const byId = new Map(currentLineItems.map((item) => [item.id, item]));
-        for (const item of req.body.items as PurchaseOrderItemInput[]) {
-          const stored = byId.get(Number(item.id));
-          if (!stored) {
-            if (item.itemName != null) {
-              const matchesExistingLabel = currentLineItems.some((line) => line.itemName === item.itemName);
-              if (!matchesExistingLabel) {
-                throw new HttpError(409, "Name changes on an offloaded purchase line require its original line ID.");
-              }
-            }
-            continue;
-          }
-          if (item.itemName != null && item.itemName !== stored.itemName) {
-            await tx.update(poLineItems).set({ itemName: item.itemName }).where(eq(poLineItems.id, stored.id));
-          }
-        }
-      } else {
-        // Unposted items are safe to replace. Posted item identities are never rebuilt.
-        await tx.delete(poLineItems).where(eq(poLineItems.poId, id));
-        if (valuedItems.length > 0) {
-          await tx.insert(poLineItems).values(valuedItems);
-        }
-      }
-
-      // Update PO with new items total and charges
-      // Check if any charge field was explicitly provided in the request
-      const chargesWereEdited =
-        req.body.freight !== undefined ||
-        req.body.surcharge !== undefined ||
-        req.body.fumigation !== undefined ||
-        req.body.documentCharges !== undefined ||
-        req.body.discount !== undefined ||
-        req.body.otherCharges !== undefined;
-
-      await tx
-        .update(purchaseOrders)
-        .set({
-          itemsTotal: cents(itemsTotal),
-          ...(nativeCost
-            ? {
-                nativeLineCount: nativeCost.nativeLineCount,
-                nativeItemsTotal: nativeCost.nativeItemsTotal,
-                nativeFreight: nativeCost.nativeFreight,
-                nativeSurcharge: nativeCost.nativeSurcharge,
-                nativeFumigation: nativeCost.nativeFumigation,
-                nativeDocumentCharges: nativeCost.nativeDocumentCharges,
-                nativeDiscount: nativeCost.nativeDiscount,
-                nativeOtherCharges: nativeCost.nativeOtherCharges,
-              }
-            : {}),
-          freight: cents(freight),
-          surcharge: cents(surcharge),
-          fumigation: cents(fumigation),
-          documentCharges: cents(documentCharges),
-          discount: cents(discount),
-          otherCharges: cents(otherCharges),
-          chargesEdited: chargesWereEdited ? true : existingPO.chargesEdited,
-          poNumber: req.body.poNumber || existingPO.poNumber,
-          currency: req.body.currency || existingPO.currency,
-          status: req.body.status || existingPO.status,
-          ...(req.body.freightPaidBy !== undefined ? { freightPaidBy: req.body.freightPaidBy } : {}),
-          ...(req.body.freightOwnAccountId !== undefined
-            ? {
-                freightOwnAccountId:
-                  req.body.freightOwnAccountId === null ? null : Number(req.body.freightOwnAccountId),
-              }
-            : {}),
-          ...(req.body.freightParentAccountId !== undefined
-            ? {
-                freightParentAccountId:
-                  req.body.freightParentAccountId === null ? null : Number(req.body.freightParentAccountId),
-              }
-            : {}),
-        })
-        .where(eq(purchaseOrders.id, id));
-
-      // Also update container's totals if applicable
-      if (lockedContainer) {
-        // Get all POs for this container and recalculate totals
-        const containerPOs = await tx
-          .select()
-          .from(purchaseOrders)
-          .where(
-            and(
-              eq(purchaseOrders.companyId, existingPO.companyId),
-              eq(purchaseOrders.containerId, existingPO.containerId)
-            )
-          );
-        let totalItemsCost = new MoneyDecimal(0);
-        let totalCharges = new MoneyDecimal(0);
-
-        for (const po of containerPOs) {
-          if (po.id === id) {
-            // Use the new values for this PO
-            totalItemsCost = totalItemsCost.plus(itemsTotal);
-            totalCharges = totalCharges.plus(freight).plus(nonFreightCharges);
-          } else {
-            totalItemsCost = totalItemsCost.plus(toMoney(po.itemsTotal));
-            totalCharges = totalCharges
-              .plus(sumMoney([po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges]))
-              .minus(toMoney(po.discount));
-          }
-        }
-
-        // Update container totals
-        const chargesTotal = totalCharges;
-        await tx
-          .update(containers)
-          .set({
-            itemsTotal: cents(totalItemsCost),
-            chargesTotal: cents(chargesTotal),
-            grandTotal: cents(totalItemsCost.plus(chargesTotal)),
-          })
-          .where(eq(containers.id, existingPO.containerId));
-      }
-
-      // Compute totals. intercoTotal = supplier share (excludes freight when own/parent-paid).
-      const poGrandTotalExact = itemsTotal.plus(freight).plus(nonFreightCharges);
-      const b1FreightPaidBy: string = req.body.freightPaidBy ?? existingPO.freightPaidBy ?? "supplier";
-      // 'own': freight goes to a separate own-account voucher → exclude from PO voucher
-      // 'parent': subsidiary still owes parent the full amount including freight → use poGrandTotalExact
-      // 'supplier': full amount
-      const b1IntercoTotal = cents(
-        b1FreightPaidBy === "own" && freight.greaterThan(0) ? itemsTotal.plus(nonFreightCharges) : poGrandTotalExact
-      );
-
-      // A reversed offload may have retired the purchase voucher while keeping its
-      // historical PO link. Never modify or resurrect that deleted accounting row.
-      const [linkedVoucher] = existingPO.voucherId
-        ? await tx
-            .select({
-              deletedAt: vouchers.deletedAt,
-              voucherDate: vouchers.voucherDate,
-              totalAmount: vouchers.totalAmount,
-            })
-            .from(vouchers)
-            .where(and(eq(vouchers.id, existingPO.voucherId), eq(vouchers.companyId, existingPO.companyId)))
-            .limit(1)
-        : [];
-      const hasRetiredPurchaseVoucher = !!existingPO.voucherId && (!linkedVoucher || !!linkedVoucher.deletedAt);
+      const poi2 = await purchaseOrderItemsUpdateStep2({ poi1, tx, req });
+      const {
+        hasRetiredPurchaseVoucher,
+        b1IntercoTotal,
+        b1FreightPaidBy,
+        poGrandTotalExact,
+        linkedVoucher,
+        chargesWereEdited,
+      } = poi2;
 
       // Update the associated voucher — use supplier share (intercoTotal) so freight excluded
       // when it's paid via own-account or parent-company voucher.
@@ -531,7 +207,7 @@ export async function applyPurchaseOrderItemsUpdate(
             } else {
               await tx.insert(containerCharges).values({
                 containerId: existingPO.containerId,
-                chargeType: chargeType,
+                chargeType,
                 amount: cents(amount),
               });
             }

@@ -2,25 +2,12 @@ import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosti
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { eq, and, isNull } from "drizzle-orm";
-import type Decimal from "decimal.js";
-import { logger } from "../../lib/logger";
-import {
-  addInventoryValues,
-  divideInventoryValues,
-  inventoryMoney,
-  inventoryQuantity,
-  inventoryUnitCost,
-  multiplyInventoryValues,
-  subtractInventoryValues,
-  toInventoryDecimal,
-} from "../../lib/inventoryMath";
+import { inventoryMoney, inventoryQuantity, inventoryUnitCost, toInventoryDecimal } from "../../lib/inventoryMath";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
-import type { POLineItem, ContainerOffload } from "@shared/schema";
-import { getLocationById } from "../inventory";
-import { getContainerById, getPurchaseOrdersByContainer } from "./containers";
-import { getLineItemsByPO } from "./line-items-charges";
-import { lockInventoryRow } from "../inventoryRowLock";
+import type { ContainerOffload } from "@shared/schema";
+import { offloadStep } from "./offloadStep";
+import { offloadStep2 } from "./offloadStep2";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -39,252 +26,28 @@ export async function offloadContainer(
   offloadDate?: string,
   inventoryCostCorrections: Array<{ stockItemId: number; correctRate: number }> = []
 ): Promise<ContainerOffload> {
-  const container = await getContainerById(containerId);
-  if (!container) throw new Error(`Container ${containerId} not found`);
-
-  const pos = await getPurchaseOrdersByContainer(containerId);
-  const allLineItems: POLineItem[] = [];
-  for (const po of pos) allLineItems.push(...(await getLineItemsByPO(po.id)));
-
-  const validLineItems = allLineItems.filter((item) => item.stockItemId && item.stockItemId !== 0);
-  const totalBales = addInventoryValues(...validLineItems.map((item) => item.quantity));
-  const additionalChargesTotal = addInventoryValues(...additionalCharges.map((charge) => charge.amount));
-  const totalCharges = addInventoryValues(
+  const off1 = await offloadStep({
+    containerId,
+    additionalCharges,
     duties,
     officeCharges,
     transferCharges,
     transportFees,
-    additionalChargesTotal,
-    container.chargesTotal
-  );
-
-  const additionalCostPerBale = divideInventoryValues(totalCharges, totalBales);
-  const expectedChargesApplied = multiplyInventoryValues(additionalCostPerBale, totalBales);
-  const roundingDifference = subtractInventoryValues(totalCharges, expectedChargesApplied).toDecimalPlaces(2);
-
-  const itemsMap = new Map<number, { stockItemId: number; totalQuantity: Decimal; weightedRateSum: Decimal }>();
-  for (const item of allLineItems) {
-    const stockItemId = item.stockItemId;
-    if (!stockItemId || stockItemId === 0) {
-      logger.warn(`Skipping line item ${item.id} - invalid stock item ID: ${stockItemId}`);
-      continue;
-    }
-    const quantity = toInventoryDecimal(item.quantity);
-    const weightedValue = multiplyInventoryValues(item.rate, quantity);
-    const existing = itemsMap.get(stockItemId);
-    if (existing) {
-      existing.totalQuantity = addInventoryValues(existing.totalQuantity, quantity);
-      existing.weightedRateSum = addInventoryValues(existing.weightedRateSum, weightedValue);
-    } else {
-      itemsMap.set(stockItemId, { stockItemId, totalQuantity: quantity, weightedRateSum: weightedValue });
-    }
-  }
-
-  const offloadItemsToStore: Array<{
-    stockItemId: number;
-    quantity: Decimal;
-    rate: Decimal;
-    totalValue: Decimal;
-  }> = [];
-  const itemsArray = Array.from(itemsMap.entries());
-  const lastItemIndex = itemsArray.length - 1;
+  });
+  const { container, totalCharges, totalBales, additionalCostPerBale, offloadItemsToStore } = off1;
 
   const offload = await db.transaction(async (tx) => {
-    const validCorrectionItemIds = new Set(itemsMap.keys());
-    for (const correction of inventoryCostCorrections) {
-      const correctRate = toInventoryDecimal(correction.correctRate);
-      if (!correctRate.isPositive() || !validCorrectionItemIds.has(correction.stockItemId)) continue;
-      const correctionRow = await lockInventoryRow(tx, locationId, correction.stockItemId);
-      if (!correctionRow) continue;
-      const existingQuantity = toInventoryDecimal(correctionRow.quantity);
-      if (!existingQuantity.isPositive()) continue;
-      const newTotalValue = multiplyInventoryValues(existingQuantity, correctRate);
-      await tx
-        .update(schema.inventory)
-        .set({
-          averageRate: inventoryUnitCost(correctRate),
-          totalValue: inventoryMoney(newTotalValue),
-          lastUpdated: new Date(),
-        })
-        .where(eq(schema.inventory.id, correctionRow.id));
-    }
-
-    for (let index = 0; index < itemsArray.length; index++) {
-      const [stockItemId, data] = itemsArray[index];
-      if (data.totalQuantity.isZero()) continue;
-
-      const averageOriginalRate = divideInventoryValues(data.weightedRateSum, data.totalQuantity);
-      const newRate = addInventoryValues(averageOriginalRate, additionalCostPerBale);
-      let offloadValue = multiplyInventoryValues(data.totalQuantity, newRate).toDecimalPlaces(2);
-      if (index === lastItemIndex && !roundingDifference.isZero()) {
-        offloadValue = addInventoryValues(offloadValue, roundingDifference);
-      }
-      const adjustedRate = divideInventoryValues(offloadValue, data.totalQuantity);
-
-      offloadItemsToStore.push({
-        stockItemId,
-        quantity: data.totalQuantity,
-        rate: adjustedRate,
-        totalValue: offloadValue,
-      });
-
-      if (!newRate.isFinite()) throw new Error(`Calculated rate is infinite for stock item ${stockItemId}`);
-
-      const existing = await lockInventoryRow(tx, locationId, stockItemId);
-
-      if (existing) {
-        const existingQuantity = toInventoryDecimal(existing.quantity);
-        const existingValue = toInventoryDecimal(existing.total_value);
-        const newQuantity = addInventoryValues(existingQuantity, data.totalQuantity);
-        let weightedAverageRate: Decimal;
-        let newTotalValue: Decimal;
-
-        if (newQuantity.isZero()) {
-          weightedAverageRate = adjustedRate;
-          newTotalValue = toInventoryDecimal(0);
-        } else if (newQuantity.isNegative()) {
-          weightedAverageRate = adjustedRate;
-          newTotalValue = multiplyInventoryValues(newQuantity, adjustedRate);
-        } else {
-          if (existingQuantity.isNegative()) {
-            newTotalValue = multiplyInventoryValues(newQuantity, DecimalMax(adjustedRate, 0));
-          } else {
-            newTotalValue = addInventoryValues(existingValue, offloadValue);
-            if (newTotalValue.isNegative()) {
-              newTotalValue = multiplyInventoryValues(newQuantity, DecimalMax(adjustedRate, 0));
-            }
-          }
-          weightedAverageRate = divideInventoryValues(newTotalValue, newQuantity);
-        }
-
-        if (!weightedAverageRate.isFinite()) {
-          throw new Error(`Calculated weighted average rate is infinite for stock item ${stockItemId}`);
-        }
-
-        await tx
-          .update(schema.inventory)
-          .set({
-            quantity: inventoryQuantity(newQuantity),
-            averageRate: inventoryUnitCost(weightedAverageRate),
-            totalValue: inventoryMoney(newTotalValue),
-            lastUpdated: new Date(),
-          })
-          .where(eq(schema.inventory.id, existing.id));
-      } else {
-        const [location] = await tx.select().from(schema.locations).where(eq(schema.locations.id, locationId));
-        if (!location) throw new Error(`Location ${locationId} not found when creating inventory record`);
-        await tx.insert(schema.inventory).values({
-          companyId: location.companyId,
-          locationId,
-          stockItemId,
-          quantity: inventoryQuantity(data.totalQuantity),
-          averageRate: inventoryUnitCost(adjustedRate),
-          totalValue: inventoryMoney(offloadValue),
-          lastUpdated: new Date(),
-        });
-      }
-    }
-
-    const resolvedOffloadDate = offloadDate || new Date().toISOString().split("T")[0];
-    const containerUpdateSet: Record<string, unknown> = { status: "OFFLOADED", offloadDate: resolvedOffloadDate };
-    if (toInventoryDecimal(duties).isPositive()) containerUpdateSet.dutyFee = duties;
-    await tx.update(schema.containers).set(containerUpdateSet).where(eq(schema.containers.id, containerId));
-
-    const location = await getLocationById(locationId);
-    if (!location) throw new Error("Location not found");
-    const voucherDate = offloadDate || new Date().toISOString().split("T")[0];
-
-    const findOrCreateImportChargesParent = async () => {
-      let [parentAccount] = await tx
-        .select()
-        .from(schema.ledgerAccounts)
-        .where(
-          and(eq(schema.ledgerAccounts.companyId, location.companyId), eq(schema.ledgerAccounts.code, "IMPORT_CHARGES"))
-        )
-        .limit(1);
-      if (!parentAccount) {
-        [parentAccount] = await tx
-          .insert(schema.ledgerAccounts)
-          .values({
-            companyId: location.companyId,
-            code: "IMPORT_CHARGES",
-            name: "Import Charges",
-            accountType: "Direct Expense",
-            subType: "Direct Expense",
-            openingBalance: "0",
-            openingBalanceSide: "Dr",
-          })
-          .returning();
-      }
-      return parentAccount.id;
-    };
-
-    const findOrCreateExpenseAccount = async (code: string, name: string, parentId: number) => {
-      let account = await tx
-        .select()
-        .from(schema.ledgerAccounts)
-        .where(and(eq(schema.ledgerAccounts.companyId, location.companyId), eq(schema.ledgerAccounts.code, code)))
-        .limit(1);
-      if (!account.length) {
-        const [newAccount] = await tx
-          .insert(schema.ledgerAccounts)
-          .values({
-            companyId: location.companyId,
-            code,
-            name,
-            accountType: "Direct Expense",
-            subType: "Direct Expense",
-            parentId,
-            openingBalance: "0",
-            openingBalanceSide: "Dr",
-          })
-          .returning();
-        account = [newAccount];
-      }
-      return account[0].id;
-    };
-
-    const importChargesParentId = await findOrCreateImportChargesParent();
-
-    for (const po of pos) {
-      if (po.voucherId) {
-        await tx
-          .update(schema.vouchers)
-          .set({ description: `Purchase Order ${po.poNumber} - Container ${container.containerNumber} (Offloaded)` })
-          .where(eq(schema.vouchers.id, po.voucherId));
-      }
-    }
-
-    if (dutiesAccountId && toInventoryDecimal(duties).isPositive()) {
-      const dutiesExpenseAccountId = await findOrCreateExpenseAccount("DUTIES", "Duties", importChargesParentId);
-      const voucherNumber = `DUTY-${container.containerNumber}-${containerId}`;
-      const amount = inventoryMoney(duties);
-      await postFactoryVoucherTx(tx, {
-        companyId: location.companyId,
-        voucherNumber: voucherNumber,
-        voucherType: "Payment",
-        voucherDate: voucherDate,
-        description: `Duties for container ${container.containerNumber}`,
-        sourceModule: "ERP",
-        source: {
-          sourceType: "container-offload",
-          sourceId: String(location.companyId) + ":" + String(containerId),
-          phase: "voucher",
-        },
-        lines: [
-          {
-            ledgerAccountId: dutiesExpenseAccountId,
-            debit: amount,
-            narration: `Duties for container ${container.containerNumber}`,
-          },
-          {
-            ledgerAccountId: dutiesAccountId,
-            credit: amount,
-            narration: `Duties for container ${container.containerNumber}`,
-          },
-        ],
-      });
-    }
+    const off2 = await offloadStep2({
+      off1,
+      inventoryCostCorrections,
+      tx,
+      locationId,
+      offloadDate,
+      duties,
+      containerId,
+      dutiesAccountId,
+    });
+    const { location, voucherDate, findOrCreateExpenseAccount, importChargesParentId } = off2;
 
     if (officeChargesAccountId && officeChargesCashAccountId && toInventoryDecimal(officeCharges).isPositive()) {
       const [officeChargesAccount] = await tx
@@ -313,7 +76,7 @@ export async function offloadContainer(
         companyId: location.companyId,
         voucherNumber: `OFFICE-${container.containerNumber}-${containerId}`,
         voucherType: "Payment",
-        voucherDate: voucherDate,
+        voucherDate,
         description: `Office charges for container ${container.containerNumber}`,
         sourceModule: "ERP",
         source: {
@@ -393,7 +156,7 @@ export async function offloadContainer(
         companyId: location.companyId,
         voucherNumber: `TRANS-${container.containerNumber}-${containerId}`,
         voucherType: "Payment",
-        voucherDate: voucherDate,
+        voucherDate,
         description: `Transport fees for container ${container.containerNumber}`,
         sourceModule: "ERP",
         source: {
@@ -453,7 +216,7 @@ export async function offloadContainer(
         companyId: location.companyId,
         voucherNumber: `XFER-${container.containerNumber}-${containerId}`,
         voucherType: "Payment",
-        voucherDate: voucherDate,
+        voucherDate,
         description: `Transfer charges for container ${container.containerNumber}`,
         sourceModule: "ERP",
         source: {
@@ -503,7 +266,7 @@ export async function offloadContainer(
         companyId: location.companyId,
         voucherNumber: `CHG-${container.containerNumber}-${containerId}-${chargeIndex}`,
         voucherType: "Payment",
-        voucherDate: voucherDate,
+        voucherDate,
         description: `${charge.description} for container ${container.containerNumber}`,
         sourceModule: "ERP",
         source: {
@@ -578,10 +341,4 @@ export async function offloadContainer(
   });
 
   return offload;
-}
-
-function DecimalMax(value: Decimal.Value, minimum: Decimal.Value): Decimal {
-  const decimalValue = toInventoryDecimal(value);
-  const decimalMinimum = toInventoryDecimal(minimum);
-  return decimalValue.greaterThan(decimalMinimum) ? decimalValue : decimalMinimum;
 }
