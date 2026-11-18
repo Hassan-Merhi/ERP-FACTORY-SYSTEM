@@ -46,10 +46,10 @@ import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
-import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices, calculateZmwSaleAmounts } from "./posZmwRatePolicy";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
+import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
-
 
 /** The rate a cashier entered for a non-USD sale on the factory LAN server. */
 function offlineEnteredRate(
@@ -218,7 +218,9 @@ export async function createPosSale(
   try {
     assertZmwImportPrices(items, lockedPosCurrency);
     if (lockedPosCurrency.currency === "ZMW") {
-      ({ nativeTotal: nativeZmwTotal, usdTotal: grandTotal } = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!));
+      const amounts = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+      nativeZmwTotal = amounts.nativeTotal;
+      grandTotal = amounts.usdTotal;
     }
   } catch (error) {
     if (error instanceof PosZmwRateError) {
