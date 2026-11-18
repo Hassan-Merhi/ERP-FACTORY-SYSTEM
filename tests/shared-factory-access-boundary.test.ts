@@ -35,6 +35,35 @@ describe("Wave 4 shared Factory API ownership", () => {
     );
   });
 
+  it("permits only read-only current ledger balances from the Factory Daybook Transactions tab", async () => {
+    const allowedDaybook = { pageKey: "factory/daybook", tabKey: "hide_tab_daybook_transactions" };
+    for (const requestPath of [
+      "/api/accounts/ledger/42/balance",
+      "/api/accounts/ledger/42/balance?balanceBasis=book",
+      "/API/ACCOUNTS/LEDGER/42/BALANCE?balanceBasis=book",
+    ]) {
+      const requirements = await resolveSharedFactoryRequirements(req(requestPath));
+      expect(requirements).toEqual(expect.arrayContaining([allowedDaybook]));
+    }
+
+    // Daybook cannot use this exception to enumerate other accounts, load
+    // statements, or change any balances; the existing permission boundary
+    // still checks the actual current Factory page and its Transactions tab.
+    for (const [requestPath, method] of [
+      ["/api/accounts/ledger/42/balance", "POST"],
+      ["/api/accounts/ledger/42/balance", "PUT"],
+      ["/api/accounts/ledger/42/balance", "DELETE"],
+      ["/api/accounts/ledger/42/transactions", "GET"],
+      ["/api/accounts/ledger/42/currency-balances", "GET"],
+      ["/api/accounts/all", "GET"],
+      ["/api/ledger-accounts", "GET"],
+      ["/api/bank-accounts", "GET"],
+    ]) {
+      const requirements = await resolveSharedFactoryRequirements(req(requestPath, method));
+      expect(requirements).not.toEqual(expect.arrayContaining([allowedDaybook]));
+    }
+  });
+
   it("permits Account Groups only its ledger read/create/update/assign endpoints", async () => {
     const groupPage = { pageKey: "factory/account-groups" };
     for (const [path, method] of [
