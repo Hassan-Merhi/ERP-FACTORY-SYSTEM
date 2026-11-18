@@ -194,6 +194,30 @@ the reasons for everything still online-only:
 - Phase 16: offline panel (banner drawer and Factory settings) with counters,
   Sync now, Pause/Resume, conflict decisions, storage and a recovery copy.
 
+## Full offline mode (Tally-style), Phase A (2026-11-17, development)
+
+Every PC keeps a full local copy of its companies; the cloud applies each PC's
+entries once and sends everyone's changes back. Owner decisions and the phase
+plan are in the plan document and the
+[runbook](../../operations/factory-offline-operations-runbook.md#full-offline-mode-phase-a-cloud-change-feed).
+
+- Phase A1 (#3299, switched off): table policy for all tables with a CI
+  check, DBA-installed change feed with redaction, and the paged
+  `GET /api/offline/pc-sync/changes` reader (`OFFLINE_PC_SYNC_ENABLED`).
+- Phase A2 (switched off): initial full copy, `GET /api/offline/pc-sync/snapshot/start`
+  and `GET /api/offline/pc-sync/snapshot`, table by table in key order, then
+  feed replay from the start cursor.
+- Phase A3a (switched off): PC sync agent (`scripts/pc-sync/local/`: copy,
+  resume, feed replay, TRUNCATE reload, offline sign-in only for people who
+  signed in on that PC, 24h warning / 2-day block rule) and the read-only local
+  server mode (`OFFLINE_PC_LOCAL_MODE=read-only`).
+- Phase A3b (off unless enabled per PC): desktop app starts an embedded
+  PostgreSQL, the sync process and the read-only local server on 127.0.0.1 and
+  opens the local copy when the cloud cannot be reached; "Connect this PC" and
+  "Sync now" in the menu; staging script and Mac target. Not yet tested on real
+  Windows/Mac PCs.
+- Next: Phase B (vouchers entered offline on a PC, sent to the cloud once).
+
 ## Resume checklist (next session)
 
 All development in the owner-approved offline plan is merged (#2871, 2026-11-06). The coverage audit (`node scripts/edge/audit-phase9-write-coverage.mjs`) reports 39 captured routes, 17 of them waiting for drill approval, and 1,140 refused; `--require-complete` stays red by design. What remains is rollout and certification:

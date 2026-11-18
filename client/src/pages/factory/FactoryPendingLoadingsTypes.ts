@@ -17,12 +17,6 @@ export interface PendingLoad {
   containerNotes: string | null;
 }
 
-export function fmtKg(val: string | number | null | undefined): string {
-  const n = parseFloat(String(val ?? "0"));
-  if (!n) return "0 kg";
-  return `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`;
-}
-
 export interface UndoItem {
   load: PendingLoad;
   cancelledAt: number;

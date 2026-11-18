@@ -8,9 +8,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import type { AuthMe } from "@shared/apiTypes";
 import type { BankAccountRow, LedgerPickerAccount, Location } from "./posTypes";
+import { PosCheckoutField, PosCheckoutPanel } from "./PosCheckoutPanel";
 
 interface PosCheckoutStripProps {
   posUser?: AuthMe | null;
+  editVoucherId?: string;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -38,6 +40,7 @@ interface PosCheckoutStripProps {
 
 export function PosCheckoutStrip({
   posUser,
+  editVoucherId,
   activeLocation,
   allLocations,
   posAssignedLocations,
@@ -62,20 +65,13 @@ export function PosCheckoutStrip({
   isSpCompany,
 }: PosCheckoutStripProps) {
   const { t } = useApplicationLanguage();
+  const lockedPosEdit = Boolean(posUser && editVoucherId);
   if (!activeLocation) return null;
 
   return (
-    <section
-      data-pos-checkout-strip="true"
-      aria-label={t("pos.modern.saleSettings")}
-      className="hidden lg:flex flex-wrap items-center gap-3 px-4 py-3"
-    >
+    <PosCheckoutPanel ariaLabel={t("pos.modern.saleSettings")} desktopOnly>
       {/* Location — admin: full select; POS user: name badge or select if multiple */}
-      <div data-pos-checkout-field="location" className="pos-checkout-field">
-        <span className="pos-checkout-field-label">
-          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-          {t("pos.modern.location")}
-        </span>
+      <PosCheckoutField field="location" icon={MapPin} label={t("pos.modern.location")}>
         {!posUser ? (
           <Select
             value={activeLocation?.id?.toString()}
@@ -99,6 +95,7 @@ export function PosCheckoutStrip({
         ) : posAssignedLocations.length > 1 ? (
           <Select
             value={posSelectedLocation?.id?.toString()}
+            disabled={lockedPosEdit}
             onValueChange={(val) => {
               const loc = posAssignedLocations.find((l) => l.id.toString() === val);
               if (loc) setPosSelectedLocation(loc);
@@ -122,13 +119,9 @@ export function PosCheckoutStrip({
             <span className="font-medium">{activeLocation.name}</span>
           </div>
         )}
-      </div>
+      </PosCheckoutField>
 
-      <div data-pos-checkout-field="date" className="pos-checkout-field">
-        <label htmlFor="pos-desktop-sale-date" className="pos-checkout-field-label">
-          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-          {t("pos.modern.date")}
-        </label>
+      <PosCheckoutField field="date" icon={CalendarDays} label={t("pos.modern.date")} htmlFor="pos-desktop-sale-date">
         <input
           id="pos-desktop-sale-date"
           type="date"
@@ -138,15 +131,17 @@ export function PosCheckoutStrip({
           className={`h-9 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-ring ${posUser ? "opacity-60 cursor-not-allowed" : ""}`}
           data-testid="input-sale-date"
         />
-      </div>
+      </PosCheckoutField>
 
-      {!isCreditSale && (
+      {lockedPosEdit ? (
+        <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
+          <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-xs" data-testid="pos-edit-payment-locked">
+            {isCreditSale ? "Credit" : "Original payment"} — unchanged
+          </div>
+        </PosCheckoutField>
+      ) : !isCreditSale && (
         <>
-          <div data-pos-checkout-field="method" className="pos-checkout-field">
-            <span className="pos-checkout-field-label">
-              <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-              {t("pos.modern.paymentMethod")}
-            </span>
+          <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
             <Select
               value={paymentAccountType}
               onValueChange={
@@ -166,13 +161,9 @@ export function PosCheckoutStrip({
                 <SelectItem value="bank">Bank</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </PosCheckoutField>
 
-          <div data-pos-checkout-field="account" className="pos-checkout-field">
-            <span className="pos-checkout-field-label">
-              <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
-              {t("pos.modern.account")}
-            </span>
+          <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")}>
             <Select
               value={paymentAccountId || ""}
               onValueChange={posUser ? undefined : setPaymentAccountId}
@@ -195,7 +186,7 @@ export function PosCheckoutStrip({
                     ))}
               </SelectContent>
             </Select>
-          </div>
+          </PosCheckoutField>
         </>
       )}
 
@@ -205,6 +196,7 @@ export function PosCheckoutStrip({
             id="credit-sale-strip"
             checked={isCreditSale}
             onCheckedChange={setIsCreditSale}
+            disabled={lockedPosEdit}
             data-testid="toggle-credit-sale"
           />
           <Label htmlFor="credit-sale-strip" className="text-sm cursor-pointer">
@@ -213,7 +205,7 @@ export function PosCheckoutStrip({
         </div>
       )}
 
-      {!isSpCompany && isCreditSale && (
+      {!isSpCompany && isCreditSale && !lockedPosEdit && (
         <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="gap-2 font-normal" data-testid="select-customer">
@@ -253,6 +245,6 @@ export function PosCheckoutStrip({
           </PopoverContent>
         </Popover>
       )}
-    </section>
+    </PosCheckoutPanel>
   );
 }

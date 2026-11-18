@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import {
   HistoricalAccountingSection,
   HistoricalAccountingSection2,
@@ -36,7 +37,73 @@ export default function HistoricalAccounting() {
       <PageHeader
         title="Historical Accounting & As-of Dates"
         subtitle="Retrospective company ledger at the selected business date. Distinguishes posted ledger evidence from changes recorded afterward and source data whose former state cannot be reconstructed."
-      />
+      >
+        {selected && section === "trial" && (
+          <RowsExportMenu
+            title="Historical Trial Balance"
+            period={{ from, to: asOf }}
+            rows={accounts}
+            columns={[
+              { header: "Account", value: (r) => `${r.code ?? r.kind}: ${r.name}` },
+              { header: "Kind", value: (r) => r.kind },
+              { header: "Type", value: (r) => r.accountType },
+              { header: "Opening Dr", value: (r) => r.openingDebit, type: "number" },
+              { header: "Opening Cr", value: (r) => r.openingCredit, type: "number" },
+              { header: "Activity Dr", value: (r) => r.periodDebit, type: "number" },
+              { header: "Activity Cr", value: (r) => r.periodCredit, type: "number" },
+              { header: "Closing Dr", value: (r) => r.closingDebit, type: "number" },
+              { header: "Closing Cr", value: (r) => r.closingCredit, type: "number" },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-historical-accounting"
+          />
+        )}
+        {selected && section === "timeline" && (
+          <RowsExportMenu
+            title="Historical Posting Chronology"
+            period={{ from, to: asOf }}
+            rows={vouchers}
+            columns={[
+              { header: "Voucher", value: (v) => v.voucher_number },
+              { header: "Type", value: (v) => `${v.voucher_type} · ${v.source_module ?? "legacy"} · ${v.currency}` },
+              { header: "Effective", value: (v) => v.booked_on },
+              { header: "Recorded", value: (v) => v.created_on },
+              { header: "Retired", value: (v) => v.deleted_on },
+              { header: "Booked Dr USD", value: (v) => v.debit_base, type: "number" },
+              { header: "Booked Cr USD", value: (v) => v.credit_base, type: "number" },
+              {
+                header: "Evidence",
+                value: (v) =>
+                  [
+                    v.late_created ? "Entered later; effective earlier" : "",
+                    v.later_retired ? "Retired after as-of" : "",
+                    !v.posted_now ? "Not in current live ledger" : "",
+                  ]
+                    .filter(Boolean)
+                    .join("; "),
+              },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-historical-accounting"
+          />
+        )}
+        {selected && section === "matching" && (
+          <RowsExportMenu
+            title="Historical Reconciliation Evidence"
+            period={{ from, to: asOf }}
+            rows={selected.reconciliationEvidence.items}
+            columns={[
+              { header: "Source", value: (r) => prettify(r.source) },
+              { header: "Count", value: (r) => r.total, type: "number" },
+              { header: "Recorded afterward", value: (r) => r.recordedAfterAsOf, type: "number" },
+              { header: "Currently voided", value: (r) => r.voidedCurrently, type: "number" },
+              { header: "Voided afterward", value: (r) => r.voidedAfterAsOf, type: "number" },
+            ]}
+            resource="erp.accounts"
+            data-testid="button-export-historical-accounting"
+          />
+        )}
+      </PageHeader>
       <Card>
         <CardHeader>
           <CardTitle>As-of financial period</CardTitle>

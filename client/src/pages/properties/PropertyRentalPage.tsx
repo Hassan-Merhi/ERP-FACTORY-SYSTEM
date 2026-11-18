@@ -8,7 +8,6 @@ import {
   Trash2,
   MapPin,
   Building2,
-  Store,
   UserRound,
   CalendarDays,
   Pencil,
@@ -24,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
+import { RENTAL_SECTION_DEFINITIONS, rentalUnitSection } from "@/properties/config/rentalSections";
 import "./property-rental/propertiesRentalsPremium.css";
 
 import type { Props, Unit } from "./property-rental/types";
@@ -55,13 +56,11 @@ export default function PropertyRentalPage(props: Props) {
     guaranteeValue,
     headerActionsForWidth,
     headerSubtitle,
-    headerTitle,
     historicalAccountMismatch,
     historicalError,
     historicalLoading,
     historicalPayments,
     historyReconciliation,
-    isErp,
     isFactoryShopTable,
     isLoading,
     isPropertiesRental,
@@ -69,7 +68,6 @@ export default function PropertyRentalPage(props: Props) {
     newGroupName,
     openRenameGroup,
     openUnit,
-    pageIcon,
     paidLabel,
     paidValue,
     phoneCards,
@@ -99,12 +97,25 @@ export default function PropertyRentalPage(props: Props) {
     usesRentExpensePaidBasis,
   } = usePropertyRentalPageState(props);
 
+  // One header for every module; the title and icon come from the shared rental sections.
+  const section = RENTAL_SECTION_DEFINITIONS[rentalUnitSection(unitType)];
+  const SectionIcon = section.icon;
+  const unitsLoadingState = <LoadingState title="Loading units…" />;
+  const unitsEmptyState = (
+    <EmptyState
+      icon={SectionIcon}
+      title={
+        unitType === "WAREHOUSE"
+          ? "No warehouses yet. Add your first unit above."
+          : "No shops yet. Add your first unit above."
+      }
+    />
+  );
+
   return (
     <ApiBaseCtx.Provider value={apiBase}>
       <div
-        className={
-          isPropertiesRental ? "properties-rentals-premium space-y-5" : isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"
-        }
+        className={isPropertiesRental ? "properties-rentals-premium space-y-4" : "space-y-4"}
         data-testid={`page-${testIdPrefix}`}
       >
         {showHistoricalPaid && (
@@ -116,34 +127,13 @@ export default function PropertyRentalPage(props: Props) {
             onReconciliationChange={setHistoryReconciliation}
           />
         )}
-        {isPropertiesRental ? (
-          // The Properties module keeps its hero design (docs/properties-unification-*.md) but
-          // renders the same title, subtitle and actions as the shared PageHeader below.
-          <section
-            className="properties-rentals-hero"
-            aria-label={unitType === "SHOP" ? "Shop rentals overview" : "Warehouse rentals overview"}
-          >
-            <div className="properties-rentals-hero-copy">
-              <span className="properties-rentals-hero-icon" aria-hidden="true">
-                {unitType === "SHOP" ? <Store className="h-7 w-7" /> : <Building2 className="h-7 w-7" />}
-              </span>
-              <div className="properties-rentals-hero-text">
-                <span className="properties-rentals-eyebrow">PROPERTIES</span>
-                <h1 className="properties-rentals-heading" data-testid="text-page-title">
-                  {headerTitle}
-                </h1>
-                <p className="properties-rentals-subheading" data-testid="text-page-subtitle">
-                  {headerSubtitle}
-                </p>
-              </div>
-            </div>
-            <div className="properties-rentals-hero-actions">{headerActionsForWidth}</div>
-          </section>
-        ) : (
-          <PageHeader title={headerTitle} subtitle={headerSubtitle} icon={pageIcon}>
-            {headerActionsForWidth}
-          </PageHeader>
-        )}
+        <PageHeader
+          title={section.title}
+          subtitle={headerSubtitle}
+          icon={<SectionIcon className="h-6 w-6 text-primary" aria-hidden="true" />}
+        >
+          {headerActionsForWidth}
+        </PageHeader>
 
         {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (
           <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
@@ -362,13 +352,9 @@ export default function PropertyRentalPage(props: Props) {
 
         {phoneCards ? (
           isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+            unitsLoadingState
           ) : grouped.length === 0 ? (
-            <div className="rounded-lg border p-8 text-center text-muted-foreground">
-              {unitType === "WAREHOUSE"
-                ? "No warehouses yet. Add your first unit above."
-                : "No shops yet. Add your first unit above."}
-            </div>
+            unitsEmptyState
           ) : (
             <RentalUnitCards
               landlordView={isPropertiesRental}
@@ -397,13 +383,9 @@ export default function PropertyRentalPage(props: Props) {
             <CardContent className={isFactoryShopTable ? "p-2 sm:p-3" : isPropertiesRental ? "p-2 sm:p-4" : "p-0"}>
               <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
-                  <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+                  unitsLoadingState
                 ) : grouped.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    {unitType === "WAREHOUSE"
-                      ? "No warehouses yet. Add your first unit above."
-                      : "No shops yet. Add your first unit above."}
-                  </div>
+                  unitsEmptyState
                 ) : (
                   <table
                     className={

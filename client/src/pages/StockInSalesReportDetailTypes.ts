@@ -30,3 +30,19 @@ export interface StockInRow {
   avgRate: number;
   totalValue: number;
 }
+
+export interface StockOutRow {
+  id: number;
+  sourceType: "Sale" | "Credit Note" | "Debit Note";
+  activityDate: string;
+  isCreditSale: boolean | null;
+  locationName: string;
+  stockItemId?: number;
+  stockItemName: string;
+  quantity: number;
+  sellingRate?: number;
+  totalSales: number;
+  totalCost: number;
+  costProfit: number;
+  avgProfitPerBale: number;
+}

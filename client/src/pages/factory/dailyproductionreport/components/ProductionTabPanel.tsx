@@ -1,4 +1,6 @@
 import "./production-overview-premium.css";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { productionOverviewExport } from "./productionOverviewExport";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +46,7 @@ export function ProductionTabPanel(props: { report: DailyProductionReportState }
     stepDates,
     valuationMode,
   } = useProductionTabPanelState(props);
+  const overviewExport = productionOverviewExport(data, costsHidden, valuationMode);
   return (
     <>
       {/* ── Production tab ── */}
@@ -113,6 +116,18 @@ export function ProductionTabPanel(props: { report: DailyProductionReportState }
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+
+            <RowsExportMenu
+              title="Production Overview"
+              sheetName="Products"
+              rows={overviewExport.products}
+              columns={overviewExport.productColumns}
+              extraSheets={[
+                { name: "Mix Batches", rows: overviewExport.batches, columns: overviewExport.batchColumns },
+              ]}
+              period={{ from: data?.from ?? null, to: data?.to ?? null }}
+              resource="factory.production"
+            />
 
             {data && !costsHidden && (
               <div

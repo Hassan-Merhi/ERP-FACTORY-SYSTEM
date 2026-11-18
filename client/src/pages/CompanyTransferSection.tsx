@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Undo2, Zap } from "lucide-react";
 import { MODULES, MODULE_LABELS, formatUsdBase, useCompanyTransferState } from "./useCompanyTransferState";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export function CompanyTransferSection({
   transfersError,
@@ -261,8 +262,23 @@ export function CompanyTransferSection({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">Transfer History</CardTitle>
+          <RowsExportMenu
+            title="Company Transfer History"
+            sheetName="Transfer History"
+            rows={transfers}
+            columns={[
+              { header: "Date", value: (transfer) => transfer.transferDate },
+              { header: "From", value: (transfer) => transfer.fromCompanyName },
+              { header: "From Account", value: (transfer) => transfer.fromAccountName },
+              { header: "To", value: (transfer) => transfer.toCompanyName },
+              { header: "To Account", value: (transfer) => transfer.toAccountName },
+              { header: "Amount (USD)", value: (transfer) => transfer.amount, type: "number" },
+              { header: "Note", value: (transfer) => transfer.description ?? "—" },
+            ]}
+            resource="erp.accounts"
+          />
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (

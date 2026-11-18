@@ -160,6 +160,7 @@ export async function buildSaleAccountingLines(
   params: {
     voucherLabel: string;
     grandTotal: MoneyInput;
+    nativeZmwTotal?: string;
     isCreditSale: boolean | null | undefined;
     accountType: "cash" | "bank" | "credit";
     accountId: number;
@@ -191,6 +192,7 @@ export async function buildSaleAccountingLines(
 
   return posSaleLines({
     grandTotal: params.grandTotal,
+    nativeZmwTotal: params.nativeZmwTotal,
     payment,
     paymentNarration: narration,
     revenue: params.isSpCompany ? null : { target: { ledgerAccountId: params.salesAccount.id }, narration },

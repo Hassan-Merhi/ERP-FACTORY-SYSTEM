@@ -9582,6 +9582,86 @@
         }
       ],
       "reason": "The only dynamic part is a numeric literal constant rendered into the lease interval; it cannot carry SQL syntax, and the occurrence id and status travel as bound parameters."
+    },
+    {
+      "id": "5915207eb27df32b475b",
+      "path": "scripts/pc-sync/changeFeedSql.mjs",
+      "kind": "assembled-sql-text",
+      "context": "renderChangeFeedInstallSql",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "literal( JSON.stringify(policyRows) )",
+          "source": "policyRows built from config/pc-sync-table-policy.json resolved against the DBA's own catalog (table names, column names, primary keys); written to a file by scripts/pc-sync/render-change-feed-sql.mjs",
+          "validation": "literal() doubles every single quote, so the JSON is one SQL string constant; PostgreSQL parses it with jsonb_populate_recordset and the DO block quotes each table name with format('%I')"
+        }
+      ],
+      "reason": "Generates a DBA-reviewed install file and never runs against a request: the only dynamic part is a quoted JSON constant of repository policy and catalog names, unpacked by PostgreSQL and turned into identifiers only through format('%I')."
+    },
+    {
+      "id": "ee9418b406fceb6ec7e6",
+      "path": "scripts/pc-sync/changeFeedSql.mjs",
+      "kind": "assembled-sql-text",
+      "context": "renderChangeFeedInstallSql",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "literal(grantTo)",
+          "source": "--grant-to=<role> command-line option of scripts/pc-sync/render-change-feed-sql.mjs, typed by the DBA generating the install file",
+          "validation": "renderChangeFeedInstallSql refuses any value outside ^[a-z_][a-z0-9_]*$ before rendering; the role then reaches GRANT only through format('%I')"
+        }
+      ],
+      "reason": "The application role name comes from the DBA's command line, is pattern-checked, sits in a quoted constant and becomes an identifier only through format('%I') inside the generated DO block; no application user can supply it."
+    },
+    {
+      "id": "5bc4d13368b6edbd3863",
+      "path": "scripts/pc-sync/changeFeedSql.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'SELECT jsonb_build_object(%s), to_jsonb(t) - $3 FROM public.%I t WHERE %s%s ORDER BY %s LIMIT $4', key_object, p_table, filter, after_clause, key_list) USING p_companies, p_after, rule.redact",
+          "source": "p_table is the table name a signed-in user asks for; every other part comes from the DBA-installed pc_sync.table_policy row for that table (key columns, mode, member table and column); the bound values are companies from getAccessibleCompanyIds of the signed-in user; the after key decoded and shape-checked by snapshotReader.ts; redacted columns from the policy",
+          "validation": "the function raises PC_SYNC_TABLE_NOT_SYNCED unless p_table has a policy row (and the route first checks ^[a-z_][a-z0-9_]{0,62}$); every identifier goes through format('%I') and the table name inside row_companies through format('%L'); an unknown mode raises instead of reading the table; bound parameters, never concatenated; the after key is cast through jsonb_populate_record of the same table"
+        }
+      ],
+      "reason": "Generated install SQL for a SECURITY DEFINER function: the only request input is a table name that must already be listed in the DBA's policy table, identifiers are quoted with format('%I'), and the user's companies, page key and limit are bound parameters."
+    },
+    {
+      "id": "419368e7e7fa76e80392",
+      "path": "scripts/pc-sync/local/localStore.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'INSERT INTO public.%I (%s) OVERRIDING SYSTEM VALUE SELECT %s FROM jsonb_populate_record(NULL::public.%I, $1) ON CONFLICT (%s) DO UPDATE SET %s', p_table, cols, cols, p_table, keys, sets) USIN",
+          "source": "p_table and the row's column names come from the cloud's change feed or full copy for the signed-in user; the column list is read from this PC's own catalog (pg_attribute) for that table",
+          "validation": "to_regclass(format('public.%I')) must find the table on this PC; only columns that exist in the PC's table and are present in the row are used, each quoted with format('%I'); the row values are a bound parameter cast through jsonb_populate_record"
+        }
+      ],
+      "reason": "Runs only inside the PC's own local database: table and column identifiers are checked against the local catalog and quoted with format('%I'), and every value is bound, so nothing from the cloud reaches the SQL text unquoted."
+    },
+    {
+      "id": "de5a9266c276505e3b30",
+      "path": "scripts/pc-sync/local/localStore.mjs",
+      "kind": "plpgsql-execute",
+      "context": "<module>",
+      "classification": "developer-script",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "format( 'DELETE FROM public.%I t WHERE (%s) = (SELECT %s FROM jsonb_populate_record(NULL::public.%I, $1) x)', p_table, t_list, x_list, p_table) USING p_key",
+          "source": "p_table and the key column names of a removal from the cloud's change feed for the signed-in user",
+          "validation": "to_regclass(format('public.%I')) must find the table on this PC; key columns are quoted with format('%I') and the key values are a bound parameter cast through jsonb_populate_record of the same table"
+        }
+      ],
+      "reason": "Runs only inside the PC's own local database; identifiers are quoted with format('%I') and the key values are bound."
     }
   ]
 }

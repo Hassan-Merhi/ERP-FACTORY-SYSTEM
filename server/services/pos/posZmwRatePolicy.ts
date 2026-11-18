@@ -107,3 +107,5 @@ export function assertZmwImportPrices(
     }
   }
 }
+
+export { calculateZmwSaleAmounts } from "@shared/posZmwMoney";

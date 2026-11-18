@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Banknote, RotateCcw, Scissors } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {} from "@/components/ui/dialog";
-import {} from "@/components/ui/dropdown-menu";
 
 import { AdvancesView } from "./factoryadvancestab/components/AdvancesView";
 import { RepaymentsView } from "./factoryadvancestab/components/RepaymentsView";
@@ -25,11 +23,15 @@ export default function FactoryAdvancesTab() {
     enabled: Boolean(selectedCompany?.id),
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_advances_advances","hide_tab_advances_repayments","hide_tab_advances_deductions"];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_advances_advances", "hide_tab_advances_repayments", "hide_tab_advances_deductions"];
 
   const showAdvances = !hiddenTabs.includes("hide_tab_advances_advances");
   const showRepayments =

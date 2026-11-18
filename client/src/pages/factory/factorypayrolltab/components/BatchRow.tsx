@@ -13,6 +13,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { ProductionBonusDecisionPanel } from "../../factorypayroll/ProductionBonusDecisionPanel";
 import type { BatchRowProps, PayrollRecord } from "../types";
 import { STATUS_CONFIG, fmt, fmtDate } from "../utils";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 function pendingProductionBonus(payroll: PayrollRecord): number {
   const value = Number(payroll.pendingProductionBonus ?? 0);
@@ -78,7 +79,7 @@ export function BatchRow({
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="text-right">
             <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>
-              ${total.toFixed(2)}
+              {formatUsd(total, 2)}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {paidCount > 0 && (

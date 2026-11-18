@@ -21,7 +21,24 @@ import { formatNumber } from "@/lib/formatNumber";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactorySupplier } from "@shared/schema";
 import { ContainerStatusBadge } from "./ContainerBadges";
-import type { ContainerWithSupplier } from "./otwHelpers";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { getContainerStatusLabel, type ContainerWithSupplier } from "./otwHelpers";
+
+/** Container value in its own currency: goods, same-currency freight and every charge. */
+function containerTotalValue(c: ContainerWithSupplier): number {
+  const ccy = c.currencyCode || "USD";
+  const baseValue = parseFloat(c.totalKg || "0") * parseFloat(c.ratePerKg || "0");
+  const freightAmt = parseFloat(c.freight || "0");
+  const freightSameCcy = (c.freightCurrencyCode || ccy) === ccy;
+  const legacyOtherAmt = parseFloat(c.otherCharges || "0");
+  const charges = c as unknown as ContainerWithSupplier & {
+    preRegisteredChargesSum?: string;
+    additionalChargesSum?: string;
+  };
+  const preRegisteredAmt = parseFloat(charges.preRegisteredChargesSum || "0");
+  const additionalAmt = parseFloat(charges.additionalChargesSum || "0");
+  return baseValue + (freightSameCcy ? freightAmt : 0) + legacyOtherAmt + preRegisteredAmt + additionalAmt;
+}
 
 interface ContainerListViewProps {
   containers: ContainerWithSupplier[] | undefined;
@@ -133,12 +150,44 @@ export function ContainerListView({
             </Select>
           }
           actions={
-            hasActiveFilters ? (
-              <Button variant="outline" type="button" onClick={onResetFilters} data-testid="button-reset-filters">
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset filters
-              </Button>
-            ) : undefined
+            <>
+              {hasActiveFilters && (
+                <Button variant="outline" type="button" onClick={onResetFilters} data-testid="button-reset-filters">
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset filters
+                </Button>
+              )}
+              <RowsExportMenu
+                title="Factory Containers"
+                rows={groups.flatMap((group) => group.containers)}
+                columns={[
+                  { header: "Supplier", value: (c) => c.supplierName || "No Supplier" },
+                  { header: "Container #", value: (c) => c.containerNumber },
+                  {
+                    header: "Commission",
+                    value: (c) =>
+                      parseFloat(c.commissionAmount || "0") > 0
+                        ? `${c.commissionCurrencyCode || "USD"} ${formatNumber(parseFloat(c.commissionAmount || "0"))}`
+                        : null,
+                  },
+                  {
+                    header: "Weight (kg)",
+                    value: (c) => (parseFloat(c.totalKg || "0") > 0 ? parseFloat(c.totalKg || "0") : null),
+                    type: "number",
+                  },
+                  { header: "Currency", value: (c) => c.currencyCode || "USD" },
+                  {
+                    header: "Total Value",
+                    value: (c) => (containerTotalValue(c) > 0 ? containerTotalValue(c) : null),
+                    type: "number",
+                  },
+                  { header: "Status", value: (c) => getContainerStatusLabel(c.status) },
+                ]}
+                resource="factory.containers"
+                size="default"
+                data-testid="button-export-factory-containers"
+              />
+            </>
           }
         />
       </div>
@@ -185,22 +234,7 @@ export function ContainerListView({
                 const groupTotals = new Map<string, number>();
                 for (const c of groupContainers) {
                   const ccy = c.currencyCode || "USD";
-                  const baseValue = parseFloat(c.totalKg || "0") * parseFloat(c.ratePerKg || "0");
-                  const freightAmt = parseFloat(c.freight || "0");
-                  const freightCcy = c.freightCurrencyCode || ccy;
-                  const freightSameCcy = freightCcy === ccy;
-                  const legacyOtherAmt = parseFloat(c.otherCharges || "0");
-                  const preRegisteredAmt = parseFloat(
-                    (c as unknown as ContainerWithSupplier & { preRegisteredChargesSum: string })
-                      .preRegisteredChargesSum || "0"
-                  );
-                  const additionalAmt = parseFloat(
-                    (c as unknown as ContainerWithSupplier & { additionalChargesSum: string }).additionalChargesSum ||
-                      "0"
-                  );
-                  const totalInCcy =
-                    baseValue + (freightSameCcy ? freightAmt : 0) + legacyOtherAmt + preRegisteredAmt + additionalAmt;
-                  groupTotals.set(ccy, (groupTotals.get(ccy) || 0) + totalInCcy);
+                  groupTotals.set(ccy, (groupTotals.get(ccy) || 0) + containerTotalValue(c));
                 }
                 return [
                   <TableRow
@@ -250,25 +284,7 @@ export function ContainerListView({
                         const commAmt = parseFloat(c.commissionAmount || "0");
                         const commCcy = c.commissionCurrencyCode || "USD";
                         const ccy = c.currencyCode || "USD";
-                        const baseValue = parseFloat(c.totalKg || "0") * parseFloat(c.ratePerKg || "0");
-                        const freightAmt = parseFloat(c.freight || "0");
-                        const freightCcy = c.freightCurrencyCode || ccy;
-                        const freightSameCcy = freightCcy === ccy;
-                        const legacyOtherAmt = parseFloat(c.otherCharges || "0");
-                        const preRegisteredAmt = parseFloat(
-                          (c as unknown as ContainerWithSupplier & { preRegisteredChargesSum: string })
-                            .preRegisteredChargesSum || "0"
-                        );
-                        const additionalAmt = parseFloat(
-                          (c as unknown as ContainerWithSupplier & { additionalChargesSum: string })
-                            .additionalChargesSum || "0"
-                        );
-                        const totalValue =
-                          baseValue +
-                          (freightSameCcy ? freightAmt : 0) +
-                          legacyOtherAmt +
-                          preRegisteredAmt +
-                          additionalAmt;
+                        const totalValue = containerTotalValue(c);
                         return (
                           <TableRow
                             key={c.id}

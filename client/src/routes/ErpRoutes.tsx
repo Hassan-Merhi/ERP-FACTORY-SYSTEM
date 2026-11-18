@@ -357,7 +357,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       )}
       {canAccess("location_summary") && canAccess("stock_query") ? (
         <Route path="/location-summary">
-          <Redirect replace to="/stock-query?tab=summary" />
+          {/* Stock Query has no "summary" tab; open the Stock hub's query tab directly. */}
+          <Redirect replace to="/stock?tab=query" />
         </Route>
       ) : (
         <Route path="/location-summary">
@@ -393,7 +394,12 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/spreadsheet", true, SpreadsheetEditor)}
       {R("/live-sheets", true, LiveSheets)}
 
-      {canAccess("stock_items") ? (
+      {/* The combined view lives behind the toggle on Inventory → On The Way. */}
+      {canAccess("stock_otw") ? (
+        <Route path="/combined-inventory">
+          <Redirect replace to="/inventory?tab=on-the-way" />
+        </Route>
+      ) : canAccess("stock_items") ? (
         <Route path="/combined-inventory">
           <Redirect replace to="/stock?tab=items" />
         </Route>

@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { useState } from "react";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -145,6 +146,39 @@ export default function StockItemHistory() {
       >
         <CoreErpHeaderActions aria-label="Stock history filters">
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+          <RowsExportMenu
+            title={`${data?.stockItem.name ?? "Stock Item"} Monthly Summary ${selectedYear}`}
+            sheetName="Monthly Summary"
+            rows={data?.monthlyData ?? []}
+            columns={[
+              { header: "Month", value: (m) => m.monthName },
+              { header: "Inwards Quantity", value: (m) => (m.inwardQty > 0 ? m.inwardQty : null), type: "number" },
+              { header: "Inwards Value", value: (m) => (m.inwardValue > 0 ? m.inwardValue : null), type: "number" },
+              { header: "Outwards Quantity", value: (m) => (m.outwardQty > 0 ? m.outwardQty : null), type: "number" },
+              {
+                header: "Outwards Value",
+                value: (m) => (m.outwardValue > 0 ? m.outwardValue : null),
+                type: "number",
+              },
+              { header: "Closing Quantity", value: (m) => m.closingQty || null, type: "number" },
+              { header: "Closing Value", value: (m) => m.closingValue || null, type: "number" },
+            ]}
+            footer={
+              data
+                ? [
+                    "Grand Total",
+                    data.grandTotal.inwardQty || 0,
+                    data.grandTotal.inwardValue || 0,
+                    data.grandTotal.outwardQty || 0,
+                    data.grandTotal.outwardValue || 0,
+                    data.grandTotal.closingQty || 0,
+                    data.grandTotal.closingValue || 0,
+                  ]
+                : undefined
+            }
+            resource="erp.stock_items"
+            period={{ from: periodFilter.fromDate, to: periodFilter.toDate }}
+          />
           <div className="flex min-w-0 items-center gap-2">
             <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Select value={selectedYear} onValueChange={setSelectedYear}>

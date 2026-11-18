@@ -1,13 +1,8 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { PageHeader } from "@/components/PageHeader";
-import { useState } from "react";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Building2,
@@ -54,23 +49,8 @@ import { ScheduledWhatsAppMessagesTab } from "./settings/ScheduledWhatsAppMessag
 import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
 import { FloatingWidgetsSettingsCard } from "./settings/FloatingWidgetsSettingsCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { Company } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
-
-interface SettingsUserToDelete {
-  id: string;
-  username?: string;
-}
 
 interface SettingsSidebarItem {
   key: string;
@@ -82,15 +62,12 @@ interface SettingsSidebarItem {
 }
 
 export default function Settings() {
-  const { toast } = useToast();
   const { language } = useApplicationLanguage();
   const excelAppearanceCopy = getExcelAppearanceCopy(language);
   const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
   const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -100,28 +77,14 @@ export default function Settings() {
     queryKey: ["/api/auth/me"],
   });
 
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await modeApiRequest("DELETE", `/api/users/${userId}`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "User deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      setUserToDelete(null);
-    },
-    onError: (error: ClientErrorLike) => {
-      toast({ title: "Delete failed", description: error.message || "Failed to delete user", variant: "destructive" });
-    },
-  });
-
   const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
-  const canManageChristmasMode = currentUser?.role === "Developer";
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
-  const canManageExcelAppearance = effectiveRole === "Admin" || effectiveRole === "Developer";
+  const isDeveloperMode = effectiveRole === "Developer";
+  const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
+  const canAccessAdminSections = canManageSessions && ["Admin", "Owner", "Developer"].includes(effectiveRole);
 
   const sidebarGroups = [
     {
@@ -137,24 +100,24 @@ export default function Settings() {
       label: "Users & Access",
       items: [
         { key: "users-permissions", label: "Users & Permissions", icon: Users },
-        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, adminOnly: true },
+        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, devOnly: true },
       ],
     },
     {
       label: "Tracking",
       items: showSupplierTrackingDefaults
-        ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
+        ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin, devOnly: true }]
         : [],
     },
     {
       label: "WhatsApp",
-      items: ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "")
-        ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText }]
+      items: isDeveloperMode
+        ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText, devOnly: true }]
         : [],
     },
     {
       label: "Accounting",
-      items: [{ key: "recurring-journals", label: "Recurring Journals", icon: CalendarClock }],
+      items: [{ key: "recurring-journals", label: "Recurring Journals", icon: CalendarClock, devOnly: true }],
     },
     {
       label: "Tools",
@@ -163,7 +126,7 @@ export default function Settings() {
         { key: "edit-log", label: "Edit Log", icon: History },
         { key: "files-export", label: "Files & Export", icon: Upload },
         { key: "export-center", label: "Export Center", icon: Zap },
-        { key: "excel-appearance", label: excelAppearanceCopy.title, icon: FileSpreadsheet, adminOnly: true },
+        { key: "excel-appearance", label: excelAppearanceCopy.title, icon: FileSpreadsheet, devOnly: true },
       ],
     },
     {
@@ -175,7 +138,12 @@ export default function Settings() {
       items:
         appMode === "factory"
           ? [
-              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
+              {
+                key: "automatic-priority-printing",
+                label: "Automatic Priority Printing",
+                icon: Printer,
+                adminOnly: true,
+              },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
@@ -185,7 +153,7 @@ export default function Settings() {
               },
               { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
-                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock }]
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock, adminOnly: true }]
                 : []),
             ]
           : [],
@@ -199,11 +167,15 @@ export default function Settings() {
   const allowedItems = (items: SettingsSidebarItem[]) =>
     items.filter(
       (item) =>
-        (!item.devOnly || currentUser?.role === "Developer") &&
-        (!item.adminOnly || canManageSessions) &&
-        (item.key !== "excel-appearance" || canManageExcelAppearance)
+        (!item.devOnly || isDeveloperMode) &&
+        (!item.adminOnly || canAccessAdminSections) &&
+        (item.key !== "system" || canAccessSystemTools)
     );
-  const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+  // Non-developers should never see headings with no accessible Settings pages.
+  // Developers retain the full Settings taxonomy, including empty groups.
+  const visibleSidebarGroups = sidebarGroups
+    .map((group) => ({ ...group, items: allowedItems(group.items) }))
+    .filter((group) => isDeveloperMode || group.items.length > 0);
 
   // The open section lives in ?section= so a reload or shared link reopens it.
   // Until the signed-in user loads, role-gated sections are kept, not stripped.
@@ -225,16 +197,17 @@ export default function Settings() {
   });
 
   const openSection = (key: string) => {
-    const item = sidebarGroups.flatMap((group) => allowedItems(group.items)).find((entry) => entry.key === key);
-    if (item?.href) {
+    const item = visibleSidebarGroups.flatMap((group) => group.items).find((entry) => entry.key === key);
+    if (!item) return;
+    if (item.href) {
       navigate(item.href);
       return;
     }
     setActiveSection(key);
   };
 
-  const activeSectionLabel = sidebarGroups
-    .flatMap((group) => allowedItems(group.items))
+  const activeSectionLabel = visibleSidebarGroups
+    .flatMap((group) => group.items)
     .find((item) => item.key === activeSection)?.label;
 
   return (
@@ -249,8 +222,8 @@ export default function Settings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {sidebarGroups.map((group) =>
-                allowedItems(group.items).map((item) => (
+              {visibleSidebarGroups.map((group) =>
+                group.items.map((item) => (
                   <SelectItem key={item.key} value={item.key}>
                     {item.label}
                   </SelectItem>
@@ -262,13 +235,13 @@ export default function Settings() {
 
         <nav className="hidden sm:flex sm:flex-col w-56 shrink-0 border-r bg-muted/30 p-3 gap-3 overflow-y-auto">
           <div className="space-y-4">
-            {sidebarGroups.map((group) => (
+            {visibleSidebarGroups.map((group) => (
               <div key={group.label}>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
-                  {allowedItems(group.items).map((item) => {
+                  {group.items.map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
@@ -289,7 +262,7 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
-          {activeSection === "appearance-seasonal" && canManageChristmasMode && <ChristmasModeSettingsCard />}
+          {activeSection === "appearance-seasonal" && isDeveloperMode && <ChristmasModeSettingsCard />}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
               <div>
@@ -304,23 +277,19 @@ export default function Settings() {
               <FloatingWidgetsSettingsCard testIdPrefix="settings-" />
             </div>
           )}
-          {activeSection === "users-permissions" && (
-            <UsersPermissionsHub userRole={currentUser?.role} appMode={appMode} />
+          {activeSection === "users-permissions" && <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />}
+          {activeSection === "sessions-hub" && isDeveloperMode && (
+            <SessionsHub isAdmin={true} isDev={isDeveloperMode} />
           )}
-          {activeSection === "sessions-hub" && canManageSessions && (
-            <SessionsHub isAdmin={true} isDev={currentUser?.role === "Developer"} />
+          {activeSection === "supplier-tracking-defaults" && isDeveloperMode && showSupplierTrackingDefaults && (
+            <SupplierTrackingDefaultsTab canManage={true} />
           )}
-          {activeSection === "supplier-tracking-defaults" && showSupplierTrackingDefaults && (
-            <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
-          )}
-          {activeSection === "recurring-journals" && <RecurringJournalsTab />}
-          {activeSection === "scheduled-whatsapp-messages" && <ScheduledWhatsAppMessagesTab />}
+          {activeSection === "recurring-journals" && isDeveloperMode && <RecurringJournalsTab />}
+          {activeSection === "scheduled-whatsapp-messages" && isDeveloperMode && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
-          {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
-          {activeSection === "pos-setup" && currentUser?.role === "Developer" && (
-            <PosSetupHub userRole={currentUser?.role} />
-          )}
-          {activeSection === "automatic-priority-printing" && appMode === "factory" && (
+          {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
+          {activeSection === "pos-setup" && isDeveloperMode && <PosSetupHub userRole={effectiveRole} />}
+          {activeSection === "automatic-priority-printing" && canAccessAdminSections && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
@@ -330,45 +299,28 @@ export default function Settings() {
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && appMode === "factory" && canManageCompanyTimezone && (
-            <div className="space-y-5 max-w-2xl">
-              <CompanyTimezoneCard />
-            </div>
-          )}
+          {activeSection === "company-timezone" &&
+            canAccessAdminSections &&
+            appMode === "factory" &&
+            canManageCompanyTimezone && (
+              <div className="space-y-5 max-w-2xl">
+                <CompanyTimezoneCard />
+              </div>
+            )}
           {activeSection === "files-export" && <FileStorageAndExport />}
           {activeSection === "export-center" && <ExportCenter />}
-          {activeSection === "excel-appearance" && canManageExcelAppearance && (
+          {activeSection === "excel-appearance" && isDeveloperMode && (
             <ExcelAppearanceSettingsTab company={selectedCompany} />
           )}
           {activeSection === "preferences" && <PreferencesTab />}
-          {activeSection === "system" && (
+          {activeSection === "system" && canAccessSystemTools && (
             <SystemToolsTab
               appMode={appMode}
-              currentUser={currentUser}
+              currentUser={{ role: effectiveRole }}
               selectedCompany={selectedCompany}
               companies={companies}
             />
           )}
-
-          <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete User</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {userToDelete?.username}?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
     </div>

@@ -1,10 +1,11 @@
 import { StatementResponse, type StatementDisplayRow } from "./factorySupplierTypes";
 import { EmptyState } from "@/components/ui/page-state";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRightLeft, Pencil, Trash2, Package } from "lucide-react";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 interface SupplierStatementRowsProps {
   statementData: StatementResponse;
@@ -21,15 +22,23 @@ interface SupplierStatementRowsProps {
   formatDate: (val: string) => string;
   formatNum: (val: string) => string;
   typeBadge: (type: string) => React.ReactNode;
-  statusColor: (
-    status: string
-  ) => "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info" | "muted";
   statusDisplayLabel: (status: string) => string;
   onEditPayment: (p: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;
 }
 
+interface StatementExportRow {
+  date: string;
+  type: string;
+  reference: string;
+  status: string;
+  detail: string;
+  amount: string;
+  balance: string;
+}
+
 export function SupplierStatementRows({
+  statementData,
   primaryCc,
   sfTotalPurchases,
   sfTotalPayments,
@@ -43,7 +52,6 @@ export function SupplierStatementRows({
   formatDate,
   formatNum,
   typeBadge,
-  statusColor,
   statusDisplayLabel,
 }: SupplierStatementRowsProps) {
   if (displayedRows.length === 0) return <EmptyState icon={Package} title="No activity yet" />;
@@ -110,6 +118,57 @@ export function SupplierStatementRows({
             {sfTxCount} result{sfTxCount !== 1 ? "s" : ""}
           </span>
         )}
+        <RowsExportMenu<StatementExportRow>
+          title="Supplier Statement"
+          filters={[{ label: "Supplier", value: statementData.supplier.name }]}
+          rows={[
+            ...displayedRows.map((row) => {
+              const balEntry = balanceByKey[row.key];
+              const bal = balEntry?.bal ?? 0;
+              const ledgerSide =
+                row.type === "purchase" || row.type === "freight" || row.type === "commission"
+                  ? " CR"
+                  : row.type === "payment"
+                    ? " DR"
+                    : "";
+              return {
+                date: formatDate(row.date || ""),
+                type: row.type.toUpperCase(),
+                reference: row.ref,
+                status: row.status ? statusDisplayLabel(row.status) : "",
+                detail: row.detail ?? "",
+                amount:
+                  (!ledgerSide && row.amountIsNeg ? "−" : "") +
+                  row.amount +
+                  (row.optional ? " (Optional)" : ledgerSide),
+                balance: fmtCcAmt(balEntry?.cc ?? row.rowCc, bal) + (bal > 0 ? " CR" : bal < 0 ? " DR" : ""),
+              };
+            }),
+            ...Object.entries(currencyTotals)
+              .filter(([, v]) => v !== 0)
+              .map(([cc, total]) => ({
+                date: `${cc} Net Balance`,
+                type: "",
+                reference: "",
+                status: "",
+                detail: "",
+                amount: "",
+                balance: fmtCcAmt(cc, total) + (total > 0 ? " CR" : total < 0 ? " DR" : ""),
+              })),
+          ]}
+          columns={[
+            { header: "Date", value: (row) => row.date },
+            { header: "Type", value: (row) => row.type },
+            { header: "Reference", value: (row) => row.reference },
+            { header: "Status", value: (row) => row.status },
+            { header: "Detail", value: (row) => row.detail },
+            { header: "Amount", value: (row) => row.amount },
+            { header: "Balance", value: (row) => row.balance },
+          ]}
+          resource="factory.accounting"
+          className="ml-auto"
+          data-testid="button-export-supplier-statement"
+        />
       </div>
 
       <div className="table-responsive">
@@ -148,9 +207,12 @@ export function SupplierStatementRows({
                       <div className="flex items-center gap-1 flex-wrap">
                         <span>{row.ref}</span>
                         {row.status && (
-                          <Badge variant={statusColor(row.status)} className="text-xs ml-1">
-                            {statusDisplayLabel(row.status)}
-                          </Badge>
+                          <StatusBadge
+                            status={row.status}
+                            label={statusDisplayLabel(row.status)}
+                            showIcon={false}
+                            className="text-xs ml-1"
+                          />
                         )}
                       </div>
                       {row.detail && <span className="text-xs text-muted-foreground font-normal">{row.detail}</span>}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatCount } from "@/lib/formatNumber";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileText, Loader2, RefreshCw, Trash2, Users } from "lucide-react";
 import type { PlanAllocationSummary } from "@shared/containerCustomerAllocation";
@@ -32,10 +33,6 @@ interface PackingListResponse {
 interface Props {
   planId: number;
   onPlanChanged: () => void;
-}
-
-function formatQty(value: number): string {
-  return Math.round(Number(value || 0)).toLocaleString();
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -173,15 +170,15 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
           <div>
             <p className="text-sm font-semibold">Customer allocation</p>
             <p className="text-xs text-muted-foreground">
-              {formatQty(summary.allocatedTotal)} of {formatQty(summary.plannedTotal)} planned bales reserved ·{" "}
-              {formatQty(summary.outstandingDemandTotal)} bales of open order demand
+              {formatCount(summary.allocatedTotal)} of {formatCount(summary.plannedTotal)} planned bales reserved ·{" "}
+              {formatCount(summary.outstandingDemandTotal)} bales of open order demand
             </p>
           </div>
         </div>
         <Badge variant={summary.unallocatedTotal === 0 ? "default" : "secondary"}>
           {summary.unallocatedTotal === 0
             ? "Fully allocated"
-            : `${formatQty(summary.unallocatedTotal)} bales unreserved`}
+            : `${formatCount(summary.unallocatedTotal)} bales unreserved`}
         </Badge>
       </div>
 
@@ -198,9 +195,9 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
             <CardContent className="p-3">
               <div className="truncate text-xs font-semibold">{container.containerName}</div>
               <div className="mt-1 text-lg font-semibold tabular-nums">
-                {formatQty(container.allocatedQty)}
+                {formatCount(container.allocatedQty)}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">
-                  / {formatQty(container.plannedQty)}
+                  / {formatCount(container.plannedQty)}
                 </span>
               </div>
               <div className="mt-1 truncate text-[11px] text-muted-foreground">
@@ -234,7 +231,7 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
             {selectedContainer.products.map((product) => (
               <div key={product.articleCode}>
                 <label className="text-[11px] text-muted-foreground" htmlFor={`qty-${product.articleCode}`}>
-                  {product.productName} (free {formatQty(product.unallocatedQty)})
+                  {product.productName} (free {formatCount(product.unallocatedQty)})
                 </label>
                 <Input
                   id={`qty-${product.articleCode}`}
@@ -270,7 +267,7 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
                   data-testid={`row-container-customer-${customer.customerId}`}
                 >
                   <span className="truncate">
-                    {customer.customerName} · {formatQty(customer.allocatedQty)} bales
+                    {customer.customerName} · {formatCount(customer.allocatedQty)} bales
                   </span>
                   <div className="flex items-center gap-1">
                     <Button
@@ -323,10 +320,10 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
               {summary.customers.map((customer) => (
                 <tr key={customer.customerId} className="border-t">
                   <td className="py-1">{customer.customerName}</td>
-                  <td className="py-1 text-right tabular-nums">{formatQty(customer.demandQty)}</td>
-                  <td className="py-1 text-right tabular-nums">{formatQty(customer.allocatedQty)}</td>
-                  <td className="py-1 text-right tabular-nums">{formatQty(customer.outstandingQty)}</td>
-                  <td className="py-1 text-right tabular-nums">{formatQty(customer.containerCount)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatCount(customer.demandQty)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatCount(customer.allocatedQty)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatCount(customer.outstandingQty)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatCount(customer.containerCount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -338,8 +335,8 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
         <div className="mt-4 rounded-lg border p-3" data-testid="customer-packing-list">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">
-              Packing list · {packingListQuery.data.customerName} · {formatQty(packingListQuery.data.totalQty)} bales ·{" "}
-              {formatQty(packingListQuery.data.totalWeightKg)} kg
+              Packing list · {packingListQuery.data.customerName} · {formatCount(packingListQuery.data.totalQty)} bales
+              · {formatCount(packingListQuery.data.totalWeightKg)} kg
             </p>
             <Button size="sm" variant="ghost" onClick={() => setPackingListCustomerId(null)}>
               Close
@@ -348,12 +345,12 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
           {packingListQuery.data.containers.map((container) => (
             <div key={container.containerId} className="mt-2">
               <p className="text-xs font-medium">
-                {container.containerName} · {formatQty(container.totalQty)} bales
+                {container.containerName} · {formatCount(container.totalQty)} bales
               </p>
               {container.lines.map((line) => (
                 <p key={line.productName} className="mt-1 text-[11px] text-muted-foreground">
-                  <span className="font-medium text-foreground">{line.productName}</span> {formatQty(line.allocatedQty)}{" "}
-                  allocated, {formatQty(line.assignedQty)} assigned
+                  <span className="font-medium text-foreground">{line.productName}</span>{" "}
+                  {formatCount(line.allocatedQty)} allocated, {formatCount(line.assignedQty)} assigned
                   {line.baleCodes.length > 0 && <span className="font-mono"> · {line.baleCodes.join(", ")}</span>}
                 </p>
               ))}

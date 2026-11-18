@@ -227,6 +227,7 @@ export default function FactoryStockQueryWorkspace() {
           <div className="grid gap-4 xl:grid-cols-2">
             <FactoryStockQueryWorkspaceSection
               displayedProducts={displayedProducts}
+              from={from}
               mhd={mhd}
               products={products}
               search={search}
@@ -236,6 +237,7 @@ export default function FactoryStockQueryWorkspace() {
               setSort={setSort}
               setVisible={setVisible}
               sort={sort}
+              to={to}
               visible={visible}
             />
 

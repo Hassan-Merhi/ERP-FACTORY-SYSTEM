@@ -92,9 +92,11 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     // phones/tablets, sale grid + item sidebar side by side on wide screens.
     const pos = read("client/src/pages/pos/RetailPOS.tsx");
     const columns = read("client/src/pages/pos/pos-components/PosWorkspaceColumns.tsx");
-    expect(pos).toContain("flex-col gap-3");
+    // Phase 9d: the page frame is the shared sale-screen layout.
+    const layout = read("client/src/pages/pos/pos-components/PosSaleLayout.tsx");
+    expect(pos).toContain('<PosSaleScreen variant="retail">');
     expect(pos).toContain('<PosWorkspaceColumns layout="retail">');
-    expect(pos).toContain("md:p-5");
+    expect(layout).toContain("md:p-5");
     expect(pos).toContain("xl:hidden");
     expect(columns).toContain("xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.7fr)]");
   });

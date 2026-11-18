@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, TruckIcon } from "lucide-react";
 import { API, fmtUsd, type Transporter } from "./FactoryTransportersPaymentDialog";
@@ -143,11 +144,26 @@ export default function FactoryTransporters() {
             <PageHeader title="Transporters" subtitle="Track charges and payments per transporter." />
           </div>
         </div>
-        {canAddTransporter && (
-          <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-transporter">
-            <Plus className="h-4 w-4 mr-1" /> Add Transporter
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <RowsExportMenu
+            title="Transporters"
+            rows={transporters}
+            columns={[
+              { header: "Transporter", value: (t) => t.name },
+              { header: "Phone", value: (t) => t.phone },
+              { header: "Total Charged (USD)", value: (t) => t.totalCharged, type: "number" },
+              { header: "Total Paid (USD)", value: (t) => t.totalPaid, type: "number" },
+              { header: "Outstanding (USD)", value: (t) => t.outstanding, type: "number" },
+            ]}
+            resource="factory.accounting"
+            data-testid="button-export-transporters"
+          />
+          {canAddTransporter && (
+            <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-transporter">
+              <Plus className="h-4 w-4 mr-1" /> Add Transporter
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Summary cards */}

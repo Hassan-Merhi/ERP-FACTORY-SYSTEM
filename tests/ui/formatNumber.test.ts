@@ -12,6 +12,9 @@ import {
   formatCurrency,
   formatCurrencyWithLabel,
   formatPercent,
+  formatQuantity,
+  formatKg,
+  formatCount,
 } from "@/lib/formatNumber";
 
 describe("drCrClass", () => {
@@ -119,5 +122,30 @@ describe("formatPercent", () => {
   it("appends a % sign and trims whole-number decimals", () => {
     expect(formatPercent(50)).toBe("50%");
     expect(formatPercent(33.333)).toMatch(/^33[.,]33%$/);
+  });
+});
+
+describe("shared quantity and weight helpers", () => {
+  it("formatQuantity matches the local kg formatters it replaced (up to 3 decimals, no trailing zeros)", () => {
+    for (const value of [0, 1, 12.5, 1234.5678, -42.1234, 1e6]) {
+      expect(formatQuantity(value)).toBe(value.toLocaleString(undefined, { maximumFractionDigits: 3 }));
+    }
+    expect(formatQuantity("12.3456")).toBe((12.3456).toLocaleString(undefined, { maximumFractionDigits: 3 }));
+    expect(formatQuantity(2.25, 1)).toBe((2.25).toLocaleString(undefined, { maximumFractionDigits: 1 }));
+    expect(formatQuantity(null)).toBe("0");
+    expect(formatQuantity("abc")).toBe("0");
+  });
+
+  it("formatKg appends the unit and shows blank or zero weights as 0 kg", () => {
+    expect(formatKg(1234.56)).toBe(`${(1234.56).toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`);
+    expect(formatKg("0")).toBe("0 kg");
+    expect(formatKg(null)).toBe("0 kg");
+    expect(formatKg(undefined)).toBe("0 kg");
+  });
+
+  it("formatCount rounds bale counts to whole numbers", () => {
+    expect(formatCount(1234.6)).toBe((1235).toLocaleString());
+    expect(formatCount(0)).toBe("0");
+    expect(formatCount(Number.NaN)).toBe("0");
   });
 });

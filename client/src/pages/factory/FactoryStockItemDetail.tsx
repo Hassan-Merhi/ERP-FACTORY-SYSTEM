@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsExportMenu";
 import { EmptyState } from "@/components/ui/page-state";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,67 @@ const fmt = (n: number) => {
   return s;
 };
 
+/** The Pressed, Sales and Loaded tables as worksheets, with their total rows. */
+function detailExportSheets(
+  data: BaleProductDetail | undefined,
+  formatDisplayDate: (date: Date) => string
+): RowsExportSheet<unknown>[] {
+  if (!data) return [];
+  const pressed: RowsExportSheet<PressedEntry> = {
+    name: "Pressed",
+    rows: data.pressed,
+    columns: [
+      { header: "Date", value: (row) => formatDisplayDate(new Date(row.date + "T00:00:00")) },
+      { header: "Qty", value: (row) => row.qty, type: "number" },
+      { header: "Weight (kg)", value: (row) => fmt(row.totalWeight), type: "number" },
+    ],
+    footer: [
+      "Total",
+      data.pressed.reduce((sum, row) => sum + row.qty, 0),
+      fmt(data.pressed.reduce((sum, row) => sum + row.totalWeight, 0)),
+    ],
+  };
+  const sales: RowsExportSheet<SaleEntry> = {
+    name: "Sales",
+    rows: data.sales,
+    columns: [
+      { header: "Date", value: (row) => formatDisplayDate(new Date(row.orderDate + "T00:00:00")) },
+      { header: "Customer", value: (row) => row.customerName },
+      { header: "Invoice", value: (row) => row.invoiceNumber },
+      { header: "Qty", value: (row) => row.qty, type: "number" },
+      { header: "Price/Bale", value: (row) => fmt(parseFloat(row.pricePerBale)), type: "number" },
+      { header: "Total", value: (row) => fmt(parseFloat(row.total)), type: "number" },
+    ],
+    footer: [
+      "Total",
+      null,
+      null,
+      data.sales.reduce((sum, row) => sum + row.qty, 0),
+      null,
+      fmt(data.sales.reduce((sum, row) => sum + parseFloat(row.total), 0)),
+    ],
+  };
+  const loaded: RowsExportSheet<LoadedEntry> = {
+    name: "Loaded (On The Way)",
+    rows: data.loaded,
+    columns: [
+      { header: "Invoice", value: (row) => row.invoiceNumber },
+      { header: "Customer", value: (row) => row.customerName },
+      { header: "Container", value: (row) => row.containerNumber || "—" },
+      { header: "Qty", value: (row) => row.qty, type: "number" },
+      { header: "Total", value: (row) => fmt(parseFloat(row.total)), type: "number" },
+    ],
+    footer: [
+      "Total",
+      null,
+      null,
+      data.loaded.reduce((sum, row) => sum + row.qty, 0),
+      fmt(data.loaded.reduce((sum, row) => sum + parseFloat(row.total), 0)),
+    ],
+  };
+  return [pressed, sales, loaded];
+}
+
 export default function FactoryStockItemDetail() {
   const { formatDisplayDate } = useDateFormat();
   const [, factoryParams] = useRoute("/factory/stock-query/:id");
@@ -116,7 +178,25 @@ export default function FactoryStockItemDetail() {
         </div>
       ) : (
         <div>
-          <PageHeader title={data?.product.name ?? "Loading..."} />
+          <PageHeader title={data?.product.name ?? "Loading..."}>
+            <RowsExportMenu
+              title={`${data?.product.name ?? "Product"} Stock Detail`}
+              sheetName="Current Stock"
+              rows={data?.currentStock?.locations ?? []}
+              columns={[
+                { header: "Location", value: (loc) => loc.locationName },
+                { header: "Bales", value: (loc) => loc.qty, type: "number" },
+                { header: "Weight (kg)", value: (loc) => fmt(loc.totalWeight), type: "number" },
+              ]}
+              footer={
+                data?.currentStock
+                  ? ["Total", data.currentStock.totalQty, fmt(data.currentStock.totalWeight)]
+                  : undefined
+              }
+              extraSheets={detailExportSheets(data, formatDisplayDate)}
+              resource="factory.bales"
+            />
+          </PageHeader>
           {data?.product.articleCode && <p className="text-sm text-muted-foreground">{data.product.articleCode}</p>}
         </div>
       )}

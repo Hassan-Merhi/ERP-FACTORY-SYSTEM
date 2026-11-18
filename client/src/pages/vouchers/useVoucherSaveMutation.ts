@@ -7,6 +7,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
+import Decimal from "decimal.js";
 import type { UseFormReturn } from "react-hook-form";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { apiRequestPrivileged, queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
@@ -27,6 +28,7 @@ export function useVoucherSaveMutation({
   activeTab,
   voucherIdToEdit,
   isWalletPayment,
+  fxWalletDraft,
   postWalletPayment,
   resetWalletPayment,
   selectedCurrency,
@@ -47,6 +49,7 @@ export function useVoucherSaveMutation({
   activeTab: string;
   voucherIdToEdit: number | null;
   isWalletPayment: boolean;
+  fxWalletDraft: { eurBalance: string; bookUsd: string; payoutCurrency: "EUR" | "USD" } | null;
   postWalletPayment: FxWalletPayment["postWalletPayment"];
   resetWalletPayment: FxWalletPayment["resetWalletPayment"];
   selectedCurrency: WalletPaymentContext["selectedCurrency"];
@@ -66,8 +69,23 @@ export function useVoucherSaveMutation({
 }) {
   return useMutation({
     mutationFn: async (formData: VoucherSubmission) => {
-      if (isWalletPayment) {
+      const isFxEurDraft = isWalletPayment && formData.optional;
+      if (isWalletPayment && !formData.optional) {
         return postWalletPayment(formData, { selectedCurrency, voucherEffectiveDate, modeApiRequest });
+      }
+      // An Optional EUR FX payment is an off-ledger draft. Save no wallet operation
+      // until the dedicated atomic draft-finalize endpoint runs.
+      let draftRate: string | undefined;
+      if (isFxEurDraft) {
+        if (fxWalletDraft?.payoutCurrency !== "EUR") {
+          throw new Error("Only direct EUR supplier FX payments can be saved as Optional");
+        }
+        const eur = new Decimal(fxWalletDraft.eurBalance);
+        const bookUsd = new Decimal(fxWalletDraft.bookUsd);
+        if (!eur.isFinite() || !bookUsd.isFinite() || eur.lte(0) || bookUsd.lte(0)) {
+          throw new Error("FX agent wallet book basis is unavailable for the Optional draft");
+        }
+        draftRate = eur.div(bookUsd).toDecimalPlaces(10).toFixed(10);
       }
       const voucherType = activeTab === "payment" ? "Payment" : "Receipt";
       const isEditMode = !!voucherIdToEdit;
@@ -84,8 +102,9 @@ export function useVoucherSaveMutation({
         entries: formData.entries,
         notes: autoDesc,
         optional: formData.optional,
-        currency: paymentPostingCurrency,
-        exchangeRate: paymentPostingRate ? paymentPostingRate.toString() : undefined,
+        ...(isFxEurDraft ? { fxWalletDraft: true } : {}),
+        currency: isFxEurDraft ? "EUR" : paymentPostingCurrency,
+        exchangeRate: isFxEurDraft ? draftRate : paymentPostingRate ? paymentPostingRate.toString() : undefined,
         effectiveDate: voucherEffectiveDate || null,
       };
       if (formData.intercompanyMirror) {

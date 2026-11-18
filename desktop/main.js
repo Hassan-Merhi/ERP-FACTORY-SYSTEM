@@ -1,11 +1,73 @@
-const { app, BrowserWindow, Menu, shell, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
+const { createLocalMode } = require('./offline/localMode');
 
 const APP_URL = 'https://www.hmdinternationalgroup.com';
 const APP_NAME = 'ERP Warehouse';
 const ICON_PATH = path.join(__dirname, 'icons', 'icon.ico');
 
 let mainWindow = null;
+let connectWindow = null;
+let pendingConnect = null;
+
+// Full offline mode: the PC's local copy (off unless enabled in offline-pc.json).
+const localMode = createLocalMode({
+  cloudUrl: APP_URL,
+  onStatus: (event) => {
+    if (event.event === 'login' && pendingConnect) {
+      pendingConnect({ ok: event.ok === true });
+      pendingConnect = null;
+    }
+    if (event.event === 'status') updateTitle();
+  },
+});
+
+function updateTitle() {
+  if (!mainWindow) return;
+  const status = localMode.status();
+  const onLocal = localMode.isLocalUrl(mainWindow.webContents.getURL());
+  if (!onLocal && !status?.freshness?.warn) return mainWindow.setTitle(APP_NAME);
+  const hours = status?.freshness?.hours;
+  const age = hours == null ? 'never synced' : `last sync ${Math.floor(hours)}h ago`;
+  mainWindow.setTitle(`${APP_NAME} — ${onLocal ? 'offline copy (read-only), ' : ''}${age}`);
+}
+
+function openConnectWindow() {
+  if (connectWindow) return connectWindow.focus();
+  connectWindow = new BrowserWindow({
+    width: 420,
+    height: 380,
+    parent: mainWindow || undefined,
+    title: 'Connect this PC',
+    backgroundColor: '#0f172a',
+    webPreferences: {
+      preload: path.join(__dirname, 'offline', 'connectPreload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  connectWindow.setMenu(null);
+  connectWindow.loadFile(path.join(__dirname, 'offline', 'connect.html'));
+  connectWindow.on('closed', () => {
+    connectWindow = null;
+  });
+}
+
+ipcMain.handle('offline-pc:connect', (event, { username, password } = {}) => {
+  if (!connectWindow || event.sender !== connectWindow.webContents) return { ok: false };
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) return { ok: false };
+  if (!localMode.connect(username, password)) return { ok: false };
+  return new Promise((resolve) => {
+    pendingConnect = resolve;
+    setTimeout(() => {
+      if (pendingConnect === resolve) {
+        pendingConnect = null;
+        resolve({ ok: false });
+      }
+    }, 60_000);
+  });
+});
 
 function createWindow() {
   const isDev = process.argv.includes('--dev');
@@ -40,6 +102,11 @@ function createWindow() {
     // An embedded frame that fails to load must not replace the running
     // application with the offline page; only a failed top-level load does.
     if (isMainFrame === false) return;
+    // The cloud cannot be reached: open this PC's local copy when it is ready.
+    if (localMode.ready() && !localMode.isLocalUrl(_validatedURL)) {
+      mainWindow.loadURL(localMode.localUrl);
+      return;
+    }
     mainWindow.loadFile(path.join(__dirname, 'offline.html'));
     console.error('Page failed to load:', errorCode, errorDescription);
   });
@@ -53,7 +120,7 @@ function createWindow() {
     }
     // Compare full origins: a prefix check would also allow look-alike hosts
     // such as https://www.hmdinternationalgroup.com.example.net.
-    if (parsed.origin === new URL(APP_URL).origin) {
+    if (parsed.origin === new URL(APP_URL).origin || localMode.isLocalUrl(url)) {
       return { action: 'allow' };
     }
     if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
@@ -64,7 +131,7 @@ function createWindow() {
 
   mainWindow.on('page-title-updated', (event) => {
     event.preventDefault();
-    mainWindow.setTitle(APP_NAME);
+    updateTitle();
   });
 
   mainWindow.on('closed', () => {
@@ -137,6 +204,22 @@ function buildMenu() {
         },
       ],
     },
+    ...(localMode.enabled
+      ? [
+          {
+            label: 'Offline copy',
+            submenu: [
+              { label: 'Connect this PC…', click: openConnectWindow },
+              { label: 'Sync now', click: () => localMode.syncNow() },
+              {
+                label: 'Open offline copy (read-only)',
+                click: () => mainWindow && localMode.ready() && mainWindow.loadURL(localMode.localUrl),
+              },
+              { label: 'Back to the cloud', click: () => mainWindow && mainWindow.loadURL(APP_URL) },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'Help',
       submenu: [
@@ -165,10 +248,17 @@ function buildMenu() {
 
 app.setName(APP_NAME);
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  localMode.start().catch((error) => console.error('Offline copy failed to start:', error && error.message));
+});
 
 app.on('window-all-closed', () => {
   app.quit();
+});
+
+app.on('before-quit', () => {
+  localMode.stop();
 });
 
 app.on('activate', () => {
@@ -187,7 +277,7 @@ app.on('web-contents-created', (_event, contents) => {
       return;
     }
     const allowedHosts = ['www.hmdinternationalgroup.com', 'hmdinternationalgroup.com'];
-    if (!allowedHosts.includes(parsedUrl.hostname)) {
+    if (!allowedHosts.includes(parsedUrl.hostname) && !localMode.isLocalUrl(navigationUrl)) {
       event.preventDefault();
       if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') {
         shell.openExternal(navigationUrl);
