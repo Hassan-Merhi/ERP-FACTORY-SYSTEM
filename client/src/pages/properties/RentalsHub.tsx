@@ -46,7 +46,7 @@ export function RentalsHub({
       {(showTabs || tools) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {showTabs ? (
-            <div className="erp-mobile-scroll-tabs pb-1">
+            <div className="erp-mobile-scroll-tabs w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-1 sm:w-auto">
               <TabsList className="w-max min-w-full sm:w-fit sm:min-w-0" aria-label="Rental sections">
                 {visible.map((section) => {
                   const { label, icon: Icon } = RENTAL_SECTION_DEFINITIONS[section];
