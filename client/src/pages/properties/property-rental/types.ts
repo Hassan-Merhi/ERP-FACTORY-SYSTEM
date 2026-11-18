@@ -86,8 +86,5 @@ export // ── Props ───────────────────
 interface Props {
   rentalModule: import("@/properties/config/rentalModulePolicy").RentalModule;
   unitType: "WAREHOUSE" | "SHOP";
-  pageTitle: string;
-  pageIcon: React.ReactNode;
   testIdPrefix: string;
-  paymentsLogUrl?: string;
 }
