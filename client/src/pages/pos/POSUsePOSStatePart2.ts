@@ -42,6 +42,8 @@ export function usePOSStatePart2({
   paymentAccountType,
   pendingAutoSend,
   pendingStockSend,
+  posAssignedLocations,
+  posSelectedLocation,
   posUser,
   posWritesDisabled,
   printRef,
@@ -63,6 +65,7 @@ export function usePOSStatePart2({
   setPaymentAccountType,
   setPendingAutoSend,
   setPendingStockSend,
+  setPosSelectedLocation,
   setRows,
   setSaleDate,
   setSaleJustCompleted,
@@ -115,6 +118,8 @@ export function usePOSStatePart2({
   | "paymentAccountType"
   | "pendingAutoSend"
   | "pendingStockSend"
+  | "posAssignedLocations"
+  | "posSelectedLocation"
   | "posUser"
   | "posWritesDisabled"
   | "printRef"
@@ -136,6 +141,7 @@ export function usePOSStatePart2({
   | "setPaymentAccountType"
   | "setPendingAutoSend"
   | "setPendingStockSend"
+  | "setPosSelectedLocation"
   | "setRows"
   | "setSaleDate"
   | "setSaleJustCompleted"
