@@ -3,10 +3,27 @@ import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth } from "../../auth";
 import { requirePosSaleEditWindow } from "../../middleware/posSaleEditWindow";
+import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { updatePosSale } from "../../services/pos/edit/updateSaleService";
 import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
 
 export function registerPosEditSaleRoutes(app: Express): void {
+  app.get("/api/pos/daybook-edit-status", requireAuth, async (req, res) => {
+    try {
+      const access = await getActiveCompanyPermissionContext(req);
+      const businessDate = await companyBusinessDate(access.companyId);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json({
+        role: access.role,
+        daybookEditDays: access.daybookEditDays,
+        posViewOnly: access.posViewOnly,
+        businessDate,
+      });
+    } catch (error) {
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+    }
+  });
   // Update existing sales voucher
   app.put("/api/vouchers/:id/sales", requireAuth, requirePosSaleEditWindow, async (req, res) => {
     return handlePosSaleEdit(req, res);

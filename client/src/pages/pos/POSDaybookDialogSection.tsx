@@ -3,7 +3,7 @@ import { Lock, MessageCircle, Pencil, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
-import { posDaybookBusinessDate, posDaybookEditEligibility } from "@shared/posDaybookEditPolicy";
+import { posDaybookEditEligibility } from "@shared/posDaybookEditPolicy";
 import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -49,31 +49,35 @@ export function POSDaybookDialogSection({
 >) {
   const [editing, setEditing] = useState(false);
   const { selectedCompany } = useCompany();
-  const { data: settings } = useQuery<{ timezone?: string | null }>({
-    queryKey: ["/api/company-settings", selectedCompany?.id],
-    enabled: Boolean(selectedCompany?.id),
+  const { data: liveAccess } = useQuery<{
+    role: string;
+    daybookEditDays: number;
+    posViewOnly: boolean;
+    businessDate: string;
+  }>({
+    queryKey: ["/api/pos/daybook-edit-status", selectedCompany?.id, selectedVoucher?.id],
+    enabled: Boolean(selectedCompany?.id && selectedVoucher),
     queryFn: async () => {
-      const response = await fetch(`/api/company-settings?companyId=${selectedCompany?.id}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Unable to load company timezone");
+      const response = await fetch("/api/pos/daybook-edit-status", { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to check Daybook edit permissions");
       return response.json();
     },
+    refetchInterval: 30_000,
+    retry: false,
   });
-  const posUser = currentUser?.role === "POS";
+  const posUser = (liveAccess?.role ?? currentUser?.role) === "POS";
   const permission = posDaybookEditEligibility({
     originalDate: selectedVoucher?.voucherDate || "",
-    businessDate: posDaybookBusinessDate(settings?.timezone),
-    editDays: Number(currentUser?.daybookEditDays ?? 0),
+    businessDate: liveAccess?.businessDate ?? "",
+    editDays: Number(liveAccess?.daybookEditDays ?? 0),
     isOwnSale: Boolean(selectedVoucher && String(selectedVoucher.userId) === String(currentUser?.id)),
-    viewOnly: Boolean(currentUser?.posViewOnly),
+    viewOnly: Boolean(liveAccess?.posViewOnly ?? currentUser?.posViewOnly),
   });
   const canEditSelected = Boolean(
     selectedVoucher?.voucherType === "Sales" &&
     !selectedVoucher.optional &&
     recordChanges.allowed &&
-    canEditDaybook &&
-    (posUser ? permission.allowed : true)
+    (posUser ? Boolean(liveAccess && permission.allowed) : canEditDaybook)
   );
   return (
     <Dialog
