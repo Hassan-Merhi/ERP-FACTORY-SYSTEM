@@ -522,9 +522,7 @@ export function PosMobileLayout({
           })
         )}
       </section>
-
       <PosMobileNotes notes={notes} setNotes={setNotes} />
-
       <PosMobileItemSheet
         item={sheetItem}
         onOpenChange={(open) => {
@@ -535,7 +533,6 @@ export function PosMobileLayout({
         onAdd={addFromSheet}
         returnFocusRef={mobileSearchInputRef}
       />
-
       {/* Sticky inside the POS scroller (not viewport-fixed), so on a tablet with the sidebar pinned the
           bar spans the content column instead of painting over the sidebar footer. */}
       <div
