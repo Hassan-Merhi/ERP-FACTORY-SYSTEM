@@ -7,6 +7,7 @@ import {
   criticalTables,
   evaluateCriticalSchema,
 } from "../server/criticalSchemaReadiness.mjs";
+import { columnDefinition } from "./helpers/schemaManifest";
 
 function completeSnapshot() {
   return {
@@ -55,20 +56,18 @@ describe("critical schema readiness", () => {
     });
   });
 
-  it("preloads the factory container schema repair before the server entrypoint", () => {
+  it("migrations define the factory container JSONCargo columns the gate verifies before the entrypoint", () => {
     const startupPreload = fs.readFileSync(path.resolve(process.cwd(), "server/startupPreload.mjs"), "utf8");
     const packageJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"));
-    const schemaBridge = fs.readFileSync(
-      path.resolve(process.cwd(), "server/factoryContainerSchemaBridge.mjs"),
-      "utf8"
-    );
 
-    expect(startupPreload).toContain('await import("./factoryContainerSchemaBridge.mjs");');
+    // No preload bridge repairs the schema any more: the read-only schema gate
+    // aborts startup when the database does not match the migrations.
+    expect(startupPreload).not.toContain("factoryContainerSchemaBridge");
+    expect(startupPreload).toContain("await runStartupSchemaGateOnce();");
     expect(packageJson.scripts.start).toContain("--import ./server/startupPreload.mjs");
-    expect(schemaBridge).toContain('["json_cargo_last_checked_at", "TIMESTAMPTZ"]');
-    expect(schemaBridge).toContain('["json_cargo_tracking_status", "TEXT"]');
-    expect(schemaBridge).toContain('["json_cargo_error", "TEXT"]');
-    expect(schemaBridge).toContain("Factory container schema verification failed; aborting startup");
+    expect(columnDefinition("factory_containers", "json_cargo_last_checked_at")?.type).toBe("timestamp with time zone");
+    expect(columnDefinition("factory_containers", "json_cargo_tracking_status")?.type).toBe("text");
+    expect(columnDefinition("factory_containers", "json_cargo_error")?.type).toBe("text");
   });
 
   it("keeps Render on the schema-aware readiness endpoint", () => {

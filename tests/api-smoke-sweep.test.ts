@@ -26,6 +26,7 @@ import path from "node:path";
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
+import * as authStorage from "../server/storage/auth";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 import type { SerializedRouteManifest } from "./helpers/routeManifest";
 
@@ -174,6 +175,11 @@ const observed: Record<string, SweptResponse> = {};
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
+  // users.chatbot_enabled defaults to false in the deployed schema, which the
+  // migrations reproduce (Drizzle declares true, which only drizzle-kit push
+  // applied). Enable it explicitly so the chatbot routes are swept on their
+  // success path rather than on the "chatbot disabled" refusal.
+  await authStorage.updateUser(ctx.userId, { chatbotEnabled: true });
   agent = request.agent(ctx.app);
 
   const login = await agent.post("/api/auth/login").send({

@@ -185,7 +185,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Prepare disposable security schema
-        run: npm run db:push
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate
 
       - name: Run focused security readiness
         env:

@@ -115,7 +115,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/Daybook.tsx",
     token: "useDaybookFilterState",
-    controls: "client/src/pages/daybook/DaybookFilters.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/transactionjournal/useTransactionJournalModel.ts",
@@ -125,7 +126,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/factory/daybook/useFactoryDaybookModel.ts",
     token: "loadFactoryDaybookState",
-    controls: "client/src/pages/factory/daybook/FactoryDaybookFilters.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/stockitems/useStockItems.ts",
@@ -150,7 +152,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/pos/POSDaybook.tsx",
     token: "usePaginatedFilterState",
-    controls: "client/src/pages/pos/POSDaybook.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/pos/POSCustomers.tsx",

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const routeSource = readFileSync(new URL("./goldenCoastAccountingRoutes.ts", import.meta.url), "utf8");
-const permissionBoundarySource = readFileSync(new URL("./core/permissionBoundaryRoutes.ts", import.meta.url), "utf8");
+const accessManifest = readFileSync(new URL("../../config/route-access-manifest.json", import.meta.url), "utf8");
 
 describe("Golden Coast Phase 1 route surface", () => {
   it("registers the four protected Phase 1 endpoints", () => {
@@ -13,10 +13,14 @@ describe("Golden Coast Phase 1 route surface", () => {
   });
 
   it("enforces accounting module and voucher-create permissions on live posting", () => {
-    expect(permissionBoundarySource).toContain('"/api/golden-coast/accounting"');
-    expect(permissionBoundarySource).toContain(
-      'app.use("/api/golden-coast/accounting/phase1/post", requireActionAccess("act_create_voucher"));'
-    );
+    const rules = accessManifest
+      .split("\n")
+      .filter((line) => line.includes('"id":"') && line.includes(" /api/golden-coast/accounting"));
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) expect(rule).toContain('"mod_accounting"');
+    const livePosting = rules.filter((rule) => rule.includes(" /api/golden-coast/accounting/phase1/post#"));
+    expect(livePosting.length).toBeGreaterThan(0);
+    for (const rule of livePosting) expect(rule).toContain('"act_create_voucher"');
   });
 
   it("rate-limits reads and mutations and caps request size", () => {

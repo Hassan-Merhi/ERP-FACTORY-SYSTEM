@@ -61,7 +61,7 @@ function fullyNormalized(entry: VoucherEntryInsertFields): boolean {
 
 /**
  * The 2 dp debit and credit the currency normalization trigger
- * (CURRENCY_NORMALIZATION_FUNCTION_DDL, insert path) will store for a line.
+ * (normalize_voucher_entry_currency_amounts(), insert path) will store for a line.
  */
 export function storedLedgerAmounts(
   voucher: Pick<VoucherInsertFields, "currency" | "exchangeRate">,

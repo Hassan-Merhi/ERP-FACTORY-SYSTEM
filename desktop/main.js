@@ -35,8 +35,11 @@ function createWindow() {
     mainWindow.focus();
   });
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
     if (errorCode === -3) return;
+    // An embedded frame that fails to load must not replace the running
+    // application with the offline page; only a failed top-level load does.
+    if (isMainFrame === false) return;
     mainWindow.loadFile(path.join(__dirname, 'offline.html'));
     console.error('Page failed to load:', errorCode, errorDescription);
   });
@@ -176,7 +179,13 @@ app.on('activate', () => {
 
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-navigate', (event, navigationUrl) => {
-    const parsedUrl = new URL(navigationUrl);
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(navigationUrl);
+    } catch {
+      event.preventDefault();
+      return;
+    }
     const allowedHosts = ['www.hmdinternationalgroup.com', 'hmdinternationalgroup.com'];
     if (!allowedHosts.includes(parsedUrl.hostname)) {
       event.preventDefault();

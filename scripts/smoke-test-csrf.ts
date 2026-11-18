@@ -40,8 +40,8 @@ const cookies = new Map<string, string>();
 function captureSetCookie(res: Response): void {
   // getSetCookie() is Node 20+; fallback to raw header split for safety.
   const raw: string[] =
-    typeof (res.headers as any).getSetCookie === "function"
-      ? (res.headers as any).getSetCookie()
+    typeof res.headers.getSetCookie === "function"
+      ? res.headers.getSetCookie()
       : (res.headers.get("set-cookie") || "").split(/,(?=[^;]+=)/g).filter(Boolean);
   for (const c of raw) {
     const [pair] = c.split(";");
@@ -83,8 +83,10 @@ async function run(): Promise<void> {
 
   // Step 1: fetch token
   const r1 = await jarFetch("/api/csrf-token");
-  const body1: any = await r1.json().catch(() => ({}));
-  const token: string | undefined = body1.csrfToken;
+  const body1: unknown = await r1.json().catch(() => ({}));
+  const token = body1 !== null && typeof body1 === "object" && "csrfToken" in body1 && typeof body1.csrfToken === "string"
+    ? body1.csrfToken
+    : undefined;
   check("GET /api/csrf-token returns 200", r1.status === 200);
   check(
     "GET /api/csrf-token returns hex token",

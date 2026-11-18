@@ -1,7 +1,6 @@
 import request from "supertest";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import { closeTestServer, cleanupTestData, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "autopriority";
@@ -9,7 +8,6 @@ let ctx: TestContext;
 let agent: request.SuperAgentTest;
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent

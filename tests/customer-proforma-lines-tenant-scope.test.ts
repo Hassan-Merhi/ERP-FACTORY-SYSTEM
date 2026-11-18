@@ -63,9 +63,10 @@ afterAll(async () => {
 }, 60000);
 
 async function foreignLine() {
-  const result = await pool.query<{ quantity: number }>(`SELECT quantity FROM customer_proforma_lines WHERE id = $1`, [
-    foreignLineId,
-  ]);
+  const result = await pool.query<{ quantity: number }>(
+    `SELECT quantity::float8 AS quantity FROM customer_proforma_lines WHERE id = $1`,
+    [foreignLineId]
+  );
   return result.rows[0];
 }
 

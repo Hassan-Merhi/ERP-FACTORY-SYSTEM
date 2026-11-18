@@ -1,139 +1,90 @@
 /**
- * Filter bar for the Factory Daybook transactions tab.
- *
- * Pure presentation over the page model: only transaction types available
- * for the selected period appear in the type dropdown.
+ * Filter bar for the Factory Daybook transactions tab, on the shared Daybook
+ * filter bar. Pure presentation over the page model: only transaction types
+ * available for the selected period appear in the type dropdown.
  */
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { DaybookFilterBar, type DaybookFilterChip } from "@/components/daybook/DaybookFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PeriodFilter } from "@/components/ui/period-filter";
-import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import type { FactoryDaybookModel } from "./useFactoryDaybookModel";
 import { formatTxType } from "./daybookUtils";
-import { SearchField } from "@/components/ui/search-field";
+
+const STATUS_LABELS = { all: "All Entries", exclude: "Exclude Optional", only: "Only Optional" } as const;
 
 export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel }) {
-  const search = (
-    <SearchField
-      placeholder="Search..."
-      value={model.searchQuery}
-      onValueChange={model.setSearchQuery}
-      data-testid="input-search"
-      wrapperClassName="w-full min-w-0 sm:w-56"
-      className="h-10 rounded-xl border-border/70 bg-background/80 text-sm shadow-sm focus-visible:ring-blue-500/30"
-    />
-  );
-  // Inline (tablet/desktop) the stepper's controls sit directly in the filter row as before; on
-  // phones they share one full-width row with the period picker taking the free space.
-  const dayStepper = (inline: boolean) => (
-    <div className={inline ? "contents" : "flex min-w-0 items-center gap-1 rounded-xl"}>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => model.stepPeriod(-1)}
-        title="Previous day (−)"
-        aria-label="Previous day"
-        data-testid="button-prev-day"
-        className="h-9 w-9 shrink-0 rounded-lg text-muted-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-sky-400"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <div className={inline ? undefined : "min-w-0 flex-1"}>
-        <PeriodFilter value={model.periodFilter} onChange={model.setPeriodFilter} data-testid="period-filter" />
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => model.stepPeriod(1)}
-        title="Next day (+)"
-        aria-label="Next day"
-        data-testid="button-next-day"
-        className="h-9 w-9 shrink-0 rounded-lg text-muted-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-sky-400"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-  const typeSelect = (
-    <Select value={model.txTypeFilter} onValueChange={model.setTxTypeFilter}>
-      <SelectTrigger
-        className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40"
-        data-testid="select-tx-type"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="ALL">All Types</SelectItem>
-        {model.availableTxTypes.map((type) => (
-          <SelectItem key={type} value={type}>
-            {formatTxType(type)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-  const statusSelect = (
-    <Select value={model.statusFilter} onValueChange={(v) => model.setStatusFilter(v as "all" | "exclude" | "only")}>
-      <SelectTrigger
-        className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40"
-        data-testid="select-status-filter"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Entries</SelectItem>
-        <SelectItem value="exclude">Exclude Optional</SelectItem>
-        <SelectItem value="only">Only Optional</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-  const sheetFilterCount = (model.txTypeFilter !== "ALL" ? 1 : 0) + (model.statusFilter !== "all" ? 1 : 0);
+  const chips: DaybookFilterChip[] = [
+    ...(model.txTypeFilter !== "ALL"
+      ? [
+          {
+            id: "type",
+            label: formatTxType(model.txTypeFilter),
+            onRemove: () => model.setTxTypeFilter("ALL"),
+            testId: "chip-type",
+          },
+        ]
+      : []),
+    ...(model.statusFilter !== "all"
+      ? [
+          {
+            id: "status",
+            label: STATUS_LABELS[model.statusFilter],
+            onRemove: () => model.setStatusFilter("all"),
+            testId: "chip-status",
+          },
+        ]
+      : []),
+    ...(model.searchQuery
+      ? [
+          {
+            id: "search",
+            label: <>Search: {model.searchQuery}</>,
+            onRemove: () => model.setSearchQuery(""),
+            testId: "chip-search",
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <Card className="rounded-2xl border border-sky-200/60 bg-gradient-to-r from-white to-slate-50/80 shadow-sm dark:border-blue-500/20 dark:from-slate-900/90 dark:to-slate-950/80">
-      <CardContent className="px-3 py-3 sm:px-4">
-        {/* Phones: day stepper and search stay visible, entry type and status open in the filter
-            sheet. Tablet/desktop keep the single wrapping row. */}
-        <ErpMobileFilters
-          label="Daybook filters"
-          primary={dayStepper(false)}
-          quick={search}
-          activeCount={sheetFilterCount}
-          onClear={model.clearFilters}
-          canClear={model.hasActiveFilters}
-          data-testid="factory-daybook-filters"
-        >
-          {(layout) =>
-            layout === "sheet" ? (
-              <>
-                {typeSelect}
-                {statusSelect}
-              </>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2.5">
-                {search}
-                {dayStepper(true)}
-                {typeSelect}
-                {statusSelect}
-                {model.hasActiveFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={model.clearFilters}
-                    data-testid="button-clear-filters"
-                    className="h-9 gap-1 rounded-lg text-sm text-muted-foreground hover:text-blue-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    Clear
-                  </Button>
-                )}
-              </div>
-            )
-          }
-        </ErpMobileFilters>
-      </CardContent>
-    </Card>
+    <DaybookFilterBar
+      period={model.periodFilter}
+      onPeriodChange={model.setPeriodFilter}
+      onPrevDay={() => model.stepPeriod(-1)}
+      onNextDay={() => model.stepPeriod(1)}
+      search={model.searchQuery}
+      onSearchChange={model.setSearchQuery}
+      searchPlaceholder="Search..."
+      searchLabel="Search factory transactions"
+      activeCount={(model.txTypeFilter !== "ALL" ? 1 : 0) + (model.statusFilter !== "all" ? 1 : 0)}
+      chips={chips}
+      hasActiveFilters={model.hasActiveFilters}
+      onClearFilters={model.clearFilters}
+      data-testid="factory-daybook-filters"
+    >
+      <Select value={model.txTypeFilter} onValueChange={model.setTxTypeFilter}>
+        <SelectTrigger className="daybook-filter-control w-full" data-testid="select-tx-type">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">All Types</SelectItem>
+          {model.availableTxTypes.map((type) => (
+            <SelectItem key={type} value={type}>
+              {formatTxType(type)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={model.statusFilter} onValueChange={(v) => model.setStatusFilter(v as "all" | "exclude" | "only")}>
+        <SelectTrigger className="daybook-filter-control w-full" data-testid="select-status-filter">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(STATUS_LABELS) as (keyof typeof STATUS_LABELS)[]).map((value) => (
+            <SelectItem key={value} value={value}>
+              {STATUS_LABELS[value]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </DaybookFilterBar>
   );
 }

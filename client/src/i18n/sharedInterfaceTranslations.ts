@@ -442,10 +442,22 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
     ar: "أظهر أو أخفِ الأدوات العائمة التي تظهر في كل صفحة من حسابك.",
     fr: "Affichez ou masquez les outils flottants présents sur chaque page de votre compte.",
   },
+  // Phase 9b: shared Daybook frame (ERP, Factory, POS).
+  { en: "Avg per Sale", ar: "متوسط البيع", fr: "Moyenne par vente" },
+  { en: "Search factory transactions", ar: "البحث في معاملات المصنع", fr: "Rechercher les transactions de l’usine" },
+  { en: "Daybook heading", ar: "عنوان دفتر اليومية", fr: "En-tête du journal" },
+  { en: "Loading transactions", ar: "جارٍ تحميل المعاملات", fr: "Chargement des transactions" },
   { en: "On the Way", ar: "في الطريق", fr: "En route" },
   // Shared period filter: open-ended custom ranges.
   { en: "Start date only", ar: "تاريخ البداية فقط", fr: "Date de début uniquement" },
   { en: "End date only", ar: "تاريخ النهاية فقط", fr: "Date de fin uniquement" },
+  {
+    en: "No intercompany links configured yet.",
+    ar: "لا توجد روابط بين الشركات مهيأة بعد.",
+    fr: "Aucun lien intersociétés configuré pour le moment.",
+  },
+  { en: "Loading spreadsheet…", ar: "جارٍ تحميل جدول البيانات…", fr: "Chargement de la feuille de calcul…" },
+  { en: "Loading recurring journals…", ar: "جارٍ تحميل القيود المتكررة…", fr: "Chargement des journaux récurrents…" },
   { en: "Loading settings…", ar: "جارٍ تحميل الإعدادات…", fr: "Chargement des paramètres…" },
   { en: "Loading locations…", ar: "جارٍ تحميل المواقع…", fr: "Chargement des emplacements…" },
   // Default texts of the shared loading and error states (components/ui/page-state).
