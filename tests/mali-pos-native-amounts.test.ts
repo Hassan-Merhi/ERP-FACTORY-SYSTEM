@@ -67,7 +67,7 @@ describe("Mali POS exact CFA totals", () => {
 
 describe("Mali POS reading a posted sale back in CFA", () => {
   const prices = (lines: { quantity: number; sellingPrice: string }[], rate: string, posted: string | null) =>
-    resolvePostedCfaUnitPrices(lines, rate, posted).map((unit) => unit.toFixed(0));
+    resolvePostedCfaUnitPrices(lines, rate, posted)!.map((unit) => unit.toFixed(0));
 
   // A real legacy sale: cent-rounded USD prices at 605, posted as 700,003.15 CFA.
   const legacy = [
@@ -96,13 +96,11 @@ describe("Mali POS reading a posted sale back in CFA", () => {
     expect(prices([{ quantity: 40, sellingPrice: "65.252855" }], "613", "1600000.00")).toEqual(["40000"]);
     expect(prices([{ quantity: 1, sellingPrice: "65.257749" }], "613", null)).toEqual(["40003"]);
     const typed = [{ quantity: 1, sellingPrice: "66.12", originalCurrencyRate: "40001" }];
-    expect(resolvePostedCfaUnitPrices(typed, "605", null)[0].toFixed(0)).toBe("40001");
+    expect(resolvePostedCfaUnitPrices(typed, "605", null)![0].toFixed(0)).toBe("40001");
   });
 
   it("refuses an unusable rate or price instead of guessing", () => {
-    expect(() => resolvePostedCfaUnitPrices(legacy, "0", null)).toThrow("positive USD/CFA rate");
-    expect(() => resolvePostedCfaUnitPrices([{ quantity: 1, sellingPrice: "abc" }], "605", null)).toThrow(
-      "Invalid USD unit price"
-    );
+    expect(resolvePostedCfaUnitPrices(legacy, "0", null)).toBeNull();
+    expect(resolvePostedCfaUnitPrices([{ quantity: 1, sellingPrice: "abc" }], "605", null)).toBeNull();
   });
 });

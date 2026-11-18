@@ -98,20 +98,21 @@ function lineSum(lines: readonly CfaSaleLine[], units: readonly Decimal[]): Deci
  * Lines read back to the nearest franc. The round reading of cent-rounded
  * legacy prices is used when it agrees with the CFA total the sale posted:
  * exactly, or (older postings were themselves USD x rate) within the rounding
- * those postings could carry. Throws on an unusable rate or price.
+ * those postings could carry. Null when the rate or a stored price is unusable.
  */
 export function resolvePostedCfaUnitPrices(
   lines: readonly CfaSaleLine[],
   exchangeRate: unknown,
   postedNativeTotal: unknown
-): Decimal[] {
+): Decimal[] | null {
   const rate = parse(exchangeRate);
-  if (!rate || !rate.gt(0)) throw new Error("A positive USD/CFA rate is required");
-  const usdPrices = lines.map((line) => {
+  if (!rate || !rate.gt(0)) return null;
+  const usdPrices: Decimal[] = [];
+  for (const line of lines) {
     const usd = usdOf(line);
-    if (!usd || usd.lt(0)) throw new Error("Invalid USD unit price");
-    return usd;
-  });
+    if (!usd || usd.lt(0)) return null;
+    usdPrices.push(usd);
+  }
   const nearest = lines.map((line, index) => supplied(line) ?? half(usdPrices[index].times(rate), 0));
   const round = lines.map(
     (line, index) => supplied(line) ?? legacyRoundCfaPrice(usdPrices[index], rate) ?? nearest[index]
