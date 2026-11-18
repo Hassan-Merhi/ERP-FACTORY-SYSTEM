@@ -86,7 +86,8 @@ const block = sendProductionBonusVoucherLocked;
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function guard(check: (req: Request) => Promise<boolean>) {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  // Named so the route snapshot (config/route-manifest.json) records it by name.
+  return async function productionBonusVoucherBoundary(req: Request, res: Response, next: NextFunction) {
     if (READ_METHODS.has(req.method)) return next();
     try {
       if (await check(req)) return block(res);

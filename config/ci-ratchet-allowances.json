@@ -32,7 +32,7 @@
     "tests/monetary-fx-valuation.database.test.ts": 1211
   },
   "routeManifestAdditions": ["GET /api/offline/pc-sync/changes [requireAuth > <anonymous>]", "GET /api/offline/pc-sync/snapshot/start [requireAuth > <anonymous>]", "GET /api/offline/pc-sync/snapshot [requireAuth > <anonymous>]"],
-  "routeManifestMountAdditions": [],
+  "routeManifestMountAdditions": ["USE /api [productionBonusVoucherBoundary]"],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
