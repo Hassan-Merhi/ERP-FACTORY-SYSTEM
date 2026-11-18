@@ -13,13 +13,13 @@ export function posZmwEditUsdRows(items: PosEditSaleItemInput[]) {
 export function editedZmwSaleAmounts(
   voucher: { currency?: string | null; exchangeRate?: string | null },
   items: PosEditSaleItemInput[],
-  isSupplierPartner = false
+  keepUsdPosting = false
 ): { nativeTotal: string; usdTotal: number } | null {
   if (voucher.currency !== "ZMW" && voucher.currency !== "CFA") return null;
   return posNativeSaleAmounts(
     items.map((item) => ({ ...item, rate: item.sellingPrice })),
     { currency: voucher.currency, exchangeRate: voucher.exchangeRate ? String(voucher.exchangeRate) : null },
-    isSupplierPartner,
+    keepUsdPosting,
     true
   );
 }

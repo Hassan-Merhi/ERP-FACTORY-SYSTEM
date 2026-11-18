@@ -55,7 +55,8 @@ export function exactCfaSaleAmounts(
     native = native.plus(half(quantity.times(cfa), 2));
   }
   if (!native.gt(0)) return null;
-  return { nativeTotal: native.toFixed(2), usdTotal: half(native.div(rate), 2).toNumber() };
+  // The ledger stores the USD value as the six-decimal conversion rounded to cents; match it.
+  return { nativeTotal: native.toFixed(2), usdTotal: half(half(native.div(rate), 6), 2).toNumber() };
 }
 
 /** Typed CFA prices are round; prefer the roundest price a cent-rounded USD price can stand for. */
