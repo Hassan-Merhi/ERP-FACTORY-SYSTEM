@@ -122,6 +122,7 @@ export default function Settings() {
   const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
   const isDeveloperMode = effectiveRole === "Developer";
   const canAccessSystemTools = isDeveloperMode || effectiveRole === "Admin";
+  const canAccessAdminSections = canManageSessions && ["Admin", "Owner", "Developer"].includes(effectiveRole);
 
   const sidebarGroups = [
     {
@@ -200,7 +201,7 @@ export default function Settings() {
     items.filter(
       (item) =>
         (!item.devOnly || isDeveloperMode) &&
-        (!item.adminOnly || canManageSessions) &&
+        (!item.adminOnly || canAccessAdminSections) &&
         (item.key !== "system" || canAccessSystemTools)
     );
   // Non-developers should never see headings with no accessible Settings pages.
@@ -325,7 +326,7 @@ export default function Settings() {
           {activeSection === "pos-setup" && isDeveloperMode && (
             <PosSetupHub userRole={effectiveRole} />
           )}
-          {activeSection === "automatic-priority-printing" && canManageSessions && appMode === "factory" && (
+          {activeSection === "automatic-priority-printing" && canAccessAdminSections && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
             </div>
@@ -335,7 +336,7 @@ export default function Settings() {
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && canManageSessions && appMode === "factory" && canManageCompanyTimezone && (
+          {activeSection === "company-timezone" && canAccessAdminSections && appMode === "factory" && canManageCompanyTimezone && (
             <div className="space-y-5 max-w-2xl">
               <CompanyTimezoneCard />
             </div>
