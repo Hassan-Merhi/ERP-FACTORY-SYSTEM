@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface MaterialRow {
   supplierId: string;
@@ -281,7 +282,7 @@ export default function FactoryMixOptimizer() {
                       <div>
                         <p className="text-xs text-muted-foreground">Expected Cost/Bale</p>
                         <p className="font-mono font-medium" data-testid={`text-cost-${idx}`}>
-                          ${suggestion.expectedCostPerBale.toFixed(2)}
+                          {formatUsd(suggestion.expectedCostPerBale, 2)}
                         </p>
                       </div>
                       <div>
@@ -290,7 +291,7 @@ export default function FactoryMixOptimizer() {
                           className="font-mono font-medium text-green-600 dark:text-green-400"
                           data-testid={`text-profit-${idx}`}
                         >
-                          ${suggestion.expectedProfit.toFixed(2)}
+                          {formatUsd(suggestion.expectedProfit, 2)}
                         </p>
                       </div>
                     </div>

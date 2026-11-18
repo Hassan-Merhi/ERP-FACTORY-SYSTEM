@@ -1,15 +1,12 @@
 import PropertyRentalPage from "@/pages/properties/PropertyRentalPage";
-import { Warehouse } from "lucide-react";
+import { RoutedRentalsHub } from "@/pages/properties/RentalsHub";
+import { useFactoryRentalSections } from "./useFactoryRentalSections";
 
 export default function FactoryRentalWarehouses() {
+  const sections = useFactoryRentalSections();
   return (
-    <PropertyRentalPage
-      unitType="WAREHOUSE"
-      pageTitle="Factory — Warehouse Rentals"
-      pageIcon={<Warehouse className="h-7 w-7 text-orange-600" />}
-      testIdPrefix="factory-rental-warehouses"
-      rentalModule="FACTORY"
-      paymentsLogUrl="/factory/rental/payments"
-    />
+    <RoutedRentalsHub module="FACTORY" section="warehouses" sections={sections}>
+      <PropertyRentalPage unitType="WAREHOUSE" testIdPrefix="factory-rental-warehouses" rentalModule="FACTORY" />
+    </RoutedRentalsHub>
   );
 }

@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
@@ -21,11 +21,7 @@ import { loadFxAgentEurSupplierPayable } from "../../services/factory/fxAgentEur
  * the difference from the actual USD payout is a realized FX gain or loss.
  */
 export function registerFactoryFxAgentSettlementRoutes(app: Express) {
-  app.post(
-    "/api/factory/fx-agent-wallets/:id/settle",
-    requireAuth,
-    requireRole("Admin", "Owner", "Developer"),
-    async (req: Request, res: Response) => {
+  const settleWalletPayment = async (req: Request, res: Response) => {
       try {
         const cid = Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
         const walletId = Number(req.params.id),
@@ -42,8 +38,11 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         const narration = String(req.body?.narration || "").slice(0, 500);
         const sourceNarration = String(req.body?.paymentAccountNarration || "").slice(0, 500);
         const beneficiaryNarration = String(req.body?.beneficiaryNarration || "").slice(0, 500);
+        const draftVoucherId = req.body?.draftVoucherId === undefined ? null : Number(req.body.draftVoucherId);
         if (
           !cid ||
+          (draftVoucherId !== null && (!Number.isSafeInteger(draftVoucherId) || draftVoucherId < 1)) ||
+          (draftVoucherId !== null && (!paymentVoucher || !directEurPayment)) ||
           !Number.isSafeInteger(walletId) ||
           walletId < 1 ||
           !Number.isSafeInteger(targetId) ||
@@ -70,8 +69,48 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         if (toMoney(eur).lte(0)) throw new Error("EUR payment amount is too small");
         const result = await db.transaction(async (tx) => {
           const locked = await tx.execute(sql`
-          SELECT id FROM factory_fx_agent_wallets WHERE id = ${walletId} AND company_id = ${cid} FOR UPDATE`);
+          SELECT id, ledger_account_id AS "ledgerId" FROM factory_fx_agent_wallets
+          WHERE id = ${walletId} AND company_id = ${cid} FOR UPDATE`);
           if (!locked.rows.length) throw new Error("FX agent wallet not found");
+          if (draftVoucherId !== null) {
+            // Verify the source, beneficiary, amount, currency, date and line count
+            // under locks. A generic Optional voucher may NEVER be silently
+            // converted into an FX settlement or settle somebody else's wallet.
+            const draft = await tx.execute(sql`
+              SELECT id, optional, currency, voucher_type AS "voucherType",
+                to_char(voucher_date, 'YYYY-MM-DD') AS date
+              FROM vouchers
+              WHERE id = ${draftVoucherId} AND company_id = ${cid}
+                AND deleted_at IS NULL
+              FOR UPDATE
+            `);
+            const header = draft.rows[0];
+            if (
+              !header || header.optional !== true || header.currency !== "EUR" ||
+              header.voucherType !== "Payment" || header.date !== date
+            ) throw new Error("Optional EUR FX payment draft is no longer eligible to finalize");
+            const draftLines = await tx.execute(sql`
+              SELECT ledger_account_id AS "ledgerId", factory_supplier_id AS "supplierId",
+                transaction_currency AS currency,
+                transaction_debit_amount::text AS debit,
+                transaction_credit_amount::text AS credit
+              FROM voucher_entries WHERE voucher_id = ${draftVoucherId}
+              ORDER BY id FOR UPDATE
+            `);
+            if (
+              draftLines.rows.length !== 2 ||
+              !draftLines.rows.some((line) =>
+                Number(line.ledgerId) === Number(locked.rows[0].ledgerId) &&
+                line.currency === "EUR" && toMoney(String(line.credit)).eq(eur) &&
+                toMoney(String(line.debit)).isZero()
+              ) ||
+              !draftLines.rows.some((line) =>
+                Number(line.supplierId) === targetId && line.currency === "EUR" &&
+                toMoney(String(line.debit)).eq(eur) &&
+                toMoney(String(line.credit)).isZero()
+              )
+            ) throw new Error("Optional FX draft entries no longer match its EUR wallet settlement");
+          }
           const prior = await tx.execute(sql`
           SELECT op.id, op.kind, op.wallet_id AS "walletId", op.source_amount::text AS amount,
             op.rate_usd_per_eur::text AS rate, op.target_kind AS "targetKind",
@@ -206,6 +245,17 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
             ${booked.voucher.id},${key},${narration},
             ${req.session.username || "unknown"})
           RETURNING id`);
+          if (draftVoucherId !== null) {
+            // Draft is off-ledger. Retire it only after the native EUR settlement
+            // and Payment voucher were created, in this very transaction.
+            const retired = await tx.execute(sql`
+              UPDATE vouchers SET deleted_at = NOW()
+              WHERE id = ${draftVoucherId} AND company_id = ${cid}
+                AND optional = true AND deleted_at IS NULL
+              RETURNING id
+            `);
+            if (retired.rows.length !== 1) throw new Error("Optional FX draft was changed during settlement");
+          }
           return {
             id: Number(inserted.rows[0].id), voucherId: booked.voucher.id,
             quote: directEurPayment
@@ -218,6 +268,72 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         res.status(201).json(result);
       } catch (error) {
         res.status(400).json({ message: getErrorMessage(error) });
+      }
+  };
+
+  app.post(
+    "/api/factory/fx-agent-wallets/:id/settle",
+    requireAuth,
+    requireRole("Admin", "Owner", "Developer"),
+    settleWalletPayment
+  );
+
+  // The Optional Vouchers screen uses the same finalize URL as other drafts.
+  // Recognize only EUR FX wallet drafts; let the ordinary handlers own others.
+  app.post(
+    "/api/vouchers/:id/finalize",
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      const cid = Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
+      const id = Number(req.params.id);
+      if (!cid || !Number.isSafeInteger(id) || id < 1) return next();
+      try {
+        const walletTable = await db.execute(sql`
+          SELECT to_regclass('factory_fx_agent_wallets')::text AS name
+        `);
+        if (!walletTable.rows[0]?.name) return next();
+        const draft = await db.execute(sql`
+          SELECT v.id, to_char(v.voucher_date, 'YYYY-MM-DD') AS date,
+            v.description, v.currency,
+            w.id AS "walletId", src.transaction_credit_amount::text AS "sourceEur",
+            dst.factory_supplier_id AS "supplierId",
+            dst.transaction_debit_amount::text AS "recipientEur"
+          FROM vouchers v
+          JOIN voucher_entries src ON src.voucher_id = v.id
+            AND src.transaction_credit_amount > 0
+          JOIN factory_fx_agent_wallets w ON w.company_id = v.company_id
+            AND w.ledger_account_id = src.ledger_account_id
+          LEFT JOIN voucher_entries dst ON dst.voucher_id = v.id
+            AND dst.transaction_debit_amount > 0 AND dst.factory_supplier_id IS NOT NULL
+          WHERE v.id = ${id} AND v.company_id = ${cid}
+            AND v.optional = true AND v.deleted_at IS NULL
+            AND v.voucher_type = 'Payment' AND v.currency = 'EUR'
+          LIMIT 1
+        `);
+        const row = draft.rows[0];
+        if (!row) return next();
+        if (!["Admin", "Owner", "Developer"].includes(String(req.session.currentRole))) {
+          return res.status(403).json({ message: "Only Admin and Owner can finalize FX wallet payments" });
+        }
+        if (
+          !row.supplierId || !/^[0-9]+(?:\.[0-9]+)?$/.test(String(row.recipientEur)) ||
+          !toMoney(String(row.recipientEur)).eq(String(row.sourceEur))
+        ) return res.status(409).json({ message: "Optional FX draft EUR amounts do not match" });
+        req.params.id = String(row.walletId);
+        req.body = {
+          paymentVoucher: true,
+          targetCurrency: "EUR",
+          eurAmount: toMoney(String(row.recipientEur)).toFixed(2),
+          targetKind: "factorySupplier",
+          targetId: Number(row.supplierId),
+          date: String(row.date),
+          requestKey: `fx-optional-${cid}-${id}`,
+          narration: String(row.description || ""),
+          draftVoucherId: id,
+        };
+        return settleWalletPayment(req, res);
+      } catch (error) {
+        return res.status(400).json({ message: getErrorMessage(error) });
       }
     }
   );

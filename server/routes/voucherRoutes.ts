@@ -7,7 +7,7 @@ import { registerVoucherPaginationRoutes } from "./vouchers/voucherPaginationRou
 import { registerVoucherQueryRoutes } from "./vouchers/voucherQueryRoutes";
 import { registerVoucherCreateRoutes } from "./vouchers/voucherCreateRoutes";
 import { registerVoucherPaymentRoutes } from "./vouchers/voucherPaymentRoutes";
-import { guardFxWalletPaymentSource } from "./vouchers/fxAgentPaymentSourceGuard";
+import { guardFxWalletPaymentSource, guardFxWalletDraftMutation } from "./vouchers/fxAgentPaymentSourceGuard";
 import { registerCentralGenericVoucherCreateRoute } from "./vouchers/centralGenericVoucherCreateRoute";
 import { registerCentralPaymentReceiptCreateRoute } from "./vouchers/centralPaymentReceiptCreateRoute";
 import { registerNormalIntercompanyVoucherRoutes } from "./vouchers/normalIntercompanyVoucherRoutes";
@@ -69,6 +69,13 @@ function registerVoucherCreateDateValidation(app: Express): void {
 }
 
 export function registerVoucherRoutes(app: Express) {
+  // An FX EUR draft may only be activated by its atomic wallet settlement.
+  for (const path of [
+    "/api/vouchers/:id/optional",
+    "/api/vouchers/:id/payment-receipt",
+    "/api/vouchers/:id",
+  ]) app.use(path, guardFxWalletDraftMutation);
+
   // The ERP Daybook uses one SQL-paged chronological union of vouchers and offloads.
   registerDaybookPaginationRoutes(app);
 

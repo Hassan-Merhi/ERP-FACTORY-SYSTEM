@@ -84,6 +84,18 @@ export async function generateInvoicePdfMeta(
     configuredPrice: toMoney(r.configured_price).toNumber(),
   }));
 
+  // Use the original posted payment amount, never revalue at today's rate.
+  let nativeZmwTotal: string | null = null;
+  if (v.currency === "ZMW") {
+    const nativeRows = await pool.query<{ native_amount: string | null }>(
+      `SELECT MAX(transaction_debit_amount)::text AS native_amount
+       FROM voucher_entries WHERE voucher_id = $1
+       AND transaction_currency = 'ZMW' AND transaction_debit_amount > 0`,
+      [voucherId]
+    );
+    nativeZmwTotal = nativeRows.rows[0]?.native_amount ?? null;
+  }
+
   let customerName: string | null = null;
   if (v.is_credit_sale) {
     const cRes = await pool.query<{ customer_name: string }>(
@@ -126,6 +138,7 @@ export async function generateInvoicePdfMeta(
     userName,
     customerName,
     items,
+    nativeZmwTotal: nativeZmwTotal === null ? null : Number(nativeZmwTotal),
     hideProfitCols,
     compactMode,
   });

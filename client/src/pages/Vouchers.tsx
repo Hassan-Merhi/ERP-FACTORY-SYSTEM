@@ -93,11 +93,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
     ...erpPageAccessQueryOptions(selectedCompany?.id, !isPOS && appMode === "erp"),
   });
-  const showOptionalDrafts =
-    !isPOS &&
-    appMode === "erp" &&
-    !isRetailCompany &&
-    (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true);
+  const showOptionalDrafts = !isPOS && (
+    (appMode === "factory" && isFactoryCompany) ||
+    (appMode === "erp" && !isRetailCompany &&
+      (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true))
+  );
   const posLocationId = posUser?.assignedLocationId;
 
   const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
@@ -397,6 +397,13 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     activeTab,
     voucherIdToEdit,
     isWalletPayment,
+    fxWalletDraft: isWalletPayment && selectedFxWallet
+      ? {
+          eurBalance: selectedFxWallet.state.eur,
+          bookUsd: selectedFxWallet.state.totalBookUsd,
+          payoutCurrency: fxPayoutCurrency,
+        }
+      : null,
     postWalletPayment,
     resetWalletPayment,
     selectedCurrency,
@@ -466,7 +473,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     exportVoucherHelper({ formData: form.getValues(), activeTab, toast, detailed });
 
   const onSubmit = async (data: VoucherFormData) => {
-    if (paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
+    if (!(isWalletPayment && data.optional) && paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
       toast({
         title: "Approved USD/ZMW rate required",
         description: "Enter a company exchange rate effective on the voucher date before posting.",
@@ -514,7 +521,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
-    if (isWalletPayment && !(await confirmWalletPayment(validEntries, toast))) return;
+    if (isWalletPayment && !data.optional && !(await confirmWalletPayment(validEntries, toast))) return;
     saveMutation.mutate({
       ...data,
       entries: validEntries,
@@ -533,11 +540,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
         />
       ) : (
-        // One header for ERP, Factory and Properties; the drafts link is ERP-only via showOptionalDrafts.
+        // Shared voucher header; drafts are available in authorized ERP and Factory workflows.
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (
             <Link
-              href="/optional-vouchers"
+              href={appMode === "factory" ? "/factory/optional-vouchers" : "/optional-vouchers"}
               className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
               data-testid="link-vouchers-optional-drafts"
             >
@@ -721,19 +728,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && (
             <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {(isPOS || (canShowVoucherTab("transfer") && activeTab === "transfer")) && (
             <StockTransferForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} posUser={posUser ?? undefined} />
           )}
-
           {!isPOS && canShowVoucherTab("adjustment") && activeTab === "adjustment" && (
             <StockAdjustmentForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {!isPOS && canShowVoucherTab("creditnote") && activeTab === "creditnote" && (
             <div className="space-y-4">
               <CreditNoteTab
@@ -742,7 +745,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("transferorder") && activeTab === "transferorder" && (
             <StockTransferOrder
               onSwitchToNormalView={() => {
@@ -755,7 +757,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
         </div>
       </div>
-
       <CreateAccountModal
         open={showCreateAccountModal}
         onClose={() => {
@@ -766,7 +767,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         onAccountCreated={handleAccountCreated}
         apiRequestFn={modeApiRequest}
       />
-
       <AlertDialog
         open={!!waPendingPrompt}
         onOpenChange={(open) => {

@@ -3,10 +3,7 @@
  *
  * PHASE 20 — POS Backend Edit-Sale Structural Split.
  *
- * Program 2C keeps the existing edit formulas and response contract, while
- * moving the authoritative voucher, location, currency, accounting-entry, and
- * sales-item reads under one transaction lock. Concurrent edits therefore use
- * the latest committed sale state instead of stale pre-transaction snapshots.
+ * Edits lock the voucher and its inventory/accounting state transactionally.
  */
 import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import { db, type DbTransaction } from "../../../db";
@@ -56,6 +53,8 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
+import { editedZmwSaleAmounts, posZmwEditUsdRows } from "./posZmwEditedAmounts";
+import { validateLockedPosDaybookEdit } from "./posDaybookEditGuard";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
@@ -129,6 +128,8 @@ export async function applyPosSaleUpdateTx(
   if (!lockedVoucher || lockedVoucher.deletedAt) {
     return { error: { status: 404, body: { message: "Voucher not found" } } };
   }
+  const editRefusal = await validateLockedPosDaybookEdit(tx, lockedVoucher, params);
+  if (editRefusal) return { error: editRefusal };
   if (lockedVoucher.currency === "ZMW") {
     // Preserve the original sale's currency and historical rate. A re-date
     // could otherwise make a new financial date silently reuse the old rate.
@@ -157,7 +158,7 @@ export async function applyPosSaleUpdateTx(
     }
     // Edited Kwacha lines are re-priced in USD by the client at the voucher's
     // LOCKED rate; every original Kwacha price supplied must agree with it.
-    const editedLines = items as Array<{ rate: unknown; originalCurrencyRate?: unknown }>;
+    const editedLines = posZmwEditUsdRows(items as PosEditSaleItemInput[]);
     if (
       editedLines.some(
         (line) =>
@@ -256,7 +257,6 @@ export async function applyPosSaleUpdateTx(
   }
 
   const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-  // Wave 11: the old lines come back exactly; the ledger's COGS is compared below.
   const cogsBefore = await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId);
   const restoredDelta = await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
   await clearOldSaleRecords(tx, voucherId);
@@ -273,10 +273,13 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
+  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[]);
+  const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
+
   await updateVoucherRecord(tx, {
     voucherId,
     description: typeof description === "string" ? description : null,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
     locationChanged,
     targetLocationId,
     oldLocationId,
@@ -287,7 +290,8 @@ export async function applyPosSaleUpdateTx(
   await rebuildSaleAccountingEntries(tx, {
     voucherId,
     oldEntries,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
+    nativeZmwTotal: zmwAmounts?.nativeTotal,
     paymentAccountType: rawPaymentAccountType,
     paymentAccountId: rawPaymentAccountId,
     isSpCompanyEdit,
@@ -368,7 +372,7 @@ export async function applyPosSaleUpdateTx(
   return {
     existingVoucher: lockedVoucher,
     targetLocationId,
-    grandTotal: rebuildResult.grandTotal,
+    grandTotal: saleGrandTotal,
     totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
     isGoldenCoastEdit,
     editBefore: editContext.before,

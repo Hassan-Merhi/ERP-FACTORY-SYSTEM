@@ -10,13 +10,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
+import { RENTAL_SECTION_DEFINITIONS } from "@/properties/config/rentalSections";
+import { RentalPaymentsExportMenu } from "./property-rental/components/RentalPaymentsExportMenu";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { MoneyAmount } from "@/components/MoneyAmount";
 import { formatMoneyNumber, formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/rentalReportingPresentation";
-import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { PropertiesPaymentsPremium } from "./property-rental/components/PropertiesPaymentsPremium";
 import { RentalPaymentDeleteDialog } from "./property-rental/components/RentalPaymentDeleteDialog";
@@ -54,20 +56,16 @@ export type PaymentRow = {
 };
 
 interface Props {
-  pageTitle: string;
-  pageIcon?: React.ReactNode;
   testIdPrefix: string;
   rentalModule: RentalModule;
 }
 
-export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, testIdPrefix }: Props) {
+export default function RentalPaymentsLog({ rentalModule, testIdPrefix }: Props) {
   const rentalPolicy = getRentalModulePolicy(rentalModule);
   const apiBase = rentalPolicy.apiBase;
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const recordChanges = useExistingRecordChangeAccess();
-  const appMode = useAppMode();
-  const isErp = appMode === "erp" || appMode === "properties";
   // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
@@ -178,10 +176,48 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
     }
   };
 
-  // One header contract for every module: the module prefix is carried by the app mode /
-  // Properties eyebrow, so the Properties hero and the shared PageHeader show the same copy.
-  const headerTitle = pageTitle.replace(/^(?:ERP|Factory|Properties)\s*[—-]\s*/, "");
-  const headerSubtitle = "All payment receipts recorded across all units, sorted by date.";
+  // One header for every module: title and icon from the shared rental sections; the export
+  // menu sits in the header actions (Properties adds its clipboard copies to the same menu).
+  const section = RENTAL_SECTION_DEFINITIONS.payments;
+  const SectionIcon = section.icon;
+  // Full-history export is available only to the verified historical reporting company.
+  const copyIsFull = isFullHistory;
+  const copyAllowed =
+    !isLoading &&
+    !paymentsError &&
+    filtered.length > 0 &&
+    clipboardIsUsd &&
+    (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
+  const header = (
+    <PageHeader
+      title={section.title}
+      subtitle="All payment receipts recorded across all units, sorted by date."
+      icon={<SectionIcon className="h-6 w-6 text-primary" aria-hidden="true" />}
+    >
+      {isPropertiesPayments ? (
+        <RentalPaymentsExportMenu
+          rows={filtered}
+          cashOnly
+          disabled={isLoading || paymentsError}
+          companyName={selectedCompany?.name}
+          testIdPrefix={testIdPrefix}
+          canCopy={copyAllowed}
+          fullHistory={copyIsFull}
+          onCopy={() => {
+            void (isFullHistory ? copyFullHistory() : copyHistory());
+          }}
+        />
+      ) : (
+        <RentalPaymentsExportMenu
+          rows={filtered}
+          cashOnly={false}
+          disabled={isLoading || paymentsError}
+          companyName={selectedCompany?.name}
+          testIdPrefix={testIdPrefix}
+        />
+      )}
+    </PageHeader>
+  );
 
   if (isPropertiesPayments) {
     const amountDisplay = paymentsError
@@ -193,16 +229,9 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
             ? formatMoneyDisplay(reconciliation.reconciled / 100, { currency: "USD" })
             : "Verifying…"
           : formatMoneyDisplay(displayedFigure.amount, { currency: displayedFigure.currency });
-    // Full-history export is available only to the verified historical reporting company.
-    const copyIsFull = isFullHistory;
-    const copyAllowed =
-      !isLoading &&
-      !paymentsError &&
-      filtered.length > 0 &&
-      clipboardIsUsd &&
-      (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
     return (
-      <div className="space-y-4 sm:p-4" data-testid={`page-${testIdPrefix}-payments-log`}>
+      <div className="space-y-4" data-testid={`page-${testIdPrefix}-payments-log`}>
+        {header}
         {isHassanProperties && (
           <PaymentsReconciliation
             payments={payments}
@@ -213,8 +242,6 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
           />
         )}
         <PropertiesPaymentsPremium
-          title={headerTitle}
-          subtitle={headerSubtitle}
           payments={filtered}
           totalRecords={payments.length}
           isLoading={isLoading}
@@ -231,11 +258,6 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
           tenantOptions={tenantOptions}
           totalAmount={amountDisplay}
           amountLabel={isFullHistory ? "Reconciled account balances (USD)" : "Voucher-backed cash received (USD)"}
-          canCopy={copyAllowed}
-          fullHistory={copyIsFull}
-          onCopy={() => {
-            void (isFullHistory ? copyFullHistory() : copyHistory());
-          }}
           onDelete={recordChanges.allowed ? setDeleteTarget : undefined}
         />
         {!clipboardIsUsd && (
@@ -256,15 +278,8 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
   }
 
   return (
-    <div
-      className={isErp || appMode === "factory" ? "space-y-4 sm:p-4" : "p-4 space-y-4"}
-      data-testid={`page-${testIdPrefix}-payments-log`}
-    >
-      <PageHeader
-        title={headerTitle}
-        subtitle={headerSubtitle}
-        icon={pageIcon ?? <ClipboardList className="h-5 w-5" />}
-      />
+    <div className="space-y-4" data-testid={`page-${testIdPrefix}-payments-log`}>
+      {header}
       <DataTableToolbar
         search={search}
         onSearchChange={setSearch}
@@ -321,13 +336,14 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
         <CardContent className="p-0">
           <div className="table-responsive">
             {isLoading ? (
-              <div className="p-8 text-center text-muted-foreground">Loading payments…</div>
+              <LoadingState title="Loading payments…" />
             ) : paymentsError ? (
-              <div className="p-8 text-center text-destructive">Payment history could not be loaded. Please retry.</div>
+              <ErrorState title="Payment history could not be loaded. Please retry." />
             ) : filtered.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                {payments.length === 0 ? "No payments recorded yet." : "No payments match the search."}
-              </div>
+              <EmptyState
+                icon={SectionIcon}
+                title={payments.length === 0 ? "No payments recorded yet." : "No payments match the search."}
+              />
             ) : (
               <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
                 <thead className="sticky top-0 z-30 bg-muted border-b">

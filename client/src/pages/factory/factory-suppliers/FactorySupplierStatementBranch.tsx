@@ -217,7 +217,6 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
         onEditPayment={() => {}}
         onDeletePayment={(id) => model.wrapAdminAction(() => model.deletePaymentMutation.mutate(id), "Delete Payment")}
         setEditObComm={model.setEditObComm}
-        statusColor={model.statusColor}
         statusDisplayLabel={model.statusDisplayLabel}
         typeBadge={typeBadge}
         displayedRows={filteredRows}

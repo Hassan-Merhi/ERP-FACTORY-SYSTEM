@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4960,
+    "scannedFiles": 4986,
     "perRoot": {
-      "server": 2692,
-      "shared": 170,
-      "scripts": 284,
+      "server": 2700,
+      "shared": 174,
+      "scripts": 285,
       "migrations": 107,
-      "tests": 1704
+      "tests": 1717
     },
     "totalSites": 1223,
     "byCategory": {
@@ -9689,7 +9689,7 @@
       "findingId": "RSQL-0440",
       "id": "4df450a1bf5edf8c7101",
       "path": "server/routes/vouchers/voucherPaginationRoutes.ts",
-      "line": 103,
+      "line": 95,
       "category": "sql.raw",
       "sink": "drizzle sql.raw",
       "context": "registerVoucherPaginationRoutes",

@@ -1,5 +1,12 @@
 // Extracted from ./POSDaybook.tsx to keep that module under the source-size cap.
 import { Lock, MessageCircle, Pencil, Undo2, X } from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { posDaybookEditEligibility, posDaybookEditMessages } from "@shared/posDaybookEditPolicy";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
+import { POSDaybookEditPanel } from "./POSDaybookEditPanel";
+import { POSDaybookTransferDetails } from "./POSDaybookTransferDetails";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,14 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/formatNumber";
 import { usePOSDaybookState } from "./usePOSDaybookState";
+import { formatPosVoucherAmount, formatPosZmwUnitPrice, formatPosZmwLineTotal } from "./posdaybook/zmwDisplay";
 
 export function POSDaybookDialogSection({
   canEditDaybook,
+  currentUser,
   canSeeProfitCost,
   detailsLoading,
   formatCashAmount,
   isAdminOrOwner,
-  navigate,
   optionalMutation,
   recordChanges,
   selectedVoucher,
@@ -27,11 +35,11 @@ export function POSDaybookDialogSection({
 }: Pick<
   ReturnType<typeof usePOSDaybookState>,
   | "canEditDaybook"
+  | "currentUser"
   | "canSeeProfitCost"
   | "detailsLoading"
   | "formatCashAmount"
   | "isAdminOrOwner"
-  | "navigate"
   | "optionalMutation"
   | "recordChanges"
   | "selectedVoucher"
@@ -41,19 +49,72 @@ export function POSDaybookDialogSection({
   | "voucherDetails"
   | "whatsappMutation"
 >) {
+  const [editing, setEditing] = useState(false);
+  const isTransfer = Boolean(selectedVoucher && selectedVoucher.voucherType !== "Sales");
+  const { selectedCompany } = useCompany();
+  const { data: liveAccess } = useQuery<{
+    role: string;
+    daybookEditDays: number;
+    posViewOnly: boolean;
+    businessDate: string;
+  }>({
+    queryKey: ["/api/pos/daybook-edit-status", selectedCompany?.id, selectedVoucher?.id],
+    enabled: Boolean(selectedCompany?.id && selectedVoucher),
+    queryFn: async () => {
+      const response = await fetch("/api/pos/daybook-edit-status", { credentials: "include" });
+      if (!response.ok) throw new Error(posDaybookEditMessages.accessCheckFailed);
+      return response.json();
+    },
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const posUser = (liveAccess?.role ?? currentUser?.role) === "POS";
+  const permission = posDaybookEditEligibility({
+    originalDate: selectedVoucher?.voucherDate || "",
+    businessDate: liveAccess?.businessDate ?? "",
+    editDays: Number(liveAccess?.daybookEditDays ?? 0),
+    isOwnSale: Boolean(selectedVoucher && String(selectedVoucher.userId) === String(currentUser?.id)),
+    viewOnly: Boolean(liveAccess?.posViewOnly ?? currentUser?.posViewOnly),
+  });
+  const canEditSelected = Boolean(
+    selectedVoucher?.voucherType === "Sales" &&
+    !selectedVoucher.optional &&
+    recordChanges.allowed &&
+    (posUser ? Boolean(liveAccess && permission.allowed) : canEditDaybook)
+  );
   return (
-    <Dialog open={Boolean(selectedVoucher)} onOpenChange={(open) => !open && setSelectedVoucher(null)}>
+    <Dialog
+      open={Boolean(selectedVoucher)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setEditing(false);
+          setSelectedVoucher(null);
+        }
+      }}
+    >
       <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>POS Sale Details - {selectedVoucher?.voucherNumber}</DialogTitle>
+          <DialogTitle>
+            {isTransfer ? posDaybookTransferText.heading : editing ? "Edit POS Sale" : "POS Sale Details"} -{" "}
+            {selectedVoucher?.voucherNumber}
+          </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto">
-          {detailsLoading ? (
+          {editing && voucherDetails ? (
+            <POSDaybookEditPanel
+              key={voucherDetails.id}
+              sale={voucherDetails}
+              onCancel={() => setEditing(false)}
+              onSaved={() => setEditing(false)}
+            />
+          ) : detailsLoading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((key) => (
                 <Skeleton key={key} className="h-14 w-full" />
               ))}
             </div>
+          ) : voucherDetails && isTransfer ? (
+            <POSDaybookTransferDetails transfer={voucherDetails.transferData} />
           ) : voucherDetails ? (
             <div className="space-y-4">
               <div className="grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-2">
@@ -102,10 +163,10 @@ export function POSDaybookDialogSection({
                           {formatNumber(Number(item.quantity || 0), 0)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {formatCashAmount(Number(item.sellingPrice || 0))}
+                          {formatPosZmwUnitPrice(voucherDetails, item.sellingPrice, formatCashAmount)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">
-                          {formatCashAmount(Number(item.totalSales || 0))}
+                          {formatPosZmwLineTotal(voucherDetails, item.quantity, item.sellingPrice, formatCashAmount)}
                         </TableCell>
                         {canSeeProfitCost && (
                           <TableCell className="text-right font-mono">
@@ -123,25 +184,25 @@ export function POSDaybookDialogSection({
                 </Table>
               </div>
               <div className="flex justify-end text-lg font-semibold">
-                Total: {formatCashAmount(Number(voucherDetails.totalAmount || 0))}
+                Total: {formatPosVoucherAmount(voucherDetails, formatCashAmount)}
               </div>
             </div>
           ) : (
             <div className="py-8 text-center text-muted-foreground">Sale details could not be loaded.</div>
           )}
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+        {!editing && <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
           <Button variant="outline" onClick={() => setSelectedVoucher(null)}>
             <X className="mr-2 h-4 w-4" />
             Close
           </Button>
-          <ExportButton
+          {!isTransfer && <ExportButton
             kind="print"
             variant="outline"
             disabled={!voucherDetails}
             onClick={() => voucherDetails && setPrintVoucherId(voucherDetails.id)}
-          />
-          {recordChanges.allowed && (
+          />}
+          {!isTransfer && recordChanges.allowed && (
             <Button
               variant="outline"
               disabled={!voucherDetails || whatsappMutation.isPending}
@@ -165,25 +226,32 @@ export function POSDaybookDialogSection({
                 Make Optional
               </Button>
             )}
-          {recordChanges.allowed && (
+          {!isTransfer && recordChanges.allowed && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
                     <Button
-                      disabled={!canEditDaybook || !selectedVoucher}
-                      onClick={() => selectedVoucher && navigate(`/pos/edit/${selectedVoucher.id}`)}
+                      disabled={!canEditSelected || !voucherDetails}
+                      onClick={() => setEditing(true)}
+                      data-testid="pos-daybook-edit-sale"
                     >
-                      {canEditDaybook ? <Pencil className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                      {canEditSelected ? <Pencil className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                       Edit Transaction
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {!canEditDaybook && <TooltipContent>Editing is disabled in Settings for this user.</TooltipContent>}
+                {!canEditSelected && (
+                  <TooltipContent>
+                    {posUser && permission.reason === "outside-window"
+                      ? "This sale is outside your configured Daybook editing window."
+                      : "You do not have permission to edit this sale."}
+                  </TooltipContent>
+                )}
               </Tooltip>
             </TooltipProvider>
           )}
-        </div>
+        </div>}
       </DialogContent>
     </Dialog>
   );

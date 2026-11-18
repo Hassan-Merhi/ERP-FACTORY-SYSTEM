@@ -8,7 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { BookCheck, ClipboardList, CreditCard, Plus, RefreshCw } from "lucide-react";
-import { useAppMode } from "@/contexts/AppModeContext";
+import { rentalSectionHref } from "@/properties/config/rentalSections";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import type { Props, Unit } from "./property-rental/types";
@@ -22,20 +22,12 @@ import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/confi
 import { ErpMobileActionsMenu } from "@/components/ui/erp-mobile-records";
 import type { ReconciliationSnapshot } from "./property-rental/components/PaymentsReconciliation";
 
-export function usePropertyRentalPageState({
-  rentalModule,
-  unitType,
-  pageTitle,
-  pageIcon,
-  testIdPrefix,
-  paymentsLogUrl,
-}: Props) {
+export function usePropertyRentalPageState({ rentalModule, unitType, testIdPrefix }: Props) {
   const { selectedCompany } = useCompany();
   const rentalPolicy = getRentalModulePolicy(rentalModule);
   const apiBase = rentalPolicy.apiBase;
   const isPropertiesRental = rentalPolicy.usesPropertiesReconciliation;
   const { toast } = useToast();
-  const appMode = useAppMode();
   const [, navigate] = useLocation();
   const [openUnitId, setOpenUnitId] = useState<number | null>(null);
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
@@ -184,12 +176,11 @@ export function usePropertyRentalPageState({
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const currentRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canPostDue = currentRole === "Admin" || currentRole === "Owner" || currentRole === "Developer";
+  const paymentsLogUrl = rentalSectionHref(rentalModule, "payments");
   // Factory Payments Log is an admin page. Do not show a link that the
   // central Factory route guard will immediately reject for other roles.
   const showPaymentsLog = Boolean(
-    paymentsLogUrl &&
-    !isPropertiesRental &&
-    (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
+    !isPropertiesRental && (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
   );
   const postDue = useMutation({
     mutationFn: async () => {
@@ -281,7 +272,6 @@ export function usePropertyRentalPageState({
     [units, selectedContractIds]
   );
 
-  const isErp = appMode === "erp" || appMode === "properties";
   const isFactoryShopTable = testIdPrefix === "factory-rental-shops";
   const isPhoneLayout = useErpPhoneLayout();
   // Phones in every mode: cards instead of the twelve-column table, and one primary action plus
@@ -305,9 +295,7 @@ export function usePropertyRentalPageState({
           showPaymentsLog && {
             label: "Payments Log",
             icon: ClipboardList,
-            onSelect: () => {
-              if (paymentsLogUrl) navigate(paymentsLogUrl);
-            },
+            onSelect: () => navigate(paymentsLogUrl),
             testId: `button-${testIdPrefix}-payments-log`,
           },
           {
@@ -347,9 +335,7 @@ export function usePropertyRentalPageState({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            if (paymentsLogUrl) navigate(paymentsLogUrl);
-          }}
+          onClick={() => navigate(paymentsLogUrl)}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -385,9 +371,6 @@ export function usePropertyRentalPageState({
     </>
   );
 
-  // One header contract for every module: the module prefix ("ERP —", "Factory —", "Properties —")
-  // is already carried by the app mode / Properties eyebrow, so every branch shows the same title.
-  const headerTitle = pageTitle.replace(/^(?:ERP|Factory|Properties)\s*[—-]\s*/, "");
   const headerSubtitle = "Click any unit to manage payments, modify rent, post guarantee, or end the contract.";
   const headerActionsForWidth = phoneCards ? phoneHeaderActions : headerActions;
   return {
@@ -406,13 +389,11 @@ export function usePropertyRentalPageState({
     guaranteeValue,
     headerActionsForWidth,
     headerSubtitle,
-    headerTitle,
     historicalAccountMismatch,
     historicalError,
     historicalLoading,
     historicalPayments,
     historyReconciliation,
-    isErp,
     isFactoryShopTable,
     isLoading,
     isPropertiesRental,
@@ -420,7 +401,6 @@ export function usePropertyRentalPageState({
     newGroupName,
     openRenameGroup,
     openUnit,
-    pageIcon,
     paidLabel,
     paidValue,
     phoneCards,

@@ -11,6 +11,7 @@ import { fmtMoneyCurrency, MONTH_NAMES } from "../utils";
 import { useApiBase } from "../shared";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import type { AuthMe } from "@shared/apiTypes";
+import { POPUP_BLOCKED_TOAST } from "@/lib/popupBlockedToast";
 
 export function useLedgerViewState({
   ledger,
@@ -229,11 +230,7 @@ export function useLedgerViewState({
 
     const w = window.open("", "_blank", "width=900,height=700");
     if (!w) {
-      toast({
-        title: "Pop-up blocked",
-        description: "Allow pop-ups for this site and try again.",
-        variant: "destructive",
-      });
+      toast(POPUP_BLOCKED_TOAST);
       return;
     }
     w.document.write(html);
