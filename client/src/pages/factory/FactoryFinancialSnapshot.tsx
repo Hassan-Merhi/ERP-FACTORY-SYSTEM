@@ -27,6 +27,9 @@ import { useFactoryFinancialSnapshotPageModel } from "./FactoryFinancialSnapshot
 import { FactoryFinancialSnapshotAccounts } from "./FactoryFinancialSnapshotAccounts";
 export default function FactoryFinancialSnapshot() {
   const m = useFactoryFinancialSnapshotPageModel();
+  // Local aliases keep TypeScript's narrowing of computed through allLoading.
+  const { computed } = m;
+  const allLoading = m.isLoading || !computed;
 
   return (
     <>
@@ -63,18 +66,18 @@ export default function FactoryFinancialSnapshot() {
               <KpiCard
                 icon={Package}
                 title="Raw Material Value"
-                value={m.computed ? usd(m.computed.rawMaterialValue) : "—"}
+                value={computed ? usd(computed.rawMaterialValue) : "—"}
                 sub="Remaining stock"
                 color="green"
-                loading={m.allLoading}
+                loading={allLoading}
               />
               <KpiCard
                 icon={Layers}
                 title="Mix Batches on Tables"
-                value={m.computed ? usd(m.computed.mixBatchValue) : "—"}
+                value={computed ? usd(computed.mixBatchValue) : "—"}
                 sub="Active & open batches"
                 color="blue"
-                loading={m.allLoading}
+                loading={allLoading}
               />
               <KpiCard
                 icon={Scale}
@@ -94,7 +97,7 @@ export default function FactoryFinancialSnapshot() {
             <SectionHeader title="Balances & Credit" color="#f59e0b" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {/* ── Supplier Balances (auto: all suppliers) ── */}
-              {m.allLoading ? (
+              {allLoading ? (
                 <KpiCard icon={TrendingDown} title="Supplier Balances" value="—" color="red" loading />
               ) : (
                 <Card data-testid="kpi-card-supplier">
@@ -114,10 +117,10 @@ export default function FactoryFinancialSnapshot() {
                             className="text-lg font-semibold font-mono mt-0.5 text-red-600 dark:text-red-400"
                             data-testid="value-supplier"
                           >
-                            {usd(m.computed.supplierNet)}
+                            {usd(computed.supplierNet)}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {m.computed.supplierCount} supplier{m.computed.supplierCount !== 1 ? "s" : ""} · Owed to
+                            {computed.supplierCount} supplier{computed.supplierCount !== 1 ? "s" : ""} · Owed to
                             suppliers
                             {(m.netPosition?.supplierOverpayments ?? 0) > 0 && (
                               <span className="text-green-600 dark:text-green-400">
@@ -132,9 +135,9 @@ export default function FactoryFinancialSnapshot() {
                         </div>
                       </div>
                     </button>
-                    {m.supplierExpanded && m.computed.supplierList.length > 0 && (
+                    {m.supplierExpanded && computed.supplierList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
-                        {m.computed.supplierList.map((s, i) => (
+                        {computed.supplierList.map((s, i) => (
                           <div key={i} className="py-1.5 px-2 rounded-md">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm text-foreground truncate">
@@ -165,7 +168,7 @@ export default function FactoryFinancialSnapshot() {
                         ))}
                       </div>
                     )}
-                    {m.supplierExpanded && m.computed.supplierList.length === 0 && (
+                    {m.supplierExpanded && computed.supplierList.length === 0 && (
                       <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                         No supplier balances found
                       </p>
@@ -175,7 +178,7 @@ export default function FactoryFinancialSnapshot() {
               )}
 
               {/* ── Customer Credit (auto: all Dr customers) ── */}
-              {m.allLoading ? (
+              {allLoading ? (
                 <KpiCard icon={TrendingUp} title="Customer Credit" value="—" color="green" loading />
               ) : (
                 <Card data-testid="kpi-card-customer">
@@ -195,12 +198,12 @@ export default function FactoryFinancialSnapshot() {
                             className="text-lg font-semibold font-mono mt-0.5 text-emerald-600 dark:text-emerald-400"
                             data-testid="value-customer"
                           >
-                            {usd(m.computed.customerNet)}
+                            {usd(computed.customerNet)}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {m.computed.customerCount === 0
+                            {computed.customerCount === 0
                               ? "No customer balances"
-                              : `${m.computed.customerCount} customer${m.computed.customerCount !== 1 ? "s" : ""} · Total owed by customers`}
+                              : `${computed.customerCount} customer${computed.customerCount !== 1 ? "s" : ""} · Total owed by customers`}
                           </p>
                         </div>
                         <div className="mt-1 text-muted-foreground shrink-0">
@@ -208,9 +211,9 @@ export default function FactoryFinancialSnapshot() {
                         </div>
                       </div>
                     </button>
-                    {m.customerExpanded && m.computed.customerList.length > 0 && (
+                    {m.customerExpanded && computed.customerList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
-                        {m.computed.customerList.map((c, i) => (
+                        {computed.customerList.map((c, i) => (
                           <div key={i} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md">
                             <span className="text-sm text-foreground truncate">{c.name}</span>
                             <span className="text-sm font-mono font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -220,7 +223,7 @@ export default function FactoryFinancialSnapshot() {
                         ))}
                       </div>
                     )}
-                    {m.customerExpanded && m.computed.customerList.length === 0 && (
+                    {m.customerExpanded && computed.customerList.length === 0 && (
                       <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                         No customer balances found
                       </p>
@@ -230,7 +233,7 @@ export default function FactoryFinancialSnapshot() {
               )}
 
               {/* ── Worker Advances Outstanding (pinned) ── */}
-              {m.allLoading ? (
+              {allLoading ? (
                 <KpiCard icon={HardHat} title="Worker Advances Outstanding" value="—" color="amber" loading />
               ) : (
                 <Card data-testid="kpi-card-advance">
@@ -250,15 +253,15 @@ export default function FactoryFinancialSnapshot() {
                             className="text-lg font-semibold font-mono mt-0.5 text-amber-600 dark:text-amber-400"
                             data-testid="value-advance"
                           >
-                            {m.computed.advanceCount === 0 ? (
+                            {computed.advanceCount === 0 ? (
                               <span className="text-sm font-normal text-muted-foreground">No accounts selected</span>
                             ) : (
-                              usd(Math.abs(m.computed.advanceNet))
+                              usd(Math.abs(computed.advanceNet))
                             )}
                           </p>
-                          {m.computed.advanceCount > 0 && (
+                          {computed.advanceCount > 0 && (
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {m.computed.advanceCount} account{m.computed.advanceCount !== 1 ? "s" : ""} · Outstanding
+                              {computed.advanceCount} account{computed.advanceCount !== 1 ? "s" : ""} · Outstanding
                               advances
                             </p>
                           )}
@@ -282,9 +285,9 @@ export default function FactoryFinancialSnapshot() {
                         </Button>
                       )}
                     </div>
-                    {m.advanceExpanded && m.computed.advanceList.length > 0 && (
+                    {m.advanceExpanded && computed.advanceList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
-                        {m.computed.advanceList.map((acct, i) => (
+                        {computed.advanceList.map((acct, i) => (
                           <div
                             key={acct.id ?? i}
                             className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
@@ -324,7 +327,7 @@ export default function FactoryFinancialSnapshot() {
                         ))}
                       </div>
                     )}
-                    {m.advanceExpanded && m.computed.advanceList.length === 0 && (
+                    {m.advanceExpanded && computed.advanceList.length === 0 && (
                       <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                         Click + to add advance accounts
                       </p>

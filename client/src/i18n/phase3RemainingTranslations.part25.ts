@@ -26,4 +26,24 @@ export const phase3RemainingTranslationsPart25: readonly Phase3SharedUiEntry[] =
     ar: "حساب الشحن الأصلي المحدد لا يخص الشركة الأم المرتبطة.",
     fr: "Le compte de fret parent sélectionné n’appartient pas à la société mère liée.",
   },
+  {
+    en: "The detailed sales rows could not be loaded.",
+    ar: "تعذر تحميل صفوف المبيعات التفصيلية.",
+    fr: "Impossible de charger les lignes de ventes détaillées.",
+  },
+  {
+    en: "Failed to load account statement (${response.status})",
+    ar: "تعذر تحميل كشف الحساب ({{0}})",
+    fr: "Impossible de charger le relevé de compte ({{0}})",
+  },
+  {
+    en: "Account selection is required",
+    ar: "يلزم اختيار الحساب",
+    fr: "La sélection d’un compte est requise",
+  },
+  {
+    en: "The complete filtered daybook could not be loaded.",
+    ar: "تعذر تحميل دفتر اليومية المصفّى بالكامل.",
+    fr: "Impossible de charger l’intégralité du journal filtré.",
+  },
 ];

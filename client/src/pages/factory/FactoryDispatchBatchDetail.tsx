@@ -88,6 +88,7 @@ export default function FactoryDispatchBatchDetail() {
     );
   }
   const view = deriveFactoryDispatchBatchDetailView({ bd: { ...bd, batchId: bd.batchId, data: bd.data } });
+  const { finalInvoice } = view;
 
   return (
     <div className="flex flex-col h-full">
@@ -123,13 +124,13 @@ export default function FactoryDispatchBatchDetail() {
               )}
             </>
           )}
-          {view.batch.status === "INVOICED" && view.finalInvoice && (
+          {view.batch.status === "INVOICED" && finalInvoice && (
             <Button
               variant="outline"
-              onClick={() => bd.navigate(`/factory/sales/invoices/${view.finalInvoice.id}`)}
+              onClick={() => bd.navigate(`/factory/sales/invoices/${finalInvoice.id}`)}
               data-testid="button-view-invoice"
             >
-              <ExternalLink className="w-4 h-4 mr-1" /> View Invoice {view.finalInvoice.invoiceNumber}
+              <ExternalLink className="w-4 h-4 mr-1" /> View Invoice {finalInvoice.invoiceNumber}
             </Button>
           )}
         </div>

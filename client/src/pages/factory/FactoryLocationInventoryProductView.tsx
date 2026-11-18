@@ -69,9 +69,10 @@ function BreakdownStatCard({ icon, label, total, regular, special, unit, accent 
 }
 
 export function FactoryLocationInventoryProductView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const { selectedLocation } = inventory;
   const mhd = useFactoryMhdView();
   const [categorySearch, setCategorySearch] = useState("");
-  if (!inventory.selectedLocation) return null;
+  if (!selectedLocation) return null;
 
   // ─── View 2: Product table ────────────────────────────────────────────────
   const metrics = createFactoryLocationProductMetrics(inventory);
@@ -87,7 +88,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     >
       {/* Header */}
       <PageHeader
-        title={inventory.selectedLocation.name}
+        title={selectedLocation.name}
         onBack={inventory.handleBackToLocations}
         backButtonTestId="breadcrumb-locations"
         meta={
@@ -106,7 +107,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           <Button
             variant="ghost"
             size="icon"
-            onClick={(e) => inventory.openRenameDialog(inventory.selectedLocation, e)}
+            onClick={(e) => inventory.openRenameDialog(selectedLocation, e)}
             data-testid="button-rename-selected-location"
             title="Rename location"
           >
@@ -142,7 +143,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             if (inventory.hideSellingPrice) p.set("includeSellPrice", "0");
             const qs = p.toString();
             window.open(
-              `/api/factory/location-inventory/${inventory.selectedLocation.id}/export/excel${qs ? "?" + qs : ""}`,
+              `/api/factory/location-inventory/${selectedLocation.id}/export/excel${qs ? "?" + qs : ""}`,
               "_blank"
             );
           }}

@@ -114,53 +114,51 @@ export function useFactoryStockAllocationV5Model() {
   // first match once. Previously `rows` was rebuilt on every render, so this
   // effect repeatedly called scrollIntoView and pulled the user back down while
   // they were trying to scroll upward.
+  const { focusProformaId, autoScrolledProformaIdRef, firstMatchRef, setExpandedRows } = hs;
   useEffect(() => {
-    if (!hs.focusProformaId) {
-      hs.autoScrolledProformaIdRef.current = null;
-      hs.firstMatchRef.current = null;
+    if (!focusProformaId) {
+      autoScrolledProformaIdRef.current = null;
+      firstMatchRef.current = null;
       return;
     }
-    if (rows.length === 0 || hs.autoScrolledProformaIdRef.current === hs.focusProformaId) return;
+    if (rows.length === 0 || autoScrolledProformaIdRef.current === focusProformaId) return;
 
     const toExpand = rows
-      .filter((r) => r.proformaDetails.some((p) => p.proformaId === hs.focusProformaId))
+      .filter((r) => r.proformaDetails.some((p) => p.proformaId === focusProformaId))
       .map((r) => r.articleCode);
     if (toExpand.length === 0) return;
 
     // Clear any stale target from a previously focused proforma, then mark this
     // focus as handled before the state update can trigger another render.
-    hs.firstMatchRef.current = null;
-    hs.autoScrolledProformaIdRef.current = hs.focusProformaId;
-    hs.setExpandedRows((prev) => {
+    firstMatchRef.current = null;
+    autoScrolledProformaIdRef.current = focusProformaId;
+    setExpandedRows((prev) => {
       const next = new Set(prev);
       toExpand.forEach((c) => next.add(c));
       return next;
     });
 
     const scrollTimer = window.setTimeout(() => {
-      hs.firstMatchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstMatchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
     return () => window.clearTimeout(scrollTimer);
-  }, [hs.focusProformaId, rows]);
+  }, [focusProformaId, rows, autoScrolledProformaIdRef, firstMatchRef, setExpandedRows]);
 
   // Preserve older "Edit in Allocation" bookmarked links without opening a popup.
+  const { openEditOnLoad, navigate } = hs;
   useEffect(() => {
-    if (
-      hs.openEditOnLoad &&
-      hs.focusProformaId !== null &&
-      Number.isSafeInteger(hs.focusProformaId) &&
-      hs.focusProformaId > 0
-    ) {
-      hs.navigate(`/factory/stock-allocation-v5/proformas/${hs.focusProformaId}/edit`, { replace: true });
+    if (openEditOnLoad && focusProformaId !== null && Number.isSafeInteger(focusProformaId) && focusProformaId > 0) {
+      navigate(`/factory/stock-allocation-v5/proformas/${focusProformaId}/edit`, { replace: true });
     }
-  }, [hs.openEditOnLoad, hs.focusProformaId, hs.navigate]);
+  }, [openEditOnLoad, focusProformaId, navigate]);
 
+  const { setRefreshFlash } = hs;
   const handleRefresh = useCallback(() => {
     query.refetch().then(() => {
-      hs.setRefreshFlash(true);
-      setTimeout(() => hs.setRefreshFlash(false), 1500);
+      setRefreshFlash(true);
+      setTimeout(() => setRefreshFlash(false), 1500);
     });
-  }, [query]);
+  }, [query, setRefreshFlash]);
 
   function toggleRow(code: string) {
     hs.setExpandedRows((prev) => {

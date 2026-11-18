@@ -75,8 +75,8 @@ export function useAccountsLegacyModel() {
     st.rawTransactionData &&
     !Array.isArray(st.rawTransactionData) &&
     Number.isSafeInteger(st.rawTransactionData.customerId) &&
-    st.rawTransactionData.customerId > 0
-      ? st.rawTransactionData.customerId
+    (st.rawTransactionData.customerId ?? 0) > 0
+      ? (st.rawTransactionData.customerId ?? null)
       : null;
 
   // broughtForwardBalance = stored account opening balance + net of all entries before the period start.

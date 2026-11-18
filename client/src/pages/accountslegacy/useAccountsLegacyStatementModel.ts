@@ -160,17 +160,18 @@ export function useAccountsLegacyStatementModel() {
   }, [accountsResponse?.accounts]);
 
   // Auto-select account when navigated here from ledger monthly summary (or any deep-link with ?accountId=)
+  const { urlAccountId, selectedAccount, urlAccountType, fromExternalNavRef, setSelectedAccount } = d;
   useEffect(() => {
-    if (!d.urlAccountId || !allAccounts.length || d.selectedAccount) return;
-    const numId = parseInt(d.urlAccountId, 10);
-    const found = d.urlAccountType
-      ? allAccounts.find((a) => a.accountId === numId && a.type === d.urlAccountType)
+    if (!urlAccountId || !allAccounts.length || selectedAccount) return;
+    const numId = parseInt(urlAccountId, 10);
+    const found = urlAccountType
+      ? allAccounts.find((a) => a.accountId === numId && a.type === urlAccountType)
       : allAccounts.find((a) => a.accountId === numId);
     if (found) {
-      d.fromExternalNavRef.current = true;
-      d.setSelectedAccount(found);
+      fromExternalNavRef.current = true;
+      setSelectedAccount(found);
     }
-  }, [allAccounts, d.selectedAccount, d.urlAccountId, d.urlAccountType]);
+  }, [allAccounts, selectedAccount, urlAccountId, urlAccountType, fromExternalNavRef, setSelectedAccount]);
 
   // Dedicated query for Group accounts used by the Parent Group combobox.
   // Uses the server's parent-group-only endpoint so
@@ -301,9 +302,11 @@ export function useAccountsLegacyStatementModel() {
   }, [statementPages?.pages]);
 
   useEffect(() => {
-    if (!d.selectedAccount || !rawTransactionData) return;
+    if (!selectedAccount || !rawTransactionData) return;
     queryClient.setQueryData(accountStatementBaseKey, rawTransactionData);
-  }, [d.selectedAccount, rawTransactionData, accountStatementBaseKey.join("|")]);
+    // The key array is rebuilt every render; its joined value is the real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the joined statement key
+  }, [selectedAccount, rawTransactionData, accountStatementBaseKey.join("|")]);
 
   return {
     d,

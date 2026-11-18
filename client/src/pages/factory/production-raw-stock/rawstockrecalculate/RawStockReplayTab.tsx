@@ -8,6 +8,8 @@ import { getRawStockErrorMessage } from "../useRawStockRecalculate";
 import type { RawStockReplayPanelModel } from "./RawStockReplayPanelModel";
 
 export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
+  const { replayPreview } = m;
+  const { selectedSupplierIds } = m;
   return (
     <>
       {m.activeTab === "replay" && (
@@ -48,30 +50,30 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
             </div>
           )}
 
-          {m.replayPreview && !m.replayLoading && (
+          {replayPreview && !m.replayLoading && (
             <div className="space-y-4">
               {/* Summary cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: "Containers scanned", value: m.replayPreview.summary.containersScanned },
-                  { label: "Suppliers scanned", value: m.replayPreview.summary.suppliersScanned },
-                  { label: "Safe to repair", value: m.replayPreview.summary.safeSuppliers, cls: "text-emerald-600" },
+                  { label: "Containers scanned", value: replayPreview.summary.containersScanned },
+                  { label: "Suppliers scanned", value: replayPreview.summary.suppliersScanned },
+                  { label: "Safe to repair", value: replayPreview.summary.safeSuppliers, cls: "text-emerald-600" },
                   {
                     label: "Manual review",
-                    value: m.replayPreview.summary.manualReviewSuppliers,
+                    value: replayPreview.summary.manualReviewSuppliers,
                     cls: "text-amber-600",
                   },
                   {
                     label: "Source mismatches",
-                    value: m.replayPreview.summary.sourceMismatches,
-                    cls: m.replayPreview.summary.sourceMismatches > 0 ? "text-red-500" : undefined,
+                    value: replayPreview.summary.sourceMismatches,
+                    cls: replayPreview.summary.sourceMismatches > 0 ? "text-red-500" : undefined,
                   },
-                  { label: "Batches to update", value: m.replayPreview.summary.batchesToUpdate },
-                  { label: "Bales to update", value: m.replayPreview.summary.balesToUpdate },
+                  { label: "Batches to update", value: replayPreview.summary.batchesToUpdate },
+                  { label: "Bales to update", value: replayPreview.summary.balesToUpdate },
                   {
                     label: "Unresolved FX",
-                    value: m.replayPreview.summary.unresolvedFx,
-                    cls: m.replayPreview.summary.unresolvedFx > 0 ? "text-amber-600" : undefined,
+                    value: replayPreview.summary.unresolvedFx,
+                    cls: replayPreview.summary.unresolvedFx > 0 ? "text-amber-600" : undefined,
                   },
                 ].map(({ label, value, cls }) => (
                   <div key={label} className="border rounded-md px-3 py-2 bg-card">
@@ -81,25 +83,25 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                 ))}
               </div>
 
-              {m.replayPreview.summary.scanCoverageError && (
+              {replayPreview.summary.scanCoverageError && (
                 <div className="border border-amber-500/30 bg-amber-500/10 rounded-md p-3 text-xs text-amber-700 dark:text-amber-400">
                   <strong>Scan coverage mismatch:</strong> Some containers could not be included in the replay.
-                  Containers scanned ({m.replayPreview.summary.containersScanned}) differs from universe (
-                  {m.replayPreview.summary.totalReceivedContainers}). Check server logs for details.
+                  Containers scanned ({replayPreview.summary.containersScanned}) differs from universe (
+                  {replayPreview.summary.totalReceivedContainers}). Check server logs for details.
                 </div>
               )}
 
-              {m.replayPreview.summary.missingDates > 0 && (
+              {replayPreview.summary.missingDates > 0 && (
                 <div className="border border-amber-500/30 bg-amber-500/10 rounded-md p-3 text-xs text-amber-700 dark:text-amber-400">
-                  <strong>{m.replayPreview.summary.missingDates} event(s)</strong> have no effective date and were
-                  placed at the end of the timeline. These suppliers are marked as requiring manual review and will be
-                  skipped by the automated repair.
+                  <strong>{replayPreview.summary.missingDates} event(s)</strong> have no effective date and were placed
+                  at the end of the timeline. These suppliers are marked as requiring manual review and will be skipped
+                  by the automated repair.
                 </div>
               )}
 
-              {m.replayPreview.summary.quantityTimelineMismatches > 0 && (
+              {replayPreview.summary.quantityTimelineMismatches > 0 && (
                 <div className="border border-amber-500/30 bg-amber-500/10 rounded-md p-3 text-xs text-amber-700 dark:text-amber-400">
-                  <strong>{m.replayPreview.summary.quantityTimelineMismatches} supplier(s)</strong> have a quantity
+                  <strong>{replayPreview.summary.quantityTimelineMismatches} supplier(s)</strong> have a quantity
                   reconciliation mismatch — the event timeline's total kg doesn't match the raw stock remaining kg. This
                   usually means a batch consumed slightly more or fewer kg than what's recorded in the raw stock row.{" "}
                   Rows with <em>only</em> this issue can still be force-applied by checking them below.
@@ -107,18 +109,18 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
               )}
 
               {/* Supplier rows */}
-              {m.replayPreview.supplierRows.length > 0 && (
+              {replayPreview.supplierRows.length > 0 && (
                 <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                   <div className="bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
                     Supplier Timelines
                     <Badge variant="outline" className="text-[11px]">
-                      {m.replayPreview.supplierRows.length} supplier(s)
+                      {replayPreview.supplierRows.length} supplier(s)
                     </Badge>
                   </div>
                   {/* FIX 11: Select All / Clear controls */}
                   {(() => {
-                    const safeIds = m.replayPreview.supplierRows.filter((s) => s.safeToRepair).map((s) => s.supplierId);
-                    const forceableIds = m.replayPreview.supplierRows
+                    const safeIds = replayPreview.supplierRows.filter((s) => s.safeToRepair).map((s) => s.supplierId);
+                    const forceableIds = replayPreview.supplierRows
                       .filter(
                         (s) =>
                           !s.safeToRepair && s.reasons.length === 1 && s.reasons[0] === "TIMELINE_QUANTITY_MISMATCH"
@@ -161,8 +163,8 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                           Clear
                         </Button>
                         <span className="ml-auto font-medium">
-                          {m.selectedSupplierIds.size}/{totalSelectable} selected
-                          {forceableIds.some((id) => m.selectedSupplierIds.has(id)) && (
+                          {selectedSupplierIds.size}/{totalSelectable} selected
+                          {forceableIds.some((id) => selectedSupplierIds.has(id)) && (
                             <span className="ml-1 text-amber-600">(includes quantity-mismatch override)</span>
                           )}
                         </span>
@@ -184,9 +186,9 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {m.replayPreview.supplierRows.map((s) => {
+                      {replayPreview.supplierRows.map((s) => {
                         const delta = s.endingExpectedRate - s.currentStoredRate;
-                        const isChecked = m.selectedSupplierIds.has(s.supplierId);
+                        const isChecked = selectedSupplierIds.has(s.supplierId);
                         // A quantity-mismatch-only row can be force-applied (user acknowledges the gap).
                         const isForceAppliable =
                           !s.safeToRepair && s.reasons.length === 1 && s.reasons[0] === "TIMELINE_QUANTITY_MISMATCH";
@@ -207,7 +209,7 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                                     : ""
                                 }
                                 onCheckedChange={(v) => {
-                                  const next = new Set(m.selectedSupplierIds);
+                                  const next = new Set(selectedSupplierIds);
                                   if (v) next.add(s.supplierId);
                                   else next.delete(s.supplierId);
                                   m.setSelectedSupplierIds(next);
@@ -265,13 +267,13 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
               )}
 
               {/* Options and apply — show when there are safe suppliers OR force-appliable ones */}
-              {(m.replayPreview.summary.safeSuppliers > 0 ||
-                m.replayPreview.supplierRows.some(
+              {(replayPreview.summary.safeSuppliers > 0 ||
+                replayPreview.supplierRows.some(
                   (s) => !s.safeToRepair && s.reasons.length === 1 && s.reasons[0] === "TIMELINE_QUANTITY_MISMATCH"
                 )) && (
                 <div className="space-y-2 pt-2">
                   {/* includeFinalizedBales toggle */}
-                  {(m.replayPreview.summary.finalizedBalesToUpdate ?? 0) > 0 && (
+                  {(replayPreview.summary.finalizedBalesToUpdate ?? 0) > 0 && (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-md px-3 py-2 bg-amber-50 border-amber-200">
                       <Checkbox
                         id="include-finalized-bales"
@@ -279,8 +281,8 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                         onCheckedChange={(v) => m.setIncludeFinalizedBales(Boolean(v))}
                       />
                       <label htmlFor="include-finalized-bales" className="cursor-pointer font-medium text-amber-800">
-                        Also update {m.replayPreview.summary.finalizedBalesToUpdate} finalized bale(s) (sold /
-                        dispatched / invoiced)
+                        Also update {replayPreview.summary.finalizedBalesToUpdate} finalized bale(s) (sold / dispatched
+                        / invoiced)
                       </label>
                     </div>
                   )}
@@ -289,19 +291,19 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                       after the token is stored in state — ensuring every apply uses
                       a freshly-signed token that was reviewed before clicking Apply. */}
                   <div className="flex items-center justify-between gap-2">
-                    {m.selectedSupplierIds.size === 0 && (
+                    {selectedSupplierIds.size === 0 && (
                       <span className="text-xs text-amber-600">
                         Select at least one supplier above to enable Prepare.
                       </span>
                     )}
-                    {m.selectedSupplierIds.size > 0 &&
+                    {selectedSupplierIds.size > 0 &&
                       (() => {
-                        const forceableSelected = m.replayPreview.supplierRows.filter(
+                        const forceableSelected = replayPreview.supplierRows.filter(
                           (s) =>
                             !s.safeToRepair &&
                             s.reasons.length === 1 &&
                             s.reasons[0] === "TIMELINE_QUANTITY_MISMATCH" &&
-                            m.selectedSupplierIds.has(s.supplierId)
+                            selectedSupplierIds.has(s.supplierId)
                         );
                         return forceableSelected.length > 0 ? (
                           <span className="text-xs text-amber-600">
@@ -316,15 +318,15 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                         disabled={
                           m.replayPrepareMutation.isPending ||
                           m.replayApplyMutation.isPending ||
-                          m.selectedSupplierIds.size === 0
+                          selectedSupplierIds.size === 0
                         }
                         onClick={() => {
-                          const allSelected = Array.from(m.selectedSupplierIds);
+                          const allSelected = Array.from(selectedSupplierIds);
                           const safeSelected = allSelected.filter((id) =>
-                            m.replayPreview.supplierRows.some((s) => s.supplierId === id && s.safeToRepair)
+                            replayPreview.supplierRows.some((s) => s.supplierId === id && s.safeToRepair)
                           );
                           const forceSelected = allSelected.filter((id) =>
-                            m.replayPreview.supplierRows.some(
+                            replayPreview.supplierRows.some(
                               (s) =>
                                 s.supplierId === id &&
                                 !s.safeToRepair &&
@@ -339,33 +341,33 @@ export function RawStockReplayTab({ m }: { m: RawStockReplayPanelModel }) {
                               includeCompletedBatches: m.includeCompletedBatches,
                               includeFinalizedBales: m.includeFinalizedBales,
                             });
-                          }, `Prepare historical cost replay for ${m.selectedSupplierIds.size} selected supplier(s) — a signed review token will be issued before any data is written.`);
+                          }, `Prepare historical cost replay for ${selectedSupplierIds.size} selected supplier(s) — a signed review token will be issued before any data is written.`);
                         }}
                         className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
                         {m.replayPrepareMutation.isPending
                           ? "Preparing…"
-                          : `Prepare Historical Replay (${m.selectedSupplierIds.size} supplier(s))`}
+                          : `Prepare Historical Replay (${selectedSupplierIds.size} supplier(s))`}
                       </Button>
                     </div>
                   </div>
                 </div>
               )}
 
-              {m.replayPreview.summary.safeSuppliers === 0 &&
-                !m.replayPreview.supplierRows.some(
+              {replayPreview.summary.safeSuppliers === 0 &&
+                !replayPreview.supplierRows.some(
                   (s) => !s.safeToRepair && s.reasons.length === 1 && s.reasons[0] === "TIMELINE_QUANTITY_MISMATCH"
                 ) &&
-                m.replayPreview.supplierRows.length > 0 && (
+                replayPreview.supplierRows.length > 0 && (
                   <div className="text-sm text-muted-foreground py-8 text-center border rounded-md bg-card">
                     No suppliers are safe to repair automatically.
-                    {m.replayPreview.summary.manualReviewSuppliers > 0 &&
-                      ` ${m.replayPreview.summary.manualReviewSuppliers} supplier(s) require manual review (missing event dates or quantity mismatches).`}
+                    {replayPreview.summary.manualReviewSuppliers > 0 &&
+                      ` ${replayPreview.summary.manualReviewSuppliers} supplier(s) require manual review (missing event dates or quantity mismatches).`}
                   </div>
                 )}
 
-              {m.replayPreview.supplierRows.length === 0 && (
+              {replayPreview.supplierRows.length === 0 && (
                 <div className="text-sm text-muted-foreground py-12 text-center border rounded-md bg-card">
                   Nothing to fix — all supplier timelines are consistent with stored costs.
                 </div>

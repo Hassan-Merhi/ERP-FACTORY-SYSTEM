@@ -6,30 +6,42 @@ import { useCreateProformaV5DataModel } from "./useCreateProformaV5DataModel";
 export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess }: Props) {
   const hs = useCreateProformaV5DataModel({ open, onClose, articleRows, onSuccess });
 
+  const {
+    triggerAutosave,
+    customerId,
+    proformaName,
+    destination,
+    isActive,
+    quantities,
+    sellingPrices,
+    sendToLoading,
+    containerCount,
+    containerNames,
+  } = hs;
   useEffect(() => {
-    hs.triggerAutosave({
-      customerId: hs.customerId,
-      proformaName: hs.proformaName,
-      destination: hs.destination,
-      isActive: hs.isActive,
-      quantities: hs.quantities,
-      sellingPrices: hs.sellingPrices,
-      sendToLoading: hs.sendToLoading,
-      containerCount: hs.containerCount,
-      containerNames: hs.containerNames,
+    triggerAutosave({
+      customerId: customerId,
+      proformaName: proformaName,
+      destination: destination,
+      isActive: isActive,
+      quantities: quantities,
+      sellingPrices: sellingPrices,
+      sendToLoading: sendToLoading,
+      containerCount: containerCount,
+      containerNames: containerNames,
       savedAt: Date.now(),
     });
   }, [
-    hs.customerId,
-    hs.proformaName,
-    hs.destination,
-    hs.isActive,
-    hs.quantities,
-    hs.sellingPrices,
-    hs.sendToLoading,
-    hs.containerCount,
-    hs.containerNames,
-    hs.triggerAutosave,
+    customerId,
+    proformaName,
+    destination,
+    isActive,
+    quantities,
+    sellingPrices,
+    sendToLoading,
+    containerCount,
+    containerNames,
+    triggerAutosave,
   ]);
 
   useEffect(() => {

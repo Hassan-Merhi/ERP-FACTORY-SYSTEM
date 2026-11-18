@@ -150,6 +150,9 @@ export function WatchUserDialog({
   onClose: () => void;
 }) {
   const m = useWatchUserDialogModel({ userId });
+  // Local aliases keep TypeScript's narrowing of screenFrame through hasScreen.
+  const { screenFrame } = m;
+  const hasScreen = !!screenFrame?.dataUrl;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -207,7 +210,7 @@ export function WatchUserDialog({
             >
               <ZoomIn className="h-3.5 w-3.5 mr-1.5" /> 100%
             </Button>
-            {m.hasScreen && (
+            {hasScreen && (
               <Button size="sm" variant="outline" onClick={m.openNativeFullscreen} data-testid="button-fullscreen-feed">
                 <Maximize2 className="h-3.5 w-3.5 mr-1.5" /> Full Screen
               </Button>
@@ -240,24 +243,24 @@ export function WatchUserDialog({
               className={`flex-1 min-h-0 ${m.displayMode === "fit" ? "overflow-hidden flex items-center justify-center" : "overflow-auto flex items-start justify-start"}`}
               data-testid="screen-feed-viewport"
             >
-              {m.hasScreen ? (
+              {hasScreen ? (
                 <div
                   className="relative shrink-0"
                   style={{ width: m.displaySize.width, height: m.displaySize.height }}
                   data-testid="screen-feed-frame-wrapper"
                 >
                   <img
-                    src={m.screenFrame.dataUrl}
+                    src={screenFrame.dataUrl}
                     alt="Live screen of user"
                     className="block w-full h-full object-contain select-none"
                     draggable={false}
                     data-testid="img-screen-feed"
-                    data-frame-viewport-width={m.screenFrame.viewport?.width ?? ""}
-                    data-frame-viewport-height={m.screenFrame.viewport?.height ?? ""}
-                    data-frame-viewport-scroll-x={m.screenFrame.viewport?.scrollX ?? ""}
-                    data-frame-viewport-scroll-y={m.screenFrame.viewport?.scrollY ?? ""}
-                    data-frame-viewport-visual-scale={m.screenFrame.viewport?.visualScale ?? ""}
-                    data-frame-captured-at={m.screenFrame.capturedAt}
+                    data-frame-viewport-width={screenFrame.viewport?.width ?? ""}
+                    data-frame-viewport-height={screenFrame.viewport?.height ?? ""}
+                    data-frame-viewport-scroll-x={screenFrame.viewport?.scrollX ?? ""}
+                    data-frame-viewport-scroll-y={screenFrame.viewport?.scrollY ?? ""}
+                    data-frame-viewport-visual-scale={screenFrame.viewport?.visualScale ?? ""}
+                    data-frame-captured-at={screenFrame.capturedAt}
                   />
                   {m.cursorVisible && m.cursor && (
                     <div

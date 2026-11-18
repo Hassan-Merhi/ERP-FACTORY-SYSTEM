@@ -40,6 +40,7 @@ import { FactoryInvoiceLinesTable } from "./FactoryInvoiceLinesTable";
 
 export default function FactoryInvoiceDetail() {
   const m = useFactoryInvoiceDetailPageModel();
+  const { order } = m;
 
   if (m.isLoading) {
     return (
@@ -52,7 +53,7 @@ export default function FactoryInvoiceDetail() {
     );
   }
 
-  if (!m.order) {
+  if (!order) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <p className="text-muted-foreground" data-testid="text-not-found">
@@ -70,19 +71,17 @@ export default function FactoryInvoiceDetail() {
       </div>
     );
   }
-  const v = deriveFactoryInvoiceView(m.order);
+  const v = deriveFactoryInvoiceView(order);
 
   return (
     <div className="flex flex-col h-full p-6 overflow-y-auto">
       <PageHeader
-        title={<span data-testid="text-invoice-number">{m.order.invoiceNumber || `Order #${m.order.id}`}</span>}
+        title={<span data-testid="text-invoice-number">{order.invoiceNumber || `Order #${order.id}`}</span>}
         backTarget={m.backTarget}
         meta={
           <>
-            {m.getStatusBadge(m.order.status)}
-            <span data-testid="text-order-date">
-              {m.order.orderDate ? m.formatDisplayDate(m.order.orderDate) : "-"}
-            </span>
+            {m.getStatusBadge(order.status)}
+            <span data-testid="text-order-date">{order.orderDate ? m.formatDisplayDate(order.orderDate) : "-"}</span>
           </>
         }
       />
@@ -92,40 +91,40 @@ export default function FactoryInvoiceDetail() {
           <div>
             <p className="text-sm text-muted-foreground">Customer</p>
             <p className="font-semibold text-lg" data-testid="text-customer-name">
-              {m.order.customerName || "-"}
+              {order.customerName || "-"}
             </p>
           </div>
-          {m.order.containerNumber && (
+          {order.containerNumber && (
             <div>
               <p className="text-sm text-muted-foreground">Container No.</p>
               <p className="font-semibold font-mono" data-testid="text-container-number">
-                {m.order.containerNumber}
+                {order.containerNumber}
               </p>
             </div>
           )}
-          {m.order.shippingCompany && (
+          {order.shippingCompany && (
             <div>
               <p className="text-sm text-muted-foreground">Shipping</p>
               <p className="font-semibold" data-testid="text-shipping-company">
-                {m.order.shippingCompany}
+                {order.shippingCompany}
               </p>
             </div>
           )}
-          {m.order.destination && (
+          {order.destination && (
             <div>
               <p className="text-sm text-muted-foreground">Destination</p>
               <p className="font-semibold" data-testid="text-destination">
-                {m.order.destination}
+                {order.destination}
               </p>
             </div>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Primary context action */}
-          {m.order.status === "DRAFT" && m.canChange && (
+          {order.status === "DRAFT" && m.canChange && (
             <Button
               variant="outline"
-              onClick={() => m.navigate(`/factory/sales/new?orderId=${m.order.id}`)}
+              onClick={() => m.navigate(`/factory/sales/new?orderId=${order.id}`)}
               data-testid="button-continue-editing"
             >
               Continue Editing
@@ -134,7 +133,7 @@ export default function FactoryInvoiceDetail() {
           {(v.isPendingVerification || v.isVerifiedStatus || v.isLoadingStatus) && (
             <Button
               variant="outline"
-              onClick={() => m.navigate(`/factory/sales/pending-invoices/${m.order.id}/verify`)}
+              onClick={() => m.navigate(`/factory/sales/pending-invoices/${order.id}/verify`)}
               data-testid="button-go-to-verify"
             >
               {v.isPendingVerification ? (
@@ -157,7 +156,7 @@ export default function FactoryInvoiceDetail() {
           )}
           {v.isFinalized && m.canChange && (
             <Button
-              onClick={() => m.navigate(`/factory/invoices/${m.order.id}/loading-scan`)}
+              onClick={() => m.navigate(`/factory/invoices/${order.id}/loading-scan`)}
               data-testid="button-scan-loading"
             >
               <ScanLine className="mr-2 h-4 w-4" />
@@ -178,7 +177,7 @@ export default function FactoryInvoiceDetail() {
                 <>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">View</DropdownMenuLabel>
                   <DropdownMenuItem
-                    onClick={() => m.navigate(`/factory/sales/pending-invoices/${m.order.id}/verify`)}
+                    onClick={() => m.navigate(`/factory/sales/pending-invoices/${order.id}/verify`)}
                     data-testid="button-proforma-vs-loaded"
                   >
                     <GitCompare className="h-4 w-4" />
@@ -191,7 +190,7 @@ export default function FactoryInvoiceDetail() {
               {m.isAdmin && m.canChange && (
                 <>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Pricing</DropdownMenuLabel>
-                  {m.order.status !== "CANCELLED" && (
+                  {order.status !== "CANCELLED" && (
                     <DropdownMenuItem
                       onClick={() => m.repriceProductionMutation.mutate()}
                       disabled={m.repriceProductionMutation.isPending}
@@ -211,7 +210,7 @@ export default function FactoryInvoiceDetail() {
                       Apply Selling Prices
                     </DropdownMenuItem>
                   )}
-                  {m.order.status !== "CANCELLED" && (
+                  {order.status !== "CANCELLED" && (
                     <DropdownMenuItem
                       onClick={() => {
                         m.setSelectedProformaId("");
@@ -254,8 +253,8 @@ export default function FactoryInvoiceDetail() {
 
               {m.isAdmin &&
                 m.canChange &&
-                (v.isFinalized || m.order.status !== "FINALIZED") &&
-                m.order.status !== "CANCELLED" && <DropdownMenuSeparator />}
+                (v.isFinalized || order.status !== "FINALIZED") &&
+                order.status !== "CANCELLED" && <DropdownMenuSeparator />}
               {m.isAdmin && m.canChange && v.isFinalized && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
@@ -266,7 +265,7 @@ export default function FactoryInvoiceDetail() {
                   Revert to Draft
                 </DropdownMenuItem>
               )}
-              {m.canChange && m.order.status !== "FINALIZED" && m.order.status !== "CANCELLED" && (
+              {m.canChange && order.status !== "FINALIZED" && order.status !== "CANCELLED" && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => m.setDeleteDialogOpen(true)}
@@ -287,7 +286,7 @@ export default function FactoryInvoiceDetail() {
       </div>
 
       {/* ── Dispatch Batch Info Card (Developer only) ───────────────────── */}
-      {m.isDeveloper && m.order.dispatchBatchId && (
+      {m.isDeveloper && order.dispatchBatchId && (
         <Card className="mb-4 border-blue-200 dark:border-blue-800">
           <CardContent className="pt-4 pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -301,7 +300,7 @@ export default function FactoryInvoiceDetail() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => m.navigate(`/factory/dispatch-batches/${m.order.dispatchBatchId}`)}
+                onClick={() => m.navigate(`/factory/dispatch-batches/${order.dispatchBatchId}`)}
                 data-testid="button-view-dispatch-batch"
               >
                 <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
@@ -344,7 +343,7 @@ export default function FactoryInvoiceDetail() {
         </Card>
       )}
 
-      <FactoryInvoiceLinesTable m={m} v={v} order={m.order} />
+      <FactoryInvoiceLinesTable m={m} v={v} order={order} />
 
       <FactoryInvoiceChargesCard m={m} v={v} />
 

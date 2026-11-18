@@ -20,6 +20,7 @@ import { PropertyRentalUnitsTable } from "./PropertyRentalUnitsTable";
 
 export default function PropertyRentalPage(props: Props) {
   const m = usePropertyRentalPageModel(props);
+  const { renameGroup, confirmDeleteUnit } = m;
 
   return (
     <ApiBaseCtx.Provider value={m.apiBase}>
@@ -349,7 +350,7 @@ export default function PropertyRentalPage(props: Props) {
           />
         )}
 
-        {m.renameGroup && (
+        {renameGroup && (
           <Dialog open onOpenChange={(open) => !open && !m.renameLocationGroup.isPending && m.setRenameGroup(null)}>
             <DialogContent data-testid={`dialog-${m.testIdPrefix}-rename-group`}>
               <DialogHeader>
@@ -366,11 +367,11 @@ export default function PropertyRentalPage(props: Props) {
                     if (
                       e.key === "Enter" &&
                       m.newGroupName.trim() &&
-                      m.newGroupName.trim().toUpperCase() !== m.renameGroup.name.toUpperCase() &&
+                      m.newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
                       !m.renameLocationGroup.isPending
                     ) {
                       m.renameLocationGroup.mutate({
-                        unitId: m.renameGroup.unitId,
+                        unitId: renameGroup.unitId,
                         locationGroup: m.newGroupName.trim(),
                       });
                     }
@@ -392,16 +393,16 @@ export default function PropertyRentalPage(props: Props) {
                 </Button>
                 <Button
                   onClick={() =>
-                    m.renameLocationGroup.mutate({ unitId: m.renameGroup.unitId, locationGroup: m.newGroupName.trim() })
+                    m.renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: m.newGroupName.trim() })
                   }
                   disabled={
                     !m.newGroupName.trim() ||
-                    m.newGroupName.trim().toUpperCase() === m.renameGroup.name.toUpperCase() ||
+                    m.newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
                     m.renameLocationGroup.isPending
                   }
                   data-testid={`button-${m.testIdPrefix}-save-group`}
                 >
-                  {m.renameLocationGroup.isPending ? "Saving…" : `Rename ${m.renameGroup.count} units`}
+                  {m.renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -409,16 +410,16 @@ export default function PropertyRentalPage(props: Props) {
         )}
 
         {/* Confirm delete unit dialog */}
-        {m.confirmDeleteUnit && (
+        {confirmDeleteUnit && (
           <Dialog open onOpenChange={(o) => !o && m.setConfirmDeleteUnitId(null)}>
             <DialogContent data-testid={`dialog-${m.testIdPrefix}-confirm-delete`}>
               <DialogHeader>
-                <DialogTitle>Delete Unit {m.confirmDeleteUnit.unitNumber}?</DialogTitle>
+                <DialogTitle>Delete Unit {confirmDeleteUnit.unitNumber}?</DialogTitle>
               </DialogHeader>
               <p className="text-sm text-muted-foreground">
                 This will permanently remove unit{" "}
-                <span className="font-semibold text-foreground">{m.confirmDeleteUnit.unitNumber}</span> from the list.
-                {m.confirmDeleteUnit.contract ? (
+                <span className="font-semibold text-foreground">{confirmDeleteUnit.unitNumber}</span> from the list.
+                {confirmDeleteUnit.contract ? (
                   <span className="block mt-1 text-destructive font-medium">
                     This unit has an active contract — end it first before deleting.
                   </span>
@@ -432,8 +433,8 @@ export default function PropertyRentalPage(props: Props) {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => m.deleteUnit.mutate(m.confirmDeleteUnit.id)}
-                  disabled={m.deleteUnit.isPending || !!m.confirmDeleteUnit.contract}
+                  onClick={() => m.deleteUnit.mutate(confirmDeleteUnit.id)}
+                  disabled={m.deleteUnit.isPending || !!confirmDeleteUnit.contract}
                   data-testid={`button-${m.testIdPrefix}-confirm-delete-submit`}
                 >
                   {m.deleteUnit.isPending ? "Deleting…" : "Delete Unit"}

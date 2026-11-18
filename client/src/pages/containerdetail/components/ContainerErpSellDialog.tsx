@@ -17,7 +17,7 @@ export function ContainerErpSellDialog({ m, v }: { m: ContainerDetailErpViewMode
           </DialogDescription>
         </DialogHeader>
         <Form {...m.form}>
-          <m.form noValidate onSubmit={m.form.handleSubmit(m.handleSellSubmit)} className="space-y-4">
+          <form noValidate onSubmit={m.form.handleSubmit(m.handleSellSubmit)} className="space-y-4">
             <FormField
               control={m.form.control}
               name="customerId"
@@ -118,7 +118,7 @@ export function ContainerErpSellDialog({ m, v }: { m: ContainerDetailErpViewMode
                 {m.sellContainerMutation.isPending ? "Processing..." : "Record Sale"}
               </Button>
             </div>
-          </m.form>
+          </form>
         </Form>
       </DialogContent>
     </Dialog>

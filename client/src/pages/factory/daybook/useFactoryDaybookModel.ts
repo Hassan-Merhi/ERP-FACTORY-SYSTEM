@@ -60,42 +60,55 @@ export function useFactoryDaybookModel() {
   // Filter/period state is now restored directly in the useState initializers
   // above (see initialDaybookStateRef) so the query doesn't fire twice on
   // mount — once for the "today" default, then again for the restored range.
+  const { initialDaybookStateRef } = fd;
   useEffect(() => {
-    const scrollY = fd.initialDaybookStateRef.current?.scrollY || 0;
+    const scrollY = initialDaybookStateRef.current?.scrollY || 0;
     if (!scrollY) return;
     requestAnimationFrame(() => {
       window.scrollTo({ top: scrollY, behavior: "instant" as ScrollBehavior });
     });
-  }, []);
+  }, [initialDaybookStateRef]);
 
   // ── Session persistence: save on every state change ───────────────────────
+  const {
+    periodFilter,
+    txTypeFilter,
+    currencyFilter,
+    statusFilter,
+    searchQuery,
+    minAmount,
+    maxAmount,
+    sortOrder,
+    scrollYRef,
+  } = fd;
   useEffect(() => {
     saveFactoryDaybookState({
-      periodFilter: fd.periodFilter,
-      txTypeFilter: fd.txTypeFilter,
-      currencyFilter: fd.currencyFilter,
-      statusFilter: fd.statusFilter,
-      searchQuery: fd.searchQuery,
-      minAmount: fd.minAmount,
-      maxAmount: fd.maxAmount,
-      sortOrder: fd.sortOrder,
-      scrollY: fd.scrollYRef.current,
+      periodFilter: periodFilter,
+      txTypeFilter: txTypeFilter,
+      currencyFilter: currencyFilter,
+      statusFilter: statusFilter,
+      searchQuery: searchQuery,
+      minAmount: minAmount,
+      maxAmount: maxAmount,
+      sortOrder: sortOrder,
+      scrollY: scrollYRef.current,
     });
   }, [
-    fd.periodFilter,
-    fd.txTypeFilter,
-    fd.currencyFilter,
-    fd.statusFilter,
-    fd.searchQuery,
-    fd.minAmount,
-    fd.maxAmount,
-    fd.sortOrder,
+    periodFilter,
+    txTypeFilter,
+    currencyFilter,
+    statusFilter,
+    searchQuery,
+    minAmount,
+    maxAmount,
+    sortOrder,
+    scrollYRef,
   ]);
 
   // ── Session persistence: track scroll ────────────────────────────────────
   useEffect(() => {
     const handleScroll = () => {
-      fd.scrollYRef.current = window.scrollY;
+      scrollYRef.current = window.scrollY;
       try {
         const raw = sessionStorage.getItem(FACTORY_DAYBOOK_STATE_KEY);
         if (raw) {
@@ -109,7 +122,7 @@ export function useFactoryDaybookModel() {
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [scrollYRef]);
 
   // ── Session persistence: clear on unmount if leaving daybook flow ─────────
   useEffect(() => {

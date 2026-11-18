@@ -158,6 +158,7 @@ export function SupplierStatement({
 
   if (!statementData) return null;
   const sv = deriveSupplierStatementView({ statementData, formatNum });
+  const { activeContainerCount } = sv;
 
   return (
     <div className="space-y-6">
@@ -233,8 +234,8 @@ export function SupplierStatement({
             <div className="rounded-xl border p-4">
               <div className="text-xs text-muted-foreground">Active Containers</div>
               <div className="text-xl font-bold mt-1" data-testid="text-statement-total-containers">
-                {sv.activeContainerCount}
-                {statementData.summary.totalContainers > sv.activeContainerCount && (
+                {activeContainerCount}
+                {statementData.summary.totalContainers > activeContainerCount && (
                   <span className="text-sm font-normal text-muted-foreground ml-1">
                     / {statementData.summary.totalContainers} total
                   </span>

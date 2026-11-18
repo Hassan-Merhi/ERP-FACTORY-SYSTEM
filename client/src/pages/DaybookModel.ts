@@ -25,22 +25,16 @@ import { useDaybookFiltersModel } from "./DaybookFiltersModel";
 export function useDaybookModel({ user }: { user: { user?: DaybookUser | null }["user"] }) {
   const f = useDaybookFiltersModel({ user });
 
+  const { voucherToEdit, voucherEntries, entriesLoading, editFormInitialized, editForm, setEditFormInitialized } = f;
   useEffect(() => {
-    if (f.voucherToEdit && f.voucherEntries.length > 0 && !f.entriesLoading && !f.editFormInitialized) {
-      f.editForm.reset({
-        voucherType: f.voucherToEdit.voucherType as
-          | "Journal"
-          | "Payment"
-          | "Receipt"
-          | "Stock Transfer"
-          | "Sales"
-          | "Purchase"
-          | "Contra"
-          | undefined,
-        voucherDate: f.voucherToEdit.voucherDate,
-        description: f.voucherToEdit.description || "",
-        optional: f.voucherToEdit.optional,
-        entries: f.voucherEntries.map((e) => ({
+    if (voucherToEdit && voucherEntries.length > 0 && !entriesLoading && !editFormInitialized) {
+      editForm.reset({
+        voucherType: voucherToEdit.voucherType as
+          "Journal" | "Payment" | "Receipt" | "Stock Transfer" | "Sales" | "Purchase" | "Contra" | undefined,
+        voucherDate: voucherToEdit.voucherDate,
+        description: voucherToEdit.description || "",
+        optional: voucherToEdit.optional,
+        entries: voucherEntries.map((e) => ({
           // NOTE: /api/vouchers/:id/entries can also return "factorySupplier"
           // and "customer" account types, which the edit form's enum does not
           // offer. The raw value is passed through unchanged (historical
@@ -53,9 +47,9 @@ export function useDaybookModel({ user }: { user: { user?: DaybookUser | null }[
           narration: e.narration || "",
         })),
       });
-      f.setEditFormInitialized(true);
+      setEditFormInitialized(true);
     }
-  }, [f.voucherToEdit, f.voucherEntries, f.entriesLoading, f.editFormInitialized, f.editForm]);
+  }, [voucherToEdit, voucherEntries, entriesLoading, editFormInitialized, editForm, setEditFormInitialized]);
 
   const [accountNameCache] = useState<Record<number, string>>({});
   const {
@@ -84,20 +78,23 @@ export function useDaybookModel({ user }: { user: { user?: DaybookUser | null }[
       : "Failed to load transactions"
     : null;
 
+  const { setVoucherPage, setDaybookRowLimit, DAYBOOK_PAGE_SIZE, selectedCompany, periodFilter, filters } = f;
   useEffect(() => {
-    f.setVoucherPage(1);
-    f.setDaybookRowLimit(f.DAYBOOK_PAGE_SIZE);
+    setVoucherPage(1);
+    setDaybookRowLimit(DAYBOOK_PAGE_SIZE);
   }, [
-    f.selectedCompany?.id,
-    f.periodFilter.fromDate,
-    f.periodFilter.toDate,
-    f.filters.voucherType,
-    f.filters.searchQuery,
-    f.filters.sortOrder,
-    f.filters.minAmount,
-    f.filters.maxAmount,
-    f.filters.statusFilter,
-    f.setVoucherPage,
+    selectedCompany?.id,
+    periodFilter.fromDate,
+    periodFilter.toDate,
+    filters.voucherType,
+    filters.searchQuery,
+    filters.sortOrder,
+    filters.minAmount,
+    filters.maxAmount,
+    filters.statusFilter,
+    setVoucherPage,
+    setDaybookRowLimit,
+    DAYBOOK_PAGE_SIZE,
   ]);
 
   const offloadsUrl = useMemo(

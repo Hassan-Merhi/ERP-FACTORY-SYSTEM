@@ -8,12 +8,15 @@ import { SectionHeader } from "./factoryfinancialsnapshot/components/SectionHead
 import type { FactoryFinancialSnapshotPageModel } from "./FactoryFinancialSnapshotPageModel";
 
 export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSnapshotPageModel }) {
+  // Local aliases keep TypeScript's narrowing of computed through allLoading.
+  const { computed } = m;
+  const allLoading = m.isLoading || !computed;
   return (
     <div>
       <SectionHeader title="Accounts & Finance" color="var(--factory-color-500)" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* ── Cash & Bank (manual pinned) ── */}
-        {m.allLoading ? (
+        {allLoading ? (
           <KpiCard icon={Wallet} title="Cash & Bank" value="—" color="green" loading />
         ) : (
           <Card data-testid="kpi-card-cash-bank">
@@ -25,25 +28,25 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   data-testid="button-expand-cash-bank"
                 >
                   <div
-                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${m.computed.cashBankTotal >= 0 ? "text-emerald-500" : "text-red-500"}`}
+                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${computed.cashBankTotal >= 0 ? "text-emerald-500" : "text-red-500"}`}
                   >
                     <Wallet className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground font-medium">Cash & Bank</p>
                     <p
-                      className={`text-lg font-semibold font-mono mt-0.5 ${m.computed.cashBankTotal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                      className={`text-lg font-semibold font-mono mt-0.5 ${computed.cashBankTotal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                       data-testid="value-cash-bank"
                     >
-                      {m.computed.cashBankCount === 0 ? (
+                      {computed.cashBankCount === 0 ? (
                         <span className="text-sm font-normal text-muted-foreground">No accounts selected</span>
                       ) : (
-                        usd(m.computed.cashBankTotal)
+                        usd(computed.cashBankTotal)
                       )}
                     </p>
-                    {m.computed.cashBankCount > 0 && (
+                    {computed.cashBankCount > 0 && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {m.computed.cashBankCount} account{m.computed.cashBankCount !== 1 ? "s" : ""}
+                        {computed.cashBankCount} account{computed.cashBankCount !== 1 ? "s" : ""}
                       </p>
                     )}
                   </div>
@@ -66,9 +69,9 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   </Button>
                 )}
               </div>
-              {m.cashBankExpanded && m.computed.cashBankList.length > 0 && (
+              {m.cashBankExpanded && computed.cashBankList.length > 0 && (
                 <div className="mt-3 pt-3 border-t space-y-1">
-                  {m.computed.cashBankList.map((acct, i) => (
+                  {computed.cashBankList.map((acct, i) => (
                     <div
                       key={acct.id ?? i}
                       className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
@@ -110,7 +113,7 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   ))}
                 </div>
               )}
-              {m.cashBankExpanded && m.computed.cashBankList.length === 0 && (
+              {m.cashBankExpanded && computed.cashBankList.length === 0 && (
                 <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                   Click + to add cash & bank accounts
                 </p>
@@ -120,7 +123,7 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
         )}
 
         {/* ── Agent Accounts (manual) ── */}
-        {m.allLoading ? (
+        {allLoading ? (
           <KpiCard icon={UserRound} title="Agent Accounts" value="—" color="amber" loading />
         ) : (
           <Card data-testid="kpi-card-agents">
@@ -132,25 +135,25 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   data-testid="button-expand-agents"
                 >
                   <div
-                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${m.computed.agentNet >= 0 ? "text-emerald-500" : "text-amber-500"}`}
+                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${computed.agentNet >= 0 ? "text-emerald-500" : "text-amber-500"}`}
                   >
                     <UserRound className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground font-medium">Agent Accounts</p>
                     <p
-                      className={`text-lg font-semibold font-mono mt-0.5 ${m.computed.agentNet >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+                      className={`text-lg font-semibold font-mono mt-0.5 ${computed.agentNet >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
                     >
-                      {m.computed.agentCount === 0 ? (
+                      {computed.agentCount === 0 ? (
                         <span className="text-sm font-normal text-muted-foreground">No accounts selected</span>
                       ) : (
-                        usd(Math.abs(m.computed.agentNet))
+                        usd(Math.abs(computed.agentNet))
                       )}
                     </p>
-                    {m.computed.agentCount > 0 && (
+                    {computed.agentCount > 0 && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {m.computed.agentCount} account{m.computed.agentCount !== 1 ? "s" : ""} ·{" "}
-                        {m.computed.agentNet >= 0 ? "Net receivable" : "Net payable"}
+                        {computed.agentCount} account{computed.agentCount !== 1 ? "s" : ""} ·{" "}
+                        {computed.agentNet >= 0 ? "Net receivable" : "Net payable"}
                       </p>
                     )}
                   </div>
@@ -173,9 +176,9 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   </Button>
                 )}
               </div>
-              {m.agentExpanded && m.computed.agentList.length > 0 && (
+              {m.agentExpanded && computed.agentList.length > 0 && (
                 <div className="mt-3 pt-3 border-t space-y-1">
-                  {m.computed.agentList.map((acct, i) => (
+                  {computed.agentList.map((acct, i) => (
                     <div
                       key={acct.id ?? i}
                       className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
@@ -217,7 +220,7 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   ))}
                 </div>
               )}
-              {m.agentExpanded && m.computed.agentList.length === 0 && (
+              {m.agentExpanded && computed.agentList.length === 0 && (
                 <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                   Click + to add agent accounts
                 </p>
@@ -227,7 +230,7 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
         )}
 
         {/* ── Freight / Embassy / Shipping (manual) ── */}
-        {m.allLoading ? (
+        {allLoading ? (
           <KpiCard icon={Truck} title="Freight / Embassy / Shipping" value="—" color="amber" loading />
         ) : (
           <Card data-testid="kpi-card-freight">
@@ -239,25 +242,25 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   data-testid="button-expand-freight"
                 >
                   <div
-                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${m.computed.freightNet >= 0 ? "text-emerald-500" : "text-amber-500"}`}
+                    className={`mt-0.5 p-2 rounded-md bg-muted shrink-0 ${computed.freightNet >= 0 ? "text-emerald-500" : "text-amber-500"}`}
                   >
                     <Truck className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground font-medium">Freight / Embassy / Shipping</p>
                     <p
-                      className={`text-lg font-semibold font-mono mt-0.5 ${m.computed.freightNet >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+                      className={`text-lg font-semibold font-mono mt-0.5 ${computed.freightNet >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
                     >
-                      {m.computed.freightCount === 0 ? (
+                      {computed.freightCount === 0 ? (
                         <span className="text-sm font-normal text-muted-foreground">No accounts selected</span>
                       ) : (
-                        usd(Math.abs(m.computed.freightNet))
+                        usd(Math.abs(computed.freightNet))
                       )}
                     </p>
-                    {m.computed.freightCount > 0 && (
+                    {computed.freightCount > 0 && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {m.computed.freightCount} account{m.computed.freightCount !== 1 ? "s" : ""} ·{" "}
-                        {m.computed.freightNet >= 0 ? "Net asset" : "Net payable"}
+                        {computed.freightCount} account{computed.freightCount !== 1 ? "s" : ""} ·{" "}
+                        {computed.freightNet >= 0 ? "Net asset" : "Net payable"}
                       </p>
                     )}
                   </div>
@@ -280,9 +283,9 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   </Button>
                 )}
               </div>
-              {m.freightExpanded && m.computed.freightList.length > 0 && (
+              {m.freightExpanded && computed.freightList.length > 0 && (
                 <div className="mt-3 pt-3 border-t space-y-1">
-                  {m.computed.freightList.map((acct, i) => (
+                  {computed.freightList.map((acct, i) => (
                     <div
                       key={acct.id ?? i}
                       className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
@@ -324,7 +327,7 @@ export function FactoryFinancialSnapshotAccounts({ m }: { m: FactoryFinancialSna
                   ))}
                 </div>
               )}
-              {m.freightExpanded && m.computed.freightList.length === 0 && (
+              {m.freightExpanded && computed.freightList.length === 0 && (
                 <p className="mt-3 pt-3 border-t text-xs text-muted-foreground text-center">
                   Click + to add freight/embassy accounts
                 </p>

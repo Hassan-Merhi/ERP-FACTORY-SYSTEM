@@ -144,13 +144,7 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
         id: account.id,
         name: account.name,
         type: account.type as
-          | "customer"
-          | "ledger"
-          | "bank"
-          | "supplier"
-          | "employee"
-          | "fixedAsset"
-          | "factorySupplier",
+          "customer" | "ledger" | "bank" | "supplier" | "employee" | "fixedAsset" | "factorySupplier",
         code: "",
       };
       handleSidebarAccountSelect(accountObj);
@@ -158,15 +152,16 @@ export function useVouchersModel({ posUser }: { posUser: VouchersProps["posUser"
     f.setCreateAccountContext(null);
   };
 
+  const { activeRowIndex, watchedEntries, setSidebarSearchValue, setSidebarHighlightedIndex } = f;
   useEffect(() => {
-    if (f.activeRowIndex !== null) {
-      const activeEntry = f.watchedEntries[f.activeRowIndex];
+    if (activeRowIndex !== null) {
+      const activeEntry = watchedEntries[activeRowIndex];
       if (activeEntry) {
-        f.setSidebarSearchValue(activeEntry.accountName || "");
-        f.setSidebarHighlightedIndex(0);
+        setSidebarSearchValue(activeEntry.accountName || "");
+        setSidebarHighlightedIndex(0);
       }
     }
-  }, [f.watchedEntries, f.activeRowIndex]);
+  }, [watchedEntries, activeRowIndex, setSidebarSearchValue, setSidebarHighlightedIndex]);
 
   const restorePaymentDraft = () => {
     if (f.paymentDraft?.data) {
