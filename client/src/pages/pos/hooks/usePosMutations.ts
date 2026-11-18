@@ -143,8 +143,11 @@ export function usePosMutations({
         const updateData = {
           description: saleData.notes,
           locationId: saleData.locationId,
-          paymentAccountType: saleData.paymentAccountType,
-          paymentAccountId: saleData.paymentAccountId,
+          // The Daybook POS edit API forbids changing the original payment.
+          // Admin/ERP edits retain their existing payment update behavior.
+          ...(!posUser
+            ? { paymentAccountType: saleData.paymentAccountType, paymentAccountId: saleData.paymentAccountId }
+            : {}),
           isCreditSale: saleData.isCreditSale,
           voucherDate: saleData.voucherDate,
           currency: saleData.currency,
