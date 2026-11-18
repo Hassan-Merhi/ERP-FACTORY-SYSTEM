@@ -1,12 +1,12 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4957,
+    "scannedFiles": 4960,
     "perRoot": {
-      "server": 2690,
+      "server": 2692,
       "shared": 170,
       "scripts": 284,
-      "migrations": 106,
+      "migrations": 107,
       "tests": 1704
     },
     "totalSites": 1223,
@@ -3151,7 +3151,7 @@
       "findingId": "RSQL-0131",
       "id": "12839514c4b9afc3f53a",
       "path": "server/offline/browserSync/browserSyncApply.ts",
-      "line": 384,
+      "line": 398,
       "category": "query-text",
       "sink": "pool.query",
       "context": "listBrowserReceipts",

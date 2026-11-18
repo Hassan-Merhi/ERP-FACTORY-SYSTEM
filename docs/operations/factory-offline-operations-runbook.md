@@ -290,14 +290,23 @@ copy is 2 days old (or was never completed); reading always works. Rows the PC
 creates get ids from 1,000,000,000 up, the offline range the cloud translates,
 so they never collide with cloud rows.
 
-The sync process delivers the connected person's entries, oldest first, to the
-cloud's existing offline apply path (`/api/offline/browser-sync/operations`,
-which needs `OFFLINE_BROWSER_SYNC_ENABLED=1`): applied exactly once as that
+The sync process delivers the connected person's entries, oldest first, to
+`POST /api/offline/pc-sync/operations`: the cloud's existing offline apply path
+(it also needs `OFFLINE_BROWSER_SYNC_ENABLED=1`), applied exactly once as that
 person, a changed replay refused, a lost acknowledgement answered with the same
-receipt. A conflict (for example stock that would go negative) writes nothing
-and is held; **Offline copy → Held entries…** lets an Admin or Developer approve
-it (the cloud re-checks the role; stock then goes negative) or anyone discard
-it. Entries made by other people on the PC wait until they connect it; switching
+receipt.
+
+**Negative stock (Phase B2, owner decision).** Stock sold twice while PCs were
+offline goes negative and is flagged: when the only disagreement is that stock
+would go below zero, the cloud applies the entry anyway and writes one row to
+`offline_negative_stock_flags` (migration 0009) in the same transaction. An Admin
+or Developer of the company lists them with
+`GET /api/offline/pc-sync/negative-stock-flags` (`?status=all` includes closed
+ones) and closes one with a note through
+`POST /api/offline/pc-sync/negative-stock-flags/:id/resolve`. Flags may stay open
+at month end. Any other conflict writes nothing and is held; **Offline copy →
+Held entries…** lets an Admin or Developer approve it (the cloud re-checks the
+role) or anyone discard it. Entries made by other people on the PC wait until they connect it; switching
 the connected account is refused while the current one still has entries to
 send or held. Once nothing is outstanding, the PC undoes its own local writes
 (recorded by a trigger that the sync process's own writes skip) and pulls the
@@ -305,9 +314,8 @@ feed, which brings back the cloud's version of every delivered entry. While
 entries are outstanding the pull waits, so cloud rows never mix with undelivered
 local ones. Covered by `tests/pc-sync-offline-entries.test.ts`.
 
-Still to come: stock sold twice offline going negative automatically with a
-flag (owner decision; today it is held for Admin/Developer approval), the other
-voucher types, masters with held edits and duplicate-customer merge (Phase C),
+Still to come: a screen for the negative-stock flags (today the two routes
+above), the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

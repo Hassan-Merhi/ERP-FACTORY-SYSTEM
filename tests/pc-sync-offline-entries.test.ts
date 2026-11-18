@@ -116,6 +116,7 @@ afterAll(async () => {
     }
   }
   await pool.query("DROP SCHEMA IF EXISTS pc_sync CASCADE");
+  if (ctx) await pool.query("DELETE FROM offline_negative_stock_flags WHERE company_id = $1", [ctx.companyId]);
   await cleanupTestData(PREFIX);
   closeTestServer();
 }, 60_000);
@@ -189,7 +190,7 @@ describe("PC offline entries: delivery to the cloud", () => {
     expect(await outboxSummary(local)).toEqual([{ status: "pending", userId: "someone-else", count: 1 }]);
   });
 
-  it("keeps a conflict for Admin/Developer review instead of writing", async () => {
+  it("applies stock sold twice offline (it goes negative) and flags it for review", async () => {
     const before = await quantity(ctx.stockItemIds[0]);
     await local.query(
       `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status)
@@ -205,17 +206,78 @@ describe("PC offline entries: delivery to the cloud", () => {
         ctx.companyId,
       ]
     );
-    const outcome = await deliverOutbox(local, cloud);
-    const seen = await local.query("SELECT status, code FROM pc_local.outbox ORDER BY id DESC LIMIT 1");
-    expect(outcome, JSON.stringify(seen.rows)).toMatchObject({ conflicts: 1 });
-    const { rows } = await local.query("SELECT code, overridable FROM pc_local.outbox WHERE status = 'conflict'");
-    expect(rows).toEqual([{ code: expect.stringContaining("NEGATIVE"), overridable: true }]);
-    expect(await quantity(ctx.stockItemIds[0])).toBe(before);
+    expect(await deliverOutbox(local, cloud)).toMatchObject({ applied: 1, conflicts: 0 });
+    expect(await quantity(ctx.stockItemIds[0])).toBe(before - 999999);
+    const delivered = await local.query("SELECT operation_id, receipt FROM pc_local.outbox ORDER BY id DESC LIMIT 1");
+    expect(delivered.rows[0].receipt).toMatchObject({ outcome: "cloud-applied", flagged: true });
+
+    const open = await cloud.get("/api/offline/pc-sync/negative-stock-flags");
+    expect(open.status).toBe(200);
+    const flag = open.body.flags.find((f: any) => f.operationId === delivered.rows[0].operation_id);
+    expect(flag).toMatchObject({ kind: "stock.quick-adjust.v1", conflictCode: expect.stringContaining("NEGATIVE") });
+
+    // Only an Admin/Developer of the company sees or closes flags.
+    await pool.query("UPDATE user_company_roles SET role = 'Manager' WHERE user_id = $1 AND company_id = $2", [
+      ctx.userId,
+      ctx.companyId,
+    ]);
+    try {
+      expect((await cloud.get("/api/offline/pc-sync/negative-stock-flags")).status).toBe(403);
+    } finally {
+      await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2", [
+        ctx.userId,
+        ctx.companyId,
+      ]);
+    }
+    const resolved = await cloud.post(`/api/offline/pc-sync/negative-stock-flags/${flag.id}/resolve`, {
+      note: "counted the shelf; stock corrected",
+    });
+    expect(resolved.status).toBe(200);
+    expect(
+      (await cloud.post(`/api/offline/pc-sync/negative-stock-flags/${flag.id}/resolve`, { note: "again" })).status
+    ).toBe(404);
+    const stillOpen = await cloud.get("/api/offline/pc-sync/negative-stock-flags");
+    expect(stillOpen.body.flags.map((f: any) => f.id)).not.toContain(flag.id);
+    const all = await cloud.get("/api/offline/pc-sync/negative-stock-flags", { status: "all" });
+    expect(all.body.flags.find((f: any) => f.id === flag.id)).toMatchObject({
+      resolvedBy: ctx.userId,
+      resolutionNote: "counted the shelf; stock corrected",
+    });
+
+    // Delivering the same entry again (a lost acknowledgement) neither applies nor flags twice.
+    await local.query("UPDATE pc_local.outbox SET status = 'pending' WHERE operation_id = $1", [
+      delivered.rows[0].operation_id,
+    ]);
+    await deliverOutbox(local, cloud);
+    expect(await quantity(ctx.stockItemIds[0])).toBe(before - 999999);
+    const count = await pool.query(
+      "SELECT count(*)::int AS n FROM offline_negative_stock_flags WHERE operation_id = $1",
+      [delivered.rows[0].operation_id]
+    );
+    expect(count.rows[0].n).toBe(1);
   });
 
-  it("lets only an Admin/Developer approve a held entry (stock then goes negative); anyone may discard", async () => {
-    const held = await local.query("SELECT operation_id FROM pc_local.outbox WHERE status = 'conflict'");
-    const operationId = held.rows[0].operation_id;
+  it("lets only an Admin/Developer approve a held entry; anyone may discard", async () => {
+    const insertHeld = async () => {
+      const { rows } = await local.query(
+        `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status, code, overridable)
+         VALUES (gen_random_uuid(), 'stock.quick-adjust.v1', $1::jsonb, nextval('pc_local.local_ref_seq'), $2, $3,
+                 'conflict', 'PHASE9_STOCK_WOULD_GO_NEGATIVE', true)
+         RETURNING operation_id`,
+        [
+          JSON.stringify({
+            stockItemId: ctx.stockItemIds[0],
+            locationId: ctx.locationId,
+            quantity: "5",
+            type: "subtract",
+          }),
+          ctx.userId,
+          ctx.companyId,
+        ]
+      );
+      return rows[0].operation_id as string;
+    };
+    const operationId = await insertHeld();
     const before = await quantity(ctx.stockItemIds[0]);
 
     await pool.query("UPDATE user_company_roles SET role = 'Manager' WHERE user_id = $1 AND company_id = $2", [
@@ -235,15 +297,10 @@ describe("PC offline entries: delivery to the cloud", () => {
     expect(await quantity(ctx.stockItemIds[0])).toBe(before);
 
     await resolveConflict(local, cloud, operationId, "approve");
-    expect(await quantity(ctx.stockItemIds[0])).toBe(before - 999999);
+    expect(await quantity(ctx.stockItemIds[0])).toBe(before - 5);
 
     // A second held entry, given up instead: the cloud is untouched.
-    await local.query(
-      `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status, code, overridable)
-       SELECT gen_random_uuid(), kind, input, nextval('pc_local.local_ref_seq'), user_id, company_id, 'conflict', code, true
-         FROM pc_local.outbox WHERE operation_id = $1::uuid`,
-      [operationId]
-    );
+    await insertHeld();
     const second = await local.query("SELECT operation_id FROM pc_local.outbox WHERE status = 'conflict'");
     const afterApprove = await quantity(ctx.stockItemIds[0]);
     await resolveConflict(local, cloud, second.rows[0].operation_id, "discard");

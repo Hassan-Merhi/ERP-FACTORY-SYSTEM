@@ -220,8 +220,10 @@ plan are in the plan document and the
   on the PC's local server, delivered exactly once through the browser-sync
   apply path, conflicts held for Admin/Developer approval, local writes undone
   and the feed pulled once nothing is outstanding; 2-day block on new entries.
-- Next: B2 negative stock auto-applied with a flag, more voucher types; then
-  Phases C to E.
+- Phase B2: a PC's offline entry that takes stock below zero is applied and
+  flagged (`offline_negative_stock_flags`, migration 0009); Admin/Developer list
+  and close flags; other conflicts stay held.
+- Next: flag screen, more voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 

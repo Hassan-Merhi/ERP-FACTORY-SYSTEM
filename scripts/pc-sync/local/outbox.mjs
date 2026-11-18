@@ -1,7 +1,8 @@
 // Full offline mode (Phase B): delivering the entries made on this PC while offline.
 //
 // Each entry recorded by the local server (pc_local.outbox) goes to the cloud's
-// offline apply path (/api/offline/browser-sync/operations), which applies it
+// offline apply path (/api/offline/pc-sync/operations, the browser-sync path
+// plus the owner's negative-stock rule: applied and flagged), which applies it
 // exactly once as the signed-in user, refuses a changed replay, and reports a
 // conflict instead of overwriting cloud data. Only an Admin or Developer can
 // approve a conflict. Entries are delivered in the order they were made, only
@@ -60,7 +61,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
       }
       company = op.company_id;
     }
-    const res = await cloud.post("/api/offline/browser-sync/operations", {
+    const res = await cloud.post("/api/offline/pc-sync/operations", {
       deviceId: state.device_id,
       operationId: op.operation_id,
       kind: op.kind,
@@ -139,7 +140,7 @@ export async function resolveConflict(local, cloud, operationId, decision) {
     ...(decision === "approve" ? { override: op.code } : {}),
   };
   const path =
-    decision === "approve" ? "/api/offline/browser-sync/operations" : "/api/offline/browser-sync/operations/discard";
+    decision === "approve" ? "/api/offline/pc-sync/operations" : "/api/offline/browser-sync/operations/discard";
   const res = await cloud.post(path, body);
   if (res.status !== 200) {
     throw new PcSyncAgentError(res.body?.code || "PC_SYNC_DECISION_REFUSED", { status: res.status });
