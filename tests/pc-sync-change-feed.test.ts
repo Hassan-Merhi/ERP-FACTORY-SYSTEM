@@ -188,6 +188,32 @@ describe("PC sync change feed: installed", () => {
     }
   });
 
+  it("gives the later write to a row the higher seq, even when it arrives first", async () => {
+    const voucherId = await insertVoucher(ctx.companyId);
+    ({ cursor } = await readAll(cursor));
+    const late = await pool.connect();
+    try {
+      await late.query("BEGIN");
+      await insertVoucher(ctx.companyId, late); // takes the lower transaction id
+      await pool.query("UPDATE vouchers SET total_amount = 1 WHERE id = $1", [voucherId]); // newer id, commits first
+      await late.query("UPDATE vouchers SET total_amount = 2 WHERE id = $1", [voucherId]); // the real final write
+      await late.query("COMMIT");
+    } finally {
+      await late.query("ROLLBACK").catch(() => undefined);
+      late.release();
+    }
+
+    const { changes, cursor: next } = await readAll(cursor);
+    cursor = next;
+    const updates = changes.filter((c) => c.table === "vouchers" && c.op === "U" && Number(c.key.id) === voucherId);
+    expect(updates).toHaveLength(2);
+    // Delivered in transaction order: the final write (2) comes first...
+    expect(updates.map((c) => Number(c.row?.total_amount))).toEqual([2, 1]);
+    // ...but it has the higher seq, so "apply only a higher seq" keeps 2.
+    const winner = updates.reduce((a, b) => (b.seq > a.seq ? b : a));
+    expect(Number(winner.row?.total_amount)).toBe(2);
+  });
+
   it("returns every change exactly once across pages, in order", async () => {
     const created: number[] = [];
     for (let i = 0; i < 5; i += 1) created.push(await insertVoucher(ctx.companyId));

@@ -8,6 +8,14 @@
  * changes come in transaction order, and the cursor remembers the last one
  * returned so a large window is read in pages.
  *
+ * Applying rule (every consumer must follow it): transaction order is not
+ * commit order. Two transactions that write the same row are serialized by its
+ * lock, so the later write always carries the higher `seq`, but it can arrive
+ * first. A PC therefore applies a change to a row only when its `seq` is higher
+ * than the last one it applied to that row (key = table + row key), and keeps
+ * that `seq` for deletes too. That makes the local copy correct whatever order
+ * the changes arrive in.
+ *
  * The companies come from the signed-in user, never from the PC. A row that
  * now belongs to another company comes back as a removal with its key only.
  */

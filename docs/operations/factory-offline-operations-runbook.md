@@ -194,6 +194,11 @@ The plan document lists the phases.
   access manifest). It answers 404 unless `OFFLINE_PC_SYNC_ENABLED=1` and 503
   until the feed is installed.
 
+**Applying rule for every PC.** Changes arrive in transaction order, which is
+not always commit order. The later write to a row always has the higher `seq`
+(writes to one row are serialized by its lock), so a PC applies a change only if
+its `seq` is higher than the last one it applied to that row, deletes included.
+
 **Guarantees, each covered by `tests/pc-sync-change-feed.test.ts`:** only the
 user's companies; a child row's company found through its parent; no password
 stored or sent; a row moved to another company reaches the old company as a
