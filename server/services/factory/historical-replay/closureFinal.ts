@@ -1,72 +1,11 @@
 import Decimal from "decimal.js";
-import type {
-  BatchCorrection,
-  BatchInfo,
-  BlockedBatch,
-  SourceCorrection,
-  SourceInfo,
-} from "./types";
-
-export interface SelectedSupplierCorrectionPlan {
-  rootBatchIds: Set<number>;
-  closureBatchIds: Set<number>;
-  allBatchPlans: BatchCorrection[];
-  changedBatchCorrections: BatchCorrection[];
-  sourceCorrections: Map<number, SourceCorrection>;
-  blockedBatches: BlockedBatch[];
-}
-
-export function buildSelectedSupplierBatchClosure(
-  sourceInfos: SourceInfo[],
-  selectedSupplierIds: Set<number>
-): { rootBatchIds: Set<number>; closureBatchIds: Set<number> } {
-  // Phase V7: use inventorySupplierId (explicit ownership) for root batch detection.
-  // This captures CONTAINER_DIRECT sources (supplierId=null, containerId set) that
-  // were previously skipped when they belonged to a supplier's inventory.
-  const rootBatchIds = new Set<number>();
-  for (const source of sourceInfos) {
-    if (source.pricingBasis === "BATCH" || source.pricingBasis === "MANUAL_REVIEW") continue;
-    const inventorySupplierId = source.inventorySupplierId;
-    if (inventorySupplierId != null && selectedSupplierIds.has(inventorySupplierId)) {
-      rootBatchIds.add(source.batchId);
-    }
-  }
-
-  const dependentsByUpstream = new Map<number, Set<number>>();
-  for (const source of sourceInfos) {
-    if (source.pricingBasis !== "BATCH" || source.sourceBatchId == null) continue;
-    const dependents = dependentsByUpstream.get(source.sourceBatchId) ?? new Set<number>();
-    dependents.add(source.batchId);
-    dependentsByUpstream.set(source.sourceBatchId, dependents);
-  }
-
-  const closureBatchIds = new Set(rootBatchIds);
-  const queue = [...rootBatchIds];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const dependent of dependentsByUpstream.get(current) ?? []) {
-      if (closureBatchIds.has(dependent)) continue;
-      closureBatchIds.add(dependent);
-      queue.push(dependent);
-    }
-  }
-
-  // Phase V7 (Phase 8): Multi-supplier closure expansion.
-  // When a batch contains sources from multiple inventory suppliers, ALL of them
-  // must be in the selected scope for the batch to be correctly repriced.
-  // Any participating inventory supplier not in selectedSupplierIds causes
-  // MIXED_BATCH_SUPPLIER_SCOPE_INCOMPLETE in the summary; this closure does not
-  // silently expand scope (that would be a scope change beyond user intent).
-  // Downstream batches that depend exclusively on blocked-scope batches remain in
-  // closureBatchIds so the correctness violation is visible in the plan.
-
-  return { rootBatchIds, closureBatchIds };
-}
-
-function needsBatchUpdate(correction: BatchCorrection): boolean {
-  return Math.abs(correction.expectedCostPerKg - correction.storedCostPerKg) > 0.000001
-    || Math.abs(correction.expectedTotalCost - correction.storedTotalCost) > 0.01;
-}
+import type { BatchCorrection, BatchInfo, BlockedBatch, SourceCorrection, SourceInfo } from "./types";
+import {
+  buildSelectedSupplierBatchClosure,
+  needsBatchUpdate,
+  type SelectedSupplierCorrectionPlan,
+} from "./closureFinalHelpers";
+export { buildSelectedSupplierBatchClosure, type SelectedSupplierCorrectionPlan } from "./closureFinalHelpers";
 
 /**
  * Compute exact correction math for the selected-supplier downstream closure.
@@ -82,17 +21,8 @@ export function buildSelectedSupplierCorrectionPlan(params: {
   expectedRateAtBatch: Map<string, number>;
   canonicalRateByContainer: Map<number, number>;
 }): SelectedSupplierCorrectionPlan {
-  const {
-    batchInfoMap,
-    sourceInfos,
-    selectedSupplierIds,
-    expectedRateAtBatch,
-    canonicalRateByContainer,
-  } = params;
-  const { rootBatchIds, closureBatchIds } = buildSelectedSupplierBatchClosure(
-    sourceInfos,
-    selectedSupplierIds
-  );
+  const { batchInfoMap, sourceInfos, selectedSupplierIds, expectedRateAtBatch, canonicalRateByContainer } = params;
+  const { rootBatchIds, closureBatchIds } = buildSelectedSupplierBatchClosure(sourceInfos, selectedSupplierIds);
 
   const sourcesByBatch = new Map<number, SourceInfo[]>();
   for (const source of sourceInfos) {
@@ -158,11 +88,12 @@ export function buildSelectedSupplierCorrectionPlan(params: {
     const sources = sourcesByBatch.get(batchId) ?? [];
     if (!batch || sources.length === 0) continue;
 
-    const blockedUpstream = sources.some((source) =>
-      source.pricingBasis === "BATCH"
-      && source.sourceBatchId != null
-      && closureBatchIds.has(source.sourceBatchId)
-      && (cycleBatchIds.has(source.sourceBatchId) || blockedIds.has(source.sourceBatchId))
+    const blockedUpstream = sources.some(
+      (source) =>
+        source.pricingBasis === "BATCH" &&
+        source.sourceBatchId != null &&
+        closureBatchIds.has(source.sourceBatchId) &&
+        (cycleBatchIds.has(source.sourceBatchId) || blockedIds.has(source.sourceBatchId))
     );
     if (blockedUpstream) {
       blockedIds.add(batchId);
@@ -205,9 +136,9 @@ export function buildSelectedSupplierCorrectionPlan(params: {
           correctedCostPerKg = source.storedCostPerKg;
         }
       } else if (
-        source.pricingBasis === "SUPPLIER_LOCKED_RATE"
-        && source.supplierId != null
-        && selectedSupplierIds.has(source.supplierId)
+        source.pricingBasis === "SUPPLIER_LOCKED_RATE" &&
+        source.supplierId != null &&
+        selectedSupplierIds.has(source.supplierId)
       ) {
         const expected = expectedRateAtBatch.get(`${source.supplierId}:${source.batchId}`);
         if (expected == null) {
@@ -247,9 +178,7 @@ export function buildSelectedSupplierCorrectionPlan(params: {
     }
 
     if (blocked) continue;
-    const expectedCostPerKg = totalWeight.gt(0)
-      ? totalCost.div(totalWeight).toDecimalPlaces(6).toNumber()
-      : 0;
+    const expectedCostPerKg = totalWeight.gt(0) ? totalCost.div(totalWeight).toDecimalPlaces(6).toNumber() : 0;
     const expectedTotalCost = totalCost.toDecimalPlaces(6).toNumber();
     correctedBatchCost.set(batchId, expectedCostPerKg);
 
@@ -269,13 +198,10 @@ export function buildSelectedSupplierCorrectionPlan(params: {
     for (const source of sources) {
       const expectedSourceCost = correctedSourceCosts.get(source.sourceId);
       if (expectedSourceCost == null) continue;
-      const expectedSourceTotal = new Decimal(source.weightKg)
-        .times(expectedSourceCost)
-        .toDecimalPlaces(6)
-        .toNumber();
+      const expectedSourceTotal = new Decimal(source.weightKg).times(expectedSourceCost).toDecimalPlaces(6).toNumber();
       if (
-        Math.abs(expectedSourceCost - source.storedCostPerKg) <= 0.000001
-        && Math.abs(expectedSourceTotal - source.storedTotalCost) <= 0.01
+        Math.abs(expectedSourceCost - source.storedCostPerKg) <= 0.000001 &&
+        Math.abs(expectedSourceTotal - source.storedTotalCost) <= 0.01
       ) {
         continue;
       }

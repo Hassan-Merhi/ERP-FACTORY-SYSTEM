@@ -26,32 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { PeriodFilterValue } from "@/components/ui/period-filter";
-
-interface EurOperation {
-  id: number;
-  date: string;
-  kind: string;
-  description: string;
-  detail: string;
-  eurIn: string;
-  eurOut: string;
-  balance: string;
-  rateUsdPerEur: string;
-  voucherId: number | null;
-  deleted?: boolean;
-}
-
-interface EurStatement {
-  accountName: string;
-  activatedOn: string;
-  fromDate: string | null;
-  toDate: string;
-  openingEur: string;
-  totalEurIn: string;
-  totalEurOut: string;
-  closingEur: string;
-  rows: EurOperation[];
-}
+import type { EurStatement } from "./fxEurStatementUrlTypes";
 
 export const eur = (amount: string) =>
   Number(amount).toLocaleString(undefined, {

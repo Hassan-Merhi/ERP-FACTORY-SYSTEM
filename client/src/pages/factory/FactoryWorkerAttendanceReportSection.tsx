@@ -5,96 +5,9 @@ import { ChevronLeft, ChevronRight, Eye, EyeOff, Loader2, Pencil } from "lucide-
 import { cn } from "@/lib/utils";
 import type { DateMode } from "./factoryworkerattendancereport/types";
 import { isoMonthEnd, isoMonthStart } from "./factoryworkerattendancereport/utils";
-import {
-  useFactoryWorkerAttendanceReportStatePart1,
-  useFactoryWorkerAttendanceReportStatePart2,
-} from "./useFactoryWorkerAttendanceReportStatePart1";
 import { PeriodFilter } from "@/components/ui/period-filter";
-
-export function useFactoryWorkerAttendanceReportState() {
-  const {
-    approvalDates,
-    approvalOpen,
-    approveAttendanceSave,
-    customEnd,
-    customStart,
-    cycleCell,
-    data,
-    dateRangeError,
-    editMode,
-    effectiveStatus,
-    error,
-    filter,
-    flushPending,
-    handleApprovalOpenChange,
-    hideFullAbsent,
-    isError,
-    isLoading,
-    mode,
-    navigateMonth,
-    pending,
-    recordChanges,
-    refetch,
-    saveMutation,
-    setCustomEnd,
-    setCustomStart,
-    setEditMode,
-    setFilter,
-    setHideFullAbsent,
-    setMode,
-    setPending,
-  } = useFactoryWorkerAttendanceReportStatePart1();
-  const {
-    absentCount,
-    filteredWorkers,
-    fullyAbsentCount,
-    overallPct,
-    presentCount,
-    rangeLabel,
-    salaryKpi,
-    sortedWorkers,
-  } = useFactoryWorkerAttendanceReportStatePart2({ customEnd, customStart, data, filter, hideFullAbsent, mode });
-  return {
-    absentCount,
-    approvalDates,
-    approvalOpen,
-    approveAttendanceSave,
-    customEnd,
-    customStart,
-    cycleCell,
-    data,
-    dateRangeError,
-    editMode,
-    effectiveStatus,
-    error,
-    filter,
-    filteredWorkers,
-    flushPending,
-    fullyAbsentCount,
-    handleApprovalOpenChange,
-    hideFullAbsent,
-    isError,
-    isLoading,
-    mode,
-    navigateMonth,
-    overallPct,
-    pending,
-    presentCount,
-    rangeLabel,
-    recordChanges,
-    refetch,
-    salaryKpi,
-    saveMutation,
-    setCustomEnd,
-    setCustomStart,
-    setEditMode,
-    setFilter,
-    setHideFullAbsent,
-    setMode,
-    setPending,
-    sortedWorkers,
-  };
-}
+import { useFactoryWorkerAttendanceReportState } from "./useFactoryWorkerAttendanceReportState";
+export { useFactoryWorkerAttendanceReportState } from "./useFactoryWorkerAttendanceReportState";
 
 export function FactoryWorkerAttendanceReportSection({
   absentCount,

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronRight, MoreHorizontal, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,20 @@ import {
 import { ResponsiveDataList, ResponsiveDataListEmpty } from "@/components/ui/responsive-data-list";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { cn } from "@/lib/utils";
+import type {
+  ErpMobileRecordField,
+  ErpMobileRecordCardProps,
+  ErpMobileRecordListProps,
+  ErpMobileSummaryItem,
+  ErpMobileAction,
+} from "./erp-mobile-records-types";
+export type {
+  ErpMobileRecordField,
+  ErpMobileRecordCardProps,
+  ErpMobileRecordListProps,
+  ErpMobileSummaryItem,
+  ErpMobileAction,
+} from "./erp-mobile-records-types";
 
 /**
  * Bespoke ERP phone record presentation, for screens whose rows do not map onto a table
@@ -19,41 +33,6 @@ import { cn } from "@/lib/utils";
  * operational lists. Every component here is presentation only; pages pass the values they
  * already compute, so business logic stays shared with the desktop table.
  */
-
-export interface ErpMobileRecordField {
-  label: React.ReactNode;
-  value: React.ReactNode;
-  /** Spans both columns (long text such as descriptions and notes). */
-  wide?: boolean;
-  /** Keeps numbers left-to-right inside RTL cards. */
-  numeric?: boolean;
-  className?: string;
-}
-
-export interface ErpMobileRecordCardProps {
-  title: React.ReactNode;
-  /** Secondary line under the title (code, date, party). */
-  subtitle?: React.ReactNode;
-  /** Badges beside the subtitle (status, type). */
-  badges?: React.ReactNode;
-  /** Headline figure on the trailing side (amount, balance, quantity). */
-  value?: React.ReactNode;
-  valueClassName?: string;
-  /** Primary fields, two per row. */
-  fields?: ErpMobileRecordField[];
-  /** Secondary fields behind a "More details" toggle. */
-  details?: ErpMobileRecordField[];
-  /** Editable controls or extra content rendered inside the card body. */
-  children?: React.ReactNode;
-  /** Row actions, shown in a footer row. */
-  actions?: React.ReactNode;
-  /** Opens the record (detail sheet, statement, voucher). Makes the card a button. */
-  onOpen?: () => void;
-  openLabel?: string;
-  selected?: boolean;
-  className?: string;
-  "data-testid"?: string;
-}
 
 function FieldGrid({ fields, className }: { fields: ErpMobileRecordField[]; className?: string }) {
   return (
@@ -175,12 +154,6 @@ export function ErpMobileRecordCard({
   );
 }
 
-export interface ErpMobileRecordListProps extends React.HTMLAttributes<HTMLUListElement> {
-  /** Shown instead of the list when there are no records. */
-  empty?: React.ReactNode;
-  isEmpty?: boolean;
-}
-
 /** Stack of {@link ErpMobileRecordCard}s with the shared empty state. */
 export function ErpMobileRecordList({
   empty,
@@ -224,14 +197,6 @@ export function ErpMobileRecordGroup({
   );
 }
 
-export interface ErpMobileSummaryItem {
-  label: React.ReactNode;
-  value: React.ReactNode;
-  valueClassName?: string;
-  /** Spans both columns. */
-  wide?: boolean;
-}
-
 /** Two-column phone KPI grid (statement totals, stock summaries). */
 export function ErpMobileSummaryGrid({
   items,
@@ -260,17 +225,6 @@ export function ErpMobileSummaryGrid({
       ))}
     </dl>
   );
-}
-
-export interface ErpMobileAction {
-  label: string;
-  icon?: LucideIcon;
-  onSelect: () => void;
-  disabled?: boolean;
-  destructive?: boolean;
-  /** Starts a new group (separator above). */
-  separated?: boolean;
-  testId?: string;
 }
 
 /**
