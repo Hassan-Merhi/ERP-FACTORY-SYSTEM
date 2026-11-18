@@ -97,34 +97,40 @@ function guard(check: (req: Request) => Promise<boolean>) {
   };
 }
 
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/** True when this write would touch a production bonus voucher. */
+async function touchesProductionBonusVoucher(req: Request): Promise<boolean> {
+  // Path middleware, not routes: no new entries in the route access manifest.
+  const path = req.path.replace(/\/+$/, "").toLowerCase(); // Express routing is case-insensitive.
+  if (req.method === "POST" && path === "/vouchers/bulk-delete") {
+    return anyProductionBonusVoucher(Array.isArray(req.body?.voucherIds) ? req.body.voucherIds : []);
+  }
+  if (req.method === "POST" && path === "/voucher-entries") {
+    return anyProductionBonusVoucher([req.body?.voucherId]);
+  }
+  if (req.method === "POST" && path === "/voucher-entries/transfer-account") {
+    return anyProductionBonusVoucherEntry(Array.isArray(req.body?.entryIds) ? req.body.entryIds : []);
+  }
+  const voucher = path.match(/^\/vouchers\/([^/]+)/);
+  if (voucher) return anyProductionBonusVoucher([safeDecode(voucher[1])]);
+  const entry = path.match(/^\/voucher-entries\/([^/]+)/);
+  if (entry) return anyProductionBonusVoucherEntry([safeDecode(entry[1])]);
+  return false;
+}
+
+/**
+ * Covers edit, delete, reverse, finalize and every typed update of one voucher;
+ * bulk delete (the whole request is refused if it includes a bonus voucher);
+ * new lines on a bonus voucher; existing lines edited by their own id; and the
+ * Admin account transfer of lines.
+ */
 export function registerProductionBonusVoucherBoundary(app: Express): void {
-  // Edit, delete, reverse, finalize and every typed update of one voucher.
-  app.use(
-    "/api/vouchers/:voucherId",
-    guard((req) => anyProductionBonusVoucher([req.params.voucherId]))
-  );
-
-  // Reject the whole bulk delete if it includes a bonus voucher.
-  app.post(
-    "/api/vouchers/bulk-delete",
-    guard((req) => anyProductionBonusVoucher(Array.isArray(req.body?.voucherIds) ? req.body.voucherIds : []))
-  );
-
-  // New lines on a bonus voucher.
-  app.post(
-    "/api/voucher-entries",
-    guard((req) => anyProductionBonusVoucher([req.body?.voucherId]))
-  );
-
-  // Admin reclassification of existing lines: reject the whole transfer if any line is a bonus line.
-  app.post(
-    "/api/voucher-entries/transfer-account",
-    guard((req) => anyProductionBonusVoucherEntry(Array.isArray(req.body?.entryIds) ? req.body.entryIds : []))
-  );
-
-  // Existing lines edited by their own id.
-  app.use(
-    "/api/voucher-entries/:entryId",
-    guard((req) => anyProductionBonusVoucherEntry([req.params.entryId]))
-  );
+  app.use("/api", guard(touchesProductionBonusVoucher));
 }
