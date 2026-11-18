@@ -136,3 +136,27 @@ describe("buildRowsExportSheet", () => {
     expect(results).toHaveLength(1);
   });
 });
+
+describe("excelSheetName", () => {
+  it("makes labels with characters Excel forbids into valid, unique worksheet names", async () => {
+    const { excelSheetName } = await import("./RowsExportMenu");
+    const { assertSheetName } = await import("@shared/universal-excel/engineAsCell");
+    const used = new Set<string>();
+    const names = [
+      "Items - Average Profit / Bale",
+      "Q1: [draft] *final*?",
+      "'Quoted'",
+      "A very long worksheet title that runs past the limit",
+      "A very long worksheet title that runs past the limit",
+      "",
+    ].map((name) => excelSheetName(name, used));
+
+    expect(names[0]).toBe("Items - Average Profit - Bale");
+    expect(names[2]).toBe("Quoted");
+    expect(names[3]).toHaveLength(31);
+    expect(names[4]).toMatch(/ \(2\)$/);
+    expect(names[5]).toBe("Sheet");
+    const seen = new Set<string>();
+    for (const name of names) expect(() => assertSheetName(name, seen)).not.toThrow();
+  });
+});

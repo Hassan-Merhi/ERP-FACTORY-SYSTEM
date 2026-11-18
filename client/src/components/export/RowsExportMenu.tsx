@@ -117,6 +117,26 @@ export function buildRowsExportSheet<Row>(sheet: RowsExportSheet<Row>) {
  * The standard Export menu for list and report pages that build the file from
  * rows they already have. Hidden for users who may not export Excel.
  */
+/**
+ * A worksheet name Excel accepts: no \\ / * ? : [ ], no leading or trailing apostrophe, at most 31 characters,
+ * and unique (case-insensitive) within the workbook. Labels such as "Average Profit / Bale" are made safe here
+ * instead of failing the whole export.
+ */
+export function excelSheetName(name: string, used: Set<string>): string {
+  const cleaned =
+    name
+      .replace(/[\\/*?:[\]]/g, "-")
+      .replace(/^'+|'+$/g, "")
+      .trim() || "Sheet";
+  let candidate = cleaned.slice(0, 31);
+  for (let n = 2; used.has(candidate.toLowerCase()); n += 1) {
+    const suffix = ` (${n})`;
+    candidate = cleaned.slice(0, 31 - suffix.length) + suffix;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
 export function RowsExportMenu<Row>({
   title,
   rows,
@@ -142,14 +162,22 @@ export function RowsExportMenu<Row>({
     setBusy(true);
     try {
       const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-      const mainSheet = buildRowsExportSheet({ name: (sheetName ?? title).slice(0, 31), rows, columns, footer });
+      const usedNames = new Set<string>();
+      const mainSheet = buildRowsExportSheet({
+        name: excelSheetName(sheetName ?? title, usedNames),
+        rows,
+        columns,
+        footer,
+      });
       await exportOperationalWorkbook({
         title,
         fileName: exportFileName(title, "xlsx", period ?? {}),
         filters,
         sheets: [
           mainSheet,
-          ...extraSheets.map((sheet) => buildRowsExportSheet({ ...sheet, name: sheet.name.slice(0, 31) })),
+          ...extraSheets.map((sheet) =>
+            buildRowsExportSheet({ ...sheet, name: excelSheetName(sheet.name, usedNames) })
+          ),
         ],
       });
     } catch (error) {
