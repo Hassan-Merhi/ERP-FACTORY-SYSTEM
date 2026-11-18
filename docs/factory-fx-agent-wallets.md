@@ -131,3 +131,12 @@ Direct EUR payments require a confirmed posted EUR supplier payable; payments ex
 A broker such as MODA ZAKARIA DIRECT can have a EUR **Net Balance** in Parties while its own posted GL has no native EUR credit. That figure comes from the broker's settlement statement (including linked suppliers and, when enabled, OTW containers), not from the GL balance displayed in the voucher account picker. Payment Voucher now reads the broker's EUR statement balance **including OTW**, clearly labels it, and automatically offers **Pay EUR directly**. The server uses the same statement builder inside the locked wallet/payment transaction to validate available EUR and prevent overpayment; no automatic EUR-to-USD supplier FX transfer is created. The broker's EUR statement recognizes the resulting voucher as a EUR payment, and deleting it restores the broker EUR pool and FX agent EUR wallet. For non-broker suppliers the existing posted native EUR ledger payable rule remains.
 
 This is a code-only correction to the direct EUR payment feature; it requires no additional SQL beyond the already documented `20261020_fx_agent_eur_supplier_payment.sql` migration.
+
+
+### Optional drafts for direct EUR supplier payments
+
+Factory Payment Voucher permits **Optional** when an active FX EUR wallet pays a factory supplier **directly in EUR**. Saving the Optional voucher records its native EUR debit/credit entries at the wallet's current historical book rate, but does **not** deduct wallet EUR, post to the supplier, or recognize FX. The draft may be edited while still optional.
+
+Finalization through the Optional Vouchers workflow re-checks the stored EUR source wallet, beneficiary, amount and date under database locks; it also verifies the wallet's current EUR position, the supplier's current eligible EUR payable, and the wallet's historical book basis. The finalizer creates a new posted Payment voucher plus the matching FX wallet settlement **in one transaction**, then soft-retires the Optional draft. Concurrent finalization cannot post twice. A generic voucher update/optional toggle cannot activate an FX wallet draft without the matching settlement.
+
+This is **EUR-only**. USD payouts using an FX wallet still require the agreed payout rate and cannot be saved as Optional drafts, because that rate and the EUR deduction must be locked together at the time of posting.
