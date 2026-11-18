@@ -53,7 +53,7 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
-import { editedZmwSaleAmounts } from "./posZmwEditedAmounts";
+import { editedZmwSaleAmounts, posZmwEditUsdRows } from "./posZmwEditedAmounts";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
@@ -155,7 +155,7 @@ export async function applyPosSaleUpdateTx(
     }
     // Edited Kwacha lines are re-priced in USD by the client at the voucher's
     // LOCKED rate; every original Kwacha price supplied must agree with it.
-    const editedLines = (items as Array<{ sellingPrice: unknown; originalCurrencyRate?: unknown }>).map((item) => ({ rate: item.sellingPrice, originalCurrencyRate: item.originalCurrencyRate }));
+    const editedLines = posZmwEditUsdRows(items as PosEditSaleItemInput[]);
     if (
       editedLines.some(
         (line) =>
@@ -271,7 +271,7 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
-  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher.currency, lockedVoucher.exchangeRate, items as PosEditSaleItemInput[]);
+  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[]);
   const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
 
   await updateVoucherRecord(tx, {

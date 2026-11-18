@@ -76,13 +76,14 @@ export default function POSDaybook() {
     whatsappMutation,
   } = usePOSDaybookState();
   const { selectedCurrency } = useCurrencyContext();
-  const totalNativeZmw = selectedCurrency === "ZMW" && salesOnly.length > 0 &&
+  const totalNativeZmw =
+    selectedCurrency === "ZMW" &&
+    salesOnly.length > 0 &&
     salesOnly.every((sale) => sale.currency === "ZMW" && sale.nativeZmwTotal != null)
       ? salesOnly.reduce((sum, sale) => sum + Number(sale.nativeZmwTotal), 0)
       : null;
-  const formatRevenue = (amount: number) => totalNativeZmw === null
-    ? formatCashAmount(amount)
-    : formatMoneyDisplay(amount, { currency: "ZMW" });
+  const formatRevenue = (amount: number) =>
+    totalNativeZmw === null ? formatCashAmount(amount) : formatMoneyDisplay(amount, { currency: "ZMW" });
 
   return (
     <DaybookPage className="mx-auto w-full max-w-[1560px] pb-8" data-pos-daybook="modern">
@@ -220,8 +221,12 @@ export default function POSDaybook() {
                   <tr key={item.id}>
                     <td className="border border-black p-2">{item.stockItemName || `Item ${item.stockItemId}`}</td>
                     <td className="border border-black p-2 text-right">{fmtPrint(qty)}</td>
-                    <td className="border border-black p-2 text-right">{formatPosZmwUnitPrice(printDetails, price, (usd) => `${fmtPrint(usd)}`)}</td>
-                    <td className="border border-black p-2 text-right">{formatPosZmwLineTotal(printDetails, qty, price, (usd) => `${fmtPrint(usd)}`)}</td>
+                    <td className="border border-black p-2 text-right">
+                      {formatPosZmwUnitPrice(printDetails, price, (usd) => `${fmtPrint(usd)}`)}
+                    </td>
+                    <td className="border border-black p-2 text-right">
+                      {formatPosZmwLineTotal(printDetails, qty, price, (usd) => `${fmtPrint(usd)}`)}
+                    </td>
                   </tr>
                 );
               })}
