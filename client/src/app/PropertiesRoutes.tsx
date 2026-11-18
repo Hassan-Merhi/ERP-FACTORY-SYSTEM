@@ -47,7 +47,7 @@ import {
   PropertiesLedgerVouchers,
   PropertiesSettings,
   PropertiesVoucherDetail,
-  PropertiesVoucherEdit,
+  LegacyVoucherEditRedirect,
   PropertiesVouchers,
   TrackingHub,
   ContainersPage,
@@ -96,7 +96,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {isDeveloper && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
       {isDeveloper && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       {isDeveloper && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}
-      <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
+      <Route path="/properties/vouchers/:id/edit" component={LegacyVoucherEditRedirect} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
       <Route path="/properties/create" component={PropertiesCreate} />

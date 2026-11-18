@@ -525,7 +525,6 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
     // ── Accounting ───────────────────────────────────────────────────────
     { label: "Accounts", loader: () => import("@/pages/factory/FactoryAccounts") },
     { label: "Vouchers", loader: () => import("@/pages/factory/FactoryVouchers") },
-    { label: "Voucher Edit", loader: () => import("@/pages/VoucherEdit") },
     { label: "Voucher Detail", loader: () => import("@/pages/VoucherDetail") },
     { label: "New Voucher", loader: () => import("@/pages/AccountingCreate") },
     { label: "Ledger Monthly", loader: () => import("@/pages/LedgerMonthlySummary") },

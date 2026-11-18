@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PeriodFilter } from "@/components/ui/period-filter";
@@ -205,10 +206,15 @@ export default function StockItemDetail() {
 
   const handleSaleClick = (sale: Sale) => {
     if (!sale.voucherId) return;
-    if (isProperties) navigate(`/properties/vouchers/${sale.voucherId}/edit`);
-    else if (sale.posStation != null)
+    if (sale.posStation != null && !isProperties)
       navigate(`/pos-daybook?date=${sale.saleDate.split(" ")[0]}&voucherId=${sale.voucherId}`);
-    else navigate(`/vouchers/${sale.voucherId}/edit`);
+    else
+      navigate(
+        voucherEditPath(
+          { id: sale.voucherId, voucherType: "Sales" },
+          isProperties ? "/properties/vouchers" : "/vouchers"
+        )!
+      );
   };
 
   if (!itemId || (stockItems.length > 0 && !selectedItem)) {

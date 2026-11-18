@@ -6,6 +6,7 @@ import { Package, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { cn } from "@/lib/utils";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import type {
   StockMovementDrillResponse,
@@ -288,12 +289,20 @@ export function StockMovementDialog({
                         const vt = (txn.vchType || "").toLowerCase();
                         if (vt === "purchase import") return txn.poId ? `/purchase-orders/${txn.poId}/edit` : null;
                         if (vt === "production" || vt === "consumption")
-                          return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+                          return txn.voucherId
+                            ? voucherEditPath({
+                                id: txn.voucherId,
+                                voucherType: vt === "production" ? "Production" : "Consumption",
+                              })
+                            : null;
                         if (vt.startsWith("pos") || vt.includes("pos"))
                           return txn.voucherId ? `/pos/edit/${txn.voucherId}` : null;
                         if (vt.startsWith("stock transfer"))
-                          return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
-                        if (vt === "sales") return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+                          return txn.voucherId
+                            ? voucherEditPath({ id: txn.voucherId, voucherType: "Stock Transfer" })
+                            : null;
+                        if (vt === "sales")
+                          return txn.voucherId ? voucherEditPath({ id: txn.voucherId, voucherType: "Sales" }) : null;
                         return null;
                       })();
 

@@ -63,7 +63,7 @@ const DEFAULT_WORKSPACE_ROUTE_GROUPS = [
   {
     workspace: "supplier-partner",
     companyCode: "PHASE9-SP",
-    routes: ["/sp", "/sp/reports", "/sp/opening-stock"],
+    routes: ["/sp/reports", "/sp/setup"],
   },
 ];
 

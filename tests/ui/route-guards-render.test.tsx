@@ -40,7 +40,6 @@ vi.mock("@/lazyPages", () => {
     }
   );
 });
-vi.mock("@/pages/sp/SpOverview", () => ({ default: () => <div data-testid="page-SpOverview" /> }));
 vi.mock("@/pages/not-found", () => ({ default: () => <div data-testid="page-NotFound" /> }));
 vi.mock("@/pages/AccountGroups", () => ({ default: () => <div data-testid="page-AccountGroups" /> }));
 vi.mock("@/pages/factory/FactoryInvoiceDetailBilingual", () => ({

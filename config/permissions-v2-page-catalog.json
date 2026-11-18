@@ -126,7 +126,7 @@
         "/vouchers/:id/edit"
       ],
       "pageFiles": [
-        "client/src/pages/VoucherEdit.tsx"
+        "client/src/pages/daybook/LegacyVoucherEditRedirect.tsx"
       ],
       "resource": "erp.vouchers",
       "actions": [
@@ -1071,8 +1071,6 @@
         "/factory/stock-allocation-v5"
       ],
       "pageFiles": [
-        "client/src/pages/factory/FactoryStockAllocationV2.tsx",
-        "client/src/pages/factory/FactoryStockAllocationV3.tsx",
         "client/src/pages/factory/FactoryStockAllocationV5.tsx"
       ],
       "resource": "factory.customer_orders",
@@ -1410,7 +1408,7 @@
       ],
       "pageFiles": [
         "client/src/pages/factory/FactoryDispatchBatchDetail.tsx",
-        "client/src/pages/factory/FactoryDispatchBatches.tsx",
+        "client/src/pages/factory/FactoryDispatchLoadings.tsx",
         "client/src/pages/factory/FactoryLoadingsHub.tsx"
       ],
       "resource": "factory.containers",
@@ -1583,7 +1581,7 @@
         "/factory/vouchers/:id/edit"
       ],
       "pageFiles": [
-        "client/src/pages/VoucherEdit.tsx"
+        "client/src/pages/daybook/LegacyVoucherEditRedirect.tsx"
       ],
       "resource": "factory.accounting",
       "actions": [
@@ -2106,7 +2104,7 @@
         "/properties/vouchers/:id/edit"
       ],
       "pageFiles": [
-        "client/src/pages/properties/PropertiesVoucherEdit.tsx"
+        "client/src/pages/daybook/LegacyVoucherEditRedirect.tsx"
       ],
       "resource": "properties.payments",
       "actions": [
@@ -2175,8 +2173,6 @@
         "/sp/reports"
       ],
       "pageFiles": [
-        "client/src/pages/sp/SpGoldenCoast.tsx",
-        "client/src/pages/sp/SpOverview.tsx",
         "client/src/pages/sp/SpReports.tsx"
       ],
       "resource": "retail.pos",
@@ -2199,8 +2195,6 @@
         "/sp/setup"
       ],
       "pageFiles": [
-        "client/src/pages/sp/SpAliases.tsx",
-        "client/src/pages/sp/SpOpeningStock.tsx",
         "client/src/pages/sp/SpSetup.tsx"
       ],
       "resource": "system.settings",

@@ -16,7 +16,6 @@ import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCompany } from "@/contexts/CompanyContext";
 import { canEnterErpGuardedRoute, effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
 import type { FeatureKey } from "@shared/schema";
-import SpOverview from "@/pages/sp/SpOverview";
 import {
   AICommandCenter,
   AccountGroups,
@@ -99,8 +98,6 @@ import {
   SalesReportDetail,
   SalesToolsHub,
   Settings,
-  SpAliases,
-  SpOpeningStock,
   SpReports,
   SpSetup,
   SpreadsheetEditor,
@@ -116,7 +113,7 @@ import {
   TrackingHub,
   TransactionJournal,
   VoucherDetail,
-  VoucherEdit,
+  LegacyVoucherEditRedirect,
   Vouchers,
 } from "@/lazyPages";
 
@@ -347,7 +344,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {G("/vouchers/:id/edit", "vouchers", VoucherEdit)}
+      {/* Retired separate edit page: old links redirect to the editor Daybook opens. */}
+      {G("/vouchers/:id/edit", "vouchers", LegacyVoucherEditRedirect)}
       {G("/purchase-orders/:id/edit", "vouchers", PurchaseOrderEdit)}
       {canAccess("vouchers") ? (
         <Route path="/voucher-detail/:voucherId" component={VoucherDetail} />
@@ -501,10 +499,20 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/account-transfer", true, AccountTransfer)}
       {R("/my-settings", true, MySettings)}
 
-      <Route path="/sp" component={SpOverview} />
-      <Route path="/sp/opening-stock" component={SpOpeningStock} />
+      {/* Retired Supplier Partner pages (Overview, Opening Stock, Aliases, Golden Coast): old links land on SP Reports. */}
+      <Route path="/sp">
+        <Redirect replace to="/sp/reports" />
+      </Route>
+      <Route path="/sp/opening-stock">
+        <Redirect replace to="/sp/reports" />
+      </Route>
       <Route path="/sp/reports" component={SpReports} />
-      <Route path="/sp/aliases" component={SpAliases} />
+      <Route path="/sp/aliases">
+        <Redirect replace to="/sp/reports" />
+      </Route>
+      <Route path="/sp/golden-coast">
+        <Redirect replace to="/sp/reports" />
+      </Route>
       <Route path="/sp/migration">
         <Redirect to="/sp/setup" />
       </Route>
