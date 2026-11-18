@@ -87,6 +87,15 @@ export async function syncOnce(local, cloud, { pageSize, maxPages = 10_000 } = {
     });
     state = await readLocalState(local);
   }
+  else {
+    // Every run, not only the first: after a cloud migration the PC must stop
+    // (and be updated) rather than apply rows of a schema it does not have.
+    const start = await cloudGet(cloud, "/api/offline/pc-sync/snapshot/start");
+    const mine = await localSchemaVersion(local);
+    if (start.schemaVersion !== state.schema_version || start.schemaVersion !== mine) {
+      throw new PcSyncAgentError("PC_LOCAL_SCHEMA_MISMATCH", { cloud: start.schemaVersion, local: mine });
+    }
+  }
   const synced = new Set(state.tables);
 
   for (;;) {
@@ -174,4 +183,29 @@ export async function rememberLocalLogin(local, userId, password) {
     [userId, hash]
   );
   await restoreLocalLogins(local);
+}
+
+/**
+ * Binds this PC's copy to the cloud account that just connected. The copy holds
+ * that account's companies, so a different account starts again from an empty
+ * copy instead of keeping the previous account's rows. Returns true when the
+ * copy was reset.
+ */
+export async function bindCloudAccount(local, userId) {
+  const state = await readLocalState(local);
+  if (state.cloud_user_id === userId) return false;
+  const reset = state.cloud_user_id != null && state.cloud_user_id !== userId;
+  await inApplyTransaction(local, async () => {
+    if (reset) {
+      for (const table of state.tables) await local.query("SELECT pc_local.clear_table($1)", [table]);
+      await local.query("DELETE FROM pc_local.copy_progress");
+      await local.query("DELETE FROM pc_local.applied");
+      await local.query(
+        `UPDATE pc_local.state SET cursor = NULL, schema_version = NULL, tables = '{}', copy_complete = false,
+                last_sync_at = NULL WHERE id = 1`
+      );
+    }
+    await local.query("UPDATE pc_local.state SET cloud_user_id = $1, updated_at = now() WHERE id = 1", [userId]);
+  });
+  return reset;
 }

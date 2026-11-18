@@ -22,8 +22,12 @@ const { pathToFileURL } = require('url');
 
 const DEFAULTS = { enabled: false, databasePort: 55439, serverPort: 5179 };
 
+const USER_FILE = /^[a-z0-9][a-z0-9-]{0,40}\.(json|bin)$|^pc-database$/;
+
+/** One of this app's own files (fixed names only) in the user-data folder. */
 function userFile(name) {
-  return path.join(app.getPath('userData'), name);
+  if (!USER_FILE.test(name)) throw new Error('Invalid offline-copy file name');
+  return `${app.getPath('userData')}${path.sep}${name}`;
 }
 
 function readConfig() {

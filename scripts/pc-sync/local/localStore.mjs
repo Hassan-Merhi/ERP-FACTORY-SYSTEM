@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS pc_local.state (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 INSERT INTO pc_local.state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+-- The cloud account whose companies this copy holds.
+ALTER TABLE pc_local.state ADD COLUMN IF NOT EXISTS cloud_user_id text;
 
 CREATE TABLE IF NOT EXISTS pc_local.copy_progress (
   table_name text PRIMARY KEY,
@@ -155,7 +157,7 @@ export async function localSchemaVersion(client) {
 
 export async function readLocalState(client) {
   const { rows } = await client.query(
-    "SELECT cursor, schema_version, tables, copy_complete, last_sync_at FROM pc_local.state WHERE id = 1"
+    "SELECT cursor, schema_version, tables, copy_complete, last_sync_at, cloud_user_id FROM pc_local.state WHERE id = 1"
   );
   return rows[0];
 }

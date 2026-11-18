@@ -21,7 +21,7 @@ import pg from "pg";
 import { loadPcSyncPolicy } from "../../../server/offline/pcSync/tablePolicy.mjs";
 import { createCloudClient } from "./cloudClient.mjs";
 import { prepareLocalDatabase, readLocalState } from "./localStore.mjs";
-import { pcSyncFreshness, rememberLocalLogin, syncOnce } from "./syncAgent.mjs";
+import { bindCloudAccount, pcSyncFreshness, rememberLocalLogin, syncOnce } from "./syncAgent.mjs";
 
 const send = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
 
@@ -88,8 +88,9 @@ async function main() {
   async function login(username, password) {
     try {
       const userId = await cloud.login(String(username ?? ""), String(password ?? ""));
+      const reset = await bindCloudAccount(local, userId);
       await rememberLocalLogin(local, userId, String(password));
-      send({ event: "login", ok: true });
+      send({ event: "login", ok: true, copyReset: reset });
       send({ event: "cookie", cookie: cloud.cookie() });
       await syncNow();
     } catch (error) {

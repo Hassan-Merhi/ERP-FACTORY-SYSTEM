@@ -224,7 +224,10 @@ every change once, in transaction order.
 **Known limits.** A user row is not re-sent when the user joins another
 company; a child row deleted after its parent is gone, with no foreign key,
 reaches no PC; TRUNCATE tells every PC to reload that table (with the full
-copy above).
+copy above). A row moved to other companies (for example a voucher moved by the
+account migration) also tells every PC to reload each table whose rows find
+their company through it (its lines), once per table and transaction; such
+moves are rare, and the reload can be large.
 
 **PC side (Phase A3a, switched off).** `scripts/pc-sync/local/` keeps a PC's
 own PostgreSQL equal to the cloud. The PC database is built with
@@ -239,13 +242,19 @@ The cloud never sends passwords: someone can sign in offline only after signing
 in on that PC while online (`rememberLocalLogin` keeps a bcrypt hash there);
 everyone else gets a password that matches nothing. A password changed in the
 cloud keeps working offline on that PC until the next online sign-in there.
+The copy belongs to the cloud account that connected the PC: connecting a
+different account empties it and copies that account's companies again. Every
+sync checks the schema version again, so after a cloud migration the PC stops
+syncing (`PC_LOCAL_SCHEMA_MISMATCH`) until the desktop app is updated.
 `pcSyncFreshness` gives the owner's rule: warning after 24 hours without a
 completed sync, new entries stopped after 2 days (reading always works).
 `createCloudClient` signs in over HTTPS and keeps only the session cookie.
 
 The ERP server started with `OFFLINE_PC_LOCAL_MODE=read-only` (desktop app
 only, never the cloud) refuses every write except sign-in, sign-out and company
-switch with `423 OFFLINE_PC_LOCAL_READ_ONLY`, and starts no background jobs.
+switch with `423 OFFLINE_PC_LOCAL_READ_ONLY`, runs no boot data operations or
+background jobs (the copy must stay exactly the cloud's), and sends its session
+cookie without the Secure flag because it serves plain http on 127.0.0.1 only.
 Covered by `tests/pc-sync-local-agent.test.ts` (a second database built from
 migrations as the PC).
 

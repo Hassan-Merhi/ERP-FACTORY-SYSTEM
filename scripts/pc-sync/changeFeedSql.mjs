@@ -122,6 +122,7 @@ DECLARE
   key_column text;
   companies integer[];
   current_companies integer[] := '{}';
+  old_companies integer[] := '{}';
 BEGIN
   SELECT * INTO rule FROM pc_sync.table_policy WHERE table_name = TG_TABLE_NAME;
   IF NOT FOUND THEN
@@ -138,9 +139,8 @@ BEGIN
     -- An update that moves a row between companies reaches both: the old
     -- company's PCs learn the row left them (the reader sends them only its key).
     current_companies := pc_sync.row_companies(TG_TABLE_NAME, new_row);
-    companies := ARRAY(
-      SELECT DISTINCT unnest(current_companies || pc_sync.row_companies(TG_TABLE_NAME, old_row))
-      ORDER BY 1);
+    old_companies := pc_sync.row_companies(TG_TABLE_NAME, old_row);
+    companies := ARRAY(SELECT DISTINCT unnest(current_companies || old_companies) ORDER BY 1);
     IF cardinality(companies) = 0 THEN
       RETURN NULL; -- belongs to no company: no PC may hold it.
     END IF;
@@ -150,6 +150,24 @@ BEGIN
   END IF;
   INSERT INTO pc_sync.changes (table_name, op, row_key, row_data, company_ids, current_company_ids, shared)
   VALUES (TG_TABLE_NAME, left(TG_OP, 1), key, stored, companies, current_companies, rule.mode = 'shared');
+  -- A row that moved to other companies takes the rows that find their company
+  -- through it along (a voucher's lines through the voucher). Those rows did not
+  -- change, so tell every PC to copy each such table again (once per table and
+  -- transaction). Company moves are rare administrative operations.
+  IF TG_OP = 'UPDATE' AND rule.mode <> 'shared' AND current_companies IS DISTINCT FROM old_companies THEN
+    WITH RECURSIVE descendant(tbl) AS (
+      SELECT p.table_name FROM pc_sync.table_policy p, jsonb_array_elements(p.parents) AS e
+       WHERE e->>'table' = TG_TABLE_NAME
+      UNION
+      SELECT p.table_name FROM descendant d, pc_sync.table_policy p, jsonb_array_elements(p.parents) AS e
+       WHERE e->>'table' = d.tbl
+    )
+    INSERT INTO pc_sync.changes (table_name, op, shared)
+    SELECT d.tbl, 'T', true FROM descendant d
+     WHERE NOT EXISTS (
+       SELECT 1 FROM pc_sync.changes c
+        WHERE c.txid = pg_current_xact_id() AND c.table_name = d.tbl AND c.op = 'T');
+  END IF;
   RETURN NULL;
 END
 $pc_sync$;
@@ -200,7 +218,9 @@ AS $pc_sync$
      AND (c.txid, c.seq) > (p_after_txid::xid8, p_after_seq)
      AND (c.shared OR c.company_ids && p_companies)
    ORDER BY c.txid, c.seq
-   LIMIT least(greatest(p_limit, 1), 1000)
+   -- 1001: the reader asks for one row more than its largest page (1000) to
+   -- know whether the window has more; capping at 1000 would end it early.
+   LIMIT least(greatest(p_limit, 1), 1001)
 $pc_sync$;
 REVOKE ALL ON FUNCTION pc_sync.read_changes(text, text, text, bigint, integer[], integer) FROM PUBLIC;
 

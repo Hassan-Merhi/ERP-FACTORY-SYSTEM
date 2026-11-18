@@ -14,7 +14,11 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
-import { applyPcLocalModeEnvironment, makePcLocalReadOnlyGuard } from "./offline/pcLocal/localReadOnlyGuard";
+import {
+  applyPcLocalModeEnvironment,
+  makePcLocalReadOnlyGuard,
+  pcLocalReadOnly,
+} from "./offline/pcLocal/localReadOnlyGuard";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
@@ -237,7 +241,11 @@ let startupDataReady = false;
   // Valid websocket upgrades are handled by the upgrade path. Plain HTTP GET
   // requests to /ws should fail explicitly instead of falling through to the SPA.
   registerWebSocketHttpFallback(app);
-  if (process.env.ENABLE_SCHEDULERS !== "false" && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+  if (
+    process.env.ENABLE_SCHEDULERS !== "false" &&
+    !pcLocalReadOnly() &&
+    shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())
+  ) {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");
   } else {
@@ -286,6 +294,15 @@ let startupDataReady = false;
   // deployment serving.
   warmupDb()
     .then(async () => {
+      // A PC's local copy must stay byte-for-byte the cloud's: no boot repair,
+      // baseline or provisioning writer runs there (the cloud already ran them
+      // and their results arrive through the change feed).
+      if (pcLocalReadOnly()) {
+        logger.info("[startup] PC local copy: boot data operations skipped");
+        startupDataReady = true;
+        markStartupMigrationsComplete();
+        return;
+      }
       // Data operations formerly embedded in the (removed) runtime schema
       // repairs, kept in their original order. None changes the schema.
       // The payroll daybook pass rewrites the factory daybook mirror only (no
@@ -438,7 +455,7 @@ let startupDataReady = false;
     })
     .then(() => {
       listenWithRetry(server, port, () => {
-        if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        if (!pcLocalReadOnly() && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
           // Run only on the authoritative scheduler, honoring production activation kill switch.
           if (process.env.ENABLE_SCHEDULERS !== "false") {

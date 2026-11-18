@@ -11,13 +11,19 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import express from "express";
 import bcrypt from "bcryptjs";
 import { Client } from "pg";
 import { pool } from "../server/db";
 import { loadPcSyncPolicy, readPublicSchema, resolvePcSyncPolicy } from "../server/offline/pcSync/tablePolicy.mjs";
 import { readPrimaryKeys, renderChangeFeedInstallSql } from "../scripts/pc-sync/changeFeedSql.mjs";
 import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
-import { pcSyncFreshness, rememberLocalLogin, syncOnce } from "../scripts/pc-sync/local/syncAgent.mjs";
+import {
+  bindCloudAccount,
+  pcSyncFreshness,
+  rememberLocalLogin,
+  syncOnce,
+} from "../scripts/pc-sync/local/syncAgent.mjs";
 import { createCloudClient } from "../scripts/pc-sync/local/cloudClient.mjs";
 import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
@@ -214,6 +220,20 @@ describe("PC local copy: sync agent", () => {
     expect(rows.rows.map((r) => Number(r.voucher_id))).toEqual(cloudRows.rows.map((r) => Number(r.voucher_id)));
   });
 
+  it("stops resuming once the cloud's schema moves on (the desktop app must be updated first)", async () => {
+    const migrated: Cloud = {
+      async get(path, query) {
+        const res = await cloud.get(path, query);
+        if (path.endsWith("/snapshot/start")) res.body = { ...res.body, schemaVersion: "9999_newer_cloud" };
+        return res;
+      },
+    };
+    const before = await local.query("SELECT cursor FROM pc_local.state");
+    await expect(syncOnce(local, migrated)).rejects.toMatchObject({ code: "PC_LOCAL_SCHEMA_MISMATCH" });
+    const after = await local.query("SELECT cursor FROM pc_local.state");
+    expect(after.rows[0].cursor).toBe(before.rows[0].cursor); // nothing applied
+  });
+
   it("lets only someone who signed in on this PC sign in offline, and keeps that hash across syncs", async () => {
     await rememberLocalLogin(local, ctx.userId, "testpassword123");
     await pool.query("UPDATE users SET active = true WHERE id = $1", [ctx.userId]);
@@ -223,6 +243,29 @@ describe("PC local copy: sync agent", () => {
     expect(await bcrypt.compare("wrong", rows[0].password)).toBe(false);
     const cloudHash = await pool.query("SELECT password FROM users WHERE id = $1", [ctx.userId]);
     expect(rows[0].password).not.toBe(cloudHash.rows[0].password); // the cloud's hash never reached the PC
+  });
+});
+
+describe("PC local copy: bound to one cloud account", () => {
+  it("keeps the copy for the same account and starts again for a different one", async () => {
+    expect(await bindCloudAccount(local, ctx.userId)).toBe(false); // first binding
+    expect(await bindCloudAccount(local, ctx.userId)).toBe(false); // same account
+    expect((await localVouchers()).length).toBeGreaterThan(0);
+
+    expect(await bindCloudAccount(local, "another-account")).toBe(true);
+    expect(await localVouchers()).toEqual([]);
+    const state = await local.query("SELECT cursor, copy_complete, last_sync_at, cloud_user_id FROM pc_local.state");
+    expect(state.rows[0]).toEqual({
+      cursor: null,
+      copy_complete: false,
+      last_sync_at: null,
+      cloud_user_id: "another-account",
+    });
+
+    // Back to the real account: a full copy again, equal to the cloud.
+    await bindCloudAccount(local, ctx.userId);
+    expect((await syncOnce(local, cloud)).upToDate).toBe(true);
+    expect(await localVouchers()).toEqual(await cloudVouchers());
   });
 });
 
@@ -277,7 +320,11 @@ describe("PC local copy: the agent process the desktop app runs", () => {
       raw += line;
       const event = JSON.parse(line);
       events.push(event);
-      for (const w of [...waiters]) if (w.test(event)) (waiters.splice(waiters.indexOf(w), 1), w.resolve(event));
+      for (const w of [...waiters]) {
+        if (!w.test(event)) continue;
+        waiters.splice(waiters.indexOf(w), 1);
+        w.resolve(event);
+      }
     });
     const next = (test: (e: any) => boolean) =>
       new Promise<any>((resolve, reject) => {
@@ -291,7 +338,7 @@ describe("PC local copy: the agent process the desktop app runs", () => {
       child.stdin!.write(
         `${JSON.stringify({ cmd: "login", username: `${PREFIX}_testuser`, password: "testpassword123" })}\n`
       );
-      expect(await next((e) => e.event === "login")).toEqual({ event: "login", ok: true });
+      expect(await next((e) => e.event === "login")).toMatchObject({ event: "login", ok: true });
       const done = await next((e) => e.event === "status" && e.copyComplete && e.lastSyncAt);
       expect(done.freshness.level).toBe("current");
       expect(raw).not.toContain("testpassword123");
@@ -336,6 +383,50 @@ describe("PC local copy: freshness and read-only server", () => {
     const pcEnv: NodeJS.ProcessEnv = { OFFLINE_PC_LOCAL_MODE: "read-only", ENABLE_SCHEDULERS: "true" };
     expect(applyPcLocalModeEnvironment(pcEnv)).toBe(true);
     expect(pcEnv.ENABLE_SCHEDULERS).toBe("false");
+  });
+
+  it("sends the session cookie over the PC's plain-http loopback, and only there", async () => {
+    const { buildSessionMiddleware } = await import("../server/startup/sessionMiddleware");
+    const saved = { ...process.env };
+    const cookieFor = async (env: Record<string, string>) => {
+      Object.assign(process.env, env);
+      try {
+        const app = express();
+        app.use(buildSessionMiddleware());
+        app.get("/touch", (req, res) => {
+          (req.session as unknown as Record<string, unknown>).touched = true;
+          res.end();
+        });
+        const res = await request(app).get("/touch");
+        return String(res.headers["set-cookie"] ?? "");
+      } finally {
+        for (const key of Object.keys(env)) {
+          if (saved[key] === undefined) delete process.env[key];
+          else process.env[key] = saved[key];
+        }
+      }
+    };
+    const base = { NODE_ENV: "production", SESSION_SECRET: "s".repeat(64) };
+    const local = await cookieFor({ ...base, OFFLINE_PC_LOCAL_MODE: "read-only" });
+    expect(local).toMatch(/=/); // set over plain http on the loopback
+    expect(local).not.toMatch(/;\s*Secure/i);
+    // The cloud (no local mode) keeps its secure cookie.
+    const cloudApp = express();
+    Object.assign(process.env, base);
+    try {
+      cloudApp.set("trust proxy", 1);
+      cloudApp.use(buildSessionMiddleware());
+      cloudApp.get("/touch", (req, res) => {
+        (req.session as unknown as Record<string, unknown>).touched = true;
+        res.end();
+      });
+      const res = await request(cloudApp).get("/touch").set("X-Forwarded-Proto", "https");
+      expect(String(res.headers["set-cookie"] ?? "")).toMatch(/;\s*Secure/i);
+    } finally {
+      process.env.NODE_ENV = saved.NODE_ENV;
+      if (saved.SESSION_SECRET === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = saved.SESSION_SECRET;
+    }
   });
 
   it("refuses writes on the local copy but allows reading and signing in", async () => {
