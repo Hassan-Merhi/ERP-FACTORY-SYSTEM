@@ -397,6 +397,13 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     activeTab,
     voucherIdToEdit,
     isWalletPayment,
+    fxWalletDraft: isWalletPayment && selectedFxWallet
+      ? {
+          eurBalance: selectedFxWallet.state.eur,
+          bookUsd: selectedFxWallet.state.totalBookUsd,
+          payoutCurrency: fxPayoutCurrency,
+        }
+      : null,
     postWalletPayment,
     resetWalletPayment,
     selectedCurrency,
@@ -466,7 +473,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     exportVoucherHelper({ formData: form.getValues(), activeTab, toast, detailed });
 
   const onSubmit = async (data: VoucherFormData) => {
-    if (paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
+    if (!(isWalletPayment && data.optional) && paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
       toast({
         title: "Approved USD/ZMW rate required",
         description: "Enter a company exchange rate effective on the voucher date before posting.",
@@ -514,7 +521,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
-    if (isWalletPayment && !(await confirmWalletPayment(validEntries, toast))) return;
+    if (isWalletPayment && !data.optional && !(await confirmWalletPayment(validEntries, toast))) return;
     saveMutation.mutate({
       ...data,
       entries: validEntries,
