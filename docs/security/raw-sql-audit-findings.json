@@ -1,11 +1,11 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 4986,
+    "scannedFiles": 4987,
     "perRoot": {
       "server": 2700,
       "shared": 174,
-      "scripts": 285,
+      "scripts": 286,
       "migrations": 107,
       "tests": 1717
     },
@@ -3167,16 +3167,16 @@
     },
     {
       "findingId": "RSQL-0132",
-      "id": "360ece57351f12c55486",
+      "id": "6216b1693ebbe67b4ad1",
       "path": "server/offline/pcLocal/localReadOnlyGuard.ts",
-      "line": 65,
+      "line": 75,
       "category": "indirect-query-text",
-      "sink": "pool.query",
-      "context": "defaultQuery",
+      "sink": "client.query",
+      "context": "defaultConnect.query",
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "the four constant SQL strings in captureEntry (read pc_local.state, insert/update/delete one pc_local.outbox row) in the same file",
+          "source": "the constant SQL strings in captureEntry (the entry lock, read pc_local.state, insert/update/delete one pc_local.outbox row, RESET lock_timeout) in the same file",
           "validation": "no caller passes request data as SQL text; the request body, user, company and operation id are bound parameters ($1..$5)"
         }
       ],
@@ -23543,7 +23543,7 @@
       "findingId": "RSQL-1098",
       "id": "fce6bad1e56f08df3205",
       "path": "tests/pc-sync-offline-entries.test.ts",
-      "line": 48,
+      "line": 59,
       "category": "indirect-query-text",
       "sink": "local.query",
       "context": "localQuery",
@@ -23567,7 +23567,7 @@
       "findingId": "RSQL-1099",
       "id": "0b1cc895c024f0cb17d1",
       "path": "tests/pc-sync-offline-entries.test.ts",
-      "line": 113,
+      "line": 125,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -23583,9 +23583,9 @@
     },
     {
       "findingId": "RSQL-1100",
-      "id": "bdca65e5171100529de5",
+      "id": "e703488fc0d8aaa647ef",
       "path": "tests/pc-sync-offline-entries.test.ts",
-      "line": 114,
+      "line": 126,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",
@@ -23603,7 +23603,7 @@
       "findingId": "RSQL-1101",
       "id": "0ffdbbf6223e83f271f3",
       "path": "tests/pc-sync-offline-entries.test.ts",
-      "line": 115,
+      "line": 129,
       "category": "query-text",
       "sink": "pool.query",
       "context": "<module>",

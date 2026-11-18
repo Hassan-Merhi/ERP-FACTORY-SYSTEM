@@ -17,8 +17,19 @@ import { loadPcSyncPolicy, readPublicSchema, resolvePcSyncPolicy } from "../serv
 import { readPrimaryKeys, renderChangeFeedInstallSql } from "../scripts/pc-sync/changeFeedSql.mjs";
 import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
 import { bindCloudAccount, syncOnce } from "../scripts/pc-sync/local/syncAgent.mjs";
-import { deliverOutbox, outboxSummary, resolveConflict, syncCycle } from "../scripts/pc-sync/local/outbox.mjs";
+import {
+  decideUnconfirmed,
+  deliverOutbox,
+  deliveryDeviceId,
+  markInterruptedCaptures,
+  outboxSummary,
+  resolveConflict,
+  syncCycle,
+} from "../scripts/pc-sync/local/outbox.mjs";
 import { makePcLocalReadOnlyGuard } from "../server/offline/pcLocal/localReadOnlyGuard";
+import { connectCloudAccount } from "../scripts/pc-sync/local/connectAccount.mjs";
+import { createCloudClient } from "../scripts/pc-sync/local/cloudClient.mjs";
+import type { AddressInfo } from "node:net";
 import { applyMigrations, databaseUrlFor } from "./helpers/migrateDisposableDatabase.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -46,6 +57,7 @@ const cloud: Cloud = {
 };
 
 const localQuery = (text: string, values?: unknown[]) => local.query(text, values as unknown[]);
+const localConnect = async () => ({ query: localQuery, release: () => undefined });
 
 /** The local server's middleware in front of stand-ins for the live routes. */
 function pcApp(mode: "entry" | "read-only", session: Record<string, unknown>) {
@@ -55,7 +67,7 @@ function pcApp(mode: "entry" | "read-only", session: Record<string, unknown>) {
     (req as unknown as { session: Record<string, unknown> }).session = session;
     next();
   });
-  app.use(makePcLocalReadOnlyGuard({ OFFLINE_PC_LOCAL_MODE: mode }, localQuery));
+  app.use(makePcLocalReadOnlyGuard({ OFFLINE_PC_LOCAL_MODE: mode }, localConnect));
   app.post("/api/inventory/quick-adjust", (_req, res) => res.json({ ok: true }));
   app.post("/api/stock-items", (_req, res) => res.status(201).json({ id: 1_000_000_005 }));
   app.post("/api/pos/sales", (_req, res) => res.status(400).json({ message: "refused locally" }));
@@ -111,7 +123,9 @@ afterAll(async () => {
   if (device) {
     for (const table of ["factory_edge_applied_events", "factory_edge_stock_item_map"]) {
       await pool.query(`ALTER TABLE ${table} DISABLE TRIGGER USER`);
-      await pool.query(`DELETE FROM ${table} WHERE site_id = $1`, [device]);
+      await pool.query(`DELETE FROM ${table} WHERE site_id = $1`, [
+        deliveryDeviceId(device, ctx.userId, ctx.companyId),
+      ]);
       await pool.query(`ALTER TABLE ${table} ENABLE TRIGGER USER`);
     }
   }
@@ -312,7 +326,110 @@ describe("PC offline entries: delivery to the cloud", () => {
   });
 });
 
+describe("PC offline entries: robustness", () => {
+  it("gives each person and company on the PC its own stable delivery device id", () => {
+    const pc = "5b0c9d2e-1f3a-4b5c-8d6e-7f8091a2b3c4";
+    const a = deliveryDeviceId(pc, "user-a", 1);
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(deliveryDeviceId(pc, "user-a", 1)).toBe(a);
+    expect(deliveryDeviceId(pc, "user-a", 2)).not.toBe(a);
+    expect(deliveryDeviceId(pc, "user-b", 1)).not.toBe(a);
+  });
+
+  it("installs write capture on a copy made before entries existed", async () => {
+    await local.query("DROP TRIGGER IF EXISTS pc_local_capture ON public.vouchers");
+    await prepareLocalDatabase(local, loadPcSyncPolicy().redact);
+    const { rows } = await local.query(
+      "SELECT count(*)::int AS n FROM pg_trigger WHERE tgname = 'pc_local_capture' AND tgrelid = 'public.vouchers'::regclass"
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it("turns an interrupted save into an unconfirmed entry that someone must send or discard", async () => {
+    const insert = async () => {
+      const { rows } = await local.query(
+        `INSERT INTO pc_local.outbox (operation_id, kind, input, user_id, company_id, status, updated_at)
+         VALUES (gen_random_uuid(), 'stock.quick-adjust.v1', '{}'::jsonb, $1, $2, 'capturing', now() - interval '11 minutes')
+         RETURNING operation_id`,
+        [ctx.userId, ctx.companyId]
+      );
+      return rows[0].operation_id as string;
+    };
+    const sent = await insert();
+    const dropped = await insert();
+    expect(await markInterruptedCaptures(local)).toBe(2);
+    await expect(bindCloudAccount(local, "another-account")).rejects.toMatchObject({
+      code: "PC_LOCAL_ENTRIES_NOT_DELIVERED",
+    });
+
+    await decideUnconfirmed(local, dropped, "discard");
+    await decideUnconfirmed(local, sent, "send");
+    const { rows } = await local.query(
+      "SELECT operation_id, status, local_ref FROM pc_local.outbox WHERE operation_id = ANY($1::uuid[])",
+      [[sent, dropped]]
+    );
+    const byId = Object.fromEntries(rows.map((r) => [r.operation_id, r]));
+    expect(byId[dropped].status).toBe("refused");
+    expect(byId[sent]).toMatchObject({ status: "pending", local_ref: expect.any(Number) });
+    // The sent one is a real (empty) request the cloud refuses as invalid; tidy up for the next tests.
+    await local.query("DELETE FROM pc_local.outbox WHERE operation_id = ANY($1::uuid[])", [[sent, dropped]]);
+  });
+
+  it("refuses a new entry while the sync process is undoing local writes or pulling", async () => {
+    const holder = new Client({
+      connectionString: databaseUrlFor(process.env.DATABASE_URL!, "pcsync_local_entries_test"),
+      ssl: false,
+    });
+    await holder.connect();
+    try {
+      await holder.query("SELECT pg_advisory_lock(7314002)");
+      const pc = request(pcApp("entry", { userId: ctx.userId, currentCompanyId: ctx.companyId }));
+      const res = await pc.post("/api/inventory/quick-adjust").send({});
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ code: "OFFLINE_PC_LOCAL_SYNC_BUSY" });
+    } finally {
+      await holder.query("SELECT pg_advisory_unlock(7314002)").catch(() => undefined);
+      await holder.end();
+    }
+  }, 20_000);
+});
+
 describe("PC offline entries: switching the connected account", () => {
+  it("keeps delivering as the connected person when another account is refused, and signs that one out", async () => {
+    await local.query("UPDATE pc_local.state SET cloud_user_id = 'previous-person'");
+    await local.query(
+      `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status)
+       VALUES (gen_random_uuid(), 'stock.quick-adjust.v1', '{}'::jsonb, nextval('pc_local.local_ref_seq'), 'previous-person', $1, 'pending')`,
+      [ctx.companyId]
+    );
+    const server = ctx.app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const { port } = server.address() as AddressInfo;
+    let seenCookie = "";
+    const recordingFetch: typeof fetch = async (url, init) => {
+      const res = await fetch(url, init);
+      const set = res.headers.getSetCookie?.() ?? [];
+      if (set.length) seenCookie = set.map((c) => c.split(";")[0]).join("; ");
+      return res;
+    };
+    try {
+      await expect(
+        connectCloudAccount(local, `http://127.0.0.1:${port}`, `${PREFIX}_testuser`, "testpassword123", {
+          fetch: recordingFetch,
+        })
+      ).rejects.toMatchObject({ code: "PC_LOCAL_ENTRIES_NOT_DELIVERED" });
+      const state = await local.query("SELECT cloud_user_id FROM pc_local.state");
+      expect(state.rows[0].cloud_user_id).toBe("previous-person");
+      // The refused account's session was signed out, so nothing can be sent with it.
+      const stale = createCloudClient(`http://127.0.0.1:${port}`, { cookie: seenCookie });
+      expect((await stale.get("/api/auth/me")).status).toBe(401);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      await local.query("DELETE FROM pc_local.outbox WHERE user_id = 'previous-person'");
+      await local.query("UPDATE pc_local.state SET cloud_user_id = $1", [ctx.userId]);
+    }
+  });
+
   it("refuses another account while the connected one still has entries to send", async () => {
     await local.query(
       `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status)

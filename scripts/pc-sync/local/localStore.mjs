@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS pc_local.outbox (
   captured_at timestamptz NOT NULL DEFAULT now(),
   user_id text NOT NULL,
   company_id integer NOT NULL,
-  status text NOT NULL CHECK (status IN ('capturing', 'pending', 'waiting', 'applied', 'conflict', 'refused')),
+  -- unconfirmed: the local save may or may not have committed (the server
+  -- stopped mid-request); someone at the PC sends or discards it.
+  status text NOT NULL CHECK (status IN ('capturing', 'unconfirmed', 'pending', 'waiting', 'applied', 'conflict', 'refused')),
   code text,
   overridable boolean NOT NULL DEFAULT false,
   receipt jsonb,
@@ -272,7 +274,18 @@ export async function prepareLocalDatabase(client, redact) {
   await client.query(STATIC_SQL);
   await client.query("SELECT pc_local.allow_empty_secrets($1::jsonb)", [JSON.stringify(redact ?? {})]);
   await client.query("SELECT pc_local.use_local_id_range()");
+  // A copy made before entries existed has no write capture yet: install it
+  // for the synced tables on every start (idempotent).
+  const { rows } = await client.query("SELECT tables FROM pc_local.state WHERE id = 1");
+  if (rows[0]?.tables?.length) await installLocalWriteCapture(client, rows[0].tables);
 }
+
+/**
+ * One lock shared by every entry the local server records and taken alone by
+ * the sync process while it checks for outstanding entries, undoes local
+ * writes and pulls: an entry can never start in the middle of that.
+ */
+export const PC_LOCAL_ENTRY_LOCK = 7314002;
 
 /** Records every write the local ERP server makes to these tables (Phase B). */
 export async function installLocalWriteCapture(client, tables) {

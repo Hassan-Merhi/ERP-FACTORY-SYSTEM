@@ -21,9 +21,10 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { loadPcSyncPolicy } from "../../../server/offline/pcSync/tablePolicy.mjs";
 import { createCloudClient } from "./cloudClient.mjs";
+import { connectCloudAccount } from "./connectAccount.mjs";
 import { prepareLocalDatabase, readLocalState } from "./localStore.mjs";
-import { bindCloudAccount, pcSyncFreshness, rememberLocalLogin } from "./syncAgent.mjs";
-import { outboxSummary, resolveConflict, syncCycle } from "./outbox.mjs";
+import { pcSyncFreshness } from "./syncAgent.mjs";
+import { decideUnconfirmed, outboxSummary, resolveConflict, syncCycle } from "./outbox.mjs";
 
 const send = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
 
@@ -58,7 +59,7 @@ async function main() {
   const local = new pg.Client({ connectionString: databaseUrl, ssl: false });
   await local.connect();
   await prepareLocalDatabase(local, loadPcSyncPolicy().redact);
-  const cloud = createCloudClient(cloudUrl, { cookie: process.env.PC_SYNC_COOKIE || "" });
+  let cloud = createCloudClient(cloudUrl, { cookie: process.env.PC_SYNC_COOKIE || "" });
 
   let busy = Promise.resolve();
   const serial = (work) => (busy = busy.then(work, work));
@@ -73,8 +74,8 @@ async function main() {
       outbox: await outboxSummary(local),
       conflicts: (
         await local.query(
-          `SELECT operation_id, kind, code, overridable, captured_at FROM pc_local.outbox
-            WHERE status = 'conflict' ORDER BY id LIMIT 20`
+          `SELECT operation_id, kind, code, overridable, captured_at, status FROM pc_local.outbox
+            WHERE status IN ('conflict', 'unconfirmed') ORDER BY id LIMIT 20`
         )
       ).rows.map((r) => ({
         operationId: r.operation_id,
@@ -82,6 +83,7 @@ async function main() {
         code: r.code,
         overridable: r.overridable,
         capturedAt: r.captured_at,
+        unconfirmed: r.status === "unconfirmed",
       })),
       ...extra,
     });
@@ -102,9 +104,9 @@ async function main() {
 
   async function login(username, password) {
     try {
-      const userId = await cloud.login(String(username ?? ""), String(password ?? ""));
-      const reset = await bindCloudAccount(local, userId);
-      await rememberLocalLogin(local, userId, String(password));
+      const connected = await connectCloudAccount(local, cloudUrl, username, password);
+      cloud = connected.cloud;
+      const reset = connected.copyReset;
       send({ event: "login", ok: true, copyReset: reset });
       send({ event: "cookie", cookie: cloud.cookie() });
       await syncNow();
@@ -126,7 +128,16 @@ async function main() {
     else if ((command?.cmd === "approve" || command?.cmd === "discard") && typeof command.operationId === "string") {
       serial(async () => {
         try {
-          await resolveConflict(local, cloud, command.operationId, command.cmd);
+          const unconfirmed = await local.query(
+            "SELECT 1 FROM pc_local.outbox WHERE operation_id = $1::uuid AND status = 'unconfirmed'",
+            [command.operationId]
+          );
+          if (unconfirmed.rowCount) {
+            // An interrupted save: "approve" means send it, "discard" drops it here.
+            await decideUnconfirmed(local, command.operationId, command.cmd === "approve" ? "send" : "discard");
+          } else {
+            await resolveConflict(local, cloud, command.operationId, command.cmd);
+          }
           send({ event: "decision", ok: true, operationId: command.operationId });
         } catch (error) {
           send({ event: "decision", ok: false, operationId: command.operationId, code: error?.code });

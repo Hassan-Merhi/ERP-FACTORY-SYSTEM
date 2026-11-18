@@ -203,7 +203,7 @@ export async function bindCloudAccount(local, userId) {
     // decided) while that account is still connected.
     const { rows } = await local.query(
       `SELECT count(*)::int AS n FROM pc_local.outbox
-        WHERE user_id = $1 AND status IN ('capturing', 'pending', 'waiting', 'conflict')`,
+        WHERE user_id = $1 AND status IN ('capturing', 'unconfirmed', 'pending', 'waiting', 'conflict')`,
       [state.cloud_user_id]
     );
     if (rows[0].n > 0) throw new PcSyncAgentError("PC_LOCAL_ENTRIES_NOT_DELIVERED", { count: rows[0].n });

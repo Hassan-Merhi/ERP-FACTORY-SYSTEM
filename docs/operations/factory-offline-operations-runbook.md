@@ -308,7 +308,16 @@ at month end. Any other conflict writes nothing and is held; **Offline copy →
 Held entries…** lets an Admin or Developer approve it (the cloud re-checks the
 role) or anyone discard it. Entries made by other people on the PC wait until they connect it; switching
 the connected account is refused while the current one still has entries to
-send or held. Once nothing is outstanding, the PC undoes its own local writes
+send, held or unconfirmed, and the refused account's new session is signed out
+at once (the PC keeps delivering as the person already connected). Each person
+and company on a PC is a separate device to the cloud (an id derived from the
+PC's), because the cloud binds a device to one user and company. An entry is
+recorded under a database lock that the sync process takes alone while it
+checks, undoes local writes and pulls, so no entry starts in between (a save
+that waits more than 5 seconds answers `503 OFFLINE_PC_LOCAL_SYNC_BUSY`; try
+again). A save interrupted mid-request (the PC or server stopped) is marked
+unconfirmed after 10 minutes and appears in **Held entries…** to send or
+discard. Once nothing is outstanding, the PC undoes its own local writes
 (recorded by a trigger that the sync process's own writes skip) and pulls the
 feed, which brings back the cloud's version of every delivered entry. While
 entries are outstanding the pull waits, so cloud rows never mix with undelivered

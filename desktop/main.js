@@ -58,17 +58,23 @@ async function reviewHeldEntries() {
     return dialog.showMessageBox(mainWindow, { type: 'info', title: 'Held entries', message: 'No entries are held.' });
   }
   for (const entry of held) {
-    const buttons = entry.overridable ? ['Approve (Admin/Developer)', 'Discard', 'Later'] : ['Discard', 'Later'];
+    const buttons = entry.unconfirmed
+      ? ['Send it', 'Discard', 'Later']
+      : entry.overridable
+        ? ['Approve (Admin/Developer)', 'Discard', 'Later']
+        : ['Discard', 'Later'];
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
-      title: 'Held entry',
+      title: entry.unconfirmed ? 'Unconfirmed entry' : 'Held entry',
       message: `${entry.kind} from ${new Date(entry.capturedAt).toLocaleString()}`,
-      detail: `The cloud did not apply it: ${entry.code}. Approving applies it anyway (for stock, the quantity goes negative). Discarding drops it; the cloud is not changed.`,
+      detail: entry.unconfirmed
+        ? 'This PC stopped while the entry was being saved, so it is not certain it was saved. Send it if you made it; discard it if you did not.'
+        : `The cloud did not apply it: ${entry.code}. Approving applies it anyway. Discarding drops it; the cloud is not changed.`,
       buttons,
       cancelId: buttons.length - 1,
     });
     const choice = buttons[response];
-    if (choice.startsWith('Approve')) localMode.decide(entry.operationId, 'approve');
+    if (choice.startsWith('Approve') || choice === 'Send it') localMode.decide(entry.operationId, 'approve');
     else if (choice === 'Discard') localMode.decide(entry.operationId, 'discard');
   }
 }

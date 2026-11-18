@@ -9664,16 +9664,16 @@
       "reason": "Runs only inside the PC's own local database; identifiers are quoted with format('%I') and the key values are bound."
     },
     {
-      "id": "360ece57351f12c55486",
+      "id": "6216b1693ebbe67b4ad1",
       "path": "server/offline/pcLocal/localReadOnlyGuard.ts",
       "kind": "indirect-query-text",
-      "context": "defaultQuery",
+      "context": "defaultConnect.query",
       "classification": "trusted-sql-fragment",
       "userControlled": "no",
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "the four constant SQL strings in captureEntry (read pc_local.state, insert/update/delete one pc_local.outbox row) in the same file",
+          "source": "the constant SQL strings in captureEntry (the entry lock, read pc_local.state, insert/update/delete one pc_local.outbox row, RESET lock_timeout) in the same file",
           "validation": "no caller passes request data as SQL text; the request body, user, company and operation id are bound parameters ($1..$5)"
         }
       ],

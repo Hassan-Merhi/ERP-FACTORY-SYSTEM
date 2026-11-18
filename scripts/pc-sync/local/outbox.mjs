@@ -12,10 +12,41 @@
 // Once nothing is left to deliver, the PC undoes its own local writes and pulls
 // the feed, which brings back the cloud's version of every delivered entry.
 
+import { createHash } from "node:crypto";
 import { PcSyncAgentError, syncOnce } from "./syncAgent.mjs";
-import { countLocalWrites, inApplyTransaction, readLocalState, revertLocalWrites } from "./localStore.mjs";
+import {
+  PC_LOCAL_ENTRY_LOCK,
+  countLocalWrites,
+  inApplyTransaction,
+  readLocalState,
+  revertLocalWrites,
+} from "./localStore.mjs";
 
-const OUTSTANDING = ["capturing", "pending", "waiting"];
+const OUTSTANDING = ["capturing", "unconfirmed", "pending", "waiting"];
+/** A save still "capturing" after this long was interrupted (no request lasts that long). */
+const CAPTURE_STALE_MINUTES = 10;
+
+/**
+ * The device id the cloud sees for one person in one company on this PC. The
+ * cloud binds a device id to the first user and company it serves, so each
+ * pair gets its own, derived from the PC's id (stable across retries and
+ * decisions, nothing to store).
+ */
+export function deliveryDeviceId(pcDeviceId, userId, companyId) {
+  const h = createHash("sha256").update(`${pcDeviceId}|${userId}|${companyId}`).digest("hex");
+  const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+/** Saves interrupted mid-request become "unconfirmed" for a person to decide. */
+export async function markInterruptedCaptures(local) {
+  const { rowCount } = await local.query(
+    `UPDATE pc_local.outbox SET status = 'unconfirmed', updated_at = now()
+      WHERE status = 'capturing' AND updated_at < now() - make_interval(mins => $1)`,
+    [CAPTURE_STALE_MINUTES]
+  );
+  return rowCount ?? 0;
+}
 
 export async function outboxSummary(local) {
   const { rows } = await local.query(
@@ -43,7 +74,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
   const result = { applied: 0, conflicts: 0, refused: 0, waiting: false };
   if (!state.cloud_user_id) return result;
   const { rows } = await local.query(
-    `SELECT id, operation_id, kind, input, local_ref, captured_at, company_id
+    `SELECT id, operation_id, kind, input, local_ref, captured_at, company_id, user_id
        FROM pc_local.outbox
       WHERE status IN ('pending', 'waiting') AND user_id = $1
       ORDER BY id LIMIT $2`,
@@ -62,7 +93,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
       company = op.company_id;
     }
     const res = await cloud.post("/api/offline/pc-sync/operations", {
-      deviceId: state.device_id,
+      deviceId: deliveryDeviceId(state.device_id, op.user_id, op.company_id),
       operationId: op.operation_id,
       kind: op.kind,
       localRef: op.local_ref,
@@ -98,18 +129,43 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
  * the cloud's rows never mix with undelivered local ones.
  */
 export async function syncCycle(local, cloud, options = {}) {
+  await markInterruptedCaptures(local);
   const delivery = await deliverOutbox(local, cloud, options);
-  const { rows } = await local.query(
-    "SELECT count(*)::int AS n FROM pc_local.outbox WHERE status = ANY($1::text[])",
-    [OUTSTANDING]
-  );
-  let reverted = 0;
-  if (rows[0].n === 0) reverted = await inApplyTransaction(local, () => revertLocalWrites(local));
-  if ((await countLocalWrites(local)) > 0) {
-    return { delivery, reverted, pullPaused: true, outstanding: rows[0].n, upToDate: false };
+  // No entry may start while we check, undo and pull (the local server takes
+  // the same lock, shared, for every entry it records).
+  await local.query("SELECT pg_advisory_lock($1)", [PC_LOCAL_ENTRY_LOCK]);
+  try {
+    const { rows } = await local.query(
+      "SELECT count(*)::int AS n FROM pc_local.outbox WHERE status = ANY($1::text[])",
+      [OUTSTANDING]
+    );
+    let reverted = 0;
+    if (rows[0].n === 0) reverted = await inApplyTransaction(local, () => revertLocalWrites(local));
+    if ((await countLocalWrites(local)) > 0) {
+      return { delivery, reverted, pullPaused: true, outstanding: rows[0].n, upToDate: false };
+    }
+    const report = await syncOnce(local, cloud, options);
+    return { delivery, reverted, pullPaused: false, outstanding: 0, ...report };
+  } finally {
+    await local.query("SELECT pg_advisory_unlock($1)", [PC_LOCAL_ENTRY_LOCK]);
   }
-  const report = await syncOnce(local, cloud, options);
-  return { delivery, reverted, pullPaused: false, outstanding: 0, ...report };
+}
+
+/**
+ * An entry whose save was interrupted: "send" delivers it like any other (the
+ * person confirms they made it), "discard" drops it without contacting the
+ * cloud. Anyone at the PC may decide; it is their own unsent entry.
+ */
+export async function decideUnconfirmed(local, operationId, decision) {
+  if (decision !== "send" && decision !== "discard") throw new PcSyncAgentError("PC_SYNC_DECISION_INVALID");
+  const { rowCount } = await local.query(
+    `UPDATE pc_local.outbox
+        SET status = $2, code = $3, updated_at = now(),
+            local_ref = COALESCE(local_ref, nextval('pc_local.local_ref_seq')::integer)
+      WHERE operation_id = $1::uuid AND status = 'unconfirmed'`,
+    [operationId, decision === "send" ? "pending" : "refused", decision === "send" ? null : "DISCARDED"]
+  );
+  if (rowCount !== 1) throw new PcSyncAgentError("PC_SYNC_ENTRY_NOT_UNCONFIRMED");
 }
 
 /**
@@ -131,7 +187,7 @@ export async function resolveConflict(local, cloud, operationId, decision) {
   const switched = await cloud.post("/api/auth/set-company", { companyId: op.company_id });
   if (switched.status !== 200) throw new PcSyncAgentError("PC_SYNC_COMPANY_NOT_ALLOWED", { status: switched.status });
   const body = {
-    deviceId: state.device_id,
+    deviceId: deliveryDeviceId(state.device_id, op.user_id, op.company_id),
     operationId: op.operation_id,
     kind: op.kind,
     localRef: op.local_ref,

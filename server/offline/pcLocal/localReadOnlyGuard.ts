@@ -59,69 +59,127 @@ export function applyPcLocalModeEnvironment(env: NodeJS.ProcessEnv = process.env
 }
 
 type Query = (text: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+/** One database connection, held for the whole request (it carries the entry lock). */
+export interface PcLocalConnection {
+  query: Query;
+  release: () => void;
+}
+type Connect = () => Promise<PcLocalConnection>;
 
-async function defaultQuery(text: string, values?: unknown[]) {
+/** Same as PC_LOCAL_ENTRY_LOCK in scripts/pc-sync/local/localStore.mjs. */
+const PC_LOCAL_ENTRY_LOCK = 7314002;
+
+async function defaultConnect(): Promise<PcLocalConnection> {
   const { pool } = await import("../../db");
-  return pool.query(text, values);
+  const client = await pool.connect();
+  return { query: (text, values) => client.query(text, values as unknown[]), release: () => client.release() };
 }
 
 function refuse(res: Response, code: string) {
   return res.status(423).json({ code });
 }
 
-async function captureEntry(req: Request, res: Response, next: () => void, kind: string, query: Query) {
+async function withRetries(work: () => Promise<unknown>, attempts = 3): Promise<void> {
+  for (let i = 1; ; i += 1) {
+    try {
+      await work();
+      return;
+    } catch (error) {
+      if (i >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * i));
+    }
+  }
+}
+
+async function captureEntry(req: Request, res: Response, next: () => void, kind: string, connect: Connect) {
   const userId = req.session?.userId == null ? "" : String(req.session.userId);
   const companyId = Number(req.session?.currentCompanyId);
   // Not signed in or no company: the route itself answers; nothing is recorded.
   if (!userId || !Number.isSafeInteger(companyId) || companyId < 1) return next();
 
-  const state = await query("SELECT last_sync_at, copy_complete FROM pc_local.state WHERE id = 1");
-  const lastSync = state.rows[0]?.last_sync_at as Date | null | undefined;
-  const ageHours = lastSync ? (Date.now() - new Date(lastSync).getTime()) / 3_600_000 : Infinity;
-  if (!state.rows[0]?.copy_complete || ageHours >= PC_LOCAL_BLOCK_AFTER_HOURS) {
-    return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
-  }
-
-  const operationId = randomUUID();
-  await query(
-    `INSERT INTO pc_local.outbox (operation_id, kind, input, user_id, company_id, status)
-     VALUES ($1::uuid, $2, $3::jsonb, $4, $5, 'capturing')`,
-    [operationId, kind, JSON.stringify(req.body ?? {}), userId, companyId]
-  );
-  let responseBody: unknown = null;
-  const json = res.json.bind(res);
-  res.json = (payload: unknown) => {
-    responseBody = payload;
-    return json(payload);
+  const conn = await connect();
+  let held = false;
+  const done = async () => {
+    if (held) {
+      held = false;
+      await conn.query("SELECT pg_advisory_unlock_shared($1)", [PC_LOCAL_ENTRY_LOCK]).catch(() => undefined);
+    }
+    await conn.query("RESET lock_timeout").catch(() => undefined);
+    conn.release();
   };
-  res.on("finish", () => {
-    const done =
-      res.statusCode >= 200 && res.statusCode < 300
-        ? (() => {
-            const createdId = Number((responseBody as { id?: unknown } | null)?.id);
-            const ownId =
-              kind === PHASE9_STOCK_ITEM_CREATE_KIND && Number.isSafeInteger(createdId) && createdId >= PC_LOCAL_ID_BASE
-                ? createdId
-                : null;
-            return query(
-              `UPDATE pc_local.outbox
-                  SET status = 'pending', updated_at = now(),
-                      local_ref = COALESCE($2::integer, nextval('pc_local.local_ref_seq')::integer)
-                WHERE operation_id = $1::uuid`,
-              [operationId, ownId]
-            );
-          })()
-        : query("DELETE FROM pc_local.outbox WHERE operation_id = $1::uuid", [operationId]);
-    done.catch((error: unknown) =>
-      logger.error("[pc-local] outbox update failed", { operationId, error: String(error) })
+  try {
+    // Wait briefly while the sync process undoes local writes and pulls.
+    await conn.query("SET lock_timeout = '5s'");
+    try {
+      await conn.query("SELECT pg_advisory_lock_shared($1)", [PC_LOCAL_ENTRY_LOCK]);
+      held = true;
+    } catch {
+      await done();
+      return res.status(503).json({ code: "OFFLINE_PC_LOCAL_SYNC_BUSY" });
+    }
+    const state = await conn.query("SELECT last_sync_at, copy_complete FROM pc_local.state WHERE id = 1");
+    const lastSync = state.rows[0]?.last_sync_at as Date | null | undefined;
+    const ageHours = lastSync ? (Date.now() - new Date(lastSync).getTime()) / 3_600_000 : Infinity;
+    if (!state.rows[0]?.copy_complete || ageHours >= PC_LOCAL_BLOCK_AFTER_HOURS) {
+      await done();
+      return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
+    }
+    const operationId = randomUUID();
+    await conn.query(
+      `INSERT INTO pc_local.outbox (operation_id, kind, input, user_id, company_id, status)
+       VALUES ($1::uuid, $2, $3::jsonb, $4, $5, 'capturing')`,
+      [operationId, kind, JSON.stringify(req.body ?? {}), userId, companyId]
     );
-  });
-  return next();
+    let responseBody: unknown = null;
+    const json = res.json.bind(res);
+    res.json = (payload: unknown) => {
+      responseBody = payload;
+      return json(payload);
+    };
+    let settled = false;
+    const settle = (finished: boolean) => {
+      if (settled) return;
+      settled = true;
+      // A request cut off before its answer leaves the entry "capturing"; the
+      // sync process turns it into "unconfirmed" for a person to decide.
+      const update = !finished
+        ? Promise.resolve()
+        : res.statusCode >= 200 && res.statusCode < 300
+          ? withRetries(() => {
+              const createdId = Number((responseBody as { id?: unknown } | null)?.id);
+              const ownId =
+                kind === PHASE9_STOCK_ITEM_CREATE_KIND &&
+                Number.isSafeInteger(createdId) &&
+                createdId >= PC_LOCAL_ID_BASE
+                  ? createdId
+                  : null;
+              return conn.query(
+                `UPDATE pc_local.outbox
+                    SET status = 'pending', updated_at = now(),
+                        local_ref = COALESCE($2::integer, nextval('pc_local.local_ref_seq')::integer)
+                  WHERE operation_id = $1::uuid`,
+                [operationId, ownId]
+              );
+            })
+          : withRetries(() => conn.query("DELETE FROM pc_local.outbox WHERE operation_id = $1::uuid", [operationId]));
+      update
+        .catch((error: unknown) =>
+          logger.error("[pc-local] outbox update failed", { operationId, error: String(error) })
+        )
+        .finally(() => done());
+    };
+    res.on("finish", () => settle(true));
+    res.on("close", () => settle(res.writableFinished));
+    return next();
+  } catch (error) {
+    await done();
+    throw error;
+  }
 }
 
 export function makePcLocalReadOnlyGuard(
   env: NodeJS.ProcessEnv = process.env,
-  query: Query = defaultQuery
+  connect: Connect = defaultConnect
 ): RequestHandler {
   return (req, res, next) => {
     const mode = pcLocalMode(env);
@@ -133,7 +191,7 @@ export function makePcLocalReadOnlyGuard(
     if (!path.startsWith("/api/") || PC_LOCAL_ALLOWED_WRITES.has(route)) return next();
     const kind = mode === "entry" ? PC_LOCAL_ENTRY_ROUTES.get(route) : undefined;
     if (!kind) return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
-    captureEntry(req, res, next, kind, query).catch((error: unknown) => {
+    captureEntry(req, res, next, kind, connect).catch((error: unknown) => {
       logger.error("[pc-local] could not record an offline entry", { error: String(error) });
       if (!res.headersSent) res.status(503).json({ code: "OFFLINE_PC_LOCAL_CAPTURE_FAILED" });
     });
