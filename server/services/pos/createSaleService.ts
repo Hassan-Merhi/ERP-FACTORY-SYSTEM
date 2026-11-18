@@ -46,8 +46,7 @@ import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
-import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
-import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, checkedPosNativeSaleAmounts } from "./posZmwRatePolicy";
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 
@@ -215,9 +214,8 @@ export async function createPosSale(
   }
 
   try {
-    assertZmwImportPrices(items, lockedPosCurrency);
-    if (lockedPosCurrency.currency === "ZMW") {
-      const amounts = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+    const amounts = checkedPosNativeSaleAmounts(items, lockedPosCurrency, isSpCompany || lanCapture);
+    if (amounts) {
       nativeZmwTotal = amounts.nativeTotal;
       grandTotal = amounts.usdTotal;
     }
