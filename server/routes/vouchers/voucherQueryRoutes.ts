@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 
-import { containers, vouchers, posShifts, userLocations } from "@shared/schema";
+import { containers, vouchers, posShifts } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
@@ -24,6 +24,14 @@ import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
 import { withPosZmwNativeTotals } from "../../services/pos/posVoucherNativeTotals";
 import { withPosVoucherShiftUserIds } from "../../services/pos/posVoucherShiftOwnership";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import {
+  getPosDaybookLocations,
+  getPosTransferScope,
+  isStockTransferVoucherType,
+  posTransferVisibleItems,
+  scopePosDaybookVouchers,
+} from "../../services/pos/posDaybookTransferAccess";
 import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
 import {
@@ -46,8 +54,9 @@ export function registerVoucherQueryRoutes(app: Express) {
       const listQuery = parsedListQuery.query;
       const { startDate, endDate } = listQuery;
 
-      // Check if user is POS role
-      const isPOS = req.session.currentRole === "POS";
+      // Always use the current company role; the session flag may be stale.
+      const liveContext = await getActiveCompanyPermissionContext(req);
+      const isPOS = liveContext.role === "POS";
 
       let vouchers;
       if (startDate && endDate) {
@@ -86,37 +95,10 @@ export function registerVoucherQueryRoutes(app: Express) {
       // Preserve historical GL descriptions; enrich only the read model.
       vouchers = await withPropertiesRentalTenantNames(access.activeCompanyId, vouchers);
 
-      // Strip totalAmount from Stock Transfer vouchers for POS users
-      let sanitizedVouchers = isPOS
-        ? vouchers.map((v) => {
-            // Check for all variants of Stock Transfer voucher type
-            const isStockTransfer =
-              v.voucherType === "Stock Transfer" ||
-              v.voucherType === "StockTransfer" ||
-              v.voucherType?.toLowerCase().includes("stock transfer");
-            if (isStockTransfer) {
-              const { totalAmount, ...rest } = v;
-              return { ...rest, totalAmount: "0" };
-            }
-            return v;
-          })
-        : vouchers;
-
-      // For POS users, only return vouchers from their assigned locations.
-      // Ownership is NOT checked here — POS users can see all sales from their location
-      // (not just their own). Ownership is enforced at detail/edit/send-invoice endpoints.
-      if (isPOS && req.user?.id) {
-        const assignedLocs = await db
-          .select({ locationId: userLocations.locationId })
-          .from(userLocations)
-          .where(and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, access.activeCompanyId)));
-        const allowedLocIds = assignedLocs.map((l) => l.locationId);
-        if (allowedLocIds.length > 0) {
-          sanitizedVouchers = sanitizedVouchers.filter(
-            (v) => v.locationId === null || allowedLocIds.includes(v.locationId)
-          );
-        }
-      }
+      // The source and destination stock legs, not a voucher header, decide
+      // whether an assigned cashier can see each transfer. Zero all POS
+      // transfer amounts; a transfer is movement, not cashier revenue.
+      const sanitizedVouchers = isPOS ? await scopePosDaybookVouchers(vouchers, liveContext) : vouchers;
 
       const ownedVouchers = isPOS
         ? await withPosVoucherShiftUserIds(sanitizedVouchers, access.activeCompanyId)
@@ -277,8 +259,62 @@ export function registerVoucherQueryRoutes(app: Express) {
         });
       }
 
+      // A transfer is read-only to a POS cashier and visible only when the
+      // actual source/destination stock legs include an assigned location.
+      // Never return ledger entries, transfer valuations, or other sources'
+      // item rows through the generic voucher detail endpoint.
+      const liveContext = await getActiveCompanyPermissionContext(req);
+      if (liveContext.role === "POS" && isStockTransferVoucherType(voucher.voucherType)) {
+        const scope = await getPosTransferScope(liveContext, voucher.id);
+        if (!scope) return res.status(404).json({ message: "Transfer not found" });
+        const { transferData } = await loadVoucherRelatedData(voucher);
+        if (!transferData?.id) return res.status(404).json({ message: "Transfer not found" });
+        const visibleItems = posTransferVisibleItems(transferData.items, scope);
+        return res.json({
+          id: voucher.id,
+          voucherNumber: voucher.voucherNumber,
+          voucherType: voucher.voucherType,
+          voucherDate: voucher.voucherDate,
+          createdAt: voucher.createdAt,
+          description: transferData.notes || voucher.description,
+          optional: voucher.optional,
+          locationId: scope.displayLocationId,
+          locationName: scope.displayLocationName,
+          totalAmount: "0",
+          entries: [],
+          transferData: {
+            id: transferData.id,
+            voucherId: voucher.id,
+            sourceLocationId: scope.isDestination ? transferData.sourceLocationId : scope.displayLocationId,
+            sourceLocationName: scope.isDestination
+              ? (transferData.sourceLocationName || "Multi-source")
+              : scope.displayLocationName,
+            destinationLocationId: transferData.destinationLocationId,
+            destinationLocationName: transferData.destinationLocationName,
+            inventoryApplied: transferData.inventoryApplied,
+            notes: transferData.notes,
+            items: visibleItems.map((item) => ({
+              id: item.id,
+              stockItemId: item.stockItemId,
+              stockItemCode: item.stockItemCode,
+              stockItemName: item.stockItemName,
+              stockItemUom: item.stockItemUom,
+              sourceLocationId: item.sourceLocationId ?? scope.headerSourceLocationId,
+              sourceLocationName: item.sourceLocationName,
+              quantity: item.quantity,
+            })),
+          },
+        });
+      }
+      if (liveContext.role === "POS") {
+        const locations = await getPosDaybookLocations(liveContext);
+        if (voucher.locationId == null || !locations.has(voucher.locationId)) {
+          return res.status(404).json({ message: "Voucher not found" });
+        }
+      }
+
       // POS sales ownership is recorded through the linked shift.
-      if (req.user?.role === "POS" && voucher.voucherType === "Sales") {
+      if (liveContext.role === "POS" && voucher.voucherType === "Sales") {
         const [ownedShift] = voucher.shiftId
           ? await db
               .select({ id: posShifts.id })
