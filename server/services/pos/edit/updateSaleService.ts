@@ -155,7 +155,7 @@ export async function applyPosSaleUpdateTx(
     }
     // Edited Kwacha lines are re-priced in USD by the client at the voucher's
     // LOCKED rate; every original Kwacha price supplied must agree with it.
-    const editedLines = items as Array<{ rate: unknown; originalCurrencyRate?: unknown }>;
+    const editedLines = (items as Array<{ sellingPrice: unknown; originalCurrencyRate?: unknown }>).map((item) => ({ rate: item.sellingPrice, originalCurrencyRate: item.originalCurrencyRate }));
     if (
       editedLines.some(
         (line) =>
