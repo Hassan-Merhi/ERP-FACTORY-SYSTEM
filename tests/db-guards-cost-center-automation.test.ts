@@ -47,7 +47,11 @@ async function voucherRule(client: PoolClient, company: Row, centre: Row, accoun
   });
 }
 
-async function splitsOf(client: PoolClient, column: string, sourceId: unknown) {
+async function splitsOf(
+  client: PoolClient,
+  column: "voucher_entry_id" | "factory_daybook_entry_id",
+  sourceId: unknown
+) {
   const { rows } = await client.query(
     `SELECT cost_center_id, amount_native::numeric AS native, amount_base::numeric AS base,
             allocation_origin, auto_rule_id, historical_rate::numeric AS rate
