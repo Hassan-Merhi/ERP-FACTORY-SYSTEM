@@ -18,6 +18,8 @@ import {
   locations,
 } from "@shared/schema";
 import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { getPosTransferScope, posTransferVisibleItems } from "../../services/pos/posDaybookTransferAccess";
 
 function sendTransferNotFound(res: Response) {
   return res.status(404).json({ message: "Transfer not found" });
@@ -30,8 +32,12 @@ export function registerPosTransferDetailRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const voucherId = req.query.voucherId ? parseInt(req.query.voucherId as string) : null;
-      if (!voucherId) return res.status(400).json({ message: "voucherId required" });
+      const rawId = req.query.voucherId;
+      const voucherId =
+        typeof rawId === "string" && /^[1-9]\d*$/.test(rawId) ? Number(rawId) : null;
+      if (!voucherId || !Number.isSafeInteger(voucherId)) {
+        return res.status(400).json({ message: "Valid voucherId required" });
+      }
 
       const [transferRow] = await db
         .select({
@@ -48,14 +54,15 @@ export function registerPosTransferDetailRoutes(app: Express) {
         })
         .from(stockTransferVouchers)
         .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-        .where(and(eq(stockTransferVouchers.voucherId, voucherId), eq(vouchers.companyId, companyId)))
+        .where(and(eq(stockTransferVouchers.voucherId, voucherId), eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt)))
         .limit(1);
       if (!transferRow) return sendTransferNotFound(res);
 
-      const isPosUser = req.user?.role === "POS";
-      const requestedPosLocationId = isPosUser
-        ? (req.user?.assignedLocationId ?? req.session?.currentLocationId ?? null)
-        : null;
+      const access = await getActiveCompanyPermissionContext(req);
+      const isPosUser = access.role === "POS";
+      const posScope = isPosUser ? await getPosTransferScope(access, voucherId) : null;
+      if (isPosUser && !posScope) return sendTransferNotFound(res);
+      const requestedPosLocationId = posScope?.displayLocationId ?? null;
 
       const requiredLocationIds = new Set<number>([transferRow.destinationLocationId]);
       if (transferRow.sourceLocationId) requiredLocationIds.add(transferRow.sourceLocationId);
@@ -115,16 +122,8 @@ export function registerPosTransferDetailRoutes(app: Express) {
       //   - Items with item-level sourceLocationId matching their location
       //   - Items with no item-level sourceLocationId AND voucher-level source matches (true single-source)
       const posLocationId = requestedPosLocationId;
-      const isDestinationUser = posLocationId !== null && posLocationId === transferRow.destinationLocationId;
-      const transferItems = posLocationId
-        ? isDestinationUser
-          ? itemRows
-          : itemRows.filter(
-              (item) =>
-                item.sourceLocationId === posLocationId ||
-                (item.sourceLocationId === null && posLocationId === transferRow.sourceLocationId)
-            )
-        : itemRows;
+      const isDestinationUser = posScope?.isDestination ?? false;
+      const transferItems = posScope ? posTransferVisibleItems(itemRows, posScope) : itemRows;
 
       const revisionRows = await db
         .select()
@@ -133,9 +132,9 @@ export function registerPosTransferDetailRoutes(app: Express) {
         .orderBy(asc(stockTransferRevisions.revisionNumber));
 
       // POS users only see their own revisions; non-POS users (admins) see all
-      const visibleRevisionRows = isPosUser
-        ? revisionRows.filter((revision) => revision.createdBy === req.user?.id)
-        : revisionRows;
+      // POS Daybook is a read-only stock view. Revision histories can reveal
+      // unassigned sources and financial changes, so keep them for ERP roles.
+      const visibleRevisionRows = isPosUser ? [] : revisionRows;
 
       const revisions = await Promise.all(
         visibleRevisionRows.map(async (revision) => {
@@ -200,7 +199,16 @@ export function registerPosTransferDetailRoutes(app: Express) {
         destinationLocationId: transferRow.destinationLocationId,
         destinationLocationName: locationMap.get(transferRow.destinationLocationId) ?? "Unknown",
         notes: transferRow.notes,
-        items: transferItems,
+        items: isPosUser
+          ? transferItems.map((item) => ({
+              id: item.id,
+              stockItemId: item.stockItemId,
+              stockItemName: item.stockItemName,
+              sourceLocationId: item.sourceLocationId,
+              sourceLocationName: item.sourceLocationName,
+              quantity: item.quantity,
+            }))
+          : transferItems,
         revisions,
       });
     } catch (error: unknown) {
