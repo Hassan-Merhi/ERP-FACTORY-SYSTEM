@@ -15,6 +15,7 @@ import { eq, and, desc, inArray, isNull, gte, lte } from "drizzle-orm";
 import { registerFinancialSalesRoutes } from "../financialSalesRoutes";
 import { moneyString, sumMoney } from "../../lib/money";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
 import {
   getPosDaybookLocations,
   getPosTransferScope,
@@ -179,16 +180,16 @@ export function registerStockTransferReadRoutes(app: Express) {
 
       const access = await getActiveCompanyPermissionContext(req);
       const transfer = await storage.getStockTransferByVoucherId(voucherId);
-      if (!transfer) return res.status(404).json({ message: "Transfer not found" });
+      if (!transfer) return res.status(404).json({ message: posDaybookTransferText.notFound });
       const [voucher] = await db
         .select({ id: vouchers.id })
         .from(vouchers)
         .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, access.companyId), isNull(vouchers.deletedAt)))
         .limit(1);
-      if (!voucher) return res.status(404).json({ message: "Transfer not found" });
+      if (!voucher) return res.status(404).json({ message: posDaybookTransferText.notFound });
       if (access.role !== "POS") return res.json(transfer);
       const scope = await getPosTransferScope(access, voucherId);
-      if (!scope) return res.status(404).json({ message: "Transfer not found" });
+      if (!scope) return res.status(404).json({ message: posDaybookTransferText.notFound });
       return res.json({
         id: transfer.id,
         voucherId: transfer.voucherId,
