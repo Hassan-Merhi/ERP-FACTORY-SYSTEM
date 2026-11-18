@@ -19,6 +19,17 @@ const localMode = createLocalMode({
       pendingConnect = null;
     }
     if (event.event === 'status') updateTitle();
+    if (event.event === 'decision' && !event.ok && mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Held entry',
+        message: 'The cloud refused that decision.',
+        detail:
+          event.code === 'OFFLINE_BROWSER_OVERRIDE_NOT_ALLOWED'
+            ? 'Only an Admin or Developer can approve a held entry. Connect this PC as one, then try again.'
+            : String(event.code || 'Try again when the internet is up.'),
+      });
+    }
   },
 });
 
@@ -26,10 +37,40 @@ function updateTitle() {
   if (!mainWindow) return;
   const status = localMode.status();
   const onLocal = localMode.isLocalUrl(mainWindow.webContents.getURL());
-  if (!onLocal && !status?.freshness?.warn) return mainWindow.setTitle(APP_NAME);
+  const waiting = (status?.outbox || []).filter((o) => ['capturing', 'pending', 'waiting'].includes(o.status));
+  const held = (status?.conflicts || []).length;
+  if (!onLocal && !status?.freshness?.warn && !waiting.length && !held) return mainWindow.setTitle(APP_NAME);
   const hours = status?.freshness?.hours;
   const age = hours == null ? 'never synced' : `last sync ${Math.floor(hours)}h ago`;
-  mainWindow.setTitle(`${APP_NAME} — ${onLocal ? 'offline copy (read-only), ' : ''}${age}`);
+  const queue = [
+    waiting.length ? `${waiting.reduce((n, o) => n + o.count, 0)} entries to send` : '',
+    held ? `${held} held for review` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const mode = onLocal ? (localMode.entries ? 'offline copy, ' : 'offline copy (read-only), ') : '';
+  mainWindow.setTitle(`${APP_NAME} — ${mode}${age}${queue ? `, ${queue}` : ''}`);
+}
+
+async function reviewHeldEntries() {
+  const held = (localMode.status() && localMode.status().conflicts) || [];
+  if (!held.length) {
+    return dialog.showMessageBox(mainWindow, { type: 'info', title: 'Held entries', message: 'No entries are held.' });
+  }
+  for (const entry of held) {
+    const buttons = entry.overridable ? ['Approve (Admin/Developer)', 'Discard', 'Later'] : ['Discard', 'Later'];
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      title: 'Held entry',
+      message: `${entry.kind} from ${new Date(entry.capturedAt).toLocaleString()}`,
+      detail: `The cloud did not apply it: ${entry.code}. Approving applies it anyway (for stock, the quantity goes negative). Discarding drops it; the cloud is not changed.`,
+      buttons,
+      cancelId: buttons.length - 1,
+    });
+    const choice = buttons[response];
+    if (choice.startsWith('Approve')) localMode.decide(entry.operationId, 'approve');
+    else if (choice === 'Discard') localMode.decide(entry.operationId, 'discard');
+  }
 }
 
 function openConnectWindow() {
@@ -211,6 +252,7 @@ function buildMenu() {
             submenu: [
               { label: 'Connect this PC…', click: openConnectWindow },
               { label: 'Sync now', click: () => localMode.syncNow() },
+              { label: 'Held entries…', click: reviewHeldEntries },
               {
                 label: 'Open offline copy (read-only)',
                 click: () => mainWindow && localMode.ready() && mainWindow.loadURL(localMode.localUrl),

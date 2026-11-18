@@ -10,6 +10,7 @@
 // Commands arrive as JSON lines on stdin:
 //   {"cmd":"login","username":"...","password":"..."}   sign in and remember on this PC
 //   {"cmd":"sync"}                                      sync now
+//   {"cmd":"approve"|"discard","operationId":"..."}     decide a held entry (approve: Admin/Developer only)
 //   {"cmd":"stop"}
 // Events leave as JSON lines on stdout: status, cookie, login, error. The
 // password never appears in an event or a log line.
@@ -21,7 +22,8 @@ import pg from "pg";
 import { loadPcSyncPolicy } from "../../../server/offline/pcSync/tablePolicy.mjs";
 import { createCloudClient } from "./cloudClient.mjs";
 import { prepareLocalDatabase, readLocalState } from "./localStore.mjs";
-import { bindCloudAccount, pcSyncFreshness, rememberLocalLogin, syncOnce } from "./syncAgent.mjs";
+import { bindCloudAccount, pcSyncFreshness, rememberLocalLogin } from "./syncAgent.mjs";
+import { outboxSummary, resolveConflict, syncCycle } from "./outbox.mjs";
 
 const send = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
 
@@ -68,6 +70,19 @@ async function main() {
       copyComplete: state.copy_complete,
       lastSyncAt: state.last_sync_at,
       freshness: pcSyncFreshness(state.last_sync_at),
+      outbox: await outboxSummary(local),
+      conflicts: (
+        await local.query(
+          `SELECT operation_id, kind, code, overridable, captured_at FROM pc_local.outbox
+            WHERE status = 'conflict' ORDER BY id LIMIT 20`
+        )
+      ).rows.map((r) => ({
+        operationId: r.operation_id,
+        kind: r.kind,
+        code: r.code,
+        overridable: r.overridable,
+        capturedAt: r.captured_at,
+      })),
       ...extra,
     });
   }
@@ -75,11 +90,11 @@ async function main() {
   async function syncNow() {
     if (!cloud.cookie()) return status({ needsLogin: true });
     try {
-      const report = await syncOnce(local, cloud);
+      const report = await syncCycle(local, cloud);
       await status({ report });
     } catch (error) {
       const code = error?.code || "PC_AGENT_SYNC_FAILED";
-      const needsLogin = error?.detail?.status === 401;
+      const needsLogin = error?.detail?.status === 401 || code === "PC_SYNC_LOGIN_EXPIRED";
       send({ event: "error", code, needsLogin });
       await status({ needsLogin });
     }
@@ -108,6 +123,17 @@ async function main() {
     }
     if (command?.cmd === "login") serial(() => login(command.username, command.password));
     else if (command?.cmd === "sync") serial(syncNow);
+    else if ((command?.cmd === "approve" || command?.cmd === "discard") && typeof command.operationId === "string") {
+      serial(async () => {
+        try {
+          await resolveConflict(local, cloud, command.operationId, command.cmd);
+          send({ event: "decision", ok: true, operationId: command.operationId });
+        } catch (error) {
+          send({ event: "decision", ok: false, operationId: command.operationId, code: error?.code });
+        }
+        await status();
+      });
+    }
     else if (command?.cmd === "stop") serial(async () => process.exit(0));
     else send({ event: "error", code: "PC_AGENT_COMMAND_INVALID" });
   });
