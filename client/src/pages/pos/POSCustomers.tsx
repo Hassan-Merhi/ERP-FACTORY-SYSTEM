@@ -18,6 +18,8 @@ import { POSCustomersSection } from "./POSCustomersSection";
 export default function POSCustomers() {
   const {
     customers,
+    canCreateCustomer,
+    isPosCashier,
     refetch,
     isError,
     closingBalance,
@@ -53,12 +55,14 @@ export default function POSCustomers() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Customers" subtitle="Manage customer accounts" />
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" data-testid="button-create-customer">
-              <Plus className="mr-2 h-4 w-4" />
-              New Customer
-            </Button>
-          </DialogTrigger>
+          {canCreateCustomer && (
+            <DialogTrigger asChild>
+              <Button size="sm" data-testid="button-create-customer">
+                <Plus className="mr-2 h-4 w-4" />
+                New Customer
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Create New Customer</DialogTitle>
@@ -96,8 +100,9 @@ export default function POSCustomers() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
+                {!isPosCashier && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
                     control={form.control}
                     name="openingBalance"
                     render={({ field }) => (
@@ -138,7 +143,8 @@ export default function POSCustomers() {
                       </FormItem>
                     )}
                   />
-                </div>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     type="button"
