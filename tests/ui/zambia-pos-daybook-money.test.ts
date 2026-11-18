@@ -18,9 +18,12 @@ describe("Zambia POS Daybook historical money display", () => {
   it("uses the saved original native payment, not rounded USD multiplied by a new rate", () => {
     expect(postedPosZmwAmount(sale)).toBe(5000);
     expect(formatPosVoucherAmount(sale, usd)).toContain("5,000.00");
-    expect(formatPosVoucherAmount({ ...sale, nativeZmwTotal: undefined, entries: [
-      { transactionCurrency: "ZMW", transactionDebitAmount: "5000.000000" },
-    ] }, usd)).toContain("5,000.00");
+    const withNativeEntry = {
+      ...sale,
+      nativeZmwTotal: undefined,
+      entries: [{ transactionCurrency: "ZMW", transactionDebitAmount: "5000.000000" }],
+    };
+    expect(formatPosVoucherAmount(withNativeEntry, usd)).toContain("5,000.00");
   });
 
   it("recovers exact unit price and line totals from six-decimal USD sale items", () => {

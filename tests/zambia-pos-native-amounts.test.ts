@@ -12,18 +12,16 @@ describe("Zambia POS exact native Kwacha totals", () => {
       rate
     );
     expect(value).toEqual({ nativeTotal: "5000.00", usdTotal: 188.68 });
-    // The former USD-first path would revalue 188.68 at 26.5 and display
-    // K5,000.02 instead of the cashier's original K5,000.00.
+    // USD-first revaluation would display K5,000.02 instead of K5,000.
     expect(value.usdTotal * Number(rate)).not.toBe(5000);
   });
 
   it("sums native ngwee with half-up rounding per line, including fractional quantities", () => {
-    expect(
-      calculateZmwSaleAmounts([
-        { quantity: "1.5", originalCurrencyRate: "10.01" },
-        { quantity: "2", originalCurrencyRate: "12.25" },
-      ], rate)
-    ).toEqual({ nativeTotal: "39.52", usdTotal: 1.49 });
+    const lines = [
+      { quantity: "1.5", originalCurrencyRate: "10.01" },
+      { quantity: "2", originalCurrencyRate: "12.25" },
+    ];
+    expect(calculateZmwSaleAmounts(lines, rate)).toEqual({ nativeTotal: "39.52", usdTotal: 1.49 });
   });
 
   it("can reconstruct a prior six-decimal USD unit price at the saved voucher rate", () => {
@@ -34,15 +32,12 @@ describe("Zambia POS exact native Kwacha totals", () => {
   });
 
   it("rejects invalid native unit precision and quantity, rather than silently truncating", () => {
-    expect(() => calculateZmwSaleAmounts([{ quantity: "1", originalCurrencyRate: "10.001" }], rate)).toThrow(
-      "at most two decimals"
-    );
-    expect(() => calculateZmwSaleAmounts([{ quantity: "0", originalCurrencyRate: "10.00" }], rate)).toThrow(
-      "Sale quantities must be positive"
-    );
-    expect(() => calculateZmwSaleAmounts([{ quantity: "1", originalCurrencyRate: "10.00" }], "0")).toThrow(
-      "positive USD/ZMW rate"
-    );
+    const wrongPrecision = () => calculateZmwSaleAmounts([{ quantity: "1", originalCurrencyRate: "10.001" }], rate);
+    const missingQuantity = () => calculateZmwSaleAmounts([{ quantity: "0", originalCurrencyRate: "10.00" }], rate);
+    const invalidRate = () => calculateZmwSaleAmounts([{ quantity: "1", originalCurrencyRate: "10.00" }], "0");
+    expect(wrongPrecision).toThrow("at most two decimals");
+    expect(missingQuantity).toThrow("Sale quantities must be positive");
+    expect(invalidRate).toThrow("positive USD/ZMW rate");
   });
 
   it("posts exact K5,000 on both payment and revenue entries without drifting on USD conversion", () => {
