@@ -405,7 +405,7 @@ export function registerStockTransferImportRoutes(app: Express) {
   });
 
   // Download sample Stock Transfer import template
-  app.get("/api/stock-transfer-import/template", async (_req, res) => {
+  app.get("/api/stock-transfer-import/template", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         {
@@ -437,7 +437,7 @@ export function registerStockTransferImportRoutes(app: Express) {
   });
 
   // Multi-source Stock Transfer Import - Template
-  app.get("/api/stock-transfer-import/template-multi-source", async (_req, res) => {
+  app.get("/api/stock-transfer-import/template-multi-source", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         {

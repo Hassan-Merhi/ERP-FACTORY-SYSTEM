@@ -82,7 +82,7 @@ One line per registration, in registration order:
 | `guards` | The registered handler chain. A changed chain fails the gate until the rule is reviewed. |
 | `auth` | `session`, `public`, `service-token`, `signed-token`, or `inherited` (a prerequisite that always continues to a later, authenticated registration of the same route). |
 | `companyScope` | `active-company`, `pinned-company` (Factory/Properties), `request-resolved` (decided from the URL: ERP container aliases under `/api/factory`, Factory training media), `context-optional` (sign-in, company picker, health), `none` (never reaches the session boundary). |
-| `crossCompany` | Optional reviewed allowances: `authorized-companies`, `reference-read`, `developer-role-administration`, `developer-user-location`, `account-migration-source`. Without one, a company ID in the query, body or URL must equal the bound company. |
+| `crossCompany` | Optional reviewed allowances: `authorized-companies`, `developer-role-administration`, `developer-user-location`, `account-migration-source`. Without one, a company ID in the query, body or URL must equal the bound company. |
 | `roles` | `"any"`, or `session` and/or `company` rules. `session` is enforced by the route's own `requireRole`/`requireNonPOS` guards against the session role; the gate proves the declaration equals the chain. `company` is enforced by the boundary against the caller's database role in the bound company. |
 | `permission` | `"none"`, or permission keys from `shared/permissionConfig.ts`. `{ "key": …, "bypassRoles": [...] }` lets the listed roles pass that one key. |
 | `policies` | Optional named resolvers, listed in evaluation order. |
@@ -223,24 +223,31 @@ direction:
 - **Path-word matches from parameter values** (a parameter whose value is
   `repair`) no longer trigger the maintenance check; the route's own words do.
 
-## Findings recorded during the migration
+## Findings recorded during the migration, and their resolution
 
-Kept as they behaved and listed for the owner to decide:
+Found while deriving the rules and decided by the owner afterwards:
 
-- `POST /api/factory/accounts/:accountId/send-statement-whatsapp` was
-  registered ahead of the Factory page boundary and has no Factory page owner.
-- The fast POS WhatsApp senders (`/api/pos/send-stock-pdf*`,
-  `/api/pos/send-invoice-pdf-backend`, `/api/pos/send-whatsapp-pdf-upload`)
-  were listed for an export permission that was never enforced, because they
-  were registered ahead of the operational middleware.
-- Five import-template downloads and `POST /api/user-presence/leave` have no
-  session guard. They are declared `public`, as they behave.
-- `GET /api/locations` and `GET /api/ledger-accounts` declare the
-  `reference-read` allowance, and the boundary honours it, but the route's own
-  `requireAuth` explicit-company check still refuses an Admin reading another
-  member company. That was already the case before this change.
+- **Fast POS WhatsApp senders** (`/api/pos/send-stock-pdf*`,
+  `/api/pos/send-invoice-pdf-backend`, `/api/pos/send-invoice-whatsapp`,
+  `/api/pos/send-whatsapp-pdf-upload`) were listed for an export permission
+  that was never enforced, because they were registered ahead of the
+  operational middleware. **Now enforced:** `exp_stock_report`, `exp_pdf` and
+  `exp_whatsapp_send` respectively.
+- **`POST /api/factory/accounts/:accountId/send-statement-whatsapp`** had no
+  Factory page policy. **Now** declares `factory-company-pin` and
+  `factory-page-access`, owned by the Factory Accounts page like every other
+  `/api/factory/accounts/...` route.
+- **Five import-template downloads** were public. **Now** require sign-in
+  (`requireAuth`); the app only downloads them from signed-in pages.
+- **`POST /api/user-presence/leave`** stays `public` by design: it is sent by
+  `sendBeacon` while a tab closes, when the session may already be ending,
+  and it only clears the caller's own presence row by its session id.
+- **Cross-company reference reads** of locations and ledger accounts were
+  declared but never worked, because `requireAuth` refused them. The
+  `reference-read` allowance was **removed**; those reads are bound to the
+  active company like every other route.
 - `/api/git/agent-*/:companyId/...` handlers read `companyId` from the URL
-  without their own check. The boundary now covers them; the handlers should
+  without their own check. The boundary covers them; the handlers should
   also resolve the company from the session.
 
 Earlier phase documents (`permissions-control-center-phase1.md`,
@@ -250,10 +257,9 @@ written and still name the files this layer replaced.
 
 ## Current numbers
 
-2459 rules, none delegated (2,425 at cutover; the rest are routes added on
-`main` since). 1631 declare a permission key, 763 a session-role rule, 165 a
-company-role rule, 1361 at least one policy and 25 a cross-company allowance.
-`npm run verify:route-access-coverage` reports the live figures.
+2,459 rules, none delegated. 1,631 declare a permission key, 763 a session-role
+rule, 165 a company-role rule, 1,362 at least one policy and 22 a cross-company
+allowance. `npm run verify:route-access-coverage` reports the live figures.
 
 ## Tests
 

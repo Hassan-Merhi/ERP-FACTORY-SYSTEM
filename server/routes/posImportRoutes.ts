@@ -225,17 +225,20 @@ export function registerPosImportRoutes(app: Express) {
       // Non-USD sales must carry native-currency amounts and a locked rate
       // on both voucher entries. Previously this covered only ZMW; CFA POS
       // imports therefore failed centrally for every location.
-      const nativeRate = lockedPosCurrency.currency === "USD"
-        ? null
-        : validateHistoricalRate(
-            lockedPosCurrency.exchangeRate,
-            `${lockedPosCurrency.currency} POS import exchange rate`
-          );
+      const nativeRate =
+        lockedPosCurrency.currency === "USD"
+          ? null
+          : validateHistoricalRate(
+              lockedPosCurrency.exchangeRate,
+              `${lockedPosCurrency.currency} POS import exchange rate`
+            );
       const nativeTransaction = (total: string) =>
         nativeRate
           ? {
               currency: lockedPosCurrency.currency,
-              amount: toInventoryDecimal(total).mul(nativeRate.toFixed()).toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
+              amount: toInventoryDecimal(total)
+                .mul(nativeRate.toFixed())
+                .toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
               rate: nativeRate.toFixed(),
             }
           : null;
@@ -489,7 +492,7 @@ export function registerPosImportRoutes(app: Express) {
     }
   });
 
-  app.get("/api/pos-import/template", async (_req, res) => {
+  app.get("/api/pos-import/template", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         { Barcode: "BC001", Quantity: 5, Rate: 25.0 },

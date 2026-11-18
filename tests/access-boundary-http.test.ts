@@ -140,24 +140,14 @@ describe("company isolation", () => {
     expect(malformed.body.code).toBe("COMPANY_ID_INVALID");
   });
 
-  it("bounds the declared cross-company reference read by role and membership", async () => {
+  it("refuses another company's reference data even to a privileged member", async () => {
     await actAs("Admin");
-    // A company the Admin is not a member of is refused by the boundary.
-    const foreign = await agent.get("/api/locations").query({ companyId: foreignCompanyId });
-    expect(foreign.status).toBe(403);
-    expect(foreign.body.code).toBe("COMPANY_ACCESS_DENIED");
-
-    // A member company passes the boundary's reference-read allowance. The
-    // route's own requireAuth then applies its explicit-company check, as it
-    // always has; the boundary must not be what refuses it.
-    const member = await agent.get("/api/locations").query({ companyId: memberCompanyId });
-    expect(member.body.code).not.toBe("COMPANY_ACCESS_DENIED");
-    expect(member.body.code).not.toBe("CROSS_COMPANY_REFERENCE_FORBIDDEN");
-
-    await actAs("Manager");
-    const manager = await agent.get("/api/locations").query({ companyId: memberCompanyId });
-    expect(manager.status).toBe(403);
-    expect(manager.body.code).toBe("CROSS_COMPANY_REFERENCE_FORBIDDEN");
+    for (const companyId of [memberCompanyId, foreignCompanyId]) {
+      const response = await agent.get("/api/locations").query({ companyId });
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
+    }
+    expect((await agent.get("/api/locations").query({ companyId: ctx.companyId })).status).toBe(200);
   });
 
   it("refuses a foreign company in a :companyId URL parameter", async () => {
@@ -224,6 +214,17 @@ describe("module and operational permissions", () => {
     await setFeature("Normal User", "mod_inventory", true);
     expect((await agent.get("/api/stock-items")).status).not.toBe(403);
     await setFeature("Normal User", "mod_inventory", null);
+  });
+
+  it("requires the export permission on the fast POS WhatsApp senders", async () => {
+    await actAs("Manager");
+    await setFeature("Manager", "exp_pdf", false);
+    const refused = await agent.post("/api/pos/send-invoice-pdf-backend").send({});
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ key: "exp_pdf", permType: "export" });
+    await setFeature("Manager", "exp_pdf", null);
+    const allowed = await agent.post("/api/pos/send-invoice-pdf-backend").send({});
+    expect(allowed.body.key).not.toBe("exp_pdf");
   });
 
   it("refuses imports to POS and View Only but keeps the POS sales-import exception", async () => {
