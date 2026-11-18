@@ -105,6 +105,10 @@ export function usePOSDaybookStatePart1() {
           const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer"].includes(voucher.voucherType);
           if (!isSupportedType || voucher.optional) return false;
           if (!isPOS) return true;
+          // The server already validates each transfer's source/destination
+          // stock legs and selects an assigned display location. Do not hide
+          // receiving transfers merely because their voucher header is elsewhere.
+          if (voucher.voucherType !== "Sales") return true;
           return assignedLocationIds.has(voucher.locationId);
         })
         .sort((a, b) => {
