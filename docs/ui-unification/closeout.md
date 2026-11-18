@@ -30,11 +30,11 @@ which that status appears at all.
 
 | Status | Rows (first status) | Rows mentioning it |
 |---|---|---|
-| Done (earlier phases) | 53 | 53 |
+| Done (earlier phases) | 54 | 54 |
 | Fixed now | 10 | 11 |
-| Kept | 20 | 22 |
+| Kept | 21 | 23 |
 | Open | 7 | 14 |
-| Owner | 4 | 6 |
+| Owner | 2 | 3 |
 
 ## Findings
 
@@ -45,7 +45,7 @@ which that status appears at all.
 | 1 | 4 | Eight export implementations, labels, file names | 4 | Done | Phase 4 migration (`ReportExportMenu`, `exportFileName`, `downloadFromUrl`); the supplier-profit-check `xlsx-js-style` import is frozen by the phase 10 ratchet |
 | 1 | 5 | ~20 ERP report pages with no export (Analytics hub, Transaction Journal, ledgers, comparisons, Optional Vouchers, Customers, 10 `/accounting/*` pages) | 4 | Fixed now (Ledger Vouchers) / Open | Ledger Vouchers gained Excel. The rest are open: the 10 `/accounting/*` workpapers, Analytics and the two comparison pages each render several nested evidence tables whose "rows shown" need per-page design; Customers and Stock-in-Sales comparison are paged. See "Exports not added" |
 | 1 | 11 | `window.confirm` in Cost Centers / automation rules | 2 | Done | Phase 2 (all native confirms → `confirmAction`); ratchet count 0 |
-| 2 | 5 | Nine export implementations; `window.print()` labelled "Export PDF" | 4 | Done / Owner | Migrated in phase 4. Container detail "Export PDF" item relies on `lib/containerExportEnhancements` overriding `window.print` (owner decision 10 labelled it; whether to stop overriding print is the open follow-up) |
+| 2 | 5 | Nine export implementations; `window.print()` labelled "Export PDF" | 4 | Done | Migrated in phase 4. Container detail "Export PDF" item relies on `lib/containerExportEnhancements` overriding `window.print`; owner decision 10 keeps it labelled "Export PDF" |
 | 2 | 6 | Export file names follow no convention | 4 | Done | `exportFileName` everywhere (phase 4) |
 | 2 | 7 | ~20 stock/list pages with no export | 4 | Fixed now (16) / Open (5) | Added: Stock Transfers, Opening/Closing Stock Summary and Detail, Stock Item Monthly Summary, Stock Item Vouchers, Location Monthly Summary, Location Vouchers, Stock Item Detail, Offload Item Search, Offload Detail, Bale Ledger, Deleted Items, Company Transfer history, Suppliers list. Open: Stock Query (server-paged), Orphaned Records, Import Cycle Diagnostics, Inventory Repair, POS Item Replacement (repair-tool working sets, not reports) |
 | 2 | 14 | "Add" button that opens PO import (ContainerToolbar) | 2 | Open | Wording belongs to phase 6; the button's destination is the intended create path for containers (create = import a PO), so it is not broken |
@@ -83,7 +83,7 @@ which that status appears at all.
 | 5 | 3 | V5 allocation export uses `xlsx-js-style` | 4 | Open | Follow-up in plan (styling parity); frozen by ratchet |
 | 5 | 4 | File naming | 4 | Done | Phase 4 |
 | 5 | 5 | Export/print labels per document | 4 | Done | Phase 4 |
-| 5 | 6 | PDF/print three ways; ProformaCard offline falls back to print dialog | 4 | Owner | ProformaCard offline fallback is a plan follow-up awaiting a decision |
+| 5 | 6 | PDF/print three ways; ProformaCard offline falls back to print dialog | 4 | Done | Owner decision 11: ProformaCard and the customer statement show "PDF needs a connection" when offline instead of the print dialog (phase 6) |
 | 5 | 7 | Lists with no export (Invoices, Containers, Shipping, Tracking, Pending Loadings, sale returns, Transporters) | 4 | Open | Not in this close-out's named scope (report 2 and 4 pages); Invoices list is server-filtered per order with per-row server exports — needs a list endpoint export |
 | 5 | 14 | `window.confirm` in dispatch finance | 2 | Done | Phase 2 |
 | 5 | D | `FactoryPendingInvoices.tsx` unrouted | 3 | Kept | Preloaded by `offlinePrep` and rendered by three wave-4 test suites |
@@ -130,7 +130,7 @@ which that status appears at all.
 | 9 | D | `operations-screen`, `financial-screen` | 3 | Kept | Pinned by `scripts/verify-program7d-accessibility-responsive.mjs` |
 | 9 | D | `date-picker-input` | 3 | Done | Removed earlier |
 | 9 | D | `workflow-dialog`, `ui/pagination` | 3 | Kept | Pinned by tests/scripts listed in phase 3 |
-| 9 | D | `lib/containerExportEnhancements.ts` | 3 | Owner | Plan follow-up: decide label vs stop overriding print |
+| 9 | D | `lib/containerExportEnhancements.ts` | 3 | Kept | Owner decision 10: the container detail item that saves a PDF is labelled "Export PDF"; the module stays |
 | 9 | D | `useDebouncedValue` duplicate | 3 | Kept | Two live importers (paginated Daybook and GIT lists) |
 | 9 | D | V2/V3 allocation | 3 | Done | Phase 9a |
 | 9 | D | Retail dead pages | 3 | Done | Phase 3 |
@@ -193,7 +193,5 @@ tables; their PDFs are server documents.
 
 | Item | Question |
 |---|---|
-| `lib/containerExportEnhancements.ts` (2/5, 9/D) | Keep overriding `window.print` on `/containers/:id` (item labelled "Export PDF"), or stop overriding print? |
-| ProformaCard / customer statement offline PDF (5/6) | Offline "Export PDF" still falls back to the print dialog on these two |
 | `POSDashboard`, `POSSettings` vs `MySettings` (7/D) | Retire the orphan POS dashboard and the duplicate password page? |
 | `PropertiesDashboard` compatibility route (8/D) | Retire the hidden legacy Properties dashboard? |
