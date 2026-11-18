@@ -175,7 +175,12 @@ export default function Settings() {
       items:
         appMode === "factory"
           ? [
-              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer, devOnly: true },
+              {
+                key: "automatic-priority-printing",
+                label: "Automatic Priority Printing",
+                icon: Printer,
+                devOnly: true,
+              },
               {
                 key: "label-banner-images",
                 label: "Label Banner Images",
@@ -309,9 +314,7 @@ export default function Settings() {
               <FloatingWidgetsSettingsCard testIdPrefix="settings-" />
             </div>
           )}
-          {activeSection === "users-permissions" && (
-            <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />
-          )}
+          {activeSection === "users-permissions" && <UsersPermissionsHub userRole={effectiveRole} appMode={appMode} />}
           {activeSection === "sessions-hub" && isDeveloperMode && (
             <SessionsHub isAdmin={true} isDev={isDeveloperMode} />
           )}
@@ -322,9 +325,7 @@ export default function Settings() {
           {activeSection === "scheduled-whatsapp-messages" && isDeveloperMode && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && isDeveloperMode && <DataToolsTab />}
-          {activeSection === "pos-setup" && isDeveloperMode && (
-            <PosSetupHub userRole={effectiveRole} />
-          )}
+          {activeSection === "pos-setup" && isDeveloperMode && <PosSetupHub userRole={effectiveRole} />}
           {activeSection === "automatic-priority-printing" && isDeveloperMode && appMode === "factory" && (
             <div className="space-y-5 max-w-3xl">
               <AutomaticPriorityPrintingCard />
@@ -335,11 +336,14 @@ export default function Settings() {
               <FxRatesCard />
             </div>
           )}
-          {activeSection === "company-timezone" && isDeveloperMode && appMode === "factory" && canManageCompanyTimezone && (
-            <div className="space-y-5 max-w-2xl">
-              <CompanyTimezoneCard />
-            </div>
-          )}
+          {activeSection === "company-timezone" &&
+            isDeveloperMode &&
+            appMode === "factory" &&
+            canManageCompanyTimezone && (
+              <div className="space-y-5 max-w-2xl">
+                <CompanyTimezoneCard />
+              </div>
+            )}
           {activeSection === "files-export" && <FileStorageAndExport />}
           {activeSection === "export-center" && <ExportCenter />}
           {activeSection === "excel-appearance" && isDeveloperMode && (
