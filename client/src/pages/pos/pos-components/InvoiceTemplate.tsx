@@ -57,12 +57,12 @@ export function InvoiceTemplate({
   const displaySaleMoney = (usd: number) =>
     hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
   const nativeUnitPrice = (item: InvoiceSaleItem) =>
-    resolveZmwUnitPrice({ ...item, rate: item.rateUSD ?? item.rate }, lockedRate, true);
+    resolveZmwUnitPrice({ quantity: item.quantity ?? 0, originalCurrencyRate: item.originalCurrencyRate, rate: item.rateUSD ?? item.rate }, lockedRate, true);
   const nativeLineAmount = (item: InvoiceSaleItem) =>
     nativeUnitPrice(item).times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   const nativeInvoiceTotal = hasLockedZmw && (savedSale?.items?.length ?? 0) > 0
     ? savedSale?.nativeZmwTotal ?? calculateZmwSaleAmounts(
-        (savedSale?.items ?? []).map((item) => ({ ...item, rate: item.rateUSD ?? item.rate })),
+        (savedSale?.items ?? []).map((item) => ({ quantity: item.quantity ?? 0, originalCurrencyRate: item.originalCurrencyRate, rate: item.rateUSD ?? item.rate })),
         lockedRate,
         true
       ).nativeTotal
