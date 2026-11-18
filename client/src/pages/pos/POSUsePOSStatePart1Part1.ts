@@ -353,12 +353,14 @@ export function usePOSStatePart1Part2({
 >) {
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  // Auto-select first POS location
+  // On edit, wait for the receipt's assigned location instead of defaulting
+  // to the cashier's first shop (which could be a different shop).
   useEffect(() => {
+    if (editVoucherId) return;
     if (posUser && posAssignedLocations.length > 0 && !posSelectedLocation) {
       setPosSelectedLocation(posAssignedLocations[0]);
     }
-  }, [posUser, posAssignedLocations, posSelectedLocation, setPosSelectedLocation]);
+  }, [editVoucherId, posUser, posAssignedLocations, posSelectedLocation, setPosSelectedLocation]);
 
   // Set default cash account for POS users from location mapping — applies to
   // Supplier Partner companies too, same as normal ERP POS.
