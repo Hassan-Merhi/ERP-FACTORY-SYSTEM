@@ -174,6 +174,11 @@ describe("full POS receipt edit protections", () => {
     });
     expect(save("CFA", [{ ...line, rate: 40000, rateUSD: 40000 / 605, amount: 80000 }])).toEqual(expected);
     expect(save("USD", [{ ...line, rate: 66.12, rateUSD: 40000 / 605, amount: 132.24 }])).toEqual(expected);
+    // A price sold with decimals is not rounded to a whole franc when saved from the USD view.
+    expect(save("USD", [{ ...line, rate: 66.12, rateUSD: 40000.5 / 605, amount: 132.24 }]).items[0]).toMatchObject({
+      originalCurrencyRate: "40000.50",
+      rate: "66.116529",
+    });
   });
 
   it("sends the typed CFA price with a new CFA sale so it can post exactly", () => {

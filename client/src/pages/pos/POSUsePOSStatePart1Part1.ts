@@ -199,7 +199,7 @@ export function usePOSStatePart1Part1(props: { posUser?: AuthMe; editVoucherId?:
             ? editVoucherId
               ? Number(newUsd.toFixed(2))
               : newUsd
-            : next.currency === "CFA"
+            : next.currency === "CFA" && !editVoucherId
               ? Math.round(newUsd * next.rate!)
               : Number((newUsd * next.rate!).toFixed(2));
         return { ...row, rateUSD: newUsd, rate: displayRate, amount: Number((row.quantity * displayRate).toFixed(2)) };

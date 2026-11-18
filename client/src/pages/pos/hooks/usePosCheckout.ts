@@ -159,9 +159,7 @@ export function usePosCheckout({
     const editedLocal = editVoucherId && (editVoucher?.currency === "ZMW" || editVoucher?.currency === "CFA");
     const saleCurrency = editedLocal ? (editVoucher!.currency as "ZMW" | "CFA") : activeCurrency;
     const salePrice = (row: SaleRow) =>
-      saleCurrency === activeCurrency
-        ? row.rate
-        : Number((row.rateUSD * (exchangeRate ?? NaN)).toFixed(saleCurrency === "CFA" ? 0 : 2));
+      saleCurrency === activeCurrency ? row.rate : Number((row.rateUSD * (exchangeRate ?? NaN)).toFixed(2));
     if (saleCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
       toast({
         title: "Missing information",

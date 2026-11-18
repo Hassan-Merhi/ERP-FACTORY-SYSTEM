@@ -99,6 +99,17 @@ describe("Mali POS reading a posted sale back in CFA", () => {
     expect(resolvePostedCfaUnitPrices(typed, "605", null)![0].toFixed(0)).toBe("40001");
   });
 
+  it("keeps a CFA price that was sold with decimals exactly as it posted", () => {
+    // 100 x 40,000.50 at 605 is stored as $66.116529 and posted 4,000,050 CFA.
+    const fractional = [{ quantity: 100, sellingPrice: "66.116529" }];
+    expect(resolvePostedCfaUnitPrices(fractional, "605", "4000050.00")![0].toFixed(2)).toBe("40000.50");
+    expect(resolvePostedCfaUnitPrices(fractional, "605", null)![0].toFixed(2)).toBe("40000.50");
+    expect(exactCfaSaleAmounts([{ ...fractional[0], originalCurrencyRate: "40000.50" }], "605")).toEqual({
+      nativeTotal: "4000050.00",
+      usdTotal: 6611.65,
+    });
+  });
+
   it("refuses an unusable rate or price instead of guessing", () => {
     expect(resolvePostedCfaUnitPrices(legacy, "0", null)).toBeNull();
     expect(resolvePostedCfaUnitPrices([{ quantity: 1, sellingPrice: "abc" }], "605", null)).toBeNull();
