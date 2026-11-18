@@ -11,7 +11,6 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { fetchGreenApiChats, getPosWaSettings, normaliseChatId } from "../services/whatsappService";
 import {
   DEFAULT_PROPERTIES_WA_SCHEDULE,
-  ensurePropertiesWaStatementSchema,
   sendPropertiesWaStatement,
 } from "../services/propertiesAccountStatementWhatsApp";
 
@@ -61,7 +60,6 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
     try {
       const account = await scopedAccount(req, res);
       if (!account) return;
-      await ensurePropertiesWaStatementSchema();
       const result = await pool.query(
         "SELECT chat_id, enabled, frequency, send_time, day_of_week, day_of_month, timezone, period_mode " +
           "FROM properties_account_wa_schedules WHERE company_id=$1 AND account_id=$2",
@@ -145,7 +143,6 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
         }
       }
 
-      await ensurePropertiesWaStatementSchema();
       await pool.query(
         `INSERT INTO properties_account_wa_schedules
           (company_id, account_id, chat_id, enabled, frequency, send_time,
@@ -180,7 +177,6 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
     try {
       const account = await scopedAccount(req, res);
       if (!account) return;
-      await ensurePropertiesWaStatementSchema();
       const setting = await pool.query<{ chat_id: string }>(
         "SELECT chat_id FROM properties_account_wa_schedules WHERE company_id=$1 AND account_id=$2",
         [account.companyId, account.accountId]
@@ -225,7 +221,6 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
     try {
       const account = await scopedAccount(req, res);
       if (!account) return;
-      await ensurePropertiesWaStatementSchema();
       const history = await pool.query(
         `SELECT mode, chat_id, statement_from::text AS from_date,
             statement_to::text AS to_date, status, error, created_at, completed_at

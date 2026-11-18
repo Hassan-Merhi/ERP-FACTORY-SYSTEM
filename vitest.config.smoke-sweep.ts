@@ -25,7 +25,7 @@ export default defineConfig({
     environment: "node",
     testTimeout: 300000,
     hookTimeout: 300000,
-    setupFiles: ["./server/schemaPreload.mjs"],
+    setupFiles: ["./tests/supertestXlsxParser.mjs"],
     include: ["tests/api-smoke-sweep.test.ts"],
     pool: "forks",
   },

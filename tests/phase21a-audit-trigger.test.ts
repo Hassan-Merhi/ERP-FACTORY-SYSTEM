@@ -17,8 +17,6 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
-import { ensureVoucherAuditTrigger } from "../server/services/audit/voucherAuditTrigger";
 import { verifyAuditLogChain } from "../server/services/audit/auditLogChain";
 import {
   hashSessionId,
@@ -36,7 +34,18 @@ import {
   runWithDatabaseScopeRuntimeContext,
 } from "../server/services/security/databaseScopeRuntimeContext";
 import { createSchedulerTick } from "../server/services/scheduler/schedulerTickGuard";
+import {
+  AUDIT_LOG_MAINTENANCE_SETTING,
+  AUDIT_LOG_RETENTION_MODE,
+  PRUNABLE_AUDIT_TABLES,
+} from "../server/services/audit/auditLogRetentionPolicy";
+import {
+  AUDIT_ACTOR_SETTINGS as DB_AUDIT_ACTOR_SETTINGS,
+  UNKNOWN_AUDIT_ACTOR as DB_UNKNOWN_AUDIT_ACTOR,
+} from "../server/services/audit/auditActorContext";
+import { AUDIT_CHAIN_GENESIS, AUDIT_TRAIL_TRIGGERS } from "../server/services/audit/voucherAuditTrigger";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { functionDefinition, hasTrigger } from "./helpers/schemaManifest";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "p21aaudit";
@@ -108,8 +117,6 @@ const ACTOR = {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureAuditLogAppendOnlyGuard(pool);
-  await ensureVoucherAuditTrigger(pool);
   agent = request.agent(ctx.app);
   const login = await agent
     .post("/api/auth/login")
@@ -123,6 +130,44 @@ afterAll(async () => {
   await cleanupTestData(PREFIX);
   closeTestServer();
 }, 120_000);
+
+describe("audit trail schema (defined by the schema migrations)", () => {
+  it("has every audit trail trigger", () => {
+    for (const [table, trigger] of AUDIT_TRAIL_TRIGGERS) {
+      expect(hasTrigger(table, trigger), `${table}.${trigger}`).toBe(true);
+    }
+  });
+
+  it("reads the request settings and chain genesis the application uses", () => {
+    const actor = functionDefinition("erp_audit_current_actor");
+    expect(actor).toContain(`current_setting('${DB_AUDIT_ACTOR_SETTINGS.actorId}', true)`);
+    expect(actor).toContain(`'${DB_UNKNOWN_AUDIT_ACTOR}'`);
+    expect(functionDefinition("erp_ledger_row_audit")).toContain(
+      `current_setting('${DB_AUDIT_ACTOR_SETTINGS.actorName}', true)`
+    );
+    const chain = functionDefinition("erp_audit_log_before_insert");
+    for (const name of [
+      DB_AUDIT_ACTOR_SETTINGS.requestId,
+      DB_AUDIT_ACTOR_SETTINGS.ip,
+      DB_AUDIT_ACTOR_SETTINGS.sessionHash,
+      DB_AUDIT_ACTOR_SETTINGS.reason,
+    ]) {
+      expect(chain).toContain(`current_setting('${name}', true)`);
+    }
+    expect(chain).toContain(`'${AUDIT_CHAIN_GENESIS}'`);
+  });
+
+  it("lets the retention job prune only the allow-listed tables", () => {
+    const financial = functionDefinition("erp_audit_log_is_financial");
+    for (const table of PRUNABLE_AUDIT_TABLES) {
+      expect(financial).toContain(`'${table.toLowerCase()}'`);
+    }
+    const appendOnly = functionDefinition("erp_audit_log_append_only");
+    expect(appendOnly).toContain(`current_setting('${AUDIT_LOG_MAINTENANCE_SETTING}', true)`);
+    expect(appendOnly).toContain(`'${AUDIT_LOG_RETENTION_MODE}'`);
+    expect(appendOnly).toContain("AUDIT_LOG_APPEND_ONLY");
+  });
+});
 
 describe("AT2/AT3/AT6: the database audits every voucher and line write", () => {
   it("audits inserts with the actor, the request metadata and the row images; sets created_by", async () => {

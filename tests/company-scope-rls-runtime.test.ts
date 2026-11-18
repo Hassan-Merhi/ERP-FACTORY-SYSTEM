@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
@@ -8,18 +6,6 @@ const databaseUrl = process.env.DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 const roleName = "wave_g_rls_probe_role";
 const probeTable = "wave_g_rls_probe";
-
-async function applyMigration(client: Client) {
-  const sql = await readFile(path.join(process.cwd(), "migrations/0016_company_scope_rls_readiness.sql"), "utf8");
-  await client.query("BEGIN");
-  try {
-    await client.query(sql);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
-}
 
 async function setProbeScope(
   client: Client,
@@ -41,10 +27,8 @@ describeDatabase("company-scope RLS runtime", () => {
     client = new Client({ connectionString: databaseUrl, ssl: resolveDatabaseSsl(databaseUrl) });
     await client.connect();
 
-    // The migration must be safely replayable: startup can execute on every boot.
-    await applyMigration(client);
-    await applyMigration(client);
-
+    // The database is built from migrations/ (company-scope RLS is part of the
+    // baseline); this suite probes the installed functions and policies.
     await client.query(`DROP TABLE IF EXISTS ${probeTable}`);
     await client.query(`DROP OWNED BY ${roleName}`).catch(() => {});
     await client.query(`DROP ROLE IF EXISTS ${roleName}`);
@@ -106,6 +90,7 @@ describeDatabase("company-scope RLS runtime", () => {
       [protectedTables]
     );
 
+    expect(result.rows.map((row) => row.table_name).sort()).toEqual([...protectedTables].sort());
     for (const row of result.rows) {
       expect(row.rls_enabled, `${row.table_name} should have RLS enabled`).toBe(true);
       expect(row.rls_forced, `${row.table_name} should force RLS for its owner`).toBe(true);

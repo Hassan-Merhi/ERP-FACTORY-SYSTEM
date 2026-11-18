@@ -140,7 +140,7 @@ jobs:
           node scripts/verify-runtime-dependencies.mjs
       - name: Seed ONLY disposable example companies and accounts
         run: |
-          node node_modules/drizzle-kit/bin.cjs push --force
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
           node scripts/prepare-phase7-browser-e2e-fixture.mjs
       - name: Run real fake-company transactions and reconcile
         shell: bash

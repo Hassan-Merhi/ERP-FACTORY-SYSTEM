@@ -27,10 +27,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
 import {
   PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT,
   phase9StockTransferEditEnvelope,
@@ -198,10 +197,7 @@ beforeAll(async () => {
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status
   ).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
-  edge.config = LAN;
-  await ensurePhase9StockOutboxSchema(pool);
   edge.config = CLOUD;
-  await ensurePhase9CloudEventSchema(pool);
 }, 120_000);
 
 afterAll(async () => {

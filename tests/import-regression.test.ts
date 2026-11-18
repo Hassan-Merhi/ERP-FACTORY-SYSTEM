@@ -43,23 +43,35 @@ afterAll(async () => {
   closeTestServer();
 }, 30000);
 
-// ── Template downloads (public GET, no auth required) ────────────────────────
+// ── Template downloads (signed-in GET) ───────────────────────────────────────
 
 describe("Import — Template downloads", () => {
+  it("refuses every template download without a session", async () => {
+    for (const path of [
+      "/api/po-import/template",
+      "/api/pos-import/template",
+      "/api/credit-sales-import/template",
+      "/api/stock-transfer-import/template",
+      "/api/stock-transfer-import/template-multi-source",
+    ]) {
+      expect((await request(ctx.app).get(path)).status, path).toBe(401);
+    }
+  });
+
   it("GET /api/po-import/template returns 200 with Excel content-type", async () => {
-    const res = await request(ctx.app).get("/api/po-import/template");
+    const res = await agent.get("/api/po-import/template");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"] ?? "").toMatch(/spreadsheet|excel|octet-stream/i);
   });
 
   it("GET /api/pos-import/template returns 200 with Excel content-type", async () => {
-    const res = await request(ctx.app).get("/api/pos-import/template");
+    const res = await agent.get("/api/pos-import/template");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"] ?? "").toMatch(/spreadsheet|excel|octet-stream/i);
   });
 
   it("GET /api/stock-transfer-import/template returns 200 with Excel content-type", async () => {
-    const res = await request(ctx.app).get("/api/stock-transfer-import/template");
+    const res = await agent.get("/api/stock-transfer-import/template");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"] ?? "").toMatch(/spreadsheet|excel|octet-stream/i);
   });
@@ -400,7 +412,7 @@ describe("Import — XLSX fixture: in-memory creation with ExcelJS", () => {
 
   it("downloaded stock-transfer template returns 200 with Excel content-type (binary, not JSON)", async () => {
     // Use supertest buffer mode to get raw bytes
-    const templateRes = await request(ctx.app)
+    const templateRes = await agent
       .get("/api/stock-transfer-import/template")
       .buffer(true)
       .parse((_res, fn) => {

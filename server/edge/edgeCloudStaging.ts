@@ -12,48 +12,6 @@ export class EdgeStageConflict extends Error {
   }
 }
 
-export async function ensureCloudEdgeStageSchema(pool: Pick<Pool, "query">, enabled: boolean): Promise<void> {
-  if (!enabled) return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_stage_cursor (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL DEFAULT 0 CHECK(last_sequence >= 0)
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_staged_vouchers (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL,
-      local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      operation_kind TEXT NOT NULL CHECK(operation_kind = 'voucher.with-entries.v1'),
-      payload JSONB NOT NULL,
-      payload_sha256 CHAR(64) NOT NULL,
-      staged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY(site_id, sequence),
-      UNIQUE(site_id, operation_id),
-      UNIQUE(site_id, company_id, local_voucher_id)
-    )
-  `);
-  await pool.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_stage_immutable()
-    RETURNS TRIGGER LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'EDGE_STAGED_VOUCHER_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await pool.query(`
-    DROP TRIGGER IF EXISTS factory_edge_stage_no_modify ON factory_edge_staged_vouchers
-  `);
-  await pool.query(`
-    CREATE TRIGGER factory_edge_stage_no_modify
-    BEFORE UPDATE OR DELETE ON factory_edge_staged_vouchers
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_stage_immutable()
-  `);
-}
-
 export async function stageVoucherEvents(pool: Pool, body: unknown, siteId: string) {
   const events = validateStageEnvelope(body, siteId);
   const client = await pool.connect();

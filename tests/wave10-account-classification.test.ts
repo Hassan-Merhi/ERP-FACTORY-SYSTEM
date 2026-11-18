@@ -25,7 +25,6 @@ import { getProfitLoss } from "../server/services/reports/financialReportsServic
 import { calculateIncomeStatementForPeriod } from "../server/helpers/calculateIncomeStatementForPeriod";
 import { phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
 import { closeFiscalPeriod } from "../server/storage/accounting/fiscal-periods";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { insertLedgerAccountSchema } from "../shared/schema";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -212,7 +211,6 @@ describe("ledger reports", () => {
 
   beforeAll(async () => {
     ctx = await seedTestData(TEST_PREFIX);
-    await ensureClosedPeriodGuard(pool);
     agent = request.agent(ctx.app);
     expect(
       (await agent.post("/api/auth/login").send({ username: `${TEST_PREFIX}_testuser`, password: "testpassword123" }))

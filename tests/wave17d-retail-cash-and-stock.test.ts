@@ -29,7 +29,6 @@ import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { getCompanyBusinessDate } from "../server/lib/dateUtils";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
-import { ensureRetailLedgerSchema } from "../server/services/retail/retailLedgerSchema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "wave17dretail";
@@ -93,7 +92,6 @@ async function openShift(openingCash: number): Promise<number> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureRetailLedgerSchema(pool);
   await pool.query(`UPDATE companies SET company_type = 'retail' WHERE id = $1`, [ctx.companyId]);
   await db
     .update(schema.userCompanyRoles)

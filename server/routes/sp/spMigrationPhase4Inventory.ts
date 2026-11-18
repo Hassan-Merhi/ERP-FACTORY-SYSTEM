@@ -4,7 +4,6 @@ import { db } from "../../db";
 import { assertNoInventoryCutoverTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { loadStockItemMap, pn } from "./spMigrationPhase2Common";
 import { resolveTargetLocation } from "./spMigrationCutoverReadiness";
-import { ensureCutoverSchema } from "./spMigrationCutoverState";
 import { exactInventoryValue, numbersDiffer, type VerificationIssue } from "./spMigrationPhase4Policy";
 import { resultRows } from "../../lib/queryResult";
 
@@ -36,29 +35,17 @@ export type InventoryPlan = {
   targetOnlyRows: number;
 };
 
-let phase4SchemaPromise: Promise<void> | null = null;
+let legacyDeltaKeyBackfillPromise: Promise<void> | null = null;
 
-export function ensurePhase4CutoverSchema(): Promise<void> {
-  if (!phase4SchemaPromise) {
-    phase4SchemaPromise = (async () => {
-      await ensureCutoverSchema();
-      await db.execute(
-        sql.raw(`
-        ALTER TABLE sp_migration_cutovers
-          ADD COLUMN IF NOT EXISTS target_write_hold BOOLEAN NOT NULL DEFAULT false,
-          ADD COLUMN IF NOT EXISTS verification_snapshot JSONB,
-          ADD COLUMN IF NOT EXISTS recovery_summary JSONB
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        ALTER TABLE sp_migration_cutover_stock_deltas
-          ALTER COLUMN source_inventory_id DROP NOT NULL,
-          ALTER COLUMN source_stock_item_id DROP NOT NULL,
-          ADD COLUMN IF NOT EXISTS delta_key TEXT,
-          ADD COLUMN IF NOT EXISTS created_target_inventory BOOLEAN NOT NULL DEFAULT false
-      `)
-      );
+/**
+ * Data-only backfill (no DDL): stock-delta rows written before delta_key
+ * existed get the key the Phase 4 writer would have given them, so the
+ * (cutover_id, delta_key) idempotency index covers them. Runs once per
+ * process; a no-op once no such legacy rows remain.
+ */
+export function backfillLegacyCutoverStockDeltaKeys(): Promise<void> {
+  if (!legacyDeltaKeyBackfillPromise) {
+    legacyDeltaKeyBackfillPromise = (async () => {
       await db.execute(
         sql.raw(`
         UPDATE sp_migration_cutover_stock_deltas
@@ -66,28 +53,12 @@ export function ensurePhase4CutoverSchema(): Promise<void> {
         WHERE delta_key IS NULL
       `)
       );
-      await db.execute(
-        sql.raw(`
-        CREATE UNIQUE INDEX IF NOT EXISTS sp_migration_cutover_stock_delta_key_unique
-        ON sp_migration_cutover_stock_deltas(cutover_id, delta_key)
-        WHERE delta_key IS NOT NULL
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        ALTER TABLE sp_migration_cutover_role_changes
-          ADD COLUMN IF NOT EXISTS source_locations_snapshot JSONB,
-          ADD COLUMN IF NOT EXISTS source_cash_mappings_snapshot JSONB,
-          ADD COLUMN IF NOT EXISTS target_locations_snapshot_before JSONB,
-          ADD COLUMN IF NOT EXISTS target_cash_mappings_snapshot_before JSONB
-      `)
-      );
     })().catch((error) => {
-      phase4SchemaPromise = null;
+      legacyDeltaKeyBackfillPromise = null;
       throw error;
     });
   }
-  return phase4SchemaPromise;
+  return legacyDeltaKeyBackfillPromise;
 }
 
 async function loadTargetInventoryRows(targetId: number, targetItemIds: number[]) {
@@ -103,7 +74,7 @@ async function loadTargetInventoryRows(targetId: number, targetItemIds: number[]
 }
 
 export async function buildExactInventoryPlan(sourceId: number, targetId: number): Promise<InventoryPlan> {
-  await ensurePhase4CutoverSchema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const stockItemMap = await loadStockItemMap(sourceId, targetId);
   const sourceResult = await db.execute(sql`
     SELECT id, stock_item_id, location_id, quantity, average_rate, total_value
@@ -346,7 +317,7 @@ export async function restoreExactCutoverStock(
 ): Promise<{ restored: number; deleted: number }> {
   // Wave 11: stock rewrites with no journal are refused after the cut-over.
   await assertNoInventoryCutoverTx(db, targetId, "sp-migration-stock");
-  await ensurePhase4CutoverSchema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutover_stock_deltas
     WHERE cutover_id = ${cutoverId}

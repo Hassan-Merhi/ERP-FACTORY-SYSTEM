@@ -237,17 +237,20 @@ export function registerCreditSalesImportRoutes(app: Express) {
       // The central voucher poster requires ORIGINAL-currency debit/credit fields
       // for every non-USD sale. CFA was previously omitted here (only ZMW was
       // included), so every Mali credit import failed before writing a voucher.
-      const nativeRate = lockedPosCurrency.currency === "USD"
-        ? null
-        : validateHistoricalRate(
-            lockedPosCurrency.exchangeRate,
-            `${lockedPosCurrency.currency} credit sales import exchange rate`
-          );
+      const nativeRate =
+        lockedPosCurrency.currency === "USD"
+          ? null
+          : validateHistoricalRate(
+              lockedPosCurrency.exchangeRate,
+              `${lockedPosCurrency.currency} credit sales import exchange rate`
+            );
       const nativeTransaction = (total: string) =>
         nativeRate
           ? {
               currency: lockedPosCurrency.currency,
-              amount: toMoney(total).times(nativeRate).toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
+              amount: toMoney(total)
+                .times(nativeRate)
+                .toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
               rate: nativeRate.toFixed(),
             }
           : null;
@@ -602,7 +605,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
   });
 
   // Download sample Credit Sales import template
-  app.get("/api/credit-sales-import/template", async (_req, res) => {
+  app.get("/api/credit-sales-import/template", requireAuth, async (_req, res) => {
     try {
       const sampleData = [
         {

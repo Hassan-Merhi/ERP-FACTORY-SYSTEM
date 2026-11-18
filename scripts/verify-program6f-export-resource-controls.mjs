@@ -11,7 +11,7 @@ const assert = (condition, message) => {
 const packageJson = JSON.parse(read("package.json"));
 const dev = String(packageJson.scripts?.dev || "");
 const start = String(packageJson.scripts?.start || "");
-const bridge = read("server/exportBufferBridge.mjs");
+const bridge = read("server/runtime/exportBuffer.mjs");
 const memoryGuard = read("server/runtimeMemoryGuard.mjs");
 const puppeteer = read("server/lib/puppeteerSemaphore.ts");
 const exportAudit = read("scripts/audit-large-export-buffers.mjs");
@@ -21,7 +21,7 @@ const hasRenderEnv = (key, value) =>
 
 // Bridges are preloaded through the ordered manifest (server/startupPreload.mjs).
 const startupPreload = read("server/startupPreload.mjs");
-const manifestLoadsExportBridge = startupPreload.includes('await import("./exportBufferBridge.mjs");');
+const manifestLoadsExportBridge = startupPreload.includes('await import("./runtime/exportBuffer.mjs");');
 assert(
   dev.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge,
   "Export bridge must be preloaded in development."

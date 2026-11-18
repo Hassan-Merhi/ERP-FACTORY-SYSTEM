@@ -48,14 +48,16 @@ throwaway database:
 
 1. set `DATABASE_URL`, `PGSSLMODE=disable`, `NODE_ENV=test`,
    `SESSION_SECRET`, `CSRF_ENFORCE=0`, and `ENABLE_SCHEDULERS=false`;
-2. run `npm run verify:migrations`;
-3. provision only the disposable schema with
-   `node node_modules/drizzle-kit/bin.cjs push --force`;
-4. run the built server once and wait for `/api/health/db` so idempotent
-   startup migrations complete;
-5. execute the backend and smoke suites.
+2. build the disposable schema with
+   `MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS npm run db:migrate` and check
+   it with `npm run db:verify`;
+3. optionally boot the built server (`node --import ./server/startupPreload.mjs
+   dist/index.js`) and wait for `/api/health/db`;
+4. execute the backend and smoke suites.
 
-Never use `drizzle-kit push` against a persistent or production database.
+The migration runner itself is tested by `npm run test:db:migrations` with
+`MIGRATION_TEST_ADMIN_URL` pointing at a disposable PostgreSQL server (each test
+creates and drops its own databases). See docs/database-migrations.md.
 
 ## Static repository contracts
 

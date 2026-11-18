@@ -122,11 +122,10 @@ async function main() {
       skippedAmbiguous++;
       continue;
     }
-    const charge = chargeRows[0] as any;
-    // For INV variant, the row shape is { customer_order_charges: {...}, customer_orders: {...} }
-    const chargeId: number = charge.id ?? charge.customer_order_charges?.id;
-    const existingVoucherId: number | null =
-      charge.voucherId ?? charge.customer_order_charges?.voucherId ?? null;
+    // Both queries select the same flat projection, including the joined INV case.
+    const charge = chargeRows[0];
+    const chargeId = charge.id;
+    const existingVoucherId = charge.voucherId;
 
     if (existingVoucherId === v.id) {
       skippedAlready++;

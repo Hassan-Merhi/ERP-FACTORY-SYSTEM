@@ -4,8 +4,6 @@ export class Phase10OperatorRefusal extends Error {
   constructor(code: string, status?: number);
   readonly status: number;
 }
-export function ensurePhase10SyncControlFunction(queryable: Queryable): Promise<void>;
-export function ensurePhase10ConflictDecisionFunction(queryable: Queryable): Promise<void>;
 export function recordPhase10OperatorSyncControl(
   queryable: Queryable,
   input: { siteId: string; companyId: number; userId: string; action: "pause" | "resume"; reason: string }

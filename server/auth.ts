@@ -288,24 +288,34 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** Role lists attached to `requireRole` guards so the route access manifest can verify them. */
+export const REQUIRED_ROLES_METADATA = "requiredRoles";
+
 export function requireRole(...roles: string[]) {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !req.user.role) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+  // The handler is deliberately an anonymous arrow: its name is part of the
+  // route snapshot (config/route-manifest.json), which must not change. The
+  // role list is attached so config/route-access-manifest.json can declare it
+  // and tests/route-access-manifest.test.ts can verify the declaration.
+  return Object.assign(
+    async (req: Request, res: Response, next: NextFunction) => {
+      if (!req.user || !req.user.role) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
 
-    // ERP Tester can exercise Manager-level operational routes, but never Admin/Owner/Developer routes.
-    // Settings and administrative APIs are independently blocked by blockErpTesterSettings.
-    if (
-      req.user.role === "Developer" ||
-      roles.includes(req.user.role) ||
-      (req.user.role === "ERP Tester" && roles.includes("Manager"))
-    ) {
-      return next();
-    }
+      // ERP Tester can exercise Manager-level operational routes, but never Admin/Owner/Developer routes.
+      // Settings and administrative APIs are independently blocked by blockErpTesterSettings.
+      if (
+        req.user.role === "Developer" ||
+        roles.includes(req.user.role) ||
+        (req.user.role === "ERP Tester" && roles.includes("Manager"))
+      ) {
+        return next();
+      }
 
-    return res.status(403).json({ message: "Forbidden" });
-  };
+      return res.status(403).json({ message: "Forbidden" });
+    },
+    { [REQUIRED_ROLES_METADATA]: Object.freeze([...roles]) as readonly string[] }
+  );
 }
 
 export function canDelete(req: Request, res: Response, next: NextFunction) {

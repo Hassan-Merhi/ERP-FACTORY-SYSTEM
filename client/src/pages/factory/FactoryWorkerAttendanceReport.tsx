@@ -421,6 +421,7 @@ export default function FactoryWorkerAttendanceReport() {
               setCustomStart(v.fromDate);
               setCustomEnd(v.toDate);
             }}
+            requireBoundedRange
             data-testid="attendance-report-custom-period"
           />
         )}

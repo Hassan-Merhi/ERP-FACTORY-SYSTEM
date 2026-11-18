@@ -26,13 +26,11 @@ import {
 } from "../../../../services/factory/repairToken";
 import { pool } from "../../../../db";
 
-import { ADMIN_ROLES, RecalcTokenPayload, captureRecalcSnapshot, ensureUndoLogTable } from "./_helpers";
+import { ADMIN_ROLES, RecalcTokenPayload, captureRecalcSnapshot } from "./_helpers";
 
 export function registerRawStockRecalcPreviewRoutes(app: Express) {
-  // Ensure the undo log table exists (idempotent, runs once at startup).
-  ensureUndoLogTable().catch((err) => logger.error("[recalc] Failed to create undo log table:", { error: err }));
-  // FIX 11: ensureTokenTable removed — consumed-tokens table DDL lives in migration
-  // 20260718_factory_replay_consumed_tokens.sql; no startup DDL needed here.
+  // factory_recalc_undo_log and factory_replay_consumed_tokens are defined by
+  // the schema migrations; no DDL runs here.
 
   // Read-only diff preview — never writes anything. Admin/Developer-only: this
   // surfaces exact stored vs. corrected landed-cost figures for every container.

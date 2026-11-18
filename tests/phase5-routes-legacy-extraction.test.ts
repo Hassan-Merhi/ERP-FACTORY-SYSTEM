@@ -14,7 +14,7 @@ describe("Phase 5 routesLegacy extraction", () => {
   it("composes every extracted registrar", () => {
     const root = read("server/routes/applicationRoutes.ts");
     for (const marker of [
-      "registerPermissionBoundaryRoutes(app)",
+      "registerVoucherMutationBoundaries(app)",
       "registerLegacyHealthRoutes(app)",
       "registerIntercompanyPosConfigRoutes(app)",
       "registerErpWorkerDocumentRoutes(app)",

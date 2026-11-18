@@ -15,34 +15,6 @@ export class Phase10ControlRefusal extends Error {
   }
 }
 
-export async function ensurePhase10SyncControlSchema(queryable) {
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_sync_control_log (
-      id BIGSERIAL PRIMARY KEY,
-      site_id UUID NOT NULL,
-      action TEXT NOT NULL CHECK (action IN ('pause', 'resume')),
-      operator_name TEXT NOT NULL CHECK (length(btrim(operator_name)) >= 3),
-      reason TEXT NOT NULL CHECK (length(btrim(reason)) >= 10),
-      recorded_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
-    )
-  `);
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_sync_control_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE10_SYNC_CONTROL_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query(
-    "DROP TRIGGER IF EXISTS factory_edge_sync_control_no_mutation ON factory_edge_sync_control_log"
-  );
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_sync_control_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_sync_control_log
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_sync_control_immutable()
-  `);
-}
-
 export async function readPhase10SyncControl(queryable, siteId) {
   const result = await queryable.query(
     `SELECT action, operator_name, reason, recorded_at

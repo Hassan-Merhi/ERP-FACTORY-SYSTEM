@@ -31,7 +31,6 @@ vi.mock("../server/auth", async (importOriginal) => {
 
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { findFactoryFxRateOnOrBefore } from "../server/services/factory/factoryFxRateOnDate";
 import { getOrFetchFxRateToUsd } from "../server/routes/factory/_helpers";
 import { loadPartyMemoLines } from "../server/services/accounting/balances/unpostedMemo";
@@ -200,7 +199,6 @@ async function cleanup(id: number) {
 }
 
 beforeAll(async () => {
-  await ensureFactoryCostBasisSchema(pool);
   for (const leftover of await all<{ id: number }>(`SELECT id FROM companies WHERE code = $1`, [
     PREFIX.toUpperCase(),
   ])) {

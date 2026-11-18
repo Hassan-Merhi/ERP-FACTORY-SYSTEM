@@ -6,7 +6,7 @@ import http from "node:http";
 process.env.API_PAGINATION_DEFAULT_LIMIT = "2";
 process.env.API_PAGINATION_MAX_LIMIT = "3";
 
-await import("../server/apiPaginationBridge.mjs");
+await import("../server/runtime/apiPagination.mjs");
 const expressNamespace = await import("express");
 const express = expressNamespace.default || expressNamespace;
 

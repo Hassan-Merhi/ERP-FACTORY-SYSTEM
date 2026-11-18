@@ -8,7 +8,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  * filtering, permissions, session persistence, exports and the voucher/cost
  * mutations all keep their original semantics in one place.
  */
-import { useState, useMemo, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { addDays, format } from "date-fns";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -23,7 +23,7 @@ import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { useDebounce } from "@/hooks/use-debounce";
-import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
+import { useDaybookDayKeys } from "@/components/daybook/useDaybookDayKeys";
 import type { DaybookEntry, DisplayEntry, FactoryDaybookUIState } from "./types";
 import {
   parseBalesMeta,
@@ -77,7 +77,6 @@ export function useFactoryDaybookModel() {
   // post-mount useEffect) so the very first query fires once, with the right
   // dates/filters — never "today" followed immediately by a second, wider fetch.
   const initialDaybookStateRef = useRef<FactoryDaybookUIState | null>(loadFactoryDaybookState());
-  const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(
     () => initialDaybookStateRef.current?.periodFilter || getDefaultPeriodValue("today")
   );
@@ -120,27 +119,10 @@ export function useFactoryDaybookModel() {
   const startDate = periodFilter.fromDate;
   const endDate = periodFilter.toDate;
 
-  const stepPeriod = (days: number) => setPeriodFilter((prev) => shiftPeriod(prev, days));
+  const stepPeriod = useCallback((days: number) => setPeriodFilter((prev) => shiftPeriod(prev, days)), []);
 
-  // ── Keyboard date navigation ──────────────────────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (hasAnyOpenDialog()) return;
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      const isBack = e.key === "-" || e.code === "Minus";
-      const isForward = (e.key === "+" && e.shiftKey) || (e.code === "Equal" && e.shiftKey) || e.key === "=";
-      if (isBack) {
-        e.preventDefault();
-        setPeriodFilter((prev) => shiftPeriod(prev, -1));
-      } else if (isForward) {
-        e.preventDefault();
-        setPeriodFilter((prev) => shiftPeriod(prev, 1));
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, []);
+  // ── Keyboard date navigation ("-" / "+") ─────────────────────────────────
+  useDaybookDayKeys(stepPeriod);
 
   // ── Scroll selected row into view ─────────────────────────────────────────
   useEffect(() => {
@@ -648,8 +630,6 @@ export function useFactoryDaybookModel() {
     formatDisplayDate,
     formatDisplayTime,
     // filters
-    activeDaybookTab,
-    setActiveDaybookTab,
     periodFilter,
     setPeriodFilter,
     stepPeriod,

@@ -12,7 +12,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => env,
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
+import { capturePhase9PressingTx } from "../server/edge/phase9PressingOutbox";
+import { applyMigrations } from "./helpers/migrateDisposableDatabase.mjs";
 
 const databaseUrl = process.env.PHASE8_TEST_DATABASE_URL;
 const base = {
@@ -45,19 +46,26 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
     try {
       // Phase 8's DBA fence experiment uses a different disposable DB.
       // Keep both suites isolated even if their workflows share a container.
+      await admin.query("DROP DATABASE IF EXISTS phase9_pressing_capture_test WITH (FORCE)");
       await admin.query("CREATE DATABASE phase9_pressing_capture_test");
+      // The outbox, its counter, FK and append-only trigger come from migrations/.
+      applyMigrations(isolatedUrl.toString());
       await client.connect();
       await client.query("BEGIN");
-      // Minimal source fixture only; never install into live factory records.
+      // Minimal source fixture only: two scans whose own parents (bale, session,
+      // machine) are irrelevant here, so their FK checks are skipped while
+      // seeding. Every statement after the fixture runs with full enforcement.
+      await client.query("SET LOCAL session_replication_role = replica");
       await client.query(`
-        CREATE TABLE factory_pressing_confirmations (
-          id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL,
-          UNIQUE (company_id, id)
-        )
+        INSERT INTO factory_pressing_confirmations
+          (id, company_id, bale_id, machine_id, assignment_id, session_id, user_id, machine_name_snapshot,
+           reference_number, weight_kg, request_id, production_date, timezone_name)
+        VALUES
+          (13, 5, 100, 4, 3, 1, 'worker-1', 'Press A', 'BALE-100', 40, 'fixture-13', '2026-10-30', 'Asia/Beirut'),
+          (14, 6, 101, 4, 3, 1, 'worker-1', 'Press A', 'BALE-101', 41, 'fixture-14', '2026-10-30', 'Asia/Beirut')
       `);
-      await ensurePhase9PressingOutboxSchema(client as never);
+      await client.query("SET LOCAL session_replication_role = origin");
       const tx = drizzle(client) as unknown as DbTransaction;
-      await client.query("INSERT INTO factory_pressing_confirmations(id,company_id) VALUES(13,5),(14,6)");
       await capturePhase9PressingTx(tx, base);
       const { rows } = await client.query(
         "SELECT sequence::text, operation_id::text, company_id, payload, payload_sha256 FROM factory_edge_pressing_outbox"
@@ -108,6 +116,16 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
       expect(saved.rows[0].count).toBe(1);
       const counter = await client.query("SELECT last_sequence::text FROM factory_edge_pressing_counter");
       expect(counter.rows[0].last_sequence).toBe("1");
+      // The source scan is protected twice: the real schema's own delete guard...
+      await client.query("SAVEPOINT source_guard");
+      await expect(client.query("DELETE FROM factory_pressing_confirmations WHERE id=13")).rejects.toMatchObject({
+        code: "P0001",
+      });
+      await client.query("ROLLBACK TO SAVEPOINT source_guard");
+      // ...and, even with that guard lifted, the outbox's ON DELETE RESTRICT FK.
+      await client.query(
+        "ALTER TABLE factory_pressing_confirmations DISABLE TRIGGER factory_pressing_confirmations_protect_trg"
+      );
       await expect(client.query("DELETE FROM factory_pressing_confirmations WHERE id=13")).rejects.toMatchObject({
         code: "23503",
       });
