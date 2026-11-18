@@ -201,11 +201,14 @@ entries once and sends everyone's changes back. Owner decisions and the phase
 plan are in the plan document and the
 [runbook](../../operations/factory-offline-operations-runbook.md#full-offline-mode-phase-a-cloud-change-feed).
 
-- Phase A1 (this change, switched off): table policy for all tables with a CI
+- Phase A1 (#3299, switched off): table policy for all tables with a CI
   check, DBA-installed change feed with redaction, and the paged
   `GET /api/offline/pc-sync/changes` reader (`OFFLINE_PC_SYNC_ENABLED`).
-- Next: A2 initial snapshot; A3 desktop app (Windows and Mac) with a local
-  server and database, read-only offline; then Phases B to E.
+- Phase A2 (switched off): initial full copy, `GET /api/offline/pc-sync/snapshot/start`
+  and `GET /api/offline/pc-sync/snapshot`, table by table in key order, then
+  feed replay from the start cursor.
+- Next: A3 desktop app (Windows and Mac) with a local server and database,
+  read-only offline; then Phases B to E.
 
 ## Resume checklist (next session)
 

@@ -194,6 +194,21 @@ The plan document lists the phases.
   access manifest). It answers 404 unless `OFFLINE_PC_SYNC_ENABLED=1` and 503
   until the feed is installed.
 
+**Initial full copy (Phase A2, switched off).** A new PC first calls
+`GET /api/offline/pc-sync/snapshot/start`, which returns the feed cursor at the
+current watermark, the synced tables and the cloud's schema version (a PC on a
+different schema must refuse to load). It then reads each table with
+`GET /api/offline/pc-sync/snapshot?table=&after=&limit=`, in key order, only the
+rows of the companies the user may open, secret columns removed, following
+`after` until it is null. Copied rows count as `seq` 0. Finally it replays the
+feed from the start cursor; a row that changed while the copy was being read is
+repaired by the applying rule below. The installer adds
+`pc_sync.snapshot_tables()`, `pc_sync.snapshot_page(...)` and
+`pc_sync.schema_version()` for the application role. Covered by
+`tests/pc-sync-snapshot.test.ts` (off by default, not installed, company
+isolation, child rows through their parent, no password, paging, refusals, and
+copy + replay ending equal to the cloud while rows change).
+
 **Applying rule for every PC.** Changes arrive in transaction order, which is
 not always commit order. The later write to a row always has the higher `seq`
 (writes to one row are serialized by its lock), so a PC applies a change only if
@@ -208,11 +223,11 @@ every change once, in transaction order.
 
 **Known limits.** A user row is not re-sent when the user joins another
 company; a child row deleted after its parent is gone, with no foreign key,
-reaches no PC; TRUNCATE tells every PC to reload that table. The initial
-snapshot (Phase A2) covers rows that existed before the feed was installed.
+reaches no PC; TRUNCATE tells every PC to reload that table (with the full
+copy above).
 
-**Not installed anywhere and not verified on PCs.** Next: the initial snapshot,
-then the desktop app with its local server and database, read-only offline.
+**Not installed anywhere and not verified on PCs.** Next: the desktop app with
+its local server and database, read-only offline (Phase A3).
 
 ### Entries left in the old browser queues
 

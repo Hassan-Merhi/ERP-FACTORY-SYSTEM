@@ -203,6 +203,86 @@ AS $pc_sync$
    LIMIT least(greatest(p_limit, 1), 1000)
 $pc_sync$;
 REVOKE ALL ON FUNCTION pc_sync.read_changes(text, text, text, bigint, integer[], integer) FROM PUBLIC;
+
+-- Initial full copy (Phase A2). The cloud's schema version, so a PC with a
+-- different schema refuses to load.
+CREATE OR REPLACE FUNCTION pc_sync.schema_version()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $pc_sync$
+DECLARE
+  version text;
+BEGIN
+  IF to_regclass('public.schema_migrations') IS NULL THEN
+    RETURN NULL;
+  END IF;
+  EXECUTE 'SELECT max(id) FROM public.schema_migrations' INTO version;
+  RETURN version;
+END
+$pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.schema_version() FROM PUBLIC;
+
+-- Every synced table, in name order.
+CREATE OR REPLACE FUNCTION pc_sync.snapshot_tables()
+RETURNS SETOF text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pc_sync
+AS $pc_sync$ SELECT table_name FROM pc_sync.table_policy ORDER BY table_name $pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.snapshot_tables() FROM PUBLIC;
+
+-- One page of a synced table for the given companies, in key order, after the
+-- key p_after (NULL = from the start), secret columns removed.
+CREATE OR REPLACE FUNCTION pc_sync.snapshot_page(p_table text, p_companies integer[], p_after jsonb, p_limit integer)
+RETURNS TABLE (row_key jsonb, row_data jsonb)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pc_sync, public
+AS $pc_sync$
+DECLARE
+  rule pc_sync.table_policy%ROWTYPE;
+  key_list text;
+  after_list text;
+  key_object text;
+  filter text;
+  after_clause text := '';
+BEGIN
+  SELECT * INTO rule FROM pc_sync.table_policy WHERE table_name = p_table;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PC_SYNC_TABLE_NOT_SYNCED' USING ERRCODE = '22023';
+  END IF;
+  SELECT string_agg(format('t.%I', k), ', '), string_agg(format('x.%I', k), ', '),
+         string_agg(format('%L, t.%I', k, k), ', ')
+    INTO key_list, after_list, key_object
+    FROM unnest(rule.key_columns) AS k;
+  filter := CASE rule.mode
+    WHEN 'company' THEN 't.company_id = ANY($1)'
+    WHEN 'self' THEN format('t.%I = ANY($1)', rule.self_column)
+    WHEN 'members' THEN format(
+      'EXISTS (SELECT 1 FROM public.%I m WHERE m.%I::text = t.id::text AND m.company_id = ANY($1))',
+      rule.members_table, rule.members_column)
+    WHEN 'derived' THEN format('pc_sync.row_companies(%L, to_jsonb(t)) && $1', p_table)
+    WHEN 'shared' THEN 'true'
+  END;
+  IF filter IS NULL THEN
+    RAISE EXCEPTION 'PC_SYNC_TABLE_NOT_SYNCED' USING ERRCODE = '22023';
+  END IF;
+  IF p_after IS NOT NULL THEN
+    after_clause := format(' AND (%s) > (SELECT %s FROM jsonb_populate_record(NULL::public.%I, $2) x)',
+                           key_list, after_list, p_table);
+  END IF;
+  RETURN QUERY EXECUTE format(
+    'SELECT jsonb_build_object(%s), to_jsonb(t) - $3 FROM public.%I t WHERE %s%s ORDER BY %s LIMIT $4',
+    key_object, p_table, filter, after_clause, key_list)
+  USING p_companies, p_after, rule.redact, least(greatest(p_limit, 1), 1000);
+END
+$pc_sync$;
+REVOKE ALL ON FUNCTION pc_sync.snapshot_page(text, integer[], jsonb, integer) FROM PUBLIC;
 `;
 
 /**
@@ -271,7 +351,7 @@ END
 $pc_sync$;`,
   ];
   if (grantTo) {
-    // The application role may only read pages through these two functions.
+    // The application role may only read through these functions.
     lines.push(
       "",
       `DO $pc_sync$
@@ -281,6 +361,9 @@ BEGIN
   EXECUTE format('GRANT USAGE ON SCHEMA pc_sync TO %I', app_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.watermark() TO %I', app_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.read_changes(text, text, text, bigint, integer[], integer) TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.schema_version() TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.snapshot_tables() TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION pc_sync.snapshot_page(text, integer[], jsonb, integer) TO %I', app_role);
 END
 $pc_sync$;`
     );
