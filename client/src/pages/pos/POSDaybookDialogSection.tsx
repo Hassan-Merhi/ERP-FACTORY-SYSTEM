@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/formatNumber";
 import { usePOSDaybookState } from "./usePOSDaybookState";
+import { formatPosVoucherAmount, formatPosZmwUnitPrice, formatPosZmwLineTotal } from "./posdaybook/zmwDisplay";
 
 export function POSDaybookDialogSection({
   canEditDaybook,
@@ -102,10 +103,10 @@ export function POSDaybookDialogSection({
                           {formatNumber(Number(item.quantity || 0), 0)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {formatCashAmount(Number(item.sellingPrice || 0))}
+                          {formatPosZmwUnitPrice(voucherDetails, item.sellingPrice, formatCashAmount)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">
-                          {formatCashAmount(Number(item.totalSales || 0))}
+                          {formatPosZmwLineTotal(voucherDetails, item.quantity, item.sellingPrice, formatCashAmount)}
                         </TableCell>
                         {canSeeProfitCost && (
                           <TableCell className="text-right font-mono">
@@ -123,7 +124,7 @@ export function POSDaybookDialogSection({
                 </Table>
               </div>
               <div className="flex justify-end text-lg font-semibold">
-                Total: {formatCashAmount(Number(voucherDetails.totalAmount || 0))}
+                Total: {formatPosVoucherAmount(voucherDetails, formatCashAmount)}
               </div>
             </div>
           ) : (
