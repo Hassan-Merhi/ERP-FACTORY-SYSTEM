@@ -1,10 +1,11 @@
 import { formatNumber } from "@/lib/formatNumber";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { SafeStyle } from "@/components/SafeStyle";
-import { calculateZmwSaleAmounts, resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import { resolveZmwUnitPrice } from "@shared/posZmwMoney";
+import { getPosInvoiceNativeZmwTotal } from "./posInvoiceZmwTotals";
 import Decimal from "decimal.js";
 
-type InvoiceSaleItem = {
+export type InvoiceSaleItem = {
   stockItemName?: string;
   quantity?: string | number;
   rate?: string | number;
@@ -57,16 +58,23 @@ export function InvoiceTemplate({
   const displaySaleMoney = (usd: number) =>
     hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
   const nativeUnitPrice = (item: InvoiceSaleItem) =>
-    resolveZmwUnitPrice({ quantity: item.quantity ?? 0, originalCurrencyRate: item.originalCurrencyRate, rate: item.rateUSD ?? item.rate }, lockedRate, true);
+    resolveZmwUnitPrice(
+      {
+        quantity: item.quantity ?? 0,
+        originalCurrencyRate: item.originalCurrencyRate,
+        rate: item.rateUSD ?? item.rate,
+      },
+      lockedRate,
+      true
+    );
   const nativeLineAmount = (item: InvoiceSaleItem) =>
     nativeUnitPrice(item).times(new Decimal(String(item.quantity ?? 0))).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
-  const nativeInvoiceTotal = hasLockedZmw && (savedSale?.items?.length ?? 0) > 0
-    ? savedSale?.nativeZmwTotal ?? calculateZmwSaleAmounts(
-        (savedSale?.items ?? []).map((item) => ({ quantity: item.quantity ?? 0, originalCurrencyRate: item.originalCurrencyRate, rate: item.rateUSD ?? item.rate })),
-        lockedRate,
-        true
-      ).nativeTotal
-    : savedSale?.nativeZmwTotal;
+  const nativeInvoiceTotal = getPosInvoiceNativeZmwTotal(
+    savedSale?.items,
+    savedSale?.nativeZmwTotal,
+    lockedRate,
+    hasLockedZmw
+  );
   return (
     <div style={{ position: "fixed", top: 0, left: "-99999px", width: "680px", pointerEvents: "none", zIndex: -1 }}>
       <div
@@ -305,7 +313,9 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {hasLockedZmw ? formatMoneyDisplay(nativeUnitPrice(item).toNumber(), { currency: "ZMW" }) : displaySaleMoney(itemRateUSD)}
+                    {hasLockedZmw
+                      ? formatMoneyDisplay(nativeUnitPrice(item).toNumber(), { currency: "ZMW" })
+                      : displaySaleMoney(itemRateUSD)}
                   </td>
                   <td
                     style={{
@@ -316,7 +326,9 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {hasLockedZmw ? formatMoneyDisplay(nativeLineAmount(item).toNumber(), { currency: "ZMW" }) : displaySaleMoney(itemAmountUSD)}
+                    {hasLockedZmw
+                      ? formatMoneyDisplay(nativeLineAmount(item).toNumber(), { currency: "ZMW" })
+                      : displaySaleMoney(itemAmountUSD)}
                   </td>
                   <td
                     style={{

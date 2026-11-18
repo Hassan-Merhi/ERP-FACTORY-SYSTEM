@@ -74,8 +74,7 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
     d.currency === "ZMW" && d.exchangeRate !== null && Number.isFinite(d.exchangeRate) && d.exchangeRate > 0;
   const formatNative = (amount: number) =>
     `K${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const formatSaleAmount = (usd: number) =>
-    isZmwInvoice ? formatNative(usd * d.exchangeRate!) : fmtUSD(usd);
+  const formatSaleAmount = (usd: number) => (isZmwInvoice ? formatNative(usd * d.exchangeRate!) : fmtUSD(usd));
 
   // Auto-hide profit columns when no item has a configured price set
   const hasConfiguredPrice = d.items.some((item) => item.configuredPrice > 0);
@@ -295,7 +294,11 @@ export async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCo
       lineBreak: false,
     });
     doc.font("Helvetica-Bold").fontSize(FONT_ROW).fillColor(CLR_BODY);
-    doc.text(nativeLineZmw !== null ? formatNative(Number(nativeLineZmw)) : formatSaleAmount(amtUSD), X_AMT + 1, cy, { width: COL_AMT_W - 2, align: "center", lineBreak: false });
+    doc.text(nativeLineZmw !== null ? formatNative(Number(nativeLineZmw)) : formatSaleAmount(amtUSD), X_AMT + 1, cy, {
+      width: COL_AMT_W - 2,
+      align: "center",
+      lineBreak: false,
+    });
 
     if (!hideProfitCols) {
       doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
