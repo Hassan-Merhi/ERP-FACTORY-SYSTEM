@@ -130,11 +130,11 @@ export function FactoryEmployeesDialogSection2({
               .map((e) => (
                 <div key={e.id} className="grid grid-cols-3 px-3 py-2 border-t">
                   <span className="truncate">{e.name}</span>
-                  <span className="text-right font-mono text-muted-foreground">${e.oldBalance.toFixed(2)}</span>
+                  <span className="text-right font-mono text-muted-foreground">{formatUsd(e.oldBalance, 2)}</span>
                   <span
                     className={`text-right font-mono font-medium ${e.newBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                   >
-                    ${e.newBalance.toFixed(2)}
+                    {formatUsd(e.newBalance, 2)}
                   </span>
                 </div>
               ))}

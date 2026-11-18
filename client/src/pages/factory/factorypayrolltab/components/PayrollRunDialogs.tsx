@@ -16,6 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState }) {
   const {
@@ -182,7 +183,6 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]" data-testid="dialog-preview-payroll">
@@ -264,8 +264,8 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                     </div>
                     {/* Salary breakdown */}
                     <div className="flex flex-wrap items-center gap-3 text-sm font-mono ml-auto">
-                      <span className="text-muted-foreground">Base: ${r.base.toFixed(2)}</span>
-                      {r.bonus > 0 && <span className="text-muted-foreground">Bonus: ${r.bonus.toFixed(2)}</span>}
+                      <span className="text-muted-foreground">Base: {formatUsd(r.base, 2)}</span>
+                      {r.bonus > 0 && <span className="text-muted-foreground">Bonus: {formatUsd(r.bonus, 2)}</span>}
                       {r.transportMonthly > 0 && (
                         <span className="text-muted-foreground flex flex-wrap items-center gap-1">
                           <span>Transport/mo:</span>
@@ -286,7 +286,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                           )}
                         </span>
                       )}
-                      <span className="font-semibold">Net: ${computedNet.toFixed(2)}</span>
+                      <span className="font-semibold">Net: {formatUsd(computedNet, 2)}</span>
                     </div>
                   </div>
 
@@ -358,7 +358,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                         >
                           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                           {r.pendingAdvances.length} outstanding advance{r.pendingAdvances.length !== 1 ? "s" : ""} ·
-                          Total: ${r.totalAdvanceBalance.toFixed(2)}
+                          Total: {formatUsd(r.totalAdvanceBalance, 2)}
                         </Button>
                         <div className="flex items-center gap-2 ml-auto">
                           <span className="text-xs text-muted-foreground">Deduct:</span>
@@ -405,12 +405,12 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                             >
                               <span className="font-mono text-muted-foreground">{adv.advanceDate}</span>
                               <span className="text-muted-foreground">
-                                Original: <span className="font-mono">${parseFloat(adv.amount).toFixed(2)}</span>
+                                Original: <span className="font-mono">{formatUsd(parseFloat(adv.amount), 2)}</span>
                               </span>
                               <span>
                                 Remaining:{" "}
                                 <span className="font-mono font-medium">
-                                  ${parseFloat(adv.remainingBalance).toFixed(2)}
+                                  {formatUsd(parseFloat(adv.remainingBalance), 2)}
                                 </span>
                               </span>
                               {adv.notes && (
@@ -432,7 +432,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                           deducted from salary):
                         </span>
                         <span className="text-sm font-mono font-medium text-blue-700 dark:text-blue-400">
-                          ${(r.totalLoanBalance ?? 0).toFixed(2)}
+                          {formatUsd(r.totalLoanBalance ?? 0, 2)}
                         </span>
                       </div>
                       <div className="space-y-0.5">
@@ -442,7 +442,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                             <span>
                               Remaining:{" "}
                               <span className="font-mono font-medium">
-                                ${parseFloat(loan.remainingBalance).toFixed(2)}
+                                {formatUsd(parseFloat(loan.remainingBalance), 2)}
                               </span>
                             </span>
                             {loan.notes && <span className="italic truncate max-w-[200px]">{loan.notes}</span>}

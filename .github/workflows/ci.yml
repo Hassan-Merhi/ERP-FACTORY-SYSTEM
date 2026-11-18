@@ -218,6 +218,9 @@ jobs:
       - name: Script inventory
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:scripts
+      - name: UI unification ratchet
+        if: always() && steps.install.outcome == 'success'
+        run: npm run audit:ui-unification
       - name: Route access declaration coverage (fail on missing, stale or drifted routes)
         if: always() && steps.install.outcome == 'success'
         # This job has no PostgreSQL service. The gate only registers routes and

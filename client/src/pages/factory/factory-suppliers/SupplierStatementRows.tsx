@@ -1,6 +1,6 @@
 import { StatementResponse, type StatementDisplayRow } from "./factorySupplierTypes";
 import { EmptyState } from "@/components/ui/page-state";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRightLeft, Pencil, Trash2, Package } from "lucide-react";
@@ -21,9 +21,6 @@ interface SupplierStatementRowsProps {
   formatDate: (val: string) => string;
   formatNum: (val: string) => string;
   typeBadge: (type: string) => React.ReactNode;
-  statusColor: (
-    status: string
-  ) => "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info" | "muted";
   statusDisplayLabel: (status: string) => string;
   onEditPayment: (p: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;
@@ -43,7 +40,6 @@ export function SupplierStatementRows({
   formatDate,
   formatNum,
   typeBadge,
-  statusColor,
   statusDisplayLabel,
 }: SupplierStatementRowsProps) {
   if (displayedRows.length === 0) return <EmptyState icon={Package} title="No activity yet" />;
@@ -148,9 +144,12 @@ export function SupplierStatementRows({
                       <div className="flex items-center gap-1 flex-wrap">
                         <span>{row.ref}</span>
                         {row.status && (
-                          <Badge variant={statusColor(row.status)} className="text-xs ml-1">
-                            {statusDisplayLabel(row.status)}
-                          </Badge>
+                          <StatusBadge
+                            status={row.status}
+                            label={statusDisplayLabel(row.status)}
+                            showIcon={false}
+                            className="text-xs ml-1"
+                          />
                         )}
                       </div>
                       {row.detail && <span className="text-xs text-muted-foreground font-normal">{row.detail}</span>}

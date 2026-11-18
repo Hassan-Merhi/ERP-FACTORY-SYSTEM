@@ -3,7 +3,6 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageCircle, Trash2, Check, CheckCircle2, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +15,7 @@ import {
   LIST_KEY,
   STATUS_ORDER,
   fmtDate,
-  statusColor,
-  statusLabel,
+  ShippingStatusBadge,
   stickyCellBase,
   stickyHeadBase,
   shippingCostUsd,
@@ -499,11 +497,7 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge
-                            className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}
-                          >
-                            {statusLabel(r.status)}
-                          </Badge>
+                          <ShippingStatusBadge status={r.status} />
                         </button>
                       </TableCell>
                     )}

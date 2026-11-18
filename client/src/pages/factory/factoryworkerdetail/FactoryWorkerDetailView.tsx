@@ -441,7 +441,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                           className={`text-xl font-bold ${netBalance >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}
                           data-testid="stat-net-balance"
                         >
-                          ${netBalance.toFixed(2)}
+                          {fmt(netBalance)}
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">Paid + Bonus − Outstanding Advances</p>
                       </CardContent>
@@ -477,7 +477,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                           className={`text-xl font-bold ${advancesLeft > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}
                           data-testid="stat-advances-left"
                         >
-                          ${advancesLeft.toFixed(2)}
+                          {fmt(advancesLeft)}
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">Outstanding balance</p>
                       </CardContent>

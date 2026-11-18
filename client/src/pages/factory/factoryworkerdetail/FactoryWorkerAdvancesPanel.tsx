@@ -20,6 +20,7 @@ import {
   type FactoryWorkerDetailModelProps,
 } from "./useFactoryWorkerAdvancesPanelState";
 import { FactoryWorkerAdvancesPanelCardSection } from "./FactoryWorkerAdvancesPanelCardSection";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps) {
   const {
@@ -91,7 +92,7 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       className={`text-xl font-bold font-mono ${salaryDeductionBal > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                       data-testid="kpi-salary-advance-balance"
                     >
-                      ${salaryDeductionBal.toFixed(2)}
+                      {formatUsd(salaryDeductionBal, 2)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {salaryDeductionBal > 0 ? "Worker owes company" : "No outstanding"}
@@ -107,7 +108,7 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       className={`text-xl font-bold font-mono ${loanBal > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"}`}
                       data-testid="kpi-loan-balance"
                     >
-                      ${loanBal.toFixed(2)}
+                      {formatUsd(loanBal, 2)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {loanBal > 0 ? "Worker owes company" : "No outstanding"}
@@ -123,7 +124,7 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       className={`text-xl font-bold font-mono ${totalOwed > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                       data-testid="kpi-total-advance-balance"
                     >
-                      ${totalOwed.toFixed(2)}
+                      {formatUsd(totalOwed, 2)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {totalOwed > 0 ? "Worker owes company" : "All settled"}
