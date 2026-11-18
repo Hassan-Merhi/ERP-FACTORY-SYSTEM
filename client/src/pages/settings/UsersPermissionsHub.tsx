@@ -21,9 +21,9 @@ export function UsersPermissionsHub({ appMode, userRole }: UsersPermissionsHubPr
       </div>
 
       <UsersSection appMode={appMode} />
-      {["Admin", "Developer"].includes(userRole ?? "") && <RolePermissionMatrix />}
-      {["Admin", "Developer"].includes(userRole ?? "") && <UserAccessOverrides />}
-      {["Admin", "Developer"].includes(userRole ?? "") && <PermissionChangeAudit />}
+      {userRole === "Developer" && <RolePermissionMatrix />}
+      {userRole === "Developer" && <UserAccessOverrides />}
+      {userRole === "Developer" && <PermissionChangeAudit />}
     </div>
   );
 }
