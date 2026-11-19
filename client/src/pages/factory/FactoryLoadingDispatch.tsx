@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   ArrowRight,
-  ClipboardCheck,
   Clock3,
   Edit3,
   FileSearch,
@@ -9,7 +8,6 @@ import {
   Package,
   Route,
   ShieldCheck,
-  Truck,
   Trash2,
   Weight,
 } from "lucide-react";
@@ -18,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import FactoryDispatchOrderDashboard from "./FactoryDispatchOrderDashboard";
+import FactoryLoadingDispatchOverview from "./FactoryLoadingDispatchOverview";
 import { queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
@@ -26,7 +24,6 @@ import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
 import FactoryLoadingDispatchPostingPanel from "./FactoryLoadingDispatchPostingPanel";
 import FactoryLoadingDispatchPoExport from "./FactoryLoadingDispatchPoExport";
 import {
-  StatCard,
   TripEditor,
   TripStatusBadge,
   fromTrip,
@@ -35,21 +32,20 @@ import {
   printNumber,
   tripPath,
 } from "./FactoryLoadingDispatchTripEditor";
-import { FactoryLoadingDispatchSection, useFactoryLoadingDispatchState } from "./useFactoryLoadingDispatchState";
+import { useFactoryLoadingDispatchState } from "./useFactoryLoadingDispatchState";
 import {
   FactoryLoadingDispatchDialogSection,
   FactoryLoadingDispatchPageHeaderSection,
 } from "./FactoryLoadingDispatchPageHeaderSection";
 
 export default function FactoryLoadingDispatch() {
+  const state = useFactoryLoadingDispatchState();
   const {
     backToLoading,
     canCreate,
     canDeleteDispatch,
     canEdit,
-    canViewFinancialDashboard,
     companyId,
-    completion,
     createMutation,
     createOpen,
     deleteMutation,
@@ -59,18 +55,13 @@ export default function FactoryLoadingDispatch() {
     editMutation,
     editOpen,
     editTrip,
-    filter,
     formatDisplayDateTime,
     listUrl,
-    loadedQty,
-    loadedWeight,
     navigate,
     newTrip,
-    openTrips,
     orderId,
     orderQuery,
     refresh,
-    remainingQty,
     selectedQuery,
     selectedTrip,
     selectedUrl,
@@ -79,17 +70,13 @@ export default function FactoryLoadingDispatch() {
     setDeleteReason,
     setEditOpen,
     setEditTrip,
-    setFilter,
     setNewTrip,
     trips,
     tripsQuery,
     user,
     validDispatch,
     validOrder,
-    verifiedQty,
-    verifiedWeight,
-    visibleTrips,
-  } = useFactoryLoadingDispatchState();
+  } = state;
 
   if (!validOrder || !validDispatch) {
     return <div className="p-6 text-sm text-destructive">Invalid loading order or dispatch ID.</div>;
@@ -114,77 +101,15 @@ export default function FactoryLoadingDispatch() {
           tripsQuery={tripsQuery}
         />
 
-        <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <span className="font-semibold">Scan-only dispatch.</span> No expected targets per truck. Scanning records
-            the actual bales on each trip. After all trips finish, compare against Pending Loading and choose whether to
-            remove unscanned bales.
-          </div>
-        </div>
-
         {(tripsQuery.isError || orderQuery.isError) && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30">
             <span>{getError(tripsQuery.error ?? orderQuery.error)}</span>
-            <Button size="sm" variant="outline" onClick={() => void refresh()}>
-              Retry
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => void refresh()}>Retry</Button>
           </div>
         )}
 
-        <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Loaded bales" value={printNumber(loadedQty)} icon={Package} />
-          <StatCard label="Verified on trips" value={printNumber(verifiedQty)} icon={ClipboardCheck} />
-          <StatCard label="Not yet verified" value={printNumber(remainingQty)} icon={FileSearch} />
-          <StatCard label="Open dispatches" value={printNumber(openTrips)} icon={Truck} />
-        </div>
-
-        <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
-          <CardContent className="space-y-3 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-semibold">Overall truck verification</span>
-              <span className="font-mono text-sm font-bold">{completion}%</span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-              <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: completion + "%" }} />
-            </div>
-            <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-              <span>
-                Loading: {printNumber(loadedQty)} bales · {printNumber(loadedWeight, 2)} kg
-              </span>
-              <span>
-                Truck verified: {printNumber(verifiedQty)} bales · {printNumber(verifiedWeight, 2)} kg
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {dispatchId === null && canViewFinancialDashboard && (
-          <ErrorBoundary resetKey={"factory-dispatch-overview-" + orderId}>
-            <FactoryDispatchOrderDashboard
-              orderId={orderId}
-              companyId={companyId}
-              onOpenTrip={(tripId) => navigate(tripPath(orderId, tripId))}
-              onCompareAll={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
-              onPhysicalReport={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/report")}
-            />
-          </ErrorBoundary>
-        )}
-
         {dispatchId === null ? (
-          <FactoryLoadingDispatchSection
-            canCreate={canCreate}
-            filter={filter}
-            formatDisplayDateTime={formatDisplayDateTime}
-            navigate={navigate}
-            openTrips={openTrips}
-            orderId={orderId}
-            setCreateOpen={setCreateOpen}
-            setFilter={setFilter}
-            trips={trips}
-            tripsQuery={tripsQuery}
-            visibleTrips={visibleTrips}
-          />
+          <FactoryLoadingDispatchOverview state={state} />
         ) : (
           <div className="space-y-4">
             <Button
