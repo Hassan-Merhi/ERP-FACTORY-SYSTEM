@@ -1,168 +1,19 @@
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
-import { useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock3, History, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import { History, Loader2, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { cn } from "@/lib/utils";
-import type { InventoryLocation } from "./locationInventoryTypes";
-
-interface DeliveryEntry {
-  id: number;
-  source: "manual" | "scheduled" | "retry";
-  retryOfId: number | null;
-  status: "running" | "sent" | "failed" | "skipped_empty";
-  includeCost: boolean;
-  includeZeroStock: boolean;
-  includeNegativeStock: boolean;
-  stockGroupId: number | null;
-  stockGroupName: string | null;
-  categoryId: number | null;
-  categoryName: string | null;
-  initiatedByUserId: string | null;
-  initiatedByUsername: string | null;
-  scheduledFor: string | null;
-  destinationGroupName: string | null;
-  reportGeneratedAt: string | null;
-  itemCount: number | null;
-  pageCount: number | null;
-  fileName: string | null;
-  error: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  canRetry: boolean;
-}
-
-interface DeliveryHistoryResponse {
-  locationId: number;
-  deliveries: DeliveryEntry[];
-  summary: {
-    latestStatus: DeliveryEntry["status"] | null;
-    latestError: string | null;
-    latestAt: string | null;
-    lastSentAt: string | null;
-    lastSentSource: DeliveryEntry["source"] | null;
-    lastSentIncludeCost: boolean | null;
-  };
-}
-
-interface Props {
-  location: InventoryLocation;
-  companyId?: number;
-  canSendWithCost: boolean;
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function sourceLabel(source: DeliveryEntry["source"]): string {
-  if (source === "scheduled") return "Automatic";
-  if (source === "retry") return "Retry";
-  return "Manual";
-}
-
-function statusPresentation(status: DeliveryEntry["status"]) {
-  if (status === "sent")
-    return { label: releaseDebtEnglish("Sent"), Icon: CheckCircle2, className: "text-green-600 dark:text-green-400" };
-  if (status === "failed") return { label: "Failed", Icon: XCircle, className: "text-destructive" };
-  if (status === "skipped_empty")
-    return {
-      label: releaseDebtEnglish("No matching stock"),
-      Icon: XCircle,
-      className: "text-amber-600 dark:text-amber-400",
-    };
-  return { label: releaseDebtEnglish("Sending"), Icon: Clock3, className: "text-blue-600 dark:text-blue-400" };
-}
-
-function newIdempotencyToken(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+import {
+  formatDateTime,
+  sourceLabel,
+  statusPresentation,
+  type Props,
+} from "./LocationWhatsappDeliveryHistoryDialogHelpers";
+import { useLocationWhatsappDeliveryHistoryDialogState } from "./useLocationWhatsappDeliveryHistoryDialogState";
 
 export function LocationWhatsappDeliveryHistoryDialog({ location, companyId, canSendWithCost }: Props) {
-  const [open, setOpen] = useState(false);
-  const [retryingId, setRetryingId] = useState<number | null>(null);
-  const retryLockRef = useRef(false);
-  const { toast } = useToast();
-  const recordChanges = useExistingRecordChangeAccess();
-
-  const historyQuery = useQuery<DeliveryHistoryResponse>({
-    queryKey: ["/api/locations", location.id, "whatsapp-deliveries", companyId],
-    queryFn: async () => {
-      const response = await fetch(`/api/locations/${location.id}/whatsapp-deliveries?limit=50`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || `Failed to load delivery history: ${response.status}`);
-      }
-      return response.json();
-    },
-    enabled: open && !!companyId,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: async (delivery: DeliveryEntry) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      setRetryingId(delivery.id);
-      const idempotencyKey = newIdempotencyToken();
-      const response = await apiRequest(
-        "POST",
-        `/api/locations/${location.id}/whatsapp-deliveries/${delivery.id}/retry`,
-        { idempotencyKey }
-      );
-      return response.json();
-    },
-    onSuccess: (result) => {
-      toast({
-        title: result.duplicate ? "Retry already processed" : "Stock report resent",
-        description: `${result.itemCount ?? 0} items sent to ${result.destinationGroupName || "the linked WhatsApp group"}.`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: releaseDebtEnglish("Retry failed"), description: error.message, variant: "destructive" });
-    },
-    onSettled: async () => {
-      retryLockRef.current = false;
-      setRetryingId(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/locations", location.id, "whatsapp-deliveries"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/locations", location.id, "whatsapp-schedule"] }),
-      ]);
-    },
-  });
-
-  const handleRetry = (delivery: DeliveryEntry) => {
-    if (retryLockRef.current || retryMutation.isPending) return;
-    if (delivery.includeCost && !canSendWithCost) {
-      toast({
-        title: releaseDebtEnglish("Cost report restricted"),
-        description: releaseDebtEnglish("Cost-price and total-value permission is required to retry this report."),
-        variant: "destructive",
-      });
-      return;
-    }
-    retryLockRef.current = true;
-    retryMutation.mutate(delivery);
-  };
-
-  const summary = historyQuery.data?.summary;
-  const deliveries = historyQuery.data?.deliveries ?? [];
+  const { setOpen, open, retryingId, recordChanges, historyQuery, retryMutation, handleRetry, summary, deliveries } =
+    useLocationWhatsappDeliveryHistoryDialogState({ location, companyId, canSendWithCost });
 
   return (
     <>

@@ -1,145 +1,47 @@
-import { searchAny } from "@shared/searchNormalization";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useParams, useLocation } from "wouter";
 import { Package, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { baleHistoryExportColumns } from "./baleHistoryExport";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
-import { useState } from "react";
-import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import type { FactoryMyAccess } from "@shared/apiTypes";
+import { BaleHistoryStatusBadge } from "./BaleHistoryStatusBadge";
 
-import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
-import type { BaleDetailResponse } from "./types";
+import { BaleWeightEditDialog } from "@/components/BaleWeightEditDialog";
 import { SearchField } from "@/components/ui/search-field";
+import { useFactoryBaleProductMonthDetailState } from "./useFactoryBaleProductMonthDetailState";
+import { FactoryBaleProductMonthDetailContent } from "./FactoryBaleProductMonthDetailContent";
 
 // ── Month-detail view ─────────────────────────────────────────────────────────
 export function FactoryBaleProductMonthDetail() {
-  const params = useParams();
-  const [, navigate] = useLocation();
-  const { formatDisplayDate } = useDateFormat();
-  const { formatAmount } = useCurrencyContext();
-  const queryClient = useQueryClient();
-  const { selectedCompany } = useCompany();
-  useEscapeToParent();
-
-  const productId = params.productId || "0";
-  const locationId = params.locationId || "0";
-  const year = params.year || String(new Date().getFullYear());
-  const month = params.month || "1";
-  const backPath = `/factory/bale-product-history/${productId}/${locationId}/${year}`;
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
-
-  const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  const accessReady = Boolean(
-    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-  );
-  const hiddenCost =
-    accessReady && myAccess?.hideAllCosts !== true
-      ? (myAccess?.hiddenCostFields ?? [])
-      : ["bale_history_cost_per_kg", "bale_history_total_cost"];
-
   const {
-    data: responseData,
+    navigate,
+    formatAmount,
+    productId,
+    locationId,
+    year,
+    backPath,
+    searchTerm,
+    setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    weightEditBale,
+    setWeightEditBale,
+    hiddenCost,
     isLoading,
     isError,
+    responseData,
     refetch,
-  } = useQuery<BaleDetailResponse>({
-    queryKey: companyQueryKey(
-      "/api/factory/bale-product-history",
-      selectedCompany?.id,
-      productId,
-      locationId,
-      year,
-      month
-    ),
-    queryFn: async () => {
-      const response = await fetch(`/api/factory/bale-product-history/${productId}/${locationId}/${year}/${month}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch");
-      return response.json();
-    },
-    enabled:
-      Boolean(selectedCompany?.id) &&
-      parseInt(productId) > 0 &&
-      parseInt(locationId) > 0 &&
-      parseInt(year) > 0 &&
-      parseInt(month) > 0,
-  });
-
-  const data = responseData?.bales;
-  const sellingPricePerBale = parseFloat(responseData?.sellingPrice || "0");
-
-  const filteredData = (data || []).filter((bale) => {
-    const effectiveStatus = getBaleHistoryDisplayStatus(bale);
-    if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
-    if (searchTerm) {
-      if (!searchAny(searchTerm, bale.baleCode, bale.referenceNumber)) return false;
-    }
-    return true;
-  });
-
-  const monthNames = [
-    "",
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const monthName = monthNames[parseInt(month)] || month;
-
-  const formatNumber = (num: number) => {
-    if (num % 1 === 0) return num.toLocaleString();
-    return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-    return `${formatDisplayDate(d)} ${time}`;
-  };
-
-  const handleWeightSuccess = () => {
-    queryClient.invalidateQueries({
-      queryKey: companyQueryKey(
-        "/api/factory/bale-product-history",
-        selectedCompany?.id,
-        productId,
-        locationId,
-        year,
-        month
-      ),
-    });
-    queryClient.invalidateQueries({
-      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year),
-    });
-  };
+    data,
+    sellingPricePerBale,
+    filteredData,
+    monthName,
+    formatNumber,
+    formatDateTime,
+    handleWeightSuccess,
+  } = useFactoryBaleProductMonthDetailState();
 
   if (isLoading) {
     return (
@@ -242,99 +144,17 @@ export function FactoryBaleProductMonthDetail() {
           </div>
 
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
-            <Table mobileLayout="cards">
-              <TableHeader className="sticky top-0 z-30 bg-background">
-                <TableRow>
-                  <TableHead>Bale Code</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Weight (KG)</TableHead>
-                  {!hiddenCost.includes("bale_history_cost_per_kg") && (
-                    <TableHead className="text-right">Cost/KG</TableHead>
-                  )}
-                  {!hiddenCost.includes("bale_history_total_cost") && (
-                    <TableHead className="text-right">Cost Price</TableHead>
-                  )}
-                  {!hiddenCost.includes("bale_history_total_cost") && (
-                    <TableHead className="text-right">Sell Price</TableHead>
-                  )}
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date/Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredData.map((bale) => {
-                  return (
-                    <TableRow key={bale.id} data-testid={`row-bale-${bale.id}`}>
-                      <TableCell className="font-medium font-mono" data-testid={`text-bale-code-${bale.id}`}>
-                        {bale.baleCode}
-                      </TableCell>
-                      <TableCell data-testid={`text-reference-${bale.id}`}>
-                        <button
-                          className="font-mono text-sm text-primary underline-offset-2 hover:underline cursor-pointer"
-                          onClick={() =>
-                            navigate(`/factory/barcode-lookup?ref=${encodeURIComponent(bale.referenceNumber)}`)
-                          }
-                          data-testid={`button-ref-lookup-${bale.id}`}
-                        >
-                          {bale.referenceNumber}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-right font-mono" data-testid={`text-weight-${bale.id}`}>
-                        <span className="inline-flex items-center gap-1.5 group">
-                          {formatNumber(Number(bale.weightKg))}
-                          <button
-                            className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
-                            onClick={() =>
-                              setWeightEditBale({
-                                id: bale.id,
-                                referenceNumber: bale.referenceNumber,
-                                weightKg: bale.weightKg,
-                              })
-                            }
-                            title="Correct weight"
-                            data-testid={`button-edit-weight-${bale.id}`}
-                          >
-                            <Pencil className="h-3 w-3 text-muted-foreground" />
-                          </button>
-                        </span>
-                      </TableCell>
-                      {!hiddenCost.includes("bale_history_cost_per_kg") && (
-                        <TableCell className="text-right font-mono" data-testid={`text-cost-per-kg-${bale.id}`}>
-                          {formatAmount(bale.costPerKg)}
-                        </TableCell>
-                      )}
-                      {!hiddenCost.includes("bale_history_total_cost") && (
-                        <TableCell className="text-right font-mono" data-testid={`text-total-cost-${bale.id}`}>
-                          {formatAmount(bale.totalCost)}
-                        </TableCell>
-                      )}
-                      {!hiddenCost.includes("bale_history_total_cost") && (
-                        <TableCell className="text-right font-mono" data-testid={`text-sell-price-${bale.id}`}>
-                          {sellingPricePerBale > 0 ? formatAmount(sellingPricePerBale) : "—"}
-                        </TableCell>
-                      )}
-                      <TableCell data-testid={`text-status-${bale.id}`}>
-                        <BaleHistoryStatusBadge bale={bale} />
-                      </TableCell>
-                      <TableCell data-testid={`text-date-${bale.id}`}>{formatDateTime(bale.createdAt)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-                {(!data || data.length === 0) && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center text-muted-foreground py-8"
-                      data-testid="text-no-data"
-                    >
-                      No bales found for this month
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <FactoryBaleProductMonthDetailContent
+            data={data}
+            filteredData={filteredData}
+            formatAmount={formatAmount}
+            formatDateTime={formatDateTime}
+            formatNumber={formatNumber}
+            hiddenCost={hiddenCost}
+            navigate={navigate}
+            sellingPricePerBale={sellingPricePerBale}
+            setWeightEditBale={setWeightEditBale}
+          />
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-2">

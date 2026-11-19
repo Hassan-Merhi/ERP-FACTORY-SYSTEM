@@ -1,44 +1,33 @@
 import { randomUUID } from "crypto";
 import { isRemoteSupportEnabled } from "./remoteSupportRuntime";
 import { evaluateRemoteSupportRollout } from "./remoteSupportRollout";
-
-export type RemoteControlSessionStatus = "active" | "stopped" | "expired";
-
-export interface RemoteControlTabPresence {
-  userId: string;
-  username: string;
-  tabId: string;
-  companyId: number;
-  route: string;
-  firstSeenAt: number;
-  lastSeenAt: number;
-}
-
-export interface RemoteControlSession {
-  id: string;
-  companyId: number;
-  targetCompanyId?: number;
-  targetUserId: string;
-  targetUsername: string;
-  targetTabId: string;
-  targetRoute: string;
-  controllerUserId: string;
-  controllerUsername: string;
-  controllerRole: string;
-  scope: "erp-browser-tab";
-  status: RemoteControlSessionStatus;
-  startedAt: number;
-  expiresAt: number;
-  lastControllerHeartbeatAt: number;
-  lastTargetHeartbeatAt: number;
-  stoppedAt: number | null;
-  stopReason: string | null;
-  capabilities: {
-    mouse: boolean;
-    keyboard: boolean;
-    browserTabOnly: true;
-  };
-}
+import {
+  sessions,
+  activeByTargetUser,
+  tabsByUser,
+  cleanIdentifier,
+  cleanRoute,
+  positiveCompanyId,
+  copySession,
+  notifyTarget,
+  activeSessionRecord,
+  stopSessionInternal,
+  isRemoteControlControllerRole,
+  type RemoteControlTabPresence,
+  type RemoteControlSession,
+  type StartRemoteControlSessionInput,
+} from "./remoteControlSessionServiceHelpers";
+export {
+  isRemoteControlControllerRole,
+  stopRemoteControlSession,
+  stopAllRemoteControlSessions,
+  subscribeRemoteControlTarget,
+  subscribeRemoteControlSessionStops,
+  resetRemoteControlSessionStateForTests,
+  type RemoteControlSessionStatus,
+  type RemoteControlTabPresence,
+  type RemoteControlSession,
+} from "./remoteControlSessionServiceHelpers";
 
 export class RemoteControlSessionError extends Error {
   constructor(
@@ -51,20 +40,6 @@ export class RemoteControlSessionError extends Error {
   }
 }
 
-interface StartRemoteControlSessionInput {
-  targetUserId: string;
-  targetUsername?: string;
-  requestedTabId?: string;
-  controllerUserId: string;
-  controllerUsername: string;
-  controllerRole: string;
-  controllerCompanyId: number;
-  durationMs?: number;
-}
-
-type TargetListener = () => void;
-type SessionStopListener = (session: RemoteControlSession) => void;
-
 const DEFAULT_SESSION_MS = 10 * 60 * 1000;
 const MAX_SESSION_MS = 15 * 60 * 1000;
 const MIN_SESSION_MS = 60 * 1000;
@@ -72,82 +47,6 @@ const TAB_PRESENCE_TTL_MS = 30 * 1000;
 const CONTROLLER_HEARTBEAT_TTL_MS = 20 * 1000;
 const TARGET_HEARTBEAT_TTL_MS = 30 * 1000;
 const COMPLETED_SESSION_RETENTION_MS = 60 * 60 * 1000;
-
-const sessions = new Map<string, RemoteControlSession>();
-const activeByTargetUser = new Map<string, string>();
-const tabsByUser = new Map<string, Map<string, RemoteControlTabPresence>>();
-const targetListeners = new Map<string, Set<TargetListener>>();
-const sessionStopListeners = new Set<SessionStopListener>();
-
-function cleanIdentifier(value: unknown, maxLength = 128): string {
-  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
-}
-
-function cleanRoute(value: unknown): string {
-  const route = cleanIdentifier(value, 500);
-  return route.startsWith("/") ? route : "/";
-}
-
-function positiveCompanyId(value: unknown): number | null {
-  const companyId = Number(value);
-  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
-}
-
-function copySession(session: RemoteControlSession | null | undefined): RemoteControlSession | null {
-  if (!session) return null;
-  return {
-    ...session,
-    capabilities: { ...session.capabilities },
-  };
-}
-
-function notifyTarget(userId: string): void {
-  for (const listener of targetListeners.get(userId) ?? []) {
-    try {
-      listener();
-    } catch {
-      // A disconnected event-stream listener must not affect session state.
-    }
-  }
-}
-
-function activeSessionRecord(targetUserId: string): RemoteControlSession | null {
-  const sessionId = activeByTargetUser.get(targetUserId);
-  if (!sessionId) return null;
-  const session = sessions.get(sessionId);
-  if (!session || session.status !== "active") {
-    activeByTargetUser.delete(targetUserId);
-    return null;
-  }
-  return session;
-}
-
-function stopSessionInternal(
-  session: RemoteControlSession,
-  reason: string,
-  status: Exclude<RemoteControlSessionStatus, "active">,
-  now: number
-): RemoteControlSession {
-  if (session.status !== "active") return session;
-  session.status = status;
-  session.capabilities.mouse = false;
-  session.capabilities.keyboard = false;
-  session.stoppedAt = now;
-  session.stopReason = cleanIdentifier(reason, 160) || "stopped";
-  if (activeByTargetUser.get(session.targetUserId) === session.id) {
-    activeByTargetUser.delete(session.targetUserId);
-  }
-  notifyTarget(session.targetUserId);
-  const stoppedSnapshot = copySession(session) as RemoteControlSession;
-  for (const listener of sessionStopListeners) {
-    try {
-      listener(stoppedSnapshot);
-    } catch {
-      // Stop observers must never prevent a fail-safe stop.
-    }
-  }
-  return session;
-}
 
 function freshTabs(userId: string, now = Date.now()): RemoteControlTabPresence[] {
   const userTabs = tabsByUser.get(userId);
@@ -162,12 +61,6 @@ function freshTabs(userId: string, now = Date.now()): RemoteControlTabPresence[]
     .filter((tab) => now - tab.lastSeenAt <= TAB_PRESENCE_TTL_MS)
     .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
     .map((tab) => ({ ...tab }));
-}
-
-const REMOTE_CONTROL_CONTROLLER_ROLES = new Set(["Developer", "Admin", "Owner", "Manager"]);
-
-export function isRemoteControlControllerRole(role: unknown): boolean {
-  return typeof role === "string" && REMOTE_CONTROL_CONTROLLER_ROLES.has(role);
 }
 
 export function listRemoteControlTabs(userId: string, now = Date.now()): RemoteControlTabPresence[] {
@@ -374,45 +267,6 @@ export function getActiveRemoteControlSession(targetUserId: string, targetTabId?
   return copySession(session);
 }
 
-export function stopRemoteControlSession(
-  sessionId: string,
-  reason: string,
-  now = Date.now()
-): RemoteControlSession | null {
-  const session = sessions.get(cleanIdentifier(sessionId));
-  if (!session) return null;
-  return copySession(stopSessionInternal(session, reason, "stopped", now));
-}
-
-export function stopAllRemoteControlSessions(reason: string, now = Date.now()): number {
-  let stopped = 0;
-  for (const session of sessions.values()) {
-    if (session.status !== "active") continue;
-    stopSessionInternal(session, reason, "stopped", now);
-    stopped += 1;
-  }
-  return stopped;
-}
-
-export function subscribeRemoteControlTarget(userId: string, listener: TargetListener): () => void {
-  const targetUserId = cleanIdentifier(userId);
-  let listeners = targetListeners.get(targetUserId);
-  if (!listeners) {
-    listeners = new Set();
-    targetListeners.set(targetUserId, listeners);
-  }
-  listeners.add(listener);
-  return () => {
-    listeners?.delete(listener);
-    if (listeners?.size === 0) targetListeners.delete(targetUserId);
-  };
-}
-
-export function subscribeRemoteControlSessionStops(listener: SessionStopListener): () => void {
-  sessionStopListeners.add(listener);
-  return () => sessionStopListeners.delete(listener);
-}
-
 export function cleanupRemoteControlState(now = Date.now()): void {
   for (const session of sessions.values()) {
     if (session.status === "active") {
@@ -434,14 +288,6 @@ export function cleanupRemoteControlState(now = Date.now()): void {
   }
 
   for (const userId of tabsByUser.keys()) freshTabs(userId, now);
-}
-
-export function resetRemoteControlSessionStateForTests(): void {
-  sessions.clear();
-  activeByTargetUser.clear();
-  tabsByUser.clear();
-  targetListeners.clear();
-  sessionStopListeners.clear();
 }
 
 const cleanupTimer = setInterval(() => cleanupRemoteControlState(), 3000);
