@@ -137,6 +137,12 @@ This is a code-only correction to the direct EUR payment feature; it requires no
 
 Factory Payment Voucher permits **Optional** when an active FX EUR wallet pays a factory supplier **directly in EUR**. Saving the Optional voucher records its native EUR debit/credit entries at the wallet's current historical book rate, but does **not** deduct wallet EUR, post to the supplier, or recognize FX. The draft may be edited while still optional.
 
-Finalization through the Optional Vouchers workflow re-checks the stored EUR source wallet, beneficiary, amount and date under database locks; it also verifies the wallet's current EUR position, the supplier's current eligible EUR payable, and the wallet's historical book basis. The finalizer creates a new posted Payment voucher plus the matching FX wallet settlement **in one transaction**, then soft-retires the Optional draft. Concurrent finalization cannot post twice. A generic voucher update/optional toggle cannot activate an FX wallet draft without the matching settlement.
+Finalization through the Optional Vouchers workflow re-checks the stored EUR source wallet, beneficiary, amount and date under database locks; it also verifies the wallet's current EUR position, the supplier's current eligible EUR payable, and the wallet's historical book basis. The finalizer creates a new posted Payment voucher plus the matching FX wallet settlement **in one transaction**, then soft-retires the Optional draft. Concurrent finalization cannot post twice.
+
+Optional can be switched both ways, always through the wallet:
+
+- **Optional → posted** (Optional Vouchers "Finalize", the Optional switch in the voucher edit form, or `PATCH /api/vouchers/:id/optional`): runs the same atomic settlement. An edit saved in the same request is stored on the draft first; if the settlement is refused the edited draft stays Optional and the reason is shown.
+- **Posted → Optional** (Optional switch on a posted direct EUR payment): cancels the settlement (wallet EUR and the supplier's EUR payable are restored, the posted voucher is retired with its audit trail) and leaves an equivalent Optional draft under a new voucher number.
+- A draft that stays Optional is always kept as one EUR supplier line at its stored wallet book rate, whatever currency the editor sends, and the edit form loads its EUR amount. An FX wallet draft is never activated as an ordinary ledger Payment.
 
 This is **EUR-only**. USD payouts using an FX wallet still require the agreed payout rate and cannot be saved as Optional drafts, because that rate and the EUR deduction must be locked together at the time of posting.
