@@ -53,7 +53,7 @@ describe("validateRequest", () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("REQUEST_VALIDATION_FAILED");
     expect(res.body.errors).toEqual([expect.objectContaining({ location: "body", code: "unrecognized_keys" })]);
-    expect(res.body.message).toMatch(/^Invalid request: body/);
+    expect(res.body.message).toBe("Invalid request data");
   });
 
   it("rejects unknown fields in nested objects", async () => {

@@ -74,4 +74,19 @@ export const phase3RemainingTranslationsPart39: readonly Phase3SharedUiEntry[] =
     ar: "لا يمكنك تغيير دورك في الشركة أو إزالته. اطلب ذلك من مسؤول آخر.",
     fr: "Vous ne pouvez pas modifier ni retirer votre propre rôle dans la société. Demandez à un autre administrateur.",
   },
+  {
+    en: "validateRequest: ${where} is a non-strict object schema. Use z.strictObject(...) or .strict() so unknown fields are rejected.",
+    ar: "validateRequest: ${where} مخطط كائن غير صارم. استخدم z.strictObject(...) أو .strict() حتى تُرفض الحقول غير المعروفة.",
+    fr: "validateRequest : ${where} est un schéma d'objet non strict. Utilisez z.strictObject(...) ou .strict() pour que les champs inconnus soient refusés.",
+  },
+  {
+    en: "validateRequest: declare at least one of body, params or query.",
+    ar: "validateRequest: صرّح بواحد على الأقل من body أو params أو query.",
+    fr: "validateRequest : déclarez au moins l'un de body, params ou query.",
+  },
+  {
+    en: "validatedInput: validateRequest did not run for this route.",
+    ar: "validatedInput: لم يتم تشغيل validateRequest لهذا المسار.",
+    fr: "validatedInput : validateRequest ne s'est pas exécuté pour cette route.",
+  },
 ];

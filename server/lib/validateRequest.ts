@@ -155,11 +155,10 @@ export function validateRequest<S extends RequestSchemas>(schemas: S): RequestHa
     }
 
     if (errors.length > 0) {
-      const first = errors[0];
-      const where = first.path ? `${first.location}.${first.path}` : first.location;
+      // A fixed, translated message; the per-field detail is in `errors`.
       const body: RequestValidationErrorBody = {
         code: "REQUEST_VALIDATION_FAILED",
-        message: `Invalid request: ${where}: ${first.message}`,
+        message: "Invalid request data",
         errors,
       };
       res.status(400).json(body);

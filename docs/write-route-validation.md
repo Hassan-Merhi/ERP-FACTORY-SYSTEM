@@ -39,7 +39,7 @@ A failed request gets a 400:
 ```json
 {
   "code": "REQUEST_VALIDATION_FAILED",
-  "message": "Invalid request: body.amount: Too small: expected number to be >0",
+  "message": "Invalid request data",
   "errors": [{ "location": "body", "path": "amount", "code": "too_small", "message": "..." }]
 }
 ```
