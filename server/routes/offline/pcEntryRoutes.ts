@@ -87,11 +87,14 @@ export function registerPcEntryRoutes(app: Express): void {
       if (!actor) return;
       const deviceId = String(req.get("X-Pc-Sync-Device-Id") ?? "").toLowerCase();
       const sha256 = String(req.get("X-File-Sha256") ?? "").toLowerCase();
-      const bytes = req.body;
+      // Only a raw body is accepted (express.raw); anything else is refused
+      // before it is used, and the bytes are copied into a Buffer of our own.
+      const body: unknown = req.body;
+      if (!Buffer.isBuffer(body)) return res.status(422).json({ code: "OFFLINE_PC_SYNC_FILE_INVALID" });
+      const bytes: Buffer = Buffer.from(body);
       if (
         !UUID.test(deviceId) ||
         !SHA256.test(sha256) ||
-        !Buffer.isBuffer(bytes) ||
         bytes.length < 1 ||
         bytes.length > PHASE9_ATTACHMENT_MAX_BYTES ||
         createHash("sha256").update(bytes).digest("hex") !== sha256

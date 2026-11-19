@@ -110,6 +110,13 @@ describe("PC offline file uploads: in the cloud", () => {
     const bytes = Buffer.from("%PDF-1.4 never sent");
     expect((await sendBytes(bytes, sha(Buffer.from("something else")))).status).toBe(422);
     expect((await sendBytes(bytes, sha(bytes), "not-a-device")).status).toBe(422);
+    // Anything but a raw body (here JSON naming the same hash) is refused.
+    const json = await agent
+      .post("/api/offline/pc-sync/files")
+      .set("x-pc-sync-device-id", DEVICE)
+      .set("x-file-sha256", sha(bytes))
+      .send({ length: 5 });
+    expect(json.status).toBe(422);
 
     const operationId = randomUUID();
     const envelope = phase9AttachmentEnvelope(evidence(operationId, 1_000_000_801, bytes, "missing.pdf"));
