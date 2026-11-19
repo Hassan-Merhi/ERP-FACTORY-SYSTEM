@@ -2,6 +2,7 @@
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
+import { capturePcLocalEnvelopeTx } from "../offline/pcLocal/pcCapture";
 
 export async function appendStockEventTx(
   tx: DbTransaction,
@@ -54,4 +55,17 @@ export async function appendStockFollowUpTx<
             ${event.companyId}, ${event.actorUserId}, ${sequence},
             ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)})
   `);
+}
+
+/**
+ * A PC in entry mode: a follow-up record goes to the PC's own outbox as a
+ * finished envelope, with a local reference from the PC's sequence, in the
+ * change's transaction.
+ */
+export async function pcLocalFollowUpTx<
+  T extends { kind: string; requestId: string; companyId: number; actorUserId: string },
+>(tx: DbTransaction, build: (localEditId: number) => T): Promise<void> {
+  const next = await tx.execute(sql`SELECT nextval('pc_local.local_ref_seq')::integer AS ref`);
+  const localEditId = Number((next.rows[0] as { ref: number | string }).ref);
+  await capturePcLocalEnvelopeTx(tx, build(localEditId), localEditId);
 }

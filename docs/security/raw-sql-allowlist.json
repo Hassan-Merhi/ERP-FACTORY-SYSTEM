@@ -9749,6 +9749,22 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
+      "id": "a4efe009962ac243f0a8",
+      "path": "tests/pc-sync-offline-transfer-edits.test.ts",
+      "kind": "indirect-query-text",
+      "context": "connect.query",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
+          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
+        }
+      ],
+      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
+    },
+    {
       "id": "101b62e3a988d7a2e362",
       "path": "tests/pc-sync-offline-stock-item-edits.test.ts",
       "kind": "indirect-query-text",

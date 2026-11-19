@@ -231,9 +231,10 @@ plan are in the plan document and the
 - Stock item master edits and deletes on a PC: the same whitelisted
   "before -> after" record as the LAN server, as a finished envelope in the
   change's own transaction.
+- Stock transfer edits, finalizes and revisions on a PC; a transfer made on the
+  PC keeps its local id as its reference.
 - Next: the other kinds the cloud already applies (POS edits/cancellations,
-  transfer edits/reviews, receiving, attachments), then new voucher types; then
-  Phases C to E.
+  receiving, attachments), then new voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 
