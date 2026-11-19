@@ -56,7 +56,14 @@ export interface Phase9ReceivingApplyResult {
 
 const NOT_PERMITTED_ROLES = new Set(["View Only", "Create Only", "ERP Tester", "POS"]);
 
-/** The live route is requireNonPOS; re-checked against CURRENT cloud access. */
+/** Editing an offload is PATCH /api/containers/:id/offload, requireRole("Admin") (Developer passes too). */
+const EDIT_ROLES = new Set(["Admin", "Developer"]);
+
+/**
+ * The live routes, re-checked against CURRENT cloud access: a first offload is
+ * requireNonPOS, an edit is Admin-only. A record built by a PC is the PC
+ * user's own claim, so the edit rule must hold here, not only on the PC.
+ */
 async function authorize(client: Queryable, event: Phase9ReceivingEvent): Promise<void> {
   const access = await client.query(
     `SELECT u.active, r.role, r.pos_view_only
@@ -69,11 +76,13 @@ async function authorize(client: Queryable, event: Phase9ReceivingEvent): Promis
   if (!row || row.active !== true) {
     throw new Phase9EventConflict("PHASE9_ACTOR_ACCESS_REVOKED", { actorUserId: event.actorUserId });
   }
-  if (row.pos_view_only === true || NOT_PERMITTED_ROLES.has(String(row.role))) {
-    throw new Phase9EventConflict("PHASE9_ACTOR_ROLE_NOT_PERMITTED", {
-      actorUserId: event.actorUserId,
-      role: String(row.role),
-    });
+  const role = String(row.role);
+  if (
+    row.pos_view_only === true ||
+    NOT_PERMITTED_ROLES.has(role) ||
+    (event.payload.mode === "edit" && !EDIT_ROLES.has(role))
+  ) {
+    throw new Phase9EventConflict("PHASE9_ACTOR_ROLE_NOT_PERMITTED", { actorUserId: event.actorUserId, role });
   }
 }
 
