@@ -38,12 +38,16 @@ const OWN_ID_KINDS: ReadonlySet<string> = new Set([PHASE9_STOCK_ITEM_CREATE_KIND
 
 /**
  * Changes to records the PC already has. The live route builds the finished
- * envelope in its own transaction (Payment / Receipt edits and deletes; any
- * other delete is refused by the route).
+ * envelope in its own transaction: Payment / Receipt edits and deletes (any
+ * other voucher is refused here), and stock item master edits and deletes
+ * (fields the cloud alone may change are refused by the route).
  */
 export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^PATCH \/api\/vouchers\/\d+\/payment-receipt$/,
   /^DELETE \/api\/vouchers\/\d+$/,
+  /^(PATCH|DELETE) \/api\/stock-items\/\d+$/,
+  /^POST \/api\/stock-items\/\d+\/location-prices$/,
+  /^POST \/api\/stock-items\/(update-names-by-code|bulk-assign-category|bulk-update-prices|import-opening-balances|bulk-update-uom|bulk-rename|import-barcodes|update-categories)$/,
 ]);
 
 /** "METHOD /path" -> offline operation kind the cloud applies exactly once. */

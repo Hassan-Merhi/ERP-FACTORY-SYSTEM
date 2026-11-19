@@ -228,9 +228,12 @@ plan are in the plan document and the
 - Payment / Receipt edits and deletes on a PC: the live route's evidence written
   as a finished envelope in the change's own transaction, accepted by the cloud
   only for the signed-in person and company; other deletes refused on a PC.
+- Stock item master edits and deletes on a PC: the same whitelisted
+  "before -> after" record as the LAN server, as a finished envelope in the
+  change's own transaction.
 - Next: the other kinds the cloud already applies (POS edits/cancellations,
-  stock item edits/deletes, transfer edits/reviews, receiving, attachments),
-  then new voucher types; then Phases C to E.
+  transfer edits/reviews, receiving, attachments), then new voucher types; then
+  Phases C to E.
 
 ## Resume checklist (next session)
 

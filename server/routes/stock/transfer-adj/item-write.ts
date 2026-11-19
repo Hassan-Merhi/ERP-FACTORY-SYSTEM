@@ -6,6 +6,7 @@
  */
 import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../../offline/pcLocal/pcCapture";
 import { capturePhase9StockItemDeleteTx } from "../../../edge/phase9StockOutbox";
 import { stockItemDeleteEvidence } from "../../../services/inventory/stockItemLifecycleCapture";
 import type { Express } from "express";
@@ -195,9 +196,9 @@ export function registerStockItemWriteRoutes(app: Express) {
         });
       }
 
-      // Plan batch 2: on the factory LAN server an item is deleted offline only
+      // Plan batch 2: on the factory LAN server (or a PC in entry mode) an item is deleted offline only
       // when it has no stock movements either, and the delete is recorded.
-      const lanCapture = isPhase9LanPrimary();
+      const lanCapture = isPhase9LanPrimary() || pcLocalEntryMode();
       if (lanCapture) {
         const movements = await db.execute<RawQueryRow<{ count: string | number }>>(
           sql`SELECT COUNT(*) AS count FROM canonical_stock_movements WHERE stock_item_id = ${stockItemId}`
