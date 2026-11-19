@@ -8,6 +8,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
+import { capturePcLocalEnvelopeTx, isPcLocalId, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import {
@@ -46,6 +47,9 @@ export async function capturePhase9AttachmentTx(tx: DbTransaction, evidence: Pha
 
 /** Plan batch 4: how an offline record names a file: by its LAN upload record if uploaded offline, else its shared id. */
 export async function phase9AttachmentFileRefTx(tx: DbTransaction, fileId: number): Promise<Phase9AttachmentFileRef> {
+  if (pcLocalEntryMode()) {
+    return isPcLocalId(fileId) ? { origin: "lan", localFileId: fileId } : { origin: "cloud", fileId };
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode === "lan" && config.primary && config.siteId) {
     const found = await tx.execute(sql`
@@ -58,11 +62,16 @@ export async function phase9AttachmentFileRefTx(tx: DbTransaction, fileId: numbe
   return { origin: "cloud", fileId };
 }
 
-/** Plan batch 4: an offline rename / move, in the change's own transaction; no-op off the LAN primary. */
+/** Plan batch 4: an offline rename / move, in the change's own transaction (LAN primary or a PC in entry mode). */
 export async function capturePhase9AttachmentUpdateTx(
   tx: DbTransaction,
   evidence: Phase9AttachmentUpdateEvidence
 ): Promise<void> {
+  if (pcLocalEntryMode()) {
+    const event = phase9AttachmentUpdateEnvelope(evidence);
+    await capturePcLocalEnvelopeTx(tx, event, event.localFileId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
   const event = phase9AttachmentUpdateEnvelope(evidence);
