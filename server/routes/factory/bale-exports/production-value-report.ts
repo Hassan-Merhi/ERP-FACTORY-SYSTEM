@@ -7,27 +7,11 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
-import {
-  BatchRateDecimal,
-  calculateProductionProfit,
-  calculateProductionWeightCost,
-  calculatePeriodTableBalance,
-} from "./production-value-math";
-import {
-  factoryCategories,
-  factoryBaleProducts,
-  factoryMixBatches,
-  factoryMixBatchSources,
-  factoryBales,
-  factoryWorkers,
-  factoryUserProfiles,
-} from "@shared/schema";
-import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
-import { getFactoryBalanceOnTableSnapshot } from "../../../services/factory/productionBalanceOnTable";
+import { productionValueReportStep } from "./productionValueReportStep";
+import { productionValueReportStep2 } from "./productionValueReportStep2";
+import { productionValueReportStep3 } from "./productionValueReportStep3";
 
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -35,649 +19,59 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
   app.get("/api/factory/production-value-report", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const currentRole = String(req.session.currentRole ?? req.user?.role ?? "").toLowerCase();
-      const isPrivileged = ["admin", "owner", "developer"].includes(currentRole);
-      const reportView = String(req.query.view ?? "");
-      const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
-      let hideReportCosts = false;
-      if (!isPrivileged && req.session.userId) {
-        const [profile] = await db
-          .select({
-            hiddenCostFields: factoryUserProfiles.hiddenCostFields,
-            hideAllCosts: factoryUserProfiles.hideAllCosts,
-          })
-          .from(factoryUserProfiles)
-          .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, req.session.userId)))
-          .limit(1);
-        const hiddenFields = profile?.hiddenCostFields ?? [];
-        const hasAnyProductionCostRestriction =
-          hiddenFields.includes("production_comparison_costing") || hiddenFields.includes("production_report_costing");
-        const viewCostRestricted =
-          reportView === "production-comparison"
-            ? hiddenFields.includes("production_comparison_costing")
-            : reportView === "production"
-              ? hiddenFields.includes("production_report_costing")
-              : hasAnyProductionCostRestriction;
-        hideReportCosts = Boolean(profile?.hideAllCosts || viewCostRestricted);
-      }
-
-      const from = req.query.from as string | undefined;
-      const to = req.query.to as string | undefined;
-      // Worker filter — accepts a single `workerId` (legacy) or a comma-separated
-      // `workerIds` list (multi-select filter on the Production Comparison page).
-      const workerIdParam = req.query.workerId as string | undefined;
-      const workerIdsParam = req.query.workerIds as string | undefined;
-      const workerIdFilter = [
-        ...new Set(
-          [...(workerIdsParam ? workerIdsParam.split(",") : []), ...(workerIdParam ? [workerIdParam] : [])]
-            .map((v) => parseInt(String(v).trim(), 10))
-            .filter((n) => Number.isFinite(n))
-        ),
-      ];
-
-      // ── Build date range conditions ──
-      // Use COALESCE(stock_entry_date, DATE(created_at)) so bales without a stock_entry_date
-      // (e.g. wipers/garbage entered via stock import) are still included using their creation date.
-      const baleConditions = [
-        eq(factoryBales.companyId, companyId),
-        // Exclude deleted/removed bales and REPACKED originals.
-        // REPACKED: when a bale is repacked a new IN_STOCK bale is created with the same
-        // weight; the original bale stays in the DB with status REPACKED.  Counting both
-        // would double-count that weight in Productions.
-        sql`${factoryBales.status} NOT IN ('DELETED', 'REMOVED', 'REPACKED')`,
-      ];
-      if (from)
-        baleConditions.push(
-          sql`COALESCE(DATE(${factoryBales.stockEntryDate}), DATE(${factoryBales.createdAt})) >= ${from}`
-        );
-      if (to)
-        baleConditions.push(
-          sql`COALESCE(DATE(${factoryBales.stockEntryDate}), DATE(${factoryBales.createdAt})) <= ${to}`
-        );
-      if (workerIdFilter.length === 1) baleConditions.push(eq(factoryBales.finalizedBy, workerIdFilter[0]));
-      else if (workerIdFilter.length > 1) baleConditions.push(inArray(factoryBales.finalizedBy, workerIdFilter));
-
-      // Exclude CARRY_FORWARD batches from the "Original Batches" total.
-      // CARRY_FORWARD batches represent leftover material from a parent batch whose weight is
-      // already counted in the parent's totalWeightKg.  Including them would double-count
-      // that leftover and inflate the raw-material total.
-      // Also exclude soft-deleted batches (deletedAt IS NOT NULL): their bales are deleted
-      // and excluded from Productions, so counting them here would widen the gap unfairly.
-      const mixBatchConditions = [
-        eq(factoryMixBatches.companyId, companyId),
-        sql`${factoryMixBatches.carryForwardFromId} IS NULL`,
-        isNull(factoryMixBatches.deletedAt),
-      ];
-      if (from)
-        mixBatchConditions.push(
-          sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt})) >= ${from}`
-        );
-      if (to)
-        mixBatchConditions.push(
-          sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt})) <= ${to}`
-        );
-
-      // Bale and mix-batch reads are independent. Start them together so the
-      // report does not pay both database latencies serially.
-      const baleRowsPromise = db
-        .select({
-          id: factoryBales.id,
-          mixBatchId: factoryBales.mixBatchId,
-          articleCode: factoryBales.articleCode,
-          productName: factoryBales.productName,
-          catalogArticleCode: factoryBaleProducts.articleCode,
-          catalogProductName: factoryBaleProducts.name,
-          weightKg: factoryBales.weightKg,
-          stockEntryDate: factoryBales.stockEntryDate,
-          productionPrice: factoryBaleProducts.productionPrice,
-          sellingPrice: factoryBaleProducts.sellingPrice,
-          productId: factoryBales.productId,
-          categoryId: factoryBaleProducts.categoryId,
-          categoryName: factoryCategories.name,
-          finalizedBy: factoryBales.finalizedBy,
-          baleWorkerName: factoryBales.workerName,
-          workerFullName: factoryWorkers.fullName,
-        })
-        .from(factoryBales)
-        .leftJoin(factoryBaleProducts, eq(factoryBales.productId, factoryBaleProducts.id))
-        .leftJoin(factoryCategories, eq(factoryBaleProducts.categoryId, factoryCategories.id))
-        .leftJoin(factoryWorkers, eq(factoryBales.finalizedBy, factoryWorkers.id))
-        .where(and(...baleConditions));
-
-      const mixBatchRowsPromise = db
-        .select({
-          id: factoryMixBatches.id,
-          batchCode: factoryMixBatches.batchCode,
-          name: factoryMixBatches.name,
-          totalWeightKg: factoryMixBatches.totalWeightKg,
-          usedKg: factoryMixBatches.usedKg,
-          status: factoryMixBatches.status,
-          costPerKg: factoryMixBatches.costPerKg,
-          totalCost: factoryMixBatches.totalCost,
-          batchDate: factoryMixBatches.batchDate,
-          createdAt: factoryMixBatches.createdAt,
-        })
-        .from(factoryMixBatches)
-        .where(and(...mixBatchConditions))
-        .orderBy(sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt}))`);
-
-      const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise]);
-
-      // Batch linkage follows the bales in the selected production period (and worker filter),
-      // rather than the mix-batch creation date. This lets Production Comparison calculate
-      // batch count/amount for whatever product/category/grade filters are applied client-side.
-      const linkedMixBatchIds = [
-        ...new Set(
-          baleRows.map((row) => row.mixBatchId).filter((id): id is number => id != null && Number.isFinite(Number(id)))
-        ),
-      ];
-      const linkedBatchRows =
-        linkedMixBatchIds.length > 0
-          ? await db
-              .select({
-                id: factoryMixBatches.id,
-                totalWeightKg: factoryMixBatches.totalWeightKg,
-              })
-              .from(factoryMixBatches)
-              .where(
-                and(
-                  eq(factoryMixBatches.companyId, companyId),
-                  inArray(factoryMixBatches.id, linkedMixBatchIds),
-                  isNull(factoryMixBatches.deletedAt)
-                )
-              )
-          : [];
-
-      // ── Helper: detect wipers/garbage by category name ──
-      function isWiperOrGarbage(catName: string): boolean {
-        const lower = (catName || "").toLowerCase();
-        return lower.includes("wiper") || lower.includes("garbage") || lower.includes("rag");
-      }
-
-      // ── Aggregate by article code (regular bales only) ──
-      const productMap = new Map<
-        string,
-        {
-          articleCode: string;
-          productName: string;
-          categoryName: string;
-          qty: number;
-          totalWeightKg: number;
-          costPricePerBale: number;
-          pricePerBale: number;
-          totalValue: number;
-          // Distinct mix batches that produced this product in the period.
-          mixBatchIds: Set<number>;
-          // Distinct workers who finalized bales of this product in the period.
-          workers: Map<string, { id: number | null; name: string; qty: number }>;
-        }
-      >();
-
-      // ── Aggregate by category (regular bales only) ──
-      const categoryMap = new Map<
-        string,
-        {
-          categoryName: string;
-          qty: number;
-          totalWeightKg: number;
-          totalValue: number;
-        }
-      >();
-
-      // ── Wipers & Garbage aggregation (separate) ──
-      const wgMap = new Map<
-        string,
-        {
-          subType: "wiper" | "garbage" | "other";
-          qty: number;
-          totalWeightKg: number;
-          totalValue: number;
-        }
-      >();
-      // Keep the existing subtype totals, but retain real catalogue products
-      // so Production Overview can expand Wipers & Garbage like regular categories.
-      const wgProductMap = new Map<
-        string,
-        {
-          articleCode: string;
-          productName: string;
-          categoryName: string;
-          qty: number;
-          totalWeightKg: number;
-          costPricePerBale: number;
-          pricePerBale: number;
-          totalValue: number;
-        }
-      >();
-
-      let totalSellingValue = 0;
-      let totalProductionCostValue = 0;
-      let missingSelectedPriceBales = 0;
-      let missingCostPriceBales = 0;
-      let missingSellingPriceBales = 0;
-
-      for (const bale of baleRows) {
-        const code = bale.articleCode || "UNKNOWN";
-        const name = bale.productName || code;
-        const catName = bale.categoryName || "Uncategorized";
-        const wt = toMoney(bale.weightKg).toNumber();
-        const costPrice = toMoney(bale.productionPrice).toNumber();
-        const sellingPrice = toMoney(bale.sellingPrice).toNumber();
-        const price = valuationMode === "selling" ? sellingPrice : costPrice;
-        const value = price; // catalog price is per bale (not per kg)
-        // Prefer the live worker record; fall back to the name snapshotted on the bale.
-        const workerName = (bale.workerFullName || bale.baleWorkerName || "").trim();
-        const workerId = bale.finalizedBy ?? null;
-
-        if (isWiperOrGarbage(catName)) {
-          // Route to wipers/garbage bucket
-          const lower = catName.toLowerCase();
-          const subType: "wiper" | "garbage" | "other" = lower.includes("wiper")
-            ? "wiper"
-            : lower.includes("garbage")
-              ? "garbage"
-              : "other";
-          const existing = wgMap.get(catName);
-          if (existing) {
-            existing.qty += 1;
-            existing.totalWeightKg += wt;
-            existing.totalValue += value;
-          } else {
-            wgMap.set(catName, { subType, qty: 1, totalWeightKg: wt, totalValue: value });
-          }
-
-          const wgCode = bale.catalogArticleCode || code;
-          const wgName = bale.catalogProductName || name;
-          const wgKey = bale.productId != null ? `product:${bale.productId}` : `code:${wgCode}`;
-          const existingProduct = wgProductMap.get(wgKey);
-          if (existingProduct) {
-            existingProduct.qty += 1;
-            existingProduct.totalWeightKg += wt;
-            existingProduct.totalValue += value;
-            existingProduct.pricePerBale = existingProduct.totalValue / existingProduct.qty;
-          } else {
-            wgProductMap.set(wgKey, {
-              articleCode: wgCode,
-              productName: wgName,
-              categoryName: "Wipers & Garbage",
-              qty: 1,
-              totalWeightKg: wt,
-              costPricePerBale: costPrice,
-              pricePerBale: price,
-              totalValue: value,
-            });
-          }
-        } else {
-          // Track both catalog values; the active valuation mode decides which one
-          // becomes Production Value and therefore which one drives Profit.
-          totalSellingValue += sellingPrice;
-          totalProductionCostValue += costPrice;
-          if (!(price > 0)) missingSelectedPriceBales += 1;
-          if (!(costPrice > 0)) missingCostPriceBales += 1;
-          if (!(sellingPrice > 0)) missingSellingPriceBales += 1;
-
-          const existing = productMap.get(code);
-          if (existing) {
-            existing.qty += 1;
-            existing.totalWeightKg += wt;
-            existing.totalValue += value;
-            if (bale.mixBatchId != null) existing.mixBatchIds.add(bale.mixBatchId);
-          } else {
-            productMap.set(code, {
-              articleCode: code,
-              productName: name,
-              categoryName: catName,
-              qty: 1,
-              totalWeightKg: wt,
-              costPricePerBale: costPrice,
-              pricePerBale: price,
-              totalValue: value,
-              mixBatchIds: new Set(bale.mixBatchId != null ? [bale.mixBatchId] : []),
-              workers: new Map(),
-            });
-          }
-
-          if (workerName || workerId != null) {
-            const wMap = productMap.get(code)!.workers;
-            const wKey = workerId != null ? `id:${workerId}` : `name:${workerName.toLowerCase()}`;
-            const wEx = wMap.get(wKey);
-            if (wEx) wEx.qty += 1;
-            else wMap.set(wKey, { id: workerId, name: workerName || `Worker #${workerId}`, qty: 1 });
-          }
-
-          const catExisting = categoryMap.get(catName);
-          if (catExisting) {
-            catExisting.qty += 1;
-            catExisting.totalWeightKg += wt;
-            catExisting.totalValue += value;
-          } else {
-            categoryMap.set(catName, { categoryName: catName, qty: 1, totalWeightKg: wt, totalValue: value });
-          }
-        }
-      }
-
-      const productRows = [...productMap.values()]
-        .sort((a, b) => a.articleCode.localeCompare(b.articleCode))
-        .map(({ workers, mixBatchIds, ...rest }) => ({
-          ...rest,
-          mixBatchIds: [...mixBatchIds].sort((a, b) => a - b),
-          workers: [...workers.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name)),
-        }));
-      const categoryRows = [...categoryMap.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-
-      const totalBales = productRows.reduce((s, r) => s + r.qty, 0);
-      const totalBaleWeightKg = productRows.reduce((s, r) => s + r.totalWeightKg, 0);
-      const totalProductionValue = productRows.reduce((s, r) => s + r.totalValue, 0);
-
-      // ── Wipers/garbage totals ──
-      const wgRows = [...wgMap.entries()].map(([catName, v]) => ({ categoryName: catName, ...v }));
-      const wgProductRows = [...wgProductMap.values()].sort(
-        (a, b) => a.productName.localeCompare(b.productName) || a.articleCode.localeCompare(b.articleCode)
-      );
-      const totalWipersQty = wgRows.filter((r) => r.subType === "wiper").reduce((s, r) => s + r.qty, 0);
-      const totalWipersKg = wgRows.filter((r) => r.subType === "wiper").reduce((s, r) => s + r.totalWeightKg, 0);
-      const totalGarbageQty = wgRows
-        .filter((r) => r.subType === "garbage" || r.subType === "other")
-        .reduce((s, r) => s + r.qty, 0);
-      const totalGarbageKg = wgRows
-        .filter((r) => r.subType === "garbage" || r.subType === "other")
-        .reduce((s, r) => s + r.totalWeightKg, 0);
-      const totalWgValue = wgRows.reduce((s, r) => s + r.totalValue, 0);
-      const totalWgWeightKg = wgRows.reduce((s, r) => s + r.totalWeightKg, 0);
-
-      // ── Recompute each batch's display cost using current supplier locked rates ──
-      // Mirrors GET /api/factory/mix-batches and EditMixBatchDialog: never uses the stored
-      // batch cost fields directly; supplier-source rows always use the current locked USD rate.
-      const reportBatchIds = mixBatchRows.map((r) => r.id);
-      const mixSourceRows =
-        reportBatchIds.length > 0
-          ? await db
-              .select({
-                mixBatchId: factoryMixBatchSources.mixBatchId,
-                sourceBatchId: factoryMixBatchSources.sourceBatchId,
-                supplierId: factoryMixBatchSources.supplierId,
-                inventorySupplierId: factoryMixBatchSources.inventorySupplierId,
-                containerId: factoryMixBatchSources.containerId,
-                weightKg: factoryMixBatchSources.weightKg,
-                costPerKg: factoryMixBatchSources.costPerKg,
-              })
-              .from(factoryMixBatchSources)
-              .where(inArray(factoryMixBatchSources.mixBatchId, reportBatchIds))
-          : [];
-
-      // Resolve current locked USD rate for every unique supplier referenced by sources
-      const reportSupplierIds = [
-        ...new Set(mixSourceRows.filter((s) => s.supplierId != null).map((s) => s.supplierId as number)),
-      ];
-      const reportSupplierRateMap = await getLockedSupplierRatesReadOnlyBulk(db, companyId, reportSupplierIds);
-
-      // Group sources by batch
-      const reportSourcesByBatch = new Map();
-      for (const src of mixSourceRows) {
-        if (!reportSourcesByBatch.has(src.mixBatchId)) reportSourcesByBatch.set(src.mixBatchId, []);
-        reportSourcesByBatch.get(src.mixBatchId)!.push(src);
-      }
-
-      // Original Batches are historical batch valuations. Keep the stored batch cost/rate
-      // instead of re-pricing old batches from today's supplier locked rates. Intentional
-      // landed-cost corrections already cascade into these stored batch fields.
-      const correctedBatchRows = mixBatchRows;
-
-      // Keep batch-rate arithmetic in decimal space so summing many stored DECIMAL
-      // values does not introduce binary floating-point drift before division.
-      const totalMixWeightDecimal = correctedBatchRows.reduce(
-        (sum, row) => sum.plus(row.totalWeightKg || 0),
-        new BatchRateDecimal(0)
-      );
-      const totalMixCostDecimal = correctedBatchRows.reduce(
-        (sum, row) => sum.plus(row.totalCost || 0),
-        new BatchRateDecimal(0)
-      );
-      const totalMixWeightKg = totalMixWeightDecimal.toNumber();
-      const totalMixCost = totalMixCostDecimal.toNumber();
-
-      // Material from period batches that is still on the pressing table (not yet turned into bales).
-      // Only ACTIVE batches have meaningful on-table material; COMPLETED batches set usedKg = totalWeightKg
-      // when closed, so their contribution is already 0 by definition.
-      const periodOnTableKg = mixBatchRows.reduce((s: number, r) => {
-        if ((r.status || "ACTIVE") !== "ACTIVE") return s;
-        const remaining = Math.max(0, toMoney(r.totalWeightKg).minus(toMoney(r.usedKg)).toNumber());
-        return s + remaining;
-      }, 0);
-
-      // ── Balance on table ──
-      // Balance on Table is an "as-of" snapshot. The report's start date never limits
-      // this card: we cumulatively include factory history through the selected END date.
-      // With no end date (All Time), the queries naturally include all available history.
-      // Period blended rate is for the Original Batches card only.
-      const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
-        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
-        : new BatchRateDecimal(0);
-      const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
-
-      // Same source and exact rounding as Factory Net Position.
-      const balanceSnapshot = await getFactoryBalanceOnTableSnapshot(companyId, to);
-      const balanceBatchRateDecimal = balanceSnapshot.batchRateDecimal;
-      const balanceWeightKg = balanceSnapshot.weightKg;
-      const balanceCostPerKg = balanceSnapshot.costPerKg;
-      const balanceValue = balanceSnapshot.value;
-
-      // Preserve the overall as-of Balance on Table snapshot without changing
-      // Production Weight Cost. Closed mix batches are normally fully used at
-      // creation, so their current "ACTIVE" status is NOT a historical month
-      // balance. For the filtered KPI, compare the physical balances at the
-      // selected period's boundaries. This is period net movement (up/down),
-      // valued at the period's correct original-batch weighted-average rate.
-      const priorDate = from
-        ? (() => {
-            const firstDay = new Date(`${from}T00:00:00Z`);
-            if (!Number.isFinite(firstDay.getTime()) || firstDay.toISOString().slice(0, 10) !== from) {
-              throw new RangeError();
-            }
-            firstDay.setUTCDate(firstDay.getUTCDate() - 1);
-            return firstDay.toISOString().slice(0, 10);
-          })()
-        : null;
-      const beforePeriodSnapshot = priorDate ? await getFactoryBalanceOnTableSnapshot(companyId, priorDate) : null;
-      const filteredTable = calculatePeriodTableBalance({
-        weightAtEndKg: balanceWeightKg,
-        weightBeforePeriodKg: beforePeriodSnapshot?.weightKg ?? 0,
-        mixedPeriodWeightKg: totalMixWeightDecimal,
-        mixedPeriodCost: totalMixCostDecimal,
-      });
-
-      // Weight Cost includes all material converted during the selected period:
-      // regular bales plus wipers and garbage. Those groups are mutually exclusive
-      // in baleRows, so each kilogram is charged once at the historical cumulative
-      // batch rate. This stays separate from the period-only Balance on Table rate.
-      const weightCostDecimal = calculateProductionWeightCost({
-        producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg),
-        batchRateCost: balanceBatchRateDecimal,
-      });
-      // Profit follows the active valuation mode:
-      // Cost Price: cost production value - Weight Cost
-      // Selling Price: selling production value - Weight Cost
-      const { weightCost, profitValue, profitMarginPct } = calculateProductionProfit({
-        productionValue: totalProductionValue,
-        weightCost: weightCostDecimal,
-      });
-      const statusValue = profitValue;
-
-      // ── Kg comparison ──
-      const kgDiff = totalBaleWeightKg - totalMixWeightKg;
-
-      // ── Supplier mix breakdown (per day, per supplier) ──
-      // Use inventorySupplierId — the canonical ownership field set on ALL source types,
-      // including batch-to-batch sources. This traces back to the ultimate raw-material supplier
-      // even when the immediate source is another mix batch.
-      const inventorySupplierIds = [
-        ...new Set(
-          mixSourceRows.filter((s) => s.inventorySupplierId != null).map((s) => s.inventorySupplierId as number)
-        ),
-      ];
-
-      // Also collect direct supplierId / container supplierId as fallback
-      const allSupplierIdsForNames = [...new Set([...inventorySupplierIds, ...reportSupplierIds])];
-
-      // Fallback: container → supplier name for sources without inventorySupplierId.
-      // Resolve container ownership in one query, then load every required supplier
-      // name in one batch. This removes the old one-query-per-container-supplier loop.
-      const containerIds = [
-        ...new Set(
-          mixSourceRows
-            .filter((s) => s.inventorySupplierId == null && s.containerId != null)
-            .map((s) => s.containerId as number)
-        ),
-      ];
-      const containerSupplierIdMap = new Map<number, number | null>();
-      if (containerIds.length > 0) {
-        const cRows = await pool.query(`SELECT id, supplier_id FROM factory_containers WHERE id = ANY($1)`, [
-          containerIds,
-        ]);
-        for (const r of cRows.rows) {
-          containerSupplierIdMap.set(r.id as number, r.supplier_id as number | null);
-        }
-      }
-
-      const supplierIdsForNames = [
-        ...new Set([
-          ...allSupplierIdsForNames,
-          ...[...containerSupplierIdMap.values()].filter((id): id is number => id != null),
-        ]),
-      ];
-      const supplierNameById = new Map<number, string>();
-      if (supplierIdsForNames.length > 0) {
-        const sRows = await pool.query(`SELECT id, name FROM factory_suppliers WHERE id = ANY($1)`, [
-          supplierIdsForNames,
-        ]);
-        for (const r of sRows.rows) {
-          supplierNameById.set(r.id as number, r.name as string);
-        }
-      }
-
-      // Resolve supplier name for one source row
-      function resolveSupplierName(src: {
-        inventorySupplierId?: number | null;
-        supplierId?: number | null;
-        containerId?: number | null;
-      }): string {
-        // 1. inventorySupplierId — most authoritative
-        if (src.inventorySupplierId != null) {
-          return supplierNameById.get(src.inventorySupplierId) ?? `Supplier #${src.inventorySupplierId}`;
-        }
-        // 2. Direct supplierId on the source row
-        if (src.supplierId != null) {
-          return supplierNameById.get(src.supplierId) ?? `Supplier #${src.supplierId}`;
-        }
-        // 3. Container → supplier
-        if (src.containerId != null) {
-          const csid = containerSupplierIdMap.get(src.containerId);
-          if (csid) return supplierNameById.get(csid) ?? `Supplier #${csid}`;
-        }
-        return "Unknown";
-      }
-
-      // Group ALL sources (including batch-to-batch) by (date, supplierName)
-      type SupDay = { date: string; supplierName: string; totalKg: number; totalCost: number };
-      const supDayMap = new Map<string, SupDay>();
-
-      for (const batch of mixBatchRows) {
-        const batchDate: string = batch.batchDate
-          ? String(batch.batchDate).slice(0, 10)
-          : String(batch.createdAt).slice(0, 10);
-        const sources = reportSourcesByBatch.get(batch.id) || [];
-
-        for (const src of sources) {
-          const supplierName = resolveSupplierName(src);
-          if (
-            supplierName === "Unknown" &&
-            src.inventorySupplierId == null &&
-            src.supplierId == null &&
-            src.containerId == null
-          ) {
-            continue; // truly unresolvable — skip
-          }
-
-          const w = toMoney(src.weightKg).toNumber();
-          // Use effective cost: locked rate for direct-supplier sources, stored costPerKg otherwise
-          let cpk: number;
-          if (src.supplierId != null) {
-            cpk = reportSupplierRateMap.get(src.supplierId) ?? toMoney(src.costPerKg).toNumber();
-          } else {
-            cpk = toMoney(src.costPerKg).toNumber();
-          }
-
-          const key = `${batchDate}::${supplierName}`;
-          const ex = supDayMap.get(key);
-          if (ex) {
-            ex.totalKg += w;
-            ex.totalCost += w * cpk;
-          } else {
-            supDayMap.set(key, { date: batchDate, supplierName, totalKg: w, totalCost: w * cpk });
-          }
-        }
-      }
-
-      const supplierMixBreakdown = [...supDayMap.values()].sort((a, b) =>
-        a.date !== b.date ? a.date.localeCompare(b.date) : a.supplierName.localeCompare(b.supplierName)
-      );
-
-      const safeProductRows = hideReportCosts
-        ? productRows.map((row) => ({
-            ...row,
-            costPricePerBale: 0,
-            pricePerBale: 0,
-            totalValue: 0,
-          }))
-        : productRows;
-      const safeCategoryRows = hideReportCosts
-        ? categoryRows.map((row) => ({
-            ...row,
-            totalValue: 0,
-          }))
-        : categoryRows;
-      const safeWgRows = hideReportCosts
-        ? wgRows.map((row) => ({
-            ...row,
-            totalValue: 0,
-          }))
-        : wgRows;
-      const safeWgProductRows = hideReportCosts
-        ? wgProductRows.map((row) => ({
-            ...row,
-            costPricePerBale: 0,
-            pricePerBale: 0,
-            totalValue: 0,
-          }))
-        : wgProductRows;
-      const safeBatchRows = hideReportCosts
-        ? correctedBatchRows.map((row) => ({
-            ...row,
-            costPerKg: "0",
-            totalCost: "0",
-          }))
-        : correctedBatchRows;
-      const safeSupplierMixBreakdown = hideReportCosts
-        ? supplierMixBreakdown.map((row) => ({
-            ...row,
-            totalCost: 0,
-          }))
-        : supplierMixBreakdown;
+      const pvr1 = await productionValueReportStep({ req, res });
+      if (pvr1.done) return pvr1.value;
+      const { from, to, hideReportCosts, valuationMode, linkedBatchRows } = pvr1;
+      const pvr2 = await productionValueReportStep2({ pvr1 });
+      const {
+        totalBales,
+        totalBaleWeightKg,
+        totalProductionValue,
+        totalWipersQty,
+        totalWipersKg,
+        totalGarbageQty,
+        totalGarbageKg,
+        totalWgWeightKg,
+        totalWgValue,
+        correctedBatchRows,
+        totalMixWeightKg,
+        periodOnTableKg,
+        totalMixCost,
+        blendedCostPerKg,
+        balanceWeightKg,
+        balanceCostPerKg,
+        balanceValue,
+        missingSelectedPriceBales,
+        missingCostPriceBales,
+        missingSellingPriceBales,
+      } = pvr2;
+      const pvr3 = await productionValueReportStep3({ pvr1, pvr2 });
+      const {
+        safeProductRows,
+        safeCategoryRows,
+        safeWgRows,
+        safeWgProductRows,
+        safeBatchRows,
+        filteredTable,
+        weightCost,
+        statusValue,
+        profitValue,
+        profitMarginPct,
+        kgDiff,
+        safeSupplierMixBreakdown,
+      } = pvr3;
 
       res.json({
         from: from || null,
         to: to || null,
         costsHidden: hideReportCosts,
-        valuationMode,
+        valuationMode: valuationMode,
         // Wave 11: the report's bale values are catalogue prices per bale — the
         // production (selling) value of what was produced — never the bales'
         // cost, which is factory_bales.total_cost (USD material cost).
         valueBasis: "selling-value-catalogue-price-per-bale",
         production: {
-          totalBales,
+          totalBales: totalBales,
           totalWeightKg: totalBaleWeightKg,
           totalValue: hideReportCosts ? 0 : totalProductionValue,
           byProduct: safeProductRows,
@@ -688,10 +82,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           })),
         },
         wipersGarbage: {
-          totalWipersQty,
-          totalWipersKg,
-          totalGarbageQty,
-          totalGarbageKg,
+          totalWipersQty: totalWipersQty,
+          totalWipersKg: totalWipersKg,
+          totalGarbageQty: totalGarbageQty,
+          totalGarbageKg: totalGarbageKg,
           totalWeightKg: totalWgWeightKg,
           totalValue: hideReportCosts ? 0 : totalWgValue,
           rows: safeWgRows,
@@ -727,8 +121,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           weightCost: hideReportCosts ? 0 : weightCost,
           productionValue: hideReportCosts ? 0 : totalProductionValue,
           statusValue: hideReportCosts ? 0 : statusValue,
-          costValue: hideReportCosts ? 0 : totalProductionCostValue,
-          sellingValue: hideReportCosts ? 0 : totalSellingValue,
+          costValue: hideReportCosts ? 0 : pvr1.totalProductionCostValue,
+          sellingValue: hideReportCosts ? 0 : pvr1.totalSellingValue,
           remainingMaterialValue: hideReportCosts ? 0 : balanceValue,
           consumedMaterialCost: hideReportCosts ? 0 : weightCost,
           profitValue: hideReportCosts ? 0 : profitValue,
