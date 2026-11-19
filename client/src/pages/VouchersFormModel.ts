@@ -207,9 +207,8 @@ export function useVouchersFormModel({ posUser }: { posUser: { posUser: Vouchers
   // Editing a historical document keeps its original native currency,
   // independently of the current user's currency-toggle preference.
   const paymentPostingCurrency =
-    voucherIdToEdit &&
-    (voucherToEdit?.currency === "ZMW" || voucherToEdit?.currency === "CFA" || voucherToEdit?.currency === "USD")
-      ? voucherToEdit.currency
+    voucherIdToEdit && ["ZMW", "CFA", "USD", "EUR"].includes(voucherToEdit?.currency ?? "")
+      ? (voucherToEdit?.currency ?? selectedCurrency)
       : selectedCurrency;
   const paymentPostingRate =
     paymentPostingCurrency === "ZMW"
@@ -218,7 +217,12 @@ export function useVouchersFormModel({ posUser }: { posUser: { posUser: Vouchers
           ? priorZmwRate
           : null
         : dateSpecificZmwRate
-      : exchangeRate;
+      : voucherIdToEdit && paymentPostingCurrency === "EUR"
+        ? // A EUR voucher (FX agent wallet payment) keeps the rate it was saved at.
+          Number.isFinite(priorZmwRate) && priorZmwRate > 0
+          ? priorZmwRate
+          : null
+        : exchangeRate;
   const watchedEntries = useWatch({ control: form.control, name: "entries" });
   const total = entries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
 

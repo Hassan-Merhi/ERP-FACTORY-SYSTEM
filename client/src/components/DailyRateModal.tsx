@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { fxRevaluationSummary, readFxRevaluation, refreshAfterFxRevaluation } from "@/lib/fxRevaluationSummary";
 import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateReadModels";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import { format } from "date-fns";
@@ -153,15 +154,18 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
         effectiveDate: savedDate,
         daily: true,
       });
-      return { response, savedCompanyId: companyId, savedDate };
+      return { response, savedCompanyId: companyId, savedDate, fxRevaluation: await readFxRevaluation(response) };
     },
-    onSuccess: async ({ savedCompanyId, savedDate }) => {
+    onSuccess: async ({ savedCompanyId, savedDate, fxRevaluation }) => {
       // Only mark today's date after an acknowledged successful server save.
       markDoneToday(savedCompanyId, savedDate);
+      const revaluation = fxRevaluationSummary(fxRevaluation);
       toast({
         title: "Today's exchange rate has been set",
-        description: "Current USD valuation views are refreshing.",
+        description: revaluation.description,
+        ...(revaluation.problem ? { variant: "destructive" as const } : {}),
       });
+      refreshAfterFxRevaluation(fxRevaluation);
       setIsOpen(false);
       setChangeMode(false);
       await invalidateExchangeRateReadModels(savedCompanyId);

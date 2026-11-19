@@ -11,6 +11,7 @@ import { and, eq, or } from "drizzle-orm";
 import { intercompanyRelationshipPolicies, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { logger } from "../../lib/logger";
 import { hasIntercompanyVoucherPoliciesTable } from "../../lib/intercompanyTradeAvailability";
 import { IntercompanyEditError, type EditIdentity } from "../../services/intercompany/tradeSync";
@@ -120,10 +121,15 @@ async function inspect(req: Request) {
   return { identity, match, policyTableAvailable: true };
 }
 
-function fail(res: Response, error: unknown) {
+export function fail(res: Response, error: unknown) {
   if (error instanceof NormalVoucherMirrorError || error instanceof IntercompanyEditError) {
     return res.status(error.status).json({ code: error.code, message: error.message });
   }
+  // A closed accounting period is a definite refusal, not an internal failure.
+  // With its code, the browser lets the request identity go, so the same entry
+  // can be posted once the period is reopened instead of replaying this answer.
+  const closedPeriod = closedPeriodErrorResponse(error);
+  if (closedPeriod) return res.status(closedPeriod.status).json(closedPeriod.body);
   if (error instanceof z.ZodError) {
     return res.status(422).json({
       code: "IC_VOUCHER_INPUT",
