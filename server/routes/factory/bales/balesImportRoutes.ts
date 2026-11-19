@@ -27,6 +27,8 @@ import { eq, and, sql, inArray, ilike } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import { registerBalesImportRoutesPart1 } from "./registerBalesImportRoutesPart1";
 import { registerBalesImportRoutesPart2 } from "./registerBalesImportRoutesPart2";
+import { validateRequest } from "../../../lib/validateRequest";
+import { openingRawStockImportInput, recalcOpeningInput } from "./balesImportRoutesSchemas";
 
 export function registerBalesImportRoutes(app: Express) {
   registerBalesImportRoutesPart1(app);
@@ -110,17 +112,22 @@ export function registerBalesImportRoutes(app: Express) {
     return { suppliersProcessed, totalAllocatedKg, unmatchedKg };
   }
 
-  app.post("/api/factory/raw-stock/recalc-opening", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const stats = await recalcOpeningStockUsage(companyId);
-      res.json(stats);
-    } catch (error: unknown) {
-      logger.error("Error recalculating opening stock:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/factory/raw-stock/recalc-opening",
+    requireAuth,
+    validateRequest(recalcOpeningInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const stats = await recalcOpeningStockUsage(companyId);
+        res.json(stats);
+      } catch (error: unknown) {
+        logger.error("Error recalculating opening stock:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Phase 19 C (F7/DI10): Admin/Owner; one transaction that takes the cut-over
   // lock and is refused once the cut-over is applied (409
@@ -132,6 +139,7 @@ export function registerBalesImportRoutes(app: Express) {
     "/api/factory/import/opening-raw-stock",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(openingRawStockImportInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

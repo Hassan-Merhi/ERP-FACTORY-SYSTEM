@@ -12,6 +12,10 @@ const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
 const queue = read("client/src/pages/factory/PressingOfflineQueueStatus.tsx");
 const routes = read("server/routes/factoryRoutes.ts");
 const contract = read("shared/schema/factory/pressing-machine-tracking.ts");
+// Formatting-independent view of the correction routes: multi-line call chains
+// are pinned by their tokens, not by where Prettier breaks the lines.
+const compact = (text: string) => text.replace(/\s+/g, "");
+const correctionCompact = compact(correction);
 
 describe("Pressing Machines Phase 8 correction and audit controls", () => {
   it("requires authenticated supervisor/manager role behind Factory page access", () => {
@@ -39,20 +43,20 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("eq(factoryPressingMachines.companyId, ctx.companyId)");
     expect(correction).toContain("eq(factoryBales.companyId, ctx.companyId)");
     expect(correction).toContain("eq(factoryBales.id, target.baleId)");
-    expect(correction).toContain('eq(factoryPressingConfirmations.id, confirmationId))).for("update")');
-    expect(correction).toContain("db.transaction(async tx =>");
+    expect(correctionCompact).toContain(compact('eq(factoryPressingConfirmations.id, confirmationId))).for("update")'));
+    expect(correctionCompact).toContain(compact("db.transaction(async (tx) =>"));
   });
 
   it("appends correction BEFORE the sole permitted voided_at/voided_by change", () => {
-    const insert = correction.indexOf("tx.insert(factoryPressingCorrections)");
-    const update = correction.indexOf("tx.update(factoryPressingConfirmations)");
+    const insert = correctionCompact.indexOf("tx.insert(factoryPressingCorrections)");
+    const update = correctionCompact.indexOf("tx.update(factoryPressingConfirmations)");
     expect(insert).toBeGreaterThan(0);
     expect(update).toBeGreaterThan(insert);
     expect(correction).toContain('action: "VOID"');
     expect(correction).toContain("voidedAt: now");
     expect(correction).toContain("voidedBy: ctx.userId");
     expect(correction).toContain('action: "void"');
-    expect(correction).toContain("}, tx)");
+    expect(correctionCompact).toContain("},tx)");
     expect(triggerDefinition("factory_pressing_corrections", "factory_pressing_corrections_immutable_trg")).toContain(
       "BEFORE DELETE OR UPDATE ON public.factory_pressing_corrections"
     );
@@ -119,7 +123,7 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain('action: "RECONFIRM"');
     expect(correction).toContain("replacementConfirmationId: restored.id");
     expect(correction).toContain('action: "restore"');
-    expect(correction).toContain("}, tx)");
+    expect(correctionCompact).toContain("},tx)");
   });
 
   it("has no accounting, stock, mix or Factory finalize side effects", () => {

@@ -47,7 +47,7 @@ vi.mock("drizzle-orm", () => ({
   desc: (column: unknown) => ({ type: "desc", column }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
 }));
-vi.mock("@shared/schema", () => ({
+vi.mock("@shared/schema", async (importOriginal) => ({
   baleProducts: { id: "baleProducts.id" },
   baleSequences: { id: "baleSequences.id", companyId: "baleSequences.companyId" },
   mixBatches: { id: "mixBatches.id" },
@@ -67,7 +67,8 @@ vi.mock("@shared/schema", () => ({
     baleCode: "productionBales.baleCode",
     createdAt: "productionBales.createdAt",
   },
-  insertProductionBaleSchema: { safeParse: vi.fn() },
+  // Real schema: the route module derives its request schema from it at load time.
+  insertProductionBaleSchema: (await importOriginal<typeof import("@shared/schema")>()).insertProductionBaleSchema,
 }));
 
 import { registerProductionBaleRoutes } from "../server/routes/productionBaleRoutes";

@@ -10,6 +10,8 @@ import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { insertStockItemCodeAliasSchema } from "@shared/schema";
 import {} from "drizzle-orm";
+import { validateRequest } from "../../../lib/validateRequest";
+import { createCodeAliasInput, deleteByIdInput } from "./transferAdjRouteSchemas";
 
 export function registerStockItemCodeAliasRoutes(app: Express) {
   // Get all code aliases for a stock item
@@ -44,48 +46,54 @@ export function registerStockItemCodeAliasRoutes(app: Express) {
   });
 
   // Create a new code alias for a stock item
-  app.post("/api/stock-items/:id/code-aliases", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const stockItemId = parseInt(req.params.id);
-      if (isNaN(stockItemId)) {
-        return res.status(400).json({ message: "Invalid stock item ID" });
-      }
+  app.post(
+    "/api/stock-items/:id/code-aliases",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createCodeAliasInput),
+    async (req, res) => {
+      try {
+        const stockItemId = parseInt(req.params.id);
+        if (isNaN(stockItemId)) {
+          return res.status(400).json({ message: "Invalid stock item ID" });
+        }
 
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      // Verify stock item exists and belongs to current company
-      const existingItem = await storage.getStockItemById(stockItemId);
-      if (!existingItem) {
-        return res.status(404).json({ message: "Stock item not found" });
-      }
+        // Verify stock item exists and belongs to current company
+        const existingItem = await storage.getStockItemById(stockItemId);
+        if (!existingItem) {
+          return res.status(404).json({ message: "Stock item not found" });
+        }
 
-      if (existingItem.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Access denied: Stock item belongs to a different company",
+        if (existingItem.companyId !== req.session.currentCompanyId) {
+          return res.status(403).json({
+            message: "Access denied: Stock item belongs to a different company",
+          });
+        }
+
+        // Validate the alias (include companyId for security)
+        const validatedAlias = insertStockItemCodeAliasSchema.parse({
+          ...req.body,
+          stockItemId,
+          companyId: req.session.currentCompanyId,
         });
-      }
 
-      // Validate the alias (include companyId for security)
-      const validatedAlias = insertStockItemCodeAliasSchema.parse({
-        ...req.body,
-        stockItemId,
-        companyId: req.session.currentCompanyId,
-      });
-
-      const alias = await storage.createStockItemCodeAlias(validatedAlias);
-      res.status(201).json(alias);
-    } catch (error: unknown) {
-      if ((error as { name?: string }).name === "ZodError") {
-        return res.status(400).json({ message: "Validation error", errors: (error as { errors?: unknown }).errors });
+        const alias = await storage.createStockItemCodeAlias(validatedAlias);
+        res.status(201).json(alias);
+      } catch (error: unknown) {
+        if ((error as { name?: string }).name === "ZodError") {
+          return res.status(400).json({ message: "Validation error", errors: (error as { errors?: unknown }).errors });
+        }
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Delete a code alias
-  app.delete("/api/stock-item-code-aliases/:id", requireAuth, async (req, res) => {
+  app.delete("/api/stock-item-code-aliases/:id", requireAuth, validateRequest(deleteByIdInput), async (req, res) => {
     try {
       const aliasId = parseInt(req.params.id);
       if (isNaN(aliasId)) {

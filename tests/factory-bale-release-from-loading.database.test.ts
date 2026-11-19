@@ -47,6 +47,7 @@ async function release(companyId: number, baleId: number | string, role = "Admin
   };
   const req = {
     params: { id: String(baleId) },
+    query: {},
     session: { factoryCompanyId: companyId, username: "tester" },
     user: { id: "release-test-user", username: "tester", role },
   };

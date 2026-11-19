@@ -15,6 +15,8 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { poImportRequestInput } from "./poImportRequestSchema";
 import { voucherEntries } from "@shared/schema";
 import {
   ParentCompanyPostingScopeError,
@@ -32,7 +34,7 @@ export function registerPoImportRoutes(app: Express) {
   registerPoImportValidateRoute(app);
 
   // PO Import - Import data
-  app.post("/api/po-import/import", requireAuth, async (req, res) => {
+  app.post("/api/po-import/import", requireAuth, validateRequest(poImportRequestInput), async (req, res) => {
     try {
       const s1 = await poImportStep({ req, res });
       if (s1.done) return s1.value;

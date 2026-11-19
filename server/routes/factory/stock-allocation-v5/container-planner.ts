@@ -15,6 +15,27 @@ import {
   writePlannerAudit,
 } from "./container-plannerLoadPlanDetail";
 import { registerV5ContainerPlannerRoutesPart1 } from "./registerV5ContainerPlannerRoutesPart1";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const planIdParams = z.strictObject({ planId: stringParam });
+
+// The handler keeps its "lock state is required" check and message.
+const lockContainerInput = {
+  params: z.strictObject({ planId: stringParam, containerId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ isLocked: z.boolean().optional() }),
+} satisfies RequestSchemas;
+
+const rebalancePlanInput = { params: planIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const deletePlanInput = { params: planIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerV5ContainerPlannerRoutes(app: Express): void {
   registerV5ContainerPlannerRoutesPart1(app);
@@ -25,12 +46,14 @@ function registerV5ContainerPlannerRoutesPart2(app: Express) {
   app.patch(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/lock",
     requireAuth,
+    validateRequest(lockContainerInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, lockContainerInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const isLocked = req.body?.isLocked;
 
         if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -104,130 +127,143 @@ function registerV5ContainerPlannerRoutesPart2(app: Express) {
     }
   );
 
-  app.post("/api/factory/v5/container-plans/:planId/rebalance", requireAuth, async (req: Request, res: Response) => {
-    const client = await pool.connect();
-    try {
-      const companyId = companyIdFor(req);
-      const planId = positiveInt(req.params.planId);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!planId) return res.status(400).json({ message: "Invalid plan id" });
+  app.post(
+    "/api/factory/v5/container-plans/:planId/rebalance",
+    requireAuth,
+    validateRequest(rebalancePlanInput),
+    async (req: Request, res: Response) => {
+      const client = await pool.connect();
+      try {
+        const companyId = companyIdFor(req);
+        const planId = positiveInt(validatedInput(req, rebalancePlanInput).params.planId);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!planId) return res.status(400).json({ message: "Invalid plan id" });
 
-      await client.query("BEGIN");
-      const plan = await lockPlan(client, planId, companyId);
-      if (!plan) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Container plan not found" });
-      }
+        await client.query("BEGIN");
+        const plan = await lockPlan(client, planId, companyId);
+        if (!plan) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Container plan not found" });
+        }
 
-      const containersResult = await client.query(
-        `SELECT id, position, is_locked
+        const containersResult = await client.query(
+          `SELECT id, position, is_locked
          FROM factory_container_plan_containers
          WHERE plan_id = $1 AND company_id = $2
          ORDER BY position, id
          FOR UPDATE`,
-        [planId, companyId]
-      );
-      const linesResult = await client.query(
-        `SELECT plan_container_id, article_code, product_name, planned_qty
+          [planId, companyId]
+        );
+        const linesResult = await client.query(
+          `SELECT plan_container_id, article_code, product_name, planned_qty
          FROM factory_container_plan_lines
          WHERE plan_id = $1 AND company_id = $2
          FOR UPDATE`,
-        [planId, companyId]
-      );
-
-      const linesByContainer = new Map<number, SavedPlannerContainer["lines"]>();
-      for (const line of linesResult.rows) {
-        const containerId = Number(line.plan_container_id);
-        if (!linesByContainer.has(containerId)) linesByContainer.set(containerId, []);
-        linesByContainer.get(containerId)!.push({
-          articleCode: String(line.article_code),
-          productName: String(line.product_name || line.article_code),
-          plannedQty: Number(line.planned_qty),
-        });
-      }
-
-      const savedContainers: SavedPlannerContainer[] = containersResult.rows.map((container) => ({
-        id: Number(container.id),
-        position: Number(container.position),
-        isLocked: Boolean(container.is_locked),
-        lines: linesByContainer.get(Number(container.id)) ?? [],
-      }));
-
-      let rebalanced;
-      try {
-        rebalanced = rebalanceUnlockedContainerPlan(savedContainers, Number(plan.capacity_bales));
-      } catch (error) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({ message: getErrorMessage(error) });
-      }
-
-      const unlockedIds = savedContainers.filter((container) => !container.isLocked).map((container) => container.id);
-      if (unlockedIds.length > 0) {
-        await client.query(
-          `DELETE FROM factory_container_plan_lines
-           WHERE plan_id = $1 AND company_id = $2 AND plan_container_id = ANY($3::int[])`,
-          [planId, companyId, unlockedIds]
+          [planId, companyId]
         );
-        for (const container of rebalanced) {
-          await insertPlanLines(client, companyId, planId, container.containerId, container.lines);
+
+        const linesByContainer = new Map<number, SavedPlannerContainer["lines"]>();
+        for (const line of linesResult.rows) {
+          const containerId = Number(line.plan_container_id);
+          if (!linesByContainer.has(containerId)) linesByContainer.set(containerId, []);
+          linesByContainer.get(containerId)!.push({
+            articleCode: String(line.article_code),
+            productName: String(line.product_name || line.article_code),
+            plannedQty: Number(line.planned_qty),
+          });
         }
-      }
 
-      const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
-      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+        const savedContainers: SavedPlannerContainer[] = containersResult.rows.map((container) => ({
+          id: Number(container.id),
+          position: Number(container.position),
+          isLocked: Boolean(container.is_locked),
+          lines: linesByContainer.get(Number(container.id)) ?? [],
+        }));
 
-      await client.query(
-        `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
+        let rebalanced;
+        try {
+          rebalanced = rebalanceUnlockedContainerPlan(savedContainers, Number(plan.capacity_bales));
+        } catch (error) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ message: getErrorMessage(error) });
+        }
+
+        const unlockedIds = savedContainers.filter((container) => !container.isLocked).map((container) => container.id);
+        if (unlockedIds.length > 0) {
+          await client.query(
+            `DELETE FROM factory_container_plan_lines
+           WHERE plan_id = $1 AND company_id = $2 AND plan_container_id = ANY($3::int[])`,
+            [planId, companyId, unlockedIds]
+          );
+          for (const container of rebalanced) {
+            await insertPlanLines(client, companyId, planId, container.containerId, container.lines);
+          }
+        }
+
+        const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+        const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+
+        await client.query(
+          `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
          WHERE id = $1 AND company_id = $2`,
-        [planId, companyId]
-      );
-      await writePlannerAudit(client, req, companyId, "update", planId, plan.name, {
-        rebalance: {
-          unlockedContainers: unlockedIds.length,
-          lockedContainers: savedContainers.length - unlockedIds.length,
-          releasedBales,
-          adjustedAllocations,
-        },
-      });
-      const detail = await loadPlanDetail(client, companyId, planId);
-      await client.query("COMMIT");
-      return res.json({ plan: detail, releasedBales, adjustedAllocations });
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      logger.error("[V5] container planner rebalance error", { error });
-      return res.status(500).json({ message: getErrorMessage(error) });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.delete("/api/factory/v5/container-plans/:planId", requireAuth, async (req: Request, res: Response) => {
-    const client = await pool.connect();
-    try {
-      const companyId = companyIdFor(req);
-      const planId = positiveInt(req.params.planId);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!planId) return res.status(400).json({ message: "Invalid plan id" });
-
-      await client.query("BEGIN");
-      const plan = await lockPlan(client, planId, companyId);
-      if (!plan) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Container plan not found" });
+          [planId, companyId]
+        );
+        await writePlannerAudit(client, req, companyId, "update", planId, plan.name, {
+          rebalance: {
+            unlockedContainers: unlockedIds.length,
+            lockedContainers: savedContainers.length - unlockedIds.length,
+            releasedBales,
+            adjustedAllocations,
+          },
+        });
+        const detail = await loadPlanDetail(client, companyId, planId);
+        await client.query("COMMIT");
+        return res.json({ plan: detail, releasedBales, adjustedAllocations });
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        logger.error("[V5] container planner rebalance error", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      } finally {
+        client.release();
       }
-      await writePlannerAudit(client, req, companyId, "delete", planId, plan.name, {
-        deleted: true,
-        revision: plan.revision,
-      });
-      await client.query(`DELETE FROM factory_container_plans WHERE id = $1 AND company_id = $2`, [planId, companyId]);
-      await client.query("COMMIT");
-      return res.json({ success: true });
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      logger.error("[V5] container planner delete error", { error });
-      return res.status(500).json({ message: getErrorMessage(error) });
-    } finally {
-      client.release();
     }
-  });
+  );
+
+  app.delete(
+    "/api/factory/v5/container-plans/:planId",
+    requireAuth,
+    validateRequest(deletePlanInput),
+    async (req: Request, res: Response) => {
+      const client = await pool.connect();
+      try {
+        const companyId = companyIdFor(req);
+        const planId = positiveInt(validatedInput(req, deletePlanInput).params.planId);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!planId) return res.status(400).json({ message: "Invalid plan id" });
+
+        await client.query("BEGIN");
+        const plan = await lockPlan(client, planId, companyId);
+        if (!plan) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Container plan not found" });
+        }
+        await writePlannerAudit(client, req, companyId, "delete", planId, plan.name, {
+          deleted: true,
+          revision: plan.revision,
+        });
+        await client.query(`DELETE FROM factory_container_plans WHERE id = $1 AND company_id = $2`, [
+          planId,
+          companyId,
+        ]);
+        await client.query("COMMIT");
+        return res.json({ success: true });
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        logger.error("[V5] container planner delete error", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      } finally {
+        client.release();
+      }
+    }
+  );
 }

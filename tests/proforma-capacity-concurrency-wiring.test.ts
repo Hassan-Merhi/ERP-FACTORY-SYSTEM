@@ -56,7 +56,7 @@ describe("Phase 3 proforma capacity mutation lock coverage", () => {
 
     const v5Containers = routeSlice(
       read("server/routes/factory/stock-allocation-v5/proforma-create.ts"),
-      'app.post("/api/factory/v5/proforma/:proformaId/add-containers"'
+      '"/api/factory/v5/proforma/:proformaId/add-containers"'
     );
     expectBefore(v5Containers, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
     expectBefore(v5Containers, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");

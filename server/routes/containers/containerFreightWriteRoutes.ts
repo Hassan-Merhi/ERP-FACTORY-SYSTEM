@@ -3,6 +3,8 @@ import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { updatePurchaseOrderInput } from "./purchaseOrderRouteSchemas";
 import { logAudit } from "../_helpers";
 import { containers, purchaseOrders } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -21,7 +23,7 @@ import { containerFreightWriteRoutesStep2 } from "./containerFreightWriteRoutesS
 import { resyncPurchaseOrderVoucher } from "./containerFreightWriteRoutesVoucherResync";
 
 export function registerContainerFreightWriteRoutes(app: Express) {
-  app.patch("/api/purchase-orders/:id", requireAuth, async (req, res) => {
+  app.patch("/api/purchase-orders/:id", requireAuth, validateRequest(updatePurchaseOrderInput), async (req, res) => {
     try {
       const cfw1 = await containerFreightWriteRoutesStep({ req, res });
       if (cfw1.done) return cfw1.value;

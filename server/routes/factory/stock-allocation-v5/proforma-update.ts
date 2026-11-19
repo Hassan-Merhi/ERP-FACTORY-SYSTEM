@@ -12,6 +12,35 @@ import { requireAuth } from "../../../auth";
 import { customerProformas } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const proformaIdParams = z.strictObject({ proformaId: stringParam });
+
+const closeProformaInput = { params: proformaIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+// The handler keeps its per-entry checks and messages.
+const draftExpectedLinesInput = {
+  params: proformaIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    updates: z
+      .array(
+        z.strictObject({
+          articleCode: z.string().optional(),
+          expectedQty: z.union([z.number(), z.string()]).optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerV5ProformaUpdateRoutes(app: Express) {
   // ── PATCH /api/factory/v5/proforma/:proformaId/close ─────────────────────
@@ -21,51 +50,56 @@ export function registerV5ProformaUpdateRoutes(app: Express) {
   // so it stops contributing to expectedToLoad automatically.
   // Does NOT delete proformas, containers, expected lines, or bales.
   // V5 guard: proformaIdUsed IS NOT NULL (proforma.isActive is V5-specific concept)
-  app.patch("/api/factory/v5/proforma/:proformaId/close", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.patch(
+    "/api/factory/v5/proforma/:proformaId/close",
+    requireAuth,
+    validateRequest(closeProformaInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const proformaId = parseInt(req.params.proformaId);
-      if (!proformaId || isNaN(proformaId)) return res.status(400).json({ message: "Invalid proformaId" });
+        const proformaId = parseInt(validatedInput(req, closeProformaInput).params.proformaId);
+        if (!proformaId || isNaN(proformaId)) return res.status(400).json({ message: "Invalid proformaId" });
 
-      // Confirm proforma exists for this company
-      const [proforma] = await db
-        .select()
-        .from(customerProformas)
-        .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
-      if (!proforma) return res.status(404).json({ message: "Proforma not found" });
-      if (!proforma.isActive) return res.status(400).json({ message: "Proforma is already closed" });
+        // Confirm proforma exists for this company
+        const [proforma] = await db
+          .select()
+          .from(customerProformas)
+          .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
+        if (!proforma) return res.status(404).json({ message: "Proforma not found" });
+        if (!proforma.isActive) return res.status(400).json({ message: "Proforma is already closed" });
 
-      // Confirm it has linked customer_orders
-      const linkedOrdersRaw = await db.execute(
-        sql`SELECT id, status FROM customer_orders WHERE proforma_id_used = ${proformaId}`
-      );
-      const linkedOrders = resultRows(linkedOrdersRaw) as { id: number; status: string }[];
-      if (linkedOrders.length === 0) {
-        return res.status(400).json({ message: "Cannot close a proforma with no linked containers" });
+        // Confirm it has linked customer_orders
+        const linkedOrdersRaw = await db.execute(
+          sql`SELECT id, status FROM customer_orders WHERE proforma_id_used = ${proformaId}`
+        );
+        const linkedOrders = resultRows(linkedOrdersRaw) as { id: number; status: string }[];
+        if (linkedOrders.length === 0) {
+          return res.status(400).json({ message: "Cannot close a proforma with no linked containers" });
+        }
+
+        // Confirm all linked orders are FINALIZED or CANCELLED
+        const CLOSEABLE_STATUSES = ["FINALIZED", "CANCELLED"];
+        const openOrders = linkedOrders.filter((o) => !CLOSEABLE_STATUSES.includes(o.status));
+        if (openOrders.length > 0) {
+          return res.status(400).json({ message: "Cannot close proforma while containers are still open." });
+        }
+
+        // Set isActive = false — proforma disappears from the V5 GET active filter automatically
+        const [updated] = await db
+          .update(customerProformas)
+          .set({ isActive: false })
+          .where(eq(customerProformas.id, proformaId))
+          .returning();
+
+        res.json({ proforma: updated });
+      } catch (err: unknown) {
+        logger.error("[V5] close-proforma error:", { error: err });
+        res.status(400).json({ message: getErrorMessage(err) });
       }
-
-      // Confirm all linked orders are FINALIZED or CANCELLED
-      const CLOSEABLE_STATUSES = ["FINALIZED", "CANCELLED"];
-      const openOrders = linkedOrders.filter((o) => !CLOSEABLE_STATUSES.includes(o.status));
-      if (openOrders.length > 0) {
-        return res.status(400).json({ message: "Cannot close proforma while containers are still open." });
-      }
-
-      // Set isActive = false — proforma disappears from the V5 GET active filter automatically
-      const [updated] = await db
-        .update(customerProformas)
-        .set({ isActive: false })
-        .where(eq(customerProformas.id, proformaId))
-        .returning();
-
-      res.json({ proforma: updated });
-    } catch (err: unknown) {
-      logger.error("[V5] close-proforma error:", { error: err });
-      res.status(400).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 
   // ── PATCH /api/factory/v5/proforma/:proformaId/draft-expected-lines ───────
   // Updates expected_qty in customer_order_expected_lines for DRAFT containers
@@ -76,12 +110,13 @@ export function registerV5ProformaUpdateRoutes(app: Express) {
   app.patch(
     "/api/factory/v5/proforma/:proformaId/draft-expected-lines",
     requireAuth,
+    validateRequest(draftExpectedLinesInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const proformaId = parseInt(req.params.proformaId);
+        const proformaId = parseInt(validatedInput(req, draftExpectedLinesInput).params.proformaId);
         if (!proformaId || isNaN(proformaId)) return res.status(400).json({ message: "Invalid proformaId" });
 
         const { updates } = req.body as { updates?: { articleCode: string; expectedQty: number }[] };

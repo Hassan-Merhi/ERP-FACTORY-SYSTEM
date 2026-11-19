@@ -11,6 +11,37 @@ import {
   type OptimizerStockRow,
 } from "@shared/containerOptimizer";
 import { loadContainerPlannerSource, type PlannerQueryable } from "./container-planner-source";
+import { z } from "zod";
+import {
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+// parsePriorities skips entries without a positive customerId or finite priority.
+const customerPriorities = z
+  .array(z.strictObject({ customerId: numberOrString.optional(), priority: numberOrString.optional() }))
+  .optional();
+
+// The preview keeps its own capacity range check and message.
+const optimizePreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    capacityBales: numberOrString.optional(),
+    includeGarbageWipers: z.boolean().optional(),
+    includeCommittedDemand: z.boolean().optional(),
+    customerPriorities,
+  }),
+} satisfies RequestSchemas;
+
+const optimizeApplyInput = {
+  params: z.strictObject({ planId: stringParam }),
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ customerPriorities })]),
+} satisfies RequestSchemas;
 
 function companyIdFor(req: Request): number | null {
   const value = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -140,53 +171,61 @@ function withCommittedStock(stock: OptimizerStockRow[], demand: OptimizerDemandR
 
 export function registerV5ContainerPlanOptimizerRoutes(app: Express): void {
   // Read-only recommendation from live stock and open orders.
-  app.post("/api/factory/v5/container-plans/optimize", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = companyIdFor(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/v5/container-plans/optimize",
+    requireAuth,
+    validateRequest(optimizePreviewInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = companyIdFor(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const capacityBales = Number(req.body?.capacityBales);
-      if (!Number.isSafeInteger(capacityBales) || capacityBales < 1 || capacityBales > MAX_CONTAINER_CAPACITY) {
-        return res.status(400).json({ message: `Capacity must be a whole number from 1 to ${MAX_CONTAINER_CAPACITY}` });
+        const capacityBales = Number(req.body?.capacityBales);
+        if (!Number.isSafeInteger(capacityBales) || capacityBales < 1 || capacityBales > MAX_CONTAINER_CAPACITY) {
+          return res
+            .status(400)
+            .json({ message: `Capacity must be a whole number from 1 to ${MAX_CONTAINER_CAPACITY}` });
+        }
+        const includeGarbageWipers = req.body?.includeGarbageWipers === true;
+        const includeCommittedDemand = req.body?.includeCommittedDemand !== false;
+
+        const client = pool as unknown as PlannerQueryable;
+        const sourceRows = await loadContainerPlannerSource(client, companyId);
+        const demand = includeCommittedDemand
+          ? await loadOptimizerDemand(client, companyId, parsePriorities(req.body?.customerPriorities))
+          : [];
+        const freeStock = toOptimizerStock(sourceRows, includeGarbageWipers);
+        const stock = includeCommittedDemand ? withCommittedStock(freeStock, demand) : freeStock;
+
+        const suggestion = buildContainerOptimizationPlan({
+          stock,
+          demand,
+          capacityBales: normalizeContainerCapacity(capacityBales),
+        });
+
+        return res.json({
+          generatedAt: new Date().toISOString(),
+          includeGarbageWipers,
+          includeCommittedDemand,
+          suggestion,
+        });
+      } catch (error: unknown) {
+        logger.error("[V5] container plan optimizer preview error", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
       }
-      const includeGarbageWipers = req.body?.includeGarbageWipers === true;
-      const includeCommittedDemand = req.body?.includeCommittedDemand !== false;
-
-      const client = pool as unknown as PlannerQueryable;
-      const sourceRows = await loadContainerPlannerSource(client, companyId);
-      const demand = includeCommittedDemand
-        ? await loadOptimizerDemand(client, companyId, parsePriorities(req.body?.customerPriorities))
-        : [];
-      const freeStock = toOptimizerStock(sourceRows, includeGarbageWipers);
-      const stock = includeCommittedDemand ? withCommittedStock(freeStock, demand) : freeStock;
-
-      const suggestion = buildContainerOptimizationPlan({
-        stock,
-        demand,
-        capacityBales: normalizeContainerCapacity(capacityBales),
-      });
-
-      return res.json({
-        generatedAt: new Date().toISOString(),
-        includeGarbageWipers,
-        includeCommittedDemand,
-        suggestion,
-      });
-    } catch (error: unknown) {
-      logger.error("[V5] container plan optimizer preview error", { error });
-      return res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Rewrite a draft plan's containers with the recommended layout.
   app.post(
     "/api/factory/v5/container-plans/:planId/optimize/apply",
     requireAuth,
+    validateRequest(optimizeApplyInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
+        const planId = positiveInt(validatedInput(req, optimizeApplyInput).params.planId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId) return res.status(400).json({ message: "Invalid plan id" });
 

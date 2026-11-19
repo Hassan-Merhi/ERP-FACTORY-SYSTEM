@@ -11,10 +11,29 @@ import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { parseMoneyInput } from "../../../lib/money";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+
+/**
+ * The inline line edit of client/src/components/stockitemdetailsdialog
+ * (stockItemId as a number, quantity and rate as strings). The handlers keep
+ * their own numeric checks and messages; the id is parseInt-ed as before.
+ */
+const lineEditInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    stockItemId: numberOrString.optional(),
+    quantity: numberOrString.optional(),
+    rate: numberOrString.optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerStockItemEditRoutes(app: Express) {
   // Update stock transfer item
-  app.patch("/api/stock-transfer-items/:id", requireAuth, async (req, res) => {
+  app.patch("/api/stock-transfer-items/:id", requireAuth, validateRequest(lineEditInput), async (req, res) => {
     try {
       const itemId = parseInt(req.params.id);
       if (isNaN(itemId)) {
@@ -74,7 +93,7 @@ export function registerStockItemEditRoutes(app: Express) {
   });
 
   // Update stock adjustment item
-  app.patch("/api/stock-adjustment-items/:id", requireAuth, async (req, res) => {
+  app.patch("/api/stock-adjustment-items/:id", requireAuth, validateRequest(lineEditInput), async (req, res) => {
     try {
       const itemId = parseInt(req.params.id);
       if (isNaN(itemId)) {

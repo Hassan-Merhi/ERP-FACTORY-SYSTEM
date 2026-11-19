@@ -16,12 +16,50 @@ import {
   recipientPattern,
   senders,
 } from "./registerStockTransferOrderWaApprovalRoutesPart1";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The handlers keep their own id, value and message checks; these declare only
+// the fields client/src/pages/settings/StockTransferOrderApprovalSettings.tsx,
+// StockTransferOrderApprovalRequestPanel.tsx and
+// StockTransferOrderWaDeliveryReconciliation.tsx send.
+const destinationInput = {
+  params: z.strictObject({ destinationId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ chatId: z.string().nullable().optional(), enabled: z.boolean().optional() }),
+} satisfies RequestSchemas;
+
+const enrollLegacyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    destinationLocationId: z.union([z.number(), z.string()]).nullable().optional(),
+    transferIds: z.array(z.number()).optional(),
+    acknowledge: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// parseStockTransferOrderDeliveryReconciliation checks the values.
+const reconcileInput = {
+  params: z.strictObject({ batchId: stringParam, recipientKind: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    action: z.string().optional(),
+    expectedStatus: z.string().optional(),
+    reason: z.string().optional(),
+    checkedWhatsApp: z.boolean().optional(),
+    checkedProvider: z.boolean().optional(),
+    confirmedDelivered: z.boolean().optional(),
+    confirmedNotDelivered: z.boolean().optional(),
+    acknowledgeDuplicateRisk: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerStockTransferOrderWaApprovalRoutesPart2(app: Express) {
   app.put(
     "/api/stock-transfer-order/wa-approval/destinations/:destinationId",
     requireAuth,
     admins,
+    validateRequest(destinationInput),
     async (req, res) => {
       try {
         const a = await actor(req),
@@ -99,65 +137,71 @@ export function registerStockTransferOrderWaApprovalRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/stock-transfer-order/wa-approval/enroll-legacy", requireAuth, admins, async (req, res) => {
-    try {
-      const a = await actor(req),
-        dest = idOf(req.body?.destinationLocationId);
-      const ids: unknown = req.body?.transferIds;
-      if (
-        !dest ||
-        req.body?.acknowledge !== true ||
-        !Array.isArray(ids) ||
-        ids.length < 1 ||
-        ids.length > 100 ||
-        new Set(ids).size !== ids.length ||
-        ids.some((id) => !Number.isSafeInteger(id) || id <= 0)
-      ) {
-        return res
-          .status(400)
-          .json({ message: "Explicitly select and confirm eligible historical Stock Transfer Orders." });
-      }
-      const client = await pool.connect();
+  app.post(
+    "/api/stock-transfer-order/wa-approval/enroll-legacy",
+    requireAuth,
+    admins,
+    validateRequest(enrollLegacyInput),
+    async (req, res) => {
       try {
-        await client.query("BEGIN");
-        const selected = await client.query(
-          "SELECT t.id FROM stock_transfer_vouchers t JOIN vouchers v ON v.id=t.voucher_id " +
-            "WHERE v.company_id=$1 AND t.destination_location_id=$2 AND t.id=ANY($3::int[]) " +
-            "AND EXISTS (SELECT 1 FROM stock_transfer_revisions r WHERE r.transfer_id=t.id AND r.status='pending') " +
-            "AND t.workflow_origin='stock_transfer' AND v.deleted_at IS NULL " +
-            "AND v.voucher_type='Stock Transfer' " +
-            "AND (v.description LIKE 'Stock Transfer Order - %' OR t.notes LIKE 'Stock Transfer Order - %') " +
-            "ORDER BY t.id FOR UPDATE OF t",
-          [a.companyId, dest, ids]
-        );
-        if (selected.rowCount !== ids.length) {
-          await client.query("ROLLBACK");
+        const a = await actor(req),
+          dest = idOf(req.body?.destinationLocationId);
+        const ids: unknown = req.body?.transferIds;
+        if (
+          !dest ||
+          req.body?.acknowledge !== true ||
+          !Array.isArray(ids) ||
+          ids.length < 1 ||
+          ids.length > 100 ||
+          new Set(ids).size !== ids.length ||
+          ids.some((id) => !Number.isSafeInteger(id) || id <= 0)
+        ) {
           return res
-            .status(409)
-            .json({ message: "Some selected historical transfers cannot be confirmed as order-view documents." });
+            .status(400)
+            .json({ message: "Explicitly select and confirm eligible historical Stock Transfer Orders." });
         }
-        await client.query(
-          "UPDATE stock_transfer_vouchers SET workflow_origin='stock_transfer_order' " +
-            "WHERE id=ANY($1::int[]) AND workflow_origin='stock_transfer'",
-          [ids]
-        );
-        await client.query("COMMIT");
-        logger.info("[STO WA] Historical order origin explicitly enrolled", {
-          companyId: a.companyId,
-          actorId: a.userId,
-          count: ids.length,
-        });
-        return res.json({ ok: true, enrolled: ids.length });
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const selected = await client.query(
+            "SELECT t.id FROM stock_transfer_vouchers t JOIN vouchers v ON v.id=t.voucher_id " +
+              "WHERE v.company_id=$1 AND t.destination_location_id=$2 AND t.id=ANY($3::int[]) " +
+              "AND EXISTS (SELECT 1 FROM stock_transfer_revisions r WHERE r.transfer_id=t.id AND r.status='pending') " +
+              "AND t.workflow_origin='stock_transfer' AND v.deleted_at IS NULL " +
+              "AND v.voucher_type='Stock Transfer' " +
+              "AND (v.description LIKE 'Stock Transfer Order - %' OR t.notes LIKE 'Stock Transfer Order - %') " +
+              "ORDER BY t.id FOR UPDATE OF t",
+            [a.companyId, dest, ids]
+          );
+          if (selected.rowCount !== ids.length) {
+            await client.query("ROLLBACK");
+            return res
+              .status(409)
+              .json({ message: "Some selected historical transfers cannot be confirmed as order-view documents." });
+          }
+          await client.query(
+            "UPDATE stock_transfer_vouchers SET workflow_origin='stock_transfer_order' " +
+              "WHERE id=ANY($1::int[]) AND workflow_origin='stock_transfer'",
+            [ids]
+          );
+          await client.query("COMMIT");
+          logger.info("[STO WA] Historical order origin explicitly enrolled", {
+            companyId: a.companyId,
+            actorId: a.userId,
+            count: ids.length,
+          });
+          return res.json({ ok: true, enrolled: ids.length });
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        } finally {
+          client.release();
+        }
       } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
-      } finally {
-        client.release();
+        return errorResponse(res, e);
       }
-    } catch (e) {
-      return errorResponse(res, e);
     }
-  });
+  );
 
   /**
    * Administrators can reconcile ONLY approved Stock Transfer Order batches,
@@ -230,6 +274,7 @@ export function registerStockTransferOrderWaApprovalRoutesPart2(app: Express) {
     "/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile",
     requireAuth,
     admins,
+    validateRequest(reconcileInput),
     async (req, res) => {
       try {
         const a = await actor(req),

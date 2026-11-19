@@ -9,6 +9,8 @@ import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { recalcZeroCostSourcesApplyInput } from "../rawStockWriteRouteSchemas";
 import {
   getZeroCostMixBatchSourcesPreview,
   applyZeroCostMixBatchSourcesFix,
@@ -58,6 +60,7 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/zero-cost-sources/apply",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(recalcZeroCostSourcesApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

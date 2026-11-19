@@ -103,8 +103,8 @@ import { registerFactoryMixBatchUpdateRoutes } from "../server/routes/factory/mi
 async function patch(body: Record<string, unknown>) {
   let handler: (req: unknown, res: unknown) => Promise<void> = async () => undefined;
   registerFactoryMixBatchUpdateRoutes({
-    patch: (_path: string, _auth: unknown, h2: typeof handler) => {
-      handler = h2;
+    patch: (_path: string, ...chain: Array<typeof handler>) => {
+      handler = chain[chain.length - 1];
     },
   } as never);
   const res = {

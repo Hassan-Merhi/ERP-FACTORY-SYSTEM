@@ -8,105 +8,131 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { parseId } from "../../../lib/parseId";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 import { sql, eq, and } from "drizzle-orm";
 import { customerDispatchBatches, customerDispatchTruckRides } from "@shared/schema";
 
 import { getCompanyId, getUsername } from "./_helpers";
 import { firstRow } from "../../../lib/queryResult";
 
+const optionalText = z.string().nullable().optional();
+const rideFields = z.strictObject({
+  truckPlate: optionalText,
+  driverName: optionalText,
+  destination: optionalText,
+  notes: optionalText,
+});
+
+const addRideInput = { params: idParams, query: emptyQuery, body: rideFields } satisfies RequestSchemas;
+const updateRideInput = { params: idParams, query: emptyQuery, body: rideFields } satisfies RequestSchemas;
+
 export function registerDispatchTruckRideRoutes(app: Express) {
   // ── POST /api/factory/dispatch-batches/:id/truck-rides ────────────────────
   // Add a new truck ride to a batch
-  app.post("/api/factory/dispatch-batches/:id/truck-rides", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const batchId = parseId(req.params.id);
-      if (batchId === null) return res.status(400).json({ message: "Invalid id" });
+  app.post(
+    "/api/factory/dispatch-batches/:id/truck-rides",
+    requireAuth,
+    validateRequest(addRideInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const batchId = validatedInput(req, addRideInput).params.id;
 
-      const result = await db.transaction(async (tx) => {
-        const [batch] = await tx
-          .select()
-          .from(customerDispatchBatches)
-          .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-        if (!batch) throw new Error("Batch not found");
-        if (batch.status === "INVOICED") throw new Error("Batch is already invoiced");
-        if (batch.status === "CANCELLED") throw new Error("Batch is cancelled");
+        const result = await db.transaction(async (tx) => {
+          const [batch] = await tx
+            .select()
+            .from(customerDispatchBatches)
+            .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
+          if (!batch) throw new Error("Batch not found");
+          if (batch.status === "INVOICED") throw new Error("Batch is already invoiced");
+          if (batch.status === "CANCELLED") throw new Error("Batch is cancelled");
 
-        // Get next ride number for this batch
-        const countRows = await tx.execute(
-          sql`SELECT COALESCE(MAX(ride_number), 0) + 1 AS next_num FROM customer_dispatch_truck_rides WHERE batch_id = ${batchId}`
-        );
-        const nextRideNum = firstRow(countRows)?.next_num || 1;
+          // Get next ride number for this batch
+          const countRows = await tx.execute(
+            sql`SELECT COALESCE(MAX(ride_number), 0) + 1 AS next_num FROM customer_dispatch_truck_rides WHERE batch_id = ${batchId}`
+          );
+          const nextRideNum = firstRow(countRows)?.next_num || 1;
 
-        const { truckPlate, driverName, destination, notes } = req.body;
+          const { truckPlate, driverName, destination, notes } = req.body;
 
-        const [ride] = await tx
-          .insert(customerDispatchTruckRides)
-          .values({
-            companyId,
-            batchId,
-            rideNumber: parseInt(String(nextRideNum)),
-            truckPlate: truckPlate || null,
-            driverName: driverName || null,
-            destination: destination || null,
-            notes: notes || null,
-            status: "DRAFT",
-            createdBy: getUsername(req),
-          })
-          .returning();
+          const [ride] = await tx
+            .insert(customerDispatchTruckRides)
+            .values({
+              companyId,
+              batchId,
+              rideNumber: parseInt(String(nextRideNum)),
+              truckPlate: truckPlate || null,
+              driverName: driverName || null,
+              destination: destination || null,
+              notes: notes || null,
+              status: "DRAFT",
+              createdBy: getUsername(req),
+            })
+            .returning();
 
-        // Advance batch to LOADING if it was DRAFT
-        if (batch.status === "DRAFT") {
-          await tx
-            .update(customerDispatchBatches)
-            .set({ status: "LOADING", updatedAt: new Date() })
-            .where(eq(customerDispatchBatches.id, batchId));
-        }
+          // Advance batch to LOADING if it was DRAFT
+          if (batch.status === "DRAFT") {
+            await tx
+              .update(customerDispatchBatches)
+              .set({ status: "LOADING", updatedAt: new Date() })
+              .where(eq(customerDispatchBatches.id, batchId));
+          }
 
-        return ride;
-      });
+          return ride;
+        });
 
-      res.status(201).json(result);
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.status(201).json(result);
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── PATCH /api/factory/dispatch-truck-rides/:id ───────────────────────────
   // Update ride info (plate, driver, notes)
-  app.patch("/api/factory/dispatch-truck-rides/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const rideId = parseId(req.params.id);
-      if (rideId === null) return res.status(400).json({ message: "Invalid id" });
+  app.patch(
+    "/api/factory/dispatch-truck-rides/:id",
+    requireAuth,
+    validateRequest(updateRideInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const rideId = validatedInput(req, updateRideInput).params.id;
 
-      const [ride] = await db
-        .select()
-        .from(customerDispatchTruckRides)
-        .where(and(eq(customerDispatchTruckRides.id, rideId), eq(customerDispatchTruckRides.companyId, companyId)));
-      if (!ride) return res.status(404).json({ message: "Ride not found" });
-      if (ride.status === "DISPATCHED")
-        return res.status(400).json({ message: "Cannot edit a dispatched ride. Reopen it first." });
-      if (ride.status === "CANCELLED") return res.status(400).json({ message: "Ride is cancelled" });
+        const [ride] = await db
+          .select()
+          .from(customerDispatchTruckRides)
+          .where(and(eq(customerDispatchTruckRides.id, rideId), eq(customerDispatchTruckRides.companyId, companyId)));
+        if (!ride) return res.status(404).json({ message: "Ride not found" });
+        if (ride.status === "DISPATCHED")
+          return res.status(400).json({ message: "Cannot edit a dispatched ride. Reopen it first." });
+        if (ride.status === "CANCELLED") return res.status(400).json({ message: "Ride is cancelled" });
 
-      const { truckPlate, driverName, destination, notes } = req.body;
-      const updates: Partial<typeof customerDispatchTruckRides.$inferInsert> = { updatedAt: new Date() };
-      if (truckPlate !== undefined) updates.truckPlate = truckPlate;
-      if (driverName !== undefined) updates.driverName = driverName;
-      if (destination !== undefined) updates.destination = destination;
-      if (notes !== undefined) updates.notes = notes;
+        const { truckPlate, driverName, destination, notes } = req.body;
+        const updates: Partial<typeof customerDispatchTruckRides.$inferInsert> = { updatedAt: new Date() };
+        if (truckPlate !== undefined) updates.truckPlate = truckPlate;
+        if (driverName !== undefined) updates.driverName = driverName;
+        if (destination !== undefined) updates.destination = destination;
+        if (notes !== undefined) updates.notes = notes;
 
-      const [updated] = await db
-        .update(customerDispatchTruckRides)
-        .set(updates)
-        .where(and(eq(customerDispatchTruckRides.id, rideId), eq(customerDispatchTruckRides.companyId, companyId)))
-        .returning();
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        const [updated] = await db
+          .update(customerDispatchTruckRides)
+          .set(updates)
+          .where(and(eq(customerDispatchTruckRides.id, rideId), eq(customerDispatchTruckRides.companyId, companyId)))
+          .returning();
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

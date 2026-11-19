@@ -19,6 +19,32 @@ import {
   type RawCell,
   type SRow,
 } from "./factorySheetsRoutesBuildStatusSheet";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// No client page calls these routes today.
+const createSheetInput = {
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+// columns/rows are the spreadsheet grid, stored verbatim as JSON; both the
+// legacy (plain string/primitive) and current ({ id, label } / { value, link })
+// cell formats are read back by getColLabel/getCellRawValue.
+const updateSheetInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    name: z.string().optional(),
+    columns: z.array(z.unknown()).optional(),
+    rows: z.array(z.unknown()).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteSheetInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+// Multipart upload of one .xlsx file; no form fields are read.
+const importSheetsInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactorySheetsRoutes(app: Express) {
   // ── List all sheets for current company ───────────────────────────────────
@@ -37,7 +63,7 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Create a new blank sheet ───────────────────────────────────────────────
-  app.post("/api/factory/sheets", requireAuth, async (req, res) => {
+  app.post("/api/factory/sheets", requireAuth, validateRequest(createSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const { name } = req.body;
@@ -69,7 +95,7 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Update a sheet (rename or save grid) ──────────────────────────────────
-  app.put("/api/factory/sheets/:id", requireAuth, async (req, res) => {
+  app.put("/api/factory/sheets/:id", requireAuth, validateRequest(updateSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const id = parseId(req.params.id);
@@ -120,7 +146,7 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Delete a sheet ─────────────────────────────────────────────────────────
-  app.delete("/api/factory/sheets/:id", requireAuth, async (req, res) => {
+  app.delete("/api/factory/sheets/:id", requireAuth, validateRequest(deleteSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const id = parseId(req.params.id);
@@ -140,124 +166,130 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Import Excel — creates/replaces sheets from uploaded .xlsx ─────────────
-  app.post("/api/factory/sheets/import", requireAuth, upload.single("file"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId!;
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  app.post(
+    "/api/factory/sheets/import",
+    requireAuth,
+    upload.single("file"),
+    validateRequest(importSheetsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId!;
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      const wb: WorkBook = readExcel(req.file.buffer, { type: "buffer", cellDates: true });
+        const wb: WorkBook = readExcel(req.file.buffer, { type: "buffer", cellDates: true });
 
-      // Delete all existing sheets for this company, then re-create
-      await db.delete(factorySheets).where(eq(factorySheets.companyId, companyId));
+        // Delete all existing sheets for this company, then re-create
+        await db.delete(factorySheets).where(eq(factorySheets.companyId, companyId));
 
-      const created = [];
-      for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
-        const sheetName = wb.SheetNames[sheetIdx];
-        const ws = wb.Sheets[sheetName];
-        const rawData = xlsxUtils.sheet_to_json<RawCell[]>(ws, { header: 1, defval: null });
+        const created = [];
+        for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
+          const sheetName = wb.SheetNames[sheetIdx];
+          const ws = wb.Sheets[sheetName];
+          const rawData = xlsxUtils.sheet_to_json<RawCell[]>(ws, { header: 1, defval: null });
 
-        if (!rawData || rawData.length === 0) {
-          // Empty sheet — just create blank
+          if (!rawData || rawData.length === 0) {
+            // Empty sheet — just create blank
+            const [s] = await db
+              .insert(factorySheets)
+              .values({
+                companyId,
+                name: sheetName,
+                orderIndex: sheetIdx,
+                columns: [],
+                rows: [],
+              })
+              .returning();
+            created.push(s);
+            continue;
+          }
+
+          // First row = column headers (skip empty leading cells in first col)
+          const headerRow = rawData[0] ?? [];
+          // Col 0 is the row-label column; cols 1..N are data columns
+          const columns: string[] = headerRow.slice(1).map((h) => (h == null ? "" : String(h)));
+
+          const rows: { label: string; cells: (number | string | null)[] }[] = [];
+          for (let r = 1; r < rawData.length; r++) {
+            const rawRow = rawData[r] ?? [];
+            // Skip entirely empty rows
+            const hasData = rawRow.some((v) => v !== null && v !== undefined && v !== "");
+            if (!hasData) continue;
+
+            const rawLabel = rawRow[0];
+            let label: string;
+            if (rawLabel == null) {
+              label = "";
+            } else if (rawLabel instanceof Date) {
+              const y = rawLabel.getFullYear();
+              const m = String(rawLabel.getMonth() + 1).padStart(2, "0");
+              const d = String(rawLabel.getDate()).padStart(2, "0");
+              label = `${y}-${m}-${d}`;
+            } else {
+              label = String(rawLabel).trim();
+            }
+
+            const cells: (number | string | null)[] = rawRow.slice(1).map((v) => {
+              if (v === null || v === undefined || v === "") return null;
+              if (v instanceof Date) {
+                // Date in a data cell — format as ISO
+                const y = v.getFullYear();
+                const m = String(v.getMonth() + 1).padStart(2, "0");
+                const d = String(v.getDate()).padStart(2, "0");
+                return `${y}-${m}-${d}`;
+              }
+              const n = Number(v);
+              // If it parses as a clean number, store as number; otherwise keep as string
+              return isNaN(n) ? String(v).trim() : n;
+            });
+            // Pad or trim cells to match column count
+            while (cells.length < columns.length) cells.push(null);
+            rows.push({ label, cells: cells.slice(0, columns.length) });
+          }
+
           const [s] = await db
             .insert(factorySheets)
             .values({
               companyId,
               name: sheetName,
               orderIndex: sheetIdx,
-              columns: [],
-              rows: [],
+              columns,
+              rows,
             })
             .returning();
           created.push(s);
-          continue;
         }
 
-        // First row = column headers (skip empty leading cells in first col)
-        const headerRow = rawData[0] ?? [];
-        // Col 0 is the row-label column; cols 1..N are data columns
-        const columns: string[] = headerRow.slice(1).map((h) => (h == null ? "" : String(h)));
+        // Build / rebuild STATUS sheet from the imported data
+        const allSheets = await db
+          .select()
+          .from(factorySheets)
+          .where(eq(factorySheets.companyId, companyId))
+          .orderBy(asc(factorySheets.orderIndex), asc(factorySheets.id));
 
-        const rows: { label: string; cells: (number | string | null)[] }[] = [];
-        for (let r = 1; r < rawData.length; r++) {
-          const rawRow = rawData[r] ?? [];
-          // Skip entirely empty rows
-          const hasData = rawRow.some((v) => v !== null && v !== undefined && v !== "");
-          if (!hasData) continue;
+        await upsertStatusSheet(
+          companyId,
+          allSheets.map((s) => ({
+            id: s.id,
+            name: s.name,
+            columns: (s.columns as string[]) ?? [],
+            rows: (s.rows as SRow[]) ?? [],
+            orderIndex: s.orderIndex,
+          }))
+        );
 
-          const rawLabel = rawRow[0];
-          let label: string;
-          if (rawLabel == null) {
-            label = "";
-          } else if (rawLabel instanceof Date) {
-            const y = rawLabel.getFullYear();
-            const m = String(rawLabel.getMonth() + 1).padStart(2, "0");
-            const d = String(rawLabel.getDate()).padStart(2, "0");
-            label = `${y}-${m}-${d}`;
-          } else {
-            label = String(rawLabel).trim();
-          }
+        // Return the final list including STATUS
+        const finalSheets = await db
+          .select()
+          .from(factorySheets)
+          .where(eq(factorySheets.companyId, companyId))
+          .orderBy(asc(factorySheets.orderIndex), asc(factorySheets.id));
 
-          const cells: (number | string | null)[] = rawRow.slice(1).map((v) => {
-            if (v === null || v === undefined || v === "") return null;
-            if (v instanceof Date) {
-              // Date in a data cell — format as ISO
-              const y = v.getFullYear();
-              const m = String(v.getMonth() + 1).padStart(2, "0");
-              const d = String(v.getDate()).padStart(2, "0");
-              return `${y}-${m}-${d}`;
-            }
-            const n = Number(v);
-            // If it parses as a clean number, store as number; otherwise keep as string
-            return isNaN(n) ? String(v).trim() : n;
-          });
-          // Pad or trim cells to match column count
-          while (cells.length < columns.length) cells.push(null);
-          rows.push({ label, cells: cells.slice(0, columns.length) });
-        }
-
-        const [s] = await db
-          .insert(factorySheets)
-          .values({
-            companyId,
-            name: sheetName,
-            orderIndex: sheetIdx,
-            columns,
-            rows,
-          })
-          .returning();
-        created.push(s);
+        res.json(finalSheets);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      // Build / rebuild STATUS sheet from the imported data
-      const allSheets = await db
-        .select()
-        .from(factorySheets)
-        .where(eq(factorySheets.companyId, companyId))
-        .orderBy(asc(factorySheets.orderIndex), asc(factorySheets.id));
-
-      await upsertStatusSheet(
-        companyId,
-        allSheets.map((s) => ({
-          id: s.id,
-          name: s.name,
-          columns: (s.columns as string[]) ?? [],
-          rows: (s.rows as SRow[]) ?? [],
-          orderIndex: s.orderIndex,
-        }))
-      );
-
-      // Return the final list including STATUS
-      const finalSheets = await db
-        .select()
-        .from(factorySheets)
-        .where(eq(factorySheets.companyId, companyId))
-        .orderBy(asc(factorySheets.orderIndex), asc(factorySheets.id));
-
-      res.json(finalSheets);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 
   // ── Template download ─────────────────────────────────────────────────────
   app.get("/api/factory/sheets/template", requireAuth, async (_req, res) => {

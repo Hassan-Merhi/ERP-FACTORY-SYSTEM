@@ -295,13 +295,11 @@ describe("offload fidelity under perpetual inventory", () => {
 
   it("suspends and restores an offload exactly, and reverses it exactly", async () => {
     const before = await Promise.all([stock(itemA), stock(itemB), stock(itemC)]);
-    const suspend = await agent.post(`/api/offloads/${c2Offload.id}/toggle-optional`).send({ requestedOptional: true });
+    const suspend = await agent.post(`/api/offloads/${c2Offload.id}/toggle-optional`).send({ optional: true });
     expect(suspend.status, JSON.stringify(suspend.body)).toBeLessThan(300);
     expect(await journalLines(`STOCK-IN-${c2.containerId}`)).toEqual([]);
     await expectReconciled();
-    const restore = await agent
-      .post(`/api/offloads/${c2Offload.id}/toggle-optional`)
-      .send({ requestedOptional: false });
+    const restore = await agent.post(`/api/offloads/${c2Offload.id}/toggle-optional`).send({ optional: false });
     expect(restore.status, JSON.stringify(restore.body)).toBeLessThan(300);
     // B and C come back exactly as they were: the restore receives each line at
     // its stored value, not its 2dp rate.

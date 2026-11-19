@@ -28,6 +28,8 @@ import {
   resolveStockDocumentRequestId,
   StockDocumentIdempotencyError,
 } from "../../services/inventory/stockDocumentIdempotency";
+import { validateRequest } from "../../lib/validateRequest";
+import { createStockTransferInput } from "./createSchemas";
 
 async function resolvePosTransferRecipientLocationId(req: Request): Promise<number | null> {
   const context = await getActiveCompanyPermissionContext(req);
@@ -37,9 +39,12 @@ async function resolvePosTransferRecipientLocationId(req: Request): Promise<numb
   return context.assignedLocationId;
 }
 
+// Built once; mounted after requireAuth on both create paths.
+const validateCreate = validateRequest(createStockTransferInput);
+
 export function registerStockTransferCreateRoutes(app: Express) {
   // Stock Transfers - POST endpoint (supports both creating new and using existing voucher)
-  app.post(["/api/stock-transfers", "/api/stock-transfer-orders"], requireAuth, async (req, res) => {
+  app.post(["/api/stock-transfers", "/api/stock-transfer-orders"], requireAuth, validateCreate, async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;
@@ -78,8 +83,11 @@ export function registerStockTransferCreateRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (workflowOrigin === "stock_transfer_order") {
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const [company] = await db.select({ companyType: companies.companyType })
-          .from(companies).where(eq(companies.id, companyId)).limit(1);
+        const [company] = await db
+          .select({ companyType: companies.companyType })
+          .from(companies)
+          .where(eq(companies.id, companyId))
+          .limit(1);
         if (company?.companyType === "retail") {
           return res.status(403).json({
             code: "RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED",

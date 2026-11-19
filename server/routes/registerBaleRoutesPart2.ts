@@ -19,9 +19,18 @@ import { registerBaleTransferRoutes } from "./baleTransferRoutes";
 import { registerProductionBaleRoutes } from "./productionBaleRoutes";
 import { registerProductionRawStockRoutes } from "./productionRawStockRoutes";
 import { registerBaleLookupRoutes } from "./baleLookupRoutes";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The reprint screens send { baleId } as a number; the handler Number()-s it
+// and keeps its own positive-integer check.
+const reprintInput = {
+  query: emptyQuery,
+  body: z.strictObject({ baleId: z.union([z.number(), z.string()]).nullable().optional() }),
+} satisfies RequestSchemas;
 
 export function registerBaleRoutesPart2(app: Express) {
-  app.post("/api/bale-label-prints/reprint", requireAuth, async (req, res) => {
+  app.post("/api/bale-label-prints/reprint", requireAuth, validateRequest(reprintInput), async (req, res) => {
     try {
       // Reprint audit rows keep the active session company, as before.
       const companyId = req.session.currentCompanyId;

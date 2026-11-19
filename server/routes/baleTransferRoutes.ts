@@ -12,6 +12,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { z } from "zod";
+import { emptyBody, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { sumMoney } from "../lib/money";
 import { ownLocationIds, positiveIds, strictIds } from "./helpers/companyOwnership";
 import {
@@ -43,6 +45,37 @@ async function allBalesOwned(companyId: number, baleIds: readonly unknown[]): Pr
     .where(and(eq(productionBales.companyId, companyId), inArray(productionBales.id, ids)));
   return rows.length === ids.length;
 }
+
+const idValue = z.union([z.number(), z.string()]);
+const amount = z.union([z.number(), z.string()]);
+const transferLine = {
+  productionBaleId: idValue.optional(),
+  quantity: z.number().nullable().optional(),
+  weightKg: amount,
+  costPerKg: amount,
+  totalCost: amount,
+};
+
+const createTransferInput = {
+  body: z.strictObject({
+    sourceLocationId: idValue.optional(),
+    destinationLocationId: idValue.optional(),
+    transferDate: z.string().optional(),
+    notes: z.string().nullable().optional(),
+    items: z.array(z.strictObject(transferLine)).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const noBodyByIdInput = { params: stringIdParams, body: emptyBody } satisfies RequestSchemas;
+
+const updateTransferInput = {
+  params: stringIdParams,
+  body: z.strictObject({
+    status: z.string().optional(),
+    notes: z.string().nullable().optional(),
+    items: z.array(z.strictObject({ id: idValue.nullable().optional(), ...transferLine })).optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerBaleTransferRoutes(app: Express) {
   // Bale Transfer Routes
@@ -79,7 +112,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.post("/api/bale-transfers", requireAuth, async (req, res) => {
+  app.post("/api/bale-transfers", requireAuth, validateRequest(createTransferInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -241,7 +274,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/bale-transfers/:id/complete", requireAuth, async (req, res) => {
+  app.patch("/api/bale-transfers/:id/complete", requireAuth, validateRequest(noBodyByIdInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -269,7 +302,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/bale-transfers/:id", requireAuth, async (req, res) => {
+  app.delete("/api/bale-transfers/:id", requireAuth, validateRequest(noBodyByIdInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -308,7 +341,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/bale-transfers/:id", requireAuth, async (req, res) => {
+  app.patch("/api/bale-transfers/:id", requireAuth, validateRequest(updateTransferInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

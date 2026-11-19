@@ -10,11 +10,23 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { sql } from "drizzle-orm";
-import { resultRows } from "../../../lib/queryResult";
+import { z } from "zod";
 import {
-  restoreCancelledContainerAtomically,
-  RestoreCancelledContainerError,
-} from "./restoreCancelledContainerAtomic";
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+import { resultRows } from "../../../lib/queryResult";
+import { restoreCancelledContainerAtomically, RestoreCancelledContainerError } from "./restoreCancelledContainerAtomic";
+
+const restoreContainerInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerV5CancelledContainerRoutes(app: Express) {
   // ── GET /api/factory/v5/recently-cancelled-containers ────────────────────
@@ -68,22 +80,27 @@ export function registerV5CancelledContainerRoutes(app: Express) {
   });
 
   // Restores status + archived bale links as one proforma-serialized transaction.
-  app.post("/api/factory/v5/containers/:id/restore", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/v5/containers/:id/restore",
+    requireAuth,
+    validateRequest(restoreContainerInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const orderId = Number.parseInt(req.params.id, 10);
-      if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: "Invalid id" });
+        const orderId = Number.parseInt(validatedInput(req, restoreContainerInput).params.id, 10);
+        if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: "Invalid id" });
 
-      const result = await restoreCancelledContainerAtomically({ companyId, orderId });
-      res.json(result);
-    } catch (err: unknown) {
-      logger.error("[V5] restore-container error:", { error: err });
-      if (err instanceof RestoreCancelledContainerError) {
-        return res.status(err.status).json({ message: err.message, ...(err.details ?? {}) });
+        const result = await restoreCancelledContainerAtomically({ companyId, orderId });
+        res.json(result);
+      } catch (err: unknown) {
+        logger.error("[V5] restore-container error:", { error: err });
+        if (err instanceof RestoreCancelledContainerError) {
+          return res.status(err.status).json({ message: err.message, ...(err.details ?? {}) });
+        }
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 }

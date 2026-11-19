@@ -23,6 +23,18 @@ import {
   type TranslationPreview,
   type TranslationPreviewEnvelope,
 } from "../../services/factoryArabicTranslationWorkbook";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Multipart form fields (client/src/components/FactoryArabicTranslationActions.tsx createFormData).
+const workbookPreviewInput = {
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ mode: z.string().optional() })]),
+} satisfies RequestSchemas;
+const workbookApplyInput = {
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ mode: z.string().optional(), previewToken: z.string().optional() })]),
+} satisfies RequestSchemas;
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const MAX_PREVIEW_RESPONSE_ROWS = 200;
@@ -247,6 +259,7 @@ export function registerFactoryArabicTranslationRoutes(app: Express) {
     requireAuth,
     requireActionAccess("act_import_data"),
     uploadArabicWorkbook,
+    validateRequest(workbookPreviewInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
@@ -272,6 +285,7 @@ export function registerFactoryArabicTranslationRoutes(app: Express) {
     requireActionAccess("act_import_data"),
     requireExportAccess("exp_excel"),
     uploadArabicWorkbook,
+    validateRequest(workbookPreviewInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
@@ -300,6 +314,7 @@ export function registerFactoryArabicTranslationRoutes(app: Express) {
     requireAuth,
     requireActionAccess("act_import_data"),
     uploadArabicWorkbook,
+    validateRequest(workbookApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);

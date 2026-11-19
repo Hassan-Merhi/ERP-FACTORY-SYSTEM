@@ -6,6 +6,25 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { factoryV3Loads } from "@shared/schema";
 import { requireAuth } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// No client page calls these yet; tests/factory-v3-load-write-routes.test.ts sends this shape.
+const createLoadInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    proformaId: z.union([z.number(), z.string()]).nullable().optional(),
+    loadName: z.string().nullable().optional(),
+    expectedLoadDate: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+export const v3LoadActionInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function getCompanyId(req: Request): number | null {
   return req.session?.factoryCompanyId || req.session?.currentCompanyId || null;
@@ -218,62 +237,72 @@ export function registerFactoryStockAllocationV3RoutesPart1(app: Express) {
   // ──────────────────────────────────────────────────────────────
   // POST /api/factory/v3/loads  — create load from proforma
   // ──────────────────────────────────────────────────────────────
-  app.post("/api/factory/v3/loads", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { proformaId, loadName, expectedLoadDate, notes } = req.body;
-      if (!proformaId || !loadName || !expectedLoadDate)
-        return res.status(400).json({ message: "proformaId, loadName, and expectedLoadDate are required" });
+  app.post(
+    "/api/factory/v3/loads",
+    requireAuth,
+    validateRequest(createLoadInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { proformaId, loadName, expectedLoadDate, notes } = req.body;
+        if (!proformaId || !loadName || !expectedLoadDate)
+          return res.status(400).json({ message: "proformaId, loadName, and expectedLoadDate are required" });
 
-      const user = getUserInfo(req);
-      const [load] = await db
-        .insert(factoryV3Loads)
-        .values({
-          companyId,
-          proformaId,
-          loadName,
-          expectedLoadDate,
-          notes: notes || null,
-          status: "expected_to_load",
-          createdBy: user.id,
-          createdByName: user.name,
-        })
-        .returning();
+        const user = getUserInfo(req);
+        const [load] = await db
+          .insert(factoryV3Loads)
+          .values({
+            companyId,
+            proformaId,
+            loadName,
+            expectedLoadDate,
+            notes: notes || null,
+            status: "expected_to_load",
+            createdBy: user.id,
+            createdByName: user.name,
+          })
+          .returning();
 
-      res.status(201).json(load);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.status(201).json(load);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ──────────────────────────────────────────────────────────────
   // PATCH /api/factory/v3/loads/:id/start — expected_to_load → loading
   // ──────────────────────────────────────────────────────────────
-  app.patch("/api/factory/v3/loads/:id/start", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
+  app.patch(
+    "/api/factory/v3/loads/:id/start",
+    requireAuth,
+    validateRequest(v3LoadActionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const [load] = await db
-        .select()
-        .from(factoryV3Loads)
-        .where(and(eq(factoryV3Loads.id, id), eq(factoryV3Loads.companyId, companyId)));
-      if (!load) return res.status(404).json({ message: "Load not found" });
-      if (load.status !== "expected_to_load")
-        return res.status(400).json({ message: `Cannot start a load in status: ${load.status}` });
+        const [load] = await db
+          .select()
+          .from(factoryV3Loads)
+          .where(and(eq(factoryV3Loads.id, id), eq(factoryV3Loads.companyId, companyId)));
+        if (!load) return res.status(404).json({ message: "Load not found" });
+        if (load.status !== "expected_to_load")
+          return res.status(400).json({ message: `Cannot start a load in status: ${load.status}` });
 
-      const [updated] = await db
-        .update(factoryV3Loads)
-        .set({ status: "loading", startedAt: new Date() })
-        .where(eq(factoryV3Loads.id, id))
-        .returning();
+        const [updated] = await db
+          .update(factoryV3Loads)
+          .set({ status: "loading", startedAt: new Date() })
+          .where(eq(factoryV3Loads.id, id))
+          .returning();
 
-      res.json(updated);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json(updated);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

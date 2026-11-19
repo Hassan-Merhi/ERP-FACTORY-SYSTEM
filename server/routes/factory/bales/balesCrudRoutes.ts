@@ -38,6 +38,23 @@ import {
 import { registerBalesMaintenanceRoutes } from "./balesMaintenanceRoutes";
 import { registerBalesCrudRoutesPart1 } from "./registerBalesCrudRoutesPart1";
 import { registerBalesCrudRoutesPart2 } from "./registerBalesCrudRoutesPart2";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handlers parse the id with parseId and keep their own 400s.
+const restoreToStockInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const deleteBaleInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerBalesCrudRoutes(app: Express) {
   registerBalesCrudRoutesPart1(app);
@@ -56,6 +73,7 @@ function registerBalesCrudRoutesPart3(app: Express) {
     "/api/factory/bales/:id/restore-to-stock",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(restoreToStockInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -295,6 +313,7 @@ function registerBalesCrudRoutesPart3(app: Express) {
     "/api/factory/bales/:id",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(deleteBaleInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

@@ -10,7 +10,6 @@ import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import {
   mergePressingHourlyTargets,
   pressingScheduleHours,
-  pressingTargetKgSchema,
   pressingWeeklyScheduleInputSchema,
   savePressingDateHourTarget,
   savePressingWeeklySchedule,
@@ -29,6 +28,14 @@ import {
   invalidDateTimeRange,
 } from "./factoryPressingReportRoutesConditions";
 import { report } from "./factoryPressingReportRoutesReport";
+import { validateRequest } from "../../lib/validateRequest";
+import {
+  dailyScheduleInput,
+  hourlyTargetInput,
+  pressingHourlyTargetBodySchema,
+  removeViewInput,
+  saveView,
+} from "./registerFactoryPressingReportRoutesSchemas";
 
 export function registerFactoryPressingReportRoutes(app: Express): void {
   // Team-wide totals are safe for permitted pressing workers to see. Keep the
@@ -205,6 +212,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   app.put(
     "/api/factory/pressing-machines/report/hourly-targets/daily-schedule",
     requireAuth,
+    validateRequest(dailyScheduleInput),
     async (req: Request, res: Response) => {
       try {
         const ctx = await context(req);
@@ -236,77 +244,58 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   // Store targets in existing company-scoped Factory settings, with an atomic
   // JSONB update so unrelated flags and other workers' targets are not lost.
   // Only Admin / Owner may edit; workers may not change their own targets.
-  app.put("/api/factory/pressing-machines/report/hourly-targets", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const ctx = await context(req);
-      if (!ctx.canCorrect)
-        throw new ReportPermissionError(
-          403,
-          "PRESSING_TARGET_FORBIDDEN",
-          "Only Admin or Owner may edit pressing targets"
+  app.put(
+    "/api/factory/pressing-machines/report/hourly-targets",
+    requireAuth,
+    validateRequest(hourlyTargetInput),
+    async (req, res) => {
+      try {
+        const ctx = await context(req);
+        if (!ctx.canCorrect)
+          throw new ReportPermissionError(
+            403,
+            "PRESSING_TARGET_FORBIDDEN",
+            "Only Admin or Owner may edit pressing targets"
+          );
+        const input = pressingHourlyTargetBodySchema.parse(req.body);
+        if ("hour" in input) {
+          // Date-scoped hourly targets preserve historical comparisons. Each
+          // hour applies to all three workers and overrides their legacy defaults.
+          // A single atomic JSONB upsert preserves unrelated settings and dates.
+          await savePressingDateHourTarget(pool, {
+            companyId: ctx.companyId,
+            day: input.day,
+            hour: input.hour,
+            targetKgPerHour: input.targetKgPerHour,
+          });
+          return res.json({ saved: true, day: input.day, hour: input.hour, targetKgPerHour: input.targetKgPerHour });
+        }
+        const eligible = await pool.query(
+          "SELECT 1 FROM users u WHERE u.id=$2 AND UPPER(BTRIM(u.username)) IN ('P1','P2','P3') " +
+            "AND EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +
+            "AND r.role IN ('User','Normal User'))",
+          [ctx.companyId, input.userId]
         );
-      const kgSchema = pressingTargetKgSchema;
-      const input = z
-        .union([
-          z
-            .object({
-              day: z
-                .string()
-                .regex(/^\d{4}-\d{2}-\d{2}$/)
-                .refine(
-                  (date) =>
-                    !Number.isNaN(Date.parse(date + "T00:00:00Z")) &&
-                    new Date(date + "T00:00:00Z").toISOString().slice(0, 10) === date
-                ),
-              hour: z.number().int().min(7).max(16),
-              targetKgPerHour: kgSchema,
-            })
-            .strict(),
-          z
-            .object({
-              userId: z.string().trim().min(1).max(255),
-              targetKgPerHour: kgSchema,
-            })
-            .strict(),
-        ])
-        .parse(req.body);
-      if ("hour" in input) {
-        // Date-scoped hourly targets preserve historical comparisons. Each
-        // hour applies to all three workers and overrides their legacy defaults.
-        // A single atomic JSONB upsert preserves unrelated settings and dates.
-        await savePressingDateHourTarget(pool, {
-          companyId: ctx.companyId,
-          day: input.day,
-          hour: input.hour,
-          targetKgPerHour: input.targetKgPerHour,
-        });
-        return res.json({ saved: true, day: input.day, hour: input.hour, targetKgPerHour: input.targetKgPerHour });
+        if (!eligible.rowCount)
+          return res
+            .status(404)
+            .json({ code: "PRESSING_WORKER_NOT_FOUND", message: "Pressing worker not found in this company" });
+        await pool.query(
+          "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
+            "VALUES ($1,jsonb_build_object('pressingWorkerTargetsKg',jsonb_build_object($2::text,$3::numeric)),now()) " +
+            "ON CONFLICT (company_id) DO UPDATE SET " +
+            "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
+            "jsonb_build_object('pressingWorkerTargetsKg', " +
+            "COALESCE(factory_settings.extra_settings->'pressingWorkerTargetsKg','{}'::jsonb) || " +
+            "jsonb_build_object($2::text,$3::numeric)),updated_at=now()",
+          [ctx.companyId, input.userId, input.targetKgPerHour]
+        );
+        return res.json({ saved: true, userId: input.userId, targetKgPerHour: input.targetKgPerHour });
+      } catch (error) {
+        return handleError(res, error);
       }
-      const eligible = await pool.query(
-        "SELECT 1 FROM users u WHERE u.id=$2 AND UPPER(BTRIM(u.username)) IN ('P1','P2','P3') " +
-          "AND EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +
-          "AND r.role IN ('User','Normal User'))",
-        [ctx.companyId, input.userId]
-      );
-      if (!eligible.rowCount)
-        return res
-          .status(404)
-          .json({ code: "PRESSING_WORKER_NOT_FOUND", message: "Pressing worker not found in this company" });
-      await pool.query(
-        "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
-          "VALUES ($1,jsonb_build_object('pressingWorkerTargetsKg',jsonb_build_object($2::text,$3::numeric)),now()) " +
-          "ON CONFLICT (company_id) DO UPDATE SET " +
-          "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
-          "jsonb_build_object('pressingWorkerTargetsKg', " +
-          "COALESCE(factory_settings.extra_settings->'pressingWorkerTargetsKg','{}'::jsonb) || " +
-          "jsonb_build_object($2::text,$3::numeric)),updated_at=now()",
-        [ctx.companyId, input.userId, input.targetKgPerHour]
-      );
-      return res.json({ saved: true, userId: input.userId, targetKgPerHour: input.targetKgPerHour });
-    } catch (error) {
-      return handleError(res, error);
     }
-  });
+  );
 
   app.get("/api/factory/pressing-machines/report", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -389,7 +378,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/factory/pressing-machines/report/views", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/pressing-machines/report/views", requireAuth, validateRequest(saveView), async (req, res) => {
     try {
       const ctx = await context(req);
       const body = pressingSavedViewSchema.parse(req.body);
@@ -450,6 +439,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   app.post(
     "/api/factory/pressing-machines/report/views/:id/remove",
     requireAuth,
+    validateRequest(removeViewInput),
     async (req: Request, res: Response) => {
       try {
         const ctx = await context(req);

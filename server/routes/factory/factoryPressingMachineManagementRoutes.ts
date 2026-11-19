@@ -18,6 +18,10 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// client/src/pages/factory/PressingMachineManagement.tsx posts {}.
+const activateInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 class AccessError extends Error {
   constructor(
@@ -89,7 +93,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/pressing-machines/activate", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/pressing-machines/activate", requireAuth, validateRequest(activateInput), async (req, res) => {
     try {
       const ctx = await getActiveCompanyPermissionContext(req);
       if (ctx.posViewOnly || ["View Only", "Create Only", "ERP Tester"].includes(ctx.role))

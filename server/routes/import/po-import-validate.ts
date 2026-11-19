@@ -10,6 +10,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { poImportRequestInput } from "./poImportRequestSchema";
 
 import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer } from "./po-import-preview";
@@ -19,7 +21,7 @@ import { validateFactoryDispatchPoImport } from "./factoryDispatchPoImportGuard"
 import { FactoryTripPoReceiptError, inspectFactoryTripPoReceipt } from "./factoryDispatchPoImportReceipt";
 
 export function registerPoImportValidateRoute(app: Express) {
-  app.post("/api/po-import/validate", requireAuth, async (req, res) => {
+  app.post("/api/po-import/validate", requireAuth, validateRequest(poImportRequestInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

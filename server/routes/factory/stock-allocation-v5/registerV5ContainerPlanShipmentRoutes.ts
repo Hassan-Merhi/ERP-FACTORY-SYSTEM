@@ -21,6 +21,58 @@ import {
   positiveInt,
   toShipmentState,
 } from "./loadShipmentRows";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const containerParams = z.strictObject({ planId: stringParam, containerId: stringParam });
+const optionalText = z.string().nullable().optional();
+
+// normalizeShipmentReference/normalizeShipmentDate turn blanks into null; the
+// handlers keep their own date-format, status and document-type checks.
+const updateShipmentInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    containerNumber: optionalText,
+    carrier: optionalText,
+    bookingNumber: optionalText,
+    vesselName: optionalText,
+    destination: optionalText,
+    etd: optionalText,
+    eta: optionalText,
+  }),
+} satisfies RequestSchemas;
+
+const shipmentStatusInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.strictObject({ toStatus: z.string().optional(), note: optionalText }),
+} satisfies RequestSchemas;
+
+const createDocumentInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    documentType: z.string().optional(),
+    title: optionalText,
+    reference: optionalText,
+    fileUrl: optionalText,
+    issuedOn: optionalText,
+  }),
+} satisfies RequestSchemas;
+
+const deleteDocumentInput = {
+  params: z.strictObject({ planId: stringParam, containerId: stringParam, documentId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   // Shipment board for the whole plan.
@@ -51,12 +103,14 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.patch(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/shipment",
     requireAuth,
+    validateRequest(updateShipmentInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, updateShipmentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId) return res.status(400).json({ message: "Invalid plan or container id" });
 
@@ -139,12 +193,14 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.post(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/shipment/status",
     requireAuth,
+    validateRequest(shipmentStatusInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, shipmentStatusInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const toStatus = req.body?.toStatus;
         const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
 
@@ -310,11 +366,13 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.post(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/documents",
     requireAuth,
+    validateRequest(createDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, createDocumentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const documentType = req.body?.documentType;
         const title = normalizeShipmentReference(req.body?.title, 200);
 
@@ -369,12 +427,14 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.delete(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/documents/:documentId",
     requireAuth,
+    validateRequest(deleteDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
-        const documentId = positiveInt(req.params.documentId);
+        const { params } = validatedInput(req, deleteDocumentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
+        const documentId = positiveInt(params.documentId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId || !documentId) {
           return res.status(400).json({ message: "Invalid plan, container or document id" });

@@ -21,6 +21,16 @@ import {
   deletePreStockBalesTx,
   lockPriorityScanQueueTx,
 } from "./baleStatusWriteGuards";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// parseId and the handler's own status checks stay; this pins the shape sent by
+// the Bales History and barcode lookup screens ({ status }).
+const statusInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ status: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerBalesCrudRoutesPart2(app: Express) {
   // Phase 19 C (F3): Admin/Owner; only a value-neutral change (baleStatusPolicy),
@@ -31,6 +41,7 @@ export function registerBalesCrudRoutesPart2(app: Express) {
     "/api/factory/bales/:id/status",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(statusInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

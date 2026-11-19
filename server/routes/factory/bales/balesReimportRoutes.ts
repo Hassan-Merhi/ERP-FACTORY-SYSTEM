@@ -1,4 +1,3 @@
-import { spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 import type { Express, Request, Response } from "express";
 import { logAudit } from "../../helpers/auditHelpers";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -8,6 +7,8 @@ import { requireAuth } from "../../../auth";
 import { factoryBaleProducts, factoryBales } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { registerBalesReimportRoutesPart1 } from "./registerBalesReimportRoutesPart1";
+import { validateRequest } from "../../../lib/validateRequest";
+import { bulkUpdateNamesInput, spreadsheetUpload } from "./balesReimportRoutesUpload";
 
 export function registerBalesReimportRoutes(app: Express) {
   registerBalesReimportRoutesPart1(app);
@@ -76,20 +77,12 @@ function registerBalesReimportRoutesPart2(app: Express) {
   });
 
   // POST /api/factory/bales/bulk-update-names — Upload Excel and update product_name in bulk
-  app.post("/api/factory/bales/bulk-update-names", requireAuth, async (req: Request, res: Response) => {
-    const multer = (await import("multer")).default;
-    const upload = multer({
-      storage: multer.memoryStorage(),
-      limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 },
-    });
-    upload.single("file")(req, res, async (err: unknown) => {
-      if (err) {
-        const tooLarge = typeof err === "object" && "code" in err && err.code === "LIMIT_FILE_SIZE";
-        return res.status(tooLarge ? 413 : 400).json({
-          code: tooLarge ? "UPLOAD_FILE_TOO_LARGE" : "UPLOAD_ERROR",
-          message: tooLarge ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : "File upload error",
-        });
-      }
+  app.post(
+    "/api/factory/bales/bulk-update-names",
+    requireAuth,
+    spreadsheetUpload,
+    validateRequest(bulkUpdateNamesInput),
+    async (req: Request, res: Response) => {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
       try {
@@ -163,6 +156,6 @@ function registerBalesReimportRoutesPart2(app: Express) {
         logger.error("Error bulk-updating bale names:", { error: error });
         res.status(500).json({ message: getErrorMessage(error) });
       }
-    });
-  });
+    }
+  );
 }

@@ -9,9 +9,52 @@ import { requireAuth } from "../auth";
 import { sumMoney, toMoney } from "../lib/money";
 import { insertProductionBaleSchema, mixBatches, pressingBatches, productionBales } from "@shared/schema";
 import { getBwipjs } from "./registerProductionBaleRoutesPart1";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const looseNumber = z.union([z.number(), z.string()]);
+/** The handlers parse the body with insertProductionBaleSchema after setting companyId from the session. */
+const productionBaleBody = insertProductionBaleSchema.omit({ companyId: true }).strict();
+/** parseInt(req.params.id): any string reaches the handler, which answers 400 for NaN. */
+const baleIdParams = z.strictObject({ id: stringParam });
+
+const finalizeInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    pressingBatchId: looseNumber.nullable().optional(),
+    scannedBaleIds: z.array(looseNumber).optional(),
+    locationId: looseNumber.nullable().optional(),
+    mixBatchId: looseNumber.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const createInput = { query: emptyQuery, body: productionBaleBody } satisfies RequestSchemas;
+const bulkCreateInput = {
+  query: emptyQuery,
+  body: z.strictObject({ bales: z.array(productionBaleBody).nullable().optional() }),
+} satisfies RequestSchemas;
+const scanInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    barcodeValue: z.string().optional(),
+    weightKg: looseNumber.optional(),
+    category: z.string().optional(),
+    grade: z.string().optional(),
+    warehouseLocation: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const generateBarcodeInput = {
+  query: emptyQuery,
+  body: z.strictObject({ text: z.union([z.string(), z.number()]).optional() }),
+} satisfies RequestSchemas;
+const deleteInput = { params: baleIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const statusInput = {
+  params: baleIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ status: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerProductionBaleRoutesPart2(app: Express) {
-  app.post("/api/production-bales/finalize", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/finalize", requireAuth, validateRequest(finalizeInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -135,7 +178,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/production-bales", requireAuth, async (req, res) => {
+  app.post("/api/production-bales", requireAuth, validateRequest(createInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -151,7 +194,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/production-bales/bulk", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/bulk", requireAuth, validateRequest(bulkCreateInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -188,7 +231,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/production-bales/scan", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/scan", requireAuth, validateRequest(scanInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -215,7 +258,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/generate-barcode", requireAuth, async (req, res) => {
+  app.post("/api/generate-barcode", requireAuth, validateRequest(generateBarcodeInput), async (req, res) => {
     try {
       const { text } = req.body;
 
@@ -274,7 +317,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.delete("/api/production-bales/:id", requireAuth, async (req, res) => {
+  app.delete("/api/production-bales/:id", requireAuth, validateRequest(deleteInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -291,7 +334,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.patch("/api/production-bales/:id/status", requireAuth, async (req, res) => {
+  app.patch("/api/production-bales/:id/status", requireAuth, validateRequest(statusInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

@@ -4,6 +4,14 @@ import { logger } from "../../lib/logger";
 import { z } from "zod";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { requireActionAccess } from "../../lib/permissionMiddleware";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { db } from "../../db";
 import { stockTransferVouchers, vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -48,6 +56,15 @@ const transferPatchSchema = z.object({
     )
     .min(1),
 });
+
+/** putSchema with unknown fields rejected; the handler still parses (and coerces) with putSchema. */
+const putInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: putSchema.extend({ items: z.array(lifecycleItemSchema.strict()).min(1) }).strict(),
+} satisfies RequestSchemas;
+
+const approveInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 function errorStatus(error: unknown): number {
   const code = String((error as { code: unknown })?.code ?? "");
@@ -145,14 +162,11 @@ export function registerStockTransferLifecycleRoutes(app: Express) {
     }
   });
 
-  app.put("/api/stock-transfers/:id", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/stock-transfers/:id", requireAuth, validateRequest(putInput), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const transferId = Number(req.params.id);
-      if (!Number.isInteger(transferId) || transferId <= 0) {
-        return res.status(400).json({ message: "Transfer ID is required" });
-      }
+      const transferId = validatedInput(req, putInput).params.id;
 
       const parsed = putSchema.parse(req.body);
       // On the factory LAN server the edit is recorded for the cloud in the same transaction.
@@ -283,14 +297,12 @@ export function registerStockTransferLifecycleRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireActionAccess("act_transfer_stock"),
+    validateRequest(approveInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const transferId = Number(req.params.id);
-        if (!Number.isInteger(transferId) || transferId <= 0) {
-          return res.status(400).json({ message: "Transfer ID is required" });
-        }
+        const transferId = validatedInput(req, approveInput).params.id;
         const [transfer] = await db
           .select({ voucherId: stockTransferVouchers.voucherId })
           .from(stockTransferVouchers)

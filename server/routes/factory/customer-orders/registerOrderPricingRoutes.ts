@@ -3,6 +3,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The repair scans the session company's open orders and takes no input.
+const repairPerKgPricesInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 import { recalculateOrderTotals } from "../_helpers";
 import {
   customerOrderBales,
@@ -304,104 +308,109 @@ export function registerOrderPricingRoutes(app: Express) {
     }
   );
 
-  app.post("/api/factory/repair-perkg-prices", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/repair-perkg-prices",
+    requireAuth,
+    validateRequest(repairPerKgPricesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      // Find all LOADING / PENDING_VERIFICATION orders that have a proforma
-      const ordersToScan = await db
-        .select({ id: customerOrders.id, proformaIdUsed: customerOrders.proformaIdUsed })
-        .from(customerOrders)
-        .where(
-          and(
-            eq(customerOrders.companyId, companyId),
-            sql`${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')`,
-            sql`${customerOrders.proformaIdUsed} IS NOT NULL`
-          )
-        );
+        // Find all LOADING / PENDING_VERIFICATION orders that have a proforma
+        const ordersToScan = await db
+          .select({ id: customerOrders.id, proformaIdUsed: customerOrders.proformaIdUsed })
+          .from(customerOrders)
+          .where(
+            and(
+              eq(customerOrders.companyId, companyId),
+              sql`${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')`,
+              sql`${customerOrders.proformaIdUsed} IS NOT NULL`
+            )
+          );
 
-      let ordersScanned = 0;
-      let balesRepaired = 0;
-      const changedOrderIds: number[] = [];
-      const errors: string[] = [];
+        let ordersScanned = 0;
+        let balesRepaired = 0;
+        const changedOrderIds: number[] = [];
+        const errors: string[] = [];
 
-      for (const order of ordersToScan) {
-        ordersScanned++;
-        try {
-          // Fetch all proforma lines for this order's proforma that use per_kg
-          const proformaPerKgLines = await db
-            .select({
-              articleCode: customerProformaLines.articleCode,
-              pricingMode: customerProformaLines.pricingMode,
-              pricePerKg: customerProformaLines.pricePerKg,
-            })
-            .from(customerProformaLines)
-            .where(
-              and(
-                eq(customerProformaLines.proformaId, order.proformaIdUsed!),
-                sql`${customerProformaLines.pricingMode} = 'per_kg'`,
-                sql`${customerProformaLines.pricePerKg} IS NOT NULL AND ${customerProformaLines.pricePerKg}::numeric > 0`
-              )
-            );
-
-          if (proformaPerKgLines.length === 0) continue;
-
-          const perKgMap = new Map<string, ReturnType<typeof toMoney>>();
-          for (const pl of proformaPerKgLines) {
-            if (pl.articleCode && pl.pricePerKg) {
-              perKgMap.set(pl.articleCode.toLowerCase(), toMoney(String(pl.pricePerKg)));
-            }
-          }
-
-          // These orders are not finalized (LOADING / PENDING_VERIFICATION): no
-          // invoice journal or customer balance moves; the order row is locked.
-          const repaired = await db.transaction(async (tx) => {
-            const locked = await lockCustomerOrderTx(tx, companyId, order.id);
-            if (!locked) return 0;
-            // Find all bales in this order that match a per_kg article and have priceUsed = 0
-            const bales = await tx
+        for (const order of ordersToScan) {
+          ordersScanned++;
+          try {
+            // Fetch all proforma lines for this order's proforma that use per_kg
+            const proformaPerKgLines = await db
               .select({
-                id: customerOrderBales.id,
-                articleCode: customerOrderBales.articleCode,
-                weight: customerOrderBales.weight,
-                priceUsed: customerOrderBales.priceUsed,
+                articleCode: customerProformaLines.articleCode,
+                pricingMode: customerProformaLines.pricingMode,
+                pricePerKg: customerProformaLines.pricePerKg,
               })
-              .from(customerOrderBales)
-              .where(eq(customerOrderBales.orderId, order.id));
+              .from(customerProformaLines)
+              .where(
+                and(
+                  eq(customerProformaLines.proformaId, order.proformaIdUsed!),
+                  sql`${customerProformaLines.pricingMode} = 'per_kg'`,
+                  sql`${customerProformaLines.pricePerKg} IS NOT NULL AND ${customerProformaLines.pricePerKg}::numeric > 0`
+                )
+              );
 
-            let count = 0;
-            for (const bale of bales) {
-              const key = (bale.articleCode || "").toLowerCase();
-              const pkgRate = perKgMap.get(key);
-              if (!pkgRate || pkgRate.isZero()) continue;
-              if (!toMoney(String(bale.priceUsed || "0")).isZero()) continue; // already repaired — skip (idempotent)
-              // Exact: 0.5 kg at 4.35 is 2.18; the float product gave 2.17.
-              const newPrice = moneyString(toMoney(String(bale.weight || "0")).times(pkgRate));
-              await tx
-                .update(customerOrderBales)
-                .set({ priceUsed: newPrice })
-                .where(eq(customerOrderBales.id, bale.id));
-              count++;
+            if (proformaPerKgLines.length === 0) continue;
+
+            const perKgMap = new Map<string, ReturnType<typeof toMoney>>();
+            for (const pl of proformaPerKgLines) {
+              if (pl.articleCode && pl.pricePerKg) {
+                perKgMap.set(pl.articleCode.toLowerCase(), toMoney(String(pl.pricePerKg)));
+              }
             }
-            if (count > 0) await recalculateOrderTotals(tx, order.id);
-            return count;
-          });
 
-          if (repaired > 0) {
-            balesRepaired += repaired;
-            changedOrderIds.push(order.id);
+            // These orders are not finalized (LOADING / PENDING_VERIFICATION): no
+            // invoice journal or customer balance moves; the order row is locked.
+            const repaired = await db.transaction(async (tx) => {
+              const locked = await lockCustomerOrderTx(tx, companyId, order.id);
+              if (!locked) return 0;
+              // Find all bales in this order that match a per_kg article and have priceUsed = 0
+              const bales = await tx
+                .select({
+                  id: customerOrderBales.id,
+                  articleCode: customerOrderBales.articleCode,
+                  weight: customerOrderBales.weight,
+                  priceUsed: customerOrderBales.priceUsed,
+                })
+                .from(customerOrderBales)
+                .where(eq(customerOrderBales.orderId, order.id));
+
+              let count = 0;
+              for (const bale of bales) {
+                const key = (bale.articleCode || "").toLowerCase();
+                const pkgRate = perKgMap.get(key);
+                if (!pkgRate || pkgRate.isZero()) continue;
+                if (!toMoney(String(bale.priceUsed || "0")).isZero()) continue; // already repaired — skip (idempotent)
+                // Exact: 0.5 kg at 4.35 is 2.18; the float product gave 2.17.
+                const newPrice = moneyString(toMoney(String(bale.weight || "0")).times(pkgRate));
+                await tx
+                  .update(customerOrderBales)
+                  .set({ priceUsed: newPrice })
+                  .where(eq(customerOrderBales.id, bale.id));
+                count++;
+              }
+              if (count > 0) await recalculateOrderTotals(tx, order.id);
+              return count;
+            });
+
+            if (repaired > 0) {
+              balesRepaired += repaired;
+              changedOrderIds.push(order.id);
+            }
+          } catch (err: unknown) {
+            errors.push(`Order ${order.id}: ${getErrorMessage(err)}`);
           }
-        } catch (err: unknown) {
-          errors.push(`Order ${order.id}: ${getErrorMessage(err)}`);
         }
-      }
 
-      res.json({ ordersScanned, balesRepaired, changedOrderIds, errors });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ ordersScanned, balesRepaired, changedOrderIds, errors });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ─────── CONTAINER DOCUMENT TYPES ───────
 }

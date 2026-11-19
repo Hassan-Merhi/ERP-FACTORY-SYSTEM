@@ -44,6 +44,7 @@ async function request(
 ) {
   const req = {
     headers: {},
+    query: {},
     body: { references, customerId: options && "customerId" in options ? options.customerId : 7 },
     session: { factoryCompanyId: options?.companyId === undefined ? 10 : options.companyId },
     user: { role: options?.role ?? "Admin" },

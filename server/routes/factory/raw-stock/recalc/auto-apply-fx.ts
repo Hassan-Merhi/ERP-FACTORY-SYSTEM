@@ -19,6 +19,8 @@
  */
 import type { Express, Request, Response } from "express";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { recalcAutoApplyFxInput } from "../rawStockWriteRouteSchemas";
 
 import { ADMIN_ROLES } from "./_helpers";
 
@@ -31,6 +33,7 @@ export function registerRawStockAutoApplyFxRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/auto-apply-fx",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(recalcAutoApplyFxInput),
     async (_req: Request, res: Response) => {
       res.status(410).json({ code: FACTORY_AUTO_APPLY_FX_RETIRED, message: FACTORY_AUTO_APPLY_FX_RETIRED_MESSAGE });
     }

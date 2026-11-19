@@ -3,6 +3,8 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import Decimal from "decimal.js";
 import { requireAuth } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { assignToBalesInput } from "./rawStockWriteRouteSchemas";
 import { pool } from "../../../db";
 import { parseId } from "../../../lib/parseId";
 
@@ -22,6 +24,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
   app.post(
     "/api/factory/raw-stock/:rawStockId/assign-to-bales",
     requireAuth,
+    validateRequest(assignToBalesInput),
     async (req: import("express").Request, res: import("express").Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -96,10 +99,9 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
         }
         for (const bale of baleResult.rows) {
           if (bale.mix_batch_id != null || bale.status !== "IN_STOCK") {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} is no longer an unlinked IN_STOCK bale`),
-              { statusCode: 409 }
-            );
+            throw Object.assign(new Error(`Bale ${bale.id} is no longer an unlinked IN_STOCK bale`), {
+              statusCode: 409,
+            });
           }
         }
 
@@ -118,8 +120,8 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           if (storedRate == null || new Decimal(storedRate).lt(0)) {
             throw Object.assign(
               new Error(
-                "Supplier has no valid persisted authoritative USD raw-material rate. "
-                + "Assignment was not applied because consumption must never create or change that rate."
+                "Supplier has no valid persisted authoritative USD raw-material rate. " +
+                  "Assignment was not applied because consumption must never create or change that rate."
               ),
               { statusCode: 409 }
             );
@@ -136,7 +138,9 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           }
           costPerKgUsd = new Decimal(rawStock.cost_per_kg_usd);
           if (costPerKgUsd.lt(0)) {
-            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), { statusCode: 409 });
+            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), {
+              statusCode: 409,
+            });
           }
         }
 
@@ -205,10 +209,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
             ]
           );
           if (update.rowCount !== 1) {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} changed during assignment`),
-              { statusCode: 409 }
-            );
+            throw Object.assign(new Error(`Bale ${bale.id} changed during assignment`), { statusCode: 409 });
           }
         }
 
@@ -219,12 +220,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
              AND company_id = $3
              AND container_id = $4
              AND deleted_at IS NULL`,
-          [
-            totalKg.toDecimalPlaces(3).toFixed(3),
-            rawStockId,
-            companyId,
-            rawStock.container_id,
-          ]
+          [totalKg.toDecimalPlaces(3).toFixed(3), rawStockId, companyId, rawStock.container_id]
         );
         if (rawStockUpdate.rowCount !== 1) {
           throw Object.assign(new Error("Raw-stock row changed during assignment"), { statusCode: 409 });

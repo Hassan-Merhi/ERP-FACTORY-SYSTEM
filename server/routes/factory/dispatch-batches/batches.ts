@@ -9,6 +9,15 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { parseId } from "../../../lib/parseId";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 import { sql, eq, and } from "drizzle-orm";
 import {
   customerDispatchBatches,
@@ -22,6 +31,30 @@ import {
 import { getCompanyId, getUsername } from "./_helpers";
 import { resultRows, firstRow } from "../../../lib/queryResult";
 import { sqlArray } from "../../../lib/sqlArray";
+
+const optionalText = z.string().nullable().optional();
+const numberOrString = z.union([z.number(), z.string()]);
+
+const createBatchInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    customerId: numberOrString.optional(),
+    proformaId: numberOrString.nullable().optional(),
+    batchDate: z.string().optional(),
+    destination: optionalText,
+    notes: optionalText,
+    currency: optionalText,
+    priceMode: optionalText,
+  }),
+} satisfies RequestSchemas;
+
+const updateBatchInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ notes: optionalText, destination: optionalText, batchDate: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const cancelBatchInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerDispatchBatchCrudRoutes(app: Express) {
   // ── GET /api/factory/dispatch-batches ─────────────────────────────────────
@@ -78,92 +111,97 @@ export function registerDispatchBatchCrudRoutes(app: Express) {
 
   // ── POST /api/factory/dispatch-batches ────────────────────────────────────
   // Create a new dispatch batch (optionally linked to a proforma)
-  app.post("/api/factory/dispatch-batches", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/dispatch-batches",
+    requireAuth,
+    validateRequest(createBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { customerId, proformaId, batchDate, destination, notes, currency, priceMode } = req.body;
-      if (!customerId) return res.status(400).json({ message: "customerId is required" });
-      if (!batchDate) return res.status(400).json({ message: "batchDate is required" });
+        const { customerId, proformaId, batchDate, destination, notes, currency, priceMode } = req.body;
+        if (!customerId) return res.status(400).json({ message: "customerId is required" });
+        if (!batchDate) return res.status(400).json({ message: "batchDate is required" });
 
-      const result = await db.transaction(async (tx) => {
-        // Validate customer
-        const [customer] = await tx
-          .select({ id: customers.id, legalName: customers.legalName })
-          .from(customers)
-          .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
-        if (!customer) throw new Error("Customer not found");
+        const result = await db.transaction(async (tx) => {
+          // Validate customer
+          const [customer] = await tx
+            .select({ id: customers.id, legalName: customers.legalName })
+            .from(customers)
+            .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+          if (!customer) throw new Error("Customer not found");
 
-        // Validate proforma if supplied
-        let proforma = null;
-        let proformaLines: unknown[] = [];
-        if (proformaId) {
-          const [pf] = await tx
-            .select()
-            .from(customerProformas)
-            .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
-          if (!pf) throw new Error("Proforma not found");
-          if (pf.customerId !== customerId) throw new Error("Proforma belongs to a different customer");
-          if (!["ACTIVE", "PARTIALLY_DISPATCHED"].includes(pf.status))
-            throw new Error(`Proforma status is ${pf.status} — cannot create dispatch batch`);
-          proforma = pf;
-          proformaLines = await tx
-            .select()
-            .from(customerProformaLines)
-            .where(eq(customerProformaLines.proformaId, proformaId));
-        }
+          // Validate proforma if supplied
+          let proforma = null;
+          let proformaLines: unknown[] = [];
+          if (proformaId) {
+            const [pf] = await tx
+              .select()
+              .from(customerProformas)
+              .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
+            if (!pf) throw new Error("Proforma not found");
+            if (pf.customerId !== customerId) throw new Error("Proforma belongs to a different customer");
+            if (!["ACTIVE", "PARTIALLY_DISPATCHED"].includes(pf.status))
+              throw new Error(`Proforma status is ${pf.status} — cannot create dispatch batch`);
+            proforma = pf;
+            proformaLines = await tx
+              .select()
+              .from(customerProformaLines)
+              .where(eq(customerProformaLines.proformaId, proformaId));
+          }
 
-        // Generate batch number
-        let seqRows = await tx.execute(
-          sql`SELECT next_number FROM customer_dispatch_batch_sequences WHERE company_id = ${companyId} FOR UPDATE`
-        );
-        let seqRow = firstRow<{ next_number?: number; nextNumber?: number }>(seqRows);
-        if (!seqRow) {
-          await tx.execute(
-            sql`INSERT INTO customer_dispatch_batch_sequences (company_id, next_number) VALUES (${companyId}, 1) ON CONFLICT (company_id) DO NOTHING`
-          );
-          seqRows = await tx.execute(
+          // Generate batch number
+          let seqRows = await tx.execute(
             sql`SELECT next_number FROM customer_dispatch_batch_sequences WHERE company_id = ${companyId} FOR UPDATE`
           );
-          seqRow = firstRow<{ next_number?: number; nextNumber?: number }>(seqRows);
-        }
-        const nextNum = Number(seqRow?.next_number ?? seqRow?.nextNumber ?? 1);
-        await tx.execute(
-          sql`UPDATE customer_dispatch_batch_sequences SET next_number = ${nextNum + 1} WHERE company_id = ${companyId}`
-        );
-        const batchNumber = `DB-${String(nextNum).padStart(6, "0")}`;
+          let seqRow = firstRow<{ next_number?: number; nextNumber?: number }>(seqRows);
+          if (!seqRow) {
+            await tx.execute(
+              sql`INSERT INTO customer_dispatch_batch_sequences (company_id, next_number) VALUES (${companyId}, 1) ON CONFLICT (company_id) DO NOTHING`
+            );
+            seqRows = await tx.execute(
+              sql`SELECT next_number FROM customer_dispatch_batch_sequences WHERE company_id = ${companyId} FOR UPDATE`
+            );
+            seqRow = firstRow<{ next_number?: number; nextNumber?: number }>(seqRows);
+          }
+          const nextNum = Number(seqRow?.next_number ?? seqRow?.nextNumber ?? 1);
+          await tx.execute(
+            sql`UPDATE customer_dispatch_batch_sequences SET next_number = ${nextNum + 1} WHERE company_id = ${companyId}`
+          );
+          const batchNumber = `DB-${String(nextNum).padStart(6, "0")}`;
 
-        const [batch] = await tx
-          .insert(customerDispatchBatches)
-          .values({
-            companyId,
-            customerId,
-            proformaId: proformaId || null,
-            batchNumber,
-            batchDate,
-            status: "DRAFT",
-            currency: currency || "USD",
-            priceMode: priceMode || "PER_BALE",
-            destination: destination || null,
-            notes: notes || null,
-            createdBy: getUsername(req),
-          })
-          .returning();
+          const [batch] = await tx
+            .insert(customerDispatchBatches)
+            .values({
+              companyId,
+              customerId,
+              proformaId: proformaId || null,
+              batchNumber,
+              batchDate,
+              status: "DRAFT",
+              currency: currency || "USD",
+              priceMode: priceMode || "PER_BALE",
+              destination: destination || null,
+              notes: notes || null,
+              createdBy: getUsername(req),
+            })
+            .returning();
 
-        return {
-          batch,
-          customerName: customer.legalName,
-          proformaName: proforma?.name || null,
-          proformaLines,
-        };
-      });
+          return {
+            batch,
+            customerName: customer.legalName,
+            proformaName: proforma?.name || null,
+            proformaLines,
+          };
+        });
 
-      res.status(201).json(result);
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.status(201).json(result);
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── GET /api/factory/dispatch-batches/:id ─────────────────────────────────
   // Full detail: batch + proforma summary + rides + bale counts
@@ -268,91 +306,99 @@ export function registerDispatchBatchCrudRoutes(app: Express) {
 
   // ── PATCH /api/factory/dispatch-batches/:id ───────────────────────────────
   // Update batch notes / destination / date (only while not INVOICED)
-  app.patch("/api/factory/dispatch-batches/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const batchId = parseId(req.params.id);
-      if (batchId === null) return res.status(400).json({ message: "Invalid id" });
+  app.patch(
+    "/api/factory/dispatch-batches/:id",
+    requireAuth,
+    validateRequest(updateBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const batchId = validatedInput(req, updateBatchInput).params.id;
 
-      const [batch] = await db
-        .select()
-        .from(customerDispatchBatches)
-        .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-      if (!batch) return res.status(404).json({ message: "Batch not found" });
-      if (batch.status === "INVOICED") return res.status(400).json({ message: "Cannot edit an invoiced batch" });
-      if (batch.status === "CANCELLED") return res.status(400).json({ message: "Cannot edit a cancelled batch" });
-
-      const { notes, destination, batchDate } = req.body;
-      const updates: Partial<typeof customerDispatchBatches.$inferInsert> = { updatedAt: new Date() };
-      if (notes !== undefined) updates.notes = notes;
-      if (destination !== undefined) updates.destination = destination;
-      if (batchDate !== undefined) updates.batchDate = batchDate;
-
-      const [updated] = await db
-        .update(customerDispatchBatches)
-        .set(updates)
-        .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)))
-        .returning();
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
-    }
-  });
-
-  // ── DELETE /api/factory/dispatch-batches/:id ──────────────────────────────
-  // Cancel a batch (returns bales to IN_STOCK)
-  app.delete("/api/factory/dispatch-batches/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const batchId = parseId(req.params.id);
-      if (batchId === null) return res.status(400).json({ message: "Invalid id" });
-
-      await db.transaction(async (tx) => {
-        const [batch] = await tx
+        const [batch] = await db
           .select()
           .from(customerDispatchBatches)
           .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-        if (!batch) throw new Error("Batch not found");
-        if (batch.status === "INVOICED") throw new Error("Cannot cancel an invoiced batch");
-        if (batch.status === "CANCELLED") throw new Error("Batch already cancelled");
+        if (!batch) return res.status(404).json({ message: "Batch not found" });
+        if (batch.status === "INVOICED") return res.status(400).json({ message: "Cannot edit an invoiced batch" });
+        if (batch.status === "CANCELLED") return res.status(400).json({ message: "Cannot edit a cancelled batch" });
 
-        // Return all reserved bales to IN_STOCK
-        const activeBaleIds = await tx.execute(sql`
+        const { notes, destination, batchDate } = req.body;
+        const updates: Partial<typeof customerDispatchBatches.$inferInsert> = { updatedAt: new Date() };
+        if (notes !== undefined) updates.notes = notes;
+        if (destination !== undefined) updates.destination = destination;
+        if (batchDate !== undefined) updates.batchDate = batchDate;
+
+        const [updated] = await db
+          .update(customerDispatchBatches)
+          .set(updates)
+          .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)))
+          .returning();
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
+    }
+  );
+
+  // ── DELETE /api/factory/dispatch-batches/:id ──────────────────────────────
+  // Cancel a batch (returns bales to IN_STOCK)
+  app.delete(
+    "/api/factory/dispatch-batches/:id",
+    requireAuth,
+    validateRequest(cancelBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const batchId = validatedInput(req, cancelBatchInput).params.id;
+
+        await db.transaction(async (tx) => {
+          const [batch] = await tx
+            .select()
+            .from(customerDispatchBatches)
+            .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
+          if (!batch) throw new Error("Batch not found");
+          if (batch.status === "INVOICED") throw new Error("Cannot cancel an invoiced batch");
+          if (batch.status === "CANCELLED") throw new Error("Batch already cancelled");
+
+          // Return all reserved bales to IN_STOCK
+          const activeBaleIds = await tx.execute(sql`
           SELECT bale_id FROM customer_dispatch_bale_scans
           WHERE batch_id = ${batchId} AND company_id = ${companyId} AND removed_at IS NULL
         `);
-        const ids = resultRows(activeBaleIds).map((r) => Number(r.bale_id));
-        if (ids.length > 0) {
-          // sqlArray, not a bare array: Drizzle renders a bare JS array as
-          // tuple syntax, which ANY() rejects outright — so this statement used
-          // to throw for every batch that had a bale on it, which is every
-          // batch worth cancelling.
-          await tx.execute(sql`
+          const ids = resultRows(activeBaleIds).map((r) => Number(r.bale_id));
+          if (ids.length > 0) {
+            // sqlArray, not a bare array: Drizzle renders a bare JS array as
+            // tuple syntax, which ANY() rejects outright — so this statement used
+            // to throw for every batch that had a bale on it, which is every
+            // batch worth cancelling.
+            await tx.execute(sql`
             UPDATE factory_bales SET status = 'IN_STOCK', updated_at = now()
             WHERE id = ANY(${sqlArray(ids)}) AND status = 'RESERVED_FOR_DISPATCH'
           `);
-        }
+          }
 
-        // Cancel all rides
-        await tx
-          .update(customerDispatchTruckRides)
-          .set({ status: "CANCELLED", updatedAt: new Date() })
-          .where(
-            and(eq(customerDispatchTruckRides.batchId, batchId), eq(customerDispatchTruckRides.companyId, companyId))
-          );
+          // Cancel all rides
+          await tx
+            .update(customerDispatchTruckRides)
+            .set({ status: "CANCELLED", updatedAt: new Date() })
+            .where(
+              and(eq(customerDispatchTruckRides.batchId, batchId), eq(customerDispatchTruckRides.companyId, companyId))
+            );
 
-        // Mark batch cancelled
-        await tx
-          .update(customerDispatchBatches)
-          .set({ status: "CANCELLED", cancelledAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-      });
+          // Mark batch cancelled
+          await tx
+            .update(customerDispatchBatches)
+            .set({ status: "CANCELLED", cancelledAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
+        });
 
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

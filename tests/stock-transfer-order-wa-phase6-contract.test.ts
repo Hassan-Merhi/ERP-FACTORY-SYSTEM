@@ -52,7 +52,7 @@ describe("Stock Transfer Order WhatsApp Phase 6 administrator reconciliation", (
     expect(routes).toContain(compact("getActiveCompanyPermissionContext"));
     expect(manifest.routeCount).toBe(manifest.routes.length);
     expect(manifest.routes).toContain(
-      "POST /api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile [requireAuth > <anonymous> > <anonymous>]"
+      "POST /api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile [requireAuth > <anonymous> > validateRequest > <anonymous>]"
     );
   });
 

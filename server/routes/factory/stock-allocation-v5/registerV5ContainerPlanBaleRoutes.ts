@@ -26,6 +26,33 @@ import {
   writeAssignmentAudit,
   type BaleLookupRow,
 } from "./container-plan-balesLoadAssignmentState";
+import { z } from "zod";
+import {
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const containerParams = z.strictObject({ planId: stringParam, containerId: stringParam });
+// parseBaleAssignmentTokens drops ids and codes it cannot use.
+const baleTokens = {
+  baleIds: z.array(z.union([z.number(), z.string()])).optional(),
+  baleCodes: z.array(z.union([z.string(), z.number()])).optional(),
+};
+
+const assignBalesInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.strictObject({ auto: z.boolean().optional(), ...baleTokens }),
+} satisfies RequestSchemas;
+
+const releaseBalesInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ all: z.boolean().optional(), ...baleTokens })]),
+} satisfies RequestSchemas;
 
 export function registerV5ContainerPlanBaleRoutes(app: Express): void {
   // Loading screen: planned vs physically assigned, container by container.
@@ -165,12 +192,14 @@ export function registerV5ContainerPlanBaleRoutes(app: Express): void {
   app.post(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/bales",
     requireAuth,
+    validateRequest(assignBalesInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, assignBalesInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId) return res.status(400).json({ message: "Invalid plan or container id" });
 
@@ -333,12 +362,14 @@ export function registerV5ContainerPlanBaleRoutes(app: Express): void {
   app.delete(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/bales",
     requireAuth,
+    validateRequest(releaseBalesInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, releaseBalesInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId) return res.status(400).json({ message: "Invalid plan or container id" });
 

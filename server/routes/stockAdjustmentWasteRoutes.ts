@@ -6,6 +6,7 @@ import { infrastructurePostingIdentity } from "../services/accounting/infrastruc
  * from fiscalTransferRoutes.ts as a sub-registrar; behaviour is unchanged.
  */
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -19,6 +20,7 @@ import {
   vouchers,
   wasteDispatches,
   wasteDispatchItems,
+  updateStockAdjustmentItemSchema,
   updateStockAdjustmentSchema,
 } from "@shared/schema";
 import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
@@ -26,6 +28,72 @@ import { requireActionAccess } from "../lib/permissionMiddleware";
 import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
 import { parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 import { createStockAdjustmentWithVoucherTx } from "../storage/stock-ops/transfers-create";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+const idStringParams = z.strictObject({ id: stringParam });
+
+// stockAdjustmentCreateHandler keeps its own presence/value checks and messages;
+// this only fixes the shape. `voucher` is the new-voucher header (form and chat
+// widget); `voucherId` is the legacy path for an existing stock voucher.
+const createStockAdjustmentInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    voucherId: numberOrString.nullable().optional(),
+    voucher: z
+      .strictObject({
+        voucherNumber: z.string().optional(),
+        voucherDate: z.string().optional(),
+        description: z.string().nullable().optional(),
+        optional: z.boolean().optional(),
+      })
+      .nullable()
+      .optional(),
+    locationId: numberOrString.optional(),
+    adjustmentType: z.string().optional(),
+    notes: z.string().nullable().optional(),
+    items: z
+      .array(
+        z.strictObject({
+          stockItemId: numberOrString,
+          quantity: numberOrString,
+          rate: numberOrString.nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+const updateStockAdjustmentInput = {
+  params: idStringParams,
+  query: emptyQuery,
+  body: updateStockAdjustmentSchema
+    .extend({ items: z.array(updateStockAdjustmentItemSchema.strict()).min(1, "At least one item is required") })
+    .strict(),
+} satisfies RequestSchemas;
+
+const createWasteDispatchInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    locationId: numberOrString,
+    dispatchDate: z.string(),
+    notes: z.string().nullable().optional(),
+    items: z.array(z.strictObject({ stockItemId: numberOrString, quantity: numberOrString })),
+  }),
+} satisfies RequestSchemas;
+
+const deleteWasteDispatchInput = {
+  params: idStringParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerStockAdjustmentWasteRoutes(app: Express) {
   // Stock Adjustments - GET endpoint
@@ -57,66 +125,71 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireActionAccess("act_create_voucher"),
+    validateRequest(createStockAdjustmentInput),
     stockAdjustmentCreateHandler
   );
 
   // Stock Adjustments - PUT endpoint (update)
-  app.put("/api/stock-adjustments/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (!id) {
-        return res.status(400).json({ message: "Adjustment ID is required" });
+  app.put(
+    "/api/stock-adjustments/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateStockAdjustmentInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { params, body } = validatedInput(req, updateStockAdjustmentInput);
+        const id = parseInt(params.id);
+        if (!id) {
+          return res.status(400).json({ message: "Adjustment ID is required" });
+        }
+
+        const { locationId, adjustmentType, notes, items } = body;
+
+        // The adjustment is reached by id and its location and items come from
+        // the body; none of them is under the path-based company scope.
+        const [owned] = await db
+          .select({ id: stockAdjustmentVouchers.id })
+          .from(stockAdjustmentVouchers)
+          .innerJoin(vouchers, eq(vouchers.id, stockAdjustmentVouchers.voucherId))
+          .where(and(eq(stockAdjustmentVouchers.id, id), eq(vouchers.companyId, companyId)));
+        if (!owned) return res.status(404).json({ message: "Adjustment not found" });
+        if (!(await ownLocationIds(companyId, [locationId])).has(locationId)) {
+          return res.status(400).json({ message: "Location not found" });
+        }
+        if (
+          !(await allStockItemsOwned(
+            companyId,
+            items.map((item) => item.stockItemId)
+          ))
+        ) {
+          return res.status(400).json({ message: "Stock item not found" });
+        }
+
+        // Convert numbers back to strings with fixed precision for storage layer
+        const itemsForStorage = items.map((item) => ({
+          stockItemId: item.stockItemId,
+          quantity: item.quantity.toFixed(3),
+          rate: item.rate.toFixed(2),
+        }));
+
+        // Update the stock adjustment using the storage method
+        const updated = await storage.updateStockAdjustment(
+          id,
+          locationId,
+          adjustmentType,
+          notes || "",
+          itemsForStorage
+        );
+
+        res.json(updated);
+      } catch (error: unknown) {
+        logger.error("[Stock Adjustment PUT] Error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Validate request body using Zod
-      const parseResult = updateStockAdjustmentSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        return res.status(400).json({
-          message: "Invalid request data",
-          errors: parseResult.error.issues,
-        });
-      }
-
-      const { locationId, adjustmentType, notes, items } = parseResult.data;
-
-      // The adjustment is reached by id and its location and items come from
-      // the body; none of them is under the path-based company scope.
-      const [owned] = await db
-        .select({ id: stockAdjustmentVouchers.id })
-        .from(stockAdjustmentVouchers)
-        .innerJoin(vouchers, eq(vouchers.id, stockAdjustmentVouchers.voucherId))
-        .where(and(eq(stockAdjustmentVouchers.id, id), eq(vouchers.companyId, companyId)));
-      if (!owned) return res.status(404).json({ message: "Adjustment not found" });
-      if (!(await ownLocationIds(companyId, [locationId])).has(locationId)) {
-        return res.status(400).json({ message: "Location not found" });
-      }
-      if (
-        !(await allStockItemsOwned(
-          companyId,
-          items.map((item) => item.stockItemId)
-        ))
-      ) {
-        return res.status(400).json({ message: "Stock item not found" });
-      }
-
-      // Convert numbers back to strings with fixed precision for storage layer
-      const itemsForStorage = items.map((item) => ({
-        stockItemId: item.stockItemId,
-        quantity: item.quantity.toFixed(3),
-        rate: item.rate.toFixed(2),
-      }));
-
-      // Update the stock adjustment using the storage method
-      const updated = await storage.updateStockAdjustment(id, locationId, adjustmentType, notes || "", itemsForStorage);
-
-      res.json(updated);
-    } catch (error: unknown) {
-      logger.error("[Stock Adjustment PUT] Error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ===== WASTE DISPATCHES =====
 
@@ -194,143 +267,155 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
     }
   });
 
-  app.post("/api/waste-dispatches", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/waste-dispatches",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createWasteDispatchInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { locationId, dispatchDate, notes, items } = req.body;
+        const { locationId, dispatchDate, notes, items } = req.body;
 
-      if (!locationId || !dispatchDate || !items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "locationId, dispatchDate, and items are required" });
-      }
-
-      // Validate items
-      for (const item of items) {
-        if (!item.stockItemId || !item.quantity || !(parseMoneyInput(item.quantity)?.gt(0) ?? false)) {
-          return res.status(400).json({ message: "Each item must have stockItemId and positive quantity" });
+        if (!locationId || !dispatchDate || !items || !Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "locationId, dispatchDate, and items are required" });
         }
-      }
 
-      // Generate dispatch number: WD-{YEAR}-{padded seq}
-      const year = new Date(dispatchDate).getFullYear();
-      const [{ count }] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(wasteDispatches)
-        .where(eq(wasteDispatches.companyId, companyId));
-      const seq = (count || 0) + 1;
-      const dispatchNumber = `WD-${year}-${String(seq).padStart(4, "0")}`;
+        // Validate items
+        for (const item of items) {
+          if (!item.stockItemId || !item.quantity || !(parseMoneyInput(item.quantity)?.gt(0) ?? false)) {
+            return res.status(400).json({ message: "Each item must have stockItemId and positive quantity" });
+          }
+        }
 
-      // Get location name for voucher description
-      const [location] = await db
-        .select()
-        .from(locations)
-        .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId)));
-      if (!location) return res.status(400).json({ message: "Location not found" });
-      if (
-        !(await allStockItemsOwned(
-          companyId,
-          items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
-        ))
-      ) {
-        return res.status(400).json({ message: "Stock item not found" });
-      }
+        // Generate dispatch number: WD-{YEAR}-{padded seq}
+        const year = new Date(dispatchDate).getFullYear();
+        const [{ count }] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(wasteDispatches)
+          .where(eq(wasteDispatches.companyId, companyId));
+        const seq = (count || 0) + 1;
+        const dispatchNumber = `WD-${year}-${String(seq).padStart(4, "0")}`;
 
-      // Calculate total (will be updated after createStockAdjustment to use actual rates)
-      const itemsForAdj = items.map((item) => ({
-        stockItemId: parseInt(item.stockItemId),
-        quantity: toMoney(item.quantity).abs().negated().toFixed(3), // negative = consumption
-        rate: "0", // rate will be determined from inventory by createStockAdjustment
-      }));
-
-      // Wave 15: the voucher, its adjustment and the dispatch rows commit
-      // together (they were separate transactions, so a failure could leave a
-      // consumption voucher with no dispatch, or a dispatch with no stock).
-      const dispatch = await db.transaction(async (tx) => {
-        const adjResult = await createStockAdjustmentWithVoucherTx(
-          tx,
-          {
+        // Get location name for voucher description
+        const [location] = await db
+          .select()
+          .from(locations)
+          .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId)));
+        if (!location) return res.status(400).json({ message: "Location not found" });
+        if (
+          !(await allStockItemsOwned(
             companyId,
-            voucherType: "Consumption",
-            voucherNumber: dispatchNumber,
-            voucherDate: dispatchDate,
-            description: `Waste dispatch from ${location.name}`,
-            totalAmount: "0",
-            currency: "USD",
-            sourceModule: "ERP",
-            optional: false,
+            items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+          ))
+        ) {
+          return res.status(400).json({ message: "Stock item not found" });
+        }
+
+        // Calculate total (will be updated after createStockAdjustment to use actual rates)
+        const itemsForAdj = items.map((item) => ({
+          stockItemId: parseInt(item.stockItemId),
+          quantity: toMoney(item.quantity).abs().negated().toFixed(3), // negative = consumption
+          rate: "0", // rate will be determined from inventory by createStockAdjustment
+        }));
+
+        // Wave 15: the voucher, its adjustment and the dispatch rows commit
+        // together (they were separate transactions, so a failure could leave a
+        // consumption voucher with no dispatch, or a dispatch with no stock).
+        const dispatch = await db.transaction(async (tx) => {
+          const adjResult = await createStockAdjustmentWithVoucherTx(
+            tx,
+            {
+              companyId,
+              voucherType: "Consumption",
+              voucherNumber: dispatchNumber,
+              voucherDate: dispatchDate,
+              description: `Waste dispatch from ${location.name}`,
+              totalAmount: "0",
+              currency: "USD",
+              sourceModule: "ERP",
+              optional: false,
+              locationId,
+            },
+            infrastructurePostingIdentity("waste-dispatch", `${companyId}:${dispatchNumber}`, "consumption"),
             locationId,
-          },
-          infrastructurePostingIdentity("waste-dispatch", `${companyId}:${dispatchNumber}`, "consumption"),
-          locationId,
-          notes || "",
-          itemsForAdj
-        );
+            notes || "",
+            itemsForAdj
+          );
 
-        // Calculate total from actual rates used
-        const totalAmount = sumMoney(adjResult.items.map((item: { totalAmount: string }) => item.totalAmount));
+          // Calculate total from actual rates used
+          const totalAmount = sumMoney(adjResult.items.map((item: { totalAmount: string }) => item.totalAmount));
 
-        const [created] = await tx
-          .insert(wasteDispatches)
-          .values({
-            companyId,
-            locationId,
-            voucherId: adjResult.voucher.id,
-            dispatchNumber,
-            dispatchDate,
-            notes: notes || null,
-            totalAmount: totalAmount.toFixed(2),
-          })
-          .returning();
+          const [created] = await tx
+            .insert(wasteDispatches)
+            .values({
+              companyId,
+              locationId,
+              voucherId: adjResult.voucher.id,
+              dispatchNumber,
+              dispatchDate,
+              notes: notes || null,
+              totalAmount: totalAmount.toFixed(2),
+            })
+            .returning();
 
-        for (const adjItem of adjResult.items) {
-          await tx.insert(wasteDispatchItems).values({
-            dispatchId: created.id,
-            stockItemId: adjItem.stockItemId,
-            quantity: toMoney(adjItem.quantity).abs().toFixed(3),
-            rate: adjItem.rate,
-            totalAmount: adjItem.totalAmount,
+          for (const adjItem of adjResult.items) {
+            await tx.insert(wasteDispatchItems).values({
+              dispatchId: created.id,
+              stockItemId: adjItem.stockItemId,
+              quantity: toMoney(adjItem.quantity).abs().toFixed(3),
+              rate: adjItem.rate,
+              totalAmount: adjItem.totalAmount,
+            });
+          }
+          return created;
+        });
+
+        res.json({ ...dispatch, voucherNumber: dispatchNumber });
+      } catch (error: unknown) {
+        logger.error("[Waste Dispatch POST] Error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/waste-dispatches/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteWasteDispatchInput),
+    async (req, res) => {
+      try {
+        const id = parseInt(validatedInput(req, deleteWasteDispatchInput).params.id);
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+        const [dispatch] = await db
+          .select()
+          .from(wasteDispatches)
+          .where(and(eq(wasteDispatches.id, id), eq(wasteDispatches.companyId, companyId)));
+
+        if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
+
+        // Delete voucher (reverses inventory changes automatically via deleteVoucher logic)
+        if (dispatch.voucherId) {
+          await storage.deleteVoucher(dispatch.voucherId, {
+            userId: req.session.userId ?? "unknown",
+            username: req.session.username || "unknown",
           });
         }
-        return created;
-      });
 
-      res.json({ ...dispatch, voucherNumber: dispatchNumber });
-    } catch (error: unknown) {
-      logger.error("[Waste Dispatch POST] Error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+        // Delete waste dispatch items and dispatch record
+        await db.delete(wasteDispatchItems).where(eq(wasteDispatchItems.dispatchId, id));
+        await db.delete(wasteDispatches).where(eq(wasteDispatches.id, id));
 
-  app.delete("/api/waste-dispatches/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const [dispatch] = await db
-        .select()
-        .from(wasteDispatches)
-        .where(and(eq(wasteDispatches.id, id), eq(wasteDispatches.companyId, companyId)));
-
-      if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
-
-      // Delete voucher (reverses inventory changes automatically via deleteVoucher logic)
-      if (dispatch.voucherId) {
-        await storage.deleteVoucher(dispatch.voucherId, {
-          userId: req.session.userId ?? "unknown",
-          username: req.session.username || "unknown",
-        });
+        res.json({ message: "Waste dispatch deleted and inventory reversed" });
+      } catch (error: unknown) {
+        logger.error("[Waste Dispatch DELETE] Error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Delete waste dispatch items and dispatch record
-      await db.delete(wasteDispatchItems).where(eq(wasteDispatchItems.dispatchId, id));
-      await db.delete(wasteDispatches).where(eq(wasteDispatches.id, id));
-
-      res.json({ message: "Waste dispatch deleted and inventory reversed" });
-    } catch (error: unknown) {
-      logger.error("[Waste Dispatch DELETE] Error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

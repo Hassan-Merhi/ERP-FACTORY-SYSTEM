@@ -14,6 +14,25 @@ import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { inventoryCutoverRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { restoreRepointedLinesTx } from "./repointDocumentLines";
 
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// MergeHistoryCard sends both ids; the handler keeps its own required check.
+const historicalRestoreInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    mergedItemId: z.union([z.number(), z.string()]).nullable().optional(),
+    keptItemId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler parseInt-s logId and answers its own 400 for a non-number.
+const unmergeInput = {
+  params: z.strictObject({ logId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
 export function registerStockMergeLogRoutes(app: Express) {
   // ── Merge Logs: GET /api/stock-items/merge-logs ──────────────────────────
   app.get("/api/stock-items/merge-logs", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
@@ -89,6 +108,7 @@ export function registerStockMergeLogRoutes(app: Express) {
     "/api/stock-items/merge-logs/historical-restore",
     requireAuth,
     requireNonPOS,
+    validateRequest(historicalRestoreInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -151,6 +171,7 @@ export function registerStockMergeLogRoutes(app: Express) {
     "/api/stock-items/merge-logs/:logId/unmerge",
     requireAuth,
     requireNonPOS,
+    validateRequest(unmergeInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

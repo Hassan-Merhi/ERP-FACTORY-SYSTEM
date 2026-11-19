@@ -7,54 +7,72 @@
  * the database uniquely guards both provider message IDs and one decision per
  * approval batch.
  */
-import { webhookTokenIsConfigured, authorizedStockTransferOrderWaWebhook } from "../services/security/stockTransferOrderWaWebhookAuthentication";
+import {
+  webhookTokenIsConfigured,
+  authorizedStockTransferOrderWaWebhook,
+} from "../services/security/stockTransferOrderWaWebhookAuthentication";
 import type { Express, Request, Response } from "express";
 import { logger } from "../lib/logger";
 import { parseStockTransferOrderWaReply } from "../services/stockTransferOrderWhatsAppReplyParser";
 import { recordStockTransferOrderWaReply } from "../services/stockTransferOrderWhatsAppInbound";
 import { queueStockTransferOrderWaDecision } from "../services/stockTransferOrderWhatsAppApprovalWorker";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../lib/validateRequest";
 
-export const STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH =
-  "/api/stock-transfer-order/wa-approval/webhook";
+// The body is a GREEN API notification whose shape the provider defines and
+// extends (many typeWebhook kinds, each with its own fields). It is a
+// genuinely open map: parseStockTransferOrderWaReply reads the fields it needs
+// and ignores every other event with a 200, so unknown keys must not be refused.
+// The query string is left undeclared: the provider calls the URL configured
+// in its console, which may carry parameters this handler never reads.
+const webhookInput = {
+  body: z.union([z.undefined(), z.record(z.string(), z.unknown())]),
+} satisfies RequestSchemas;
+
+export const STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH = "/api/stock-transfer-order/wa-approval/webhook";
 
 export async function stockTransferOrderWaWebhookHandler(req: Request, res: Response) {
-    res.setHeader("Cache-Control", "no-store");
-    if (!webhookTokenIsConfigured()) {
-      return res.status(503).json({ code: "STO_WA_WEBHOOK_NOT_CONFIGURED" });
-    }
-    if (!authorizedStockTransferOrderWaWebhook(req.headers.authorization)) {
-      return res.status(401).json({ code: "STO_WA_WEBHOOK_UNAUTHORIZED" });
-    }
-    const reply = parseStockTransferOrderWaReply(req.body);
-    if (!reply) {
-      return res.status(200).json({ accepted: false, outcome: "ignored" });
-    }
-    try {
-      const result = await recordStockTransferOrderWaReply(reply);
-      // Acknowledge provider redeliveries with HTTP 200, not an error that
-      // would trigger further retries. Phase 4 consumes the staged event.
-      if (result.outcome === "accepted") {
-        // Persisted before this line. The worker executes it outside webhook
-        // latency limits, and the durable sweep replays after any restart.
-        queueStockTransferOrderWaDecision(result.batchId);
-        return res.status(200).json({
-          accepted: true, decisionRecorded: true, approvalExecuted: false,
-          executionQueued: true, batchId: result.batchId, command: result.command,
-        });
-      }
-      return res.status(200).json({ accepted: false, outcome: result.outcome });
-    } catch (error) {
-      logger.error("[STO WA] Incoming provider event could not be staged", {
-        type: "stock_transfer_order_wa_webhook_failure",
-        message: error instanceof Error ? error.message : "unknown_error",
+  res.setHeader("Cache-Control", "no-store");
+  if (!webhookTokenIsConfigured()) {
+    return res.status(503).json({ code: "STO_WA_WEBHOOK_NOT_CONFIGURED" });
+  }
+  if (!authorizedStockTransferOrderWaWebhook(req.headers.authorization)) {
+    return res.status(401).json({ code: "STO_WA_WEBHOOK_UNAUTHORIZED" });
+  }
+  const reply = parseStockTransferOrderWaReply(req.body);
+  if (!reply) {
+    return res.status(200).json({ accepted: false, outcome: "ignored" });
+  }
+  try {
+    const result = await recordStockTransferOrderWaReply(reply);
+    // Acknowledge provider redeliveries with HTTP 200, not an error that
+    // would trigger further retries. Phase 4 consumes the staged event.
+    if (result.outcome === "accepted") {
+      // Persisted before this line. The worker executes it outside webhook
+      // latency limits, and the durable sweep replays after any restart.
+      queueStockTransferOrderWaDecision(result.batchId);
+      return res.status(200).json({
+        accepted: true,
+        decisionRecorded: true,
+        approvalExecuted: false,
+        executionQueued: true,
+        batchId: result.batchId,
+        command: result.command,
       });
-      // Database unavailability is transient. An authenticated provider retry
-      // is safe because accepted decisions are unique at the database level.
-      res.setHeader("Retry-After", "30");
-      return res.status(503).json({ code: "STO_WA_WEBHOOK_TEMPORARILY_UNAVAILABLE" });
     }
+    return res.status(200).json({ accepted: false, outcome: result.outcome });
+  } catch (error) {
+    logger.error("[STO WA] Incoming provider event could not be staged", {
+      type: "stock_transfer_order_wa_webhook_failure",
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    // Database unavailability is transient. An authenticated provider retry
+    // is safe because accepted decisions are unique at the database level.
+    res.setHeader("Retry-After", "30");
+    return res.status(503).json({ code: "STO_WA_WEBHOOK_TEMPORARILY_UNAVAILABLE" });
+  }
 }
 
 export function registerStockTransferOrderWaApprovalWebhookRoutes(app: Express): void {
-  app.post(STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH, stockTransferOrderWaWebhookHandler);
+  app.post(STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH, validateRequest(webhookInput), stockTransferOrderWaWebhookHandler);
 }

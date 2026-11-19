@@ -15,90 +15,98 @@ import { createFactorySupplierTx, updateFactorySupplierTx } from "../suppliers/c
 import { factoryContainers, factoryRawStock, factorySuppliers } from "@shared/schema";
 import { and, eq, ilike } from "drizzle-orm";
 
+import { validateRequest } from "../../../lib/validateRequest";
+import { rawStockImportInput, supplierImportInput } from "./balesImportRoutesSchemas";
+
 export function registerBalesImportRoutesPart1(app: Express) {
   // ───────────────────────────────────────────────
   // Factory Import API Endpoints
   // ───────────────────────────────────────────────
 
-  app.post("/api/factory/import/suppliers", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/import/suppliers",
+    requireAuth,
+    validateRequest(supplierImportInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { suppliers: supplierList } = req.body;
-      if (!Array.isArray(supplierList) || supplierList.length === 0) {
-        return res.status(400).json({ message: "No suppliers provided" });
-      }
-
-      let imported = 0;
-      let updated = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < supplierList.length; i++) {
-        const s = supplierList[i];
-        try {
-          if (!s.name || !s.name.trim()) {
-            errors.push(`Row ${i + 1}: Name is required`);
-            continue;
-          }
-
-          const [existing] = await db
-            .select()
-            .from(factorySuppliers)
-            .where(and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, s.name.trim())));
-
-          // Wave 16 (B): each row is written and audited in its own
-          // transaction under the history rules (factorySupplierWrites.ts).
-          const actor = {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            role: requestRole(req),
-          };
-          if (existing) {
-            await db.transaction((tx) =>
-              updateFactorySupplierTx(
-                tx,
-                companyId,
-                existing.id,
-                {
-                  openingBalance: s.openingBalance || existing.openingBalance,
-                  contactPerson: s.contactPerson !== undefined ? s.contactPerson : existing.contactPerson,
-                  phone: s.phone !== undefined ? s.phone : existing.phone,
-                  email: s.email !== undefined ? s.email : existing.email,
-                },
-                actor,
-                "import"
-              )
-            );
-            updated++;
-          } else {
-            await db.transaction((tx) =>
-              createFactorySupplierTx(
-                tx,
-                companyId,
-                {
-                  name: s.name.trim(),
-                  openingBalance: s.openingBalance ? String(s.openingBalance) : "0",
-                  contactPerson: s.contactPerson || null,
-                  phone: s.phone || null,
-                  email: s.email || null,
-                },
-                actor
-              )
-            );
-            imported++;
-          }
-        } catch (err: unknown) {
-          errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
+        const { suppliers: supplierList } = req.body;
+        if (!Array.isArray(supplierList) || supplierList.length === 0) {
+          return res.status(400).json({ message: "No suppliers provided" });
         }
-      }
 
-      res.json({ imported, updated, errors });
-    } catch (error: unknown) {
-      logger.error("Error importing suppliers:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        let imported = 0;
+        let updated = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < supplierList.length; i++) {
+          const s = supplierList[i];
+          try {
+            if (!s.name || !s.name.trim()) {
+              errors.push(`Row ${i + 1}: Name is required`);
+              continue;
+            }
+
+            const [existing] = await db
+              .select()
+              .from(factorySuppliers)
+              .where(and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, s.name.trim())));
+
+            // Wave 16 (B): each row is written and audited in its own
+            // transaction under the history rules (factorySupplierWrites.ts).
+            const actor = {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              role: requestRole(req),
+            };
+            if (existing) {
+              await db.transaction((tx) =>
+                updateFactorySupplierTx(
+                  tx,
+                  companyId,
+                  existing.id,
+                  {
+                    openingBalance: s.openingBalance || existing.openingBalance,
+                    contactPerson: s.contactPerson !== undefined ? s.contactPerson : existing.contactPerson,
+                    phone: s.phone !== undefined ? s.phone : existing.phone,
+                    email: s.email !== undefined ? s.email : existing.email,
+                  },
+                  actor,
+                  "import"
+                )
+              );
+              updated++;
+            } else {
+              await db.transaction((tx) =>
+                createFactorySupplierTx(
+                  tx,
+                  companyId,
+                  {
+                    name: s.name.trim(),
+                    openingBalance: s.openingBalance ? String(s.openingBalance) : "0",
+                    contactPerson: s.contactPerson || null,
+                    phone: s.phone || null,
+                    email: s.email || null,
+                  },
+                  actor
+                )
+              );
+              imported++;
+            }
+          } catch (err: unknown) {
+            errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
+          }
+        }
+
+        res.json({ imported, updated, errors });
+      } catch (error: unknown) {
+        logger.error("Error importing suppliers:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Wave 18 C (owner decision): the raw-stock and bale imports create stock
   // value from a spreadsheet with no journal. Admin/Owner only (Developer
@@ -111,6 +119,7 @@ export function registerBalesImportRoutesPart1(app: Express) {
     "/api/factory/import/raw-stock",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(rawStockImportInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

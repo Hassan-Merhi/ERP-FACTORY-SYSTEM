@@ -11,8 +11,26 @@ import { db } from "../../db";
 import { parseId } from "../../lib/parseId";
 import { buildAliasMap, resolveBarcode } from "../helpers/proformaBarcodeHelpers";
 import { supplierContainerLoadedItems } from "@shared/schema";
+import { z } from "zod";
+import { emptyBody, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 import { verifyContainerOwnership } from "./_helpers";
+
+const itemIdParams = z.strictObject({ itemId: stringParam });
+const numericText = z.union([z.number(), z.string()]).nullable();
+
+const updateLoadedItemInput = {
+  params: itemIdParams,
+  body: z.strictObject({
+    barcode: z.string().optional(),
+    itemName: z.string().nullable().optional(),
+    qty: numericText.optional(),
+    weightPerBale: numericText.optional(),
+    pricePerBale: numericText.optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteLoadedItemInput = { params: itemIdParams, body: emptyBody } satisfies RequestSchemas;
 
 export function registerContainerLoadedItemCrudRoutes(app: Express, requireAuth: RequestHandler) {
   app.get("/api/containers/:containerId/loaded-items", requireAuth, async (req: Request, res: Response) => {
@@ -63,53 +81,63 @@ export function registerContainerLoadedItemCrudRoutes(app: Express, requireAuth:
     }
   });
 
-  app.patch("/api/container-loaded-items/:itemId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const itemId = parseId(req.params.itemId);
-      if (itemId === null) return res.status(400).json({ message: "Invalid id" });
-      const [item] = await db
-        .select()
-        .from(supplierContainerLoadedItems)
-        .where(eq(supplierContainerLoadedItems.id, itemId));
-      if (!item) return res.status(404).json({ message: "Item not found" });
-      if (!(await verifyContainerOwnership(item.containerId, companyId)))
-        return res.status(403).json({ message: "Access denied" });
-      const updates: Partial<typeof supplierContainerLoadedItems.$inferInsert> = {};
-      if (req.body.barcode !== undefined) updates.barcode = req.body.barcode;
-      if (req.body.itemName !== undefined) updates.itemName = req.body.itemName;
-      if (req.body.qty !== undefined) updates.qty = parseInt(req.body.qty) || 0;
-      if (req.body.weightPerBale !== undefined) updates.weightPerBale = req.body.weightPerBale;
-      if (req.body.pricePerBale !== undefined) updates.pricePerBale = req.body.pricePerBale;
-      const [updated] = await db
-        .update(supplierContainerLoadedItems)
-        .set(updates)
-        .where(eq(supplierContainerLoadedItems.id, itemId))
-        .returning();
-      res.json(updated);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.patch(
+    "/api/container-loaded-items/:itemId",
+    requireAuth,
+    validateRequest(updateLoadedItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const itemId = parseId(req.params.itemId);
+        if (itemId === null) return res.status(400).json({ message: "Invalid id" });
+        const [item] = await db
+          .select()
+          .from(supplierContainerLoadedItems)
+          .where(eq(supplierContainerLoadedItems.id, itemId));
+        if (!item) return res.status(404).json({ message: "Item not found" });
+        if (!(await verifyContainerOwnership(item.containerId, companyId)))
+          return res.status(403).json({ message: "Access denied" });
+        const updates: Partial<typeof supplierContainerLoadedItems.$inferInsert> = {};
+        if (req.body.barcode !== undefined) updates.barcode = req.body.barcode;
+        if (req.body.itemName !== undefined) updates.itemName = req.body.itemName;
+        if (req.body.qty !== undefined) updates.qty = parseInt(req.body.qty) || 0;
+        if (req.body.weightPerBale !== undefined) updates.weightPerBale = req.body.weightPerBale;
+        if (req.body.pricePerBale !== undefined) updates.pricePerBale = req.body.pricePerBale;
+        const [updated] = await db
+          .update(supplierContainerLoadedItems)
+          .set(updates)
+          .where(eq(supplierContainerLoadedItems.id, itemId))
+          .returning();
+        res.json(updated);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/container-loaded-items/:itemId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const itemId = parseId(req.params.itemId);
-      if (itemId === null) return res.status(400).json({ message: "Invalid id" });
-      const [item] = await db
-        .select()
-        .from(supplierContainerLoadedItems)
-        .where(eq(supplierContainerLoadedItems.id, itemId));
-      if (!item) return res.status(404).json({ message: "Item not found" });
-      if (!(await verifyContainerOwnership(item.containerId, companyId)))
-        return res.status(403).json({ message: "Access denied" });
-      await db.delete(supplierContainerLoadedItems).where(eq(supplierContainerLoadedItems.id, itemId));
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/container-loaded-items/:itemId",
+    requireAuth,
+    validateRequest(deleteLoadedItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const itemId = parseId(req.params.itemId);
+        if (itemId === null) return res.status(400).json({ message: "Invalid id" });
+        const [item] = await db
+          .select()
+          .from(supplierContainerLoadedItems)
+          .where(eq(supplierContainerLoadedItems.id, itemId));
+        if (!item) return res.status(404).json({ message: "Item not found" });
+        if (!(await verifyContainerOwnership(item.containerId, companyId)))
+          return res.status(403).json({ message: "Access denied" });
+        await db.delete(supplierContainerLoadedItems).where(eq(supplierContainerLoadedItems.id, itemId));
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

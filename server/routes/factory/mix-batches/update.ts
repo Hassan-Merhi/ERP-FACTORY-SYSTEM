@@ -8,6 +8,8 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { requireAuth } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { updateMixBatchInput } from "./mixBatchWriteSchemas";
 import { sendFactoryCostBasisRefusal } from "../../../services/factory/baleCostBasis";
 import { MixEditRequestError } from "../../../services/factory/mixBatchEditRequest";
 import {
@@ -17,28 +19,33 @@ import {
 import { handlePatchFactoryMixBatchesIdStep2 } from "./handlePatchFactoryMixBatchesIdStep2";
 
 export function registerFactoryMixBatchUpdateRoutes(app: Express) {
-  app.patch("/api/factory/mix-batches/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const step1Result = await handlePatchFactoryMixBatchesIdStep1(req, res);
-      if (step1Result.done) return step1Result.value;
-      const { ZERO, batchDate, companyId, id, name, notes, reason, sourceInputs, weightOf } = step1Result;
-      const { result } = await handlePatchFactoryMixBatchesIdStep2(
-        { ZERO, batchDate, companyId, id, name, notes, reason, sourceInputs, weightOf },
-        req
-      );
-      handlePatchFactoryMixBatchesIdStep3({ result }, res);
-    } catch (error: unknown) {
-      if (error instanceof MixEditRequestError) {
-        return res.status(error.status).json({ code: error.code, message: error.message });
+  app.patch(
+    "/api/factory/mix-batches/:id",
+    requireAuth,
+    validateRequest(updateMixBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const step1Result = await handlePatchFactoryMixBatchesIdStep1(req, res);
+        if (step1Result.done) return step1Result.value;
+        const { ZERO, batchDate, companyId, id, name, notes, reason, sourceInputs, weightOf } = step1Result;
+        const { result } = await handlePatchFactoryMixBatchesIdStep2(
+          { ZERO, batchDate, companyId, id, name, notes, reason, sourceInputs, weightOf },
+          req
+        );
+        handlePatchFactoryMixBatchesIdStep3({ result }, res);
+      } catch (error: unknown) {
+        if (error instanceof MixEditRequestError) {
+          return res.status(error.status).json({ code: error.code, message: error.message });
+        }
+        if (error instanceof CompletedMixBatchSourceEditError) {
+          return res.status(409).json({ code: error.code, message: error.message });
+        }
+        if (sendFactoryCostBasisRefusal(res, error)) return;
+        logger.error("Error updating mix batch:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      if (error instanceof CompletedMixBatchSourceEditError) {
-        return res.status(409).json({ code: error.code, message: error.message });
-      }
-      if (sendFactoryCostBasisRefusal(res, error)) return;
-      logger.error("Error updating mix batch:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }
 
 function handlePatchFactoryMixBatchesIdStep3(
