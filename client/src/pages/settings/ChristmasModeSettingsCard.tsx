@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import {
   CalendarDays,
   Gift,
@@ -16,15 +15,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import {
-  useChristmasModeConfiguration,
-  defaultChristmasVisuals,
-  type ChristmasEffectKey,
-  type ChristmasVisualSettings,
-} from "@/hooks/useChristmasMode";
-
-type ChristmasDraft = { enabled: boolean; userIds: string[]; visuals: ChristmasVisualSettings };
+import { type ChristmasEffectKey } from "@/hooks/useChristmasMode";
+import { useChristmasModeSettingsCardState } from "./useChristmasModeSettingsCardState";
 
 const EFFECT_CONTROLS = [
   {
@@ -67,64 +59,22 @@ const EFFECT_CONTROLS = [
 
 /** Accessible only from Developer Settings; the server independently enforces it. */
 export function ChristmasModeSettingsCard() {
-  const { toast } = useToast();
-  const { configQuery, saveConfig } = useChristmasModeConfiguration();
-  const [search, setSearch] = useState("");
-  const [draft, setDraft] = useState<ChristmasDraft | null>(null);
-
-  const config = configQuery.data;
-  const enabled = draft?.enabled ?? config?.enabled ?? false;
-  const selectedIds = useMemo(() => draft?.userIds ?? config?.userIds ?? [], [draft?.userIds, config?.userIds]);
-  const visuals = draft?.visuals ?? config?.visuals ?? defaultChristmasVisuals;
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const filteredUsers = useMemo(
-    () => (config?.users ?? []).filter((user) => user.username.toLowerCase().includes(search.trim().toLowerCase())),
-    [config?.users, search]
-  );
-  const changed =
-    draft !== null &&
-    (draft.enabled !== config?.enabled ||
-      draft.userIds.length !== (config?.userIds.length ?? 0) ||
-      draft.userIds.some((id) => !config?.userIds.includes(id)) ||
-      JSON.stringify(draft.visuals) !== JSON.stringify(config?.visuals ?? defaultChristmasVisuals));
-  const loading = configQuery.isLoading;
-  const saving = saveConfig.isPending;
-
-  const edit = (next: Partial<ChristmasDraft>) => {
-    setDraft((previous) => ({
-      enabled: next.enabled ?? previous?.enabled ?? config?.enabled ?? false,
-      userIds: next.userIds ?? previous?.userIds ?? config?.userIds ?? [],
-      visuals: next.visuals ?? previous?.visuals ?? config?.visuals ?? defaultChristmasVisuals,
-    }));
-  };
-
-  const toggleUser = (userId: string, checked: boolean) => {
-    const next = new Set(selectedIds);
-    if (checked) next.add(userId);
-    else next.delete(userId);
-    edit({ userIds: [...next] });
-  };
-
-  const save = () => {
-    saveConfig.mutate(
-      { enabled, userIds: selectedIds, visuals },
-      {
-        onSuccess: () => {
-          setDraft(null);
-          toast({
-            title: "Christmas Mode access saved",
-            description: "Only selected users will receive the effects when the master switch is ON.",
-          });
-        },
-        onError: (error) =>
-          toast({
-            title: "Unable to update Christmas Mode",
-            description: error.message || "Your changes were not saved.",
-            variant: "destructive",
-          }),
-      }
-    );
-  };
+  const {
+    configQuery,
+    search,
+    setSearch,
+    enabled,
+    selectedIds,
+    visuals,
+    selectedSet,
+    filteredUsers,
+    changed,
+    loading,
+    saving,
+    edit,
+    toggleUser,
+    save,
+  } = useChristmasModeSettingsCardState();
 
   return (
     <Card className="max-w-3xl" data-testid="settings-christmas-mode-card">

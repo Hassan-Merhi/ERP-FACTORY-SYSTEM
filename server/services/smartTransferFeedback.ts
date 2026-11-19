@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db } from "../db";
 import { aiActionLog, salesItems, stockTransferVouchers, vouchers } from "@shared/schema";
@@ -16,14 +15,10 @@ import {
   type FeedbackComparison,
 } from "./createSmartTransferPreviewFeedback";
 import { reconcileApprovals } from "./recordSmartTransferImportFeedback";
+import { weightedAverage } from "./smartTransferFeedbackHelpers";
+export { resetSmartTransferFeedback } from "./smartTransferFeedbackHelpers";
 export { createSmartTransferPreviewFeedback } from "./createSmartTransferPreviewFeedback";
 export { recordSmartTransferImportFeedback } from "./recordSmartTransferImportFeedback";
-
-function weightedAverage(entries: Array<{ value: number; weight: number }>): number {
-  const totalWeight = entries.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
-  if (totalWeight <= 0) return 0;
-  return entries.reduce((sum, entry) => sum + entry.value * Math.max(0, entry.weight), 0) / totalWeight;
-}
 
 export async function getSmartTransferFeedbackSummary(companyId: number, requestedDays: number) {
   const periodDays = clamp(Math.floor(requestedDays || 90), 7, 365);
@@ -297,18 +292,4 @@ export async function getSmartTransferFeedbackSummary(companyId: number, request
     recommendations,
     lastUpdatedAt: new Date().toISOString(),
   };
-}
-
-export async function resetSmartTransferFeedback(params: { companyId: number; userId: string }): Promise<string> {
-  const sessionId = `stf_reset_${randomUUID()}`;
-  await db.insert(aiActionLog).values({
-    companyId: params.companyId,
-    userId: params.userId,
-    sessionId,
-    actionType: "write",
-    actionName: RESET_ACTION,
-    outputJson: { resetAt: new Date().toISOString() },
-    status: "success",
-  });
-  return sessionId;
 }

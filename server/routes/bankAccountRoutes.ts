@@ -16,15 +16,13 @@
  */
 import type { Express } from "express";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { z } from "zod";
 import { bankAccounts, insertBankAccountSchema, ledgerAccounts } from "@shared/schema";
 
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { toMoney } from "../lib/money";
-import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
-import { storage } from "../storage";
+import { validateRequest } from "../lib/validateRequest";
 import { buildAuditChanges } from "../services/audit";
 import {
   accountHistoryErrorResponse,
@@ -34,6 +32,8 @@ import {
   requestRole,
 } from "../services/accounting/accountHistoryPolicy";
 import { logAudit } from "./_helpers";
+import { registerBankAccountRoutesPart1, BANK_ACCOUNT_AUDIT_FIELDS } from "./registerBankAccountRoutesPart1";
+import { deleteBankAccountInput, updateBankAccountInput } from "./bankAccountRoutesSchemas";
 
 class BankAccountRouteError extends Error {
   constructor(
@@ -59,140 +59,8 @@ function bankRouteErrorBody(error: BankAccountRouteError) {
 
 const BANK_ACCOUNT_ADMIN_ROLES = ["Admin", "Owner"] as const;
 
-const BANK_ACCOUNT_AUDIT_FIELDS = [
-  "name",
-  "code",
-  "companyId",
-  "bankName",
-  "accountNumber",
-  "linkedLedgerId",
-  "openingBalance",
-  "openingBalanceSide",
-  "openingBalanceNativeAmount",
-  "openingBalanceCurrency",
-  "openingBalanceHistoricalRate",
-  "openingBalanceBaseAmount",
-  "active",
-] as const;
-
-// The bank_accounts columns a client may send, as JSON types. The handlers still parse with
-// insertBankAccountSchema for the field rules and keep their own messages.
-const nullableString = z.string().nullable().optional();
-const bankAccountFields = {
-  routingCode: nullableString,
-  linkedLedgerId: z.number().nullable().optional(),
-  openingBalance: nullableString,
-  openingBalanceSide: nullableString,
-  openingBalanceNativeAmount: nullableString,
-  openingBalanceCurrency: nullableString,
-  openingBalanceHistoricalRate: nullableString,
-  openingBalanceBaseAmount: nullableString,
-  active: z.boolean().optional(),
-  // POST ignores it (the active company is used); PUT refuses a company move.
-  companyId: z.number().nullable().optional(),
-};
-const createBankAccountInput = {
-  query: emptyQuery,
-  body: z.strictObject({
-    code: z.string(),
-    name: z.string(),
-    bankName: z.string(),
-    accountNumber: z.string(),
-    ...bankAccountFields,
-  }),
-} satisfies RequestSchemas;
-const updateBankAccountInput = {
-  params: stringIdParams,
-  query: emptyQuery,
-  body: z.strictObject({
-    code: z.string().optional(),
-    name: z.string().optional(),
-    bankName: z.string().optional(),
-    accountNumber: z.string().optional(),
-    ...bankAccountFields,
-  }),
-} satisfies RequestSchemas;
-const deleteBankAccountInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
-
 export function registerBankAccountRoutes(app: Express) {
-  app.get("/api/bank-accounts", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-      const accounts = await storage.getAllBankAccounts(req.session.currentCompanyId);
-      res.json(accounts);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.post("/api/bank-accounts", requireAuth, validateRequest(createBankAccountInput), async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      // The account belongs to the active company; a companyId in the body is ignored.
-      const parsed = insertBankAccountSchema.parse({ ...req.body, companyId: req.session.currentCompanyId });
-
-      // Check for duplicate code
-      const existing = await storage.getBankAccountByCode(parsed.code);
-      if (existing) {
-        return res.status(400).json({ message: "Bank account code already exists" });
-      }
-
-      // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
-      const hasSide = !!parsed.openingBalanceSide;
-
-      if (hasBalance && !hasSide) {
-        return res.status(400).json({ message: "Opening balance requires Dr/Cr side" });
-      }
-
-      if (!hasBalance && hasSide) {
-        return res.status(400).json({ message: "Dr/Cr side requires opening balance amount" });
-      }
-
-      // Validate linked ledger is Bank or Cash type
-      if (parsed.linkedLedgerId) {
-        const allLedgers = await storage.getAllLedgerAccounts(req.session.currentCompanyId!);
-        const linkedLedger = allLedgers.find((l) => l.id === parsed.linkedLedgerId);
-
-        if (!linkedLedger) {
-          return res.status(400).json({ message: "Linked ledger account not found" });
-        }
-
-        if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
-          return res.status(400).json({
-            message: `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`,
-          });
-        }
-      }
-
-      // Wave 16 (B): created and audited in one transaction.
-      const account = await db.transaction(async (tx) => {
-        const [created] = await tx.insert(bankAccounts).values(parsed).returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "create",
-            tableName: "bank_accounts",
-            recordId: created.id,
-            recordIdentifier: created.name,
-            changes: buildAuditChanges(null, created, [...BANK_ACCOUNT_AUDIT_FIELDS]),
-          },
-          tx
-        );
-        return created;
-      });
-      res.status(201).json(account);
-    } catch (error: unknown) {
-      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerBankAccountRoutesPart1(app);
 
   // Wave 16 (B): an account with posted lines changes its opening only by an
   // Admin or Owner, never moves company, and every change is audited in the

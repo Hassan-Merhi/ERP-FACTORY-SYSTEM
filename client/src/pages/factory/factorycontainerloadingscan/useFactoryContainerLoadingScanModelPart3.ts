@@ -1,12 +1,12 @@
 // Extracted from ./useFactoryContainerLoadingScanModel.ts to keep that module under the source-size cap.
 import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 import { getErrorDetails } from "@shared/errorUtils";
-import { OPEN_ORDER_STATUSES } from "./types";
-import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
+import { summarizeLoadedBales } from "./loadedBales";
 import { useProformaComparison } from "./useProformaComparison";
 import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
 import { useFactoryContainerLoadingScanModelPart1 } from "./useFactoryContainerLoadingScanModelPart1";
 import { useFactoryContainerLoadingScanModelPart2 } from "./useFactoryContainerLoadingScanModelPart2";
+import { useFactoryContainerLoadingScanModelPart4 } from "./useFactoryContainerLoadingScanModelPart4";
 
 export function useFactoryContainerLoadingScanModelPart3({
   addBaleMutation,
@@ -79,65 +79,17 @@ export function useFactoryContainerLoadingScanModelPart3({
   | "setShowPendingWarning"
   | "toast"
 >) {
-  const handleStartLoading = useCallback(async () => {
-    if (!customerId || !selectedLocationId || !canCreateLoading) return;
-    const proforma = chosenProforma();
-
-    // A reusable proforma is a per-loading reference. Aggregate quantities from
-    // older/sibling loadings must never prevent creation of a fresh loading.
-    if (proforma) {
-      try {
-        const res = await fetch(`/api/factory/customer-orders?customerId=${customerId}&proformaId=${proforma.id}`, {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const allOrders = await res.json();
-          const pending = allOrders.filter((o: { status: string }) => OPEN_ORDER_STATUSES.includes(o.status));
-          if (pending.length > 0) {
-            setPendingOrders(pending);
-            setShowPendingWarning(true);
-            return;
-          }
-        }
-      } catch {
-        // If check fails, proceed with creation anyway
-      }
-    }
-
-    createOrderMutation.mutate({
-      customerId,
-      proformaIdUsed: proforma?.id || null,
-      locationId: parseInt(selectedLocationId),
-      orderDate,
-      containerNotes: loadingNote.trim() || undefined,
-    });
-  }, [
-    customerId,
-    selectedLocationId,
-    chosenProforma,
-    orderDate,
-    loadingNote,
-    createOrderMutation,
+  const { handleStartLoading, startNewLoadingAnyway, downloadTemplate } = useFactoryContainerLoadingScanModelPart4({
     canCreateLoading,
+    chosenProforma,
+    createOrderMutation,
+    customerId,
+    loadingNote,
+    orderDate,
+    selectedLocationId,
     setPendingOrders,
     setShowPendingWarning,
-  ]);
-
-  /** Create a separate loading from the pending-orders warning. */
-  const startNewLoadingAnyway = () => {
-    setShowPendingWarning(false);
-    if (!canCreateLoading) return;
-    const proforma = chosenProforma();
-    createOrderMutation.mutate({
-      customerId: customerId!,
-      proformaIdUsed: proforma?.id || null,
-      locationId: parseInt(selectedLocationId),
-      orderDate,
-      containerNotes: loadingNote.trim() || undefined,
-    });
-  };
-
-  const downloadTemplate = useCallback((mode: "ref" | "articleCode") => downloadBaleImportTemplate(mode), []);
+  });
 
   const submitScannedCode = useCallback(
     (code: string) => {

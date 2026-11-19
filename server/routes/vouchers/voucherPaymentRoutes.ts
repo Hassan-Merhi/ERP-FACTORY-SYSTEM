@@ -1,6 +1,6 @@
 import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express } from "express";
-import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
+import { errorBody, getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -24,12 +24,14 @@ import {
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import {
   capturePhase9PaymentEditTx,
+  phase9PaymentFollowUpCaptureActive,
   capturePhase9PaymentTx,
   paymentFollowUpActor,
   paymentReceiptEvidence,
   phase9PaymentSnapshotTx,
   phase9PaymentVoucherRefTx,
 } from "../../edge/phase9PaymentOutbox";
+import { assertPcLocalCaptured } from "../../offline/pcLocal/pcCapture";
 import { applyPaymentReceiptEditTx, paymentReceiptEditPlan } from "../../services/accounting/paymentReceiptVoucherEdit";
 
 /**
@@ -196,7 +198,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
         res.json({ ...result, whatsapp: waResult });
       } catch (error: unknown) {
         logger.error("Error creating payment/receipt voucher:", { error: error });
-        res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+        res.status(errorStatus(error)).json(errorBody(error));
       }
     }
   );
@@ -270,7 +272,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
         if (!editPlan) return res.status(400).json({ message: "Invalid amount" });
 
         // Use database transaction for atomic operation (the edit itself: applyPaymentReceiptEditTx).
-        const lanCapture = isPhase9LanPrimary();
+        const lanCapture = phase9PaymentFollowUpCaptureActive();
         const result = await db.transaction(async (tx) => {
           const before = lanCapture
             ? await phase9PaymentSnapshotTx(tx, req.session.currentCompanyId!, voucherId)
@@ -282,6 +284,8 @@ export function registerVoucherPaymentRoutes(app: Express) {
             plan: editPlan,
             actor: { userId: req.session.userId, username: req.session.username },
           });
+          // On a PC, a voucher that was not a Payment / Receipt cannot be recorded: refuse (rolls back).
+          assertPcLocalCaptured(Boolean(before));
           // Factory LAN server during an outage: record the edit, with the voucher as it stood, in this transaction.
           if (lanCapture && before) {
             await capturePhase9PaymentEditTx(tx, {

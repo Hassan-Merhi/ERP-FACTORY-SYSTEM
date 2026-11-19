@@ -10,7 +10,6 @@
  * only new issues, worsened magnitudes or increased severity. Changes in CURRENT supplier rate are
  * not recorded as historical cost defects.
  */
-import Decimal from "decimal.js";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
 import { getHistoricalMixBatchReconciliation } from "./historicalMixBatchReconciliation";
@@ -18,18 +17,17 @@ import { getPhase4MixProvenanceReport } from "./mixPhase4ProvenanceAudit";
 import { getPhase5MixDownstreamReconciliation } from "./mixPhase5DownstreamAudit";
 import { getPhase6MixLifecycleReport } from "./mixPhase6LifecycleAudit";
 import {
-  MAX_FINDINGS,
   MONITOR_ALERT_TYPE,
   MONITOR_ENTITY_TYPE,
   MONITOR_FAILURE_TYPE,
   MONITOR_STATE_TYPE,
   buildMixMonitorSnapshot,
-  severityLevel,
-  type MixMonitorFinding,
   type MixMonitorSnapshot,
   type MixMonitorStatus,
   type StoredMonitorState,
 } from "./buildMixMonitorSnapshot";
+import { compareMixMonitorFindings, parseState, type MixMonitorRunResult } from "./mixPhase7IntegrityMonitorHelpers";
+export { compareMixMonitorFindings, type MixMonitorRunResult } from "./mixPhase7IntegrityMonitorHelpers";
 export { buildMixMonitorSnapshot } from "./buildMixMonitorSnapshot";
 export type {
   MixMonitorFinding,
@@ -37,61 +35,6 @@ export type {
   MixMonitorSnapshot,
   MixMonitorStatus,
 } from "./buildMixMonitorSnapshot";
-
-export function compareMixMonitorFindings(
-  previous: StoredMonitorState["findings"] | null,
-  current: MixMonitorFinding[]
-): { baseline: boolean; newOrEscalated: MixMonitorFinding[]; resolvedKeys: string[] } {
-  if (previous === null) return { baseline: true, newOrEscalated: [], resolvedKeys: [] };
-  const old = new Map(previous.map((item) => [item.key, item] as const));
-  const worsened = (now: MixMonitorFinding, before?: StoredMonitorState["findings"][number]): boolean => {
-    if (!now.metric || !before?.metric || now.metric.unit !== before.metric.unit) return false;
-    try {
-      const tolerance = now.metric.unit === "kg" ? "0.001" : now.metric.unit === "usd" ? "0.02" : "0";
-      return new Decimal(now.metric.value).gt(new Decimal(before.metric.value).plus(tolerance));
-    } catch {
-      return false;
-    }
-  };
-  const present = new Set(current.map((item) => item.key));
-  return {
-    baseline: false,
-    newOrEscalated: current.filter((item) => {
-      const prior = old.get(item.key);
-      return (
-        prior === undefined || severityLevel[item.severity] > severityLevel[prior.severity] || worsened(item, prior)
-      );
-    }),
-    resolvedKeys: previous.map((item) => item.key).filter((key) => !present.has(key)),
-  };
-}
-
-function parseState(payload: string | null): StoredMonitorState | null {
-  if (!payload) return null;
-  try {
-    const value: unknown = JSON.parse(payload);
-    if (!value || typeof value !== "object") return null;
-    const v = value as Partial<StoredMonitorState>;
-    if (
-      v.version !== 1 ||
-      !Array.isArray(v.findings) ||
-      typeof v.lastSuccessAt !== "string" ||
-      !v.summary ||
-      v.findings.length > MAX_FINDINGS ||
-      !v.findings.every(
-        (f) =>
-          f &&
-          typeof f.key === "string" &&
-          (f.severity === "review" || f.severity === "warning" || f.severity === "critical")
-      )
-    ) {
-      return null;
-    }
-    return v as StoredMonitorState;
-  } catch {
-    return null;
-  }
-}
 
 export async function collectMixMonitorSnapshot(companyId: number): Promise<MixMonitorSnapshot> {
   // Read each subsystem in its own bounded, repeatable-read/READ ONLY
@@ -102,15 +45,6 @@ export async function collectMixMonitorSnapshot(companyId: number): Promise<MixM
   const downstream = await getPhase5MixDownstreamReconciliation(companyId);
   const lifecycle = await getPhase6MixLifecycleReport(companyId);
   return buildMixMonitorSnapshot(companyId, history, stock, downstream, lifecycle);
-}
-
-export interface MixMonitorRunResult {
-  companyId: number;
-  baseline: boolean;
-  currentIssues: number;
-  alertsCreated: number;
-  resolved: number;
-  checkedAt: string;
 }
 
 /** Durable baseline and alert dedupe using the existing factory_alerts table.

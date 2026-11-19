@@ -17,39 +17,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-
-interface FrenchCatalogRow {
-  id: number;
-  articleCode: string | null;
-  nameEn: string;
-  nameAr: string | null;
-  nameFr: string | null;
-  descriptionEn: string | null;
-  descriptionAr: string | null;
-  descriptionFr: string | null;
-  categoryId: number | null;
-  categoryNameEn: string | null;
-  categoryNameAr: string | null;
-  categoryNameFr: string | null;
-}
-
-interface PreviewRow {
-  rowNumber: number;
-  articleCode: string;
-  nameFr: string | null;
-  categoryNameFr: string | null;
-  descriptionFr: string | null;
-  productId: number | null;
-  categoryId: number | null;
-  status: "ready" | "unknown";
-}
-
-async function jsonRequest(url: string, init?: RequestInit) {
-  const response = await fetch(url, { credentials: "include", ...init });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || `Request failed (${response.status})`);
-  return payload;
-}
+import { jsonRequest, type FrenchCatalogRow, type PreviewRow } from "./FactoryFrenchCatalogManagerHelpers";
 
 export function FactoryFrenchCatalogManager() {
   const { language } = useApplicationLanguage();

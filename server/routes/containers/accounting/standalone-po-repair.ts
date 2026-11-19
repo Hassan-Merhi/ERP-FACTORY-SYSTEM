@@ -11,50 +11,11 @@ import { calcPoAmounts } from "../containerHelpers";
 import { sumMoney, toMoney } from "../../../lib/money";
 import { syncPurchaseOrderGitTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { editPostedFactoryVoucherTx } from "../../../services/factory/factoryVoucherCorrection";
-
-interface StandaloneRepairSummary {
-  handled: boolean;
-  scannedPOs: number;
-  repairedStandaloneSupplierVouchers: number;
-  normalizedStandaloneParentFreight: number;
-  skipped: string[];
-  errors: string[];
-}
-
-async function isStandaloneErpCompany(companyId: number): Promise<boolean> {
-  const [company, allCompanies, legacyParentCompanyId] = await Promise.all([
-    storage.getCompanyById(companyId),
-    storage.getAllCompanies(),
-    storage.getParentCompanyId(),
-  ]);
-
-  if (!company) return false;
-  if (company.parentCompanyId) return false;
-
-  // The legacy global parent setting may identify the root company itself, but
-  // it must never turn another unlinked company into a subsidiary.
-  if (legacyParentCompanyId === companyId) return false;
-
-  // A root company that is explicitly referenced by a child is also not a
-  // standalone company, even if the old global parent setting is stale.
-  if (allCompanies.some((candidate) => candidate.parentCompanyId === companyId)) return false;
-
-  return true;
-}
-
-function normalizedUsdFields(debit: number, credit: number) {
-  return {
-    debitAmount: debit.toFixed(2),
-    creditAmount: credit.toFixed(2),
-    transactionCurrency: "USD",
-    transactionDebitAmount: debit.toFixed(6),
-    transactionCreditAmount: credit.toFixed(6),
-    baseDebitAmount: debit.toFixed(6),
-    baseCreditAmount: credit.toFixed(6),
-    historicalExchangeRate: "1.0000000000",
-    rateConvention: "IDENTITY",
-  } as const;
-}
+import {
+  isStandaloneErpCompany,
+  normalizedUsdFields,
+  type StandaloneRepairSummary,
+} from "./standalone-po-repair-helpers";
 
 /**
  * Repairs historical PO vouchers created while an unrelated global parent

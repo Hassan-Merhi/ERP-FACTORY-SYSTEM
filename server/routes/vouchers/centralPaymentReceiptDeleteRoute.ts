@@ -12,7 +12,6 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import { intercompanyTransferOfVoucher } from "../../services/accounting/intercompanyTransferLegGuard";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
@@ -29,6 +28,7 @@ import {
 import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 import type { DatabaseOrTransaction } from "../../db";
+import { phase9PaymentFollowUpCaptureActive } from "../../edge/phase9PaymentOutbox";
 
 class LegacyPaymentReceiptDeleteRequired extends Error {}
 
@@ -76,7 +76,8 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
 
     // Factory LAN server (plan batch 4): the delete route that records the change
     // for the cloud serves it; an intercompany transfer leg stays online-only.
-    if (isPhase9LanPrimary()) {
+    // A PC in entry mode is served the same way: its recording route captures the change.
+    if (phase9PaymentFollowUpCaptureActive()) {
       if (await intercompanyTransferOfVoucher(voucherId)) {
         res.status(409).json({
           code: "EDGE_PAYMENT_INTERCOMPANY_ONLINE_ONLY",

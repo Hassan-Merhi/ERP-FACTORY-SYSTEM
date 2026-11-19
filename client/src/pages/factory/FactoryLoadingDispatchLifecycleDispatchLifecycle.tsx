@@ -7,7 +7,6 @@ import {
   History,
   Loader2,
   LockKeyhole,
-  ShieldCheck,
   UnlockKeyhole,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +38,7 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
   setShowHistory,
   showHistory,
   status,
+  compact = false,
 }: Pick<
   ReturnType<typeof useFactoryLoadingDispatchLifecycleState>,
   | "canClose"
@@ -61,38 +61,39 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
   | "setShowHistory"
   | "showHistory"
   | "status"
->) {
+> & { compact?: boolean }) {
   return (
     <Card
-      className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      className={
+        compact
+          ? "border-0 bg-transparent shadow-none"
+          : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      }
       data-testid="dispatch-lifecycle"
     >
-      <CardContent className="space-y-3 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="flex items-start gap-2">
-            {status === "CLOSED" ? (
-              <LockKeyhole className="mt-0.5 h-5 w-5 text-emerald-600" />
-            ) : (
-              <ClipboardCheck className="mt-0.5 h-5 w-5 text-blue-600" />
-            )}
-            <div>
-              <h3 className="text-sm font-bold">Dispatch finalization</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {status === "CLOSED"
-                  ? "This truck record is locked. Scans, expected allocations and details can no longer be changed."
-                  : "Scan physical bales on this trip and End Dispatch. No truck targets are needed. Compare all trips against Pending Loading at the end."}
-              </p>
+      <CardContent className={compact ? "space-y-2 p-0" : "space-y-3 p-4"}>
+        {!compact && (
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              {status === "CLOSED" ? (
+                <LockKeyhole className="mt-0.5 h-5 w-5 text-emerald-600" />
+              ) : (
+                <ClipboardCheck className="mt-0.5 h-5 w-5 text-blue-600" />
+              )}
+              <div>
+                <h3 className="text-sm font-semibold">
+                  {status === "CLOSED" ? "Dispatch completed" : "Dispatch finalization"}
+                </h3>
+                {status !== "CLOSED" && (
+                  <p className="mt-1 text-xs text-muted-foreground">Scan bales, then End Dispatch.</p>
+                )}
+              </div>
             </div>
+            {status !== "CLOSED" && <Badge variant="outline">{factoryStatusLabel("dispatch", status)}</Badge>}
           </div>
-          <Badge
-            variant="outline"
-            className={status === "CLOSED" ? "border-emerald-500 text-emerald-600" : "border-blue-400 text-blue-600"}
-          >
-            {status === "CLOSED" ? "Completed" : factoryStatusLabel("dispatch", status)}
-          </Badge>
-        </div>
+        )}
 
-        {status === "CLOSED" && latest && (
+        {!compact && status === "CLOSED" && latest && (
           <div className="space-y-1 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
             <p className="flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="h-4 w-4" /> Completed by {latest.closedByUsername}
@@ -109,10 +110,12 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={compact ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
           {canClose && (
             <Button
               size="sm"
+              className={compact ? "w-full justify-start" : undefined}
+              variant={compact ? "outline" : "default"}
               onClick={() => {
                 setCloseConfirmed(false);
                 setDiscrepancyReason("");
@@ -128,29 +131,27 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
             <Button
               size="sm"
               variant="outline"
+              className={compact ? "w-full justify-start" : undefined}
               onClick={() => {
                 setReopenReason("");
                 setReopenOpen(true);
               }}
               data-testid="button-reopen-dispatch"
             >
-              <UnlockKeyhole className="mr-1.5 h-4 w-4" /> Reopen Dispatch
+              <UnlockKeyhole className="mr-1.5 h-4 w-4" /> Reopen
             </Button>
           )}
           <Button
             size="sm"
             variant="outline"
+            className={compact ? "w-full justify-start" : undefined}
             onClick={() => setShowHistory((v) => !v)}
             data-testid="button-dispatch-audit-history"
           >
-            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide" : "Closure & audit history"}
+            <History className="mr-1.5 h-4 w-4" />{" "}
+            {showHistory ? "Hide history" : compact ? "Trip history" : "Closure & audit history"}
           </Button>
         </div>
-        {status === "CLOSED" && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="h-4 w-4" /> Reopening never erases or changes the signed closure snapshot.
-          </p>
-        )}
         {showHistory && (
           <div className="space-y-3 border-t pt-3 dark:border-slate-700">
             {history.isLoading && (

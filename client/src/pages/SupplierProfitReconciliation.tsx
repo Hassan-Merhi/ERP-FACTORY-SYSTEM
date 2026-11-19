@@ -1,185 +1,44 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { ExternalLink, RefreshCw } from "lucide-react";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpField, ErpNativeSelect } from "@/erp-core";
-
-type Options = {
-  suppliers: { id: number; name: string; stock_group_id: number | null }[];
-  groups: { id: number; name: string }[];
-};
-
-type Report = {
-  supplier: { id: number; name: string };
-  totals: {
-    salesRevenue: number;
-    storedProfit: number;
-    offloadedBase: number;
-    offloadingCharges: number;
-    currentStock: number;
-    otwBase: number;
-    otwContainers: number;
-    offloadedContainers: number;
-    modeledProfit: number;
-    modeledVsRecordedGap: number;
-  };
-  warnings: string[];
-};
-
-type Period = "all" | "day" | "month" | "year" | "custom";
-
-const dollars = (n: number | string | null | undefined) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(n ?? 0));
-
-const isoLocal = (d: Date) =>
-  [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
-const today = () => isoLocal(new Date());
-const firstDay = (p: string) => (p && /^\d{4}-\d{2}$/.test(p) ? p + "-01" : "");
-const lastDay = (p: string) => {
-  if (!/^\d{4}-\d{2}$/.test(p)) return "";
-  const [year, month] = p.split("-").map(Number);
-  return isoLocal(new Date(year, month, 0));
-};
-
-function SummaryRow({
-  label,
-  value,
-  emphasis = false,
-  attention = false,
-}: {
-  label: ReactNode;
-  value: string;
-  emphasis?: boolean;
-  attention?: boolean;
-}) {
-  return (
-    <div
-      className={
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-border/60 px-3 py-3 last:border-b-0 sm:px-4 " +
-        (emphasis ? "bg-muted/40 font-semibold " : "") +
-        (attention ? "text-amber-700 dark:text-amber-400" : "")
-      }
-    >
-      <span className="text-sm">{label}</span>
-      <span className="font-mono text-sm tabular-nums sm:text-base">{value}</span>
-    </div>
-  );
-}
-
-function SummarySection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="overflow-hidden rounded-lg border">
-      <h3 className="border-b bg-muted/50 px-4 py-2 text-xs font-bold uppercase tracking-wide">{title}</h3>
-      {children}
-    </section>
-  );
-}
+import { dollars, SummaryRow, SummarySection, type Period } from "./SupplierProfitReconciliationParts";
+import { useSupplierProfitReconciliationState } from "./useSupplierProfitReconciliationState";
 
 export default function SupplierProfitReconciliation() {
-  const { selectedCompany } = useCompany();
-  const [, navigate] = useLocation();
-  const [supplierId, setSupplierId] = useState("");
-  const [groupId, setGroupId] = useState("");
-  const [period, setPeriod] = useState<Period>("all");
-  const [day, setDay] = useState(today());
-  const [month, setMonth] = useState(today().slice(0, 7));
-  const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  const optionsQuery = useQuery<Options>({
-    queryKey: companyQueryKey("/api/supplier-profit-reconciliation/options", selectedCompany?.id),
-    queryFn: async () => {
-      const r = await fetch("/api/supplier-profit-reconciliation/options", { credentials: "include" });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Could not load suppliers");
-      return r.json();
-    },
-    enabled: !!selectedCompany?.id,
-    staleTime: 60_000,
-  });
-  const options = optionsQuery.data;
-
-  useEffect(() => {
-    if (!options?.suppliers.length) return;
-    if (!options.suppliers.some((supplier) => String(supplier.id) === supplierId)) {
-      setSupplierId(String(options.suppliers[0].id));
-    }
-  }, [options, supplierId]);
-
-  const range = useMemo(() => {
-    if (period === "all") return { from: "", to: "" };
-    if (period === "day") return { from: day, to: day };
-    if (period === "month") return { from: firstDay(month), to: lastDay(month) };
-    if (period === "year") {
-      return /^\d{4}$/.test(year) ? { from: year + "-01-01", to: year + "-12-31" } : { from: "", to: "" };
-    }
-    return { from, to };
-  }, [period, day, month, year, from, to]);
-
-  const params = useMemo(() => {
-    const p = new URLSearchParams({ supplierId });
-    if (groupId) p.set("groupId", groupId);
-    if (range.from) p.set("startDate", range.from);
-    if (range.to) p.set("endDate", range.to);
-    return p.toString();
-  }, [supplierId, groupId, range]);
-
-  const validRange =
-    (period !== "year" || /^\d{4}$/.test(year)) &&
-    (period !== "month" || !!firstDay(month)) &&
-    (period !== "custom" || !range.from || !range.to || range.from <= range.to);
-
-  const reportQuery = useQuery<Report>({
-    queryKey: companyQueryKey("/api/supplier-profit-reconciliation/report?" + params, selectedCompany?.id),
-    queryFn: async () => {
-      const r = await fetch("/api/supplier-profit-reconciliation/report?" + params, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Unable to calculate supplier profit");
-      return r.json();
-    },
-    enabled: !!selectedCompany?.id && !!supplierId && validRange,
-  });
-
-  const supplierBalanceQuery = useQuery<{ balance: string | number }>({
-    queryKey: companyQueryKey("/api/suppliers/" + supplierId + "/balance", selectedCompany?.id),
-    queryFn: async () => {
-      const r = await fetch("/api/suppliers/" + supplierId + "/balance", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!r.ok) throw new Error("Supplier statement unavailable");
-      return r.json();
-    },
-    enabled: !!supplierId && !!selectedCompany?.id,
-  });
-
-  // This sheet displays only saved summary amounts; drilldowns stay in Sales Report.
-  const report = reportQuery.data;
-  const totals = report?.totals;
-  const isAllTime = period === "all";
-  const bridgeGap = totals?.modeledVsRecordedGap ?? 0;
-
-  const salesReportUrl =
-    "/sales-report?" +
-    new URLSearchParams({
-      startDate: range.from,
-      endDate: range.to,
-      ...(groupId ? { stockGroupId: groupId } : {}),
-    }).toString();
+  const {
+    navigate,
+    supplierId,
+    setSupplierId,
+    setGroupId,
+    groupId,
+    period,
+    setPeriod,
+    day,
+    setDay,
+    month,
+    setMonth,
+    year,
+    setYear,
+    from,
+    setFrom,
+    to,
+    setTo,
+    optionsQuery,
+    options,
+    range,
+    validRange,
+    reportQuery,
+    supplierBalanceQuery,
+    report,
+    totals,
+    isAllTime,
+    bridgeGap,
+    salesReportUrl,
+  } = useSupplierProfitReconciliationState();
 
   return (
     <div className="flex h-full min-w-0 flex-col" data-testid="supplier-profit-reconciliation">

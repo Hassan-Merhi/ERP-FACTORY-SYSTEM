@@ -4,48 +4,20 @@
  * Roughly 1,400 lines of the original page, and self-contained: it takes an
  * entry and a close handler and owns everything else itself.
  */
-import { EmptyState, LoadingState } from "@/components/ui/page-state";
-import { useQuery } from "@tanstack/react-query";
+import { LoadingState } from "@/components/ui/page-state";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { companyDataKey } from "@/lib/frontendDataArchitecture";
-import {
-  FACTORY_BALANCE_VOUCHER_TYPES,
-  fetchFactoryVoucherCurrentBalances,
-  type FactoryVoucherCurrentBalances,
-} from "./entry-views/voucherBalances";
 import type { DaybookEntry } from "./types";
-import type {
-  ContainerDetail,
-  ContainerImportDetail,
-  LoadingOrder,
-  MixBatchDetail,
-  MixBatchSource,
-  PayrollSummary,
-  SupplierBalance,
-  VoucherViewEntry,
-} from "./entry-views/types";
-import { apiNumber } from "./entry-views/types";
 import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
 import { LoadingCreatedView } from "./entry-views/LoadingCreatedView";
 import { OpenContainerButton } from "./entry-views/OpenContainerButton";
-import {
-  parseBalesMeta,
-  formatDaybookDescription,
-  currencySymbol,
-  formatTxType,
-  getFactoryTxTypeBadge,
-} from "./daybookUtils";
+import { formatDaybookDescription, formatTxType } from "./daybookUtils";
 import { formatUsd } from "@/lib/moneyDisplay";
-
-// Stable empty default: `= []` is a new array each render while the query is disabled (not voucher-backed),
-// and the balance effect below depends on it and resets state with a new {} — an endless re-render loop.
-const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
+import { useViewEntryModalModel } from "./ViewEntryModalModel";
+import { ViewEntryVoucherView } from "./ViewEntryVoucherView";
 
 export function ViewEntryModal({
   entry,
@@ -58,307 +30,38 @@ export function ViewEntryModal({
   onNavigate: (path: string) => void;
   formatDisplayDate: (d: string) => string;
 }) {
-  const { selectedCompany } = useCompany();
-  const { formatHistoricalBaseAmount: formatCurrentLedgerBalance } = useCurrencyContext();
-  const isVoucherBacked = entry.referenceTable === "vouchers" && !!entry.referenceId;
-  const isBaleStockEntry = entry.txType === "BALE_STOCK_ENTRY";
-  const isBaleRemoval = entry.txType === "BALE_REMOVAL";
-  const hasBalesMeta = isBaleStockEntry || isBaleRemoval;
-  const isContainerImport = entry.txType === "CONTAINER_IMPORT" && !!entry.referenceId;
-  const isPayrollPayment = entry.txType === "PAYROLL_PAYMENT" && !!entry.referenceId;
-  const isMixBatchCreated =
-    (entry.txType === "MIX_BATCH_CREATED" || entry.txType === "MIX_BATCH_TOPUP") && !!entry.referenceId;
-  const isLoadingCreated = entry.txType === "LOADING_CREATED" && !!entry.referenceId;
-  const isOffloadRawStock = entry.txType === "OFFLOAD_RAW_STOCK";
-  const isCommission = entry.txType === "COMMISSION";
-  const isWasteDisposal = entry.txType === "WASTE_DISPOSAL";
-  const isOtherCharge = entry.txType === "OTHER_CHARGE";
-
-  const entryMeta = (() => {
-    try {
-      return JSON.parse(entry.metaJson || "{}");
-    } catch {
-      return {};
-    }
-  })();
-  const metaContainerId: number | undefined = entryMeta.containerId;
-
-  const viewEntriesPath = `/api/vouchers/${entry.referenceId}/view-entries`;
-  const { data: rawViewEntries } = useQuery<VoucherViewEntry[] | { entries?: VoucherViewEntry[] }>({
-    queryKey: companyDataKey(viewEntriesPath, selectedCompany?.id, "factory-daybook-view"),
-    enabled: isVoucherBacked && !!entry.referenceId && !!selectedCompany?.id,
-    // A voucher may have been revised since it was last viewed.
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-  const viewEntries = Array.isArray(rawViewEntries) ? rawViewEntries : (rawViewEntries?.entries ?? NO_VIEW_ENTRIES);
-
-  const { data: containerDetail } = useQuery<ContainerImportDetail>({
-    queryKey: [`/api/factory/containers/${entry.referenceId}`],
-    enabled: isContainerImport,
-  });
-
-  const { data: supplierBalance } = useQuery<SupplierBalance>({
-    queryKey: [`/api/factory/suppliers/${containerDetail?.supplierId}/balance`],
-    enabled: isContainerImport && !!containerDetail?.supplierId,
-  });
-
-  const { data: payrollSummary } = useQuery<PayrollSummary>({
-    queryKey: [`/api/factory/payroll/${entry.referenceId}/summary`],
-    enabled: isPayrollPayment,
-  });
-
-  const { data: mixBatchDetail } = useQuery<MixBatchDetail>({
-    queryKey: [`/api/factory/mix-batches/${entry.referenceId}`],
-    enabled: isMixBatchCreated,
-  });
-
-  const { data: mixBatchSources = [] } = useQuery<MixBatchSource[]>({
-    queryKey: [`/api/factory/mix-batches/${entry.referenceId}/sources`],
-    enabled: isMixBatchCreated,
-  });
-
-  const { data: loadingOrder } = useQuery<LoadingOrder>({
-    queryKey: [`/api/factory/customer-orders/${entry.referenceId}`],
-    enabled: isLoadingCreated,
-    // Only while this detail dialog is open: keep scanned bales and totals live.
-    refetchInterval: isLoadingCreated ? 2_500 : false,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: metaContainerDetail } = useQuery<ContainerDetail>({
-    queryKey: [`/api/factory/containers/${metaContainerId}`],
-    enabled: (isOffloadRawStock || isCommission) && !!metaContainerId,
-  });
-
-  const { data: otherChargeContainerDetail } = useQuery<ContainerDetail>({
-    queryKey: [`/api/factory/containers/${entry.referenceId}`],
-    enabled: isOtherCharge && !!entry.referenceId,
-  });
-
-  // Current posted account balances, shared with ERP Daybook's book-balance basis. Company and voucher IDs are
-  // in the query identity so switching companies or vouchers never displays a balance from another selection.
-  const isBalanceVoucher = FACTORY_BALANCE_VOUCHER_TYPES.has(entry.txType);
+  const m = useViewEntryModalModel({ entry });
   const {
-    data: currentBalances,
-    isPending: currentBalancesPending,
-    isFetching: currentBalancesFetching,
-  } = useQuery<FactoryVoucherCurrentBalances>({
-    queryKey: companyDataKey(
-      `/api/factory/daybook/voucher-balances/${entry.referenceId}`,
-      selectedCompany?.id,
-      entry.txType,
-      viewEntries.map((e) => [
-        e.id,
-        e.ledgerAccountId,
-        e.bankAccountId,
-        e.customerId,
-        e.employeeId,
-        e.supplierId,
-        e.factorySupplierId,
-        e.debitAmount,
-        e.creditAmount,
-      ])
-    ),
-    queryFn: ({ signal }) => fetchFactoryVoucherCurrentBalances(entry.txType, viewEntries, signal),
-    enabled: isVoucherBacked && !!selectedCompany?.id && isBalanceVoucher && viewEntries.length > 0,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-  const sourceBalance = currentBalances?.sourceBalance ?? null;
-  const entryBalances = currentBalances?.entryBalances ?? {};
-  const balancesLoading = isBalanceVoucher && (currentBalancesPending || currentBalancesFetching);
-  const displayCurrentBalance = (balance: string | null | undefined) =>
-    balancesLoading ? "Loading…" : balance == null ? "Unavailable" : formatCurrentLedgerBalance(balance);
-
-  const bales = parseBalesMeta(entry);
-  const amt = parseFloat(entry.amountCurrency || "0");
-  const sym = currencySymbol(entry.currencyCode);
-
-  const totalDebit = viewEntries.reduce((s, e) => s + apiNumber(e.debitAmount), 0);
-  const totalCredit = viewEntries.reduce((s, e) => s + apiNumber(e.creditAmount), 0);
-
-  const { variant: badgeVariant, className: badgeClass } = getFactoryTxTypeBadge(entry.txType);
+    isVoucherBacked,
+    isContainerImport,
+    containerDetail,
+    supplierBalance,
+    isPayrollPayment,
+    payrollSummary,
+    badgeVariant,
+    badgeClass,
+    isMixBatchCreated,
+    mixBatchDetail,
+    mixBatchSources,
+    isLoadingCreated,
+    loadingOrder,
+    isBaleStockEntry,
+    bales,
+    amt,
+    sym,
+    isOffloadRawStock,
+    metaContainerDetail,
+    metaContainerId,
+    isCommission,
+    isWasteDisposal,
+    isOtherCharge,
+    otherChargeContainerDetail,
+    isBaleRemoval,
+    hasBalesMeta,
+  } = m;
 
   if (isVoucherBacked) {
-    const voucherType =
-      entry.txType === "PAYMENT"
-        ? "Payment"
-        : entry.txType === "RECEIPT"
-          ? "Receipt"
-          : entry.txType === "JOURNAL"
-            ? "Journal"
-            : entry.txType;
-    const isPayment = voucherType === "Payment";
-    const isReceipt = voucherType === "Receipt";
-    const isJournal = voucherType === "Journal";
-    const isPaymentOrReceipt = isPayment || isReceipt;
-
-    // Source account: For Payment = credit entry (cash going OUT), For Receipt = debit entry (cash coming IN)
-    const sourceEntry = isPayment
-      ? viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
-      : isReceipt
-        ? viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
-        : null;
-
-    // Total = opposite side of source for Payment/Receipt
-    const totalAmount = isPayment
-      ? viewEntries.reduce((s: number, e) => s + apiNumber(e.debitAmount), 0)
-      : isReceipt
-        ? viewEntries.reduce((s: number, e) => s + apiNumber(e.creditAmount), 0)
-        : Math.max(totalDebit, totalCredit);
-
-    // Display entries: Payment = debit side only, Receipt = credit side only, Journal = all
-    const displayEntries = isPayment
-      ? viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
-      : isReceipt
-        ? viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
-        : viewEntries;
-
-    return (
-      <>
-        <DialogHeader>
-          <DialogTitle>Voucher Details</DialogTitle>
-          <DialogDescription>View voucher information</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 md:space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Date</p>
-              <p className="font-medium">{formatDisplayDate(entry.txDate + "T00:00:00")}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Type</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant={badgeVariant} className={badgeClass}>
-                  {voucherType}
-                </Badge>
-                {entry.optional && <span className="text-sm text-muted-foreground">Optional</span>}
-              </div>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Description</p>
-            <p className="text-sm font-medium">{formatDaybookDescription(entry)}</p>
-          </div>
-
-          {/* Paid From / Received In card — Payment and Receipt only */}
-          {isPaymentOrReceipt && sourceEntry && (
-            <div className="p-3 md:p-4 bg-muted/50 rounded-md">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{isPayment ? "Paid From" : "Received In"}</p>
-                  <p className="font-medium text-base md:text-lg">{sourceEntry.accountName}</p>
-                  <p
-                    className="text-sm font-mono mt-2 text-muted-foreground"
-                    data-testid="factory-voucher-source-balance"
-                  >
-                    Current balance: {displayCurrentBalance(sourceBalance)}
-                  </p>
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
-                  <p className="text-xl md:text-2xl font-bold font-mono">
-                    {sym} {formatNumber(totalAmount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Entries table */}
-          <div>
-            <h3 className="font-semibold mb-3">Entries</h3>
-            {viewEntries.length === 0 ? (
-              <EmptyState title="No entries found" className="min-h-0 py-4 sm:py-4" />
-            ) : (
-              <div className="rounded-md border overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Account
-                      </th>
-                      {isPaymentOrReceipt || isJournal ? (
-                        <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Amount
-                        </th>
-                      ) : (
-                        <>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Debit
-                          </th>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Credit
-                          </th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayEntries.map((e, i: number) => (
-                      <tr key={e.id ?? i} className="border-b last:border-0">
-                        <td className="px-3 py-2">
-                          <p className="font-medium">{e.accountName || "—"}</p>
-                          {(isPaymentOrReceipt || isJournal) && (
-                            <p
-                              className="text-xs text-muted-foreground mt-0.5"
-                              data-testid={`factory-voucher-current-balance-${e.id}`}
-                            >
-                              Current balance: {displayCurrentBalance(entryBalances[e.id])}
-                            </p>
-                          )}
-                        </td>
-                        {isPaymentOrReceipt || isJournal ? (
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount)))}
-                          </td>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.debitAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.debitAmount))}` : "-"}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.creditAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.creditAmount))}` : "-"}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-bold border-t">
-                      <td className="px-3 py-2">Total</td>
-                      {isPaymentOrReceipt || isJournal ? (
-                        <td className="px-3 py-2 text-right font-mono">
-                          {sym}
-                          {formatNumber(totalAmount)}
-                        </td>
-                      ) : (
-                        <>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(totalDebit)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {sym}
-                            {formatNumber(totalCredit)}
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    );
+    return <ViewEntryVoucherView m={m} entry={entry} formatDisplayDate={formatDisplayDate} />;
   }
 
   // ── CONTAINER_IMPORT enriched view ──────────────────────────────────────

@@ -66,20 +66,16 @@ function fail(res: Response, error: unknown) {
   if (error instanceof ActiveCompanyPermissionContextError)
     return res.status(error.status).json({ code: error.code, message: error.message });
   if (error instanceof ZodError)
-    return res
-      .status(400)
-      .json({
-        code: "PRESSING_INVALID_CORRECTION",
-        message: "Invalid pressing correction request",
-        issues: error.issues,
-      });
-  logger.error("Factory pressing correction failed", { error });
-  return res
-    .status(500)
-    .json({
-      code: "PRESSING_CORRECTION_FAILED",
-      message: "Correction was not saved. Check history before trying again.",
+    return res.status(400).json({
+      code: "PRESSING_INVALID_CORRECTION",
+      message: "Invalid pressing correction request",
+      issues: error.issues,
     });
+  logger.error("Factory pressing correction failed", { error });
+  return res.status(500).json({
+    code: "PRESSING_CORRECTION_FAILED",
+    message: "Correction was not saved. Check history before trying again.",
+  });
 }
 async function requireSupervisor(req: Request): Promise<ActiveCompanyPermissionContext> {
   const ctx = await getActiveCompanyPermissionContext(req);

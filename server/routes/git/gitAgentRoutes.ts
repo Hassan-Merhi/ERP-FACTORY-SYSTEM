@@ -11,25 +11,7 @@ import { requireAuth } from "../../auth";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../lib/queryResult";
 import { parseMoneyInput, toMoney } from "../../lib/money";
-
-/** Shape of a git_agent_adjustments row as selected by the queries below. */
-type GitAgentAdjustmentRow = {
-  id: number;
-  agent_name?: string;
-  description: string | null;
-  amount: string;
-  type: string;
-  created_at: string | Date;
-};
-
-/** DTO returned to the client for one adjustment. */
-type GitAgentAdjustment = {
-  id: number;
-  description: string | null;
-  amount: number;
-  type: string;
-  createdAt: string | Date;
-};
+import type { GitAgentAdjustmentRow, GitAgentAdjustment } from "./gitAgentRoutesTypes";
 
 export function registerGitAgentRoutes(app: Express) {
   // ── Agent notes (per-company, per-agent, shared across all users) ─────────

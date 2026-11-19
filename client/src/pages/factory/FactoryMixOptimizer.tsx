@@ -13,29 +13,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { formatUsd } from "@/lib/moneyDisplay";
-
-interface MaterialRow {
-  supplierId: string;
-  kgAvailable: number;
-  costPerKg: number;
-}
-
-interface OptimizeSuggestion {
-  sources: { supplier: string; kgRatio: number }[];
-  expectedCostPerBale: number;
-  expectedProfit: number;
-  historicalWastePercent: number;
-}
-
-interface BaleProduct {
-  id: number;
-  name: string;
-}
-
-interface Supplier {
-  id: number;
-  name: string;
-}
+import type { MaterialRow, OptimizeSuggestion, BaleProduct, Supplier } from "./FactoryMixOptimizerTypes";
 
 export default function FactoryMixOptimizer() {
   const { selectedCompany } = useCompany();

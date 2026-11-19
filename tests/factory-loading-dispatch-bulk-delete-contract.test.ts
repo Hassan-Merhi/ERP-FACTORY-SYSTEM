@@ -7,9 +7,18 @@ function source(file: string): string {
 }
 
 const scanRoutes = source("server/routes/factory/customer-orders/loadingDispatchScanRoutes.ts");
-const dispatchRoutes = source("server/routes/factory/customer-orders/loadingDispatchRoutes.ts");
+const dispatchRoutes = source("server/routes/factory/customer-orders/loadingDispatchRoutes.ts").replace(
+  /app\.post\(\s+/g,
+  "app.post("
+);
 const scanner = source("client/src/pages/factory/FactoryLoadingDispatchScanner.tsx");
-const dispatchScreen = source("client/src/pages/factory/FactoryLoadingDispatch.tsx");
+// The simplified trip screen lives in a dedicated child component while
+// the cancel mutation remains in the extracted state module.
+const dispatchScreen = [
+  source("client/src/pages/factory/FactoryLoadingDispatch.tsx"),
+  source("client/src/pages/factory/FactoryLoadingDispatchDetail.tsx"),
+  source("client/src/pages/factory/useFactoryLoadingDispatchState.tsx"),
+].join("\n");
 const manifest = JSON.parse(source("config/route-manifest.json")) as { routes: string[] };
 
 describe("Factory dispatch bulk scan removal", () => {
@@ -47,7 +56,7 @@ describe("Factory dispatch deletion", () => {
     expect(dispatchScreen).toContain("deleteReason.trim().length < 3");
   });
 
-  it("soft-cancels only open unfinalized trips without deleting business or audit records", () => {
+  it("soft-cancels open or explicitly reopened trips while preserving signed closure and financial evidence", () => {
     const start = dispatchRoutes.indexOf(
       'app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel"'
     );
@@ -58,12 +67,21 @@ describe("Factory dispatch deletion", () => {
     expect(handler).toContain("db.transaction(async (tx) =>");
     expect(handler).toContain('trip.status !== "OPEN"');
     expect(handler).toContain("factory_loading_dispatch_closure_history");
+    expect(handler).toContain("AND reopened_at IS NULL LIMIT 1");
+    expect(handler).toContain("if (activeClosures.length)");
+    expect(handler).not.toContain("if (closed.length)");
+    expect(handler).toContain("factory_dispatch_order_consolidations");
+    expect(handler).toContain("reconciled_at IS NOT NULL AND status IN ('DRAFT', 'FINALIZED')");
+    expect(handler).toContain("if (signed.length)");
     expect(handler).toContain("factory_dispatch_trip_financials");
+    expect(handler).toContain("if (finances.length)");
     expect(handler).toContain("UPDATE factory_loading_dispatch_scans");
     expect(handler).toContain("UPDATE factory_loading_dispatch_expected_bales");
     expect(handler).toContain("status = 'CANCELLED'");
     expect(handler).toContain("DISPATCH_CANCELLED");
     expect(handler).not.toMatch(/DELETE FROM factory_loading_dispatches/);
+    expect(handler).not.toMatch(/DELETE FROM factory_loading_dispatch_closure_history/);
+    expect(handler).not.toMatch(/UPDATE factory_loading_dispatch_closure_history/);
     expect(handler).not.toMatch(/UPDATE customer_order_bales/);
     expect(handler).not.toMatch(/UPDATE factory_bales/);
   });

@@ -12,27 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
-import type { VoucherGroup } from "../types";
 import { formatNumericValue, profitColor } from "../utils";
-
-type ItemColumnId =
-  | "qty"
-  | "costPrice"
-  | "hassanPrice"
-  | "pricePerBale"
-  | "costProfitBale"
-  | "hassanProfitBale"
-  | "costProfitTotal"
-  | "hassanProfitTotal";
-
-interface SalesReportBySaleViewProps {
-  voucherGroups: VoucherGroup[];
-  expandedVouchers: Set<number>;
-  toggleVoucher: (id: number) => void;
-  col: (id: ItemColumnId) => boolean;
-  plFilter: "all" | "gain" | "loss";
-  formatAmount: (amount: number | string | null | undefined) => string;
-}
+import type { SalesReportBySaleViewProps } from "./SalesReportBySaleViewTypes";
 
 export function SalesReportBySaleView({
   voucherGroups,

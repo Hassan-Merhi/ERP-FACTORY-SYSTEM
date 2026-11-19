@@ -1,86 +1,24 @@
 import Decimal from "decimal.js";
-
-export type ProductionBonusScope = "company" | "worker";
-export type ProductionBonusStatus = "Present" | "Absent" | "New";
-
-export interface ProductionTargetBonusRate {
-  id: number;
-  scope: ProductionBonusScope;
-  workerId: number | null;
-  effectiveFrom: string;
-  enabled: boolean;
-  ratePerExtraBale: string;
-}
-
-export interface ProductionTargetBonusWorker {
-  workerId: number;
-  workerName: string;
-  employeeCode: string | null;
-  category: string | null;
-  status: ProductionBonusStatus;
-  targetBales: number | null;
-  // The finalized daily snapshot repeats the entire team total for each
-  // linked member. Never add these repeated values together.
-  producedBales: number | null;
-}
-
-export interface ProductionTargetBonusLink {
-  id: number;
-  workerIds: number[];
-}
-
-export interface ProductionTargetBonusDayInput {
-  date: string;
-  finalized: boolean;
-  workers: ProductionTargetBonusWorker[];
-  links: ProductionTargetBonusLink[];
-}
-
-export type ProductionTargetBonusIssue =
-  | "NOT_FINALIZED"
-  | "EMPTY_FINALIZED_DAY"
-  | "INVALID_PRODUCTION"
-  | "LINK_MEMBER_MISSING"
-  | "OVERLAPPING_LINKS"
-  | "LINKED_OUTPUT_CONFLICT"
-  | "NO_TARGET"
-  | "ABSENT"
-  | "RATE_DISABLED"
-  | "NO_RATE"
-  | "ODD_LINKED_BALES";
-
-export interface ProductionTargetBonusWorkerPreview {
-  date: string;
-  workerId: number;
-  workerName: string;
-  employeeCode: string | null;
-  category: string | null;
-  status: ProductionBonusStatus;
-  linkGroupId: number | null;
-  partnerIds: number[];
-  targetBales: number | null;
-  // Credited share, not the repeated team total.
-  creditedBales: number;
-  extraBales: number;
-  ratePerExtraBale: string;
-  rateVersionId: number | null;
-  rateScope: ProductionBonusScope | null;
-  bonusUsd: string;
-  eligibleForReview: boolean;
-  requiresReview: boolean;
-  issues: ProductionTargetBonusIssue[];
-}
-
-export interface ProductionTargetBonusDayPreview {
-  date: string;
-  finalized: boolean;
-  payoutReady: boolean;
-  totalProducedBales: number;
-  extraBales: number;
-  proposedBonusUsd: string;
-  workers: ProductionTargetBonusWorkerPreview[];
-  warnings: ProductionTargetBonusIssue[];
-}
+import type {
+  ProductionTargetBonusRate,
+  ProductionTargetBonusWorker,
+  ProductionTargetBonusLink,
+  ProductionTargetBonusDayInput,
+  ProductionTargetBonusIssue,
+  ProductionTargetBonusWorkerPreview,
+  ProductionTargetBonusDayPreview,
+} from "./factoryProductionTargetBonusCoreTypes";
+export type {
+  ProductionBonusScope,
+  ProductionBonusStatus,
+  ProductionTargetBonusRate,
+  ProductionTargetBonusWorker,
+  ProductionTargetBonusLink,
+  ProductionTargetBonusDayInput,
+  ProductionTargetBonusIssue,
+  ProductionTargetBonusWorkerPreview,
+  ProductionTargetBonusDayPreview,
+} from "./factoryProductionTargetBonusCoreTypes";
 
 function validBales(value: number | null): value is number {
   return value !== null && Number.isSafeInteger(value) && value >= 0;
@@ -94,12 +32,12 @@ function sumUsd(amounts: string[]): string {
 export function resolveProductionTargetBonusRate(
   workerId: number,
   date: string,
-  versions: ProductionTargetBonusRate[],
+  versions: ProductionTargetBonusRate[]
 ): ProductionTargetBonusRate | null {
   const eligible = versions.filter(
     (version) =>
       version.effectiveFrom <= date &&
-      (version.scope === "company" || (version.scope === "worker" && version.workerId === workerId)),
+      (version.scope === "company" || (version.scope === "worker" && version.workerId === workerId))
   );
   const sortNewest = (a: ProductionTargetBonusRate, b: ProductionTargetBonusRate) =>
     b.effectiveFrom.localeCompare(a.effectiveFrom) || b.id - a.id;
@@ -114,13 +52,19 @@ export function resolveProductionTargetBonusRate(
 
 function groupBales(
   workers: ProductionTargetBonusWorker[],
-  links: ProductionTargetBonusLink[],
+  links: ProductionTargetBonusLink[]
 ): {
-  shares: Map<number, { credited: number; linkId: number | null; partnerIds: number[]; issues: ProductionTargetBonusIssue[] }>;
+  shares: Map<
+    number,
+    { credited: number; linkId: number | null; partnerIds: number[]; issues: ProductionTargetBonusIssue[] }
+  >;
   produced: number;
   warnings: ProductionTargetBonusIssue[];
 } {
-  const shares = new Map<number, { credited: number; linkId: number | null; partnerIds: number[]; issues: ProductionTargetBonusIssue[] }>();
+  const shares = new Map<
+    number,
+    { credited: number; linkId: number | null; partnerIds: number[]; issues: ProductionTargetBonusIssue[] }
+  >();
   const warnings: ProductionTargetBonusIssue[] = [];
   const byId = new Map(workers.map((worker) => [worker.workerId, worker]));
   const linkedWorkers = new Set<number>();
@@ -197,7 +141,7 @@ function groupBales(
  */
 export function calculateProductionTargetBonusDay(
   day: ProductionTargetBonusDayInput,
-  versions: ProductionTargetBonusRate[],
+  versions: ProductionTargetBonusRate[]
 ): ProductionTargetBonusDayPreview {
   const grouped = groupBales(day.workers, day.links);
   const previews = day.workers.map((worker): ProductionTargetBonusWorkerPreview => {
@@ -211,14 +155,12 @@ export function calculateProductionTargetBonusDay(
     else if (!new Decimal(rate.ratePerExtraBale).greaterThan(0)) issues.push("NO_RATE");
 
     const credited = share?.credited ?? 0;
-    const extra = validBales(worker.targetBales) && worker.targetBales > 0
-      ? Math.max(0, credited - worker.targetBales)
-      : 0;
+    const extra =
+      validBales(worker.targetBales) && worker.targetBales > 0 ? Math.max(0, credited - worker.targetBales) : 0;
     const blocking = issues.some((issue) => issue !== "ODD_LINKED_BALES");
-    const bonusUsd = blocking ? "0.00" : new Decimal(rate!.ratePerExtraBale)
-      .times(extra)
-      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-      .toFixed(2);
+    const bonusUsd = blocking
+      ? "0.00"
+      : new Decimal(rate!.ratePerExtraBale).times(extra).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
 
     return {
       date: day.date,
@@ -242,16 +184,16 @@ export function calculateProductionTargetBonusDay(
     };
   });
 
-  const warnings = [...new Set([
-    ...grouped.warnings,
-    ...(!day.finalized ? ["NOT_FINALIZED" as const] : []),
-    ...(day.finalized && day.workers.length === 0 ? ["EMPTY_FINALIZED_DAY" as const] : []),
-  ])];
+  const warnings = [
+    ...new Set([
+      ...grouped.warnings,
+      ...(!day.finalized ? ["NOT_FINALIZED" as const] : []),
+      ...(day.finalized && day.workers.length === 0 ? ["EMPTY_FINALIZED_DAY" as const] : []),
+    ]),
+  ];
   // If the source is incomplete or ambiguous, do not let approval/posting
   // proceed on that day until a supervisor reconciles the evidence.
-  const payoutReady = day.finalized && !warnings.some(
-    (issue) => issue !== "ODD_LINKED_BALES",
-  );
+  const payoutReady = day.finalized && !warnings.some((issue) => issue !== "ODD_LINKED_BALES");
 
   return {
     date: day.date,
@@ -266,36 +208,40 @@ export function calculateProductionTargetBonusDay(
 }
 
 export function summarizeProductionTargetBonusDays(days: ProductionTargetBonusDayPreview[]) {
-  const map = new Map<number, {
-    workerId: number;
-    workerName: string;
-    employeeCode: string | null;
-    targetBales: number;
-    creditedBales: number;
-    extraBales: number;
-    proposedBonusUsd: string;
-    eligibleDays: number;
-    reviewDays: number;
-  }>();
-  for (const day of days) for (const worker of day.workers) {
-    const item = map.get(worker.workerId) ?? {
-      workerId: worker.workerId,
-      workerName: worker.workerName,
-      employeeCode: worker.employeeCode,
-      targetBales: 0,
-      creditedBales: 0,
-      extraBales: 0,
-      proposedBonusUsd: "0.00",
-      eligibleDays: 0,
-      reviewDays: 0,
-    };
-    item.targetBales += worker.targetBales ?? 0;
-    item.creditedBales += worker.creditedBales;
-    item.extraBales += worker.eligibleForReview ? worker.extraBales : 0;
-    item.proposedBonusUsd = new Decimal(item.proposedBonusUsd).plus(worker.bonusUsd).toFixed(2);
-    item.eligibleDays += worker.eligibleForReview ? 1 : 0;
-    item.reviewDays += worker.requiresReview ? 1 : 0;
-    map.set(worker.workerId, item);
-  }
+  const map = new Map<
+    number,
+    {
+      workerId: number;
+      workerName: string;
+      employeeCode: string | null;
+      targetBales: number;
+      creditedBales: number;
+      extraBales: number;
+      proposedBonusUsd: string;
+      eligibleDays: number;
+      reviewDays: number;
+    }
+  >();
+  for (const day of days)
+    for (const worker of day.workers) {
+      const item = map.get(worker.workerId) ?? {
+        workerId: worker.workerId,
+        workerName: worker.workerName,
+        employeeCode: worker.employeeCode,
+        targetBales: 0,
+        creditedBales: 0,
+        extraBales: 0,
+        proposedBonusUsd: "0.00",
+        eligibleDays: 0,
+        reviewDays: 0,
+      };
+      item.targetBales += worker.targetBales ?? 0;
+      item.creditedBales += worker.creditedBales;
+      item.extraBales += worker.eligibleForReview ? worker.extraBales : 0;
+      item.proposedBonusUsd = new Decimal(item.proposedBonusUsd).plus(worker.bonusUsd).toFixed(2);
+      item.eligibleDays += worker.eligibleForReview ? 1 : 0;
+      item.reviewDays += worker.requiresReview ? 1 : 0;
+      map.set(worker.workerId, item);
+    }
   return [...map.values()].sort((a, b) => a.workerName.localeCompare(b.workerName));
 }

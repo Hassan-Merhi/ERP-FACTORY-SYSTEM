@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
 const projectRoot = process.cwd();
 const factoryStyles = join(projectRoot, "client/src/pages/factory");
@@ -104,7 +105,7 @@ describe("Factory unified blue theme", () => {
     expect(violations).toEqual([]);
 
     const container = readFileSync(join(factoryStyles, "FactoryContainerLoadingScan.tsx"), "utf8");
-    const financial = readFileSync(join(factoryStyles, "FactoryFinancialSnapshot.tsx"), "utf8");
+    const financial = readModuleFamily(join(factoryStyles, "FactoryFinancialSnapshot.tsx"));
     const pressing = readFileSync(join(factoryStyles, "PressingHistoryReport.tsx"), "utf8");
     const theme = readFileSync(factoryTheme, "utf8");
     const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");

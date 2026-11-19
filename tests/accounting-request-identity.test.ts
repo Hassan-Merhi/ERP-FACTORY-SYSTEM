@@ -5,6 +5,7 @@ import {
   releaseAccountingRequestIdentity,
   shouldReleaseAccountingRequestIdentity,
 } from "../client/src/lib/accountingRequestIdentity";
+import { errorBody, errorStatus } from "../server/lib/httpHandlers";
 
 const JOURNAL_URL = "/api/vouchers/journal";
 const GENERIC_URL = "/api/vouchers/with-entries";
@@ -152,5 +153,46 @@ describe("accounting request identity", () => {
     expect(shouldReleaseAccountingRequestIdentity(409, "ACCOUNTING_REQUEST_OUTCOME_UNCERTAIN")).toBe(false);
     expect(shouldReleaseAccountingRequestIdentity(500)).toBe(false);
     expect(shouldReleaseAccountingRequestIdentity(503)).toBe(false);
+  });
+});
+
+describe("a closed-period refusal is a definite outcome", () => {
+  // What the closed-period guard raises, wrapped the way Drizzle wraps driver errors.
+  const guardRefusal = Object.assign(new Error("Failed query: insert into voucher_entries ..."), {
+    cause: Object.assign(
+      new Error(
+        "ACCOUNTING_PERIOD_CLOSED: the books are closed through 2026-10-31, so an entry dated 2026-10-15 cannot be created, changed or deleted"
+      ),
+      { code: "EPL01" }
+    ),
+  });
+
+  it("is sent with its code by the voucher create routes, so the browser lets the identity go", () => {
+    const body = errorBody(guardRefusal);
+
+    expect(errorStatus(guardRefusal)).toBe(409);
+    expect(body).toEqual({
+      code: "ACCOUNTING_PERIOD_CLOSED",
+      message:
+        "Accounting period closed: the books are closed through 2026-10-31, so an entry dated 2026-10-15 cannot be created, changed or deleted.",
+    });
+    expect(shouldReleaseAccountingRequestIdentity(409, body.code)).toBe(true);
+  });
+
+  it("lets the same entry be submitted afresh once the period is reopened", () => {
+    const payload = journalPayload();
+    const refused = attachAccountingRequestIdentity("POST", JOURNAL_URL, payload) as { clientRequestId: string };
+    if (shouldReleaseAccountingRequestIdentity(409, errorBody(guardRefusal).code)) {
+      releaseAccountingRequestIdentity("POST", JOURNAL_URL, refused, true);
+    }
+
+    const afterReopen = attachAccountingRequestIdentity("POST", JOURNAL_URL, payload) as { clientRequestId: string };
+
+    // Reusing the identity would make the server replay the stored refusal.
+    expect(afterReopen.clientRequestId).not.toBe(refused.clientRequestId);
+  });
+
+  it("keeps other errors to their message alone", () => {
+    expect(errorBody(new Error("Account not found"))).toEqual({ message: "Account not found" });
   });
 });

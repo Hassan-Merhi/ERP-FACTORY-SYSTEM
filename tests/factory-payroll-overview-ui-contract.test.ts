@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
 import { resolve } from "path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const ROOT = resolve(__dirname, "..");
-const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
+const src = (path: string) => readModuleFamily(resolve(ROOT, path));
 
 describe("Factory Payroll & Benefits overview UI contract", () => {
   it("keeps the projection amount visible during refreshes instead of flashing loading dots", () => {
@@ -33,7 +33,18 @@ describe("Factory Payroll & Benefits overview UI contract", () => {
     expect(batch).toContain("setUndoTargetId(payroll.id)");
     expect(batch).toContain("setPayOpen(true)");
     expect(batch).toContain('minimumWidth="76rem"');
-    for (const heading of ["Worker", "Present", "Absent", "Production Bonus", "Other Bonus", "Deductions", "Advances", "Net", "Status", "Paid On"]) {
+    for (const heading of [
+      "Worker",
+      "Present",
+      "Absent",
+      "Production Bonus",
+      "Other Bonus",
+      "Deductions",
+      "Advances",
+      "Net",
+      "Status",
+      "Paid On",
+    ]) {
       expect(batch).toContain(`>${heading}</TableHead>`);
     }
   });

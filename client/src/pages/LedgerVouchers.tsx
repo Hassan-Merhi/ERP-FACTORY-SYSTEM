@@ -1,122 +1,33 @@
-import { useState, useEffect } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
-import { useQuery } from "@tanstack/react-query";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { format, startOfMonth, endOfMonth } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { ErpListTable } from "@/erp-core";
 import { FileText } from "lucide-react";
-import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
-import { useDateJump } from "@/hooks/use-date-jump";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { Badge } from "@/components/ui/badge";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
-
-interface VoucherEntry {
-  id: number;
-  voucherId: number;
-  date: string;
-  particulars: string;
-  voucherType: string;
-  voucherNumber: string;
-  voucherDescription?: string | null;
-  createdAt?: string | Date | null;
-  companyId?: number;
-  debit: number;
-  credit: number;
-}
-
-interface LedgerVouchersData {
-  account: {
-    id: number;
-    code: string;
-    name: string;
-  };
-  month: number;
-  monthName: string;
-  year: number;
-  openingBalance: number;
-  vouchers: VoucherEntry[];
-  totals: {
-    debit: number;
-    credit: number;
-  };
-  closingBalance: number;
-}
-
-const voucherTypeColors: Record<string, string> = {
-  Payment: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  Receipt: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  Journal: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  "Stock Transfer": "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-  Production: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  Consumption: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  "Purchase Import": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
-};
-
-function getInitialPeriodValue(year: number | null, month: number | null): PeriodFilterValue {
-  if (year && month) {
-    const monthDate = new Date(year, month - 1, 1);
-    return {
-      fromDate: format(startOfMonth(monthDate), "yyyy-MM-dd"),
-      toDate: format(endOfMonth(monthDate), "yyyy-MM-dd"),
-      preset: "custom",
-    };
-  }
-  return getDefaultPeriodValue("today");
-}
+import { voucherTypeColors } from "./LedgerVouchersHelpers";
+import { useLedgerVouchersState } from "./useLedgerVouchersState";
 
 export default function LedgerVouchers() {
-  const [, navigate] = useLocation();
-  const [, params] = useRoute("/ledger-vouchers/:accountId/:year/:month");
-  const { formatAmountRaw: formatAmount } = useCurrencyContext();
-  const { formatShortDate } = useDateFormat();
-
-  const accountId = params?.accountId ? parseInt(params.accountId) : null;
-  const year = params?.year ? parseInt(params.year) : null;
-  const month = params?.month ? parseInt(params.month) : null;
-
-  useEscapeToParent();
-
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getInitialPeriodValue(year, month));
-  useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
-
-  useEffect(() => {
-    if (year && month) {
-      const monthDate = new Date(year, month - 1, 1);
-      setPeriodFilter({
-        fromDate: format(startOfMonth(monthDate), "yyyy-MM-dd"),
-        toDate: format(endOfMonth(monthDate), "yyyy-MM-dd"),
-        preset: "custom",
-      });
-    }
-  }, [year, month]);
-
-  const { data, isLoading, isError, refetch } = useQuery<LedgerVouchersData>({
-    queryKey: ["/api/reports/ledger-vouchers", accountId, year, month, periodFilter.fromDate, periodFilter.toDate],
-    queryFn: async () => {
-      const searchParams = new URLSearchParams({
-        startDate: periodFilter.fromDate,
-        endDate: periodFilter.toDate,
-      });
-      const response = await fetch(`/api/reports/ledger-vouchers/${accountId}/${year}/${month}?${searchParams}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch ledger vouchers");
-      return response.json();
-    },
-    enabled: !!accountId && !!year && !!month,
-  });
-
-  const handleVoucherClick = (voucherId: number) => {
-    window.open(`/voucher-detail/${voucherId}`, "_blank");
-  };
+  const {
+    navigate,
+    formatAmount,
+    formatShortDate,
+    accountId,
+    year,
+    month,
+    periodFilter,
+    setPeriodFilter,
+    data,
+    isLoading,
+    isError,
+    refetch,
+    handleVoucherClick,
+  } = useLedgerVouchersState();
 
   if (!accountId || !year || !month) {
     return (

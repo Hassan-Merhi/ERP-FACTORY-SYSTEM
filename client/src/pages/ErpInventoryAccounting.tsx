@@ -3,111 +3,18 @@
  * Read-only: a discrepancy is not a mandate to generate correction vouchers.
  */
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
 import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { sourceLabel, type Kind, type Status } from "./ErpInventoryAccountingHelpers";
+import { useErpInventoryAccountingState } from "./useErpInventoryAccountingState";
 
-type Kind = "sale" | "purchase_order" | "offload" | "inventory_movement" | "credit_debit_note" | "transfer";
-type Status = "posted" | "cost_mismatch" | "date_mismatch" | "missing" | "expected_periodic" | "review";
-interface Row {
-  kind: Kind;
-  sourceId: string;
-  documentNumber: string;
-  documentDate: string;
-  linkedJournalNumber: string;
-  linkedJournalId: number | null;
-  linkedJournalDate: string | null;
-  expectedStockMovement: string | null;
-  postedStockMovement: string | null;
-  status: Status;
-  note: string;
-}
-interface Audit {
-  companyId: number;
-  asOfDate: string;
-  postingReady: boolean;
-  cutover: { effectiveFrom: string; openingVoucherId: number | null } | null;
-  accountingMode: "PERIODIC" | "PERPETUAL" | "SUPPLIER_PARTNER";
-  valuation: {
-    subLedgerAtCost: string | null;
-    ledgerInventory: string | null;
-    difference: string | null;
-    basis: string;
-    historicalReliable: boolean;
-  };
-  summary: {
-    sources: number;
-    posted: number;
-    missing: number;
-    mismatched: number;
-    periodic: number;
-    review: number;
-    truncated: boolean;
-  };
-  journals: Row[];
-  policy: {
-    sourceOfCost: string;
-    cutoverActivation: string;
-    historicalAdjustment: string;
-    transfers: string;
-    returns: string;
-    landedCosts: string;
-  };
-}
-interface Readiness {
-  ready: boolean;
-  postingReady: boolean;
-  blockers: Array<{ code: string; count: number; message: string }>;
-  effectiveFrom: string;
-  cutover: { effectiveFrom: string } | null;
-  openingPlan: { lines: number; total: string; unvalued: number } | null;
-  reconciliation: { reconciled: boolean; differences: number } | null;
-}
-async function get<T>(url: string): Promise<T> {
-  const r = await fetch(url, { credentials: "include" });
-  const v = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(v.message || "Unable to retrieve the inventory audit");
-  return v as T;
-}
-function sourceLabel(k: Kind) {
-  return (
-    {
-      sale: "Sales / COGS",
-      purchase_order: "Purchase / GIT",
-      offload: "Offload / stock-in",
-      inventory_movement: "Inventory adjustment",
-      credit_debit_note: "Credit / debit note",
-      transfer: "Stock transfer",
-    } as const
-  )[k];
-}
 export default function ErpInventoryAccounting() {
-  const [asOf, setAsOf] = useState("");
-  const [kind, setKind] = useState<Kind | "all">("all");
-  const [status, setStatus] = useState<Status | "all">("all");
-  const audit = useQuery<Audit>({
-    queryKey: ["/api/accounting/erp-inventory/audit", asOf],
-    queryFn: () => get("/api/accounting/erp-inventory/audit" + (asOf ? "?asOfDate=" + asOf : "")),
-    retry: false,
-  });
-  const readiness = useQuery<Readiness>({
-    queryKey: ["/api/accounting/erp-inventory/readiness"],
-    queryFn: () => get("/api/accounting/erp-inventory/readiness"),
-    retry: false,
-  });
-  const current = audit.data;
-  const rows = useMemo(
-    () =>
-      current?.journals.filter(
-        (r) => (kind === "all" || r.kind === kind) && (status === "all" || r.status === status)
-      ) ?? [],
-    [current, kind, status]
-  );
+  const { asOf, setAsOf, kind, setKind, status, setStatus, audit, readiness, current, rows } =
+    useErpInventoryAccountingState();
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="erp-inventory-accounting">
       <PageHeader

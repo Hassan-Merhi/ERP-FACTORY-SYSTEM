@@ -9,30 +9,20 @@ import { ResponsiveChartPanel, ResponsiveChartViewport } from "@/components/ui/r
 import type { ProductRow } from "@/pages/factory/productioncomparison/types";
 import { fmtKg, fmtNum, pctChange } from "@/pages/factory/productioncomparison/utils";
 import { type ComparisonRange, isValidComparisonRange, parseLocalIsoDate, type ProductComparisonPeriod } from "./utils";
-
-export type Metric = "bales" | "weight";
-
-export interface BaleProductCatalogRow {
-  id: number;
-  code?: string | null;
-  articleCode?: string | null;
-  name?: string | null;
-  nameAr?: string | null;
-  nameFr?: string | null;
-  categoryId?: number | null;
-  active?: boolean | null;
-}
-
-export interface CategoryRow {
-  id: number;
-  name: string;
-  nameAr?: string | null;
-  nameFr?: string | null;
-}
-
-function normalizeArticle(value: string | null | undefined): string {
-  return (value || "").trim().toUpperCase();
-}
+import {
+  normalizeArticle,
+  type Metric,
+  type BaleProductCatalogRow,
+  type CategoryRow,
+  type StatKind,
+  type StatTone,
+} from "./ProductComparisonChartsStatHelpers";
+export {
+  localeFor,
+  type Metric,
+  type BaleProductCatalogRow,
+  type CategoryRow,
+} from "./ProductComparisonChartsStatHelpers";
 
 export function productKey(product: BaleProductCatalogRow): string {
   return normalizeArticle(product.articleCode || product.code);
@@ -53,12 +43,6 @@ export function formatMetric(value: number, metric: Metric): string {
 export function metricValue(row: ProductRow | undefined, metric: Metric): number {
   if (!row) return 0;
   return metric === "bales" ? row.qty : row.totalWeightKg;
-}
-
-export function localeFor(language: "en" | "ar" | "fr"): string {
-  if (language === "ar") return "ar";
-  if (language === "fr") return "fr-FR";
-  return "en-US";
 }
 
 export function localizedProductName(product: BaleProductCatalogRow, language: "en" | "ar" | "fr"): string {
@@ -91,10 +75,6 @@ export function formatRangeLabel(range: ComparisonRange, period: ProductComparis
   if (range.from === range.to) return formatter.format(from);
   return `${formatter.format(from)} – ${formatter.format(to)}`;
 }
-
-type StatKind = "products" | "selected" | "compared" | "difference";
-
-type StatTone = "violet" | "blue" | "green" | "rose";
 
 export function Stat({
   label,

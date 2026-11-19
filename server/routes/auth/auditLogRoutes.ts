@@ -10,66 +10,7 @@ import { requireExportAccess } from "../../lib/permissionMiddleware";
 import { auditLog, companies, factoryUserProfiles, stockTransferRevisionItems, users } from "@shared/schema";
 import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
-
-const moduleLabels: Record<string, string> = {
-  vouchers: "Vouchers",
-  voucher_entries: "Journal Entries",
-  ledger_accounts: "Accounts",
-  customers: "Customers",
-  suppliers: "Suppliers",
-  stock_items: "Stock Items",
-  inventory: "Inventory",
-  stock_transfers: "Stock Transfers",
-  stock_transfer_revisions: "Stock Transfer Revisions",
-  containers: "Containers",
-  factory_containers: "Factory Containers",
-  factory_offload_charges: "Post-Offload Charges",
-  factory_mix_batches: "Mix Batches",
-  factory_mix_batch_sources: "Mix Batch Sources",
-  production_raw_stock: "Raw Material Stock",
-  bales: "Bales",
-  factory_customer_orders: "Factory Customer Orders",
-  users: "Users",
-  user_company_roles: "Roles & Permissions",
-  exchange_rates: "Exchange Rates",
-  company_settings: "Company Settings",
-  reports: "Reports",
-};
-
-const actionLabels: Record<string, string> = {
-  create: "Created",
-  update: "Updated",
-  delete: "Deleted",
-  restore: "Restored",
-  reverse: "Reversed",
-  void: "Voided",
-  return: "Returned",
-  recalculate: "Recalculated",
-  repair: "Repaired",
-  import: "Imported",
-  export: "Exported",
-  send_whatsapp: "Sent to WhatsApp",
-  send_email: "Sent by Email",
-  approve: "Approved",
-  cancel: "Cancelled",
-  offload: "Offloaded",
-  transfer: "Transferred",
-  adjust: "Adjusted",
-  login: "Login",
-  permission_change: "Permission Changed",
-  settings_change: "Settings Changed",
-};
-
-function deriveModuleLabel(name: string): string {
-  return (
-    moduleLabels[name] ||
-    name
-      .replace(/^(factory_|payroll_|rental_|pos_)/, "")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (character) => character.toUpperCase()) ||
-    "Unknown"
-  );
-}
+import { formatAuditRow, type FormattedAuditRow } from "./auditLogRoutesHelpers";
 
 function summarizeChanges(changes: unknown): string | null {
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) return null;
@@ -83,28 +24,6 @@ function summarizeChanges(changes: unknown): string | null {
   );
   return `${labels.join(", ")}${fields.length > labels.length ? ` and ${fields.length - labels.length} more` : ""}`;
 }
-
-function formatAuditRow(row: { id: number; userId: string; storedUsername: string; companyId: number | null; action: string; tableName: string; recordId: number | null; recordIdentifier: string | null; changes: unknown; createdAt: Date; resolvedUsername: string | null; displayName: string | null; companyName: string | null; companyCode: string | null; }) {
-  const { storedUsername, resolvedUsername, displayName, companyName, companyCode, ...rest } = row;
-  const actionLower = String(rest.action || "").toLowerCase();
-  return {
-    ...rest,
-    username: resolvedUsername || displayName || storedUsername || "Unknown",
-    companyName: companyName || null,
-    companyCode: companyCode || null,
-    moduleLabel: deriveModuleLabel(rest.tableName),
-    actionLabel:
-      actionLabels[actionLower] ||
-      (rest.action
-        ? String(rest.action)
-            .replace(/_/g, " ")
-            .replace(/\b\w/g, (character) => character.toUpperCase())
-        : "Unknown"),
-    targetUrl: null as string | null,
-  };
-}
-
-type FormattedAuditRow = ReturnType<typeof formatAuditRow>;
 
 function auditChangesRecord(changes: unknown): Record<string, unknown> {
   return changes && typeof changes === "object" && !Array.isArray(changes)

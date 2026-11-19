@@ -38,9 +38,9 @@
 import { createHash } from "node:crypto";
 
 import type Decimal from "decimal.js";
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
-import { retailInventoryOpenings, retailVariantInventory } from "@shared/schema";
+import { retailInventoryOpenings } from "@shared/schema";
 
 import { db, type DatabaseOrTransaction, type DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
@@ -64,6 +64,19 @@ import {
   retailStockSubLedgerValue,
   rows,
 } from "./planRetailInventoryOpeningTx";
+import {
+  keyOf,
+  rowValues,
+  type RetailStockKey,
+  type RetailStockValueTracker,
+  type RetailInventoryReconciliation,
+} from "./retailInventoryJournalHelpers";
+export type {
+  RetailStockKey,
+  RetailStockJournalKind,
+  RetailStockValueTracker,
+  RetailInventoryReconciliation,
+} from "./retailInventoryJournalHelpers";
 export {
   OPENING_EQUITY_ACCOUNT,
   RETAIL_GRNI_ACCOUNT,
@@ -154,60 +167,10 @@ export async function applyRetailInventoryOpening(
 // ---------------------------------------------------------------------------
 // Stock writers
 
-export interface RetailStockKey {
-  variantId: number;
-  locationId: number;
-}
-
-export type RetailStockJournalKind =
-  "receipt" | "intake" | "import" | "product" | "adjustment" | "transfer" | "return" | "cancel" | "count";
-
-const keyOf = (key: RetailStockKey) => `${key.variantId}:${key.locationId}`;
-
-async function rowValues(tx: DbTransaction, companyId: number, keys: RetailStockKey[]) {
-  const values = new Map<string, Decimal>();
-  for (const key of keys) {
-    const [row] = await tx
-      .select({ quantity: retailVariantInventory.quantity, averageCost: retailVariantInventory.averageCost })
-      .from(retailVariantInventory)
-      .where(
-        and(
-          eq(retailVariantInventory.companyId, companyId),
-          eq(retailVariantInventory.variantId, key.variantId),
-          eq(retailVariantInventory.locationId, key.locationId)
-        )
-      )
-      .limit(1);
-    values.set(keyOf(key), row ? toMoney(row.quantity).times(toMoney(row.averageCost)) : new MoneyDecimal(0));
-  }
-  return values;
-}
-
 /** A source id that fits a voucher number: as given up to 60 characters, else a 24-hex digest of it. */
 export function retailStockSourceId(raw: string | number): string {
   const text = String(raw);
   return text.length <= 60 ? text : createHash("sha256").update(text).digest("hex").slice(0, 24);
-}
-
-export interface RetailStockValueTracker {
-  /** Takes the value of more rows before the writer changes them (rows already taken are kept). */
-  include(keys: RetailStockKey[]): Promise<void>;
-  /**
-   * Journals the value the writer moved since the tracker was taken. `contra`
-   * lines are signed (debit positive): a receipt credits RETAIL-GRNI with the
-   * purchase value. `alreadyDebited` is what another journal of the same
-   * document already put on the inventory account (a refund's restored
-   * cost). The rest goes to RETAIL-INVENTORY-ADJUSTMENT. Null before the
-   * opening, or when nothing moved.
-   */
-  post(input: {
-    kind: RetailStockJournalKind;
-    sourceId: string | number;
-    description: string;
-    actor: RetailJournalActor;
-    contra?: { accountCode: string; amount: Decimal; narration: string }[];
-    alreadyDebited?: Decimal;
-  }): Promise<number | null>;
 }
 
 /**
@@ -291,17 +254,6 @@ export async function trackRetailStockValueTx(
 
 // ---------------------------------------------------------------------------
 // Reconciliation
-
-export interface RetailInventoryReconciliation {
-  companyId: number;
-  applicable: boolean;
-  opening: { openingDate: string; voucherId: number | null } | null;
-  inventoryAccountIds: number[];
-  ledger: string;
-  subLedger: string;
-  difference: string;
-  stockRows: number;
-}
 
 /** RETAIL-INVENTORY (every Retail inventory account) against the Retail stock sub-ledger (today's value). */
 export async function retailInventoryReconciliationTx(

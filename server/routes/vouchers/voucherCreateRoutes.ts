@@ -2,7 +2,7 @@ import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVo
 import { captureEdgeVoucherTx } from "../../edge/edgeVoucherOutbox";
 import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
-import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
+import { errorBody, getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { logger } from "../../lib/logger";
@@ -453,7 +453,7 @@ export function registerVoucherCreateRoutes(app: Express) {
         if (error instanceof PostingValidationError) {
           return res.status(400).json({ message: error.message, code: error.code });
         }
-        res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+        res.status(errorStatus(error)).json(errorBody(error));
       }
     }
   );

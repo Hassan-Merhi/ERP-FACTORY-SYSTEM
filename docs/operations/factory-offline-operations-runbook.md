@@ -328,7 +328,53 @@ Admins and Developers see these flags in the **Conflict Center**
 open flags first, each closed with a note (a note is required); closed ones on
 request. The card is not shown when PC sync is off or to anyone else.
 
-Still to come: the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
+**Payment / Receipt edits and deletes on a PC.** In entry mode the PC also
+accepts editing and deleting a Payment or Receipt it holds (synced from the
+cloud or made on the PC). The live route computes the same evidence the
+factory LAN server records, including the voucher as it stood, and writes it to
+`pc_local.outbox` as a finished envelope in the change's own transaction (so
+the change and its record commit together). The cloud accepts an envelope only
+on `POST /api/offline/pc-sync/operations`, only for these two kinds, and only
+when it names the signed-in person, username and company; the same exactly-once
+handlers apply it. If the voucher changed in the cloud since the PC copied it,
+the change is held (`PHASE9_PAYMENT_CHANGED`) for an Admin or Developer to
+approve, or for anyone to discard on the PC. A voucher made on the PC is named
+by its local id, which the cloud resolves through that PC's receipt for the
+create. Every other delete on a PC is refused before any handler runs
+(`423 OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED`): it could not be replayed. An edit
+by a different person than the one who made the payment on the same PC waits,
+because each person is a separate device to the cloud. Covered by
+`tests/pc-sync-offline-edits.test.ts`.
+
+**Stock item edits and deletes on a PC.** In entry mode the PC also accepts the
+stock item master changes the factory LAN server records: a single item's edit,
+bulk prices, categories, renames and units, the barcode, category and name
+imports, opening balances, and location selling prices. Only the fields the
+cloud can replay change (name, unit, selling price, category, stock group,
+active, opening quantity, rate and value, location prices, aliases); changing
+any other field, such as the code, is refused
+(`EDGE_PHASE9_STOCK_ITEM_FIELD_CLOUD_ONLY`). An item can be deleted on a PC only
+while it has no inventory and no stock movements. Each change is recorded as
+"field: before -> after" in the change's own transaction; if the cloud changed
+the same field since the PC copied it, the change is held
+(`PHASE9_STOCK_ITEM_CHANGED`) instead of overwriting. Items made on the PC are
+translated to their cloud items, so they can be edited before the next sync.
+Covered by `tests/pc-sync-offline-stock-item-edits.test.ts`.
+
+**Stock transfer changes on a PC.** In entry mode the PC also accepts the
+transfer changes the factory LAN server records: editing a transfer, finalizing
+or approving it (finalizing any other voucher is refused with
+`423 OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED`), and creating, approving or
+rejecting a revision. Each is recorded with the transfer as it stood, in the
+change's own transaction. A transfer made on the PC keeps its local id as its
+reference, so it can be changed before the next sync; if the cloud's transfer
+changed since the PC copied it, the change is held instead of overwriting.
+Covered by `tests/pc-sync-offline-transfer-edits.test.ts`.
+
+Still to come: the remaining offline kinds the cloud can already apply (POS sale
+edits and cancellations, receiving, attachments), which need the factory LAN server's offline
+behaviour (invoice numbers, local ids, transfer references) made available on a
+PC; then the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

@@ -139,7 +139,7 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     const panel = readModuleFamily("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx");
     const vouchers = readModuleFamily("client/src/pages/Vouchers.tsx");
     const payment = readModuleFamily("client/src/pages/intercompany/IntercompanyPayments.tsx");
-    expect(details).toContain("PropertiesIntercompanyContainerWorkflow containerId={container.id}");
+    expect(details).toMatch(/PropertiesIntercompanyContainerWorkflow containerId=\{(?:v\.)?container\.id\}/);
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
     expect(panel).toContain("<IntercompanyLifecycle physicalContainerId={containerId} embedded />");
     expect(vouchers).not.toContain('activeTab === "intercompany"');

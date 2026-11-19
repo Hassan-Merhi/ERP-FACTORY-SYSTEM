@@ -16,7 +16,6 @@ import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employee
 import { buildPaymentReceiptPostingRequest } from "../../services/accounting/paymentReceiptPosting";
 import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import {
   assertVoucherEditableTx,
@@ -31,6 +30,7 @@ import {
   updateIntercompanyPaymentReceiptAccounts,
   type CentralPaymentReceiptBody,
 } from "./buildLegacyPaymentReceiptEditTarget";
+import { phase9PaymentFollowUpCaptureActive } from "../../edge/phase9PaymentOutbox";
 export { buildLegacyPaymentReceiptEditTarget } from "./buildLegacyPaymentReceiptEditTarget";
 
 async function updateActivePaymentReceipt(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -68,7 +68,8 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
     const linkedTransfer = await intercompanyTransferOfVoucher(voucherId);
     // Factory LAN server (plan batch 4): the edit route that records the change
     // for the cloud serves it; an intercompany transfer leg stays online-only.
-    if (isPhase9LanPrimary()) {
+    // A PC in entry mode is served the same way: its recording route captures the change.
+    if (phase9PaymentFollowUpCaptureActive()) {
       if (linkedTransfer) {
         res.status(409).json({
           code: "EDGE_PAYMENT_INTERCOMPANY_ONLINE_ONLY",
