@@ -114,7 +114,7 @@ needs an owner decision; none is removed by the coverage program itself.
   install. Not tested for that reason.
 - **Backend modules reachable only from tests** (from `npm run report:dead-code`),
   for example `server/services/accounting/financialCloseService.ts` (which has
-  a 99% per-file floor), `server/lib/trackTraceScraper.ts`,
+  a 99% per-file floor),
   `server/lib/workerBalesPdfGenerator.ts` and the three
   `server/services/sp-sales-form-v2/build*Sheet.ts` builders. Deleting them
   deletes the tests that certify them, so each is decided individually.
@@ -125,5 +125,7 @@ needs an owner decision; none is removed by the coverage program itself.
   The dead-code report misses them because `index.ts` re-exports every part.
 
 Removed so far: `server/services/factory/historical-replay/exactApply.ts`
-(superseded by `exactApplyFinal.ts`) and `server/services/syncSalesItemCosts.ts`
-(a no-op shim with no callers).
+(superseded by `exactApplyFinal.ts`), `server/services/syncSalesItemCosts.ts`
+(a no-op shim with no callers), and `server/lib/trackTraceScraper.ts` with
+its `trackTraceDate.ts` helper (no production caller; owner-approved
+2026-11-19).
