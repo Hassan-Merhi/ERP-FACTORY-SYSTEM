@@ -91,8 +91,17 @@ export async function createIntercompanyTradeWorld(client: PoolClient, options: 
       [companyId, `${tag}-${kind}`, type, landed]
     );
 
-  /** One linked trade on its own physical container (several per world are allowed). */
-  async function trade(suffix = "A", status = "OTW", destinationLineRate = landed) {
+  /**
+   * One linked trade on its own physical container (several per world are allowed).
+   * `chargeEvidence` records the import's charge evidence reference, as an import
+   * with confirmed PO charges does.
+   */
+  async function trade(
+    suffix = "A",
+    status = "OTW",
+    destinationLineRate = landed,
+    chargeEvidence: string | null = null
+  ) {
     const containerId = await one(
       `INSERT INTO containers (company_id, container_number, import_date, supplier_id, status, items_total,
          charges_total, grand_total)
@@ -149,9 +158,9 @@ export async function createIntercompanyTradeWorld(client: PoolClient, options: 
     );
     await q(
       `INSERT INTO intercompany_import_batch_containers (batch_id, container_number, destination_company_id,
-         physical_container_id, trade_id, confirmed_landed_cost)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [batchId, `${tag}${suffix}`, destinationCompanyId, containerId, tradeId, landed]
+         physical_container_id, trade_id, confirmed_landed_cost, charge_evidence_reference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [batchId, `${tag}${suffix}`, destinationCompanyId, containerId, tradeId, landed, chargeEvidence]
     );
     const payload = {
       physicalContainerId: containerId,
