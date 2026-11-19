@@ -30,7 +30,8 @@ export interface NegativeStockFlag {
   resolutionNote: string | null;
 }
 
-const FLAGS_URL = "/api/offline/pc-sync/negative-stock-flags";
+export const NEGATIVE_STOCK_FLAGS_URL = "/api/offline/pc-sync/negative-stock-flags";
+const FLAGS_URL = NEGATIVE_STOCK_FLAGS_URL;
 
 type FlagsResult = { state: "ready"; flags: NegativeStockFlag[] } | { state: "hidden" };
 
@@ -122,7 +123,13 @@ export function NegativeStockFlagsCard() {
   const [showAll, setShowAll] = useState(false);
   const queryClient = useQueryClient();
   const status = showAll ? "all" : "open";
-  const flags = useQuery({ queryKey: [FLAGS_URL, status], queryFn: () => loadFlags(status) });
+  // Always reload on return: the shared defaults keep a cached list, and new
+  // flags arrive from PCs without a live update on this endpoint.
+  const flags = useQuery({
+    queryKey: [FLAGS_URL, status],
+    queryFn: () => loadFlags(status),
+    refetchOnMount: "always",
+  });
 
   if (flags.isLoading || (flags.data && flags.data.state === "hidden")) return null;
 
