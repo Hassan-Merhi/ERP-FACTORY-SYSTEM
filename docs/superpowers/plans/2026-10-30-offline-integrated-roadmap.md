@@ -234,8 +234,10 @@ plan are in the plan document and the
 - Stock transfer edits, finalizes and revisions on a PC; a transfer made on the
   PC keeps its local id as its reference.
 - Container offloads (receiving) and file renames / moves on a PC.
-- Next: file uploads on a PC (the record plus its bytes), POS edits and
-  cancellations, then new voucher types; then Phases C to E.
+- File uploads on a PC: the bytes first (checked against the declared
+  SHA-256), then the record.
+- Next: POS edits and cancellations, then new voucher types; then Phases C to
+  E.
 
 ## Resume checklist (next session)
 

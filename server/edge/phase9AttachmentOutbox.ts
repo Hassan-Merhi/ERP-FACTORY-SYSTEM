@@ -20,8 +20,15 @@ import {
   type Phase9AttachmentUpdateEvidence,
 } from "./phase9AttachmentEnvelope.mjs";
 
-/** Record the committed upload in the SAME transaction; no-op off the LAN primary. */
+/** Record the committed upload in the SAME transaction (LAN primary or a PC in entry mode); no-op elsewhere. */
 export async function capturePhase9AttachmentTx(tx: DbTransaction, evidence: Phase9AttachmentEvidence): Promise<void> {
+  // A PC in entry mode: the record goes to its own outbox; its sync agent sends
+  // the bytes (from the stored file) just before the record.
+  if (pcLocalEntryMode()) {
+    const event = phase9AttachmentEnvelope(evidence);
+    await capturePcLocalEnvelopeTx(tx, event, event.localFileId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
   const event = phase9AttachmentEnvelope(evidence);

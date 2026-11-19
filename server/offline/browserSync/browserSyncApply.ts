@@ -26,7 +26,7 @@ import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phas
 import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "../../edge/phase9StockItemEditEnvelope.mjs";
 import { PHASE9_RECEIVING_KIND } from "../../edge/phase9ReceivingEnvelope.mjs";
-import { PHASE9_ATTACHMENT_UPDATE_KIND } from "../../edge/phase9AttachmentEnvelope.mjs";
+import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "../../edge/phase9AttachmentEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_DELETE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
 import {
   PHASE9_STOCK_TRANSFER_EDIT_KIND,
@@ -128,6 +128,7 @@ export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze
   [PHASE9_STOCK_TRANSFER_REVISION_KIND]: "stock",
   [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: "stock",
   [PHASE9_RECEIVING_KIND]: "receiving",
+  [PHASE9_ATTACHMENT_KIND]: "attachments",
   [PHASE9_ATTACHMENT_UPDATE_KIND]: "attachments",
 });
 

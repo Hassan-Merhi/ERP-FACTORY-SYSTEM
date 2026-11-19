@@ -248,9 +248,9 @@ describe("PC offline receiving and file changes: on the PC", () => {
     expect((await request(entry).post("/api/containers/9/offload").send({})).status).toBe(200);
     expect((await request(entry).patch("/api/containers/9/offload").send({})).status).toBe(200);
     expect((await request(entry).patch("/api/files/9").send({})).status).toBe(200);
-    // Not replayable from a PC yet.
+    expect((await request(entry).post("/api/files/upload").send({})).status).toBe(200);
+    // Not replayable from a PC.
     expect((await request(entry).delete("/api/files/9")).status).toBe(423);
-    expect((await request(entry).post("/api/files/upload").send({})).status).toBe(423);
     expect((await request(build("read-only")).patch("/api/files/9").send({})).status).toBe(423);
   });
 });
