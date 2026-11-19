@@ -3,8 +3,9 @@
  * (owner decision 2026-11-02): bulk edits, update-by-code imports and
  * single-item edits of whitelisted fields on EXISTING items.
  *
- * Routes make their writes through these helpers on one transaction. Off the
- * LAN primary the recorder is inactive and the helpers only write. On the LAN
+ * Routes make their writes through these helpers on one transaction. A PC in
+ * entry mode records exactly as the LAN primary does. Elsewhere the recorder
+ * is inactive and the helpers only write. On the LAN
  * each helper locks the row, writes, and records "field: before -> after";
  * finishStockItemEditCaptureTx then appends the net changes to the "stock"
  * outbox in the same transaction. A field outside the whitelist (code, grade,
@@ -17,6 +18,7 @@ import Decimal from "decimal.js";
 import { stockItemCodeAliases, stockItemLocationPrices, stockItems, type InsertStockItem } from "@shared/schema";
 import type { DbTransaction } from "../../db";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
 import { capturePhase9StockItemEditTx } from "../../edge/phase9StockOutbox";
 import { PHASE9_STOCK_ITEM_EDIT_FIELDS, type Phase9StockItemChange } from "../../edge/phase9StockItemEditEnvelope.mjs";
 import { getClientDate } from "../../lib/dateUtils";
@@ -40,7 +42,7 @@ export interface StockItemEditRecorder {
 }
 
 export function stockItemEditRecorder(route: string): StockItemEditRecorder {
-  return { active: isPhase9LanPrimary(), route, changes: [] };
+  return { active: isPhase9LanPrimary() || pcLocalEntryMode(), route, changes: [] };
 }
 
 /** The canonical string a field value is recorded as (the envelope's format). */
