@@ -71,7 +71,7 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(parent).toContain("FactoryLoadingDispatchOverview");
     expect(overview).toContain("canViewFinancialDashboard");
     expect(overview).toContain("FactoryDispatchOrderDashboard");
-    expect(overview).toContain('enabled: canViewFinancialDashboard && tab !== "trips"');
+    expect(overview).toContain('enabled: canViewFinancialDashboard && activeTab !== "trips"');
     expect(routes).toContain("registerFactoryDispatchOrderOverviewRoutes");
     const app = read("server/routes/factoryRoutes.ts");
     expect(app.indexOf("registerFactoryDispatchOrderOverviewRoutes(app)")).toBeLessThan(
