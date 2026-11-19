@@ -323,8 +323,12 @@ feed, which brings back the cloud's version of every delivered entry. While
 entries are outstanding the pull waits, so cloud rows never mix with undelivered
 local ones. Covered by `tests/pc-sync-offline-entries.test.ts`.
 
-Still to come: a screen for the negative-stock flags (today the two routes
-above), the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
+Admins and Developers see these flags in the **Conflict Center**
+(`/conflicts`, `/factory/conflicts`), under "Negative stock from offline PCs":
+open flags first, each closed with a note (a note is required); closed ones on
+request. The card is not shown when PC sync is off or to anyone else.
+
+Still to come: the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 
