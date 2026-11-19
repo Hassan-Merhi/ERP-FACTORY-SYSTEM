@@ -1,8 +1,8 @@
 /**
- * POS read model: use the ORIGINAL posted Kwacha debit, never the USD voucher
+ * POS read model: use the ORIGINAL posted Kwacha or CFA debit, never the USD voucher
  * total multiplied by the user's current exchange rate. No writes or backfill.
  */
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, gt, inArray, sql } from "drizzle-orm";
 import { voucherEntries } from "@shared/schema";
 import { db } from "../../db";
 
@@ -12,7 +12,8 @@ export async function withPosZmwNativeTotals<T extends object>(
   const ids = vouchers
     .filter((voucher) => {
       const row = voucher as T & { id?: unknown; currency?: unknown; voucherType?: unknown };
-      return typeof row.id === "number" && row.currency === "ZMW" && row.voucherType === "Sales";
+      const local = row.currency === "ZMW" || row.currency === "CFA";
+      return typeof row.id === "number" && local && row.voucherType === "Sales";
     })
     .map((voucher) => (voucher as T & { id: number }).id);
   if (!ids.length) return vouchers;
@@ -29,7 +30,7 @@ export async function withPosZmwNativeTotals<T extends object>(
       .where(
         and(
           inArray(voucherEntries.voucherId, ids.slice(i, i + 200)),
-          eq(voucherEntries.transactionCurrency, "ZMW"),
+          inArray(voucherEntries.transactionCurrency, ["ZMW", "CFA"]),
           gt(voucherEntries.transactionDebitAmount, "0")
         )
       )

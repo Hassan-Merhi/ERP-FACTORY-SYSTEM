@@ -279,9 +279,21 @@ async function reviewerRole(client: PoolClient, actor: BrowserActor): Promise<bo
   return found.rows.some((row) => REVIEWER_ROLES.has(String(row.role)));
 }
 
+/** Server-side options; never taken from the request. */
+export interface BrowserApplyOptions {
+  /**
+   * Conflict codes this caller may approve without an Admin/Developer (full
+   * offline mode: owner-approved negative stock from PCs, always flagged).
+   */
+  preApprovedOverrides?: readonly string[];
+  /** Runs inside the apply transaction, after the receipt is written. */
+  afterApply?: (client: PoolClient, receipt: BrowserReceipt, override: string | null) => Promise<void>;
+}
+
 export async function applyBrowserOperation(
   actor: BrowserActor,
-  request: BrowserOperationRequest
+  request: BrowserOperationRequest,
+  options: BrowserApplyOptions = {}
 ): Promise<BrowserApplyResult> {
   let prepared: PreparedOperation;
   try {
@@ -300,7 +312,8 @@ export async function applyBrowserOperation(
       const override = typeof request.override === "string" && request.override ? request.override : null;
       if (override) {
         const allowed = phase9OverridableConflicts(prepared.stream, prepared.event.kind).includes(override);
-        if (!allowed || !(await reviewerRole(client, actor))) {
+        const preApproved = options.preApprovedOverrides?.includes(override) === true;
+        if (!allowed || !(preApproved || (await reviewerRole(client, actor)))) {
           throw new BrowserSyncRefusal("OFFLINE_BROWSER_OVERRIDE_NOT_ALLOWED", 403);
         }
       }
@@ -332,6 +345,7 @@ export async function applyBrowserOperation(
         throw new BrowserSyncRefusal("OFFLINE_BROWSER_READ_AFTER_APPLY_FAILED", 500);
       }
       const receipt = await insertReceipt(client, deviceId, prepared, result);
+      if (options.afterApply) await options.afterApply(client, receipt, override);
       return { status: "applied" as const, receipt };
     });
   } catch (error) {

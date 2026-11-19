@@ -27,7 +27,7 @@ export interface PosLineTarget {
 
 export interface PosSaleLinesInput {
   grandTotal: MoneyInput;
-  /** Original Kwacha total from quantity x typed unit prices. */
+  /** Original Kwacha (or CFA) total from quantity x typed unit prices. */
   nativeZmwTotal?: MoneyInput;
   payment: PosLineTarget;
   paymentNarration: string;
@@ -81,7 +81,9 @@ export function posSaleLines(input: PosSaleLinesInput): ErpVoucherLine[] {
   const rate = toMoney(input.exchangeRate);
   const foreign = currency !== "USD" && rate.gt(0);
   const exactZmw =
-    currency === "ZMW" && input.nativeZmwTotal != null ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2) : null;
+    (currency === "ZMW" || currency === "CFA") && input.nativeZmwTotal != null
+      ? toMoney(input.nativeZmwTotal).toDecimalPlaces(2)
+      : null;
   if (exactZmw && input.supplierPartner) {
     throw new Error(ZMW_SPLIT_ACCOUNTING_ERROR);
   }

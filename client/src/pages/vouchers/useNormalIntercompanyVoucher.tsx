@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequestPrivileged } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
 import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
 import { intercompanyVoucherText } from "@/i18n/intercompanyVoucherTranslations";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +11,8 @@ import { type VoucherFormData } from "./voucherTypes";
 import IntercompanyVoucherHistory from "./IntercompanyVoucherHistory";
 
 const PREVIEW = "/api/intercompany-container-trading/payments/voucher-preview";
+// A read-only matching check must never hold an ordinary receipt hostage for five minutes.
+const PREVIEW_TIMEOUT_MS = 12_000;
 
 type CashAccount = { id: number; companyId: number; type: "cash" | "bank"; name: string };
 type PurchaseOrder = { tradeId: number; version: number; containerNumber: string; unpaid: string };
@@ -68,15 +71,21 @@ export function useNormalIntercompanyVoucher(options: {
     enabled: shouldCheck,
     retry: false,
     queryFn: async () => {
-      const response = await apiRequest("POST", PREVIEW, {
-        voucherType,
-        paymentAccountType,
-        paymentAccountId,
-        entries: accountKeys.filter((row) => row.accountId > 0),
-      });
+      const response = await apiRequestPrivileged(
+        "POST",
+        PREVIEW,
+        {
+          voucherType,
+          paymentAccountType,
+          paymentAccountId,
+          entries: accountKeys.filter((row) => row.accountId > 0),
+        },
+        PREVIEW_TIMEOUT_MS
+      );
       return (await response.json()) as Preview;
     },
-    staleTime: 0,
+    // A verified match is rechecked on posting by the server; avoid needless UI refetch churn.
+    staleTime: 15_000,
   });
   const match = previewQuery.data?.matched ? previewQuery.data : null;
   const pairKey = match?.match.relationshipId ?? null;
@@ -127,17 +136,25 @@ export function useNormalIntercompanyVoucher(options: {
   const Details = () => {
     if (!enabled || !shouldCheck) return null;
     if (previewQuery.isPending || previewQuery.isFetching) {
+      // Most receipts only involve local ledger accounts. Avoid displaying a
+      // misleading intercompany warning while checking an unrelated account.
       return (
-        <p className="text-sm text-muted-foreground" data-testid="ic-normal-checking">
+        <span className="sr-only" role="status">
           {copy.linkedChecking}
-        </p>
+        </span>
       );
     }
     if (previewQuery.isError) {
+      // Do not fail open: submitting while the classification is unavailable
+      // remains blocked by buildMirror() and by the server's write guard.
       return (
-        <p role="alert" className="text-sm text-destructive" data-testid="ic-normal-error">
-          {previewQuery.error.message}
-        </p>
+        <div role="alert" className="space-y-2 text-sm text-destructive" data-testid="ic-normal-error">
+          <p>{copy.linkedCheckFailed}</p>
+          <p className="text-xs">{previewQuery.error.message}</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => void previewQuery.refetch()}>
+            {copy.linkedCheckRetry}
+          </Button>
+        </div>
       );
     }
     if (!match) return null;

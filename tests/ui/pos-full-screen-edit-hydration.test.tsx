@@ -75,6 +75,51 @@ describe("Daybook receipt hydration on the full Point of Sale editor", () => {
     expect(props.setIsCreditSale).toHaveBeenCalledWith(true);
   });
 
+  it("loads a cent-rounded legacy Kwacha sale at the price typed, in Kwacha or as a USD view", () => {
+    const legacySale = () => {
+      const props = editorProps();
+      props.editVoucher.salesItems[0].sellingPrice = "96.150000";
+      return { ...props, editVoucher: { ...props.editVoucher, nativeZmwTotal: "4000.000000" } };
+    };
+    const kwachaView = legacySale();
+    renderHook(() => usePosEditVoucherHydration(kwachaView));
+    expect(kwachaView.setRows.mock.calls[0][0][0]).toMatchObject({ rate: 2000, amount: 4000 });
+
+    const usdView = { ...legacySale(), activeCurrency: "USD" };
+    renderHook(() => usePosEditVoucherHydration(usdView));
+    const row = usdView.setRows.mock.calls[0][0][0];
+    expect(row).toMatchObject({ rate: 96.15, amount: 192.3 });
+    // The USD view still carries the exact price, so switching back shows K2,000.00.
+    expect(Number((row.rateUSD * 20.8).toFixed(2))).toBe(2000);
+  });
+
+  it("loads a CFA sale in CFA at the price typed, or as a USD view, never as USD figures in a CFA grid", () => {
+    const cfaSale = (activeCurrency?: string) => {
+      const props = editorProps();
+      return {
+        ...props,
+        activeCurrency,
+        editVoucher: {
+          ...props.editVoucher,
+          currency: "CFA",
+          exchangeRate: "605",
+          // Legacy cent-rounded USD price of a 40,000 CFA item; the sale posted USD x rate.
+          salesItems: [{ ...props.editVoucher.salesItems[0], sellingPrice: "66.120000" }],
+          entries: [{ transactionCurrency: "CFA", transactionDebitAmount: "80005.200000", debitAmount: "132.24" }],
+        },
+      };
+    };
+    const cfaView = cfaSale("CFA");
+    renderHook(() => usePosEditVoucherHydration(cfaView));
+    expect(cfaView.setRows.mock.calls[0][0][0]).toMatchObject({ rate: 40000, amount: 80000 });
+
+    const usdView = cfaSale("USD");
+    renderHook(() => usePosEditVoucherHydration(usdView));
+    const row = usdView.setRows.mock.calls[0][0][0];
+    expect(row).toMatchObject({ rate: 66.12, amount: 132.24 });
+    expect(Math.round(row.rateUSD * 605)).toBe(40000);
+  });
+
   it("never selects an unassigned shop and does not overwrite rows during rerender", () => {
     const props = editorProps();
     props.posAssignedLocations = [props.posAssignedLocations[0]];

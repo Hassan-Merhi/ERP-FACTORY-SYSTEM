@@ -13,8 +13,7 @@ import { validateItemsBasic, calculateGrandTotal, validateInventoryAvailability 
 import { getOrCreateSalesRevenueAccount, fetchSupplierPartnerAccountingContext } from "./postSaleAccounting";
 import { POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
-import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
-import { calculateZmwSaleAmounts } from "@shared/posZmwMoney";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, checkedPosNativeSaleAmounts } from "./posZmwRatePolicy";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 import { offlineEnteredRate, err } from "./createSaleServiceHelpers";
@@ -183,9 +182,8 @@ export async function preparePosSale({
   }
 
   try {
-    assertZmwImportPrices(items, lockedPosCurrency);
-    if (lockedPosCurrency.currency === "ZMW") {
-      const amounts = calculateZmwSaleAmounts(items, lockedPosCurrency.exchangeRate!);
+    const amounts = checkedPosNativeSaleAmounts(items, lockedPosCurrency, isSpCompany || lanCapture);
+    if (amounts) {
       nativeZmwTotal = amounts.nativeTotal;
       grandTotal = amounts.usdTotal;
     }

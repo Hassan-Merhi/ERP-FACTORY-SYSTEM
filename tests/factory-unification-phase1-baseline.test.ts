@@ -71,7 +71,7 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
     expect(FACTORY_ACCESS_REGISTRY.length).toBe(actual.length);
   });
 
-  it("pins all 151 declared route paths, including four non-Factory utility routes", () => {
+  it("pins all 152 declared route paths, including four non-Factory utility routes", () => {
     const paths = routesFromSource();
     expect(paths).toEqual(fixture.routerPaths);
     expect(paths.length).toBe(fixture.counts.routerDeclarations);
