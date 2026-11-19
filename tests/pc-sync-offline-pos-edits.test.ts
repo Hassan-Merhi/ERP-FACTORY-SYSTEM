@@ -211,6 +211,24 @@ describe("PC offline POS edits and cancellations: in the cloud", () => {
   });
 });
 
+describe("PC offline POS edits: a cashier's own return reaches the cloud", () => {
+  it("applies a cashier's edit of a sale at their location inside the window", async () => {
+    const sale = await deliveredSale(1_000_000_504);
+    await setRole("POS", { locationId: ctx.locationId, editDays: 7 });
+    try {
+      const operationId = randomUUID();
+      const res = await agent
+        .post("/api/offline/pc-sync/operations")
+        .send(body(EDIT_KIND, { envelope: editEnvelope(operationId, sale) }, sale.local, operationId));
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const total = await pool.query("SELECT total_amount::numeric AS t FROM vouchers WHERE id = $1", [sale.cloud]);
+      expect(Number(total.rows[0].t)).toBe(10);
+    } finally {
+      await setRole("Admin");
+    }
+  });
+});
+
 describe("PC offline POS edits and cancellations: on the PC", () => {
   let admin: Client;
   let local: Client;

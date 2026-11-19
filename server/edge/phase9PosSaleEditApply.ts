@@ -11,6 +11,7 @@
  * held for an Admin/Developer approve/reject decision; a missing sale or any
  * other refusal by the edit core can only be rejected.
  */
+import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
 import * as schema from "@shared/schema";
@@ -110,9 +111,10 @@ async function apply(
   });
 
   const role = await client.query(
-    "SELECT role, can_sell_negative_stock FROM user_company_roles WHERE user_id = $1 AND company_id = $2",
+    "SELECT role, can_sell_negative_stock, daybook_edit_days FROM user_company_roles WHERE user_id = $1 AND company_id = $2",
     [event.actorUserId, event.companyId]
   );
+  const userRole = role.rows[0]?.role ? String(role.rows[0].role) : undefined;
   const spContext = await fetchSpEditAccountingContext(event.companyId);
   if ("error" in spContext)
     throw new Phase9EventConflict("PHASE9_POS_EDIT_REFUSED", { status: spContext.error.status });
@@ -122,7 +124,18 @@ async function apply(
     currentCompanyId: event.companyId,
     userId: event.actorUserId,
     username: p.actorUsername,
-    userRole: role.rows[0]?.role ? String(role.rows[0].role) : undefined,
+    userRole,
+    // A cashier's edit: the service re-checks role, location, edit window and
+    // the locked date/payment/location itself against current data; this only
+    // stands in for the live route's middleware having run.
+    ...(userRole === "POS"
+      ? {
+          posDaybookEditAuthorization: {
+            editDays: Number(role.rows[0]?.daybook_edit_days ?? 0),
+            businessDate: await companyBusinessDate(event.companyId, tx),
+          },
+        }
+      : {}),
     canSellNegativeStock:
       role.rows[0]?.can_sell_negative_stock === true ||
       context.overrideConflicts.includes(PHASE9_POS_NEGATIVE_CONFLICT),
@@ -132,7 +145,8 @@ async function apply(
       paymentAccountType: p.edit.paymentAccountType,
       paymentAccountId: p.edit.paymentAccountId,
       isCreditSale: p.edit.isCreditSale,
-      voucherDate: p.edit.voucherDate,
+      // null means "date unchanged" (the service treats it as absent).
+      voucherDate: p.edit.voucherDate ?? undefined,
       locationId: p.edit.locationId,
     },
   };
