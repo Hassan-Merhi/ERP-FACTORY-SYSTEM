@@ -56,6 +56,7 @@ import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
 import { editedZmwSaleAmounts, posZmwEditUsdRows } from "./posZmwEditedAmounts";
 import { validateLockedPosDaybookEdit } from "./posDaybookEditGuard";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../../offline/pcLocal/pcCapture";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
@@ -273,7 +274,8 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
-  const keepUsdPosting = isSpCompanyEdit || isPhase9LanPrimary(); // LAN edits replay from cent-rounded prices
+  // LAN (and PC) edits replay in the cloud from cent-rounded prices.
+  const keepUsdPosting = isSpCompanyEdit || isPhase9LanPrimary() || pcLocalEntryMode();
   const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[], keepUsdPosting);
   const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
 
@@ -414,8 +416,9 @@ export async function updatePosSale(
   const preRestrictionResult = applyPosRoleRestrictions(userRole, newLocationId, preExistingVoucher.locationId);
   if ("error" in preRestrictionResult) return err(preRestrictionResult.error);
 
-  // Factory LAN server during an outage: supplier-partner sale edits stay online-only.
-  const lanCapture = isPhase9LanPrimary();
+  // Factory LAN server during an outage, or a PC in entry mode: the edit is
+  // recorded for the cloud; supplier-partner sale edits stay online-only.
+  const lanCapture = isPhase9LanPrimary() || pcLocalEntryMode();
   if (lanCapture && spContextResult.context.isSpCompanyEdit) {
     return err({
       status: 409,

@@ -48,14 +48,15 @@ const OWN_ID_KINDS: ReadonlyMap<string, (body: Record<string, unknown>) => unkno
 
 /**
  * Changes to records the PC already has. The live route builds the finished
- * envelope in its own transaction: Payment / Receipt edits and deletes (any
- * other voucher is refused here), stock item master edits and deletes
+ * envelope in its own transaction: Payment / Receipt edits and deletes, POS
+ * sale edits and cancellations (any other voucher is refused here), stock item master edits and deletes
  * (fields the cloud alone may change are refused by the route), and stock
  * transfer edits, finalizes and revisions (finalizing any other voucher is
  * refused here), container offloads, and file uploads, renames and moves.
  */
 export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^PATCH \/api\/vouchers\/\d+\/payment-receipt$/,
+  /^(PUT|PATCH) \/api\/vouchers\/\d+\/sales$/,
   /^DELETE \/api\/vouchers\/\d+$/,
   /^(PATCH|DELETE) \/api\/stock-items\/\d+$/,
   /^POST \/api\/stock-items\/\d+\/location-prices$/,
@@ -99,6 +100,9 @@ export interface PcLocalConnection {
 type Connect = () => Promise<PcLocalConnection>;
 
 const PAYMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Payment", "Receipt"]);
+/** A delete may also cancel a POS sale (recorded on the sale's stream). */
+const DELETE_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Payment", "Receipt", "Sales"]);
+const SALE_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Sales"]);
 const TRANSFER_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Stock Transfer", "StockTransfer", "Transfer"]);
 
 /** Same as PC_LOCAL_ENTRY_LOCK in scripts/pc-sync/local/localStore.mjs. */
@@ -160,14 +164,23 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
       return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
     }
     if (kind === null) {
-      // Only Payment / Receipt edits and deletes, and transfer finalizes, can be
-      // replayed in the cloud. Several handlers serve these paths, so refuse any
+      // Only Payment / Receipt edits and deletes, POS sale edits and
+      // cancellations, and transfer finalizes, can be replayed in the cloud. Several handlers serve these paths, so refuse any
       // other voucher here, before any of them can change it without recording it.
-      const target = /^\/api\/vouchers\/(\d+)(\/payment-receipt|\/finalize)?$/.exec(req.originalUrl.split("?")[0]);
+      const target = /^\/api\/vouchers\/(\d+)(\/payment-receipt|\/finalize|\/sales)?$/.exec(
+        req.originalUrl.split("?")[0]
+      );
       if (target) {
         const found = await conn.query("SELECT voucher_type FROM vouchers WHERE id = $1", [Number(target[1])]);
         const type = String(found.rows[0]?.voucher_type ?? "");
-        const allowed = target[2] === "/finalize" ? TRANSFER_VOUCHER_TYPES : PAYMENT_VOUCHER_TYPES;
+        const allowed =
+          target[2] === "/finalize"
+            ? TRANSFER_VOUCHER_TYPES
+            : target[2] === "/sales"
+              ? SALE_VOUCHER_TYPES
+              : target[2] === "/payment-receipt"
+                ? PAYMENT_VOUCHER_TYPES
+                : DELETE_VOUCHER_TYPES;
         if (found.rows.length && !allowed.has(type)) {
           await done();
           return refuse(

@@ -11,6 +11,9 @@
  * conflict is still held for Admin/Developer approval.
  */
 import type { PoolClient } from "pg";
+import { pool } from "../../db";
+import { PHASE9_POS_SALE_EDIT_KIND } from "../../edge/phase9PosSaleEnvelope.mjs";
+import { pcPosSaleEditRefusal } from "./pcPosEditPolicy";
 import { PHASE9_POS_NEGATIVE_CONFLICT } from "../../edge/phase9PosSaleEnvelope.mjs";
 import { PHASE9_STOCK_NEGATIVE_CONFLICT } from "../../edge/phase9StockEnvelope.mjs";
 import {
@@ -54,7 +57,29 @@ async function insertFlag(
   );
 }
 
+/**
+ * Live-route rules a PC's own record must still meet in the cloud (the LAN
+ * server enforced them before recording; a PC is the user's own claim). A
+ * replay of an entry already applied is not re-judged.
+ */
+async function pcEnvelopeRefusal(actor: BrowserActor, request: BrowserOperationRequest) {
+  if (request.envelope?.kind !== PHASE9_POS_SALE_EDIT_KIND) return null;
+  const client = await pool.connect();
+  try {
+    const applied = await client.query(
+      "SELECT 1 FROM factory_edge_applied_events WHERE site_id = $1::uuid AND operation_id = $2::uuid LIMIT 1",
+      [request.deviceId.toLowerCase(), request.operationId.toLowerCase()]
+    );
+    if (applied.rows.length) return null;
+    return await pcPosSaleEditRefusal(client, actor, request.envelope as Parameters<typeof pcPosSaleEditRefusal>[2]);
+  } finally {
+    client.release();
+  }
+}
+
 export async function applyPcOperation(actor: BrowserActor, request: BrowserOperationRequest): Promise<PcApplyResult> {
+  const refused = await pcEnvelopeRefusal(actor, request);
+  if (refused) return { status: "conflict", code: refused.code, overridable: false, detail: refused.detail };
   const first = await applyBrowserOperation(actor, request, { allowEnvelope: true });
   if (first.status !== "conflict" || !first.overridable || !PC_NEGATIVE_STOCK_CODES.includes(first.code)) return first;
   const code = first.code;
