@@ -38,7 +38,7 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
-import { pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
+import { assertPcLocalCaptured, pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
 
 type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
 
@@ -286,6 +286,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
         if (lanCapture && voucher.voucherType === "Sales") {
           await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
         }
+        if (pcEntry) assertPcLocalCaptured(Boolean(offlinePayment && paymentBefore));
         if ((lanCapture || pcEntry) && offlinePayment && paymentBefore) {
           await capturePhase9PaymentDeleteTx(tx, {
             ...paymentFollowUpActor(req),

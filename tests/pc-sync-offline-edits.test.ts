@@ -24,7 +24,7 @@ import { db, pool, type DbTransaction } from "../server/db";
 import { paymentReceiptEvidence, phase9PaymentVoucherRefTx } from "../server/edge/phase9PaymentOutbox";
 import { phase9PaymentSnapshotTx } from "../server/edge/phase9PaymentSnapshot";
 import { phase9PaymentDeleteEnvelope, phase9PaymentEditEnvelope } from "../server/edge/phase9PaymentEnvelope.mjs";
-import { capturePcLocalEnvelopeTx } from "../server/offline/pcLocal/pcCapture";
+import { assertPcLocalCaptured, capturePcLocalEnvelopeTx } from "../server/offline/pcLocal/pcCapture";
 import { loadPcSyncPolicy } from "../server/offline/pcSync/tablePolicy.mjs";
 import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
 import { deliverOutbox, deliveryDeviceId } from "../scripts/pc-sync/local/outbox.mjs";
@@ -286,6 +286,17 @@ describe("PC offline payment edits and deletes: on the PC", () => {
     expect(gone.rowCount).toBe(0);
   });
 
+  it("refuses, on a PC, a change the route could not record, so it rolls back", async () => {
+    process.env.OFFLINE_PC_LOCAL_MODE = "entry";
+    try {
+      expect(() => assertPcLocalCaptured(false)).toThrow("OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED");
+      expect(() => assertPcLocalCaptured(true)).not.toThrow();
+    } finally {
+      delete process.env.OFFLINE_PC_LOCAL_MODE;
+    }
+    expect(() => assertPcLocalCaptured(false)).not.toThrow();
+  });
+
   it("names a voucher the PC created by its local id and a synced one by its cloud id", async () => {
     process.env.OFFLINE_PC_LOCAL_MODE = "entry";
     try {
@@ -304,7 +315,7 @@ describe("PC offline payment edits and deletes: on the PC", () => {
     }
   });
 
-  it("lets payment edits and deletes through on the PC and refuses any other delete before a handler runs", async () => {
+  it("lets payment edits and deletes through on the PC and refuses any other voucher before a handler runs", async () => {
     await local.query("UPDATE pc_local.state SET copy_complete = true, last_sync_at = now()");
     await local.query(`BEGIN; SET LOCAL session_replication_role = replica;
       INSERT INTO vouchers (id, company_id, voucher_number, voucher_type, voucher_date, total_amount)
@@ -334,6 +345,9 @@ describe("PC offline payment edits and deletes: on the PC", () => {
     const journal = await request(app).delete("/api/vouchers/91");
     expect(journal.status).toBe(423);
     expect(journal.body).toEqual({ code: "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED" });
+    const journalEdit = await request(app).patch("/api/vouchers/91/payment-receipt").send({});
+    expect(journalEdit.status).toBe(423);
+    expect(journalEdit.body).toEqual({ code: "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED" });
     expect((await request(app).delete("/api/vouchers/92")).status).toBe(200);
     expect((await request(app).patch("/api/vouchers/92/payment-receipt").send({})).status).toBe(200);
     expect(handled).toEqual(["DELETE 92", "PATCH 92"]);

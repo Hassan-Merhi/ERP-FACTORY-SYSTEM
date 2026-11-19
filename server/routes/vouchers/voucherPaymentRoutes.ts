@@ -28,6 +28,7 @@ import {
   phase9PaymentSnapshotTx,
   phase9PaymentVoucherRefTx,
 } from "../../edge/phase9PaymentOutbox";
+import { assertPcLocalCaptured } from "../../offline/pcLocal/pcCapture";
 import { applyPaymentReceiptEditTx, paymentReceiptEditPlan } from "../../services/accounting/paymentReceiptVoucherEdit";
 
 /**
@@ -251,6 +252,8 @@ export function registerVoucherPaymentRoutes(app: Express) {
           plan: editPlan,
           actor: { userId: req.session.userId, username: req.session.username },
         });
+        // On a PC, a voucher that was not a Payment / Receipt cannot be recorded: refuse (rolls back).
+        assertPcLocalCaptured(Boolean(before));
         // Factory LAN server during an outage: record the edit, with the voucher as it stood, in this transaction.
         if (lanCapture && before) {
           await capturePhase9PaymentEditTx(tx, {

@@ -134,16 +134,21 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
       return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
     }
     if (kind === null) {
-      // Only Payment / Receipt deletes can be replayed in the cloud. Several
-      // handlers serve DELETE /api/vouchers/:id, so refuse anything else here,
-      // before any of them can delete without recording it.
-      const deleteId = req.method.toUpperCase() === "DELETE" ? /^\/api\/vouchers\/(\d+)$/.exec(req.path) : null;
-      if (deleteId) {
-        const found = await conn.query("SELECT voucher_type FROM vouchers WHERE id = $1", [Number(deleteId[1])]);
+      // Only Payment / Receipt edits and deletes can be replayed in the cloud.
+      // Several handlers serve these paths, so refuse any other voucher here,
+      // before any of them can change it without recording it.
+      const target = /^\/api\/vouchers\/(\d+)(?:\/payment-receipt)?$/.exec(req.originalUrl.split("?")[0]);
+      if (target) {
+        const found = await conn.query("SELECT voucher_type FROM vouchers WHERE id = $1", [Number(target[1])]);
         const type = found.rows[0]?.voucher_type;
         if (found.rows.length && type !== "Payment" && type !== "Receipt") {
           await done();
-          return refuse(res, "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED");
+          return refuse(
+            res,
+            req.method.toUpperCase() === "DELETE"
+              ? "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED"
+              : "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED"
+          );
         }
       }
       // The live route writes its own finished envelope in its transaction

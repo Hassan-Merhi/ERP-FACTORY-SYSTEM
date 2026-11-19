@@ -12,6 +12,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
+import { HttpError } from "../../lib/httpError";
 import { pcLocalMode } from "./pcLocalMode";
 
 /** Rows the PC creates itself start here (pc_local.use_local_id_range). */
@@ -37,4 +38,13 @@ export async function capturePcLocalEnvelopeTx(
     VALUES (${envelope.requestId}::uuid, ${envelope.kind}, '{}'::jsonb, ${JSON.stringify(envelope)}::jsonb,
             ${localRef}, ${envelope.actorUserId}, ${envelope.companyId}, 'pending')
   `);
+}
+
+/**
+ * In PC entry mode a change the live route could not record (no Payment /
+ * Receipt evidence) must not commit: it would never reach the cloud and the
+ * next sync would silently undo it. Throw inside the transaction to roll back.
+ */
+export function assertPcLocalCaptured(captured: boolean): void {
+  if (pcLocalEntryMode() && !captured) throw new HttpError(423, "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED");
 }
