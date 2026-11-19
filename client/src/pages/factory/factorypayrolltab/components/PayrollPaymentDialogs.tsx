@@ -420,7 +420,8 @@ export function PayrollPaymentDialogs({ payroll }: { payroll: FactoryPayrollStat
           <DialogHeader>
             <DialogTitle>Delete Payroll and Reverse Accounting</DialogTitle>
             <DialogDescription>
-              This will reverse any posted payroll payment and associated journal entries, remove the payroll record, and restore its advance deductions. This action cannot be undone.
+              This will reverse any posted payroll payment and associated journal entries, remove the payroll record,
+              and restore its advance deductions. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

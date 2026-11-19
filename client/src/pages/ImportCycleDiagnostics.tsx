@@ -1,10 +1,9 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import {
   CheckCircle2,
   AlertCircle,
@@ -14,235 +13,19 @@ import {
   TrendingDown,
   Minus,
   Wrench,
-  Database,
-  Package,
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-
-interface ImportCycleData {
-  netImportCycleBalance: number;
-  components: {
-    supplierBalance: number;
-    stockOtwValue: number;
-    dutyAgentBalance: number;
-    transporterAgentBalance: number;
-    loansBalance: number;
-    cashBalance: number;
-    bankBalance: number;
-    assetBalance: number;
-    directExpenseBalance: number;
-    indirectExpenseBalance: number;
-    generalExpenseBalance: number;
-    governmentTaxesBalance: number;
-    incomeBalance: number;
-    liabilityBalance: number;
-    profitBalance: number;
-    equityTransactionBalance: number;
-    apTransactionBalance: number;
-    stockOnFloorValue: number;
-    cogsBalance: number;
-    consumptionBalance: number;
-    productionBalance: number;
-    payrollExpenseBalance: number;
-    salaryAdvancesBalance: number;
-    payrollLiabilitiesBalance: number;
-    openingBalanceEquity: number;
-    openingStockValue: number;
-  };
-}
-
-interface DiagnosticIssue {
-  id: string;
-  severity: "critical" | "warning" | "info";
-  title: string;
-  description: string;
-  impact: number;
-  howToFix: string;
-  category: string;
-}
-
-interface BucketVariance {
-  bucket: string;
-  computed: number;
-  fromAccounts: number;
-  variance: number;
-  accountsInBucket: number;
-}
-
-interface UncategorizedAccount {
-  accountId: number;
-  accountName: string;
-  accountCode: string;
-  parentType: string;
-  bucket: string;
-  balance: number;
-}
-
-interface ComponentAudit {
-  key: string;
-  label: string;
-  value: number;
-  source: "ledger" | "inventory" | "containers" | "sales" | "employees" | "calculated";
-  ledgerVerified: boolean;
-  ledgerSum?: number;
-  variance?: number;
-}
-
-interface Reconciliation {
-  buckets: BucketVariance[];
-  uncategorizedAccounts: UncategorizedAccount[];
-  totalUncategorized: number;
-  significantVarianceCount: number;
-  componentAudit?: ComponentAudit[];
-}
-
-interface ContainerAuditEntry {
-  containerId: number;
-  containerNumber: string;
-  status: string;
-  supplierName: string;
-  itemsTotal: number;
-  chargesTotal: number;
-  grandTotal: number;
-  voucherDebits: number;
-  voucherCredits: number;
-  difference: number;
-  voucherCount: number;
-  hasDiscrepancy: boolean;
-}
-
-interface DiagnosticsData {
-  issues: DiagnosticIssue[];
-  summary: {
-    totalIssues: number;
-    criticalCount: number;
-    warningCount: number;
-    totalImpact: number;
-  };
-  reconciliation?: Reconciliation;
-  containerAudit?: ContainerAuditEntry[];
-}
-
-interface ComponentInfo {
-  key: string;
-  label: string;
-  category: "asset" | "expense" | "liability";
-  inFormula: boolean;
-  sign: "+" | "-";
-}
-
-const componentConfig: ComponentInfo[] = [
-  { key: "stockOtwValue", label: "Stock OTW (In Transit)", category: "asset", inFormula: true, sign: "+" },
-  { key: "cashBalance", label: "Cash", category: "asset", inFormula: true, sign: "+" },
-  { key: "bankBalance", label: "Bank", category: "asset", inFormula: true, sign: "+" },
-  { key: "stockOnFloorValue", label: "Stock on Floor", category: "asset", inFormula: true, sign: "+" },
-  { key: "assetBalance", label: "Other Assets", category: "asset", inFormula: true, sign: "+" },
-  { key: "salaryAdvancesBalance", label: "Salary Advances", category: "asset", inFormula: true, sign: "+" },
-  { key: "indirectExpenseBalance", label: "Indirect Expenses", category: "expense", inFormula: true, sign: "+" },
-  { key: "payrollExpenseBalance", label: "Payroll Expenses", category: "expense", inFormula: true, sign: "+" },
-  { key: "governmentTaxesBalance", label: "Government Taxes", category: "expense", inFormula: true, sign: "+" },
-  { key: "cogsBalance", label: "Cost of Goods Sold", category: "expense", inFormula: true, sign: "+" },
-  { key: "supplierBalance", label: "Supplier Payables", category: "liability", inFormula: true, sign: "-" },
-  { key: "dutyAgentBalance", label: "Duty Agent", category: "liability", inFormula: true, sign: "-" },
-  { key: "transporterAgentBalance", label: "Transporter Agent", category: "liability", inFormula: true, sign: "-" },
-  { key: "loansBalance", label: "Loans", category: "liability", inFormula: true, sign: "-" },
-  { key: "liabilityBalance", label: "Other Liabilities", category: "liability", inFormula: true, sign: "-" },
-  { key: "profitBalance", label: "Profit / Retained Earnings", category: "liability", inFormula: true, sign: "-" },
-  { key: "equityTransactionBalance", label: "Equity Transfers", category: "liability", inFormula: true, sign: "-" },
-  { key: "apTransactionBalance", label: "Accounts Payable", category: "liability", inFormula: true, sign: "-" },
-  { key: "incomeBalance", label: "Income", category: "liability", inFormula: true, sign: "-" },
-  { key: "payrollLiabilitiesBalance", label: "Payroll Liabilities", category: "liability", inFormula: true, sign: "-" },
-  { key: "openingBalanceEquity", label: "Opening Balance Equity", category: "liability", inFormula: true, sign: "+" },
-  {
-    key: "directExpenseBalance",
-    label: "Import Charges (capitalised)",
-    category: "expense",
-    inFormula: false,
-    sign: "+",
-  },
-  {
-    key: "generalExpenseBalance",
-    label: "General Expenses (Purchases)",
-    category: "expense",
-    inFormula: false,
-    sign: "+",
-  },
-  { key: "consumptionBalance", label: "Consumption (in inventory)", category: "expense", inFormula: false, sign: "+" },
-  { key: "productionBalance", label: "Production (in inventory)", category: "expense", inFormula: false, sign: "+" },
-  { key: "openingStockValue", label: "Opening Stock Value", category: "asset", inFormula: false, sign: "+" },
-];
-
-const CATEGORY_META = {
-  asset: {
-    label: "Assets",
-    colorClass: "text-green-600 dark:text-green-400",
-    bgClass: "bg-green-50 dark:bg-green-950/40",
-    borderClass: "border-green-200 dark:border-green-800",
-  },
-  expense: {
-    label: "Expenses",
-    colorClass: "text-amber-600 dark:text-amber-400",
-    bgClass: "bg-amber-50 dark:bg-amber-950/40",
-    borderClass: "border-amber-200 dark:border-amber-800",
-  },
-  liability: {
-    label: "Liabilities",
-    colorClass: "text-red-600 dark:text-red-400",
-    bgClass: "bg-red-50 dark:bg-red-950/40",
-    borderClass: "border-red-200 dark:border-red-800",
-  },
-};
+import { componentConfig, CATEGORY_META } from "./importCycleDiagnosticsTypes";
+import type { ImportCycleData } from "./importCycleDiagnosticsTypes";
+import { useImportCycleDiagnosticsModel } from "./ImportCycleDiagnosticsModel";
+import { ImportCycleContainerAuditCard } from "./ImportCycleContainerAuditCard";
+import { ImportCycleReconciliationCard } from "./ImportCycleReconciliationCard";
 
 export default function ImportCycleDiagnostics() {
-  const { formatAmount } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { toast } = useToast();
+  const m = useImportCycleDiagnosticsModel();
 
-  const { data, isLoading, error, refetch } = useQuery<ImportCycleData>({
-    queryKey: ["/api/stats/import-cycle-balance", selectedCompany?.id, appMode],
-    queryFn: () =>
-      modeApiRequest("GET", "/api/stats/import-cycle-balance").then((r) => {
-        if (!r.ok) throw new Error("Failed to load import cycle balance");
-        return r.json();
-      }),
-    enabled: !!selectedCompany,
-  });
-
-  const { data: diagnosticsData, isLoading: diagnosticsLoading } = useQuery<DiagnosticsData>({
-    queryKey: ["/api/stats/import-cycle-diagnostics", selectedCompany?.id, appMode],
-    queryFn: () =>
-      modeApiRequest("GET", "/api/stats/import-cycle-diagnostics").then((r) => {
-        if (!r.ok) throw new Error("Failed to load diagnostics");
-        return r.json();
-      }),
-    enabled: !!selectedCompany,
-  });
-
-  const recalculateMutation = useMutation({
-    mutationFn: () => {
-      return modeApiRequest("POST", "/api/admin/recalculate-equity-adjustment").then((r) => {
-        if (!r.ok) throw new Error("Recalculate failed");
-        return r.json();
-      });
-    },
-    onSuccess: (data: { message?: string }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-diagnostics"] });
-      toast({ title: "Recalculated", description: data.message ?? "" });
-    },
-    onError: (e: Error) => toast({ title: "Recalculation failed", description: e.message, variant: "destructive" }),
-  });
-
-  if (isLoading) {
+  if (m.isLoading) {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-10 w-64" />
@@ -256,14 +39,14 @@ export default function ImportCycleDiagnostics() {
     );
   }
 
-  if (error) {
+  if (m.error) {
     return (
       <div className="p-6">
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
-              <span>Failed to load data: {(error as Error).message}</span>
+              <span>Failed to load data: {(m.error as Error).message}</span>
             </div>
           </CardContent>
         </Card>
@@ -271,10 +54,10 @@ export default function ImportCycleDiagnostics() {
     );
   }
 
-  const netBalance = data?.netImportCycleBalance || 0;
+  const netBalance = m.data?.netImportCycleBalance || 0;
   const isBalanced = Math.abs(netBalance) < 0.01;
-  const components = data?.components || ({} as ImportCycleData["components"]);
-  const issues = diagnosticsData?.issues || [];
+  const components = m.data?.components || ({} as ImportCycleData["components"]);
+  const issues = m.diagnosticsData?.issues || [];
 
   const activeComponents = componentConfig.filter(
     (c) => c.inFormula && (components[c.key as keyof typeof components] || 0) !== 0
@@ -303,18 +86,18 @@ export default function ImportCycleDiagnostics() {
         backTarget="/settings"
         backButtonTestId="button-back-settings"
       >
-        <Button onClick={() => refetch()} variant="outline" size="default" data-testid="button-refresh">
+        <Button onClick={() => m.refetch()} variant="outline" size="default" data-testid="button-refresh">
           <RefreshCw className="h-4 w-4 mr-1.5" />
           Refresh
         </Button>
         <Button
-          onClick={() => recalculateMutation.mutate()}
-          disabled={recalculateMutation.isPending}
+          onClick={() => m.recalculateMutation.mutate()}
+          disabled={m.recalculateMutation.isPending}
           variant="outline"
           data-testid="button-recalculate-equity"
         >
           <RotateCcw className="h-4 w-4 mr-1.5" />
-          {recalculateMutation.isPending ? "Recalculating…" : "Recalculate Equity"}
+          {m.recalculateMutation.isPending ? "Recalculating…" : "Recalculate Equity"}
         </Button>
       </PageHeader>
 
@@ -329,7 +112,7 @@ export default function ImportCycleDiagnostics() {
                 <div className={`text-xs font-medium uppercase tracking-wide mb-1 ${meta.colorClass}`}>
                   {meta.label}
                 </div>
-                <div className={`text-xl font-bold tabular-nums ${meta.colorClass}`}>{formatAmount(total)}</div>
+                <div className={`text-xl font-bold tabular-nums ${meta.colorClass}`}>{m.formatAmount(total)}</div>
               </CardContent>
             </Card>
           );
@@ -354,7 +137,7 @@ export default function ImportCycleDiagnostics() {
             <div
               className={`text-xl font-bold tabular-nums ${isBalanced ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
             >
-              {formatAmount(netBalance)}
+              {m.formatAmount(netBalance)}
             </div>
           </CardContent>
         </Card>
@@ -367,14 +150,14 @@ export default function ImportCycleDiagnostics() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Wrench className="h-4 w-4 text-amber-500" />
               Potential Issues
-              {diagnosticsData?.summary && (
+              {m.diagnosticsData?.summary && (
                 <div className="flex gap-1.5 ml-1">
-                  {diagnosticsData.summary.criticalCount > 0 && (
-                    <Badge variant="destructive">{diagnosticsData.summary.criticalCount} Critical</Badge>
+                  {m.diagnosticsData.summary.criticalCount > 0 && (
+                    <Badge variant="destructive">{m.diagnosticsData.summary.criticalCount} Critical</Badge>
                   )}
-                  {diagnosticsData.summary.warningCount > 0 && (
+                  {m.diagnosticsData.summary.warningCount > 0 && (
                     <Badge variant="outline" className="status-warning">
-                      {diagnosticsData.summary.warningCount} Warning
+                      {m.diagnosticsData.summary.warningCount} Warning
                     </Badge>
                   )}
                 </div>
@@ -383,7 +166,7 @@ export default function ImportCycleDiagnostics() {
             <CardDescription>Automatically detected sources of imbalance</CardDescription>
           </CardHeader>
           <CardContent>
-            {diagnosticsLoading ? (
+            {m.diagnosticsLoading ? (
               <div className="space-y-3">
                 <Skeleton className="h-20" />
                 <Skeleton className="h-20" />
@@ -419,7 +202,7 @@ export default function ImportCycleDiagnostics() {
                           <span className="font-semibold text-sm">{issue.title}</span>
                           {issue.impact > 0 && (
                             <Badge variant="outline" className="text-xs">
-                              Impact: {formatAmount(issue.impact)}
+                              Impact: {m.formatAmount(issue.impact)}
                             </Badge>
                           )}
                         </div>
@@ -457,7 +240,9 @@ export default function ImportCycleDiagnostics() {
                   <span className={`text-xs font-semibold uppercase tracking-wide ${meta.colorClass}`}>
                     {meta.label}
                   </span>
-                  <span className={`text-xs font-mono font-semibold ${meta.colorClass}`}>{formatAmount(catTotal)}</span>
+                  <span className={`text-xs font-mono font-semibold ${meta.colorClass}`}>
+                    {m.formatAmount(catTotal)}
+                  </span>
                 </div>
                 <Table>
                   <TableBody>
@@ -478,7 +263,7 @@ export default function ImportCycleDiagnostics() {
                           </TableCell>
                           <TableCell className="text-sm">{config.label}</TableCell>
                           <TableCell className={`text-right font-mono text-sm pr-4 ${meta.colorClass}`}>
-                            {formatAmount(value)}
+                            {m.formatAmount(value)}
                           </TableCell>
                         </TableRow>
                       );
@@ -497,7 +282,7 @@ export default function ImportCycleDiagnostics() {
             <span
               className={`font-mono font-bold text-sm ${isBalanced ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
             >
-              {formatAmount(netBalance)}
+              {m.formatAmount(netBalance)}
             </span>
           </div>
         </CardContent>
@@ -529,7 +314,7 @@ export default function ImportCycleDiagnostics() {
                       </TableCell>
                       <TableCell className="text-sm">{config.label}</TableCell>
                       <TableCell className="text-right font-mono text-sm text-muted-foreground pr-4">
-                        {formatAmount(value)}
+                        {m.formatAmount(value)}
                       </TableCell>
                     </TableRow>
                   );
@@ -541,218 +326,10 @@ export default function ImportCycleDiagnostics() {
       )}
 
       {/* ── Reconciliation ── */}
-      {diagnosticsData?.reconciliation && (
-        <Card data-testid="card-reconciliation">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              Reconciliation Analysis
-              {diagnosticsData.reconciliation.significantVarianceCount > 0 ? (
-                <Badge variant="destructive">
-                  {diagnosticsData.reconciliation.significantVarianceCount} Variance
-                  {diagnosticsData.reconciliation.significantVarianceCount > 1 ? "s" : ""}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="status-success">
-                  All Matched
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription>Computed totals vs account-level sums</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="sticky top-0 z-30 bg-background">
-                <TableRow>
-                  <TableHead className="pl-4">Bucket</TableHead>
-                  <TableHead className="text-right">Computed</TableHead>
-                  <TableHead className="text-right">From Accounts</TableHead>
-                  <TableHead className="text-right">Variance</TableHead>
-                  <TableHead className="text-right pr-4">Accounts</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {diagnosticsData.reconciliation.buckets
-                  .filter((b) => b.computed !== 0 || b.fromAccounts !== 0 || b.variance !== 0)
-                  .map((bucket) => (
-                    <TableRow
-                      key={bucket.bucket}
-                      className={Math.abs(bucket.variance) > 1 ? "bg-amber-50 dark:bg-amber-950/30" : ""}
-                      data-testid={`recon-row-${bucket.bucket}`}
-                    >
-                      <TableCell className="font-medium text-sm pl-4">{bucket.bucket}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{formatAmount(bucket.computed)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatAmount(bucket.fromAccounts)}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-mono text-sm ${Math.abs(bucket.variance) > 1 ? "text-destructive font-bold" : ""}`}
-                      >
-                        {formatAmount(bucket.variance)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm pr-4">{bucket.accountsInBucket}</TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-
-            {diagnosticsData.reconciliation.uncategorizedAccounts.length > 0 && (
-              <div className="p-4 border-t space-y-2">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Uncategorised Accounts
-                </h4>
-                {diagnosticsData.reconciliation.uncategorizedAccounts.map((account) => (
-                  <div
-                    key={account.accountId}
-                    className="flex items-center justify-between p-2 bg-muted rounded-md text-sm"
-                  >
-                    <span className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs text-muted-foreground">{account.accountCode}</span>
-                      <span>{account.accountName}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {account.parentType}
-                      </Badge>
-                    </span>
-                    <span className={`font-mono ${account.balance < 0 ? "text-red-600" : "text-green-600"}`}>
-                      {formatAmount(account.balance)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {diagnosticsData.reconciliation.componentAudit &&
-              diagnosticsData.reconciliation.componentAudit.length > 0 && (
-                <div className="border-t">
-                  <div className="px-4 py-2 bg-muted/40 flex items-center gap-2">
-                    <Database className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold">
-                      Component Audit ({diagnosticsData.reconciliation.componentAudit.length} components)
-                    </span>
-                  </div>
-                  <Table>
-                    <TableHeader className="sticky top-0 z-30 bg-background">
-                      <TableRow>
-                        <TableHead className="pl-4">Component</TableHead>
-                        <TableHead className="text-right">Value</TableHead>
-                        <TableHead>Source</TableHead>
-                        <TableHead className="text-right">Ledger Sum</TableHead>
-                        <TableHead className="text-right pr-4">Variance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {diagnosticsData.reconciliation.componentAudit.map((comp) => (
-                        <TableRow
-                          key={comp.key}
-                          className={
-                            comp.variance && Math.abs(comp.variance) > 0.5 ? "bg-red-50 dark:bg-red-950/30" : ""
-                          }
-                          data-testid={`audit-row-${comp.key}`}
-                        >
-                          <TableCell className="font-medium text-sm pl-4">{comp.label}</TableCell>
-                          <TableCell className="text-right font-mono text-sm">{formatAmount(comp.value)}</TableCell>
-                          <TableCell>
-                            <Badge variant={comp.ledgerVerified ? "default" : "outline"} className="text-xs">
-                              {comp.source}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {comp.ledgerVerified ? formatAmount(comp.ledgerSum || 0) : "N/A"}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-mono text-sm pr-4 ${comp.variance && Math.abs(comp.variance) > 0.5 ? "text-destructive font-bold" : ""}`}
-                          >
-                            {comp.ledgerVerified ? formatAmount(comp.variance || 0) : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-          </CardContent>
-        </Card>
-      )}
+      <ImportCycleReconciliationCard m={m} />
 
       {/* ── Container Offload Audit ── */}
-      {diagnosticsData?.containerAudit && diagnosticsData.containerAudit.length > 0 && (
-        <Card data-testid="container-audit-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Package className="h-4 w-4" />
-              Container Offload Audit
-              {diagnosticsData.containerAudit.filter((c) => c.hasDiscrepancy).length > 0 ? (
-                <Badge variant="destructive">
-                  {diagnosticsData.containerAudit.filter((c) => c.hasDiscrepancy).length} Discrepanc
-                  {diagnosticsData.containerAudit.filter((c) => c.hasDiscrepancy).length > 1 ? "ies" : "y"}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="status-success">
-                  All Balanced
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription>Voucher debits vs credits per offloaded container</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="sticky top-0 z-30 bg-background">
-                <TableRow>
-                  <TableHead className="pl-4">Container</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Debits</TableHead>
-                  <TableHead className="text-right">Credits</TableHead>
-                  <TableHead className="text-right">Diff</TableHead>
-                  <TableHead className="text-right pr-4">Entries</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {diagnosticsData.containerAudit.map((container) => (
-                  <TableRow
-                    key={container.containerId}
-                    className={container.hasDiscrepancy ? "bg-red-50 dark:bg-red-950/30" : ""}
-                    data-testid={`container-row-${container.containerId}`}
-                  >
-                    <TableCell className="font-medium text-sm pl-4">{container.containerNumber}</TableCell>
-                    <TableCell className="text-sm">{container.supplierName}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{formatAmount(container.grandTotal)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatAmount(container.voucherDebits)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatAmount(container.voucherCredits)}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-mono text-sm ${container.hasDiscrepancy ? "text-destructive font-bold" : ""}`}
-                    >
-                      {formatAmount(container.difference)}
-                    </TableCell>
-                    <TableCell className="text-right text-sm pr-4">{container.voucherCount}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <div className="p-4 border-t flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted-foreground">Total Discrepancy</span>
-              <span
-                className={`font-mono text-sm font-bold ${diagnosticsData.containerAudit.reduce((s, c) => s + c.difference, 0) !== 0 ? "text-destructive" : "text-green-600 dark:text-green-400"}`}
-              >
-                {formatAmount(diagnosticsData.containerAudit.reduce((s, c) => s + c.difference, 0))}
-              </span>
-            </div>
-            {diagnosticsData.containerAudit.filter((c) => c.hasDiscrepancy).length > 0 && (
-              <div className="px-4 pb-4">
-                <p className="text-xs text-muted-foreground">
-                  Containers in red have unbalanced voucher entries. A positive difference means debits exceed credits;
-                  negative means credits exceed debits.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <ImportCycleContainerAuditCard m={m} />
     </div>
   );
 }

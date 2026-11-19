@@ -1,4 +1,5 @@
 import type { Plugin } from "vite";
+import { readModuleFamilySource } from "./moduleFamilySource.ts";
 
 import { heavyListPaginationPlugin as legacyHeavyListPaginationPlugin } from "./viteHeavyListPaginationPluginLegacy.ts";
 
@@ -119,9 +120,22 @@ export function heavyListPaginationPlugin(): Plugin {
     transform(source, id) {
       const normalizedId = id.replaceAll("\\", "/").split("?")[0];
       if (normalizedId.endsWith(STOCK_ENTRY_SUFFIX)) {
+        // A split page keeps its paged-search wiring in extracted siblings.
+        const family = readModuleFamilySource(normalizedId, source);
+        if (family !== source && transformStockEntryShell(family) === family) return null;
         return { code: transformStockEntryShell(source), map: null };
       }
       if (normalizedId.endsWith(FACTORY_DAYBOOK_MODEL_SUFFIX)) {
+        // The complete-data exports and server-side filters are committed to the
+        // source (split across extracted siblings); the rewrite only applies to
+        // the older client-filtered model.
+        if (
+          /\(await fetchAllDaybookEntries\(new URLSearchParams\((?:\w+\.)?queryParams\)\)\)\.filter\(/.test(
+            readModuleFamilySource(normalizedId, source)
+          )
+        ) {
+          return null;
+        }
         return { code: transformFactoryDaybookModel(source), map: null };
       }
       // V5 now implements full-catalog edit/draft/export actions natively.

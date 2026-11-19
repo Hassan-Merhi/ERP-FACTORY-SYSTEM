@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,8 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  ArrowRightLeft,
-  BookOpen,
   Building2,
   ChevronDown,
   FileText,
@@ -29,9 +26,10 @@ import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
 import { CurrencyPools } from "./CurrencyPools";
-import { SupplierStatementRows } from "./SupplierStatementRows";
+import { deriveSupplierStatementView } from "./supplierStatementView";
+import { SupplierStatementTransfers } from "./SupplierStatementTransfers";
 
-interface SupplierStatementProps {
+export interface SupplierStatementProps {
   statementSupplierId: number;
   statementData: StatementResponse | undefined;
   statementLoading: boolean;
@@ -157,58 +155,8 @@ export function SupplierStatement({
   }
 
   if (!statementData) return null;
-
-  const activeSt = (statementData.statement || []).filter((c) => c.status !== "OFFLOADED");
-  const activeContainerCount = activeSt.length;
-  const activeKg = activeSt.reduce((sum: number, c) => sum + parseFloat(c.actualReceivedKg || c.totalKg || "0"), 0);
-  const currencyGroups = statementData.currencyGroups || [];
-
-  const ownMap: Record<string, { own: number; totalFreight: number }> = {};
-  for (const g of currencyGroups) {
-    const cc = g.currencyCode;
-    if (!ownMap[cc]) ownMap[cc] = { own: 0, totalFreight: 0 };
-    ownMap[cc].own += parseFloat(g.netPayable || "0");
-    ownMap[cc].totalFreight += parseFloat(g.totalFreight || "0");
-  }
-
-  const renderBalCard = (cc: string, bal: number, label: string, testId: string, freight?: number) => {
-    const isOverpaid = bal < -0.005;
-    const isSettled = Math.abs(bal) <= 0.005;
-    const ccPrefix = cc !== "USD" ? `${cc} ` : "$";
-    return (
-      <div key={`${testId}-${cc}`} className="rounded-xl border p-4">
-        <div className="text-xs text-muted-foreground font-medium">
-          {cc} {label}
-        </div>
-        <div
-          className={`text-xl font-bold mt-1 tabular-nums ${isSettled ? "text-muted-foreground" : isOverpaid ? "text-green-600 dark:text-green-400" : ""}`}
-          data-testid={`${testId}-${cc}`}
-        >
-          {isSettled ? (
-            <>
-              {ccPrefix}— <span className="text-sm font-normal">Settled</span>
-            </>
-          ) : isOverpaid ? (
-            <>
-              {ccPrefix}
-              {formatNum(String(Math.abs(bal).toFixed(2)))} <span className="text-sm font-normal">CR</span>
-            </>
-          ) : (
-            <>
-              {ccPrefix}
-              {formatNum(String(bal.toFixed(2)))}
-            </>
-          )}
-        </div>
-        {freight && freight > 0.005 && (
-          <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-            incl. {ccPrefix}
-            {formatNum(String(freight.toFixed(2)))} freight
-          </div>
-        )}
-      </div>
-    );
-  };
+  const sv = deriveSupplierStatementView({ statementData, formatNum });
+  const { activeContainerCount } = sv;
 
   return (
     <div className="space-y-6">
@@ -295,13 +243,13 @@ export function SupplierStatement({
             <div className="rounded-xl border p-4">
               <div className="text-xs text-muted-foreground">Active Weight</div>
               <div className="text-xl font-bold mt-1" data-testid="text-statement-total-kg">
-                {formatKg(String(activeKg.toFixed(3)))}
+                {formatKg(String(sv.activeKg.toFixed(3)))}
               </div>
             </div>
           </>
         )}
-        {Object.entries(ownMap).map(([cc, v]) =>
-          renderBalCard(cc, v.own, "Net Balance", "text-statement-balance", v.totalFreight)
+        {Object.entries(sv.ownMap).map(([cc, v]) =>
+          sv.renderBalCard(cc, v.own, "Net Balance", "text-statement-balance", v.totalFreight)
         )}
       </div>
 
@@ -390,113 +338,31 @@ export function SupplierStatement({
         />
       )}
 
-      {statementData.fxTransfers && statementData.fxTransfers.length > 0 && (
-        <div className="rounded-xl border overflow-hidden">
-          <div
-            className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 cursor-pointer hover-elevate"
-            onClick={() => toggleStmtSection("fxTransfers")}
-          >
-            <span className="flex items-center gap-2 flex-1">
-              <ArrowRightLeft className="h-4 w-4" />
-              <span className="text-sm font-semibold">FX Settlement Log</span>
-              <ChevronDown
-                className={`h-4 w-4 text-muted-foreground transition-transform ${collapsedStmtSections.has("fxTransfers") ? "" : "rotate-180"}`}
-              />
-            </span>
-          </div>
-          {!collapsedStmtSections.has("fxTransfers") && (
-            <div>
-              <div className="table-responsive">
-                <Table mobileLayout="cards">
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-32">Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">From</TableHead>
-                      <TableHead className="text-right">Cost (USD)</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {statementData.fxTransfers.map((f) => {
-                      const isSelf = f.toSupplierId === f.fromSupplierId;
-                      const isIncoming = f.toSupplierId === statementSupplierId;
-                      const displayRate = parseFloat(f.fxRateToUsd) > 0 ? 1 / parseFloat(f.fxRateToUsd) : 0;
-                      return (
-                        <TableRow key={f.id}>
-                          <TableCell className="text-sm">{formatDate(f.date)}</TableCell>
-                          <TableCell className="text-sm">
-                            {isSelf ? "Internal Settlement" : isIncoming ? "Transfer In" : "Transfer Out"}
-                            {f.sourceType && <span className="ml-1 opacity-60">({f.sourceType})</span>}
-                          </TableCell>
-                          <TableCell className="text-right text-sm tabular-nums">
-                            {f.fromCurrencyCode} {formatNum(f.fromAmount)} @ {displayRate.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="text-right text-sm font-bold tabular-nums">
-                            ${formatNum(f.toAmountUsd)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {canChangeExistingRecords && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive"
-                                onClick={() =>
-                                  wrapAdminAction(() => deleteFxTransferMutation.mutate(f.id), "Delete FX Transfer")
-                                }
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="rounded-xl border overflow-hidden">
-        <div
-          className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 cursor-pointer hover-elevate"
-          onClick={() => toggleStmtSection("allActivity")}
-        >
-          <span className="flex items-center gap-2 flex-1">
-            <BookOpen className="h-4 w-4" />
-            <span className="text-sm font-semibold">Account Ledger</span>
-            <ChevronDown
-              className={`h-4 w-4 text-muted-foreground transition-transform ${collapsedStmtSections.has("allActivity") ? "" : "rotate-180"}`}
-            />
-          </span>
-        </div>
-        {!collapsedStmtSections.has("allActivity") && (
-          <div className="p-4">
-            <SupplierStatementRows
-              statementData={statementData}
-              primaryCc={primaryCc}
-              sfTotalPurchases={sfTotalPurchases}
-              sfTotalPayments={sfTotalPayments}
-              sfPurchasesQty={sfPurchasesQty}
-              sfTxCount={sfTxCount}
-              currencyTotals={currencyTotals}
-              statDateFilter={statDateFilter}
-              setStatDateFilter={setStatDateFilter}
-              displayedRows={displayedRows}
-              balanceByKey={balanceByKey}
-              formatDate={formatDate}
-              formatNum={formatNum}
-              typeBadge={typeBadge}
-              statusDisplayLabel={statusDisplayLabel}
-              onEditPayment={onEditPayment}
-              onDeletePayment={onDeletePayment}
-            />
-          </div>
-        )}
-      </div>
+      <SupplierStatementTransfers
+        statementData={statementData}
+        toggleStmtSection={toggleStmtSection}
+        collapsedStmtSections={collapsedStmtSections}
+        statementSupplierId={statementSupplierId}
+        formatDate={formatDate}
+        formatNum={formatNum}
+        canChangeExistingRecords={canChangeExistingRecords}
+        wrapAdminAction={wrapAdminAction}
+        deleteFxTransferMutation={deleteFxTransferMutation}
+        primaryCc={primaryCc}
+        sfTotalPurchases={sfTotalPurchases}
+        sfTotalPayments={sfTotalPayments}
+        sfPurchasesQty={sfPurchasesQty}
+        sfTxCount={sfTxCount}
+        currencyTotals={currencyTotals}
+        statDateFilter={statDateFilter}
+        setStatDateFilter={setStatDateFilter}
+        displayedRows={displayedRows}
+        balanceByKey={balanceByKey}
+        typeBadge={typeBadge}
+        statusDisplayLabel={statusDisplayLabel}
+        onEditPayment={onEditPayment}
+        onDeletePayment={onDeletePayment}
+      />
 
       {/* Rename dialog */}
       <Dialog open={showRename} onOpenChange={(v) => !v && setShowRename(false)}>

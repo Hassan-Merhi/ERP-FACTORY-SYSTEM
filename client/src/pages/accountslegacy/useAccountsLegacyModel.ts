@@ -1,6 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
 import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
-import type { ClientErrorLike } from "@/lib/clientError";
 /**
  * Controller hook for the legacy Accounts Overview page.
  *
@@ -8,33 +7,15 @@ import type { ClientErrorLike } from "@/lib/clientError";
  * derivation, the ledger/bank/WhatsApp mutations, the two edit forms and the
  * voucher navigation map. Views render this model and nothing else.
  */
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation, useSearch } from "wouter";
-import { useForm, type SubmitHandler } from "react-hook-form";
-import { zodResolver } from "@/lib/form-resolver";
-import { useReactToPrint } from "react-to-print";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useCompany } from "@/contexts/CompanyContext";
-import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useDateJump } from "@/hooks/use-date-jump";
-import { useEscapeBack } from "@/hooks/use-escape-back";
-import { useDebounce } from "@/hooks/use-debounce";
-import { getDefaultPeriodValue, PeriodFilterValue } from "@/components/ui/period-filter";
-import { LedgerAccount, BankAccount, insertBankAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
-import type { InsertBankAccount, UpdateLedgerAccount } from "@shared/schema";
-import { Account, Transaction, WaRule, WaChat } from "../accounts/accountTypes";
+import { useMemo, useEffect } from "react";
+import { insertBankAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
+import { Account, Transaction, WaRule } from "../accounts/accountTypes";
 import { readNotInLedger } from "./NotInLedgerSection";
 import { buildAccountStatementTabUrl } from "./accountStatementNavigation";
-import { VOUCHER_TAB_MAP, type VoucherSearchResult } from "./useAccountsLegacyModelConstants";
+import { VOUCHER_TAB_MAP } from "./useAccountsLegacyModelConstants";
+import { useAccountsLegacyStatementModel } from "./useAccountsLegacyStatementModel";
 
-const DEFAULT_WA_RULE: WaRule = {
+export const DEFAULT_WA_RULE: WaRule = {
   enabled: false,
   whatsappChatId: "",
   sendOnPayment: true,
@@ -42,7 +23,7 @@ const DEFAULT_WA_RULE: WaRule = {
   sendOnJournal: true,
 };
 
-interface GroupOption {
+export interface GroupOption {
   id: number;
   name: string;
   parentId?: number | null;
@@ -55,475 +36,17 @@ interface VoucherNavigationRow {
 }
 
 export function useAccountsLegacyModel() {
-  const { selectedCompany } = useCompany();
-  const { toast } = useToast();
-  const recordChanges = useExistingRecordChangeAccess();
-  const canCreateBankAccount = recordChanges.canCreate("POST", "/api/bank-accounts");
-  const { formatDisplayDate } = useDateFormat();
-  const { formatAmount, formatHistoricalBaseAmount, isMultiCurrency } = useCurrencyContext();
-
-  // Account-list and statement balances are historical base values. They must
-  // not change when the user changes the current display-rate preference.
-  function formatAmountForAccount(amount: number, _accountType?: string): string {
-    return formatHistoricalBaseAmount(amount);
-  }
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
-    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
-  });
-  const hideBalances = (myErpPages?.hiddenErpCostFields ?? []).includes("accounts_balances");
-  const appMode = useAppMode();
-  const accountsListUrl = appMode === "factory" ? "/api/factory/accounts/list" : "/api/accounts/all";
-  const modePrefix = useModePrefix();
-  const modeApiRequest = getApiRequest(appMode);
-  const [, navigate] = useLocation();
-  const searchString = useSearch();
-
-  const urlParams = new URLSearchParams(searchString);
-  const urlAccountId = urlParams.get("accountId");
-  const urlAccountType = urlParams.get("accountType");
-  const urlStartDate = urlParams.get("startDate") || "";
-  const urlEndDate = urlParams.get("endDate") || "";
-
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const fromExternalNavRef = useRef(false);
-
-  useEscapeBack(
-    selectedAccount
-      ? () => {
-          fromExternalNavRef.current = false;
-          setSelectedAccount(null);
-          updateUrlParams({ accountId: null, accountType: null, startDate: null, endDate: null });
-        }
-      : null
-  );
-
-  // Query key includes selectedCompany?.id and periodFilter.toDate so React Query refetches
-  // when company or selected end date changes, keeping list balance in sync with statement.
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => {
-    if (urlStartDate || urlEndDate) {
-      return { fromDate: urlStartDate, toDate: urlEndDate, preset: "custom" as const };
-    }
-    return getDefaultPeriodValue("all_time");
-  });
-
-  const [accountToEdit, setAccountToEdit] = useState<LedgerAccount | null>(null);
-  const [supplierToEdit, setSupplierToEdit] = useState<Account | null>(null);
-  const [customerToEdit, setCustomerToEdit] = useState<Account | null>(null);
-  const [employeeToEdit, setEmployeeToEdit] = useState<Account | null>(null);
-  const [bankToEdit, setBankToEdit] = useState<BankAccount | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
-  const [alterSelectedAccount, setAlterSelectedAccount] = useState<Account | null>(null);
-  const [findQuery, setFindQuery] = useState("");
-  const debouncedFindQuery = useDebounce(findQuery, 350);
-
-  const updateUrlParams = useCallback((updates: Record<string, string | null>) => {
-    const params = new URLSearchParams(window.location.search);
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-      else params.delete(key);
-    });
-    const newSearch = params.toString();
-    window.history.replaceState(
-      null,
-      "",
-      newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname
-    );
-  }, []);
-
-  useDateJump((date) => {
-    const jumped = { fromDate: date, toDate: date, preset: "custom" as const };
-    setPeriodFilter(jumped);
-    updateUrlParams({ startDate: date, endDate: date });
-  });
-
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
-  const [selectedVoucherIds, setSelectedVoucherIds] = useState<Set<number>>(new Set());
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [showDeletedVouchers, setShowDeletedVouchers] = useState(false);
-  const [parentGroupOpen, setParentGroupOpen] = useState(false);
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (ids: number[]) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return apiRequest("POST", "/api/vouchers/bulk-delete", { voucherIds: ids });
-    },
-    onSuccess: (_, ids) => {
-      toast({ title: `Deleted ${ids.length} voucher(s)` });
-      setSelectedVoucherIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      if (selectedAccount) {
-        const accountType = (selectedAccount.type || "").toLowerCase().replace(" ", "-");
-        queryClient.invalidateQueries({
-          queryKey: [`/api/accounts/${accountType}/${selectedAccount.accountId}/transactions`],
-        });
-      }
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Delete failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const { data: voucherSearchResults = [], isLoading: voucherSearchLoading } = useQuery<VoucherSearchResult[]>({
-    queryKey: ["/api/vouchers/search", debouncedFindQuery],
-    queryFn: async () => {
-      if (!debouncedFindQuery.trim()) return [];
-      const res = await fetch(`/api/vouchers/search?q=${encodeURIComponent(debouncedFindQuery)}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Search failed");
-      return res.json();
-    },
-    enabled: debouncedFindQuery.trim().length > 0,
-    // Only re-fetch when the search term itself changes — never on window
-    // focus or background intervals, so typing is never interrupted.
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchInterval: false,
-  });
-
-  const deleteLedgerMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("DELETE", `/api/ledger-accounts/${id}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? "Delete failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Account deleted" });
-      setAlterSelectedAccount(null);
-      editForm.reset();
-      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Cannot delete", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const updateLedgerMutation = useMutation({
-    mutationFn: async (data: {
-      id: number;
-      name?: string;
-      accountType?: string;
-      subType?: string | null;
-      openingBalance?: string;
-      openingBalanceSide?: string;
-      active?: boolean;
-      parentId?: number | null | undefined;
-    }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const { id, ...rest } = data;
-      return apiRequest("PUT", `/api/ledger-accounts/${id}`, rest);
-    },
-    onSuccess: () => {
-      toast({ title: "Account updated successfully" });
-      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Update failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const updateBankMutation = useMutation({
-    mutationFn: async (data: { id: number } & Record<string, unknown>) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const { id, ...rest } = data;
-      const res = await apiRequest("PUT", `/api/bank-accounts/${id}`, rest);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? "Update failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Bank account updated" });
-      setBankToEdit(null);
-      bankForm.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Update failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const deleteBankMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("DELETE", `/api/bank-accounts/${id}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? "Delete failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Bank account deleted" });
-      setBankToEdit(null);
-      bankForm.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Delete failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const createBankMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await apiRequest("POST", "/api/bank-accounts", {
-        ...data,
-        companyId: selectedCompany?.id,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? "Create failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Bank account created" });
-      setBankToEdit(null);
-      bankForm.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Create failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const onBankSubmit: SubmitHandler<Omit<InsertBankAccount, "companyId">> = (data) => {
-    if (bankToEdit) {
-      updateBankMutation.mutate({ id: bankToEdit.id, ...data });
-    } else {
-      createBankMutation.mutate(data);
-    }
-  };
-
-  const handleDeleteBankAccount = () => {
-    if (bankToEdit) deleteBankMutation.mutate(bankToEdit.id);
-  };
-
-  const [filterCurrency, setFilterCurrency] = useState<"all" | "CFA">("all");
-  const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
-  const [exportLang, setExportLang] = useState<"en" | "fr" | "ar">("en");
-
-  // ─── WhatsApp rule state ─────────────────────────────────────────────────
-  const [waRuleDialogOpen, setWaRuleDialogOpen] = useState(false);
-  const [waRuleDraft, setWaRuleDraft] = useState<WaRule>(DEFAULT_WA_RULE);
-  const [waChatSearch, setWaChatSearch] = useState("");
-
-  const selectedAccountIsLedger = !!selectedAccount?.accountId;
-  const selectedAccountId = selectedAccount?.accountId ?? null;
-
-  const { data: waChatsRaw = [], isLoading: waChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats/pos"],
-    queryFn: async () => {
-      const res = await fetch("/api/whatsapp/chats/pos", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 60_000,
-    enabled: waRuleDialogOpen,
-  });
-
-  const waRuleBase = appMode === "factory" ? "/api/factory/accounts" : "/api/accounts";
-  const { data: waRule = null } = useQuery<WaRule | null>({
-    queryKey: [waRuleBase, selectedAccountId, "whatsapp-rule"],
-    queryFn: async () => {
-      const res = await fetch(`${waRuleBase}/${selectedAccountId}/whatsapp-rule`, { credentials: "include" });
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: selectedAccountIsLedger && !!selectedAccountId,
-    staleTime: 30_000,
-  });
-
-  const filteredWaChats = useMemo(() => {
-    if (!waChatSearch.trim()) return waChatsRaw;
-    return waChatsRaw.filter((c) => searchAny(waChatSearch, c.name));
-  }, [waChatsRaw, waChatSearch]);
-
-  const openWaRuleDialog = () => {
-    setWaRuleDraft(waRule ?? DEFAULT_WA_RULE);
-    setWaChatSearch("");
-    setWaRuleDialogOpen(true);
-  };
-
-  const saveWaRuleMutation = useMutation({
-    mutationFn: async (rule: WaRule) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("PUT", `${waRuleBase}/${selectedAccountId}/whatsapp-rule`, rule);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "WhatsApp rule saved" });
-      setWaRuleDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: [waRuleBase, selectedAccountId, "whatsapp-rule"] });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Save failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const sendWaStatementMutation = useMutation({
-    mutationFn: async ({ accountId, month }: { accountId: number; month: string }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const url =
-        appMode === "factory"
-          ? `/api/factory/accounts/${accountId}/send-statement-whatsapp`
-          : `/api/accounts/${accountId}/send-statement-whatsapp`;
-      const res = await apiRequest("POST", url, { month });
-      if (!res.ok) throw new Error((await res.json()).message || "Send failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Statement sent to WhatsApp" });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "WhatsApp send failed", description: err?.message, variant: "destructive" });
-    },
-  });
-
-  const printRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: selectedAccount ? `Statement - ${selectedAccount.name}` : "Account Statement",
-  });
-
-  // Accounts query — includes the selected period end date so the list balance
-  // is always computed through the same cut-off as the opened statement.
-  const {
-    data: accountsResponse,
-    isLoading: accountsLoading,
-    isError: accountsError,
-    error: accountsQueryError,
-    refetch: refetchAccounts,
-  } = useQuery<{
-    accounts: Account[];
-    asOfDate: string;
-  }>({
-    queryKey: [accountsListUrl, selectedCompany?.id, periodFilter.toDate || null, "book-balance", appMode],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (periodFilter.toDate) params.set("endDate", periodFilter.toDate);
-      // The Accounts page and its statements must reconcile with posted voucher
-      // USD amounts; current-rate FX values belong to the valuation report.
-      if (appMode !== "factory") params.set("balanceBasis", "book");
-      const res = await fetch(`${accountsListUrl}?${params.toString()}`, { credentials: "include" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || `Failed to load accounts (${res.status})`);
-      }
-      return res.json();
-    },
-    enabled: !!selectedCompany,
-  });
-  // Show customer-linked balances exactly as Factory Parties does, including
-  // held pre-finalization charges and legacy operational amounts. Keep the
-  // server's GL book balance unchanged for other accounting consumers.
-  const allAccounts: Account[] = useMemo(() => {
-    const accounts = accountsResponse?.accounts ?? [];
-    return accounts.map((account) => {
-      if (account.partyBalance === undefined) return account;
-      return {
-        ...account,
-        balance: Number(account.partyBalance),
-        balanceSide: account.partyBalanceSide ?? account.balanceSide,
-      };
-    });
-  }, [accountsResponse?.accounts]);
-
-  // Auto-select account when navigated here from ledger monthly summary (or any deep-link with ?accountId=)
-  useEffect(() => {
-    if (!urlAccountId || !allAccounts.length || selectedAccount) return;
-    const numId = parseInt(urlAccountId, 10);
-    const found = urlAccountType
-      ? allAccounts.find((a) => a.accountId === numId && a.type === urlAccountType)
-      : allAccounts.find((a) => a.accountId === numId);
-    if (found) {
-      fromExternalNavRef.current = true;
-      setSelectedAccount(found);
-    }
-  }, [allAccounts, selectedAccount, urlAccountId, urlAccountType]);
-
-  // Dedicated query for Group accounts used by the Parent Group combobox.
-  // Uses the server's parent-group-only endpoint so
-  // groups created there always appear here without needing /api/accounts/all to refresh.
-  // Groups = accounts marked with subType "Group" OR accounts that happen to have children
-  // (backward-compat: groups created before subType tagging still show up)
-  const { data: groupOptions = [] } = useQuery<GroupOption[]>({
-    queryKey: ["/api/ledger-accounts/parent-groups", selectedCompany?.id],
-    queryFn: async () => {
-      const url = `/api/ledger-accounts/parent-groups?companyId=${selectedCompany!.id}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch ledger accounts");
-      return res.json();
-    },
-    // The server returns tagged and legacy parent groups already filtered.
-    // Re-filtering this narrowed result would incorrectly drop legacy parents.
-    enabled: !!selectedCompany,
-  });
-
-  const {
-    data: rawTransactionData,
-    isLoading: transactionsLoading,
-    error: transactionsQueryError,
-  } = useQuery({
-    queryKey: selectedAccount
-      ? [
-          "account-statement",
-          selectedCompany?.id,
-          selectedAccount.type,
-          selectedAccount.accountId,
-          periodFilter.fromDate || null,
-          periodFilter.toDate || null,
-        ]
-      : [],
-    queryFn: async () => {
-      if (!selectedAccount) return [];
-      const params = new URLSearchParams();
-      if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
-      if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
-
-      let url;
-      if (selectedAccount.type === "factoryWorker") {
-        url = `/api/factory/workers/${selectedAccount.accountId}/statement?${params.toString()}`;
-      } else {
-        const accountType = (selectedAccount.type || "").toLowerCase().replace(" ", "-");
-        url = `/api/accounts/${accountType}/${selectedAccount.accountId}/transactions?${params.toString()}`;
-      }
-      const response = await fetch(url, { credentials: "include" });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.message || `Failed to load account statement (${response.status})`);
-      }
-      return payload;
-    },
-    enabled: !!selectedAccount,
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const st = useAccountsLegacyStatementModel();
 
   // Unwrap response — when a startDate filter is active the backend returns
   // { transactions, preNetBalance } so we can compute the correct opening balance.
   const transactions: Transaction[] = useMemo(() => {
-    if (!rawTransactionData) return [];
-    if (Array.isArray(rawTransactionData)) return rawTransactionData;
-    const posted: Transaction[] = rawTransactionData.transactions ?? [];
+    if (!st.rawTransactionData) return [];
+    if (Array.isArray(st.rawTransactionData)) return st.rawTransactionData;
+    const posted: Transaction[] = st.rawTransactionData.transactions ?? [];
     // Historical factory invoices already affect Parties balances. Present their
     // operational amounts as dated statement rows, never as new GL postings.
-    const memo = readNotInLedger(rawTransactionData);
+    const memo = readNotInLedger(st.rawTransactionData);
     if (!memo) return posted;
     const historical: Transaction[] = memo.rows
       .filter((row) => row.amountUsd !== null && row.amountUsd !== undefined)
@@ -542,31 +65,39 @@ export function useAccountsLegacyModel() {
     return [...posted, ...historical].sort(
       (a, b) => a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
     );
-  }, [rawTransactionData]);
+  }, [st.rawTransactionData]);
+
+  // The continuous statement chunk also carries these optional fields.
+  const statementPayload = st.rawTransactionData as
+    | (NonNullable<typeof st.rawTransactionData> & {
+        customerId?: number | null;
+        notInLedger?: { prePeriodTotal?: unknown } | null;
+      })
+    | undefined;
 
   // Expose customer ownership from the active statement query reactively. A linked
   // Factory customer account has type "ledger", so name/type alone cannot
   // reliably identify it. Passing this value as a prop avoids reading a
   // non-subscribed query-cache snapshot in AccountStatementView.
   const statementCustomerId: number | null =
-    rawTransactionData &&
-    !Array.isArray(rawTransactionData) &&
-    Number.isSafeInteger(rawTransactionData.customerId) &&
-    rawTransactionData.customerId > 0
-      ? rawTransactionData.customerId
+    statementPayload &&
+    !Array.isArray(statementPayload) &&
+    Number.isSafeInteger(statementPayload.customerId) &&
+    (statementPayload.customerId ?? 0) > 0
+      ? (statementPayload.customerId ?? null)
       : null;
 
   // broughtForwardBalance = stored account opening balance + net of all entries before the period start.
   // openingBalance from the API is always an unsigned positive number; openingBalanceSide carries the sign.
   // Cr opening balances must be negated (convention: positive = Dr, negative = Cr).
   const broughtForwardBalance = useMemo(() => {
-    const rawOB = parseFloat(String(selectedAccount?.openingBalance ?? 0)) || 0;
-    const obSide = selectedAccount?.openingBalanceSide || "Dr";
+    const rawOB = parseFloat(String(st.d.selectedAccount?.openingBalance ?? 0)) || 0;
+    const obSide = st.d.selectedAccount?.openingBalanceSide || "Dr";
     const storedOB = obSide === "Cr" ? -rawOB : rawOB;
-    if (!rawTransactionData || Array.isArray(rawTransactionData)) return storedOB;
-    const memoPrePeriod = Number(rawTransactionData.notInLedger?.prePeriodTotal ?? 0);
-    return storedOB + (rawTransactionData.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
-  }, [rawTransactionData, selectedAccount]);
+    if (!statementPayload || Array.isArray(statementPayload)) return storedOB;
+    const memoPrePeriod = Number(statementPayload.notInLedger?.prePeriodTotal ?? 0);
+    return storedOB + (statementPayload.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
+  }, [statementPayload, st.d.selectedAccount]);
 
   // Calculate ALL original posted lines first. The archived historical
   // supplier batch must continue to affect running and closing balances.
@@ -587,7 +118,7 @@ export function useAccountsLegacyModel() {
       allVouchersWithBalance.filter(
         (row) =>
           !isInternalHistoricalSupplierRoutineRow({
-            companyId: row.companyId ?? selectedCompany?.id,
+            companyId: row.companyId ?? st.d.selectedCompany?.id,
             voucherId: row.voucherId,
             voucherDate: row.voucherDate,
             voucherNumber: row.voucherNumber,
@@ -595,7 +126,7 @@ export function useAccountsLegacyModel() {
             createdAt: row.createdAt,
           })
       ),
-    [allVouchersWithBalance, selectedCompany?.id]
+    [allVouchersWithBalance, st.d.selectedCompany?.id]
   );
 
   const closingBalance = useMemo(() => {
@@ -606,12 +137,12 @@ export function useAccountsLegacyModel() {
   }, [allVouchersWithBalance, broughtForwardBalance]);
 
   const filteredAccounts = useMemo(() => {
-    return allAccounts.filter((a) => searchAny(searchTerm, a.name, a.code));
-  }, [allAccounts, searchTerm]);
+    return st.allAccounts.filter((a) => searchAny(st.d.searchTerm, a.name, a.code));
+  }, [st.allAccounts, st.d.searchTerm]);
 
   // Handlers
   const toggleParent = (id: string) => {
-    setExpandedParents((prev) => {
+    st.d.setExpandedParents((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -620,17 +151,17 @@ export function useAccountsLegacyModel() {
   };
 
   const handleAccountChange = (id: string) => {
-    const acc = allAccounts.find((a) => a.id === id);
+    const acc = st.allAccounts.find((a) => a.id === id);
     if (!acc) return;
 
     // Keep the overview (including expansion, search and scroll position) intact.
     // The existing accountId/accountType deep link opens the statement in the new tab.
-    const statementUrl = buildAccountStatementTabUrl(window.location.href, acc, periodFilter);
+    const statementUrl = buildAccountStatementTabUrl(window.location.href, acc, st.d.periodFilter);
     window.open(statementUrl, "_blank", "noopener,noreferrer");
   };
 
   const toggleVoucherSelection = (voucherId: number) => {
-    setSelectedVoucherIds((prev) => {
+    st.d.setSelectedVoucherIds((prev) => {
       const next = new Set(prev);
       if (next.has(voucherId)) next.delete(voucherId);
       else next.add(voucherId);
@@ -639,8 +170,8 @@ export function useAccountsLegacyModel() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedVoucherIds.size === vouchersWithBalance.length) setSelectedVoucherIds(new Set());
-    else setSelectedVoucherIds(new Set(vouchersWithBalance.map((v) => v.voucherId)));
+    if (st.d.selectedVoucherIds.size === vouchersWithBalance.length) st.d.setSelectedVoucherIds(new Set());
+    else st.d.setSelectedVoucherIds(new Set(vouchersWithBalance.map((v) => v.voucherId)));
   };
 
   const handleOpenVoucher = (v: VoucherNavigationRow) => {
@@ -649,7 +180,7 @@ export function useAccountsLegacyModel() {
 
     // POS / Sales → open in the POS edit page
     if (rawType === "sales" || rawType === "pos") {
-      navigate(`${modePrefix.replace(/^\/erp/, "")}/pos/edit/${id}`);
+      st.d.navigate(`${st.d.modePrefix.replace(/^\/erp/, "")}/pos/edit/${id}`);
       return;
     }
 
@@ -660,54 +191,47 @@ export function useAccountsLegacyModel() {
         .then((data) => {
           const po = data && !Array.isArray(data) ? data.purchaseOrder : null;
           if (po?.containerId) {
-            navigate(`${modePrefix}/containers/${po.containerId}`);
+            st.d.navigate(`${st.d.modePrefix}/containers/${po.containerId}`);
           } else {
-            navigate(`${modePrefix}/vouchers?edit=${id}&tab=purchase`);
+            st.d.navigate(`${st.d.modePrefix}/vouchers?edit=${id}&tab=purchase`);
           }
         })
-        .catch(() => navigate(`${modePrefix}/vouchers?edit=${id}&tab=purchase`));
+        .catch(() => st.d.navigate(`${st.d.modePrefix}/vouchers?edit=${id}&tab=purchase`));
       return;
     }
 
     // All other voucher types → map to the correct Vouchers tab
     const tab = VOUCHER_TAB_MAP[rawType] ?? "journal";
-    navigate(`${modePrefix}/vouchers?edit=${id}&tab=${tab}`);
+    st.d.navigate(`${st.d.modePrefix}/vouchers?edit=${id}&tab=${tab}`);
   };
-
-  const bankForm = useForm<Omit<InsertBankAccount, "companyId">>({
-    resolver: zodResolver(insertBankAccountSchema.omit({ companyId: true })),
-  });
 
   // Populate bank form fields whenever a bank account is selected for editing.
   useEffect(() => {
-    if (bankToEdit) {
+    if (st.d.bankToEdit) {
       const openingBalanceSide = insertBankAccountSchema.shape.openingBalanceSide.safeParse(
-        bankToEdit.openingBalanceSide ?? "Dr"
+        st.d.bankToEdit.openingBalanceSide ?? "Dr"
       );
-      bankForm.reset({
-        code: bankToEdit.code ?? "",
-        name: bankToEdit.name ?? "",
-        bankName: bankToEdit.bankName ?? "",
-        accountNumber: bankToEdit.accountNumber ?? "",
-        routingCode: bankToEdit.routingCode ?? "",
-        openingBalance: bankToEdit.openingBalance ?? "0",
+      st.d.bankForm.reset({
+        code: st.d.bankToEdit.code ?? "",
+        name: st.d.bankToEdit.name ?? "",
+        bankName: st.d.bankToEdit.bankName ?? "",
+        accountNumber: st.d.bankToEdit.accountNumber ?? "",
+        routingCode: st.d.bankToEdit.routingCode ?? "",
+        openingBalance: st.d.bankToEdit.openingBalance ?? "0",
         openingBalanceSide: openingBalanceSide.success ? openingBalanceSide.data : "Dr",
       });
     } else {
-      bankForm.reset();
+      st.d.bankForm.reset();
     }
-  }, [bankForm, bankToEdit]);
-  const editForm = useForm<Omit<UpdateLedgerAccount, "id" | "companyId">>({
-    resolver: zodResolver(updateLedgerAccountSchema.omit({ id: true, companyId: true })),
-  });
-  const alterAccountType = editForm.watch("accountType") as string | undefined;
+  }, [st.d.bankForm, st.d.bankToEdit]);
+  const alterAccountType = st.d.editForm.watch("accountType") as string | undefined;
 
   /** Opens the alter/edit dialog pre-filled from an account table row. */
   const openEditAccountDialog = (account: Account) => {
-    if (!recordChanges.allowed) return;
-    setAlterSelectedAccount(account);
+    if (!st.d.recordChanges.allowed) return;
+    st.d.setAlterSelectedAccount(account);
     const accountType = updateLedgerAccountSchema.shape.accountType.safeParse(account.accountType || account.type);
-    editForm.reset({
+    st.d.editForm.reset({
       code: account.code,
       name: account.name,
       accountType: accountType.success ? accountType.data : undefined,
@@ -717,122 +241,122 @@ export function useAccountsLegacyModel() {
       active: account.active !== false,
       parentId: account.parentId ?? undefined,
     });
-    setEditDialogOpen(true);
+    st.d.setEditDialogOpen(true);
   };
 
   const closeEditAccountDialog = () => {
-    setEditDialogOpen(false);
-    setAlterSelectedAccount(null);
-    editForm.reset();
+    st.d.setEditDialogOpen(false);
+    st.d.setAlterSelectedAccount(null);
+    st.d.editForm.reset();
   };
 
   return {
     // context / formatting
-    selectedCompany,
-    appMode,
-    modePrefix,
-    modeApiRequest,
-    navigate,
-    currentUser,
-    formatAmount,
-    formatAmountForAccount,
-    formatDisplayDate,
-    isMultiCurrency,
-    hideBalances,
+    selectedCompany: st.d.selectedCompany,
+    appMode: st.d.appMode,
+    modePrefix: st.d.modePrefix,
+    modeApiRequest: st.d.modeApiRequest,
+    navigate: st.d.navigate,
+    currentUser: st.currentUser,
+    formatAmount: st.d.formatAmount,
+    formatAmountForAccount: st.d.formatAmountForAccount,
+    formatDisplayDate: st.d.formatDisplayDate,
+    isMultiCurrency: st.d.isMultiCurrency,
+    hideBalances: st.d.hideBalances,
     // account list + statement
-    accountsLoading,
-    accountsError,
-    accountsQueryError,
-    refetchAccounts,
-    allAccounts,
+    accountsLoading: st.accountsLoading,
+    accountsError: st.accountsError,
+    accountsQueryError: st.accountsQueryError,
+    refetchAccounts: st.refetchAccounts,
+    allAccounts: st.allAccounts,
     filteredAccounts,
-    searchTerm,
-    setSearchTerm,
-    selectedAccount,
-    setSelectedAccount,
+    searchTerm: st.d.searchTerm,
+    setSearchTerm: st.d.setSearchTerm,
+    selectedAccount: st.d.selectedAccount,
+    setSelectedAccount: st.d.setSelectedAccount,
     handleAccountChange,
-    expandedParents,
+    expandedParents: st.d.expandedParents,
     toggleParent,
-    periodFilter,
-    setPeriodFilter,
+    periodFilter: st.d.periodFilter,
+    setPeriodFilter: st.d.setPeriodFilter,
     vouchersWithBalance,
     statementCustomerId,
-    notInLedger: readNotInLedger(rawTransactionData),
+    notInLedger: readNotInLedger(st.rawTransactionData),
     broughtForwardBalance,
     closingBalance,
-    transactionsLoading,
-    transactionsQueryError,
-    filterCurrency,
-    setFilterCurrency,
-    showDeletedVouchers,
-    setShowDeletedVouchers,
-    selectedVoucherIds,
+    transactionsLoading: st.transactionsLoading,
+    transactionsQueryError: st.transactionsQueryError,
+    filterCurrency: st.filterCurrency,
+    setFilterCurrency: st.setFilterCurrency,
+    showDeletedVouchers: st.d.showDeletedVouchers,
+    setShowDeletedVouchers: st.d.setShowDeletedVouchers,
+    selectedVoucherIds: st.d.selectedVoucherIds,
     toggleVoucherSelection,
     toggleSelectAll,
     handleOpenVoucher,
-    printRef,
-    handlePrint,
-    exportLang,
-    setExportLang,
+    printRef: st.printRef,
+    handlePrint: st.handlePrint,
+    exportLang: st.exportLang,
+    setExportLang: st.setExportLang,
     // find voucher tab
-    findQuery,
-    setFindQuery,
-    debouncedFindQuery,
-    voucherSearchResults,
-    voucherSearchLoading,
+    findQuery: st.d.findQuery,
+    setFindQuery: st.d.setFindQuery,
+    debouncedFindQuery: st.d.debouncedFindQuery,
+    voucherSearchResults: st.d.voucherSearchResults,
+    voucherSearchLoading: st.d.voucherSearchLoading,
     // dialogs / forms
-    accountToEdit,
-    setAccountToEdit,
-    supplierToEdit,
-    setSupplierToEdit,
-    customerToEdit,
-    setCustomerToEdit,
-    employeeToEdit,
-    setEmployeeToEdit,
-    bankToEdit,
-    setBankToEdit,
-    bankForm,
-    onBankSubmit,
-    handleDeleteBankAccount,
-    pendingDelete,
-    setPendingDelete,
-    editForm,
+    accountToEdit: st.d.accountToEdit,
+    setAccountToEdit: st.d.setAccountToEdit,
+    supplierToEdit: st.d.supplierToEdit,
+    setSupplierToEdit: st.d.setSupplierToEdit,
+    customerToEdit: st.d.customerToEdit,
+    setCustomerToEdit: st.d.setCustomerToEdit,
+    employeeToEdit: st.d.employeeToEdit,
+    setEmployeeToEdit: st.d.setEmployeeToEdit,
+    bankToEdit: st.d.bankToEdit,
+    setBankToEdit: st.d.setBankToEdit,
+    bankForm: st.d.bankForm,
+    onBankSubmit: st.onBankSubmit,
+    handleDeleteBankAccount: st.handleDeleteBankAccount,
+    pendingDelete: st.d.pendingDelete,
+    setPendingDelete: st.d.setPendingDelete,
+    editForm: st.d.editForm,
     alterAccountType,
-    alterSelectedAccount,
-    editDialogOpen,
-    setEditDialogOpen,
+    alterSelectedAccount: st.d.alterSelectedAccount,
+    editDialogOpen: st.d.editDialogOpen,
+    setEditDialogOpen: st.d.setEditDialogOpen,
     openEditAccountDialog,
     closeEditAccountDialog,
-    groupOptions,
-    parentGroupOpen,
-    setParentGroupOpen,
-    showDeleteAccountConfirm,
-    setShowDeleteAccountConfirm,
-    showBulkDeleteConfirm,
-    setShowBulkDeleteConfirm,
+    groupOptions: st.groupOptions,
+    parentGroupOpen: st.d.parentGroupOpen,
+    setParentGroupOpen: st.d.setParentGroupOpen,
+    showDeleteAccountConfirm: st.d.showDeleteAccountConfirm,
+    setShowDeleteAccountConfirm: st.d.setShowDeleteAccountConfirm,
+    showBulkDeleteConfirm: st.d.showBulkDeleteConfirm,
+    setShowBulkDeleteConfirm: st.d.setShowBulkDeleteConfirm,
     // whatsapp
-    waRule,
-    waRuleDialogOpen,
-    setWaRuleDialogOpen,
-    waRuleDraft,
-    setWaRuleDraft,
-    waChatSearch,
-    setWaChatSearch,
-    filteredWaChats,
-    waChatsLoading,
-    selectedAccountIsLedger,
-    openWaRuleDialog,
+    waRule: st.waRule,
+    waRuleDialogOpen: st.waRuleDialogOpen,
+    setWaRuleDialogOpen: st.setWaRuleDialogOpen,
+    waRuleDraft: st.waRuleDraft,
+    setWaRuleDraft: st.setWaRuleDraft,
+    waChatSearch: st.waChatSearch,
+    setWaChatSearch: st.setWaChatSearch,
+    filteredWaChats: st.filteredWaChats,
+    waChatsLoading: st.waChatsLoading,
+    selectedAccountIsLedger: st.selectedAccountIsLedger,
+    openWaRuleDialog: st.openWaRuleDialog,
     // mutations
-    bulkDeleteMutation,
-    deleteLedgerMutation,
-    updateLedgerMutation,
-    updateBankMutation,
-    deleteBankMutation,
-    createBankMutation,
-    saveWaRuleMutation,
-    sendWaStatementMutation,
-    canChangeExistingRecords: recordChanges.allowed,
-    canCreateBankAccount,
+    bulkDeleteMutation: st.d.bulkDeleteMutation,
+    deleteLedgerMutation: st.d.deleteLedgerMutation,
+    updateLedgerMutation: st.d.updateLedgerMutation,
+    updateBankMutation: st.d.updateBankMutation,
+    deleteBankMutation: st.d.deleteBankMutation,
+    createBankMutation: st.d.createBankMutation,
+    saveWaRuleMutation: st.saveWaRuleMutation,
+    sendWaStatementMutation: st.sendWaStatementMutation,
+    canChangeExistingRecords: st.d.recordChanges.allowed,
+    canCreateBankAccount: st.d.canCreateBankAccount,
   };
 }
 

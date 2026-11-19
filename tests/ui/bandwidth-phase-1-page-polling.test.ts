@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
@@ -12,12 +13,13 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
  * still carries the caching rules, not which file the query literal happens to
  * live in. Pages split during the god-file programme keep their modules in a
  * sibling directory named after the page (FactoryContainerLoadingScan.tsx →
- * factorycontainerloadingscan/), so the assertions read both.
+ * factorycontainerloadingscan/), and pages split under the 500-line policy keep
+ * extracted siblings marked `// Extracted from ./<page>`; the assertions read all of them.
  */
 function readPageSources(file: string): string {
   const parsed = path.parse(file);
   const moduleDir = path.join(root, parsed.dir, parsed.name.toLowerCase());
-  let combined = read(file);
+  let combined = readModuleFamily(path.join(root, file));
   if (fs.existsSync(moduleDir)) {
     const walk = (dir: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

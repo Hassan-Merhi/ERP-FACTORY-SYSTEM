@@ -2,13 +2,15 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
 const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
 
 const shell = await read("client/src/app/PosShell.tsx");
 const header = await read("client/src/pages/pos/pos-components/POSHeader.tsx");
-const mobile = await read("client/src/pages/pos/pos-components/PosMobileLayout.tsx");
+// Read the layout with its extracted siblings (see ./lib/readModuleFamily.mjs).
+const mobile = readModuleFamily(path.join(ROOT, "client/src/pages/pos/pos-components/PosMobileLayout.tsx"));
 const transfers = await read("client/src/pages/pos/PosTransferOrders.tsx");
 const failures = [];
 
@@ -41,7 +43,7 @@ for (const token of [
 for (const token of [
   'role="combobox"',
   'aria-autocomplete="list"',
-  'aria-controls={resultsId}',
+  'aria-controls={m.resultsId}',
   'role="listbox"',
   'aria-label="Matching stock items"',
   "max-h-[min(22rem,48dvh)]",
