@@ -1,11 +1,3 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAdminOverride } from "@/hooks/use-admin-override";
-import { queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Banknote, Users, Loader2, ArrowDownCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,152 +16,36 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
-
-interface Employee {
-  id: number;
-  code: string | null;
-  firstName: string;
-  lastName: string;
-  currentBalance: string;
-}
-
-interface CashAccount {
-  id: number;
-  name: string;
-  code: string;
-}
-
-function fmt(v: string | number | null | undefined) {
-  const n = parseFloat(String(v || 0));
-  return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-const today = () => new Date().toLocaleDateString("en-CA");
+import { fmt } from "./FactoryEmployeeWithdrawalsTabHelpers";
+import { useFactoryEmployeeWithdrawalsTabState } from "./useFactoryEmployeeWithdrawalsTabState";
+import { FactoryEmployeeWithdrawalsTabDialog } from "./FactoryEmployeeWithdrawalsTabDialog";
 
 export default function FactoryEmployeeWithdrawalsTab() {
-  const { wrapAdminAction, AdminDialog } = useAdminOverride();
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const [singleOpen, setSingleOpen] = useState(false);
-  const [bulkOpen, setBulkOpen] = useState(false);
-
-  const [singleForm, setSingleForm] = useState({
-    employeeId: "",
-    amount: "",
-    date: today(),
-    cashAccountId: "",
-    notes: "",
-  });
-
-  const [bulkForm, setBulkForm] = useState({
-    date: today(),
-    cashAccountId: "",
-    notes: "",
-  });
-  const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
-
   const {
-    data: employeesData,
+    wrapAdminAction,
+    AdminDialog,
+    recordChanges,
+    setSingleOpen,
+    singleOpen,
+    setBulkOpen,
+    bulkOpen,
+    setSingleForm,
+    singleForm,
+    bulkForm,
+    setBulkForm,
+    bulkAmounts,
+    setBulkAmounts,
     isError,
+    employeesData,
     refetch,
-  } = useQuery<Employee[]>({
-    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/employees", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-  });
-  const employees = employeesData ?? [];
-
-  const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const singleMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await fetch(`/api/factory/employees/${singleForm.employeeId}/withdraw`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          amount: singleForm.amount,
-          date: singleForm.date,
-          cashAccountId: singleForm.cashAccountId,
-          notes: singleForm.notes || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Withdrawal recorded" });
-      setSingleOpen(false);
-      setSingleForm({ employeeId: "", amount: "", date: today(), cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const bulkMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const withdrawals = employees
-        .filter((e) => bulkAmounts[e.id] && parseFloat(bulkAmounts[e.id]) > 0)
-        .map((e) => ({ employeeId: e.id, amount: bulkAmounts[e.id] }));
-      if (withdrawals.length === 0) throw new Error("Enter at least one withdrawal amount");
-      const res = await fetch("/api/factory/employees/bulk-withdraw", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          withdrawals,
-          date: bulkForm.date,
-          cashAccountId: bulkForm.cashAccountId,
-          notes: bulkForm.notes || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Bulk withdrawal recorded",
-        description: `${data.results?.length ?? 0} employees — Total: ${fmt(data.totalAmount)}`,
-      });
-      setBulkOpen(false);
-      setBulkAmounts({});
-      setBulkForm({ date: today(), cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const bulkTotal = useMemo(
-    () => Object.values(bulkAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0),
-    [bulkAmounts]
-  );
-
-  const selectedEmp = employees.find((e) => String(e.id) === singleForm.employeeId);
+    employees,
+    cashAccounts,
+    singleMutation,
+    bulkMutation,
+    bulkTotal,
+    selectedEmp,
+  } = useFactoryEmployeeWithdrawalsTabState();
 
   return (
     <div className="space-y-4">
@@ -285,114 +161,17 @@ export default function FactoryEmployeeWithdrawalsTab() {
       )}
 
       {/* Single Withdrawal Dialog */}
-      <Dialog
-        open={singleOpen}
-        onOpenChange={(o) => {
-          if (!o) setSingleOpen(false);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Withdraw — Single Employee</DialogTitle>
-            <DialogDescription>Record a cash withdrawal deducted from an employee.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Employee</Label>
-              <Select
-                value={singleForm.employeeId}
-                onValueChange={(v) => setSingleForm((f) => ({ ...f, employeeId: v }))}
-              >
-                <SelectTrigger data-testid="select-single-employee">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={String(e.id)}>
-                      {e.firstName} {e.lastName}
-                      {e.code && ` (${e.code})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedEmp && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Current balance:{" "}
-                  <span className={parseFloat(selectedEmp.currentBalance || "0") < 0 ? "text-red-500" : ""}>
-                    {fmt(selectedEmp.currentBalance)}
-                  </span>
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={singleForm.date}
-                  onChange={(e) => setSingleForm((f) => ({ ...f, date: e.target.value }))}
-                  data-testid="input-withdraw-date"
-                />
-              </div>
-              <div>
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  value={singleForm.amount}
-                  onChange={(e) => setSingleForm((f) => ({ ...f, amount: e.target.value }))}
-                  data-testid="input-withdraw-amount"
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Cash Account</Label>
-              <Select
-                value={singleForm.cashAccountId}
-                onValueChange={(v) => setSingleForm((f) => ({ ...f, cashAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-cash-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Notes (optional)</Label>
-              <Textarea
-                placeholder="Optional notes…"
-                rows={2}
-                value={singleForm.notes}
-                onChange={(e) => setSingleForm((f) => ({ ...f, notes: e.target.value }))}
-                data-testid="input-withdraw-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSingleOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => wrapAdminAction(() => singleMutation.mutate(), "Record Withdrawal")}
-              disabled={
-                singleMutation.isPending || !singleForm.employeeId || !singleForm.amount || !singleForm.cashAccountId
-              }
-              data-testid="button-confirm-single-withdraw"
-            >
-              {singleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Record Withdrawal
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FactoryEmployeeWithdrawalsTabDialog
+        cashAccounts={cashAccounts}
+        employees={employees}
+        selectedEmp={selectedEmp}
+        setSingleForm={setSingleForm}
+        setSingleOpen={setSingleOpen}
+        singleForm={singleForm}
+        singleMutation={singleMutation}
+        singleOpen={singleOpen}
+        wrapAdminAction={wrapAdminAction}
+      />
 
       {/* Bulk Withdrawal Dialog */}
       <Dialog

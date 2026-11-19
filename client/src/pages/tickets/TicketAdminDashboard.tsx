@@ -1,82 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
-import { downloadBlob } from "@/lib/downloadBlob";
-import { exportFileName } from "@/lib/exportFile";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { safeNumber } from "./TicketAdminDashboardHelpers";
+import { useTicketAdminDashboardState } from "./useTicketAdminDashboardState";
+import { TicketAdminDashboardContent } from "./TicketAdminDashboardContent";
 
-type ReportFilters = {
-  from: string;
-  to: string;
-  status: string;
-  priority: string;
-  sourceMode: string;
-  category: string;
-  assignedTo: string;
-};
-type Summary = {
-  total: string;
-  open: string;
-  seen: string;
-  working: string;
-  reopened: string;
-  finalized: string;
-  overdue: string;
-  urgent: string;
-  avg_resolution_hours: string | null;
-  resolved_within_24_hours: string;
-};
-type Group = { label: string; count: string; overdue: string };
-type Employee = {
-  user_id: string;
-  username: string | null;
-  count: string;
-  finalized: string;
-  overdue: string;
-  avg_resolution_hours: string | null;
-};
-type Day = { day: string; created: string; finalized: string };
-type OverdueCase = {
-  id: number;
-  ticket_number: string;
-  title: string;
-  assigned_to: string;
-  username: string | null;
-  status: string;
-  priority: string;
-  due_at: string;
-  overdue_hours: string;
-};
-type Report = {
-  summary: Summary;
-  byStatus: Group[];
-  byCategory: Group[];
-  byEmployee: Employee[];
-  byCreatedDay: Day[];
-  overdueCases: OverdueCase[];
-  generatedAt: string;
-};
-const initial: ReportFilters = {
-  from: "",
-  to: "",
-  status: "",
-  priority: "",
-  sourceMode: "",
-  category: "",
-  assignedTo: "",
-};
-function queryString(filters: ReportFilters) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) if (value.trim()) params.set(key, value.trim());
-  return params.toString();
-}
-function safeNumber(value: string | null | undefined): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
 export default function TicketAdminDashboard({
   onBack,
   onOpenTicket,
@@ -86,65 +13,8 @@ export default function TicketAdminDashboard({
   onOpenTicket: (ticketId: number) => void;
   canExport: boolean;
 }) {
-  const { selectedCompany } = useCompany();
-  const [filters, setFilters] = useState<ReportFilters>(initial);
-  const [applied, setApplied] = useState<ReportFilters>(initial);
-  const [exportError, setExportError] = useState("");
-  const employees = useQuery({
-    queryKey: ["ticket-dashboard-users", selectedCompany?.id],
-    enabled: !!selectedCompany?.id,
-    queryFn: async () => {
-      const res = await fetch("/api/tickets/users", { credentials: "include", cache: "no-store" });
-      if (!res.ok) throw new Error("Unable to load employees");
-      return res.json() as Promise<{ users: { id: string; username: string }[] }>;
-    },
-  });
-  const qs = useMemo(() => queryString(applied), [applied]);
-  const report = useQuery({
-    queryKey: ["ticket-admin-dashboard", selectedCompany?.id, qs],
-    enabled: !!selectedCompany?.id,
-    queryFn: async () => {
-      const r = await fetch("/api/tickets/dashboard" + (qs ? "?" + qs : ""), {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (r.status === 403) throw new Error("You do not have permission to view company-wide ticket reports.");
-      if (!r.ok) throw new Error("Unable to load the ticket dashboard.");
-      return r.json() as Promise<Report>;
-    },
-  });
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setApplied({ ...filters });
-  };
-  const set = (key: keyof ReportFilters, value: string) => setFilters((prev) => ({ ...prev, [key]: value }));
-  const download = async () => {
-    setExportError("");
-    try {
-      const r = await fetch("/api/tickets/export" + (qs ? "?" + qs : ""), {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!r.ok) {
-        const response = await r.json().catch(() => ({ message: "Unable to export tickets" }));
-        throw new Error(response.message || "Unable to export tickets");
-      }
-      downloadBlob(await r.blob(), exportFileName("ticket report", "csv", { from: applied.from, to: applied.to }));
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : "Export failed");
-    }
-  };
-  const s = report.data?.summary;
-  const cards = [
-    ["All tickets", s?.total],
-    ["Open", s?.open],
-    ["Seen", s?.seen],
-    ["Working", s?.working],
-    ["Reopened", s?.reopened],
-    ["Finalized", s?.finalized],
-    ["Overdue", s?.overdue],
-    ["Urgent unresolved", s?.urgent],
-  ];
+  const { filters, setFilters, setApplied, exportError, employees, report, submit, set, download, s, cards } =
+    useTicketAdminDashboardState();
   return (
     <section className="mx-auto max-w-7xl space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -159,110 +29,14 @@ export default function TicketAdminDashboard({
           {canExport && <ExportButton kind="csv" disabled={!report.data} onClick={download} />}
         </div>
       </header>
-      <form onSubmit={submit} className="space-y-3 rounded-xl border bg-card p-3 sm:p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="space-y-1 text-sm">
-            Created from (UTC)
-            <Input type="date" value={filters.from} onChange={(e) => set("from", e.target.value)} />
-          </label>
-          <label className="space-y-1 text-sm">
-            Created through (UTC)
-            <Input type="date" value={filters.to} onChange={(e) => set("to", e.target.value)} />
-          </label>
-          <label className="space-y-1 text-sm">
-            Status
-            <Select value={filters.status || "__all__"} onValueChange={(v) => set("status", v === "__all__" ? "" : v)}>
-              <SelectTrigger className="h-10 w-full px-2" aria-label="Status">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All statuses</SelectItem>
-                {["open", "seen", "working", "finalized", "reopened"].map((x) => (
-                  <SelectItem key={x} value={x}>
-                    {x}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="space-y-1 text-sm">
-            Priority
-            <Select
-              value={filters.priority || "__all__"}
-              onValueChange={(v) => set("priority", v === "__all__" ? "" : v)}
-            >
-              <SelectTrigger className="h-10 w-full px-2" aria-label="Priority">
-                <SelectValue placeholder="All priorities" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All priorities</SelectItem>
-                {["low", "normal", "high", "urgent"].map((x) => (
-                  <SelectItem key={x} value={x}>
-                    {x}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="space-y-1 text-sm">
-            Source
-            <Select
-              value={filters.sourceMode || "__all__"}
-              onValueChange={(v) => set("sourceMode", v === "__all__" ? "" : v)}
-            >
-              <SelectTrigger className="h-10 w-full px-2" aria-label="Source">
-                <SelectValue placeholder="ERP + Factory" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">ERP + Factory</SelectItem>
-                <SelectItem value="erp">ERP</SelectItem>
-                <SelectItem value="factory">Factory</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="space-y-1 text-sm">
-            Issue category
-            <Input
-              maxLength={80}
-              value={filters.category}
-              onChange={(e) => set("category", e.target.value)}
-              placeholder="Exact category"
-            />
-          </label>
-          <label className="space-y-1 text-sm">
-            Assigned employee
-            <Select
-              value={filters.assignedTo || "__all__"}
-              onValueChange={(v) => set("assignedTo", v === "__all__" ? "" : v)}
-            >
-              <SelectTrigger className="h-10 w-full px-2" aria-label="Assigned employee">
-                <SelectValue placeholder="All employees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All employees</SelectItem>
-                {employees.data?.users.map((user) => (
-                  <SelectItem key={user.id} value={String(user.id)}>
-                    {user.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setFilters(initial);
-              setApplied(initial);
-            }}
-          >
-            Clear
-          </Button>
-          <Button type="submit">Apply filters</Button>
-        </div>
-      </form>
+      <TicketAdminDashboardContent
+        employees={employees}
+        filters={filters}
+        set={set}
+        setApplied={setApplied}
+        setFilters={setFilters}
+        submit={submit}
+      />
       {report.isLoading && (
         <p role="status" className="rounded-lg border p-4">
           Loading dashboard...
