@@ -1,276 +1,22 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, Download, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable, ErpPendingButton } from "@/erp-core";
-import { erpCompanyDataKey } from "@/erp-core/erpData";
-import { useToast } from "@/hooks/use-toast";
-import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
-import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
+import { ErpPendingButton } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 
-import {
-  StatusBadge,
-  normalizeItemCode,
-  matchesProfitDirection,
-  formatNativePurchase,
-  MetricCard,
-  type MarketResponse,
-  type ProfitDirectionFilter,
-  SalePriceBreakdown,
-} from "./itemMarketAnalysisParts";
-import { valueMarketRow } from "./itemMarketAnalysisValuation";
+import { MetricCard, type ProfitDirectionFilter } from "./itemMarketAnalysisParts";
+import { useItemMarketAnalysisModel } from "./itemMarketAnalysisModel";
+import { ItemMarketAnalysisTable } from "./ItemMarketAnalysisTable";
 
 export default function ItemMarketAnalysis() {
-  const { selectedCompany, companies } = useCompany();
-  const { formatAmount } = useCurrencyContext();
-  const { toast } = useToast();
-  const [isExporting, setIsExporting] = useState(false);
-  const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedStockGroupNames, setSelectedStockGroupNames] = useState<string[]>([]);
-  const [stockGroupPopoverOpen, setStockGroupPopoverOpen] = useState(false);
-  const [profitDirection, setProfitDirection] = useState<ProfitDirectionFilter>("all");
-  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
-  const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
-  const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
-  const [expandedSalePriceKey, setExpandedSalePriceKey] = useState<string | null>(null);
-  const [visibleRowCount, setVisibleRowCount] = useState(250);
-  const [includeOffloadingCost, setIncludeOffloadingCost] = useState(false);
+  const m = useItemMarketAnalysisModel();
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    setSelectedStockGroupNames([]);
-    setProfitDirection("all");
-    setExpandedItemCode(null);
-    setExpandedSalePriceKey(null);
-    setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
-  }, [selectedCompany?.id]);
-
-  const erpCompanies = useMemo(
-    () => companies.filter((company) => company.companyType === "erp" && company.role !== "POS"),
-    [companies]
-  );
-
-  const multiCompany = selectedCompanyIds.length > 1;
-
-  const toggleCompany = (companyId: number) => {
-    setSelectedCompanyIds((current) => {
-      if (current.includes(companyId)) {
-        return current.length === 1 ? current : current.filter((id) => id !== companyId);
-      }
-      return [...current, companyId];
-    });
-    setExpandedItemCode(null);
-    setExpandedSalePriceKey(null);
-  };
-
-  const toggleStockGroup = (groupName: string) => {
-    setSelectedStockGroupNames((current) =>
-      current.includes(groupName) ? current.filter((name) => name !== groupName) : [...current, groupName]
-    );
-    setExpandedItemCode(null);
-    setExpandedSalePriceKey(null);
-  };
-
-  const queryUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (period.fromDate) params.set("startDate", period.fromDate);
-    if (period.toDate) params.set("endDate", period.toDate);
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (selectedStockGroupNames.length > 0) params.set("stockGroupNames", selectedStockGroupNames.join(","));
-    if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
-    return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, selectedStockGroupNames, selectedCompanyIds]);
-
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
-    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id, selectedCompanyIds),
-    enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
-    staleTime: 5 * 60_000,
-    gcTime: 15 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    setVisibleRowCount(250);
-    setExpandedItemCode(null);
-    setExpandedSalePriceKey(null);
-  }, [queryUrl, profitDirection, multiCompany, includeOffloadingCost]);
-
-  // Sales Report's all-time KPI uses a company-wide stock/COGS reconciliation,
-  // not the modeled per-item purchase cost. Only compare unfiltered views.
-  const comparableToSalesReport =
-    selectedCompanyIds.length === 1 &&
-    selectedCompanyIds[0] === selectedCompany?.id &&
-    !period.fromDate &&
-    !period.toDate &&
-    !debouncedSearch &&
-    selectedStockGroupNames.length === 0 &&
-    profitDirection === "all";
-  const { data: salesReportReconciliation } = useQuery<{
-    totalSales: number;
-    adjustedCostProfit: number;
-  }>({
-    queryKey: erpCompanyDataKey("/api/sales-report/cogs-reconciliation", selectedCompany?.id),
-    enabled: comparableToSalesReport,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
-  const stockGroups = data?.stockGroups ?? [];
-
-  const baseRows = useMemo(
-    () =>
-      rawRows
-        .map((row) => valueMarketRow(row, includeOffloadingCost))
-        .sort(
-          (left, right) =>
-            normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
-            left.companyName.localeCompare(right.companyName)
-        ),
-    [rawRows, includeOffloadingCost]
-  );
-
-  // In multi-company mode, filter by the combined profit for the item code so
-  // expanding a kept item still shows every selected company's contribution.
-  const combinedProfitByItemKey = useMemo(() => {
-    const combined = new Map<string, number>();
-    if (multiCompany && profitDirection !== "all") {
-      for (const row of baseRows) {
-        const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-        combined.set(itemKey, (combined.get(itemKey) ?? 0) + row.profit);
-      }
-    }
-    return combined;
-  }, [baseRows, multiCompany, profitDirection]);
-
-  const rows = useMemo(
-    () =>
-      baseRows.filter((row) => {
-        if (profitDirection === "all") return true;
-        if (!multiCompany) return matchesProfitDirection(row.profit, profitDirection);
-        const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-        return matchesProfitDirection(combinedProfitByItemKey.get(itemKey) ?? 0, profitDirection);
-      }),
-    [baseRows, combinedProfitByItemKey, multiCompany, profitDirection]
-  );
-
-  const summary = useMemo(() => {
-    const totals = rows.reduce(
-      (acc, row) => {
-        acc.importedQty += row.importedQty;
-        acc.soldQty += row.soldQty;
-        acc.revenue += row.revenue;
-        acc.profit += row.profit;
-        return acc;
-      },
-      { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
-    );
-
-    return {
-      itemCount: new Set(rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`))
-        .size,
-      ...totals,
-      marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
-    };
-  }, [rows]);
-
-  const selectedCompanyNames = useMemo(
-    () => erpCompanies.filter((company) => selectedCompanyIds.includes(company.id)),
-    [erpCompanies, selectedCompanyIds]
-  );
-
-  const companySummaries = useMemo(
-    () =>
-      selectedCompanyNames.map((company) => {
-        const companyRows = rows.filter((row) => row.companyId === company.id);
-        const totals = companyRows.reduce(
-          (acc, row) => {
-            acc.importedQty += row.importedQty;
-            acc.soldQty += row.soldQty;
-            acc.revenue += row.revenue;
-            acc.profit += row.profit;
-            return acc;
-          },
-          { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
-        );
-        return {
-          companyId: company.id,
-          companyCode: company.code,
-          companyName: company.name,
-          itemCount: companyRows.length,
-          ...totals,
-          marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
-        };
-      }),
-    [rows, selectedCompanyNames]
-  );
-
-  const topProfitCompanyByItem = useMemo(() => getTopProfitCompanyByItem(rows), [rows]);
-
-  const groupedRows = useMemo(() => groupMarketRows(rows), [rows]);
-
-  const handleExportExcel = async () => {
-    if (!data || isFetching || isExporting || search.trim() !== debouncedSearch) return;
-    setIsExporting(true);
-    try {
-      const salePriceRows = await fetchSalePriceExportRows(rows, {
-        startDate: period.fromDate,
-        endDate: period.toDate,
-      });
-
-      const { exportItemMarketAnalysisExcel } = await import("./itemMarketAnalysisExport");
-      await exportItemMarketAnalysisExcel({
-        groups: groupedRows,
-        rows,
-        companySummaries,
-        summary,
-        salePriceRows,
-        startDate: period.fromDate,
-        endDate: period.toDate,
-        search: debouncedSearch,
-        stockGroups: selectedStockGroupNames,
-        companyNames: selectedCompanyNames.map((company) => company.name),
-        profitDirection,
-        includeOffloadingCost,
-        generatedAt: data.generatedAt,
-      });
-      toast({
-        title: "Excel exported",
-        description: `Exported ${groupedRows.length} items and ${rows.length} company-item records with current filters.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Excel export failed",
-        description: error instanceof Error ? error.message : "Could not generate the workbook.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const visibleRows = rows.slice(0, visibleRowCount);
-  const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
-  const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
-
-  if (selectedCompany && selectedCompany.companyType !== "erp") {
+  if (m.selectedCompany && m.selectedCompany.companyType !== "erp") {
     return (
       <div className="container mx-auto p-4 sm:p-6">
         <PageHeader title="Market Price Analysis" onBack={() => window.history.back()} />
@@ -282,8 +28,8 @@ export default function ItemMarketAnalysis() {
   }
 
   // The main KPI must match Sales Report's posted Cost Profit, not a revalued purchase-cost scenario.
-  const reportedProfit = data?.salesReportTotals?.profit ?? 0;
-  const reportedRevenue = data?.salesReportTotals?.revenue ?? 0;
+  const reportedProfit = m.data?.salesReportTotals?.profit ?? 0;
+  const reportedRevenue = m.data?.salesReportTotals?.revenue ?? 0;
   const profitClass = reportedProfit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
@@ -294,10 +40,10 @@ export default function ItemMarketAnalysis() {
         meta={
           <span>
             Imports, sales and modeled profit at the selected purchase cost
-            {multiCompany
-              ? ` · ${selectedCompanyIds.length} companies selected`
-              : selectedCompanyNames[0]?.name
-                ? ` · ${selectedCompanyNames[0].name}`
+            {m.multiCompany
+              ? ` · ${m.selectedCompanyIds.length} companies selected`
+              : m.selectedCompanyNames[0]?.name
+                ? ` · ${m.selectedCompanyNames[0].name}`
                 : ""}
           </span>
         }
@@ -305,50 +51,50 @@ export default function ItemMarketAnalysis() {
         <ErpPendingButton
           variant="outline"
           size="sm"
-          onClick={handleExportExcel}
-          disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
-          pending={isExporting}
+          onClick={m.handleExportExcel}
+          disabled={m.isLoading || m.isFetching || !m.data || !!m.isError || m.search.trim() !== m.debouncedSearch}
+          pending={m.isExporting}
           pendingLabel="Exporting..."
           data-testid="button-item-market-export-excel"
         >
-          {!isExporting && <Download className="mr-2 h-4 w-4" />}
+          {!m.isExporting && <Download className="mr-2 h-4 w-4" />}
           Export Excel
         </ErpPendingButton>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+        <Button variant="outline" size="sm" onClick={() => m.refetch()} disabled={m.isFetching}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${m.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </PageHeader>
 
-      {comparableToSalesReport && salesReportReconciliation && (
+      {m.comparableToSalesReport && m.salesReportReconciliation && (
         <div className="grid gap-3 sm:grid-cols-2">
           <MetricCard
             label="Sales Report Revenue (all sales, including credit)"
-            value={formatAmount(salesReportReconciliation.totalSales)}
+            value={m.formatAmount(m.salesReportReconciliation.totalSales)}
           />
           <MetricCard
             label="Sales Report Cost Profit (reconciled COGS)"
-            value={formatAmount(salesReportReconciliation.adjustedCostProfit)}
+            value={m.formatAmount(m.salesReportReconciliation.adjustedCostProfit)}
           />
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Items" value={formatNumber(summary.itemCount)} />
-        <MetricCard label="Imported Qty" value={formatNumber(summary.importedQty)} />
+        <MetricCard label="Items" value={formatNumber(m.summary.itemCount)} />
+        <MetricCard label="Imported Qty" value={formatNumber(m.summary.importedQty)} />
         <MetricCard
           label="Sold Qty (Sales Report)"
-          value={formatNumber(data?.salesReportTotals?.soldQty ?? summary.soldQty)}
+          value={formatNumber(m.data?.salesReportTotals?.soldQty ?? m.summary.soldQty)}
         />
         <MetricCard
           label="Total Sales (Sales Report)"
-          value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)}
+          value={m.formatAmount(m.data?.salesReportTotals?.revenue ?? m.summary.revenue)}
         />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Cost Profit (Sales Report)
           </div>
           <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>
-            {data?.salesReportTotals ? formatAmount(reportedProfit) : "—"}
+            {m.data?.salesReportTotals ? m.formatAmount(reportedProfit) : "—"}
           </div>
           <div className="text-xs text-muted-foreground">
             {reportedRevenue ? ((reportedProfit / reportedRevenue) * 100).toFixed(1) : "0.0"}% margin
@@ -357,20 +103,20 @@ export default function ItemMarketAnalysis() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
-        <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-item-market-analysis" />
+        <PeriodFilter value={m.period} onChange={m.setPeriod} data-testid="period-filter-item-market-analysis" />
         <SearchField
-          value={search}
-          onValueChange={setSearch}
+          value={m.search}
+          onValueChange={m.setSearch}
           placeholder="Search item code or name"
           wrapperClassName="min-w-[220px] flex-1 sm:max-w-sm"
           data-testid="input-item-market-search"
         />
-        <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
+        <Popover open={m.companyPopoverOpen} onOpenChange={m.setCompanyPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-[190px] justify-between" data-testid="button-item-market-companies">
               <span className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
-                {selectedCompanyIds.length === 1 ? "1 Company" : `${selectedCompanyIds.length} Companies`}
+                {m.selectedCompanyIds.length === 1 ? "1 Company" : `${m.selectedCompanyIds.length} Companies`}
               </span>
               <ChevronDown className="h-4 w-4" />
             </Button>
@@ -380,15 +126,15 @@ export default function ItemMarketAnalysis() {
               Compare ERP companies
             </div>
             <div className="max-h-72 space-y-1 overflow-y-auto">
-              {erpCompanies.map((company) => (
+              {m.erpCompanies.map((company) => (
                 <button
                   type="button"
                   key={company.id}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                  onClick={() => toggleCompany(company.id)}
+                  onClick={() => m.toggleCompany(company.id)}
                   data-testid={`option-item-market-company-${company.id}`}
                 >
-                  <Checkbox checked={selectedCompanyIds.includes(company.id)} className="h-4 w-4" />
+                  <Checkbox checked={m.selectedCompanyIds.includes(company.id)} className="h-4 w-4" />
                   <span className="min-w-0 flex-1 truncate text-sm">{company.name}</span>
                   <span className="text-xs text-muted-foreground">{company.code}</span>
                 </button>
@@ -396,15 +142,15 @@ export default function ItemMarketAnalysis() {
             </div>
           </PopoverContent>
         </Popover>
-        <Popover open={stockGroupPopoverOpen} onOpenChange={setStockGroupPopoverOpen}>
+        <Popover open={m.stockGroupPopoverOpen} onOpenChange={m.setStockGroupPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-[190px] justify-between" data-testid="button-item-market-groups">
               <span className="min-w-0 truncate">
-                {selectedStockGroupNames.length === 0
+                {m.selectedStockGroupNames.length === 0
                   ? "All Stock Groups"
-                  : selectedStockGroupNames.length === 1
-                    ? selectedStockGroupNames[0]
-                    : `${selectedStockGroupNames.length} Stock Groups`}
+                  : m.selectedStockGroupNames.length === 1
+                    ? m.selectedStockGroupNames[0]
+                    : `${m.selectedStockGroupNames.length} Stock Groups`}
               </span>
               <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
             </Button>
@@ -414,25 +160,25 @@ export default function ItemMarketAnalysis() {
               type="button"
               className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
               onClick={() => {
-                setSelectedStockGroupNames([]);
-                setExpandedItemCode(null);
-                setExpandedSalePriceKey(null);
+                m.setSelectedStockGroupNames([]);
+                m.setExpandedItemCode(null);
+                m.setExpandedSalePriceKey(null);
               }}
               data-testid="option-item-market-group-all"
             >
-              <Checkbox checked={selectedStockGroupNames.length === 0} className="h-4 w-4" />
+              <Checkbox checked={m.selectedStockGroupNames.length === 0} className="h-4 w-4" />
               <span className="text-sm">All Stock Groups</span>
             </button>
             <div className="max-h-72 space-y-1 overflow-y-auto">
-              {stockGroups.map((groupName) => (
+              {m.stockGroups.map((groupName) => (
                 <button
                   type="button"
                   key={groupName}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                  onClick={() => toggleStockGroup(groupName)}
+                  onClick={() => m.toggleStockGroup(groupName)}
                   data-testid={`option-item-market-group-${groupName}`}
                 >
-                  <Checkbox checked={selectedStockGroupNames.includes(groupName)} className="h-4 w-4" />
+                  <Checkbox checked={m.selectedStockGroupNames.includes(groupName)} className="h-4 w-4" />
                   <span className="min-w-0 flex-1 truncate text-sm">{groupName}</span>
                 </button>
               ))}
@@ -440,11 +186,11 @@ export default function ItemMarketAnalysis() {
           </PopoverContent>
         </Popover>
         <Select
-          value={profitDirection}
+          value={m.profitDirection}
           onValueChange={(value) => {
-            setProfitDirection(value as ProfitDirectionFilter);
-            setExpandedItemCode(null);
-            setExpandedSalePriceKey(null);
+            m.setProfitDirection(value as ProfitDirectionFilter);
+            m.setExpandedItemCode(null);
+            m.setExpandedSalePriceKey(null);
           }}
         >
           <SelectTrigger className="w-[150px]" data-testid="select-item-market-profit-direction">
@@ -459,11 +205,11 @@ export default function ItemMarketAnalysis() {
         </Select>
         <Button
           type="button"
-          variant={includeOffloadingCost ? "default" : "outline"}
-          onClick={() => setIncludeOffloadingCost((current) => !current)}
+          variant={m.includeOffloadingCost ? "default" : "outline"}
+          onClick={() => m.setIncludeOffloadingCost((current) => !current)}
           data-testid="button-item-market-offloading-cost"
         >
-          {includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
+          {m.includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
@@ -471,9 +217,9 @@ export default function ItemMarketAnalysis() {
         unavailable, posted historical profit is retained. No accounting entries are changed.
       </p>
 
-      {multiCompany && companySummaries.length > 0 && (
+      {m.multiCompany && m.companySummaries.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {companySummaries.map((company) => {
+          {m.companySummaries.map((company) => {
             const companyProfitClass =
               company.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
             return (
@@ -486,12 +232,12 @@ export default function ItemMarketAnalysis() {
                   </div>
                   <div>
                     <div className="text-muted-foreground">Revenue</div>
-                    <div className="font-medium tabular-nums">{formatAmount(company.revenue)}</div>
+                    <div className="font-medium tabular-nums">{m.formatAmount(company.revenue)}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Profit</div>
                     <div className={`font-medium tabular-nums ${companyProfitClass}`}>
-                      {formatAmount(company.profit)}
+                      {m.formatAmount(company.profit)}
                     </div>
                   </div>
                   <div>
@@ -505,9 +251,9 @@ export default function ItemMarketAnalysis() {
         </div>
       )}
 
-      {isError && (
+      {m.isError && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          {error?.message || "Failed to load item market analysis."}
+          {m.error?.message || "Failed to load item market analysis."}
         </div>
       )}
 
@@ -516,7 +262,7 @@ export default function ItemMarketAnalysis() {
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <div className="font-medium">Item performance</div>
           <div className="ml-auto hidden text-xs text-muted-foreground lg:block">
-            {multiCompany
+            {m.multiCompany
               ? "Items are matched by code · expand Companies to compare each company"
               : "Historical item performance for this company"}
           </div>
@@ -524,377 +270,24 @@ export default function ItemMarketAnalysis() {
             variant="outline"
             size="sm"
             className="ml-auto shrink-0 lg:ml-0"
-            onClick={handleExportExcel}
-            disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
-            pending={isExporting}
+            onClick={m.handleExportExcel}
+            disabled={m.isLoading || m.isFetching || !m.data || !!m.isError || m.search.trim() !== m.debouncedSearch}
+            pending={m.isExporting}
             pendingLabel="Exporting..."
             data-testid="button-item-market-export-excel-table"
           >
-            {!isExporting && <Download className="mr-2 h-4 w-4" />}
+            {!m.isExporting && <Download className="mr-2 h-4 w-4" />}
             Export Excel
           </ErpPendingButton>
         </div>
-        <div className="overflow-x-auto">
-          <ErpListTable pageKey="market-analysis" companyId={selectedCompany?.id} scrollLabel="Market price analysis">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                {multiCompany && <TableHead>Company</TableHead>}
-                <TableHead className="text-right">Imports</TableHead>
-                <TableHead className="text-right">Imported Qty</TableHead>
-                <TableHead className="text-right">
-                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
-                </TableHead>
-                <TableHead className="text-right">
-                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
-                </TableHead>
-                <TableHead className="text-right">Sold Qty</TableHead>
-                <TableHead className="text-right">Avg Sell</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Profit</TableHead>
-                <TableHead className="text-right">Margin</TableHead>
-                {multiCompany && <TableHead>Top Profit Company</TableHead>}
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading &&
-                Array.from({ length: 6 }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell colSpan={multiCompany ? 13 : 11}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-              {!isLoading &&
-                multiCompany &&
-                visibleGroupedRows.map((group) => {
-                  const expanded = expandedItemCode === group.itemKey;
-                  const mixedCurrency = group.purchaseCurrencies.length > 1;
-                  const topCompany = topProfitCompanyByItem.get(group.itemKey);
-                  const topProfitClass = "text-emerald-600 dark:text-emerald-400";
-
-                  return (
-                    <Fragment key={group.itemKey}>
-                      <TableRow data-testid={`row-item-market-group-${group.itemKey}`}>
-                        <TableCell>
-                          <div className="max-w-[260px] truncate font-medium">{group.name}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1.5 px-2"
-                            onClick={() => {
-                              setExpandedItemCode(expanded ? null : group.itemKey);
-                              setExpandedSalePriceKey(null);
-                            }}
-                            data-testid={`button-item-market-expand-${group.itemKey}`}
-                          >
-                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            {selectedCompanyNames.length} Companies
-                          </Button>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(group.importCount)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(group.importedQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {mixedCurrency ? (
-                            <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                          ) : (
-                            formatNativePurchase(
-                              includeOffloadingCost ? group.purchaseValueWithOffloading : group.purchaseValue,
-                              group.purchaseCurrencies
-                            )
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatNativePurchase(
-                            includeOffloadingCost
-                              ? group.weightedPurchaseCostWithOffloading
-                              : group.weightedPurchaseCost,
-                            group.purchaseCurrencies
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(group.soldQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatAmount(group.avgSellingPrice)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatAmount(group.revenue)}</TableCell>
-                        <TableCell
-                          className={`text-right font-medium tabular-nums ${
-                            group.profit < 0
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-emerald-600 dark:text-emerald-400"
-                          }`}
-                        >
-                          {formatAmount(group.profit)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{group.marginPct.toFixed(1)}%</TableCell>
-                        <TableCell>
-                          {topCompany?.kind === "equal" ? (
-                            <span className="font-medium">Equal</span>
-                          ) : topCompany?.kind === "winner" ? (
-                            <div>
-                              <div className="font-medium">{topCompany.companyName}</div>
-                              <div className={`text-xs tabular-nums ${topProfitClass}`}>
-                                {formatAmount(topCompany.profit)} · {topCompany.marginPct.toFixed(1)}%
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">None</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={group.marketStatus} />
-                        </TableCell>
-                      </TableRow>
-
-                      {expanded && (
-                        <TableRow key={`${group.itemKey}:companies`}>
-                          <TableCell colSpan={13} className="bg-muted/20 p-0">
-                            <div className="p-3">
-                              <div className="mb-2 text-xs font-medium text-muted-foreground">
-                                Company breakdown for {group.name}
-                              </div>
-                              <div className="overflow-x-auto rounded-md border">
-                                <ErpListTable
-                                  pageKey="market-company-breakdown"
-                                  companyId={selectedCompany?.id}
-                                  showDensityControl={false}
-                                  scrollLabel="Market company breakdown"
-                                >
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Company</TableHead>
-                                      <TableHead className="text-right">Imports</TableHead>
-                                      <TableHead className="text-right">Imported Qty</TableHead>
-                                      <TableHead className="text-right">
-                                        {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
-                                      </TableHead>
-                                      <TableHead className="text-right">
-                                        {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
-                                      </TableHead>
-                                      <TableHead className="text-right">Sold Qty</TableHead>
-                                      <TableHead className="text-right">Avg Sell</TableHead>
-                                      <TableHead className="text-right">Revenue</TableHead>
-                                      <TableHead className="text-right">Profit</TableHead>
-                                      <TableHead className="text-right">Margin</TableHead>
-                                      <TableHead>Status</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {selectedCompanyNames.map((company) => {
-                                      const row = group.companyRows.find((entry) => entry.companyId === company.id);
-                                      if (!row) {
-                                        return (
-                                          <TableRow key={company.id}>
-                                            <TableCell>
-                                              <div className="font-medium">{company.name}</div>
-                                            </TableCell>
-                                            <TableCell
-                                              colSpan={10}
-                                              className="text-center text-xs text-muted-foreground"
-                                            >
-                                              No import or sales activity for this item code in the selected period.
-                                            </TableCell>
-                                          </TableRow>
-                                        );
-                                      }
-
-                                      const rowMixedCurrency = row.purchaseCurrencies.length > 1;
-                                      const salePriceKey = `${company.id}:${row.stockItemId}`;
-                                      const salePriceExpanded = expandedSalePriceKey === salePriceKey;
-
-                                      return (
-                                        <Fragment key={company.id}>
-                                          <TableRow>
-                                            <TableCell>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 gap-1.5 px-2"
-                                                onClick={() =>
-                                                  setExpandedSalePriceKey(salePriceExpanded ? null : salePriceKey)
-                                                }
-                                              >
-                                                {salePriceExpanded ? (
-                                                  <ChevronDown className="h-4 w-4" />
-                                                ) : (
-                                                  <ChevronRight className="h-4 w-4" />
-                                                )}
-                                                <span className="font-medium">{row.companyName}</span>
-                                              </Button>
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatNumber(row.importCount)}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatNumber(row.importedQty)}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {rowMixedCurrency ? (
-                                                <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                                              ) : (
-                                                formatNativePurchase(
-                                                  includeOffloadingCost
-                                                    ? row.purchaseValueWithOffloading
-                                                    : row.purchaseValue,
-                                                  row.purchaseCurrencies
-                                                )
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatNativePurchase(
-                                                includeOffloadingCost
-                                                  ? row.weightedPurchaseCostWithOffloading
-                                                  : row.weightedPurchaseCost,
-                                                row.purchaseCurrencies
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatNumber(row.soldQty)}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatAmount(row.avgSellingPrice)}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {formatAmount(row.revenue)}
-                                            </TableCell>
-                                            <TableCell
-                                              className={`text-right font-medium tabular-nums ${
-                                                row.profit < 0
-                                                  ? "text-red-600 dark:text-red-400"
-                                                  : "text-emerald-600 dark:text-emerald-400"
-                                              }`}
-                                            >
-                                              {formatAmount(row.profit)}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                              {row.marginPct.toFixed(1)}%
-                                            </TableCell>
-                                            <TableCell>
-                                              <StatusBadge status={row.marketStatus} />
-                                            </TableCell>
-                                          </TableRow>
-                                          {salePriceExpanded && (
-                                            <TableRow>
-                                              <TableCell colSpan={11} className="bg-muted/10 p-3">
-                                                <SalePriceBreakdown
-                                                  companyId={row.companyId}
-                                                  stockItemId={row.stockItemId}
-                                                  startDate={period.fromDate}
-                                                  endDate={period.toDate}
-                                                />
-                                              </TableCell>
-                                            </TableRow>
-                                          )}
-                                        </Fragment>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </ErpListTable>
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-
-              {!isLoading &&
-                !multiCompany &&
-                visibleRows.map((row) => {
-                  const rowKey = `${row.companyId}:${row.stockItemId}`;
-                  const mixedCurrency = row.purchaseCurrencies.length > 1;
-                  const salePriceExpanded = expandedSalePriceKey === rowKey;
-
-                  return (
-                    <Fragment key={rowKey}>
-                      <TableRow data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 max-w-[280px] gap-1.5 px-2"
-                            onClick={() => setExpandedSalePriceKey(salePriceExpanded ? null : rowKey)}
-                          >
-                            {salePriceExpanded ? (
-                              <ChevronDown className="h-4 w-4 shrink-0" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 shrink-0" />
-                            )}
-                            <span className="truncate font-medium">{row.name}</span>
-                          </Button>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {mixedCurrency ? (
-                            <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                          ) : (
-                            formatNativePurchase(
-                              includeOffloadingCost ? row.purchaseValueWithOffloading : row.purchaseValue,
-                              row.purchaseCurrencies
-                            )
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatNativePurchase(
-                            includeOffloadingCost ? row.weightedPurchaseCostWithOffloading : row.weightedPurchaseCost,
-                            row.purchaseCurrencies
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                        <TableCell
-                          className={`text-right font-medium tabular-nums ${
-                            row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
-                          }`}
-                        >
-                          {formatAmount(row.profit)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                        <TableCell>
-                          <StatusBadge status={row.marketStatus} />
-                        </TableCell>
-                      </TableRow>
-                      {salePriceExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={11} className="bg-muted/10 p-3">
-                            <SalePriceBreakdown
-                              companyId={row.companyId}
-                              stockItemId={row.stockItemId}
-                              startDate={period.fromDate}
-                              endDate={period.toDate}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-
-              {!isLoading && (multiCompany ? groupedRows.length === 0 : rows.length === 0) && (
-                <TableRow>
-                  <TableCell
-                    colSpan={multiCompany ? 13 : 11}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No imported or sold items match these filters.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </ErpListTable>
-        </div>
-        {!isLoading && visibleRowCount < totalVisibleSourceRows && (
+        <ItemMarketAnalysisTable m={m} />
+        {!m.isLoading && m.visibleRowCount < m.totalVisibleSourceRows && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <div className="text-xs text-muted-foreground">
-              Showing {formatNumber(Math.min(visibleRowCount, totalVisibleSourceRows))} of{" "}
-              {formatNumber(totalVisibleSourceRows)} items
+              Showing {formatNumber(Math.min(m.visibleRowCount, m.totalVisibleSourceRows))} of{" "}
+              {formatNumber(m.totalVisibleSourceRows)} items
             </div>
-            <Button variant="outline" size="sm" onClick={() => setVisibleRowCount((count) => count + 250)}>
+            <Button variant="outline" size="sm" onClick={() => m.setVisibleRowCount((count) => count + 250)}>
               Load 250 more
             </Button>
           </div>

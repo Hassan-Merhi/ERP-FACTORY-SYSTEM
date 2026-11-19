@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const route = fs.readFileSync(
-  path.resolve(process.cwd(), "server/routes/containers/containerFreightWriteRoutes.ts"),
-  "utf8"
-);
-const itemsUpdate = fs.readFileSync(
-  path.resolve(process.cwd(), "server/routes/containers/purchaseOrderItemsUpdate.ts"),
-  "utf8"
+const route = readModuleFamily(path.resolve(process.cwd(), "server/routes/containers/containerFreightWriteRoutes.ts"));
+const itemsUpdate = readModuleFamily(
+  path.resolve(process.cwd(), "server/routes/containers/purchaseOrderItemsUpdate.ts")
 );
 
 describe("Wave 2 purchase-order/offload transaction boundary", () => {

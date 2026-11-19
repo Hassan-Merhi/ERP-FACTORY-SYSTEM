@@ -106,7 +106,7 @@ requireText(gitServer, "createGitContinuousSnapshot", "GIT server must snapshot 
 requireText(gitServer, "readGitContinuousSnapshot", "GIT later chunks must read the snapshot instead of rerunning enrichment.");
 
 const migratedPickerFiles = [
-  "client/src/pages/factory/ProductionComparison.tsx",
+  "client/src/pages/factory/productioncomparison/useProductionComparisonModel.ts",
   "client/src/pages/factory/FactoryWorkerBonusesTab.tsx",
 ];
 for (const file of migratedPickerFiles) {
@@ -114,7 +114,7 @@ for (const file of migratedPickerFiles) {
 }
 
 for (const file of [
-  "client/src/pages/factory/ProductionComparison.tsx",
+  "client/src/pages/factory/productioncomparison/useProductionComparisonModel.ts",
   "client/src/pages/factory/ProformaAddLine.tsx",
   "client/src/pages/factory/FactoryMixOptimizer.tsx",
 ]) {
