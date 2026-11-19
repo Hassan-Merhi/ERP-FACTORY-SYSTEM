@@ -10,6 +10,8 @@ const harness = vi.hoisted(() => ({
   preferencesGet: vi.fn(),
   preferencesSet: vi.fn(),
   preferencesRemove: vi.fn(),
+  secureSet: vi.fn(),
+  secureRemove: vi.fn(),
   setQueryData: vi.fn(),
   resetCsrfToken: vi.fn(),
 }));
@@ -41,6 +43,15 @@ vi.mock("@capacitor/preferences", () => ({
     get: harness.preferencesGet,
     set: harness.preferencesSet,
     remove: harness.preferencesRemove,
+  },
+}));
+
+vi.mock("@aparajita/capacitor-secure-storage", () => ({
+  KeychainAccess: { whenUnlockedThisDeviceOnly: 1 },
+  SecureStorage: {
+    get: vi.fn(async () => null),
+    set: harness.secureSet,
+    remove: harness.secureRemove,
   },
 }));
 
@@ -121,16 +132,23 @@ describe("login behavior", () => {
     expect(harness.toast).toHaveBeenCalledTimes(1);
   });
 
-  it("persists and clears biometric credentials through Capacitor preferences", async () => {
+  it("keeps biometric credentials in the device's secure store, never in plain preferences", async () => {
     await saveBiometricCredentials("operator", "secret");
-    expect(harness.preferencesSet).toHaveBeenCalledWith({
-      key: "biometric_creds",
-      value: JSON.stringify({ username: "operator", password: "secret" }),
-    });
+    // Keychain access 1 is whenUnlockedThisDeviceOnly: readable only while unlocked, never migrated.
+    expect(harness.secureSet).toHaveBeenCalledWith(
+      "biometric_creds",
+      { username: "operator", password: "secret" },
+      false,
+      false,
+      1
+    );
+    expect(harness.preferencesSet).not.toHaveBeenCalledWith(expect.objectContaining({ key: "biometric_creds" }));
+    // Any plain copy an older release left behind is deleted.
+    expect(harness.preferencesRemove).toHaveBeenCalledWith({ key: "biometric_creds" });
 
+    harness.preferencesRemove.mockClear();
     await clearBiometricCredentials();
-    expect(harness.preferencesRemove).toHaveBeenCalledWith({
-      key: "biometric_creds",
-    });
+    expect(harness.secureRemove).toHaveBeenCalledWith("biometric_creds", false);
+    expect(harness.preferencesRemove).toHaveBeenCalledWith({ key: "biometric_creds" });
   });
 });
