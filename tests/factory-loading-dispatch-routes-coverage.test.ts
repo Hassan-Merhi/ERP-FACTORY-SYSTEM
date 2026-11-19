@@ -214,7 +214,15 @@ describe("loading dispatch trips: delete (cancel)", () => {
       );
       const signed = await w.agent.post(url).send({ reason: "valid reason" });
       expect(signed.status).toBe(409);
-      expect(signed.body.message).toMatch(/closure history/);
+      expect(signed.body.message).toMatch(/Reopen this completed dispatch before deleting it/);
+      // Once a supervisor has reopened the closure, the OPEN trip may be archived.
+      await w.q(
+        `UPDATE factory_loading_dispatch_closure_history
+            SET reopened_at = now(), reopen_reason = 'supervised reopen', reopened_by_user_id = $2, reopened_by_username = 'u'
+          WHERE dispatch_id = $1`,
+        [trip.id, w.userId]
+      );
+      expect((await w.agent.post(url).send({ reason: "valid reason" })).status).toBe(200);
 
       const trip2 = (await w.agent.post(base(orderId)).send({})).body;
       await w.q(
@@ -230,11 +238,14 @@ describe("loading dispatch trips: delete (cancel)", () => {
       const final = await w.agent.post(`${base(invoiced)}/${trip3.id}/cancel`).send({ reason: "valid reason" });
       expect(final.status).toBe(409);
       expect(final.body.message).toMatch(/finalized or inactive/);
-      const statuses = await w.q(`SELECT status FROM factory_loading_dispatches WHERE order_id IN ($1, $2)`, [
+      const statuses = await w.q(`SELECT id, status FROM factory_loading_dispatches WHERE order_id IN ($1, $2)`, [
         orderId,
         invoiced,
       ]);
-      expect(statuses.every((s) => s.status === "OPEN")).toBe(true);
+      const refused = statuses.filter((s) => Number(s.id) !== Number(trip.id));
+      expect(refused.length).toBe(2);
+      expect(refused.every((s) => s.status === "OPEN")).toBe(true);
+      expect(statuses.find((s) => Number(s.id) === Number(trip.id))?.status).not.toBe("OPEN");
     });
   });
 });
