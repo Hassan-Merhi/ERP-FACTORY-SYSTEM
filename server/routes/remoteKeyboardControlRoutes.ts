@@ -1,9 +1,8 @@
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
 import { requireAuth, requireLogin } from "../auth";
 import { requireActionAccess } from "../lib/permissionMiddleware";
-import { getSessionCompanyId, getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
+import { getSessionCompanyId } from "../lib/requestContext";
 import {
-  RemoteKeyboardControlError,
   assertRemoteKeyboardCommandAdmission,
   authorizeRemoteKeyboardControl,
   publishRemoteKeyboardCommand,
@@ -11,113 +10,35 @@ import {
   revokeRemoteKeyboardControl,
   subscribeRemoteKeyboardCommands,
   subscribeRemoteKeyboardResults,
-  type RemoteKeyboardAuthorization,
-  type RemoteKeyboardCommand,
   type RemoteKeyboardCommandResult,
 } from "../services/remoteKeyboardCommandService";
-import { getRemoteControlSession, isRemoteControlControllerRole } from "../services/remoteControlSessionService";
+import { getRemoteControlSession } from "../services/remoteControlSessionService";
 import { remoteSupportCommandAuditDetails, writeRemoteSupportAudit } from "../services/remoteSupportAuditService";
 import {
   enqueueRemoteSupportCommandAudit,
   isRemoteSupportCommandAuditAccepting,
 } from "../services/remoteSupportCommandAuditQueue";
 import { isRemoteKeyboardAllowedOnRoute } from "../services/remoteSupportSensitiveActionPolicy";
+import {
+  STREAM_HEARTBEAT_MS,
+  sessionUserId,
+  sessionUsername,
+  passwordConfirmedAt,
+  requireController,
+  openEventStream,
+  writeEvent,
+  writeHeartbeat,
+  serializeAuthorization,
+  serializeCommand,
+  handleError,
+  respondAuditUnavailable,
+  auditOrBlock,
+} from "./remoteKeyboardControlRoutesHelpers";
 
-const STREAM_HEARTBEAT_MS = 5000;
 const keyboardPermission = requireActionAccess("remote_support_keyboard");
-type FlushableResponse = Response & { flush?: () => void };
-
-function sessionUserId(req: Request): string {
-  const value = getSessionUserId(req);
-  return value === null || value === undefined ? "" : String(value);
-}
-
-function sessionUsername(req: Request): string {
-  return getSessionUsername(req) || sessionUserId(req);
-}
-
-function passwordConfirmedAt(req: Request): number | null {
-  const value = (req.session as { passwordConfirmedAt?: unknown }).passwordConfirmedAt;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function requireController(req: Request, res: Response): boolean {
-  if (!isRemoteControlControllerRole(getSessionRole(req))) {
-    res.status(403).json({ message: "Access denied." });
-    return false;
-  }
-  return true;
-}
-
-function openEventStream(res: Response): void {
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
-  res.write("retry: 3000\n\n");
-}
-
-function writeEvent(res: Response, event: string, payload: unknown): void {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
-  (res as FlushableResponse).flush?.();
-}
-
-function writeHeartbeat(res: Response): void {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`: heartbeat ${Date.now()}\n\n`);
-  (res as FlushableResponse).flush?.();
-}
-
-function serializeAuthorization(authorization: RemoteKeyboardAuthorization | null) {
-  if (!authorization) return null;
-  return {
-    ...authorization,
-    authorizedAt: new Date(authorization.authorizedAt).toISOString(),
-    expiresAt: new Date(authorization.expiresAt).toISOString(),
-  };
-}
-
-function serializeCommand(command: RemoteKeyboardCommand) {
-  return { ...command, createdAt: new Date(command.createdAt).toISOString() };
-}
 
 function serializeResult(result: RemoteKeyboardCommandResult) {
   return { ...result, completedAt: new Date(result.completedAt).toISOString() };
-}
-
-function handleError(error: unknown, res: Response): void {
-  if (error instanceof RemoteKeyboardControlError) {
-    const { retryAfterMs } = error;
-    if (typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)) {
-      // Refusing fast is only useful if the controller knows when to resume.
-      res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
-      res.status(error.statusCode).json({ code: error.code, message: error.message, retryAfterMs });
-      return;
-    }
-    res.status(error.statusCode).json({ code: error.code, message: error.message });
-    return;
-  }
-  res.status(500).json({ message: "Unable to manage keyboard control." });
-}
-
-function respondAuditUnavailable(res: Response): void {
-  res.status(503).json({
-    code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
-    message: "Remote support auditing is temporarily unavailable. Keyboard control remains blocked.",
-  });
-}
-
-async function auditOrBlock(input: Parameters<typeof writeRemoteSupportAudit>[0], res: Response): Promise<boolean> {
-  try {
-    await writeRemoteSupportAudit(input);
-    return true;
-  } catch {
-    respondAuditUnavailable(res);
-    return false;
-  }
 }
 
 export function registerRemoteKeyboardControlRoutes(app: Express): void {

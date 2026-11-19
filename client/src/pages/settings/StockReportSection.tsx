@@ -1,142 +1,37 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import type { SettingsMessageResult } from "./settingsTypes";
 import { Package, Send, ChevronDown, ChevronRight, Loader2, Users, Clock, Calendar } from "lucide-react";
-
-interface Company {
-  id: number;
-  name: string;
-}
-interface Recipient {
-  id: number;
-  chatId: string;
-  name: string;
-  isGroup: boolean;
-  active: boolean;
-}
-
-interface StockSettings {
-  companyId: number | null;
-  recipientId: number | null;
-  autoSend: boolean;
-  enabled: boolean;
-  frequency: string;
-  sendHour: number;
-  sendDayOfWeek: number;
-  lastSentAt: string | null;
-}
-
-const DAYS = [
-  { value: "0", label: "Sunday" },
-  { value: "1", label: "Monday" },
-  { value: "2", label: "Tuesday" },
-  { value: "3", label: "Wednesday" },
-  { value: "4", label: "Thursday" },
-  { value: "5", label: "Friday" },
-  { value: "6", label: "Saturday" },
-];
-
-function formatHour(h: number): string {
-  if (h === 0) return "12:00 AM";
-  if (h < 12) return `${h}:00 AM`;
-  if (h === 12) return "12:00 PM";
-  return `${h - 12}:00 PM`;
-}
+import { DAYS, formatHour } from "./StockReportSectionHelpers";
+import { useStockReportSectionState } from "./useStockReportSectionState";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({ value: String(i), label: formatHour(i) }));
 
-function scheduleLabel(cfg: StockSettings | undefined): string {
-  if (!cfg?.autoSend) return "";
-  const time = formatHour(cfg.sendHour ?? 18);
-  if (cfg.frequency === "daily") return `Daily at ${time} EST`;
-  if (cfg.frequency === "monthly") return `Monthly (1st) at ${time} EST`;
-  if (cfg.frequency === "weekly") {
-    const day = DAYS.find((d) => d.value === String(cfg.sendDayOfWeek))?.label ?? "Monday";
-    return `Every ${day} at ${time} EST`;
-  }
-  return "Auto-Send On";
-}
-
 export function StockReportSection() {
-  const { toast } = useToast();
-  const [expanded, setExpanded] = useState(false);
-
-  const { data: companies = [] } = useQuery<Company[]>({
-    queryKey: ["/api/companies"],
-    enabled: expanded,
-  });
-
-  const { data: recipients = [] } = useQuery<Recipient[]>({
-    queryKey: ["/api/whatsapp/recipients"],
-    enabled: expanded,
-  });
-
-  const { data: cfg } = useQuery<StockSettings>({
-    queryKey: ["/api/whatsapp/stock-settings"],
-    enabled: expanded,
-  });
-
-  const groups = recipients.filter((r) => r.isGroup && r.active);
-
-  // Local state for all editable fields
-  const [companyId, setCompanyId] = useState<number | null>(null);
-  const [recipientId, setRecipientId] = useState<number | null>(null);
-  const [frequency, setFrequency] = useState<string | null>(null);
-  const [sendHour, setSendHour] = useState<number | null>(null);
-  const [sendDayOfWeek, setSendDayOfWeek] = useState<number | null>(null);
-
-  // Resolved values (local state overrides server state)
-  const rCompanyId = companyId ?? cfg?.companyId ?? null;
-  const rRecipientId = recipientId ?? cfg?.recipientId ?? null;
-  const rFrequency = frequency ?? cfg?.frequency ?? "daily";
-  const rSendHour = sendHour ?? cfg?.sendHour ?? 18;
-  const rSendDayOfWeek = sendDayOfWeek ?? cfg?.sendDayOfWeek ?? 1;
-
-  const buildPayload = (patch?: Partial<StockSettings>) => ({
-    companyId: rCompanyId,
-    recipientId: rRecipientId,
-    frequency: rFrequency,
-    sendHour: rSendHour,
-    sendDayOfWeek: rSendDayOfWeek,
-    autoSend: cfg?.autoSend ?? false,
-    enabled: cfg?.enabled ?? false,
-    ...patch,
-  });
-
-  const saveSettings = useMutation({
-    mutationFn: (patch?: Partial<StockSettings>) =>
-      apiRequest("PUT", "/api/whatsapp/stock-settings", buildPayload(patch)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/stock-settings"] });
-      toast({ title: "Stock report settings saved" });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const sendNow = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/whatsapp/send-stock-report", {
-        companyId: rCompanyId,
-        recipientId: rRecipientId,
-      }),
-    onSuccess: (data: unknown) => {
-      const message = (data as SettingsMessageResult | null)?.message;
-      toast({ title: "Reports sent", description: message || "Done" });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
-  });
-
-  const canSend = !!(rCompanyId && rRecipientId);
-  const label = scheduleLabel(cfg);
+  const {
+    setExpanded,
+    expanded,
+    companies,
+    cfg,
+    groups,
+    setCompanyId,
+    setRecipientId,
+    setFrequency,
+    setSendHour,
+    setSendDayOfWeek,
+    rCompanyId,
+    rRecipientId,
+    rFrequency,
+    rSendHour,
+    rSendDayOfWeek,
+    saveSettings,
+    sendNow,
+    canSend,
+    label,
+  } = useStockReportSectionState();
 
   return (
     <div className="border rounded-md">
