@@ -37,6 +37,11 @@ export function isPhase9LanPrimary(): boolean {
   return config.mode === "lan" && config.primary === true;
 }
 
+/** POS sale edits and cancellations are recorded here (LAN primary, or a PC in entry mode). */
+export function phase9PosFollowUpCaptureActive(): boolean {
+  return isPhase9LanPrimary() || pcLocalEntryMode();
+}
+
 /** Reserve the next LAN invoice number inside the sale transaction. */
 export async function allocatePhase9PosInvoiceTx(tx: DbTransaction): Promise<Phase9PosInvoice> {
   const config = readFactoryEdgeConfiguration();
