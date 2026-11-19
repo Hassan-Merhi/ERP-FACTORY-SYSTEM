@@ -206,8 +206,8 @@ export default function FactoryLoadingDispatch() {
               </div>
             )}
             {selectedTrip && dispatchId !== null && (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(290px,0.7fr)]">
-                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)] xl:col-span-2">
                   <CardContent className="space-y-5 p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -305,7 +305,7 @@ export default function FactoryLoadingDispatch() {
                     </div>
                   </CardContent>
                 </Card>
-                <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2 xl:col-span-2">
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2">
@@ -313,9 +313,8 @@ export default function FactoryLoadingDispatch() {
                         <h3 className="text-sm font-semibold">Truck verification</h3>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Use the scanner below for each bale entering this truck. Scans never change the main loading.
+                        Scan each bale as it enters the truck.
                       </p>
-                      <Badge variant="secondary">Scanner available below</Badge>
                     </CardContent>
                   </Card>
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
@@ -325,8 +324,7 @@ export default function FactoryLoadingDispatch() {
                         <h3 className="text-sm font-semibold">Final loading comparison</h3>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Compare every trip's scanned bales against Pending Loading. After all trips finish, you may
-                        choose which unscanned bales to remove from the order.
+                        Compare all trips with Pending Loading.
                       </p>
                       <Button
                         type="button"
@@ -406,10 +404,6 @@ export default function FactoryLoadingDispatch() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not
-          post stock or accounting changes
-        </div>
       </div>
 
       <FactoryLoadingDispatchDialogSection
