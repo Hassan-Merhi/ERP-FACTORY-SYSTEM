@@ -1,6 +1,6 @@
 /**
  * One-time factory bale repair audit trails (server/startup/
- * ensureFactoryBaleOrderIntegrity.ts and runApprovedLegacyBaleUnitCostRepair.ts).
+ * ensureFactoryBaleOrderIntegrity.ts and the since-removed one-time legacy bale unit-cost repair).
  *
  * These tables are created by runtime DDL (CREATE TABLE IF NOT EXISTS in the
  * startup services). They are declared here so drizzle-kit and the type system

@@ -50,29 +50,10 @@ import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
-import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
-import { applyApprovedEmployeeOpeningCredits } from "./startup/applyApprovedEmployeeOpeningCredits";
 import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
 import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
 import { repairCompletedOrderBaleStatuses } from "./startup/repairCompletedOrderBaleStatuses";
 import { warmupDb } from "./startup/warmupDb";
-import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
-import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
-import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
-import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedReturnedLoadingDateRepair";
-import { runApprovedFactoryPayableReclassification } from "./startup/runApprovedFactoryPayableReclassification";
-import { runApprovedFactoryPayableUndo } from "./startup/runApprovedFactoryPayableUndo";
-import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82";
-import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
-import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
-import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEurogulfFreightRepair";
-import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
-import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
-import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
-import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCashAdvanceSourceRepair";
-import { runApprovedFactoryWorkerAdvanceNonCashGLRepair } from "./startup/runApprovedFactoryWorkerAdvanceNonCashGLRepair";
-import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
-import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/applyApprovedOctoberPayrollOverlapReclass20261103";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 
 registerProcessErrorHandlers();
@@ -328,22 +309,6 @@ let startupDataReady = false;
       if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
         await bootstrapRecurringJournalFromEnvironment();
       }
-      // Owner-confirmed: HADI L'SHI Zakaria El Ali #103's $9,930.12
-      // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
-      // salary/bonus postings or other employees.
-      await applyApprovedZakariaOpeningCredit();
-      // The historical payroll import used positive openings for employee
-      // credits; several records still carry the default Dr side. Correct the
-      // verified records once with before/after audit; never alter vouchers.
-      try {
-        await applyApprovedEmployeeOpeningCredits();
-      } catch (openingRepairError: unknown) {
-        logger.error("[startup] Historical employee openings were not fully corrected", {
-          error: getErrorMessage(openingRepairError),
-        });
-        // Do not take the whole ERP offline for a historical correction.
-        // Failed database transactions roll back; errors remain visible here.
-      }
       // The one-time historical bonus reclassification has already been applied.
       // Never rerun a historical voucher mutation on every server startup.
       // A later legitimate voucher edit can change a paid amount while its old
@@ -374,82 +339,6 @@ let startupDataReady = false;
       // Before accepting requests, reconcile old completed-order bales still
       // marked IN_STOCK (audited; the guard trigger is part of the schema).
       await repairCompletedOrderBaleStatuses(pool);
-      // Explicitly owner-approved, one-time monetary correction. Disabled by
-      // default and guarded against repeat execution or accounting cutover.
-      // Startup repair writers are forbidden on independently authoritative LAN
-      // databases and on a cloud explicitly fenced for factory handoff.
-      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
-        await runApprovedLegacyBaleUnitCostRepair(pool);
-        // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
-        await runApprovedLegacySoldBaleUnitCostRepair(pool);
-        // One-time owner-authorized, company-12 historical loading-date reconciliation.
-        // Atomic before-image audit and exact first-submission evidence are required.
-        await runApprovedCustomerLoadingDateRepair(pool);
-        // Restore the original date for a historically confirmed order returned to LOADING.
-        await runApprovedReturnedLoadingDateRepair(pool);
-        // Owner-approved, idempotent reclassification of 18 original factory import payables.
-        // No-op unless explicitly enabled on the verified production Render service.
-        await runApprovedFactoryPayableReclassification();
-        await runApprovedFactoryPayableUndo();
-        // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
-        await runApprovedAboSobhiGoods82();
-        // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
-        await runApprovedAboJaberPayableFix();
-        // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
-        await runApprovedUkBasma38();
-        // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
-        await runApprovedHmdEurogulfFreightRepair();
-        // Owner-approved Factory customer order destination spelling consolidation.
-        // Opt-in only; exact company, database, before-images and audit are verified.
-        await runApprovedFactoryDestinationNormalization(pool);
-        // One-time, audited destination label consolidation on the finalized MALI 53 order.
-        await runApprovedMali53DestinationNormalization(pool);
-        // Opt-in, production company 12 only; no UI or reporting substitution.
-        try {
-          await runApprovedFactoryWorkerAdvanceLedgerRepair();
-        } catch (advanceRepairError: unknown) {
-          logger.error("[startup] Factory worker advance accrual correction blocked", {
-            error: getErrorMessage(advanceRepairError),
-          });
-        }
-        // Company 12 source repair only; never writes Cash or ledger journals.
-        try {
-          await runApprovedNoCashAdvanceSourceRepair();
-        } catch (noCashAdvanceError: unknown) {
-          logger.error("[startup] No-cash worker advance source repair blocked", {
-            error: getErrorMessage(noCashAdvanceError),
-          });
-        }
-        // Original-date accounting correction for the remaining $51.61.
-        // Exact Render opt-in, guarded against any Cash or source mutation.
-        try {
-          await runApprovedFactoryWorkerAdvanceNonCashGLRepair();
-        } catch (advanceGLRepairError: unknown) {
-          logger.error("[startup] Factory advance historical noncash GL repair blocked", {
-            error: getErrorMessage(advanceGLRepairError),
-          });
-        }
-        // Explicitly opted-in, tenant-scoped READ-ONLY inspection. It only
-        // logs posted October payroll accrual/payment evidence and closed books;
-        // never changes cash, advances, payroll rows or journal entries.
-        try {
-          await inspectOctoberPayrollJournalIntegrity20261103();
-        } catch (payrollInspectionError: unknown) {
-          logger.error("[startup] October payroll journal inspection unavailable", {
-            error: getErrorMessage(payrollInspectionError),
-          });
-        }
-        // Audited, opt-in October paid-overlap reclassification. Never touches
-        // cash, Daybook, historical payrolls or existing worker advances.
-        // All source/payments/attendance snapshots must match before posting.
-        try {
-          await applyApprovedOctoberPayrollOverlapReclass20261103();
-        } catch (overlapRepairError: unknown) {
-          logger.error("[startup] October payroll overlap reclassification blocked", {
-            error: getErrorMessage(overlapRepairError),
-          });
-        }
-      }
       startupDataReady = true;
       markStartupMigrationsComplete();
     })

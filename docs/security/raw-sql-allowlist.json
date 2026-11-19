@@ -267,48 +267,6 @@
       "reason": "Identifiers come from the frozen map; the cloud response's sequences are bound as an array parameter, not text."
     },
     {
-      "id": "d47230ee95305cf3174b",
-      "path": "scripts/reconcile-factory-invoices-20261014.ts",
-      "kind": "assembled-sql-text",
-      "context": "run",
-      "classification": "not-sql-text",
-      "userControlled": "no",
-      "dynamicInputs": [
-        {
-          "expression": "pending.length",
-          "source": "length of an in-memory array/Buffer built in run (scripts/reconcile-factory-invoices-20261014.ts:102)",
-          "validation": "Array/Buffer length is an integer; the text is a log/console line, never executed as SQL"
-        }
-      ],
-      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
-    },
-    {
-      "id": "87b3411df15dceae75d1",
-      "path": "scripts/reconcile-factory-invoices-20261014.ts",
-      "kind": "assembled-sql-text",
-      "context": "run",
-      "classification": "not-sql-text",
-      "userControlled": "no",
-      "dynamicInputs": [
-        {
-          "expression": "gross.toFixed(2)",
-          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
-          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
-        },
-        {
-          "expression": "posted.toFixed(2)",
-          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
-          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
-        },
-        {
-          "expression": "expected.toFixed(2)",
-          "source": "MoneyDecimal / Decimal.js / number computed locally in run (scripts/reconcile-factory-invoices-20261014.ts:106)",
-          "validation": "Decimal#toFixed / Number#toFixed render only digits, '-' and '.'; the text is a log/console line, never executed as SQL"
-        }
-      ],
-      "reason": "Log or console text only: the template builds an operator/log message that is printed or stored as a bound value, never sent to the database as SQL; the dynamic parts are numbers, Decimal strings or array lengths."
-    },
-    {
       "id": "1358bcaeff32798ffb77",
       "path": "scripts/reconcile-unfinalized-factory-customer-charges-20261016.ts",
       "kind": "assembled-sql-text",

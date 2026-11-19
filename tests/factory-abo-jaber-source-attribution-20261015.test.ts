@@ -70,12 +70,4 @@ describe("ABO JABER: zero balance by source-verified attribution, not by masking
     expect(s).toContain("<SupplierStatementRows");
   });
 
-  it("one-time production application cannot occur without an exact flag and database match", () => {
-    const runner = readModuleFamily(resolve(process.cwd(), "server/startup/runApprovedAboJaberPayableFix.ts"));
-    expect(runner).toContain("FACTORY_ABO_JABER_REASSIGN_20261015");
-    expect(runner).toContain("approved-company12-nine-jaber");
-    expect(runner).toContain("preview-company12-nine-jaber");
-    expect(runner).toContain("srv-d6kibgtactks739u7vl0");
-    expect(runner).toContain("erp_db_qscj_64lv_e7rz_8744_2lm3");
-  });
 });

@@ -42,20 +42,13 @@ describe("UK BASMA source-backed posted vs operational reconciliation (company 1
       expect(toMoney(entries[0].debitAmount).minus(entries[1].creditAmount).isZero()).toBe(true);
     }
   });
-  it("no other supplier is changed, only 2 exact-source vouchers, preview before apply",()=>{
+  it("no other supplier is changed, only 2 exact-source vouchers",()=>{
     const script=readFileSync(resolve(process.cwd(),
       "scripts/repair-uk-basma-38-20261015.ts"),"utf8");
-    const gate=readFileSync(resolve(process.cwd(),
-      "server/startup/runApprovedUkBasma38.ts"),"utf8");
     expect(script).toContain("const BASMA = 38;");
     expect(script).toContain("const GOODS = 126;");
     expect(script).toContain("const FREIGHT = 85;");
     expect(script).toContain("BASMA_REPAIR_POSTCHECK_FAILED");
     expect(script).toContain("BASMA_PARTIAL_CORRECTION_REQUIRES_REVIEW");
-    expect(gate).toContain("FACTORY_UK_BASMA_REPAIR_20261015");
-    expect(gate).toContain("preview-company12-uk-basma");
-    expect(gate).toContain("approved-company12-uk-basma");
-    expect(gate).toContain("srv-d6kibgtactks739u7vl0");
-    expect(gate).toContain("erp_db_qscj_64lv_e7rz_8744_2lm3");
   });
 });

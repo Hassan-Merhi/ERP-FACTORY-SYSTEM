@@ -129,3 +129,12 @@ Removed so far: `server/services/factory/historical-replay/exactApply.ts`
 (a no-op shim with no callers), and `server/lib/trackTraceScraper.ts` with
 its `trackTraceDate.ts` helper (no production caller; owner-approved
 2026-11-19).
+
+Also removed (owner-confirmed 2026-11-19 that every one had run): the
+one-time, env-gated production repairs wired into startup, namely
+the 22 `server/startup/runApproved*.ts`, `applyApproved*.ts` and
+`inspectOctoberPayrollJournalIntegrity20261103.ts` modules, and the eight
+`scripts/*-20261014.ts` reconciliations `postStartupJobs.ts` imported. Their
+audit tables and the rows they wrote stay as history. Recurring startup
+hygiene (`repairCompletedOrderBaleStatuses`, export-run cleanup) and the
+historical sales-cost repair (its rollback must stay available) are kept.
