@@ -119,13 +119,13 @@ export function usePosImportModelPart1() {
         : null
       : exchangeRate;
 
-  /** Import payload USD rates and the original typed ZMW rate for audit/reconciliation. */
+  /** Import payload USD rates and the original typed local-currency rate, which the sale posts exactly. */
   const toUsdItems = (items: PosImportItem[]): PosImportItem[] =>
     saleCurrency !== "USD" && applicableExchangeRate
       ? items.map((item) => ({
           ...item,
-          originalCurrencyRate: saleCurrency === "ZMW" ? String(item.rate) : undefined,
-          rate: (Number(item.rate) / applicableExchangeRate).toFixed(saleCurrency === "ZMW" ? 6 : 2),
+          originalCurrencyRate: String(item.rate),
+          rate: (Number(item.rate) / applicableExchangeRate).toFixed(6),
         }))
       : items;
 

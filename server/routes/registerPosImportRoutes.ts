@@ -2,6 +2,7 @@
 import type { Express } from "express";
 import { getErrorMessage, HttpError } from "../lib/httpHandlers";
 import { assertZmwImportPrices, PosZmwRateError, resolveLockedZmwPosCurrency } from "../services/pos/posZmwRatePolicy";
+import { exactCfaSaleAmounts } from "@shared/posCfaMoney";
 import { logger } from "../lib/logger";
 import {
   addInventoryValues,
@@ -187,7 +188,7 @@ export function registerPosImportRoutes(app: Express) {
               lockedPosCurrency.exchangeRate,
               `${lockedPosCurrency.currency} POS import exchange rate`
             );
-      const nativeTransaction = (total: string) =>
+      const usdTimesRate = (total: string) =>
         nativeRate
           ? {
               currency: lockedPosCurrency.currency,
@@ -234,7 +235,14 @@ export function registerPosImportRoutes(app: Express) {
             multiplyInventoryValues(toInventoryDecimal(item.quantity), toInventoryDecimal(item.rate))
           );
         }
-        const totalSalesAmount = inventoryMoney(totalSales);
+        // A CFA sheet that carries its typed CFA prices posts their exact sum.
+        const exactCfa =
+          lockedPosCurrency.currency === "CFA" ? exactCfaSaleAmounts(items, nativeRate?.toFixed()) : null;
+        const totalSalesAmount = exactCfa ? inventoryMoney(exactCfa.usdTotal) : inventoryMoney(totalSales);
+        const nativeTransaction = (total: string) =>
+          exactCfa && nativeRate
+            ? { currency: "CFA", amount: exactCfa.nativeTotal, rate: nativeRate.toFixed() }
+            : usdTimesRate(total);
         let relieved = new MoneyDecimal(0);
         const { voucher } = await postErpVoucherTx(tx, {
           companyId: req.session.currentCompanyId!,

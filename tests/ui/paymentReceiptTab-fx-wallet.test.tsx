@@ -320,8 +320,8 @@ describe("PaymentReceiptTab — FX wallet, direct EUR supplier payment", () => {
       />
     );
     expect(await screen.findByTestId("fx-payment-voucher")).toHaveTextContent("Amount exceeds supplier EUR balance.");
-    // An Optional draft moves no balances and is validated when it is finalized;
-    // the live settlement is what the supplier balance must block.
+    // A direct EUR payment starts as an Optional draft, which moves no balances (#3320);
+    // posting it for real is what the supplier's EUR balance must cover.
     const optional = screen.getByTestId("checkbox-optional");
     fireEvent.click(optional);
     await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));

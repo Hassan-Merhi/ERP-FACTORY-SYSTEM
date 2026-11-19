@@ -12,6 +12,7 @@ import type { AuthMe } from "@shared/apiTypes";
 import type { usePosQueries } from "./hooks/usePosQueries";
 import type { usePosState } from "./hooks/usePosState";
 import { resolvePostedZmwUnitPrices } from "@shared/posZmwMoney";
+import { resolvePostedCfaUnitPrices } from "@shared/posCfaMoney";
 
 type PosState = ReturnType<typeof usePosState>;
 type PosQueries = ReturnType<typeof usePosQueries>;
@@ -124,37 +125,36 @@ export function usePosEditVoucherHydration({
 
     if (!editVoucher || resolvedItems.length === 0) return;
 
-    // The Kwacha price is the sale's real price; USD follows from it, so a
-    // USD/ZMW switch never drifts off the price the cashier typed.
-    const lockedRate = editVoucher.currency === "ZMW" ? Number(editVoucher.exchangeRate) : 0;
-    let kwachaPrices: ReturnType<typeof resolvePostedZmwUnitPrices> | null = null;
+    // The Kwacha or CFA price is the sale's real price; USD follows from it, so
+    // a currency switch never drifts off the price the cashier typed.
+    const localCurrency =
+      editVoucher.currency === "ZMW" || editVoucher.currency === "CFA" ? editVoucher.currency : null;
+    const lockedRate = localCurrency ? Number(editVoucher.exchangeRate) : 0;
+    let localPrices: ReturnType<typeof resolvePostedZmwUnitPrices> | null = null;
     if (lockedRate > 0) {
-      const postedKwacha =
+      const postedLocal =
         editVoucher.nativeZmwTotal ??
-        editVoucher.entries?.find((e) => e.transactionCurrency === "ZMW" && Number(e.transactionDebitAmount) > 0)
-          ?.transactionDebitAmount;
+        editVoucher.entries?.find(
+          (e) => e.transactionCurrency === localCurrency && Number(e.transactionDebitAmount) > 0
+        )?.transactionDebitAmount;
       try {
-        kwachaPrices = resolvePostedZmwUnitPrices(
+        localPrices = (localCurrency === "CFA" ? resolvePostedCfaUnitPrices : resolvePostedZmwUnitPrices)(
           resolvedItems.map((item: PosEditSalesItem) => ({ quantity: item.quantity, rate: item.sellingPrice })),
           lockedRate,
-          postedKwacha
+          postedLocal
         );
       } catch {
-        kwachaPrices = null; // a stored line that is not a valid sale line: load plain USD prices
+        localPrices = null; // a stored line that is not a valid sale line: load plain USD prices
       }
     }
 
     const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => {
       const quantity = Number(item.quantity ?? 0);
       const storedUsd = Number(item.sellingPrice ?? 0);
-      const kwacha = kwachaPrices?.[index] ?? null;
-      const usdRate = kwacha === null ? storedUsd : kwacha.div(lockedRate).toNumber();
+      const local = localPrices?.[index] ?? null;
+      const usdRate = local === null ? storedUsd : local.div(lockedRate).toNumber();
       const rate =
-        kwacha === null
-          ? usdRate
-          : activeCurrencyRef.current === "USD"
-            ? Number(usdRate.toFixed(2))
-            : kwacha.toNumber();
+        local === null ? usdRate : activeCurrencyRef.current === "USD" ? Number(usdRate.toFixed(2)) : local.toNumber();
       return {
         id: String(index + 1),
         itemName: item.stockItemName || "",

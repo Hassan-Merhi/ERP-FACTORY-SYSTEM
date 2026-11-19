@@ -154,9 +154,10 @@ export function usePosCheckout({
       });
       return;
     }
-    // An edited Kwacha sale stays a Kwacha sale at its locked rate, even while
-    // the grid shows it in USD; its Kwacha prices then follow from the USD ones.
-    const saleCurrency = editVoucherId && editVoucher?.currency === "ZMW" ? "ZMW" : activeCurrency;
+    // An edited Kwacha or CFA sale stays in its own currency at its locked rate,
+    // even while the grid shows it in USD; its local prices then follow from the USD ones.
+    const editedLocal = editVoucherId && (editVoucher?.currency === "ZMW" || editVoucher?.currency === "CFA");
+    const saleCurrency = editedLocal ? (editVoucher!.currency as "ZMW" | "CFA") : activeCurrency;
     const salePrice = (row: SaleRow) =>
       saleCurrency === activeCurrency ? row.rate : Number((row.rateUSD * (exchangeRate ?? NaN)).toFixed(2));
     if (saleCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
@@ -232,7 +233,7 @@ export function usePosCheckout({
           // USD is the inventory/ledger basis. Preserve the *typed* Kwacha
           // unit price separately so the server can verify the round-trip
           // against the rate locked for this exact sale date.
-          originalCurrencyRate: saleCurrency === "ZMW" ? salePrice(row).toFixed(2) : undefined,
+          originalCurrencyRate: saleCurrency === "USD" ? undefined : salePrice(row).toFixed(2),
           stockItemName: row.itemName,
           stockItemCode: row.stockItemCode,
           configuredPrice: row.configuredPrice,

@@ -89,9 +89,10 @@ const reviewedSpMounts: string[] = [];
 // prerequisite routes that core/permissionBoundaryRoutes.ts registered ahead of their
 // handlers are gone. Their permission keys are declared on the handlers' own rules in
 // config/route-access-manifest.json and enforced by the access boundary.
-// Raised from 66 to 67 for Optional EUR FX wallet drafts (#3320):
+// Raised from 66 to 67 for Optional direct-EUR FX wallet payments (#3320):
 // fxAgentWalletSettlementRoutes registers POST /api/vouchers/:id/finalize ahead of
-// the standard handlers and calls next() unless the voucher is such a draft.
+// the standard finalize handlers and calls next() unless the draft is an Optional
+// EUR FX wallet payment, so the later registrations stay reachable.
 const MAX_SHADOWED_REGISTRATIONS = 67;
 let actual: SerializedRouteManifest;
 

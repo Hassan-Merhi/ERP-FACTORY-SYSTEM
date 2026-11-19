@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
+import { NEGATIVE_STOCK_FLAGS_URL, NegativeStockFlagsCard } from "@/components/NegativeStockFlagsCard";
 import { getUnresolvedConflicts, resolveConflict, addToSyncQueue, type Conflict } from "@/lib/db";
 
 function formatTime(ts: number): string {
@@ -198,7 +199,15 @@ export default function ConflictCenter() {
         subtitle="Review and resolve sync conflicts between your offline changes and the server."
         icon={<AlertTriangle className="h-5 w-5" />}
       >
-        <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="btn-refresh-conflicts">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            refetch();
+            queryClient.invalidateQueries({ queryKey: [NEGATIVE_STOCK_FLAGS_URL] });
+          }}
+          data-testid="btn-refresh-conflicts"
+        >
           <RefreshCw className="h-3 w-3 mr-1" />
           Refresh
         </Button>
@@ -215,6 +224,8 @@ export default function ConflictCenter() {
           </Button>
         )}
       </PageHeader>
+
+      <NegativeStockFlagsCard />
 
       <Separator />
 
