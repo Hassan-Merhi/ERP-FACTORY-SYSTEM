@@ -3,7 +3,10 @@
  *
  * ERP stores foreign currency per one accounting-base currency unit
  * (for Zambia: 1 USD = N ZMW). Factory rateToUsd uses the inverse direction.
- * No rate save here posts a voucher or revalues historical records.
+ * A rate save never changes historical vouchers or native amounts. It is
+ * followed by one automatic FX revaluation Journal that brings the USD value
+ * of foreign-currency cash/bank, customer and loan balances to the new rate
+ * (services/accounting/fxRevaluationPosting.ts).
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
@@ -16,6 +19,8 @@ import { companyRateValueSchema, companyRateDateSchema } from "@shared/companyRa
 import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
 import { invalidateCompanyFxRateCaches } from "../services/accounting/invalidateCompanyFxRateCaches";
 import { MonetaryFxError } from "../services/accounting/monetaryFxRates";
+import { postFxRevaluation, type FxRevaluationResult } from "../services/accounting/fxRevaluationPosting";
+import { logger } from "../lib/logger";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 /** Roles that may save a rate for any date and replace an existing one. */
@@ -242,10 +247,24 @@ export function registerExchangeRateRoutes(app: Express) {
       // on validation failures or rolled-back writes. All consumers (Settings,
       // daily popup, API clients) share this one backend event.
       invalidateCompanyFxRateCaches(companyId);
-      // Reporting translations update on next read; no historical voucher,
-      // original currency amount or FX-REVAL journal is written here.
+      // The saved rate stands on its own. The revaluation journal that follows
+      // it (cash and bank, customers, loans at the new rate) is a second
+      // transaction: if it cannot be posted the rate is still saved and the
+      // reason is returned, never a failed save.
+      let fxRevaluation: FxRevaluationResult | { status: "failed"; reason: string };
+      try {
+        fxRevaluation = await postFxRevaluation({
+          companyId,
+          actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
+          reason: `Exchange rate saved: 1 ${fromCurrency} = ${parsed.data.rate} ${toCurrency} from ${parsed.data.effectiveDate}`,
+        });
+        if (fxRevaluation.status === "posted") invalidateCompanyFxRateCaches(companyId);
+      } catch (revaluationError: unknown) {
+        logger.error("Automatic FX revaluation failed after rate save:", { error: revaluationError });
+        fxRevaluation = { status: "failed", reason: getErrorMessage(revaluationError) };
+      }
       res.setHeader("Cache-Control", "private, no-store");
-      res.json(rate);
+      res.json({ ...rate, fxRevaluation });
     } catch (error: unknown) {
       if (error instanceof MonetaryFxError) {
         return res.status(error.status).json({ code: error.code, message: error.message });
