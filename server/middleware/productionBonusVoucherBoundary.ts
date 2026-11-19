@@ -1,5 +1,6 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
+import { voucherEntries } from "@shared/schema";
 import { db } from "../db";
 import { firstRow } from "../lib/queryResult";
 
@@ -43,15 +44,15 @@ async function anyProductionBonusVoucher(values: unknown[]): Promise<boolean> {
 }
 
 async function anyProductionBonusVoucherEntry(values: unknown[]): Promise<boolean> {
-  for (const value of values) {
-    for (const entryId of candidateIds(value)) {
-      const row = firstRow<{ voucherId: number | null }>(
-        await db.execute(sql`SELECT voucher_id AS "voucherId" FROM voucher_entries WHERE id = ${entryId}`)
-      );
-      if (row?.voucherId != null && (await anyProductionBonusVoucher([Number(row.voucherId)]))) return true;
-    }
-  }
-  return false;
+  const entryIds = [...new Set(values.flatMap(candidateIds))];
+  if (entryIds.length === 0) return false;
+  // One lookup for every entry id, not one per id (a transfer can name many lines).
+  const rows = await db
+    .selectDistinct({ voucherId: voucherEntries.voucherId })
+    .from(voucherEntries)
+    .where(inArray(voucherEntries.id, entryIds));
+  const voucherIds = rows.map((row) => row.voucherId).filter((id): id is number => id != null);
+  return anyProductionBonusVoucher(voucherIds);
 }
 
 /** True when the voucher is the payment or reversal voucher of any production bonus. */
