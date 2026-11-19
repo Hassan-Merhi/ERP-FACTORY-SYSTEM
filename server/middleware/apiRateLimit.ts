@@ -10,9 +10,10 @@ import rateLimit from "express-rate-limit";
  * single abusive client exhaust the budget for a whole site — or lock the
  * site out. Anonymous callers fall back to per-IP buckets.
  *
- * Budgets are generous on purpose (~10 req/s sustained per signed-in user):
- * this lane exists to stop floods and scrapers, not to police normal ERP,
- * POS, and polling traffic. Tune via API_RATE_LIMIT_* (see .env.example).
+ * Authenticated background reads must not exhaust the budget needed for a
+ * voucher post or ERP permission check. Use separate capped read, write, and
+ * critical-access lanes; anonymous traffic keeps its single IP flood guard.
+ * Tune via API_RATE_LIMIT_* (see .env.example).
  */
 
 // NOTE: the tuning variables are read as direct `process.env.X` accesses (not
@@ -25,11 +26,17 @@ function readPositiveInt(raw: string | undefined, fallback: number): number {
 
 const WINDOW_MS = readPositiveInt(process.env.API_RATE_LIMIT_WINDOW_MS, 60_000);
 const AUTHED_MAX = readPositiveInt(process.env.API_RATE_LIMIT_MAX, 600);
+const AUTHED_WRITE_MAX = readPositiveInt(process.env.API_RATE_LIMIT_WRITE_MAX, 120);
+const AUTHED_ACCESS_MAX = readPositiveInt(process.env.API_RATE_LIMIT_ACCESS_MAX, 120);
 const ANON_MAX = readPositiveInt(process.env.API_RATE_LIMIT_ANON_MAX, 120);
 
 function clientKey(req: Request): string {
   const sessionUserId = req.session?.userId;
-  if (sessionUserId !== undefined && sessionUserId !== null && String(sessionUserId) !== "") {
+  if (
+    sessionUserId !== undefined &&
+    sessionUserId !== null &&
+    String(sessionUserId) !== ""
+  ) {
     return `user:${String(sessionUserId)}`;
   }
   // Same client-IP derivation as the login limiter: left-most X-Forwarded-For
@@ -69,10 +76,34 @@ function buildLimiter(max: number): RequestHandler {
   });
 }
 
-const authedLimiter = buildLimiter(AUTHED_MAX);
+// These reads are needed to keep an already authenticated ERP/Factory shell
+// available. They receive their own finite budget, not an unbounded exemption.
+const CRITICAL_AUTHED_READS = new Set([
+  "/api/auth/me",
+  "/api/my-erp-pages",
+  "/api/factory/my-access",
+]);
+
+const authedReadLimiter = buildLimiter(AUTHED_MAX);
+const authedWriteLimiter = buildLimiter(AUTHED_WRITE_MAX);
+const authedAccessLimiter = buildLimiter(AUTHED_ACCESS_MAX);
 const anonLimiter = buildLimiter(ANON_MAX);
 
 export function apiRateLimit(req: Request, res: Response, next: NextFunction): void {
-  const limiter = req.session?.userId ? authedLimiter : anonLimiter;
+  if (!req.session?.userId) {
+    anonLimiter(req, res, next);
+    return;
+  }
+
+  const method = req.method.toUpperCase();
+  // Never let read-heavy pages, polling or a QA harness cause a normal manual
+  // voucher write to fail with API_RATE_LIMITED. Financial writes still have a
+  // bounded budget; route-specific security limiters continue to apply.
+  const limiter =
+    (method === "GET" || method === "HEAD") && CRITICAL_AUTHED_READS.has(req.path)
+      ? authedAccessLimiter
+      : method === "GET" || method === "HEAD" || method === "OPTIONS"
+        ? authedReadLimiter
+        : authedWriteLimiter;
   limiter(req, res, next);
 }

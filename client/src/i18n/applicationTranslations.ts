@@ -63,6 +63,7 @@ export const applicationEnglishTranslations = {
   "user.menu": "Account menu",
   "common.logout": "Log out",
   "common.refresh": "Refresh",
+  "access.permissionRefreshFailed": "Page permissions could not be refreshed. Your workspace is still available.",
   "access.noTabsAvailable": "No tabs are available for this user.",
   "common.updateAvailable": "Update available",
   "common.updateDescription": "A new version of the app is ready.",
