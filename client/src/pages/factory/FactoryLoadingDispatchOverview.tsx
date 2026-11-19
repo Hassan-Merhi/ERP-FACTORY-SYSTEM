@@ -51,17 +51,18 @@ export default function FactoryLoadingDispatchOverview({ state }: { state: State
     verifiedWeight,
     visibleTrips,
   } = state;
+  const activeTab: Tab = canViewFinancialDashboard ? tab : "trips";
   const overviewBase = "/api/factory/customer-orders/" + orderId + "/loading-dispatches";
   const finance = useQuery<Overview>({
     queryKey: companyQueryKey(overviewBase + "/order-overview", companyId),
     queryFn: () => json<Overview>(overviewBase + "/order-overview"),
-    enabled: canViewFinancialDashboard && tab !== "trips" && Boolean(companyId),
-    refetchInterval: tab === "trips" ? false : 20000,
+    enabled: canViewFinancialDashboard && activeTab !== "trips" && Boolean(companyId),
+    refetchInterval: activeTab === "trips" ? false : 20000,
   });
   const readiness = useQuery<ReleaseGate>({
     queryKey: companyQueryKey(overviewBase + "/release-readiness", companyId),
     queryFn: () => json<ReleaseGate>(overviewBase + "/release-readiness"),
-    enabled: canViewFinancialDashboard && tab === "invoice" && Boolean(companyId),
+    enabled: canViewFinancialDashboard && activeTab === "invoice" && Boolean(companyId),
   });
   const compare = () => navigate(tripPath(orderId) + "/compare");
   const physicalReport = () => navigate(tripPath(orderId) + "/report");
@@ -98,29 +99,29 @@ export default function FactoryLoadingDispatchOverview({ state }: { state: State
       <Card className="overflow-hidden border-border bg-card shadow-sm">
         <CardContent className="p-0">
           <div className="flex flex-wrap gap-1 border-b border-border px-3 pt-3 sm:px-5" role="tablist" aria-label="Dispatch management sections">
-            <button type="button" role="tab" aria-selected={tab === "trips"}
+            <button type="button" role="tab" aria-selected={activeTab === "trips"}
               onClick={() => setTab("trips")}
               data-testid="dispatch-simple-tab-trips"
-              className={tabClass(tab === "trips")}>
+              className={tabClass(activeTab === "trips")}>
               <Truck className="h-4 w-4" /> Trips <span className="text-xs opacity-70">({trips.length})</span>
             </button>
             {canViewFinancialDashboard && (
               <>
-                <button type="button" role="tab" aria-selected={tab === "charges"}
+                <button type="button" role="tab" aria-selected={activeTab === "charges"}
                   onClick={() => setTab("charges")} data-testid="dispatch-simple-tab-charges"
-                  className={tabClass(tab === "charges")}>
+                  className={tabClass(activeTab === "charges")}>
                   <ReceiptText className="h-4 w-4" /> Charges
                 </button>
-                <button type="button" role="tab" aria-selected={tab === "invoice"}
+                <button type="button" role="tab" aria-selected={activeTab === "invoice"}
                   onClick={() => setTab("invoice")} data-testid="dispatch-simple-tab-invoice"
-                  className={tabClass(tab === "invoice")}>
+                  className={tabClass(activeTab === "invoice")}>
                   <FileText className="h-4 w-4" /> Final Invoice
                 </button>
               </>
             )}
           </div>
           <div className="p-3 sm:p-5">
-            {tab === "trips" && (
+            {activeTab === "trips" && (
               <FactoryLoadingDispatchSection
                 canCreate={canCreate}
                 filter={filter}
@@ -135,13 +136,13 @@ export default function FactoryLoadingDispatchOverview({ state }: { state: State
                 visibleTrips={visibleTrips}
               />
             )}
-            {tab !== "trips" && canViewFinancialDashboard && (
+            {activeTab !== "trips" && canViewFinancialDashboard && (
               <div role="tabpanel" className="space-y-4">
                 {finance.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading financial details…</p>}
                 {finance.isError && <p className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive" role="alert">
                   {finance.error instanceof Error ? finance.error.message : "Unable to load financial details"}
                 </p>}
-                {finance.data && tab === "charges" && (
+                {finance.data && activeTab === "charges" && (
                   <>
                     <p className="text-sm text-muted-foreground">Charges stay linked to their dispatch. Open a trip to add or change its charges.</p>
                     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -176,7 +177,7 @@ export default function FactoryLoadingDispatchOverview({ state }: { state: State
                     ) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No charges recorded yet.</p>}
                   </>
                 )}
-                {finance.data && tab === "invoice" && (
+                {finance.data && activeTab === "invoice" && (
                   <>
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 p-4">
                       <div className="space-y-1">
