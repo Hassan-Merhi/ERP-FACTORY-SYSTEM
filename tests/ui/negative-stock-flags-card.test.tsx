@@ -55,7 +55,7 @@ describe("negative stock flags card", () => {
   });
 
   it("lists open flags and closes one with a note", async () => {
-    harness.apiRequest.mockImplementation(async (method: string, url: string) => {
+    harness.apiRequest.mockImplementation(async (method: string) => {
       if (method === "GET") return { json: async () => ({ flags: [openFlag] }) };
       return { json: async () => ({ resolved: true }) };
     });
