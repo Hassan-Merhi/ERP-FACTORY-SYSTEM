@@ -29,7 +29,7 @@ import {
 import { FactoryLoadingDispatchLifecycleDispatchLifecycle } from "./FactoryLoadingDispatchLifecycleDispatchLifecycle";
 import { LoadingState } from "@/components/ui/page-state";
 
-export default function FactoryLoadingDispatchLifecycle(props: Props) {
+export default function FactoryLoadingDispatchLifecycle(props: Props & { compact?: boolean }) {
   const {
     canClose,
     canConfirmEnd,
@@ -71,6 +71,7 @@ export default function FactoryLoadingDispatchLifecycle(props: Props) {
   return (
     <>
       <FactoryLoadingDispatchLifecycleDispatchLifecycle
+        compact={props.compact}
         canClose={canClose}
         capabilities={capabilities}
         closures={closures}

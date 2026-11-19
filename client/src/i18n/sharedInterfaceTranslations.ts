@@ -1,14 +1,12 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
+import { factoryDispatchTranslations } from "./factoryDispatchTranslations";
+
 type SharedEntry = Record<ApplicationLanguage, string>;
 
-/**
- * Exact approved interface labels used by the compatibility translator.
- * These entries are UI chrome only. Stored names, codes, references and free-form
- * business values are intentionally absent and remain protected by the translator.
- */
+/** Exact UI labels only. Stored business values remain protected. */
 export const sharedInterfaceTranslations: SharedEntry[] = [
-  // Proforma creation/editing dashboard labels.
+  ...factoryDispatchTranslations,
   { en: "Qty / Container", ar: "الكمية لكل حاوية", fr: "Quantité par conteneur" },
   { en: "Total KG", ar: "إجمالي الكيلوغرامات", fr: "Poids total (kg)" },
   { en: "Shortages", ar: "النواقص", fr: "Manquants" },

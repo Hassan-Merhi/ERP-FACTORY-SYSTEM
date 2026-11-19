@@ -11,6 +11,7 @@ const DETECTOR_VERSION = 9;
 const compatibilityTranslationFiles = [
   "client/src/i18n/applicationTranslations.ts",
   "client/src/i18n/sharedInterfaceTranslations.ts",
+  "client/src/i18n/factoryDispatchTranslations.ts",
   "client/src/i18n/accountingDocumentTranslations.ts",
   "client/src/i18n/sharedUiPhase3Translations.part1.ts",
   "client/src/i18n/sharedUiPhase3Translations.part2.ts",
