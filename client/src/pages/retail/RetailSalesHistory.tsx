@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { History, Search, UserRound } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -9,111 +7,31 @@ import { Label } from "@/components/ui/label";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
-import { getJson, money, type Location } from "./retailInventoryTypes";
-import {
-  fetchRetailCustomerHistory,
-  searchRetailCustomers,
-  searchRetailSalesHistory,
-} from "@/pages/pos/retailWave2Api";
-import type { RetailCustomerSummary } from "@/pages/pos/retailWave2Types";
-import type { RetailSale } from "@/pages/pos/retailPosTypes";
-
-function SaleBreakdown({ sale }: { sale: RetailSale }) {
-  return (
-    <div className="space-y-2">
-      {sale.items.map((item) => (
-        <div key={item.id} className="flex flex-wrap items-center gap-2 text-sm" data-no-translate>
-          <span className="min-w-0 flex-1 truncate">
-            {item.name} · {item.color} · {item.size} <span className="text-muted-foreground">× {item.quantity}</span>
-          </span>
-          {Number(item.lineDiscountAmount ?? 0) > 0 && (
-            <span className="text-xs text-destructive">-{money(item.lineDiscountAmount ?? 0)}</span>
-          )}
-          <span className="font-medium">
-            {money(item.lineTotal ?? item.quantity * (item.grossUnitPrice ?? item.unitPrice))}
-          </span>
-        </div>
-      ))}
-      <div className="space-y-0.5 border-t pt-2 text-xs text-muted-foreground">
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>{money(sale.listSubtotal ?? sale.totalAmount)}</span>
-        </div>
-        {Number(sale.discountTotal ?? 0) > 0 && (
-          <div className="flex justify-between text-destructive">
-            <span>Discount{sale.orderDiscountReason ? ` · ${sale.orderDiscountReason}` : ""}</span>
-            <span>-{money(sale.discountTotal ?? 0)}</span>
-          </div>
-        )}
-        {sale.taxEnabled && (
-          <div className="flex justify-between">
-            <span>{sale.taxLabel || "Tax"}</span>
-            <span>{money(sale.taxAmount ?? 0)}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-sm font-semibold text-foreground">
-          <span>Total</span>
-          <span>{money(sale.totalAmount)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { money } from "./retailInventoryTypes";
+import { SaleBreakdown } from "./SaleBreakdown";
+import { useRetailSalesHistoryState } from "./useRetailSalesHistoryState";
 
 /**
  * Retail history workspace: find any past sale by receipt number, customer, item/barcode or date,
  * and inspect one customer's purchases, receipts, returns and exchanges.
  */
 export default function RetailSalesHistory() {
-  const { selectedCompany } = useCompany();
-  const retailEnabled = selectedCompany?.companyType === "retail";
-  const [filters, setFilters] = useState({
-    receipt: "",
-    search: "",
-    barcode: "",
-    dateFrom: "",
-    dateTo: "",
-    locationId: "" as number | "",
-  });
-  const [submittedFilters, setSubmittedFilters] = useState<typeof filters | null>(null);
-  const [customerTerm, setCustomerTerm] = useState("");
-  const [customer, setCustomer] = useState<RetailCustomerSummary | null>(null);
-
-  const locationsQuery = useQuery({
-    queryKey: ["retail-history-locations"],
-    queryFn: () => getJson<Location[]>("/api/locations"),
-    enabled: retailEnabled,
-  });
-
-  const customersQuery = useQuery({
-    queryKey: ["retail-history-customers", customerTerm],
-    queryFn: () => searchRetailCustomers(customerTerm, 10),
-    enabled: retailEnabled && !customer && customerTerm.trim().length > 1,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ["retail-history-sales", submittedFilters, customer?.id],
-    queryFn: () =>
-      searchRetailSalesHistory({
-        receipt: submittedFilters?.receipt || undefined,
-        search: submittedFilters?.search || undefined,
-        barcode: submittedFilters?.barcode || undefined,
-        dateFrom: submittedFilters?.dateFrom || undefined,
-        dateTo: submittedFilters?.dateTo || undefined,
-        locationId: submittedFilters?.locationId || undefined,
-        customerId: customer?.id,
-        limit: 50,
-      }),
-    enabled: retailEnabled && (Boolean(submittedFilters) || Boolean(customer)),
-  });
-
-  const customerHistoryQuery = useQuery({
-    queryKey: ["retail-customer-history", customer?.id],
-    queryFn: () => fetchRetailCustomerHistory(customer!.id),
-    enabled: retailEnabled && Boolean(customer),
-  });
+  const {
+    retailEnabled,
+    filters,
+    setFilters,
+    setSubmittedFilters,
+    submittedFilters,
+    customerTerm,
+    setCustomerTerm,
+    customer,
+    setCustomer,
+    locationsQuery,
+    customersQuery,
+    historyQuery,
+    customerHistoryQuery,
+  } = useRetailSalesHistoryState();
 
   if (!retailEnabled) return null;
 

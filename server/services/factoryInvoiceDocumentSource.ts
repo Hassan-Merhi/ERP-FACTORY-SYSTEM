@@ -10,51 +10,7 @@ import {
   type CanonicalInvoiceDocument,
   type CanonicalInvoiceLine,
 } from "./factoryInvoiceDocumentModel";
-
-/** Reads a customer order as it stands now, as a canonical invoice document. */
-type HeaderRow = {
-  id: unknown;
-  company_id: unknown;
-  invoice_number: unknown;
-  order_date: unknown;
-  status: unknown;
-  subtotal_bales: unknown;
-  freight_amount: unknown;
-  other_charges_total: unknown;
-  grand_total: unknown;
-  total_qty_bales: unknown;
-  container_number: unknown;
-  destination: unknown;
-  shipping_company: unknown;
-  customer_name: unknown;
-  customer_code: unknown;
-  base_currency: unknown;
-};
-
-type LineRow = {
-  id: unknown;
-  article_code: unknown;
-  bale_name: unknown;
-  bale_name_ar: unknown;
-  bale_name_fr: unknown;
-  qty: unknown;
-  weight_per_bale: unknown;
-  total_weight: unknown;
-  pricing_mode: unknown;
-  price_per_bale: unknown;
-  price_per_kg: unknown;
-  total_price: unknown;
-  category_name: unknown;
-  category_name_ar: unknown;
-  category_name_fr: unknown;
-};
-
-type ChargeRow = {
-  id: unknown;
-  name: unknown;
-  amount: unknown;
-  charge_type: unknown;
-};
+import type { HeaderRow, LineRow, ChargeRow } from "./factoryInvoiceDocumentSourceTypes";
 
 export async function buildLiveCanonicalInvoiceDocument(
   orderId: number,
@@ -211,37 +167,50 @@ export async function buildLiveCanonicalInvoiceDocument(
   // discounts ONCE without cloning them into the old charge voucher workflow.
   let dispatchTrips: CanonicalInvoiceDocument["dispatchTrips"] = undefined;
   let signedGoods: number | null = null;
-  if (safeString(header.status)==="FINALIZED") {
-    const [tableExists] = resultRows<{ present: boolean }>(await db.execute(sql`
+  if (safeString(header.status) === "FINALIZED") {
+    const [tableExists] = resultRows<{ present: boolean }>(
+      await db.execute(sql`
       SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL AS present
-    `));
+    `)
+    );
     if (tableExists?.present) {
       const [consolidated] = resultRows<{
-        status: string; goods_subtotal: string;
-      }>(await db.execute(sql`
+        status: string;
+        goods_subtotal: string;
+      }>(
+        await db.execute(sql`
         SELECT status,goods_subtotal::text
         FROM factory_dispatch_order_consolidations
         WHERE company_id=${companyId} AND order_id=${orderId} LIMIT 1
-      `));
-      if (consolidated?.status==="FINALIZED") {
+      `)
+      );
+      if (consolidated?.status === "FINALIZED") {
         // The signed Phase 7 field is accessed only for actual consolidated
         // orders; legacy invoice exports do not depend on deferred migrations.
-        const [signed]=resultRows<{reconciliation_snapshot:unknown}>(await db.execute(sql`
+        const [signed] = resultRows<{ reconciliation_snapshot: unknown }>(
+          await db.execute(sql`
           SELECT reconciliation_snapshot FROM factory_dispatch_order_consolidations
           WHERE company_id=${companyId} AND order_id=${orderId}
-        `));
-        const snapshot=signed?.reconciliation_snapshot as
-          { trips?: Array<{dispatchId?:unknown;dispatchNumber?:unknown;postedBales?:unknown;customerTotal?:unknown}> }|null;
-        dispatchTrips=Array.isArray(snapshot?.trips)
-          ? snapshot.trips.map(t=>({
-              dispatchId:safeString(t.dispatchId),
-              dispatchNumber:safeNumber(t.dispatchNumber),
-              postedBales:safeNumber(t.postedBales),
-              customerTotal:safeNumber(t.customerTotal),
+        `)
+        );
+        const snapshot = signed?.reconciliation_snapshot as {
+          trips?: Array<{
+            dispatchId?: unknown;
+            dispatchNumber?: unknown;
+            postedBales?: unknown;
+            customerTotal?: unknown;
+          }>;
+        } | null;
+        dispatchTrips = Array.isArray(snapshot?.trips)
+          ? snapshot.trips.map((t) => ({
+              dispatchId: safeString(t.dispatchId),
+              dispatchNumber: safeNumber(t.dispatchNumber),
+              postedBales: safeNumber(t.postedBales),
+              customerTotal: safeNumber(t.customerTotal),
             }))
           : [];
-        signedGoods=safeNumber(consolidated.goods_subtotal);
-        const tripChargeResult=await db.execute(sql`
+        signedGoods = safeNumber(consolidated.goods_subtotal);
+        const tripChargeResult = await db.execute(sql`
           SELECT c.id,c.name,c.kind,c.amount::text AS amount,
                  d.dispatch_number AS "dispatchNumber"
             FROM factory_dispatch_trip_charges c
@@ -259,35 +228,43 @@ export async function buildLiveCanonicalInvoiceDocument(
         // trips. The immutable source rows and their original GL vouchers stay
         // separate for audit and are NEVER recreated in customer_order_charges.
         // Internal expenses are not customer-billable and remain excluded.
-        const dispatchChargeRows=resultRows<{
-          id:unknown;name:unknown;kind:unknown;amount:unknown;dispatchNumber:unknown;
+        const dispatchChargeRows = resultRows<{
+          id: unknown;
+          name: unknown;
+          kind: unknown;
+          amount: unknown;
+          dispatchNumber: unknown;
         }>(tripChargeResult);
-        if(dispatchChargeRows.length) {
-          const netDispatchCharges=sumMoney(dispatchChargeRows.map(row=>
-            new MoneyDecimal(String(row.amount??"0"))
-              .times(row.kind==="DISCOUNT"?-1:1).toFixed(2)
-          ));
+        if (dispatchChargeRows.length) {
+          const netDispatchCharges = sumMoney(
+            dispatchChargeRows.map((row) =>
+              new MoneyDecimal(String(row.amount ?? "0")).times(row.kind === "DISCOUNT" ? -1 : 1).toFixed(2)
+            )
+          );
           charges.push({
-            id:-safeNumber(header.id),
-            name:"Dispatch charges (all trips, net of discounts)",
-            amount:netDispatchCharges.toDecimalPlaces(2).toNumber(),
+            id: -safeNumber(header.id),
+            name: "Dispatch charges (all trips, net of discounts)",
+            amount: netDispatchCharges.toDecimalPlaces(2).toNumber(),
             // Trip freight is intentionally not "FREIGHT": the existing
             // exporter filters that bucket and would otherwise hide it.
-            chargeType:"OTHER",
+            chargeType: "OTHER",
           });
         }
       }
     }
   }
 
-  if(dispatchTrips) {
+  if (dispatchTrips) {
     // Fail closed: the PDF/Excel commercial document must reconcile to
     // the signed, already-posted customer totals, including billable trip fees,
     // discounts and original order charges. Never emit a misleading invoice.
-    const renderedTotal=new MoneyDecimal(String(signedGoods ?? 0))
-      .plus(sumMoney(charges.map(x=>String(x.amount))));
-    if(!renderedTotal.toDecimalPlaces(2).eq(new MoneyDecimal(String(header.grand_total??"0")))){
-      throw new Error("COMBINED_INVOICE_DOCUMENT_TOTAL_MISMATCH: Signed goods and itemized charges do not equal the finalized invoice total");
+    const renderedTotal = new MoneyDecimal(String(signedGoods ?? 0)).plus(
+      sumMoney(charges.map((x) => String(x.amount)))
+    );
+    if (!renderedTotal.toDecimalPlaces(2).eq(new MoneyDecimal(String(header.grand_total ?? "0")))) {
+      throw new Error(
+        "COMBINED_INVOICE_DOCUMENT_TOTAL_MISMATCH: Signed goods and itemized charges do not equal the finalized invoice total"
+      );
     }
   }
 
