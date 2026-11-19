@@ -234,8 +234,12 @@ plan are in the plan document and the
 - Stock transfer edits, finalizes and revisions on a PC; a transfer made on the
   PC keeps its local id as its reference.
 - Container offloads (receiving) and file renames / moves on a PC.
-- Next: file uploads on a PC (the record plus its bytes), POS edits and
-  cancellations, then new voucher types; then Phases C to E.
+- File uploads on a PC: the bytes first (checked against the declared
+  SHA-256), then the record.
+- POS sale edits and cancellations on a PC, with the live sale-edit rules
+  re-checked in the cloud for a PC's own records.
+- Next: new voucher types (journals, invoices, purchases need cloud handlers);
+  then Phases C to E.
 
 ## Resume checklist (next session)
 

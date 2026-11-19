@@ -112,8 +112,8 @@ export default function MonetaryFxAccounting() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Valuation is informational. No revaluation journal or changes to original transactions are created when
-            rates change.
+            Original transactions and native balances never change. When a company rate is saved, one automatic FX
+            revaluation journal brings cash, bank, customer and loan balances to the new rate.
           </p>
           <Label htmlFor="fx-account">Cash or bank account</Label>
           <Select

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { fxRevaluationSummary, readFxRevaluation, refreshAfterFxRevaluation } from "@/lib/fxRevaluationSummary";
 import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateReadModels";
 import { RefreshCw, Plus, TrendingUp } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -128,13 +129,21 @@ export function ExchangeRateSettings() {
         rate: data.rate,
         effectiveDate: data.effectiveDate,
       });
-      return { response, savedCompanyId, savedDate: data.effectiveDate };
+      return {
+        response,
+        savedCompanyId,
+        savedDate: data.effectiveDate,
+        fxRevaluation: await readFxRevaluation(response),
+      };
     },
-    onSuccess: async ({ savedCompanyId, savedDate }) => {
+    onSuccess: async ({ savedCompanyId, savedDate, fxRevaluation }) => {
+      const revaluation = fxRevaluationSummary(fxRevaluation);
       toast({
         title: "Exchange rate saved",
-        description: "Rate-dependent USD views are refreshing. Native balances and historical vouchers are unchanged.",
+        description: `${revaluation.description} Native balances are unchanged.`,
+        ...(revaluation.problem ? { variant: "destructive" as const } : {}),
       });
+      refreshAfterFxRevaluation(fxRevaluation);
       await invalidateExchangeRateReadModels(savedCompanyId);
       // Don't reset an in-progress draft for a different company if the user
       // switched while this request was in flight.

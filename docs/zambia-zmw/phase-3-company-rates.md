@@ -1,5 +1,7 @@
 # Zambia ZMW integration — Phase 3 company settings and rate controls
 
+> **Superseded in part (2026-11-19):** a company rate save now also posts an automatic FX revaluation journal. See [automatic-revaluation-journal.md](../fx-monetary-valuation/automatic-revaluation-journal.md).
+
 **Status:** Phase 3 code implemented and committed on the existing `feature/zambia-zmw-multicurrency` branch, with no execution of CI, tests, lint, typechecking or builds. Claude must verify after all implementation phases. This phase does NOT update production company #19, write exchange rates, run migrations, merge main or deploy Render.
 
 ## Scope completed

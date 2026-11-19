@@ -39,6 +39,11 @@ services:
           property: connectionString
       - key: SESSION_SECRET
         generateValue: true
+      # The Android and iOS apps call this server from their own origin, so the
+      # session cookie must be SameSite=None (it stays Secure and HttpOnly).
+      # The origin guard and CSRF tokens remain the CSRF protection.
+      - key: CAPACITOR_ENABLED
+        value: "true"
     healthCheckPath: /api/health/ready
     autoDeployTrigger: checksPass
 

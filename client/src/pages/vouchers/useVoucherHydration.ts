@@ -257,8 +257,10 @@ export function useVoucherHydration({
         const isLiabilityPayment = paymentEntry.supplierId || paymentEntry.employeeId || paymentEntry.factorySupplierId;
         // Historical Zambia vouchers store USD in debitAmount/creditAmount,
         // and the original Kwacha amounts in transactionDebit/CreditAmount.
-        const debitNative = voucherToEdit.currency === "ZMW" ? entry.transactionDebitAmount : entry.debitAmount;
-        const creditNative = voucherToEdit.currency === "ZMW" ? entry.transactionCreditAmount : entry.creditAmount;
+        // A direct EUR payment from an FX agent wallet is likewise entered in EUR.
+        const editsNative = voucherToEdit.currency === "ZMW" || voucherToEdit.currency === "EUR";
+        const debitNative = editsNative ? entry.transactionDebitAmount : entry.debitAmount;
+        const creditNative = editsNative ? entry.transactionCreditAmount : entry.creditAmount;
         if (voucherToEdit.voucherType === "Payment") {
           amount = String(isLiabilityPayment ? (creditNative ?? "0") : (debitNative ?? "0"));
         } else if (voucherToEdit.voucherType === "Receipt") {
