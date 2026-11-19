@@ -10,6 +10,7 @@ const routes = read("server/routes/factory/customer-orders/loadingDispatchOrderO
 const workbook = read("server/routes/factory/customer-orders/loadingDispatchOrderOverviewWorkbook.ts");
 const ui = read("client/src/pages/factory/FactoryDispatchOrderDashboard.tsx");
 const parent = read("client/src/pages/factory/FactoryLoadingDispatch.tsx");
+const overview = read("client/src/pages/factory/FactoryLoadingDispatchOverview.tsx");
 const accessManifest = read("config/route-access-manifest.json");
 const schema = read("shared/schema/factory/dispatch-financials.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as { routes: string[]; routeCount: number };
@@ -67,8 +68,10 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(reportRule).toContain('"exp_excel"');
   });
   it("is registered before dynamic trip routes and displays financials only to Admin/Owner/Developer", () => {
-    expect(parent).toContain("canViewFinancialDashboard");
-    expect(parent).toContain("FactoryDispatchOrderDashboard");
+    expect(parent).toContain("FactoryLoadingDispatchOverview");
+    expect(overview).toContain("canViewFinancialDashboard");
+    expect(overview).toContain("FactoryDispatchOrderDashboard");
+    expect(overview).toContain('enabled: canViewFinancialDashboard && tab !== "trips"');
     expect(routes).toContain("registerFactoryDispatchOrderOverviewRoutes");
     const app = read("server/routes/factoryRoutes.ts");
     expect(app.indexOf("registerFactoryDispatchOrderOverviewRoutes(app)")).toBeLessThan(
