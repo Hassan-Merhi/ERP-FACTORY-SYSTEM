@@ -8,29 +8,7 @@ import type { FactorySettingsData, RenamePreviewItem } from "./types";
 import { defaultSettings } from "./utils";
 import { factoryRenameDefaults } from "@shared/factoryUiDefaults";
 import { useCompany } from "@/contexts/CompanyContext";
-
-type OcContainer = {
-  containerId: number;
-  containerNumber: string;
-  charges: { id: number; description: string; amount: string; currencyCode: string }[];
-};
-
-type BaleValidationResult = {
-  totalRows: number;
-  validRows: {
-    rowIndex: number;
-    articleCode: string;
-    productName: string;
-    productId: number;
-    quantity: number;
-    weight: number;
-    productionDate: string;
-  }[];
-  skippedRows: { rowIndex: number; articleCode: string; reason: string }[];
-  totalBales: number;
-  totalWeight: number;
-  totalProducts: number;
-};
+import type { OcContainer, BaleValidationResult } from "./useFactorySettingsModelPart1Types";
 
 export function useFactorySettingsModelPart1() {
   const { toast } = useToast();

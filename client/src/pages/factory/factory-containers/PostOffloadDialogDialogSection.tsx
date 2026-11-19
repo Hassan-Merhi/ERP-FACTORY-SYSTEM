@@ -1,19 +1,6 @@
 // Extracted from ./PostOffloadDialog.tsx to keep that module under the source-size cap.
-import { Fragment } from "react";
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Pencil,
-  Plus,
-  PlusCircle,
-  RotateCcw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Pencil, PlusCircle, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -22,9 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MutationResultPanel } from "./postoffloaddialog/components/MutationResultPanel";
 import { usePostOffloadDialogState } from "./usePostOffloadDialogState";
+import { PostOffloadDialogDialogSectionContent } from "./PostOffloadDialogDialogSectionContent";
 
 export function PostOffloadDialogDialogSection({
   activeCharges,
@@ -188,136 +175,14 @@ export function PostOffloadDialogDialogSection({
               )}
 
               {/* ── Add new charge form ────────────────────────────────── */}
-              <div className="space-y-5">
-                <div className="flex items-start gap-3 p-3 rounded-md bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 text-sm">
-                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>Enter charges that arrived after the original offload — port fees, duties, handling, etc.</p>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Date</label>
-                  <Input
-                    type="date"
-                    value={txDate}
-                    onChange={(e) => setTxDate(e.target.value)}
-                    className="w-48"
-                    data-testid="input-post-offload-date"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between flex-wrap gap-1">
-                    <label className="text-sm font-medium">New Charges</label>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setNewCharges((prev) => [
-                          ...prev,
-                          {
-                            id: Date.now().toString(),
-                            description: "",
-                            amount: "",
-                            currencyCode: container?.currencyCode || "USD",
-                            ledgerAccountId: "",
-                            supplierId: "",
-                          },
-                        ])
-                      }
-                      data-testid="button-add-post-offload-charge-row"
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Add Row
-                    </Button>
-                  </div>
-                  {newCharges.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center border rounded-md">
-                      No charges added yet — click "Add Row" to begin.
-                    </p>
-                  ) : (
-                    <div className="space-y-1">
-                      <div className="grid grid-cols-[2fr_1fr_auto_2fr_auto] gap-x-2 gap-y-1 items-center">
-                        <div className="text-xs text-muted-foreground font-medium">Description</div>
-                        <div className="text-xs text-muted-foreground font-medium">Amount</div>
-                        <div className="text-xs text-muted-foreground font-medium">CCY</div>
-                        <div className="text-xs text-muted-foreground font-medium">Account / Broker</div>
-                        <div />
-                        {newCharges.map((charge, idx) => (
-                          <Fragment key={charge.id}>
-                            <Input
-                              value={charge.description}
-                              onChange={(e) =>
-                                setNewCharges((prev) =>
-                                  prev.map((c) => (c.id === charge.id ? { ...c, description: e.target.value } : c))
-                                )
-                              }
-                              placeholder="e.g. Port duty"
-                              data-testid={`input-poc-description-${idx}`}
-                            />
-                            <Input
-                              type="number"
-                              value={charge.amount}
-                              onChange={(e) =>
-                                setNewCharges((prev) =>
-                                  prev.map((c) => (c.id === charge.id ? { ...c, amount: e.target.value } : c))
-                                )
-                              }
-                              placeholder="0.00"
-                              step="0.01"
-                              data-testid={`input-poc-amount-${idx}`}
-                            />
-                            <Select
-                              value={charge.currencyCode || "USD"}
-                              onValueChange={(v) =>
-                                setNewCharges((prev) =>
-                                  prev.map((c) => (c.id === charge.id ? { ...c, currencyCode: v } : c))
-                                )
-                              }
-                            >
-                              <SelectTrigger className="w-20" data-testid={`select-poc-currency-${idx}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {["USD", "EUR", "GBP", "AUD", "LBP"].map((ccy) => (
-                                  <SelectItem key={ccy} value={ccy}>
-                                    {ccy}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={charge.ledgerAccountId || ""}
-                              onValueChange={(v) =>
-                                setNewCharges((prev) =>
-                                  prev.map((c) =>
-                                    c.id === charge.id ? { ...c, ledgerAccountId: v, supplierId: "" } : c
-                                  )
-                                )
-                              }
-                            >
-                              <SelectTrigger data-testid={`select-poc-account-${idx}`}>
-                                <SelectValue placeholder="Select account (optional)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ledgerAccounts.map((a) => (
-                                  <SelectItem key={a.id} value={String(a.id)}>
-                                    {a.code ? `${a.code} - ${a.name}` : a.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setNewCharges((prev) => prev.filter((c) => c.id !== charge.id))}
-                              data-testid={`button-remove-poc-${idx}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </Fragment>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <PostOffloadDialogDialogSectionContent
+                container={container}
+                ledgerAccounts={ledgerAccounts}
+                newCharges={newCharges}
+                setNewCharges={setNewCharges}
+                setTxDate={setTxDate}
+                txDate={txDate}
+              />
             </>
           )}
         </div>

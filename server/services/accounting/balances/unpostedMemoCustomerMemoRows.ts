@@ -1,21 +1,22 @@
 // Extracted from ./unpostedMemo.ts to keep that module under the source-size cap.
 import { lte, sql } from "drizzle-orm";
-import type { DatabaseOrTransaction } from "../../../db";
 import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { netPositionKnownTransactionThrough, netPositionRecordedThrough } from "../../factory/netPositionAsOf";
-
-export type MemoPartyKind = "customer" | "factorySupplier";
-
-export type MemoSource =
-  | "factoryInvoice"
-  | "factoryPosCreditSale"
-  | "factoryPosDeposit"
-  | "customerBalanceCache"
-  | "factoryContainerGoods"
-  | "factoryContainerFreight"
-  | "factoryContainerCommission"
-  | "factoryRawStockCommission"
-  | "factoryCommissionRecord";
+import type {
+  MemoSource,
+  MemoQuery,
+  Executor,
+  NumberCondition,
+  CustomerMemoRow,
+} from "./unpostedMemoCustomerMemoRowsTypes";
+export type {
+  MemoPartyKind,
+  MemoSource,
+  PartyBalanceMemoLine,
+  MemoQuery,
+  Executor,
+  ContainerMemoRow,
+} from "./unpostedMemoCustomerMemoRowsTypes";
 
 /** What each source is, as shown next to a balance (the reference names the document). */
 export const MEMO_SOURCE_LABELS: Record<MemoSource, string> = {
@@ -32,36 +33,6 @@ export const MEMO_SOURCE_LABELS: Record<MemoSource, string> = {
 
 /** A container amount in a currency with no confirmed rate (listed, not totalled). */
 export const MEMO_NO_RATE_LABEL = "Container amount not yet in the ledger, in a currency without a confirmed rate";
-
-/** An amount that belongs next to a party's balance but is not in the ledger. */
-export interface PartyBalanceMemoLine {
-  source: MemoSource;
-  /** The operational document: invoice number, cache reference, container number. */
-  reference: string | null;
-  /** The row it comes from (order, customer_balances row, container id). */
-  sourceId: number;
-  /** YYYY-MM-DD. */
-  date: string;
-  /** USD, debit positive (owed to us positive); null when no rate is stored for its currency. */
-  amount: string | null;
-  /** The amount in its own currency, debit positive. */
-  nativeAmount: string;
-  currency: string;
-  /** Human-readable label: what the amount is and why it is not in the ledger. */
-  label: string;
-  /** Always true: the line is outside the ledger balance. */
-  notInLedger: true;
-}
-
-export interface MemoQuery {
-  knownAt?: FactoryNetPositionAsOf;
-  companyId: number;
-  kind: MemoPartyKind;
-  ids: readonly number[];
-  asOf?: string | null;
-}
-
-export type Executor = DatabaseOrTransaction;
 
 export async function rowsOf<T>(executor: Executor, query: ReturnType<typeof sql>): Promise<T[]> {
   return (await executor.execute(query)).rows as unknown as T[];
@@ -94,8 +65,6 @@ export function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefi
   if (!asOf) return sql``;
   return sql` AND ${lte(sql.raw(`COALESCE(${alias}.effective_date, ${alias}.voucher_date)`), asOf)}`;
 }
-
-type NumberCondition = (voucherNumber: ReturnType<typeof sql>) => ReturnType<typeof sql>;
 
 /**
  * The voucher's number matches. A voucher retired after the cutoff was renamed
@@ -130,17 +99,6 @@ export function liveVoucherExists(
        AND ${numberMatches("mv", matches, retired)}${bookedBy("mv", asOf, knownAt)}
   )`;
   return knownAt ? sql`(${exists(false)} OR ${exists(true)})` : exists(false);
-}
-
-interface CustomerMemoRow {
-  party_id: number;
-  source: MemoSource;
-  reference: string | null;
-  source_id: number;
-  date: string;
-  native: string;
-  currency: string | null;
-  extra: string | null;
 }
 
 export async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<CustomerMemoRow[]> {
@@ -285,32 +243,4 @@ export function customerLabel(row: CustomerMemoRow): string {
     default:
       return `${row.extra || row.reference}: customer balance record not in the ledger`;
   }
-}
-
-export interface ContainerMemoRow {
-  id: number;
-  container_number: string;
-  supplier_id: number | null;
-  /** The party the commission is owed to: the commission supplier, else the container's supplier. */
-  commission_party_id: number | null;
-  date: string;
-  status: string | null;
-  currency_code: string | null;
-  fx_rate_to_usd: string | null;
-  fx_rate_confirmed: boolean | null;
-  goods: string | null;
-  goods_posted: boolean;
-  opening_already_in_supplier_master: boolean;
-  freight: string | null;
-  freight_currency_code: string | null;
-  freight_fx_rate_to_usd: string | null;
-  freight_fx_rate_confirmed: boolean | null;
-  freight_paid_by: string | null;
-  freight_supplier_id: number | null;
-  freight_posted: boolean;
-  commission_amount: string | null;
-  commission_currency_code: string | null;
-  commission_fx_rate_to_usd: string | null;
-  commission_fx_rate_confirmed: boolean | null;
-  commission_posted: boolean;
 }

@@ -1,85 +1,15 @@
 // Extracted from ./smartTransferBusinessRules.ts to keep that module under the source-size cap.
-import type { SmartTransferPreviewOptions } from "./smartTransferAllocation";
-import type {
-  SmartTransferSourceOptimizedLine,
-  SmartTransferSourceOptimizedResult,
-} from "./smartTransferSourceOptimization";
 import { parseMoneyInput } from "../lib/money";
-
-export interface SmartTransferBusinessRuleOptions extends SmartTransferPreviewOptions {
-  maxItemSharePct?: number;
-  maxCategorySharePct?: number;
-  maxStockGroupSharePct?: number;
-  minItemQuantity?: number;
-  preserveDestinationMix?: boolean;
-  priorityCategoryIds?: number[];
-  priorityStockGroupIds?: number[];
-}
-
-export interface SmartTransferBusinessRuleFields {
-  categoryName: string;
-  stockGroupName: string;
-  businessPriorityScore: number;
-  itemBusinessCapQty: number;
-  categoryTargetSharePct: number;
-  stockGroupTargetSharePct: number;
-  finalCategorySharePct: number;
-  finalStockGroupSharePct: number;
-  mixAdjustmentReason: string;
-}
-
-export type SmartTransferBusinessRuleLine = SmartTransferSourceOptimizedLine & SmartTransferBusinessRuleFields;
-
-export interface SmartTransferMixSummaryRow {
-  id: number | null;
-  name: string;
-  targetSharePct: number;
-  finalSharePct: number;
-  quantity: number;
-  historicalSalesQty: number;
-  capped: boolean;
-  priority: boolean;
-}
-
-export interface SmartTransferBusinessRuleResult extends Omit<SmartTransferSourceOptimizedResult, "lines"> {
-  businessRulesVersion: 3;
-  lines: SmartTransferBusinessRuleLine[];
-  businessRules: {
-    maxItemSharePct: number;
-    maxCategorySharePct: number;
-    maxStockGroupSharePct: number;
-    minItemQuantity: number;
-    preserveDestinationMix: boolean;
-    priorityCategoryIds: number[];
-    priorityStockGroupIds: number[];
-  };
-  businessRulesApplied: string[];
-  categoryMix: SmartTransferMixSummaryRow[];
-  stockGroupMix: SmartTransferMixSummaryRow[];
-}
-
-export interface SourceOption {
-  line: SmartTransferSourceOptimizedLine;
-  capacity: number;
-}
-
-export interface BusinessItem {
-  stockItemId: number;
-  representative: SmartTransferSourceOptimizedLine;
-  sources: SourceOption[];
-  capacity: number;
-  itemCap: number;
-  categoryKey: number;
-  stockGroupKey: number;
-  historicalSalesQty: number;
-  weight: number;
-  businessPriorityScore: number;
-}
-
-interface MixTargets {
-  shareByKey: Map<number, number>;
-  historicalQtyByKey: Map<number, number>;
-}
+import type { SourceOption, BusinessItem, MixTargets } from "./smartTransferBusinessRulesAllocateWithSharedCapsTypes";
+export type {
+  SmartTransferBusinessRuleOptions,
+  SmartTransferBusinessRuleFields,
+  SmartTransferBusinessRuleLine,
+  SmartTransferMixSummaryRow,
+  SmartTransferBusinessRuleResult,
+  SourceOption,
+  BusinessItem,
+} from "./smartTransferBusinessRulesAllocateWithSharedCapsTypes";
 
 export const UNASSIGNED_KEY = 0;
 

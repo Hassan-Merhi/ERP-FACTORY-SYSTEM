@@ -7,48 +7,23 @@
  * are read-only; external authorization is mandatory before passing records.
  */
 import type { UniversalExcelColumn, UniversalExcelColumnType, UniversalExcelRecord } from "./engine";
-
-export interface UniversalExcelDimension {
-  id: string | number;
-  label: string;
-  /** Hidden dimensions remain out of the workbook completely. */
-  enabled?: boolean;
-  /**
-   * Position in a source array (if sourceFormat = array), independent of
-   * display order. Use when the underlying matrix arrives in month order.
-   */
-  index?: number;
-  /** Extra column visibility requirement. Not an authorization substitute. */
-  permissionTag?: string;
-}
-
-export type UniversalExcelColumnOrder = "provided" | "label" | "id" | "period";
-export type UniversalExcelMissingValue =
-  { mode: "blank" } | { mode: "zero" } | { mode: "error" } | { mode: "fallback"; key: string };
-
-export interface UniversalExcelColumnFamily {
-  /** Stable key namespace, e.g. location_price or month_count. */
-  namespace: string;
-  /** Key of the record/map/array on each data row. */
-  sourceKey: string;
-  dimensions: readonly UniversalExcelDimension[];
-  headerPrefix?: string;
-  headerSuffix?: string;
-  type: UniversalExcelColumnType;
-  width?: number;
-  numFmt?: string;
-  permissionTag?: string;
-  order?: UniversalExcelColumnOrder;
-  sourceFormat?: "record" | "array";
-  missing?: UniversalExcelMissingValue;
-}
-
-/** Insert whole families before/after a known base key, without key guessing. */
-export interface UniversalExcelColumnInsertion {
-  columns: readonly UniversalExcelColumn[];
-  after?: string;
-  before?: string;
-}
+import type {
+  UniversalExcelDimension,
+  UniversalExcelColumnOrder,
+  UniversalExcelColumnFamily,
+  UniversalExcelColumnInsertion,
+  UniversalExcelLocation,
+  UniversalExcelMonth,
+} from "./columnsTypes";
+export type {
+  UniversalExcelDimension,
+  UniversalExcelColumnOrder,
+  UniversalExcelMissingValue,
+  UniversalExcelColumnFamily,
+  UniversalExcelColumnInsertion,
+  UniversalExcelLocation,
+  UniversalExcelMonth,
+} from "./columnsTypes";
 
 function compareKey(left: string, right: string): number {
   return left.localeCompare(right, "en", { numeric: true, sensitivity: "base" });
@@ -217,12 +192,6 @@ export function selectUniversalExcelConditionalColumns(
   return selected;
 }
 
-export interface UniversalExcelLocation {
-  id: number | string;
-  name: string;
-  enabled?: boolean;
-}
-
 /** ERP Stock Items: dynamic Price - <Location> fields, alphabetically. */
 export function buildLocationPriceColumns(
   locations: readonly UniversalExcelLocation[],
@@ -248,12 +217,6 @@ export function buildLocationPriceColumns(
     order: "label",
     ...(options.fallbackPriceKey ? { missing: { mode: "fallback" as const, key: options.fallbackPriceKey } } : {}),
   });
-}
-
-export interface UniversalExcelMonth {
-  period: string; // YYYY-MM
-  label: string;
-  enabled?: boolean;
 }
 
 /** Factory: chronological month columns; optional positional matrix arrays. */

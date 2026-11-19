@@ -8,80 +8,14 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { type CostCenter, readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-
-type AmountRow = { expense: string; inventoryCost: string; budget: string; variance: string; entries?: number };
-
-type TotalRow = AmountRow & { unallocated: string; recognizedExpense: string; unallocatedApplicable: boolean };
-
-type CenterRow = AmountRow & {
-  companyId: number;
-  companyName: string;
-  costCenterId: number;
-  code: string;
-  name: string;
-  active: boolean;
-  utilization: string | null;
-};
-
-type AccountRow = {
-  companyId: number;
-  accountId: number | null;
-  accountName: string;
-  expense: string;
-  inventoryCost: string;
-  entries: number;
-};
-
-type MonthRow = {
-  month: string;
-  expense: string;
-  unallocated: string;
-  inventoryCost: string;
-  budget: string;
-  variance: string;
-};
-
-type Summary = {
-  currency: string;
-  scope: string;
-  companyIds: number[];
-  period: { from: string; to: string; budgetBasis: string };
-  totals: TotalRow;
-  centers: CenterRow[];
-  departments: Array<CenterRow & { members: number }>;
-  accounts: AccountRow[];
-  months: MonthRow[];
-};
-
-type Activity = {
-  id: number;
-  companyId: number;
-  costCenterId: number;
-  costCenterName: string;
-  costCenterCode: string;
-  accountId: number | null;
-  accountName: string;
-  voucherId: number | null;
-  voucherNumber: string | null;
-  voucherEntryId: number | null;
-  factoryDaybookEntryId: number | null;
-  sourceModule: string;
-  sourceDate: string;
-  treatment: string;
-  allocationOrigin: string;
-  currency: string;
-  amountNative: string;
-  amountUsd: string;
-};
-
-type ExpenseAccount = { id: number; code: string; name: string };
-
-type BudgetRow = { id: number; costCenterId: number; month: string; amountUsd: string; notes: string | null };
-
-function dateStart(): string {
-  const now = new Date();
-  return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
-}
+import {
+  dateStart,
+  type Summary,
+  type Activity,
+  type ExpenseAccount,
+  type BudgetRow,
+} from "./useCostCenterReportsStateHelpers";
+export { strictMoney } from "./useCostCenterReportsStateHelpers";
 
 function dateEnd(): string {
   const now = new Date();
@@ -98,8 +32,6 @@ export const fmt = (v: string | number | null | undefined) =>
   Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const message = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
-
-export const strictMoney = /^(?:0|[1-9]\d{0,13})(?:\.\d{1,6})?$/;
 
 export function useCostCenterReportsState({ baseUrl, centers }: { baseUrl: string; centers: CostCenter[] }) {
   const { selectedCompany } = useCompany();

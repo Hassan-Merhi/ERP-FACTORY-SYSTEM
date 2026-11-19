@@ -1,86 +1,38 @@
-import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { formatUsd } from "@/lib/moneyDisplay";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronsUp, ArrowUp, ArrowDown, ArrowLeftRight, XIcon } from "lucide-react";
 import { fmtD } from "./helpers";
-import type { ApiAllocatedRow, ApiPreviewRow } from "./types";
-
-interface ReplaceTargetLite {
-  id: number;
-  containerNumber: string;
-  dutyFee: number;
-}
-
-interface AgentCardTableProps {
-  agentName: string;
-  prepaidTransitRows: ApiPreviewRow[];
-  visibleOpenPartial: ApiAllocatedRow[];
-  openAndPartial: ApiAllocatedRow[];
-  isReconciled: boolean;
-  showCleared: boolean;
-  setShowCleared: (v: boolean | ((prev: boolean) => boolean)) => void;
-  isDbOverride: boolean;
-  effectivePrepaidIds: number[];
-  setAllPrepaidMutate: (ids: number[]) => void;
-  remainingTransitRows: ApiPreviewRow[];
-  setReplaceTarget: (t: ReplaceTargetLite | null) => void;
-  setReplaceAmountWarning: (w: null) => void;
-  setReplaceConfirmDiff: (b: boolean) => void;
-  isCustomOrder: boolean;
-  moveRow: (id: number, dir: "up" | "down") => void;
-  moveToTop: (id: number) => void;
-  ledgerBalance: number | null;
-  openSum: number;
-  hasBalance: boolean;
-  hasAdjustments: boolean;
-  adjustedBalance: number | null;
-  isMismatch: boolean;
-  allBudgetDesignated: boolean;
-  clearedRows: ApiAllocatedRow[];
-}
+import type { AgentCardTableProps } from "./AgentCardTableTypes";
+import { useAgentCardTableState } from "./useAgentCardTableState";
+import { AgentCardTableContent } from "./AgentCardTableContent";
 
 export function AgentCardTable(props: AgentCardTableProps) {
   const {
     prepaidTransitRows,
-    visibleOpenPartial,
-    openAndPartial,
-    isReconciled,
-    showCleared,
-    effectivePrepaidIds,
-    setAllPrepaidMutate,
     remainingTransitRows,
     setReplaceTarget,
     setReplaceAmountWarning,
     setReplaceConfirmDiff,
-    moveRow,
+    setAllPrepaidMutate,
+    effectivePrepaidIds,
+    isReconciled,
+    visibleOpenPartial,
     moveToTop,
+    moveRow,
+    hasBalance,
     ledgerBalance,
     openSum,
-    hasBalance,
     hasAdjustments,
     adjustedBalance,
     isMismatch,
     allBudgetDesignated,
     clearedRows,
-  } = props;
-
-  // ERP phones read each container as a card (labels from these headers); desktop keeps the grid.
-  const { tableProps } = useMobileCardTable();
-  const cols = [
-    "CONTAINER",
-    "SUPPLIER",
-    "PLATE",
-    "OFFLOAD DATE",
-    "BORDER DATE",
-    "TRANSPORTER",
-    "LOCATION",
-    "DUTY",
-    "CLEARED",
-    "REMAINING",
-    "STATUS",
-    "",
-  ];
+    openAndPartial,
+    showCleared,
+    tableProps,
+    cols,
+  } = useAgentCardTableState(props);
 
   return (
     <div className="mx-3 my-2 overflow-x-auto rounded-xl border border-border/70 shadow-sm dark:border-violet-500/20">
@@ -298,61 +250,12 @@ export function AgentCardTable(props: AgentCardTableProps) {
             })()}
 
           {(clearedRows.length > 0 || (isReconciled && openAndPartial.length > 0)) && (
-            <>
-              {showCleared &&
-                clearedRows.map((r) => (
-                  <tr key={`cleared-${r.id}`} className="border-b bg-slate-50/60 dark:bg-slate-800/20 opacity-70">
-                    <td className="py-0.5 px-2 font-mono text-muted-foreground">{r.containerNumber}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.supplierCode ?? "—"}</td>
-                    <td className="py-0.5 px-2 font-mono text-muted-foreground">{r.numberPlate ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.offloadDate ?? null)}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">{formatUsd(r.dutyFee, 0)}</td>
-                    <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                      {formatUsd(r.dutyFee, 0)}
-                    </td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
-                    <td className="py-0.5 px-2 text-center">
-                      <Badge
-                        variant="outline"
-                        className="text-[11px] text-slate-500 border-slate-300 dark:border-slate-600 no-default-active-elevate"
-                      >
-                        Cleared
-                      </Badge>
-                    </td>
-                    <td />
-                  </tr>
-                ))}
-              {showCleared &&
-                isReconciled &&
-                openAndPartial.map((r) => (
-                  <tr key={`reconciled-${r.id}`} className="border-b bg-purple-50/60 dark:bg-purple-900/10 opacity-70">
-                    <td className="py-0.5 px-2 font-mono text-muted-foreground">{r.containerNumber}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.supplierCode ?? "—"}</td>
-                    <td className="py-0.5 px-2 font-mono text-muted-foreground">{r.numberPlate ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.offloadDate ?? null)}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{fmtD(r.borderDate)}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.transporter ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-muted-foreground">{r.location ?? "—"}</td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">{formatUsd(r.dutyFee, 0)}</td>
-                    <td className="py-0.5 px-2 text-right text-green-600 dark:text-green-500">
-                      {r.clearedAmount > 0 ? formatUsd(r.clearedAmount, 0) : "—"}
-                    </td>
-                    <td className="py-0.5 px-2 text-right text-muted-foreground">—</td>
-                    <td className="py-0.5 px-2 text-center">
-                      <Badge
-                        variant="outline"
-                        className="text-[11px] text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-700 no-default-active-elevate"
-                      >
-                        Manual
-                      </Badge>
-                    </td>
-                    <td />
-                  </tr>
-                ))}
-            </>
+            <AgentCardTableContent
+              clearedRows={clearedRows}
+              isReconciled={isReconciled}
+              openAndPartial={openAndPartial}
+              showCleared={showCleared}
+            />
           )}
         </tbody>
       </table>

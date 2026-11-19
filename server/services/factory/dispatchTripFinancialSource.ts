@@ -15,17 +15,20 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { MoneyDecimal, sumMoney } from "../../lib/money";
 import { resultRows } from "../../lib/queryResult";
-
-export type DispatchFinancialSourceErrorCode =
-  | "FINANCIAL_SOURCE_UNAVAILABLE"
-  | "DISPATCH_NOT_CLOSED"
-  | "CLOSURE_REOPENED"
-  | "MANIFEST_UNAVAILABLE"
-  | "MANIFEST_INVALID"
-  | "LOADING_CHANGED"
-  | "SCANS_CHANGED"
-  | "ARTICLE_CODE_MISSING"
-  | "PRICE_UNRESOLVED";
+import {
+  idString,
+  type DispatchFinancialSourceErrorCode,
+  type Row,
+  type DispatchSourceBale,
+  type DispatchFinancialSourceSnapshot,
+  type DispatchSourceInput,
+} from "./dispatchTripFinancialSourceHelpers";
+export type {
+  DispatchFinancialSourceErrorCode,
+  DispatchSourceBale,
+  DispatchFinancialSourceSnapshot,
+  DispatchSourceInput,
+} from "./dispatchTripFinancialSourceHelpers";
 
 export class DispatchFinancialSourceError extends Error {
   constructor(
@@ -40,65 +43,6 @@ export class DispatchFinancialSourceError extends Error {
 function refuse(code: DispatchFinancialSourceErrorCode, message: string): never {
   throw new DispatchFinancialSourceError(code, message);
 }
-
-type Row = Record<string, unknown>;
-export interface DispatchSourceBale {
-  scanId: string;
-  baleId: number;
-  baleReference: string;
-  articleCode: string;
-  productName: string;
-  weightKg: string;
-  priceUsed: string;
-  priceSource: "ORDER_BALE_PRICE_USED";
-  pricingMode: "per_bale";
-  unitPrice: string;
-  lineTotal: string;
-}
-
-export interface DispatchFinancialSourceSnapshot {
-  companyId: number;
-  orderId: number;
-  dispatchId: number;
-  customerId: number;
-  closureHistoryId: string;
-  closureRevision: number;
-  manifestFingerprint: string;
-  sourceFingerprint: string;
-  goodsSubtotal: string;
-  totalWeightKg: string;
-  baleCount: number;
-  bales: DispatchSourceBale[];
-}
-
-export interface DispatchSourceInput {
-  companyId: number;
-  orderId: number;
-  dispatchId: number;
-  customerId: number;
-  closureHistoryId: string;
-  closureRevision: number;
-  manifestFingerprint: string;
-  manifest: unknown;
-  orderBales: ReadonlyArray<{
-    baleId: number;
-    baleReference: string;
-    articleCode: string | null;
-    productName: string | null;
-    weightKg: string;
-    priceUsed: string;
-  }>;
-  activeScans: ReadonlyArray<{
-    scanId: string;
-    baleId: number;
-    dispatchId: string;
-  }>;
-}
-
-const idString = (value: unknown): string => {
-  const stringified = String(value ?? "");
-  return /^[1-9][0-9]*$/.test(stringified) ? stringified : "";
-};
 
 function decimal(value: unknown, places: number, label: string): Decimal {
   const str = String(value ?? "");
@@ -132,8 +76,11 @@ function signedManifestRows(manifest: unknown): Row[] {
 
 /** Pure validator/fingerprint builder suitable for deterministic local tests. */
 export function createDispatchTripFinancialSource(input: DispatchSourceInput): DispatchFinancialSourceSnapshot {
-  if (![input.companyId, input.orderId, input.dispatchId, input.customerId, input.closureRevision]
-    .every((n) => Number.isSafeInteger(n) && n > 0)) {
+  if (
+    ![input.companyId, input.orderId, input.dispatchId, input.customerId, input.closureRevision].every(
+      (n) => Number.isSafeInteger(n) && n > 0
+    )
+  ) {
     refuse("FINANCIAL_SOURCE_UNAVAILABLE", "Invalid company, order, trip, customer, or closure revision");
   }
   const closureHistoryId = idString(input.closureHistoryId);
@@ -153,8 +100,13 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
   const activeBaleIds = new Set<number>();
   for (const scan of input.activeScans) {
     const scanId = idString(scan.scanId);
-    if (!scanId || !Number.isSafeInteger(scan.baleId) || scan.baleId <= 0 ||
-        activeTripScans.has(scanId) || activeBaleIds.has(scan.baleId)) {
+    if (
+      !scanId ||
+      !Number.isSafeInteger(scan.baleId) ||
+      scan.baleId <= 0 ||
+      activeTripScans.has(scanId) ||
+      activeBaleIds.has(scan.baleId)
+    ) {
       refuse("SCANS_CHANGED", "Live dispatch contains invalid or repeated scans");
     }
     if (scan.dispatchId !== String(input.dispatchId)) {
@@ -170,8 +122,7 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
   for (const manifestRow of signedManifestRows(input.manifest)) {
     const scanId = idString(manifestRow.scanId);
     const baleId = Number(manifestRow.baleId);
-    if (!scanId || !Number.isSafeInteger(baleId) || baleId <= 0 ||
-        seenScans.has(scanId) || seenBales.has(baleId)) {
+    if (!scanId || !Number.isSafeInteger(baleId) || baleId <= 0 || seenScans.has(scanId) || seenBales.has(baleId)) {
       refuse("MANIFEST_INVALID", "Saved manifest contains an invalid or duplicate barcode");
     }
     if (activeTripScans.get(scanId) !== baleId) {
@@ -200,7 +151,9 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
     if (!productName) refuse("MANIFEST_INVALID", "Bale product name is missing");
 
     result.push({
-      scanId, baleId, baleReference: reference,
+      scanId,
+      baleId,
+      baleReference: reference,
       articleCode: article,
       productName,
       weightKg: weight.toFixed(3),
@@ -220,8 +173,25 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
   const bales = result.sort((a, b) => a.baleId - b.baleId);
   const goodsSubtotal = sumMoney(bales.map((b) => b.lineTotal)).toFixed(2);
   const totalWeightKg = bales.reduce((sum, b) => sum.plus(b.weightKg), new MoneyDecimal(0)).toFixed(3);
-  const sourceFingerprint = createHash("sha256").update(JSON.stringify({
-    version: 1,
+  const sourceFingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        version: 1,
+        companyId: input.companyId,
+        orderId: input.orderId,
+        dispatchId: input.dispatchId,
+        customerId: input.customerId,
+        closureHistoryId,
+        closureRevision: input.closureRevision,
+        manifestFingerprint: input.manifestFingerprint,
+        bales,
+        goodsSubtotal,
+        totalWeightKg,
+      })
+    )
+    .digest("hex");
+
+  return {
     companyId: input.companyId,
     orderId: input.orderId,
     dispatchId: input.dispatchId,
@@ -229,17 +199,11 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
     closureHistoryId,
     closureRevision: input.closureRevision,
     manifestFingerprint: input.manifestFingerprint,
-    bales,
+    sourceFingerprint,
     goodsSubtotal,
     totalWeightKg,
-  })).digest("hex");
-
-  return {
-    companyId: input.companyId, orderId: input.orderId,
-    dispatchId: input.dispatchId, customerId: input.customerId,
-    closureHistoryId, closureRevision: input.closureRevision,
-    manifestFingerprint: input.manifestFingerprint,
-    sourceFingerprint, goodsSubtotal, totalWeightKg, baleCount: bales.length, bales,
+    baleCount: bales.length,
+    bales,
   };
 }
 
@@ -248,9 +212,13 @@ export function createDispatchTripFinancialSource(input: DispatchSourceInput): D
  * transaction. The future posting writer must already hold order->trip locks.
  */
 export async function loadDispatchTripFinancialSource(
-  tx: DbTransaction, companyId: number, orderId: number, dispatchId: number
+  tx: DbTransaction,
+  companyId: number,
+  orderId: number,
+  dispatchId: number
 ): Promise<DispatchFinancialSourceSnapshot> {
-  const contextRows = resultRows(await tx.execute(sql`
+  const contextRows = resultRows(
+    await tx.execute(sql`
     SELECT o.id, o.customer_id AS "customerId",
            o.status AS "orderStatus", o.deleted_at AS "deletedAt",
            d.status AS "dispatchStatus",
@@ -269,32 +237,44 @@ export async function loadDispatchTripFinancialSource(
          ORDER BY revision DESC LIMIT 1
       ) h ON TRUE
      WHERE o.company_id = ${companyId} AND o.id = ${orderId} AND d.id = ${dispatchId}
-  `));
+  `)
+  );
   const context = contextRows[0];
-  if (!context || context.deletedAt || !["LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(String(context.orderStatus))) {
+  if (
+    !context ||
+    context.deletedAt ||
+    !["LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(String(context.orderStatus))
+  ) {
     refuse("FINANCIAL_SOURCE_UNAVAILABLE", "This order is unavailable for trip financial finalization");
   }
-  if (context.dispatchStatus !== "CLOSED") refuse("DISPATCH_NOT_CLOSED", "End Dispatch before financially finalizing the trip");
+  if (context.dispatchStatus !== "CLOSED")
+    refuse("DISPATCH_NOT_CLOSED", "End Dispatch before financially finalizing the trip");
   if (!context.closureId) refuse("MANIFEST_UNAVAILABLE", "This trip has no saved close revision");
   if (context.reopenedAt) refuse("CLOSURE_REOPENED", "This signed closure was reopened and cannot be posted");
 
-  const orderBalesRows = resultRows(await tx.execute(sql`
+  const orderBalesRows = resultRows(
+    await tx.execute(sql`
     SELECT cob.bale_id AS "baleId", cob.bale_reference AS "baleReference",
            cob.article_code AS "articleCode", cob.bale_name AS "productName",
            cob.weight::text AS "weightKg", cob.price_used::text AS "priceUsed"
       FROM customer_order_bales cob
       JOIN customer_orders o ON o.id = cob.order_id
      WHERE o.company_id = ${companyId} AND o.id = ${orderId}
-  `));
-  const activeScanRows = resultRows(await tx.execute(sql`
+  `)
+  );
+  const activeScanRows = resultRows(
+    await tx.execute(sql`
     SELECT id::text AS "scanId", bale_id AS "baleId", dispatch_id::text AS "dispatchId"
       FROM factory_loading_dispatch_scans
      WHERE company_id = ${companyId} AND order_id = ${orderId}
        AND dispatch_id = ${dispatchId} AND removed_at IS NULL
-  `));
+  `)
+  );
 
   return createDispatchTripFinancialSource({
-    companyId, orderId, dispatchId,
+    companyId,
+    orderId,
+    dispatchId,
     customerId: Number(context.customerId),
     closureHistoryId: String(context.closureId),
     closureRevision: Number(context.revision),

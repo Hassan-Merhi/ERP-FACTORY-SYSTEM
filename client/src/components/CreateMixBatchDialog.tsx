@@ -1,18 +1,16 @@
 import { formatNumber } from "@/lib/formatNumber";
-import { Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { MIX_BATCH_TARGET_OPTIONS } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
 import type { CreateMixBatchDialogProps } from "./CreateMixBatchDialogTypes";
 import { useCreateMixBatchDialogState } from "./useCreateMixBatchDialogState";
 import { CreateMixBatchDialogSection } from "./CreateMixBatchDialogSection";
 import { formatUsd } from "@/lib/moneyDisplay";
+import { CreateMixBatchDialogContent } from "./CreateMixBatchDialogContent";
 
 export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
   const {
@@ -215,51 +213,7 @@ export function CreateMixBatchDialog(props: CreateMixBatchDialogProps) {
           />
 
           {selectedSources.length > 0 && (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead className="text-right">Weight (kg)</TableHead>
-                    <TableHead className="text-right">Cost/kg</TableHead>
-                    <TableHead className="text-right">Total Cost</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedSources.map((selection) => (
-                    <TableRow key={`${selection.type}-${selection.sourceId}`}>
-                      <TableCell>
-                        <Badge variant={selection.type === "batch" ? "secondary" : "outline"}>
-                          {selection.type === "batch" ? "Batch" : "Supplier"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{selection.label}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {selection.weightKg.toLocaleString(undefined, {
-                          minimumFractionDigits: 3,
-                          maximumFractionDigits: 3,
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{formatUsd(selection.costPerKg, 4)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatUsd(selection.totalCost, 0, 2)}</TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveSource(selection.type, selection.sourceId)}
-                          data-testid={`button-remove-${selection.type}-${selection.sourceId}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <CreateMixBatchDialogContent handleRemoveSource={handleRemoveSource} selectedSources={selectedSources} />
           )}
 
           <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-md">

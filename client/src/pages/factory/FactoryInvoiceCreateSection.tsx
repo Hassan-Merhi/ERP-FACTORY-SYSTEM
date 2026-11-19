@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, PackageCheck, Plus, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { MapPin, PackageCheck, RefreshCw, ScanLine } from "lucide-react";
 import { useFactoryInvoiceCreateState } from "./useFactoryInvoiceCreateState";
+import { FactoryInvoiceCreateSectionCard } from "./FactoryInvoiceCreateSectionCard";
 
 export function FactoryInvoiceCreateSection({
   activeProforma,
@@ -192,119 +193,24 @@ export function FactoryInvoiceCreateSection({
         </div>
       </Card>
 
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h3 className="font-semibold text-sm">Charges</h3>
-          {orderDetail?.status === "FINALIZED" && charges.some((c) => !c.voucherId) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => relinkVouchersMutation.mutate()}
-              disabled={relinkVouchersMutation.isPending}
-              data-testid="button-relink-charge-vouchers"
-            >
-              {relinkVouchersMutation.isPending ? "Linking..." : "Fix Ledger Entries"}
-            </Button>
-          )}
-        </div>
-
-        {charges.length > 0 && (
-          <div className="space-y-1">
-            {charges.map((charge) => (
-              <div
-                key={charge.id}
-                className="flex items-center justify-between gap-2"
-                data-testid={`row-charge-${charge.id}`}
-              >
-                <span className="text-sm">{charge.name}</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-mono text-sm" data-testid={`text-charge-amount-${charge.id}`}>
-                    {parseFloat(charge.amount).toLocaleString(undefined, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeChargeMutation.mutate(charge.id)}
-                    disabled={removeChargeMutation.isPending}
-                    data-testid={`button-remove-charge-${charge.id}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Select value={chargeType} onValueChange={setChargeType}>
-            <SelectTrigger data-testid="select-charge-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="FREIGHT">Freight</SelectItem>
-              <SelectItem value="OTHER">Other</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {chargeType === "OTHER" && (
-            <Input
-              value={chargeName}
-              onChange={(e) => setChargeName(e.target.value)}
-              placeholder="Charge name..."
-              data-testid="input-charge-name"
-            />
-          )}
-
-          <Select value={chargeLedgerAccountId} onValueChange={setChargeLedgerAccountId}>
-            <SelectTrigger data-testid="select-charge-ledger-account">
-              <SelectValue
-                placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {ledgerAccounts.map((acc) => (
-                <SelectItem key={acc.id} value={String(acc.id)}>
-                  {acc.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              A ledger account is required so the charge posts to accounting.
-            </p>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              step="0.01"
-              value={chargeAmount}
-              onChange={(e) => setChargeAmount(e.target.value)}
-              placeholder="Amount"
-              disabled={!orderId}
-              data-testid="input-charge-amount"
-            />
-            <Button
-              variant="outline"
-              onClick={handleAddCharge}
-              disabled={
-                !orderId ||
-                !chargeAmount ||
-                (chargeType !== "FREIGHT" && !chargeLedgerAccountId) ||
-                addChargeMutation.isPending
-              }
-              data-testid="button-add-charge"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <FactoryInvoiceCreateSectionCard
+        addChargeMutation={addChargeMutation}
+        chargeAmount={chargeAmount}
+        chargeLedgerAccountId={chargeLedgerAccountId}
+        chargeName={chargeName}
+        charges={charges}
+        chargeType={chargeType}
+        handleAddCharge={handleAddCharge}
+        ledgerAccounts={ledgerAccounts}
+        orderDetail={orderDetail}
+        orderId={orderId}
+        relinkVouchersMutation={relinkVouchersMutation}
+        removeChargeMutation={removeChargeMutation}
+        setChargeAmount={setChargeAmount}
+        setChargeLedgerAccountId={setChargeLedgerAccountId}
+        setChargeName={setChargeName}
+        setChargeType={setChargeType}
+      />
 
       <Card className="p-4 space-y-2">
         <div className="flex items-center justify-between gap-2 text-sm">

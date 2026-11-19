@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { pool } from "../db";
 import { evaluateOperationalAlerts, getOperationalIncidentSnapshot } from "./operationalAlerts";
 import { getRuntimePerformanceSnapshot } from "./runtimePerformance";
+import type { RequestSample, RouteAggregate } from "./performanceDashboardTypes";
 
 const CLIENT_ABORT_STATUS = 499;
 const NORMAL_LATENCY_BUDGET_MS = 500;
@@ -12,31 +13,6 @@ const NORMAL_DB_QUERY_BUDGET = 20;
 const HEAVY_DB_QUERY_BUDGET = 40;
 const HEAVY_RESPONSE_BYTES = 500_000;
 
-interface RequestSample {
-  timestamp: number;
-  method: string;
-  routeTemplate: string;
-  mode: string;
-  status: number;
-  durationMs: number;
-  responseBytes: number;
-  dbQueryCount: number;
-  dbDurationMs: number;
-}
-interface RouteAggregate {
-  method: string;
-  route: string;
-  mode: string;
-  count: number;
-  errors: number;
-  clientAborts: number;
-  totalMs: number;
-  maxMs: number;
-  bytes: number;
-  dbMs: number;
-  dbQueries: number;
-  durations: number[];
-}
 function finiteConfig(name: string, fallback: number, minimum: number): number {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) ? Math.max(minimum, parsed) : fallback;

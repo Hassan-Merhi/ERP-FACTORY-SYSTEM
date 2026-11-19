@@ -4,9 +4,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { ArrowDownLeft, ArrowUpRight, Check, ChevronsUpDown, GripVertical, Plus, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronsUpDown, GripVertical, Plus, X } from "lucide-react";
 import { useDashboardFinancePanelState } from "./useDashboardFinancePanelState";
 import { EmptyState } from "@/components/ui/page-state";
+import { DashboardFinancePanelSectionContent } from "./DashboardFinancePanelSectionContent";
 
 export function DashboardFinancePanelSection({
   addAccountMutation,
@@ -77,142 +78,25 @@ export function DashboardFinancePanelSection({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 lg:divide-x">
       {/* ─── Available ─── */}
-      <div className="p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-chart-2 flex items-center gap-1.5">
-            <ArrowDownLeft className="h-4 w-4" />
-            Available
-          </h3>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline" disabled={isViewer} data-testid="button-add-cash-account">
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Account to Available</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Account</label>
-                  <Popover open={cashComboboxOpen} onOpenChange={setCashComboboxOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={cashComboboxOpen}
-                        className="w-full justify-between"
-                        data-testid="select-account"
-                      >
-                        {selectedAccountId > 0
-                          ? availableCashAccounts.find((acc) => acc.accountId === selectedAccountId)?.name ||
-                            "Select account..."
-                          : "Search accounts..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search accounts..." />
-                        <CommandList>
-                          <CommandEmpty>No account found.</CommandEmpty>
-                          <CommandGroup>
-                            {availableCashAccounts.map((account) => (
-                              <CommandItem
-                                key={account.id}
-                                value={account.name}
-                                onSelect={() => {
-                                  setSelectedAccountId(account.accountId);
-                                  setCashComboboxOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedAccountId === account.accountId ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {account.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <Button
-                  onClick={() => {
-                    if (selectedAccountId > 0) {
-                      const account = allAccounts.find((a) => a.accountId === selectedAccountId);
-                      addAccountMutation.mutate({
-                        accountType: account?.type.toLowerCase() || "ledger",
-                        accountId: selectedAccountId,
-                      });
-                    }
-                  }}
-                  disabled={selectedAccountId === 0 || addAccountMutation.isPending}
-                  className="w-full"
-                  data-testid="button-save-cash-account"
-                >
-                  {addAccountMutation.isPending ? "Adding..." : "Add Account"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {cashAccountsError ? (
-          <p className="text-sm text-destructive text-center py-4">Error loading accounts</p>
-        ) : displayedCashAccounts.length === 0 ? (
-          <EmptyState title="No accounts added yet" className="min-h-0 py-6" />
-        ) : (
-          <div className="space-y-1">
-            {displayedCashAccounts.map((dca) => {
-              const balance = parseFloat(String(dca.account.balance || dca.account.currentBalance || 0));
-              return (
-                <div
-                  key={dca.id}
-                  draggable={!isViewer}
-                  onDragStart={() => {
-                    if (isViewer) return;
-                    dragCashRef.current = dca.id;
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => !isViewer && handleCashDrop(dca.id)}
-                  className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
-                  data-testid={`cash-account-row-${dca.id}`}
-                >
-                  <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-                  <span className="flex-1 text-sm font-medium truncate">{dca.account.name}</span>
-                  <span
-                    className="text-sm font-bold font-mono text-chart-2 shrink-0"
-                    data-testid={`text-balance-${dca.id}`}
-                  >
-                    {formatCashAmount(balance)}
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
-                    onClick={() => !isViewer && removeAccountMutation.mutate(dca.id)}
-                    disabled={isViewer}
-                    data-testid={`button-remove-cash-account-${dca.id}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              );
-            })}
-            <div className="flex items-center justify-between py-2 px-2 bg-chart-2/10 rounded-sm font-semibold mt-1">
-              <span className="text-sm">Total Available</span>
-              <span className="text-sm font-mono text-chart-2">{formatCashAmount(totalAvailable)}</span>
-            </div>
-          </div>
-        )}
-      </div>
+      <DashboardFinancePanelSectionContent
+        addAccountMutation={addAccountMutation}
+        allAccounts={allAccounts}
+        availableCashAccounts={availableCashAccounts}
+        cashAccountsError={cashAccountsError}
+        cashComboboxOpen={cashComboboxOpen}
+        displayedCashAccounts={displayedCashAccounts}
+        dragCashRef={dragCashRef}
+        formatCashAmount={formatCashAmount}
+        handleCashDrop={handleCashDrop}
+        isAddDialogOpen={isAddDialogOpen}
+        isViewer={isViewer}
+        removeAccountMutation={removeAccountMutation}
+        selectedAccountId={selectedAccountId}
+        setCashComboboxOpen={setCashComboboxOpen}
+        setIsAddDialogOpen={setIsAddDialogOpen}
+        setSelectedAccountId={setSelectedAccountId}
+        totalAvailable={totalAvailable}
+      />
 
       {/* ─── To Pay ─── */}
       <div className="p-4 sm:p-5 border-t lg:border-t-0">

@@ -6,46 +6,14 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
-import type { TableColumnOption } from "@/components/TableViewOptions";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Copy, NotebookText, PhoneCall, Tags, UsersRound } from "lucide-react";
-
-interface PhoneEntry {
-  label: string;
-  number: string;
-}
-
-export interface Contact {
-  id: number;
-  companyId: number;
-  name: string;
-  role: string | null;
-  numbers: PhoneEntry[];
-  notes: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const EMPTY_FORM = {
-  name: "",
-  role: "",
-  numbers: [{ label: "Mobile", number: "" }] as PhoneEntry[],
-  notes: "",
-};
-
-export const CONTACT_COLUMNS: TableColumnOption[] = [
-  { key: "name", label: "Name", required: true },
-  { key: "role", label: "Role" },
-  { key: "phones", label: "Phone Numbers", required: true },
-  { key: "notes", label: "Notes" },
-  { key: "actions", label: "Actions", required: true },
-];
-
-export type ContactFilter = "all" | "has-phone" | "has-notes" | "missing-phone" | "missing-notes";
+import { EMPTY_FORM, type Contact, type ContactFilter } from "./useFactoryContactsStateModel";
+export { CONTACT_COLUMNS, type Contact, type ContactFilter } from "./useFactoryContactsStateModel";
 
 export function roleAccent(role: string): string {
   const value = role.toLowerCase();

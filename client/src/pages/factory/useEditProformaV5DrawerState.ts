@@ -4,59 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-export interface ArticleRow {
-  articleCode: string;
-  productName: string;
-  categoryName?: string;
-  stockAvailable: number;
-  totalLoaded: number;
-  expectedToLoad: number;
-  freeToPromise: number;
-}
-
-interface ExistingLine {
-  id: number;
-  articleCode: string;
-  productName: string;
-  quantity: number;
-  pricePerBale: string;
-  weightPerBaleKg: string;
-  pricingMode?: string;
-  pricePerKg?: string | null;
-}
-
-interface ProformaData {
-  id: number;
-  companyId: number;
-  name: string;
-  isActive: boolean;
-  customerId: number;
-  destination?: string | null;
-  lines: ExistingLine[];
-}
-
-interface AgreedPriceRow {
-  article_code: string;
-  price_per_bale: string;
-}
-
-interface BaleProduct {
-  id: number;
-  code: string;
-  articleCode: string | null;
-  weightPerBaleKg: string | null;
-  sellingPrice: string | null;
-  productionPrice: string | null;
-}
-
-export interface Props {
-  open: boolean;
-  onClose: () => void;
-  proformaId: number;
-  articleRows: ArticleRow[];
-  onSuccess: () => void;
-}
+import type {
+  ExistingLine,
+  ProformaData,
+  AgreedPriceRow,
+  BaleProduct,
+  Props,
+} from "./useEditProformaV5DrawerStateTypes";
+export type { ArticleRow, Props } from "./useEditProformaV5DrawerStateTypes";
 
 export function useEditProformaV5DrawerState({ open, onClose, proformaId, articleRows, onSuccess }: Props) {
   const { toast } = useToast();

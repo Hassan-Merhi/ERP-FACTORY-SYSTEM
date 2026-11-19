@@ -11,24 +11,26 @@ import {
   getCompanyAccessContext,
 } from "../../security/companyAccessBoundary";
 import { auditLog, ledgerAccounts } from "@shared/schema";
-import type { AccountMigrationControlSnapshot } from "./accountMigrationControlReferences";
-
-export const EXECUTE_ACTION = "ACCOUNT_MIGRATION_EXECUTE_SAFE";
-
-export const UNDO_ACTION = "ACCOUNT_MIGRATION_UNDO_SAFE";
-
-const MAX_BATCH = 200;
+import {
+  EXECUTE_ACTION,
+  UNDO_ACTION,
+  MAX_BATCH,
+  MIGRATION_CLEARING_SUBTYPE,
+  deepestError,
+  type AccountMigrationTransaction,
+  type AccountMigrationDatabaseScope,
+  type SavedMigrationV1,
+  type SavedMigrationV2,
+  type SavedMigration,
+} from "./registerAccountMigrationSafeRoutesPart1Helpers";
+export {
+  EXECUTE_ACTION,
+  UNDO_ACTION,
+  type SplitVoucherSnapshot,
+  type SavedMigrationV2,
+} from "./registerAccountMigrationSafeRoutesPart1Helpers";
 
 const MAX_CODE_LENGTH = 50;
-
-const MIGRATION_CLEARING_SUBTYPE = "account_migration_clearing";
-
-type AccountMigrationTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-type AccountMigrationDatabaseScope = {
-  activeCompanyId: number;
-  authorizedCompanyIds: string;
-};
 
 export class AccountMigrationConflict extends Error {
   status: number;
@@ -38,38 +40,6 @@ export class AccountMigrationConflict extends Error {
     this.status = status;
   }
 }
-
-type SavedMigrationV1 = {
-  version: 1;
-  migrationId: string;
-  srcCompanyId: number;
-  destCompanyId: number;
-  accountIds: number[];
-  movedVoucherIds: number[];
-  accounts: Array<{ accountId: number; originalCode: string; finalCode: string }>;
-  controls: AccountMigrationControlSnapshot;
-};
-
-export type SplitVoucherSnapshot = {
-  sourceVoucherId: number;
-  destinationVoucherId: number;
-  sourceClearingAccountId: number;
-  remappedEntries: Array<{ entryId: number; originalLedgerAccountId: number }>;
-};
-
-export type SavedMigrationV2 = {
-  version: 2;
-  migrationId: string;
-  srcCompanyId: number;
-  destCompanyId: number;
-  accountIds: number[];
-  movedVoucherIds: number[];
-  accounts: Array<{ accountId: number; originalCode: string; finalCode: string }>;
-  controls: AccountMigrationControlSnapshot;
-  splitVouchers: SplitVoucherSnapshot[];
-};
-
-type SavedMigration = SavedMigrationV1 | SavedMigrationV2;
 
 export function positiveInt(value: unknown): number | null {
   const parsed = Number(value);
@@ -200,25 +170,6 @@ export async function lockCompanies(
   for (const companyId of ids) {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('account-migration'), ${companyId})`);
   }
-}
-
-interface PgErrorLike {
-  message?: string;
-  code?: string;
-  constraint?: string;
-  detail?: string;
-  cause?: unknown;
-}
-
-function deepestError(error: unknown): PgErrorLike {
-  const asPgError = (value: unknown): PgErrorLike => (value && typeof value === "object" ? (value as PgErrorLike) : {});
-  let current = asPgError(error);
-  const seen = new Set<unknown>();
-  while (current.cause && !seen.has(current.cause)) {
-    seen.add(current.cause);
-    current = asPgError(current.cause);
-  }
-  return current;
 }
 
 export function respondWithError(res: Response, error: unknown) {

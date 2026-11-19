@@ -1,40 +1,21 @@
 // Extracted from ./remote-mouse-control-policy.ts to keep that module under the source-size cap.
 
-export type RemoteMouseCommandType = "pointer-move" | "click" | "scroll";
-
-export type RemoteMouseExecutionStatus = "executed" | "blocked" | "ignored";
-
-export interface RemoteMouseFrameViewport {
-  width: number;
-  height: number;
-  scrollX: number;
-  scrollY: number;
-  visualScale: number;
-}
-
-export interface RemoteMouseCommandView {
-  id: string;
-  sessionId: string;
-  type: RemoteMouseCommandType;
-  sequence: number;
-  x: number;
-  y: number;
-  deltaX?: number;
-  deltaY?: number;
-  frameViewport?: RemoteMouseFrameViewport;
-  createdAt?: string;
-}
-
-export interface RemoteMouseExecutionResult {
-  status: RemoteMouseExecutionStatus;
-  reason: string | null;
-  clientX: number;
-  clientY: number;
-}
-
-export interface RemoteMouseExecutionOptions {
-  keyboardEnabled?: boolean;
-}
+import type {
+  RemoteMouseFrameViewport,
+  RemoteMouseFrameSize,
+  RemoteMouseViewportMetrics,
+} from "./getRemoteMouseFrameContentBoxTypes";
+export type {
+  RemoteMouseCommandType,
+  RemoteMouseExecutionStatus,
+  RemoteMouseFrameViewport,
+  RemoteMouseCommandView,
+  RemoteMouseExecutionResult,
+  RemoteMouseExecutionOptions,
+  RemoteMouseFrameSize,
+  RemoteMouseViewportMetrics,
+  RemoteMouseFramePointMapping,
+} from "./getRemoteMouseFrameContentBoxTypes";
 
 export const BLOCKED_SELECTOR = [
   "input",
@@ -183,11 +164,6 @@ export function isSameOriginNavigation(anchor: HTMLAnchorElement, location: Loca
   }
 }
 
-export interface RemoteMouseFrameSize {
-  width: number;
-  height: number;
-}
-
 /**
  * The box the frame's pixels actually occupy inside the image element.
  * Viewers letterbox the frame with `object-fit: contain` whenever the
@@ -254,13 +230,6 @@ export function normalizeRemoteMousePoint(
  * is still remapped so the right scroll container is chosen.
  */
 
-export interface RemoteMouseViewportMetrics {
-  width: number;
-  height: number;
-  scrollX: number;
-  scrollY: number;
-}
-
 /**
  * How far beyond the live viewport's edges a remapped frame point may sit and
  * still be treated as an in-view edge click. Absorbs the sub-pixel rounding
@@ -316,11 +285,4 @@ export function coerceRemoteMouseFrameViewport(
     return undefined;
   }
   return frame;
-}
-
-export interface RemoteMouseFramePointMapping {
-  clientX: number;
-  clientY: number;
-  /** False when the remapped frame point fell outside the live viewport. */
-  onScreen: boolean;
 }

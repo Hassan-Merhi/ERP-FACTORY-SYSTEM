@@ -1,0 +1,194 @@
+// Extracted from ./lines.ts
+import type { Express, Request, Response } from "express";
+import { parseId } from "../../../lib/parseId";
+import { getErrorMessage } from "../../../lib/httpHandlers";
+import { logger } from "../../../lib/logger";
+import { syncProformaReservations, isFactoryV2Company, computeFreeToPromise } from "../_stockReservationHelper";
+import { db } from "../../../db";
+import { requireAuth } from "../../../auth";
+import { recalculateOrderTotals } from "../_helpers";
+import {
+  factoryBaleProducts,
+  customerProformas,
+  customerProformaLines,
+  customerOrders,
+  customerOrderBales,
+} from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
+
+/** Whether the proforma belongs to the company; lines carry no company of their own. */
+export async function proformaInCompany(proformaId: number, companyId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: customerProformas.id })
+    .from(customerProformas)
+    .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)))
+    .limit(1);
+  return Boolean(row);
+}
+
+export function registerFactoryCustomerProformaLineRoutesPart1(app: Express) {
+  app.put("/api/factory/customer-proforma-lines/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ message: "Invalid id" });
+
+      // Fetch the line first to get its proformaId
+      const [existingLine] = await db
+        .select()
+        .from(customerProformaLines)
+        .where(eq(customerProformaLines.id, id))
+        .limit(1);
+      if (!existingLine || !(await proformaInCompany(existingLine.proformaId, companyId))) {
+        return res.status(404).json({ message: "Proforma line not found" });
+      }
+
+      const updateData: Partial<
+        Pick<
+          typeof customerProformaLines.$inferInsert,
+          "productName" | "quantity" | "pricePerBale" | "pricingMode" | "pricePerKg"
+        >
+      > = {};
+      if (req.body.productName !== undefined) updateData.productName = req.body.productName;
+      if (req.body.quantity !== undefined) updateData.quantity = parseInt(req.body.quantity);
+      if (req.body.pricePerBale !== undefined) updateData.pricePerBale = req.body.pricePerBale;
+      if (req.body.pricingMode !== undefined) updateData.pricingMode = req.body.pricingMode;
+      if (req.body.pricePerKg !== undefined) updateData.pricePerKg = req.body.pricePerKg ?? null;
+
+      // Auto-save weight to factoryBaleProducts so stock allocation stays in sync
+      const newWeightPerBaleKg = req.body.weightPerBaleKg;
+      if (newWeightPerBaleKg !== undefined && newWeightPerBaleKg !== "" && existingLine.articleCode) {
+        await db
+          .update(factoryBaleProducts)
+          .set({ weightPerBaleKg: String(newWeightPerBaleKg) })
+          .where(
+            and(
+              eq(factoryBaleProducts.companyId, companyId),
+              eq(factoryBaleProducts.articleCode, existingLine.articleCode)
+            )
+          );
+      }
+
+      // factory_v2: warn if quantity increase exceeds free-to-promise (non-blocking)
+      let stockWarning: string | undefined;
+      if (updateData.quantity !== undefined && (await isFactoryV2Company(companyId))) {
+        const delta = updateData.quantity - Number(existingLine.quantity);
+        if (delta > 0) {
+          const ftp = await computeFreeToPromise(companyId, existingLine.articleCode);
+          if (delta > ftp) {
+            stockWarning = `Insufficient free stock for ${existingLine.articleCode}: need ${delta} more, available ${ftp}`;
+          }
+        }
+      }
+
+      if (updateData.quantity !== undefined) {
+        logger.info(
+          `[proforma-line PUT] lineId=${id} proformaId=${existingLine.proformaId} articleCode=${existingLine.articleCode} oldQty=${existingLine.quantity} newQty=${updateData.quantity}`
+        );
+      }
+
+      const [updated] = await db
+        .update(customerProformaLines)
+        .set(updateData)
+        .where(eq(customerProformaLines.id, id))
+        .returning();
+
+      if (!updated) return res.status(404).json({ message: "Proforma line not found" });
+
+      // Keep ordinary open loading snapshots in step with edits to an
+      // EXISTING proforma line. Previously only newly inserted article codes
+      // were synchronized. Do not modify remaining-only continuation plans
+      // or verified/finalized historical quantities.
+      if (updateData.quantity !== undefined || updateData.productName !== undefined) {
+        await db.execute(sql`
+          UPDATE customer_order_expected_lines expected
+          SET expected_qty = ${updated.quantity},
+              product_name = ${updated.productName},
+              updated_at = NOW()
+          FROM customer_orders co
+          WHERE expected.order_id = co.id
+            AND expected.company_id = ${companyId}
+            AND expected.proforma_id = ${existingLine.proformaId}
+            AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(${existingLine.articleCode}))
+            AND co.company_id = ${companyId}
+            AND co.proforma_id_used = ${existingLine.proformaId}
+            AND co.status IN ('LOADING', 'PENDING_VERIFICATION')
+            AND co.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM factory_daybook_entries event
+              WHERE event.company_id = ${companyId}
+                AND event.reference_table = 'customer_orders'
+                AND event.reference_id = co.id
+                AND event.tx_type = 'LOADING_CREATED'
+                AND event.description LIKE 'Loading started for customer:%'
+            )
+        `);
+      }
+      // Sync — quantity change alters reservedNotYetLoaded
+      await syncProformaReservations(db, companyId, existingLine.proformaId);
+
+      // Editing this line must not update the customer's shared agreed-price
+      // list, which can be applied to other proformas explicitly.
+
+      // Auto-reprice active orders: when pricingMode or pricePerKg changes on a proforma line,
+      // immediately update price_used on all matching bales in LOADING/PENDING_VERIFICATION orders
+      // and recalculate order totals so the list view shows the correct amount without a manual repair.
+      const pricingChanged =
+        updateData.pricingMode !== undefined ||
+        updateData.pricePerKg !== undefined ||
+        (newWeightPerBaleKg !== undefined && newWeightPerBaleKg !== "");
+      if (pricingChanged && existingLine.articleCode) {
+        try {
+          const effectivePricingMode = updateData.pricingMode ?? updated.pricingMode ?? "per_bale";
+          const effectivePricePerKg = updateData.pricePerKg ?? updated.pricePerKg ?? null;
+          if (effectivePricingMode === "per_kg" && effectivePricePerKg) {
+            const pkgRate = toMoney(String(effectivePricePerKg));
+            if (pkgRate.greaterThan(0)) {
+              // Find active orders that use this proforma
+              const activeOrders = await db
+                .select({ id: customerOrders.id })
+                .from(customerOrders)
+                .where(
+                  and(
+                    eq(customerOrders.proformaIdUsed, existingLine.proformaId),
+                    sql`${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')`
+                  )
+                );
+              for (const order of activeOrders) {
+                // Fetch bales for this article in this order
+                const bales = await db
+                  .select({ id: customerOrderBales.id, weight: customerOrderBales.weight })
+                  .from(customerOrderBales)
+                  .where(
+                    and(
+                      eq(customerOrderBales.orderId, order.id),
+                      eq(customerOrderBales.articleCode, existingLine.articleCode)
+                    )
+                  );
+                for (const bale of bales) {
+                  const wt = toMoney(bale.weight);
+                  if (wt.greaterThan(0)) {
+                    await db
+                      .update(customerOrderBales)
+                      .set({ priceUsed: wt.times(pkgRate).toFixed(2) })
+                      .where(eq(customerOrderBales.id, bale.id));
+                  }
+                }
+                await recalculateOrderTotals(db, order.id);
+              }
+            }
+          }
+        } catch {
+          /* non-blocking */
+        }
+      }
+
+      res.json({ ...updated, ...(stockWarning ? { stockWarning } : {}) });
+    } catch (error: unknown) {
+      logger.error("Error updating proforma line:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+}
