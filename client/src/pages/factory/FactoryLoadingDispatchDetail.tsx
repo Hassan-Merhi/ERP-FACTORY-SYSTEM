@@ -83,11 +83,6 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
 
   return (
     <div className="space-y-4" data-testid="dispatch-simplified-trip-detail">
-      <Button size="sm" variant="ghost" onClick={() => navigate(tripPath(orderId))}
-        data-testid="button-dispatch-back">
-        <ArrowRight className="mr-2 h-4 w-4 rotate-180" /> All dispatches
-      </Button>
-
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {metrics.map(({ label, value, icon: Icon }) => (
           <div key={label} className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
