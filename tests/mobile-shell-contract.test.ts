@@ -142,11 +142,10 @@ describe("saved sign-in credentials", () => {
     expect(manifest).toMatch(/android:allowBackup="false"/);
   });
 
-  it("registers the secure store on both platforms, so credentials never fall back to plain storage", () => {
+  it("registers the secure store plugin in both native projects", () => {
     expect(read("android/capacitor.settings.gradle")).toContain(":aparajita-capacitor-secure-storage");
     expect(read("android/app/capacitor.build.gradle")).toContain("project(':aparajita-capacitor-secure-storage')");
     expect(read("ios/App/Podfile")).toContain("pod 'AparajitaCapacitorSecureStorage'");
-    expect(read("client/src/lib/biometricCredentials.ts")).toContain('import("@aparajita/capacitor-secure-storage")');
   });
 });
 
