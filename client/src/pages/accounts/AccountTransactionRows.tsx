@@ -1,36 +1,9 @@
-import { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
-import type { Account, Transaction } from "./accountTypes";
-
-const HISTORICAL_REFERENCE_TYPE = "Historical PO Reference";
-const HISTORICAL_FACTORY_INVOICE_TYPE = "Historical Factory Invoice";
-const ACCOUNT_ROW_HEIGHT = 56;
-
-export interface AccountStatementRow extends Transaction {
-  totalDebit: number;
-  totalCredit: number;
-  runningBalance: number;
-}
-
-export interface AccountTransactionRowsProps {
-  vouchersWithBalance: AccountStatementRow[];
-  selectedVoucherIds: Set<number>;
-  toggleSelectAll: () => void;
-  toggleVoucherSelection: (id: number) => void;
-  handleOpenVoucher: (v: AccountStatementRow) => void;
-  formatAmount: (amt: number) => string;
-  formatTransactionAmount?: (amt: number | string, currency: string) => string;
-  hideBalances: boolean;
-  appMode: string;
-  openingBalance: number;
-  closingBalance: number;
-  selectedAccount: Account;
-  formatDisplayDate: (date: Date | string) => string;
-  showCustomerDestination?: boolean;
-  destinationFilter?: string;
-}
+import { Table, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { type AccountTransactionRowsProps } from "./AccountTransactionRowsModel";
+import { useAccountTransactionRowsState } from "./useAccountTransactionRowsState";
+import { AccountTransactionRowsTableBody } from "./AccountTransactionRowsTableBody";
+export type { AccountStatementRow, AccountTransactionRowsProps } from "./AccountTransactionRowsModel";
 
 export function AccountTransactionRows({
   vouchersWithBalance,
@@ -49,63 +22,30 @@ export function AccountTransactionRows({
   showCustomerDestination = false,
   destinationFilter = "all",
 }: AccountTransactionRowsProps) {
-  const showDestination = appMode === "factory" && showCustomerDestination;
-  const colSpanMid = (appMode === "factory" ? 3 : 2) + (showDestination ? 1 : 0);
-  const totalColumns = 3 + (appMode === "factory" ? 1 : 0) + (showDestination ? 1 : 0) + (hideBalances ? 0 : 3);
-  const displayedVouchers = useMemo(() => {
-    if (!showDestination || destinationFilter === "all") return vouchersWithBalance;
-    if (destinationFilter === "__none__") return vouchersWithBalance.filter((v) => !v.destination?.trim());
-    return vouchersWithBalance.filter((v) => v.destination?.trim() === destinationFilter);
-  }, [vouchersWithBalance, showDestination, destinationFilter]);
-  const { totalDebit, totalCredit, selectableRows } = useMemo(() => {
-    let debit = 0;
-    let credit = 0;
-    const selectable: AccountStatementRow[] = [];
-
-    for (const voucher of vouchersWithBalance) {
-      debit += voucher.totalDebit || 0;
-      credit += voucher.totalCredit || 0;
-    }
-    for (const voucher of displayedVouchers) {
-      if (voucher.voucherType !== HISTORICAL_REFERENCE_TYPE && voucher.voucherType !== HISTORICAL_FACTORY_INVOICE_TYPE) selectable.push(voucher);
-    }
-
-    return { totalDebit: debit, totalCredit: credit, selectableRows: selectable };
-  }, [vouchersWithBalance, displayedVouchers]);
-  const isSupplier = selectedAccount.type === "supplier";
-  const isReferenceRow = (v: AccountStatementRow) => v.voucherType === HISTORICAL_REFERENCE_TYPE || v.voucherType === HISTORICAL_FACTORY_INVOICE_TYPE;
-  const allSelectableSelected = useMemo(
-    () => selectableRows.length > 0 && selectableRows.every((v) => selectedVoucherIds.has(v.voucherId)),
-    [selectableRows, selectedVoucherIds]
-  );
-  const virtualRows = useBoundedTableRows({
-    rowCount: displayedVouchers.length,
-    rowHeight: ACCOUNT_ROW_HEIGHT,
-    minimumRows: 120,
-    overscan: 16,
+  const {
+    showDestination,
+    colSpanMid,
+    totalColumns,
+    totalDebit,
+    totalCredit,
+    isSupplier,
+    isReferenceRow,
+    allSelectableSelected,
+    virtualRows,
+    renderedVouchers,
+    handleSelectAllRows,
+    balSide,
+  } = useAccountTransactionRowsState({
+    vouchersWithBalance,
+    selectedVoucherIds,
+    toggleSelectAll,
+    toggleVoucherSelection,
+    hideBalances,
+    appMode,
+    selectedAccount,
+    showCustomerDestination,
+    destinationFilter,
   });
-  const renderedVouchers = useMemo(
-    () => displayedVouchers.slice(virtualRows.startIndex, virtualRows.endIndex),
-    [displayedVouchers, virtualRows.endIndex, virtualRows.startIndex]
-  );
-
-  const handleSelectAllRows = () => {
-    if (selectableRows.length === vouchersWithBalance.length && destinationFilter === "all") {
-      toggleSelectAll();
-      return;
-    }
-    if (allSelectableSelected) {
-      selectableRows.forEach((v) => {
-        if (selectedVoucherIds.has(v.voucherId)) toggleVoucherSelection(v.voucherId);
-      });
-    } else {
-      selectableRows.forEach((v) => {
-        if (!selectedVoucherIds.has(v.voucherId)) toggleVoucherSelection(v.voucherId);
-      });
-    }
-  };
-
-  const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
 
   return (
     <div
@@ -135,7 +75,10 @@ export function AccountTransactionRows({
               </TableHead>
             )}
             {showDestination && (
-              <TableHead className="w-[150px] py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground" data-testid="column-customer-destination">
+              <TableHead
+                className="w-[150px] py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                data-testid="column-customer-destination"
+              >
                 Destination
               </TableHead>
             )}
@@ -156,212 +99,29 @@ export function AccountTransactionRows({
             )}
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {!hideBalances && (
-          <TableRow className="bg-accent/20 border-b border-border/60" data-testid="row-opening-balance">
-            <TableCell className="py-3 print:hidden" />
-            <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" />
-            <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" colSpan={colSpanMid - 1}>
-              <span className="font-semibold text-foreground">Opening Balance</span>
-            </TableCell>
-            <TableCell className="text-right font-mono py-3 text-sm tabular-nums">
-              {!hideBalances &&
-                (isSupplier
-                  ? openingBalance < 0
-                    ? fmt(Math.abs(openingBalance))
-                    : "—"
-                  : openingBalance > 0
-                    ? fmt(openingBalance)
-                    : "—")}
-            </TableCell>
-            <TableCell className="text-right font-mono py-3 text-sm tabular-nums">
-              {!hideBalances &&
-                (isSupplier
-                  ? openingBalance > 0
-                    ? fmt(openingBalance)
-                    : "—"
-                  : openingBalance < 0
-                    ? fmt(Math.abs(openingBalance))
-                    : "—")}
-            </TableCell>
-            <TableCell className="text-right font-mono font-semibold py-3 text-sm tabular-nums">
-              {!hideBalances && (
-                <>
-                  {fmt(Math.abs(openingBalance))}
-                  <span className="ml-1 text-[11px] opacity-60">
-                    {isSupplier ? (openingBalance > 0 ? "Cr" : "Dr") : openingBalance >= 0 ? "Dr" : "Cr"}
-                  </span>
-                </>
-              )}
-            </TableCell>
-          </TableRow>
-          )}
-
-          {virtualRows.topSpacerHeight > 0 && (
-            <TableRow aria-hidden="true" data-testid="account-virtual-spacer-top">
-              <TableCell
-                colSpan={totalColumns}
-                className="p-0 border-0"
-                style={{ height: virtualRows.topSpacerHeight }}
-              />
-            </TableRow>
-          )}
-
-          {renderedVouchers.map((v) => {
-            const isReference = isReferenceRow(v);
-            return (
-              <TableRow
-                key={`${v.voucherId}-${v.entryId}`}
-                className={
-                  isReference
-                    ? "bg-muted/15 border-b border-border/40 last:border-0"
-                    : "group hover:bg-muted/30 cursor-pointer border-b border-border/40 last:border-0"
-                }
-                onClick={isReference ? undefined : () => handleOpenVoucher(v)}
-                data-testid={
-                  isReference ? `row-historical-reference-${Math.abs(v.voucherId)}` : `row-voucher-${v.voucherId}`
-                }
-              >
-                <TableCell className="py-3 print:hidden" onClick={(e) => e.stopPropagation()}>
-                  {isReference ? null : (
-                    <Checkbox
-                      checked={selectedVoucherIds.has(v.voucherId)}
-                      onCheckedChange={() => toggleVoucherSelection(v.voucherId)}
-                    />
-                  )}
-                </TableCell>
-                <TableCell className="py-3 font-mono text-xs tabular-nums text-muted-foreground whitespace-nowrap">
-                  {formatDisplayDate(v.voucherDate)}
-                </TableCell>
-                <TableCell className="py-3 max-w-[420px]">
-                  <div className="text-sm font-medium text-foreground leading-snug truncate">
-                    {v.voucherDescription || v.narration || (
-                      <span className="text-muted-foreground italic">No description</span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                    {isReference ? v.voucherType === HISTORICAL_FACTORY_INVOICE_TYPE ? "Historical factory invoice · included in customer balance" : "Historical PO reference · reference only · balance unchanged" : v.voucherType}
-                  </div>
-                </TableCell>
-                {appMode === "factory" && (
-                  <TableCell className="py-3 text-[11px] text-muted-foreground max-w-[280px] truncate">
-                    {v.narration}
-                  </TableCell>
-                )}
-                {showDestination && (
-                  <TableCell className="py-3 text-xs text-muted-foreground max-w-[210px] truncate" data-testid="cell-customer-destination">
-                    {v.destination?.trim() || "—"}
-                  </TableCell>
-                )}
-                {!hideBalances && (
-                  <TableCell className="py-3 text-right font-mono text-sm tabular-nums">
-                    {v.totalDebit > 0 ? (
-                      <span className="text-foreground">
-                        {formatTransactionAmount && v.transactionCurrency
-                          ? formatTransactionAmount(v.transactionDebitAmount || v.totalDebit, v.transactionCurrency)
-                          : fmt(v.totalDebit)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </TableCell>
-                )}
-                {!hideBalances && (
-                  <TableCell className="py-3 text-right font-mono text-sm tabular-nums">
-                    {v.totalCredit > 0 ? (
-                      <span className="text-foreground">
-                        {formatTransactionAmount && v.transactionCurrency
-                          ? formatTransactionAmount(v.transactionCreditAmount || v.totalCredit, v.transactionCurrency)
-                          : fmt(v.totalCredit)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </TableCell>
-                )}
-                {!hideBalances && (
-                  <TableCell className="py-3 text-right font-mono text-sm tabular-nums font-semibold">
-                    {v.runningBalance != null ? (
-                      <>
-                        {fmt(Math.abs(v.runningBalance))}
-                        <span className="ml-1 text-[11px] font-normal opacity-50">
-                          {v.runningBalance >= 0 ? "Dr" : "Cr"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </TableCell>
-                )}
-              </TableRow>
-            );
-          })}
-
-          {virtualRows.bottomSpacerHeight > 0 && (
-            <TableRow aria-hidden="true" data-testid="account-virtual-spacer-bottom">
-              <TableCell
-                colSpan={totalColumns}
-                className="p-0 border-0"
-                style={{ height: virtualRows.bottomSpacerHeight }}
-              />
-            </TableRow>
-          )}
-
-          {!hideBalances && (
-            <>
-              <TableRow className="bg-muted/20 border-t-2 text-xs font-medium text-muted-foreground">
-                <TableCell className="py-2 print:hidden" />
-                <TableCell colSpan={colSpanMid} className="py-2 text-right pr-4 text-xs text-muted-foreground">
-                  Opening Balance
-                </TableCell>
-                <TableCell className="py-2 text-right font-mono tabular-nums text-sm">
-                  {isSupplier
-                    ? openingBalance < 0
-                      ? fmt(Math.abs(openingBalance))
-                      : "—"
-                    : openingBalance > 0
-                      ? fmt(openingBalance)
-                      : "—"}
-                </TableCell>
-                <TableCell className="py-2 text-right font-mono tabular-nums text-sm">
-                  {isSupplier
-                    ? openingBalance > 0
-                      ? fmt(openingBalance)
-                      : "—"
-                    : openingBalance < 0
-                      ? fmt(Math.abs(openingBalance))
-                      : "—"}
-                </TableCell>
-                <TableCell className="py-2" />
-              </TableRow>
-              <TableRow className="bg-muted/20 text-xs font-medium text-muted-foreground">
-                <TableCell className="py-2 print:hidden" />
-                <TableCell colSpan={colSpanMid} className="py-2 text-right pr-4 text-xs text-muted-foreground">
-                  {showDestination && destinationFilter !== "all" ? "Period Total (all destinations)" : "Period Total"}
-                </TableCell>
-                <TableCell className="py-2 text-right font-mono tabular-nums text-sm">
-                  {totalDebit > 0 ? fmt(totalDebit) : "—"}
-                </TableCell>
-                <TableCell className="py-2 text-right font-mono tabular-nums text-sm">
-                  {totalCredit > 0 ? fmt(totalCredit) : "—"}
-                </TableCell>
-                <TableCell className="py-2" />
-              </TableRow>
-              <TableRow className="bg-muted/50 border-t text-sm font-semibold">
-                <TableCell className="py-2.5 print:hidden" />
-                <TableCell colSpan={colSpanMid} className="py-2.5 text-right pr-4">
-                  Closing Balance
-                </TableCell>
-                <TableCell className="py-2.5" />
-                <TableCell className="py-2.5" />
-                <TableCell className="py-2.5 text-right font-mono tabular-nums">
-                  {fmt(Math.abs(closingBalance))}
-                  <span className="ml-1 text-[11px] font-normal opacity-60">{balSide(closingBalance)}</span>
-                </TableCell>
-              </TableRow>
-            </>
-          )}
-        </TableBody>
+        <AccountTransactionRowsTableBody
+          appMode={appMode}
+          balSide={balSide}
+          closingBalance={closingBalance}
+          colSpanMid={colSpanMid}
+          destinationFilter={destinationFilter}
+          formatAmount={fmt}
+          formatDisplayDate={formatDisplayDate}
+          formatTransactionAmount={formatTransactionAmount}
+          handleOpenVoucher={handleOpenVoucher}
+          hideBalances={hideBalances}
+          isReferenceRow={isReferenceRow}
+          isSupplier={isSupplier}
+          openingBalance={openingBalance}
+          renderedVouchers={renderedVouchers}
+          selectedVoucherIds={selectedVoucherIds}
+          showDestination={showDestination}
+          toggleVoucherSelection={toggleVoucherSelection}
+          totalColumns={totalColumns}
+          totalCredit={totalCredit}
+          totalDebit={totalDebit}
+          virtualRows={virtualRows}
+        />
       </Table>
     </div>
   );

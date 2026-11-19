@@ -2,14 +2,9 @@
 /** Maersk JSON shape parsing and local-calendar-date extraction. */
 import { firstDefined, jsonArray, jsonPath, jsonString } from "./externalJson";
 import type { TrackingEvent } from "./trackingProviders/types";
+import { parseDate, DEEP_ETA_KEY_RE, parseEvents } from "./maerskDirectParsingHelpers";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function parseDate(raw: unknown): Date | null {
-  if (!raw || typeof raw !== "string") return null;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
-}
 
 /**
  * Convert a raw date/datetime string into a calendar date "YYYY-MM-DD"
@@ -40,15 +35,6 @@ export function formatEtaDate(raw: unknown): string | null {
   return `${y}-${m}-${day}`;
 }
 
-/**
- * Recursively walk any JSON object looking for ETA-named fields.
- * Returns { path, value: "YYYY-MM-DD" } for the first valid date found,
- * or null if none.  Only matches keys whose names explicitly mean
- * estimated/planned/scheduled arrival — never event dates.
- */
-const DEEP_ETA_KEY_RE =
-  /^(eta|estimatedArrival|estimatedTimeOfArrival|plannedArrival|plannedArrivalDate|scheduledArrival|predictiveEstimatedArrival|latestEstimatedArrival|arrivalDate|vesselArrival|portArrival|destinationEstimatedArrival)$/i;
-
 export function deepScanForEta(obj: unknown, depth = 0): { path: string; value: string } | null {
   if (depth > 12 || !obj || typeof obj !== "object") return null;
   if (Array.isArray(obj)) {
@@ -69,49 +55,6 @@ export function deepScanForEta(obj: unknown, depth = 0): { path: string; value: 
     }
   }
   return null;
-}
-
-function parseEvents(rawEvents: unknown[]): TrackingEvent[] {
-  if (!Array.isArray(rawEvents)) return [];
-  return rawEvents
-    .map((e: unknown): TrackingEvent => ({
-      date: parseDate(
-        firstDefined(
-          jsonPath(e, "eventDateTime"),
-          jsonPath(e, "eventDate"),
-          jsonPath(e, "timestamp"),
-          jsonPath(e, "date")
-        ) ?? null
-      ),
-      status: jsonString(
-        firstDefined(
-          jsonPath(e, "transportEventTypeCode"),
-          jsonPath(e, "activityName"),
-          jsonPath(e, "eventCode"),
-          jsonPath(e, "activity"),
-          jsonPath(e, "status")
-        )
-      ),
-      location: jsonString(
-        firstDefined(
-          jsonPath(e, "location", "portName"),
-          jsonPath(e, "location", "locationName"),
-          jsonPath(e, "location", "city"),
-          jsonPath(e, "portName"),
-          jsonPath(e, "locationName"),
-          jsonPath(e, "location")
-        )
-      ),
-      description: jsonString(
-        firstDefined(jsonPath(e, "description"), jsonPath(e, "eventDescription"), jsonPath(e, "activityName"))
-      ),
-    }))
-    .filter((e) => e.date !== null || e.status !== null)
-    .sort((a, b) => {
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return b.date.getTime() - a.date.getTime();
-    });
 }
 
 const normContainer = (v: unknown): string =>

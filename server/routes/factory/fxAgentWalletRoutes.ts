@@ -16,35 +16,7 @@ import {
   loadFxAgentWallets,
 } from "../../services/factory/fxAgentWalletDb";
 import { conversionPreview } from "../../services/factory/fxAgentWalletState";
-
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ROLES = ["Admin", "Owner", "Developer"] as const;
-function company(req: Request) {
-  return Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
-}
-function positive(value: unknown): string {
-  const v = String(value ?? "");
-  if (!/^\d+(?:\.\d{1,6})?$/.test(v) || toMoney(v).lte(0)) throw new Error("Positive amount required (max 6 decimals)");
-  return v;
-}
-function rate(value: unknown): string {
-  const v = String(value ?? "");
-  if (!/^\d+(?:\.\d{1,10})?$/.test(v) || toMoney(v).lte(0)) throw new Error("Enter a positive USD-per-EUR rate");
-  return v;
-}
-function dateOf(req: Request): string {
-  const date = String(req.body?.date ?? getClientDate(req));
-  if (!DATE.test(date) || date > getClientDate(req)) throw new Error("Date must not be in the future");
-  return date;
-}
-async function configRate(cid: number, date: string) {
-  const result = await db.execute(sql`
-    SELECT rate_to_usd::text AS rate FROM factory_fx_rates
-    WHERE company_id = ${cid} AND currency_code = 'EUR' AND source = 'manual'
-      AND effective_date <= ${date}::date
-    ORDER BY effective_date DESC, id DESC LIMIT 1`);
-  return result.rows[0]?.rate ? String(result.rows[0].rate) : null;
-}
+import { DATE, ROLES, company, positive, rate, dateOf, configRate } from "./fxAgentWalletRoutesHelpers";
 
 export function registerFactoryFxAgentWalletRoutes(app: Express) {
   registerFactoryFxAgentSettlementRoutes(app);
@@ -163,13 +135,18 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         const expectedOpeningUsd = String(req.body?.expectedOpeningUsd ?? "");
         const expectedLedgerBookUsd = String(req.body?.expectedLedgerBookUsd ?? "");
         if (
-          !cid || !Number.isSafeInteger(walletId) || walletId <= 0 ||
-          !reason || reason.length > 500 ||
+          !cid ||
+          !Number.isSafeInteger(walletId) ||
+          walletId <= 0 ||
+          !reason ||
+          reason.length > 500 ||
           !/^\d+(?:\.\d{1,6})?$/.test(expectedOpeningUsd) ||
           !/^\d+(?:\.\d{1,6})?$/.test(expectedLedgerBookUsd) ||
           req.body?.confirmUsdSource !== true
         ) {
-          return res.status(400).json({ message: "Confirm the updated USD ledger balance and give a reason (max 500 characters)" });
+          return res
+            .status(400)
+            .json({ message: "Confirm the updated USD ledger balance and give a reason (max 500 characters)" });
         }
         const today = getClientDate(req);
         const saved = await db.transaction(async (tx) => {
@@ -232,20 +209,23 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
             SET opening_usd = ${current.toFixed(6)}, activated_on = ${today}::date
             WHERE id = ${walletId} AND company_id = ${cid}
           `);
-          await logAudit({
-            userId: String(req.session.userId || "unknown"),
-            username: req.session.username || "unknown",
-            companyId: cid,
-            action: "repair",
-            tableName: "factory_fx_agent_wallets",
-            recordId: walletId,
-            recordIdentifier: String(account.accountName),
-            changes: {
-              opening_usd: { old: previous.toFixed(6), new: current.toFixed(6) },
-              activated_on: { old: String(account.activatedOn).slice(0, 10), new: today },
-              reason: { old: null, new: reason },
+          await logAudit(
+            {
+              userId: String(req.session.userId || "unknown"),
+              username: req.session.username || "unknown",
+              companyId: cid,
+              action: "repair",
+              tableName: "factory_fx_agent_wallets",
+              recordId: walletId,
+              recordIdentifier: String(account.accountName),
+              changes: {
+                opening_usd: { old: previous.toFixed(6), new: current.toFixed(6) },
+                activated_on: { old: String(account.activatedOn).slice(0, 10), new: today },
+                reason: { old: null, new: reason },
+              },
             },
-          }, tx);
+            tx
+          );
           return { walletId, openingUsd: current.toFixed(6), activatedOn: today };
         });
         return res.json(saved);

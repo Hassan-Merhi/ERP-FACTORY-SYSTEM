@@ -1,48 +1,6 @@
 import { cn } from "@/lib/utils";
 import { formatUsd } from "@/lib/moneyDisplay";
-
-interface OrderLike {
-  status: string;
-  grandTotal: string;
-  totalQtyBales: number;
-  totalWeightKg: string;
-  proformaExpectedBales?: string;
-  loadedNotInProformaBales?: string;
-}
-
-interface Bucket {
-  label: string;
-  color: string;
-  dotColor: string;
-  orders: OrderLike[];
-}
-
-function fmt(n: number) {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
-function sum(orders: OrderLike[], field: "grandTotal" | "totalWeightKg") {
-  return orders.reduce((s, o) => s + parseFloat(o[field] || "0"), 0);
-}
-
-function sumBales(orders: OrderLike[]) {
-  return orders.reduce((s, o) => s + (o.totalQtyBales || 0), 0);
-}
-
-interface LoadingStats {
-  remainingBales: number;
-  remainingKg: number;
-  remainingPrice: number;
-  overloadedBales: number;
-  overloadedKg: number;
-  overloadedPrice: number;
-  underLoadedBales: number;
-  underLoadedKg: number;
-  underLoadedPrice: number;
-  notRequestedBales: number;
-  notRequestedKg: number;
-  notRequestedPrice: number;
-}
+import { fmt, sum, sumBales, type OrderLike, type Bucket, type LoadingStats } from "./InvoiceSummaryBarHelpers";
 
 export function InvoiceSummaryBar({
   orders,

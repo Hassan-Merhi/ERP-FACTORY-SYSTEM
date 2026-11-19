@@ -5,99 +5,35 @@
  * may be posted explicitly only for a valid, foreign-currency Phase 3 match.
  */
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
 import { MonetaryFxExportMenu } from "./MonetaryFxExportMenu";
-import type { Account, Domain, RateMatrix, RealizedList, Valuation } from "./monetaryFxAccountingTypes";
+import { currency } from "./MonetaryFxAccountingHelpers";
+import { useMonetaryFxAccountingState } from "./useMonetaryFxAccountingState";
+import { MonetaryFxAccountingCard } from "./MonetaryFxAccountingCard";
 
-// Phase 15 source-only rollout: an independent financial release is still required.
-const UNIFIED_FINANCIAL_POSTING_CERTIFIED = false;
-async function load<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include" });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message ?? "Cannot load FX accounting report");
-  return body as T;
-}
-function currency(v: string | null) {
-  return v === null ? "Unavailable" : v;
-}
 export default function MonetaryFxAccounting() {
-  const [location] = useLocation();
-  const factory = location.startsWith("/factory/");
-  const properties = location.startsWith("/properties/");
-  const voucher = (id: number) =>
-    factory
-      ? `/factory/voucher-detail/${id}`
-      : properties
-        ? `/properties/voucher-detail/${id}`
-        : `/voucher-detail/${id}`;
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const accounts = useQuery<Account[]>({
-    queryKey: ["/api/accounting/cash-bank/accounts"],
-    queryFn: () => load("/api/accounting/cash-bank/accounts"),
-    retry: false,
-  });
-  const [account, setAccount] = useState("");
-  const [asOfDate, setAsOfDate] = useState("");
-  const [domain, setDomain] = useState<Domain | "">("");
-  const [partyId, setPartyId] = useState("");
-  const [reason, setReason] = useState("");
-  const target = useMemo(
-    () => accounts.data?.find((a) => account === `${a.accountKind}:${a.accountId}`),
-    [account, accounts.data]
-  );
-  const rates = useQuery<RateMatrix>({
-    queryKey: ["/api/accounting/monetary-fx/rates", asOfDate],
-    queryFn: () => load(`/api/accounting/monetary-fx/rates${asOfDate ? "?asOfDate=" + asOfDate : ""}`),
-    retry: false,
-  });
-  const valuationUrl = target
-    ? `/api/accounting/monetary-fx/cash-bank?accountKind=${target.accountKind}&accountId=${target.accountId}${asOfDate ? "&asOfDate=" + asOfDate : ""}`
-    : null;
-  const valuation = useQuery<Valuation>({
-    queryKey: ["/api/accounting/monetary-fx/cash-bank", valuationUrl],
-    queryFn: () => load(valuationUrl!),
-    enabled: !!valuationUrl,
-    retry: false,
-  });
-  const pId = partyId ? Number(partyId) : null;
-  const query = new URLSearchParams();
-  if (domain) query.set("domain", domain);
-  if (pId && Number.isSafeInteger(pId) && pId > 0) query.set("partyId", String(pId));
-  if (asOfDate) query.set("asOfDate", asOfDate);
-  const realized = useQuery<RealizedList>({
-    queryKey: ["/api/accounting/monetary-fx/realized", domain, partyId, asOfDate],
-    queryFn: () => load(`/api/accounting/monetary-fx/realized?${query.toString()}`),
-    retry: false,
-  });
-  const recognize = useMutation({
-    mutationFn: async (matchId: number) => {
-      const response = await apiRequest("POST", `/api/accounting/monetary-fx/realized/${matchId}/recognize`, {
-        reason,
-      });
-      return response.json();
-    },
-    onSuccess: async () => {
-      toast({
-        title: "Realized FX journal posted",
-        description: "Matched invoice and settlement originals remain unchanged.",
-      });
-      setReason("");
-      await qc.invalidateQueries({ queryKey: ["/api/accounting/monetary-fx/realized"] });
-      await qc.invalidateQueries({ queryKey: ["/api/accounting/monetary-fx/cash-bank"] });
-    },
-    onError: (err: Error) =>
-      toast({ title: "FX recognition refused", description: err.message, variant: "destructive" }),
-  });
+  const {
+    voucher,
+    accounts,
+    account,
+    setAccount,
+    asOfDate,
+    setAsOfDate,
+    domain,
+    setDomain,
+    partyId,
+    setPartyId,
+    reason,
+    setReason,
+    rates,
+    valuation,
+    realized,
+    recognize,
+  } = useMonetaryFxAccountingState();
 
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="unified-monetary-fx">
@@ -263,128 +199,18 @@ export default function MonetaryFxAccounting() {
           )}
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>2. Realized FX on matched invoices and settlements</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Calculated from recorded historical USD on each posted invoice/payment and the matched original-currency
-            amount. Positive realized difference is an FX gain, negative is a loss. Factory suppliers follow their
-            special inside/outside settlement policy, so this view does not automatically adjust them.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <Label>Area</Label>
-              <Select
-                value={domain || "__all__"}
-                onValueChange={(value) => setDomain(value === "__all__" ? "" : (value as Domain))}
-              >
-                <SelectTrigger className="h-10 w-full" aria-label="Area">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All matched parties</SelectItem>
-                  <SelectItem value="customer">Customers</SelectItem>
-                  <SelectItem value="supplier">ERP suppliers</SelectItem>
-                  <SelectItem value="factory_supplier">Factory suppliers (report only)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Party ID (optional)</Label>
-              <Input type="number" min="1" value={partyId} onChange={(e) => setPartyId(e.target.value)} />
-            </div>
-            <div>
-              <Label>Reason for authorized FX posting</Label>
-              <Input
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Why recognize this realized difference?"
-              />
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Phase 15 source-release control: realized-FX accounting journals are locked pending independent Claude and
-            finance certification, regardless of metadata pilot status. Dated valuation and reporting remain read-only.
-          </p>
-          {asOfDate && (
-            <p className="text-sm text-muted-foreground">
-              Historical as-of views are read-only and can never post an FX adjustment.
-            </p>
-          )}
-          {asOfDate && realized.data && (
-            <p className="text-xs text-muted-foreground">{realized.data.asOfLimitations}</p>
-          )}
-          {realized.isError && <p className="text-sm text-destructive">{(realized.error as Error).message}</p>}
-          {realized.data && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="p-2">Match / party</th>
-                    <th className="p-2">Invoice / settlement</th>
-                    <th className="p-2 text-right">Native matched</th>
-                    <th className="p-2 text-right">Invoice basis USD</th>
-                    <th className="p-2 text-right">Settlement basis USD</th>
-                    <th className="p-2 text-right">Realized FX USD</th>
-                    <th className="p-2">Posting</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {realized.data.items.map((item) => (
-                    <tr key={item.matchId} className="border-b align-top">
-                      <td className="p-2">
-                        #{item.matchId}
-                        <div className="text-xs text-muted-foreground">
-                          {item.domain} #{item.partyId}
-                        </div>
-                      </td>
-                      <td className="p-2">
-                        {item.chargeVoucher}
-                        <div className="text-muted-foreground">{item.settlementVoucher}</div>
-                      </td>
-                      <td className="p-2 text-right tabular-nums">
-                        {item.nativeMatchedAmount} {item.nativeCurrency}
-                      </td>
-                      <td className="p-2 text-right tabular-nums">{item.chargeHistoricalUsd}</td>
-                      <td className="p-2 text-right tabular-nums">{item.settlementHistoricalUsd}</td>
-                      <td className="p-2 text-right tabular-nums">{item.realizedGainUsd}</td>
-                      <td className="p-2">
-                        <span>{item.status}</span>
-                        {item.recognitionVoucherId && (
-                          <div>
-                            <a className="underline text-xs" href={voucher(item.recognitionVoucherId)}>
-                              Journal #{item.recognitionVoucherId}
-                            </a>
-                          </div>
-                        )}
-                        {item.issue && <div className="text-xs text-destructive">{item.issue}</div>}
-                        {item.postable && (
-                          <div className="mt-2">
-                            <Button
-                              size="sm"
-                              disabled={
-                                !UNIFIED_FINANCIAL_POSTING_CERTIFIED ||
-                                !!asOfDate ||
-                                reason.trim().length < 3 ||
-                                recognize.isPending
-                              }
-                              onClick={() => recognize.mutate(item.matchId)}
-                            >
-                              Recognize FX
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <MonetaryFxAccountingCard
+        asOfDate={asOfDate}
+        domain={domain}
+        partyId={partyId}
+        realized={realized}
+        reason={reason}
+        recognize={recognize}
+        setDomain={setDomain}
+        setPartyId={setPartyId}
+        setReason={setReason}
+        voucher={voucher}
+      />
     </div>
   );
 }

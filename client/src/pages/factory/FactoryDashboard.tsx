@@ -25,42 +25,7 @@ import { FactoryKpiCard } from "@/components/FactoryKpiCard";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
-
-interface DashboardData {
-  waste: { totalKg: number; breakdown: Array<{ wasteType: string; kg: number }> };
-  workers: { active: number; attendanceToday: number };
-  containers: { loaded: number };
-}
-
-interface KpiData {
-  openingStockKg: string;
-  closingStockKg: string;
-  balesPressedToday: number;
-  kgsUsedToday: string;
-  totalBaleWeightToday: string;
-  categories: Array<{ name: string; count: number; totalKg: number }>;
-  balesDetail: Array<{
-    id: number;
-    baleCode: string;
-    productName: string;
-    category: string;
-    weightKg: string;
-    pressedAt: string;
-    status: string;
-    quantity: number;
-  }>;
-}
-
-interface Container {
-  id: number;
-  containerNumber: string;
-  supplierName: string | null;
-  status: string;
-  totalKg: string;
-  actualReceivedKg: string | null;
-  arrivalDate: string | null;
-  origin: string | null;
-}
+import type { DashboardData, KpiData, Container } from "./FactoryDashboardTypes";
 
 const STATUS_ORDER = ["PENDING", "IN_TRANSIT", "ARRIVED", "OFFLOADED", "PARTIALLY_RECEIVED", "RECEIVED"];
 const STATUS_LABEL: Record<string, string> = {

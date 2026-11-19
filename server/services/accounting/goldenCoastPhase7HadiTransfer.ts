@@ -1,28 +1,27 @@
-import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
-import type { CentralPostingRequest, PostingActor } from "./centralPostingEngine";
+import type { PostingActor } from "./centralPostingEngine";
 import { buildGenericVoucherPostingRequest } from "./genericVoucherPosting";
 import { gcSalesCashPayableBalance } from "./goldenCoastSalesCashPayable";
 import {
-  GOLDEN_COAST_PHASE7_SOURCE_TYPE,
   GoldenCoastPhase7TransferError,
-  MONEY_SCALE,
   balanceMoney,
-  clientRequestId,
   money,
   positiveId,
   positiveMoney,
-  requiredText,
   type GoldenCoastPhase7Balances,
   type GoldenCoastPhase7CashAccount,
-  type GoldenCoastPhase7Operation,
   type GoldenCoastPhase7PostingBatch,
-  type GoldenCoastPhase7PostingRole,
   type GoldenCoastPhase7RoleAccounts,
   type GoldenCoastPhase7TransferInput,
   type GoldenCoastPhase7TransferPlan,
 } from "./parseGoldenCoastPhase7TransferInput";
+import { cashTarget, taggedRequest } from "./goldenCoastPhase7HadiTransferHelpers";
+export {
+  goldenCoastPhase7TransferDigest,
+  goldenCoastPhase7SourceId,
+  goldenCoastPhase7IdempotencyKey,
+} from "./goldenCoastPhase7HadiTransferHelpers";
 export {
   GOLDEN_COAST_PHASE7_MAX_REQUEST_ID_LENGTH,
   GOLDEN_COAST_PHASE7_SOURCE_TYPE,
@@ -94,82 +93,6 @@ export function planGoldenCoastPhase7Transfer(input: {
     gcSalesCashPayableAfterUsd: money(payable),
     outstandingHadiCollectionsBeforeUsd: money(outstanding),
     outstandingHadiCollectionsAfterUsd: money(outstanding.minus(amount)),
-  };
-}
-
-export function goldenCoastPhase7TransferDigest(input: {
-  transfer: GoldenCoastPhase7TransferInput;
-  accounts: GoldenCoastPhase7RoleAccounts;
-}): string {
-  const { transfer, accounts } = input;
-  const canonicalAccounts: GoldenCoastPhase7RoleAccounts = {
-    gcSalesCashAccountId: positiveId(accounts.gcSalesCashAccountId, "gcSalesCashAccountId"),
-    goldenCoastHadiIntercompanyAccountId: positiveId(
-      accounts.goldenCoastHadiIntercompanyAccountId,
-      "goldenCoastHadiIntercompanyAccountId"
-    ),
-    hadiGoldenCoastIntercompanyAccountId: positiveId(
-      accounts.hadiGoldenCoastIntercompanyAccountId,
-      "hadiGoldenCoastIntercompanyAccountId"
-    ),
-  };
-
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        companyId: transfer.companyId,
-        parentCompanyId: transfer.parentCompanyId,
-        operation: transfer.operation,
-        transferDate: transfer.transferDate,
-        amountUsd: new Decimal(transfer.amountUsd).toFixed(MONEY_SCALE),
-        reference: transfer.reference,
-        hadiCashAccount: transfer.hadiCashAccount,
-        goldenCoastCashAccount: transfer.goldenCoastCashAccount,
-        accounts: canonicalAccounts,
-      })
-    )
-    .digest("hex")
-    .slice(0, 32);
-}
-
-export function goldenCoastPhase7SourceId(
-  operation: GoldenCoastPhase7Operation,
-  transferDigest: string,
-  role: GoldenCoastPhase7PostingRole
-): string {
-  const digest = requiredText(transferDigest, "transferDigest", 64);
-  return `${operation}:${digest}:${role}`;
-}
-
-export function goldenCoastPhase7IdempotencyKey(
-  companyId: number,
-  requestId: string,
-  role: GoldenCoastPhase7PostingRole
-): string {
-  return `${GOLDEN_COAST_PHASE7_SOURCE_TYPE}:${positiveId(companyId, "companyId")}:${clientRequestId(requestId)}:${role}`;
-}
-
-function cashTarget(account: GoldenCoastPhase7CashAccount): Record<string, number> {
-  return account.kind === "bank" ? { bankAccountId: account.id } : { ledgerAccountId: account.id };
-}
-
-function taggedRequest(input: {
-  request: CentralPostingRequest;
-  transfer: GoldenCoastPhase7TransferInput;
-  transferDigest: string;
-  role: GoldenCoastPhase7PostingRole;
-}): CentralPostingRequest {
-  return {
-    ...input.request,
-    source: {
-      sourceType: GOLDEN_COAST_PHASE7_SOURCE_TYPE,
-      sourceId: goldenCoastPhase7SourceId(input.transfer.operation, input.transferDigest, input.role),
-      idempotencyKey: goldenCoastPhase7IdempotencyKey(
-        input.transfer.companyId,
-        input.transfer.clientRequestId,
-        input.role
-      ),
-    },
   };
 }
 

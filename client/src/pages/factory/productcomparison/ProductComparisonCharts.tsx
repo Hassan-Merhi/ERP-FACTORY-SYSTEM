@@ -1,7 +1,5 @@
-import { AlertTriangle, ArrowLeftRight, BarChart3, Package, Scale, X } from "lucide-react";
+import { AlertTriangle, BarChart3, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { RowsExportMenu } from "@/components/export/RowsExportMenu";
-import { pctChange } from "@/pages/factory/productioncomparison/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,17 +7,16 @@ import { ResponsiveMetricGrid, ResponsiveReportGrid } from "@/components/ui/resp
 import { MultiSelectFilter } from "@/pages/factory/productioncomparison/components/MultiSelectFilter";
 import { fmtNum } from "@/pages/factory/productioncomparison/utils";
 
-import { type ProductComparisonPeriod } from "./utils";
 import "./product-comparison-premium.css";
 import {
   LazyProductChartCard,
   Stat,
   formatMetric,
   localizedProductName,
-  metricValue,
   productKey,
 } from "./ProductComparisonChartsStat";
 import { ProductComparisonChartsCardSection, useProductComparisonChartsState } from "./useProductComparisonChartsState";
+import { ProductComparisonChartsContent } from "./ProductComparisonChartsContent";
 
 export default function ProductComparisonCharts() {
   const {
@@ -76,123 +73,23 @@ export default function ProductComparisonCharts() {
         </div>
       </div>
 
-      <div className="pc-toolbar flex flex-wrap items-center gap-2">
-        {(
-          [
-            ["day", copy.daily],
-            ["month", copy.monthly],
-            ["year", copy.yearly],
-            ["custom", copy.custom],
-          ] as [ProductComparisonPeriod, string][]
-        ).map(([value, label]) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={period === value ? "default" : "outline"}
-            className="pc-control-button"
-            aria-pressed={period === value}
-            onClick={() => setPeriod(value)}
-            data-testid={`product-comparison-period-${value}`}
-          >
-            {label}
-          </Button>
-        ))}
-
-        {period !== "custom" ? (
-          <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={direction === "previous" ? "secondary" : "ghost"}
-              className="pc-control-button"
-              aria-pressed={direction === "previous"}
-              onClick={() => setDirection("previous")}
-              data-testid="product-comparison-direction-previous"
-            >
-              {copy.previous}
-            </Button>
-            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-            <Button
-              type="button"
-              size="sm"
-              variant={direction === "next" ? "secondary" : "ghost"}
-              className="pc-control-button"
-              aria-pressed={direction === "next"}
-              onClick={() => setDirection("next")}
-              data-testid="product-comparison-direction-next"
-            >
-              {copy.next}
-            </Button>
-          </div>
-        ) : null}
-
-        <RowsExportMenu
-          title={`${copy.title} ${metric === "bales" ? copy.bales : copy.weight}`}
-          sheetName={copy.title}
-          rows={selectedCatalogRows}
-          columns={[
-            { header: copy.products, value: (product) => localizedProductName(product, language) },
-            {
-              header: `${copy.current}: ${selectedLabel}`,
-              value: (product) => metricValue(selectedRows.get(productKey(product)), metric),
-              type: "number",
-            },
-            {
-              header: `${copy.compared}: ${comparisonLabel}`,
-              value: (product) => metricValue(comparisonRows.get(productKey(product)), metric),
-              type: "number",
-            },
-            {
-              header: copy.difference,
-              value: (product) =>
-                metricValue(selectedRows.get(productKey(product)), metric) -
-                metricValue(comparisonRows.get(productKey(product)), metric),
-              type: "number",
-            },
-            {
-              header: `${copy.change} %`,
-              value: (product) =>
-                pctChange(
-                  metricValue(selectedRows.get(productKey(product)), metric),
-                  metricValue(comparisonRows.get(productKey(product)), metric)
-                ),
-              type: "number",
-            },
-          ]}
-          footer={[copy.selectedTotal, totals.selected, totals.comparison, totals.difference, totals.change]}
-          period={{ from: ranges.selected.from, to: ranges.selected.to }}
-          resource="factory.production"
-          className="pc-control-button"
-        />
-
-        <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-auto">
-          <Button
-            type="button"
-            size="sm"
-            variant={metric === "bales" ? "secondary" : "ghost"}
-            className="pc-control-button"
-            aria-pressed={metric === "bales"}
-            onClick={() => setMetric("bales")}
-            data-testid="product-comparison-metric-bales"
-          >
-            <Package className="mr-1.5 h-4 w-4" />
-            {copy.bales}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={metric === "weight" ? "secondary" : "ghost"}
-            className="pc-control-button"
-            aria-pressed={metric === "weight"}
-            onClick={() => setMetric("weight")}
-            data-testid="product-comparison-metric-weight"
-          >
-            <Scale className="mr-1.5 h-4 w-4" />
-            {copy.weight}
-          </Button>
-        </div>
-      </div>
+      <ProductComparisonChartsContent
+        comparisonLabel={comparisonLabel}
+        comparisonRows={comparisonRows}
+        copy={copy}
+        direction={direction}
+        language={language}
+        metric={metric}
+        period={period}
+        ranges={ranges}
+        selectedCatalogRows={selectedCatalogRows}
+        selectedLabel={selectedLabel}
+        selectedRows={selectedRows}
+        setDirection={setDirection}
+        setMetric={setMetric}
+        setPeriod={setPeriod}
+        totals={totals}
+      />
 
       <ProductComparisonChartsCardSection
         comparisonLabel={comparisonLabel}

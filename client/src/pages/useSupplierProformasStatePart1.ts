@@ -9,37 +9,8 @@ import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-
-export interface ProformaLine {
-  id: number;
-  proformaId: number;
-  barcode: string;
-  itemName: string;
-  qty: number;
-  weightPerBale: string;
-  pricePerBale: string;
-}
-
-interface Proforma {
-  id: number;
-  companyId: number;
-  supplierId: number;
-  reference: string;
-  notes: string | null;
-  isStarred: boolean;
-  destinationCompanyId: number | null;
-  createdAt: string;
-  updatedAt: string;
-  lines?: ProformaLine[];
-}
-
-export const parseFiniteNumber = (value: number | string | null | undefined) => {
-  const parsed = typeof value === "number" ? value : Number.parseFloat(value ?? "");
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-export const calculateLineTotal = (qty: number | string, pricePerBale: number | string) =>
-  parseFiniteNumber(qty) * parseFiniteNumber(pricePerBale);
+import type { Proforma } from "./useSupplierProformasStatePart1Helpers";
+export { parseFiniteNumber, calculateLineTotal, type ProformaLine } from "./useSupplierProformasStatePart1Helpers";
 
 export function useSupplierProformasStatePart1() {
   const { toast } = useToast();

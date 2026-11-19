@@ -1,15 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, History } from "lucide-react";
 import { type CostCenter } from "@/api/costCentersApi";
-import { MultiSelectFilter } from "@/pages/factory/productioncomparison/components/MultiSelectFilter";
-import { MAX_BATCH, fmt, type Kind } from "./CostCenterHistoricalTypes";
+import { fmt } from "./CostCenterHistoricalTypes";
 import { useCostCenterHistoricalState } from "./useCostCenterHistoricalState";
 import { CostCenterHistoricalSection, CostCenterHistoricalSection2 } from "./CostCenterHistoricalSection2";
+import { CostCenterHistoricalContent } from "./CostCenterHistoricalContent";
 /** Rows drawn in the preview table; totals and Apply always cover the whole batch. */
 const PREVIEW_ROWS_SHOWN = 500;
 
@@ -68,87 +66,21 @@ export function CostCenterHistorical(props: { baseUrl: string; centers: CostCent
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <div className="space-y-1">
-            <Label>Historical Source</Label>
-            <Select
-              value={kind}
-              onValueChange={(v) => {
-                invalidatePreview();
-                setKind(v as Kind);
-                setSelectedAccounts([]);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="VOUCHER_ENTRY">Posted expense voucher lines</SelectItem>
-                {isFactory && <SelectItem value="FACTORY_DAYBOOK">Standalone Factory expenses</SelectItem>}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="historical-cc-from">From</Label>
-            <Input
-              id="historical-cc-from"
-              type="date"
-              value={from}
-              onChange={(e) => {
-                invalidatePreview();
-                setFrom(e.target.value);
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="historical-cc-to">To</Label>
-            <Input
-              id="historical-cc-to"
-              type="date"
-              value={to}
-              onChange={(e) => {
-                invalidatePreview();
-                setTo(e.target.value);
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="historical-cc-limit">Maximum entries (1–10,000)</Label>
-            <Input
-              id="historical-cc-limit"
-              type="number"
-              min={1}
-              max={MAX_BATCH}
-              step={1}
-              value={limit}
-              onChange={(e) => {
-                invalidatePreview();
-                setLimit(e.target.value);
-              }}
-            />
-          </div>
-          {kind === "VOUCHER_ENTRY" && (
-            <div className="space-y-1 sm:col-span-2">
-              <Label>Expense Ledger Accounts (optional)</Label>
-              <MultiSelectFilter
-                className="w-full"
-                contentClassName="w-[min(28rem,90vw)]"
-                testId="historical-cc-accounts"
-                options={(accounts?.accounts || []).map((a) => ({
-                  value: String(a.id),
-                  label: a.code + " — " + a.name,
-                }))}
-                selected={selectedAccounts}
-                onChange={(next) => {
-                  invalidatePreview();
-                  setSelectedAccounts(next);
-                }}
-                placeholder="Expense accounts"
-                allLabel="All Eligible Expense Accounts"
-              />
-            </div>
-          )}
-        </div>
+        <CostCenterHistoricalContent
+          accounts={accounts}
+          from={from}
+          invalidatePreview={invalidatePreview}
+          isFactory={isFactory}
+          kind={kind}
+          limit={limit}
+          selectedAccounts={selectedAccounts}
+          setFrom={setFrom}
+          setKind={setKind}
+          setLimit={setLimit}
+          setSelectedAccounts={setSelectedAccounts}
+          setTo={setTo}
+          to={to}
+        />
         <CostCenterHistoricalSection
           reconError={reconError}
           reconErrorText={reconErrorText}
