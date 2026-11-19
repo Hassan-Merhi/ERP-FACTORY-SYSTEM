@@ -52,7 +52,7 @@ describe("Factory dispatch simplified management layout", () => {
     expect(detail).toContain("embedded");
     expect(scanner).toContain("embedded={embedded}");
     expect(scannerTable).toContain('data-testid="button-delete-all-dispatch-scans"');
-    expect(scannerTable).toContain('data-testid="button-remove-dispatch-scan-"');
+    expect(scannerTable).toContain('data-testid={"button-remove-dispatch-scan-" + scan.id}');
     expect(scannerTable).toContain("!embedded &&");
     expect(detail).toContain('data-testid="button-refresh-trip-detail"');
   });
