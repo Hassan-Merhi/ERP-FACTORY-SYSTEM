@@ -21,6 +21,7 @@ import {
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import {
   capturePhase9PaymentEditTx,
+  phase9PaymentFollowUpCaptureActive,
   capturePhase9PaymentTx,
   paymentFollowUpActor,
   paymentReceiptEvidence,
@@ -240,7 +241,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
       if (!editPlan) return res.status(400).json({ message: "Invalid amount" });
 
       // Use database transaction for atomic operation (the edit itself: applyPaymentReceiptEditTx).
-      const lanCapture = isPhase9LanPrimary();
+      const lanCapture = phase9PaymentFollowUpCaptureActive();
       const result = await db.transaction(async (tx) => {
         const before = lanCapture ? await phase9PaymentSnapshotTx(tx, req.session.currentCompanyId!, voucherId) : null;
         const edited = await applyPaymentReceiptEditTx(tx, {

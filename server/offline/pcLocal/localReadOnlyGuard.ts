@@ -19,6 +19,8 @@ import type { Request, RequestHandler, Response } from "express";
 import { BROWSER_OPERATION_KINDS } from "../browserSync/browserOperationKinds";
 import { logger } from "../../lib/logger";
 import { PHASE9_STOCK_ITEM_CREATE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
+import { PHASE9_PAYMENT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
+import { pcLocalMode } from "./pcLocalMode";
 
 const READS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Same rule as scripts/pc-sync/local/syncAgent.mjs (PC_SYNC_BLOCK_AFTER_HOURS). */
@@ -32,17 +34,24 @@ export const PC_LOCAL_ALLOWED_WRITES: ReadonlySet<string> = new Set([
   "POST /api/auth/set-company",
 ]);
 
+const OWN_ID_KINDS: ReadonlySet<string> = new Set([PHASE9_STOCK_ITEM_CREATE_KIND, PHASE9_PAYMENT_KIND]);
+
+/**
+ * Changes to records the PC already has. The live route builds the finished
+ * envelope in its own transaction (Payment / Receipt edits and deletes; any
+ * other delete is refused by the route).
+ */
+export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
+  /^PATCH \/api\/vouchers\/\d+\/payment-receipt$/,
+  /^DELETE \/api\/vouchers\/\d+$/,
+]);
+
 /** "METHOD /path" -> offline operation kind the cloud applies exactly once. */
 export const PC_LOCAL_ENTRY_ROUTES: ReadonlyMap<string, string> = new Map(
   Object.entries(BROWSER_OPERATION_KINDS).map(([kind, def]) => [`${def.route.method} ${def.route.path}`, kind])
 );
 
-type PcLocalMode = "read-only" | "entry" | null;
-
-export function pcLocalMode(env: NodeJS.ProcessEnv = process.env): PcLocalMode {
-  const mode = env.OFFLINE_PC_LOCAL_MODE;
-  return mode === "read-only" || mode === "entry" ? mode : null;
-}
+export { pcLocalMode } from "./pcLocalMode";
 
 export function pcLocalReadOnly(env: NodeJS.ProcessEnv = process.env): boolean {
   return pcLocalMode(env) !== null;
@@ -91,7 +100,7 @@ async function withRetries(work: () => Promise<unknown>, attempts = 3): Promise<
   }
 }
 
-async function captureEntry(req: Request, res: Response, next: () => void, kind: string, connect: Connect) {
+async function captureEntry(req: Request, res: Response, next: () => void, kind: string | null, connect: Connect) {
   const userId = req.session?.userId == null ? "" : String(req.session.userId);
   const companyId = Number(req.session?.currentCompanyId);
   // Not signed in or no company: the route itself answers; nothing is recorded.
@@ -124,6 +133,31 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
       await done();
       return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
     }
+    if (kind === null) {
+      // Only Payment / Receipt deletes can be replayed in the cloud. Several
+      // handlers serve DELETE /api/vouchers/:id, so refuse anything else here,
+      // before any of them can delete without recording it.
+      const deleteId = req.method.toUpperCase() === "DELETE" ? /^\/api\/vouchers\/(\d+)$/.exec(req.path) : null;
+      if (deleteId) {
+        const found = await conn.query("SELECT voucher_type FROM vouchers WHERE id = $1", [Number(deleteId[1])]);
+        const type = found.rows[0]?.voucher_type;
+        if (found.rows.length && type !== "Payment" && type !== "Receipt") {
+          await done();
+          return refuse(res, "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED");
+        }
+      }
+      // The live route writes its own finished envelope in its transaction
+      // (pcCapture.ts); the lock only has to cover the request.
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        void done();
+      };
+      res.on("finish", release);
+      res.on("close", release);
+      return next();
+    }
     const operationId = randomUUID();
     await conn.query(
       `INSERT INTO pc_local.outbox (operation_id, kind, input, user_id, company_id, status)
@@ -146,11 +180,12 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
         ? Promise.resolve()
         : res.statusCode >= 200 && res.statusCode < 300
           ? withRetries(() => {
-              const createdId = Number((responseBody as { id?: unknown } | null)?.id);
+              // New stock items and payments keep their own local id as the
+              // reference, so later entries naming them resolve in the cloud.
+              const body = responseBody as { id?: unknown; voucher?: { id?: unknown } } | null;
+              const createdId = Number(body?.id ?? body?.voucher?.id);
               const ownId =
-                kind === PHASE9_STOCK_ITEM_CREATE_KIND &&
-                Number.isSafeInteger(createdId) &&
-                createdId >= PC_LOCAL_ID_BASE
+                OWN_ID_KINDS.has(kind) && Number.isSafeInteger(createdId) && createdId >= PC_LOCAL_ID_BASE
                   ? createdId
                   : null;
               return conn.query(
@@ -189,8 +224,12 @@ export function makePcLocalReadOnlyGuard(
     const path = req.originalUrl.split("?")[0];
     const route = `${method} ${path}`;
     if (!path.startsWith("/api/") || PC_LOCAL_ALLOWED_WRITES.has(route)) return next();
-    const kind = mode === "entry" ? PC_LOCAL_ENTRY_ROUTES.get(route) : undefined;
-    if (!kind) return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
+    const kind =
+      mode !== "entry"
+        ? undefined
+        : (PC_LOCAL_ENTRY_ROUTES.get(route) ??
+          (PC_LOCAL_EVIDENCE_ROUTES.some((pattern) => pattern.test(route)) ? null : undefined));
+    if (kind === undefined) return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
     captureEntry(req, res, next, kind, connect).catch((error: unknown) => {
       logger.error("[pc-local] could not record an offline entry", { error: String(error) });
       if (!res.headersSent) res.status(503).json({ code: "OFFLINE_PC_LOCAL_CAPTURE_FAILED" });

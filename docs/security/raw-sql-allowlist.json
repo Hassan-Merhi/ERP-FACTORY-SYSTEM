@@ -9731,6 +9731,22 @@
         }
       ],
       "reason": "INSERT into accounting_fiscal_reviewed_closures with column names from a test-written object literal; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "b6d89f6c2e7f32823e99",
+      "path": "tests/pc-sync-offline-edits.test.ts",
+      "kind": "indirect-query-text",
+      "context": "connect.query",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
+          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
+        }
+      ],
+      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     }
   ]
 }
