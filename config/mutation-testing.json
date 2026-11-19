@@ -1,0 +1,45 @@
+{
+  "description": "Mutation testing: the money, stock-costing and posting-rule modules Stryker mutates, the database-free tests that must notice, and the per-file mutation score floors. Floors only rise; npm run test:mutation fails a file that drops below its floor. Raise a floor in the same change that adds the tests.",
+  "mutate": [
+    "server/lib/money.ts",
+    "server/lib/inventoryMath.ts",
+    "server/lib/closedPeriodError.ts",
+    "server/services/accounting/currencyAmounts.ts",
+    "server/services/accounting/currencyAmountsCore.ts",
+    "shared/posCfaMoney.ts",
+    "shared/posZmwMoney.ts",
+    "client/src/lib/accountingRequestIdentity.ts"
+  ],
+  "tests": [
+    "server/lib/money.test.ts",
+    "tests/money-parse-input.test.ts",
+    "tests/money-leading-number.test.ts",
+    "tests/money-exact-batch-23.test.ts",
+    "tests/money-exact-batch-26.test.ts",
+    "tests/money-exact-batch-30.test.ts",
+    "tests/currencyAmounts.test.ts",
+    "tests/currency-amounts-behavior.test.ts",
+    "tests/currency-amounts-engine-paths.test.ts",
+    "tests/currency-amounts-legacy-fallbacks.test.ts",
+    "tests/multi-currency-integration.test.ts",
+    "tests/factory-container-fx-voucher-normalization.test.ts",
+    "tests/mali-pos-native-amounts.test.ts",
+    "tests/zambia-pos-native-amounts.test.ts",
+    "tests/accounting-request-identity.test.ts",
+    "tests/intercompany-voucher-closed-period-response.test.ts",
+    "tests/inventory-math.test.ts",
+    "tests/closed-period-error.test.ts",
+    "tests/money-allocation-and-daybook.test.ts",
+    "tests/accounting-request-identity-rules.test.ts"
+  ],
+  "floors": {
+    "server/lib/money.ts": 86,
+    "server/lib/inventoryMath.ts": 81,
+    "server/lib/closedPeriodError.ts": 90,
+    "server/services/accounting/currencyAmounts.ts": 95,
+    "server/services/accounting/currencyAmountsCore.ts": 84,
+    "shared/posCfaMoney.ts": 80,
+    "shared/posZmwMoney.ts": 66,
+    "client/src/lib/accountingRequestIdentity.ts": 82
+  }
+}
