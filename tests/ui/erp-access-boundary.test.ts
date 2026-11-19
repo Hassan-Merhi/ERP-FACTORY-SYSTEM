@@ -98,6 +98,7 @@ describe("ERP access boundary", () => {
       })
     ).toBe(ERP_ACCESS_BOUNDARY_STATE.ready);
   });
+
   it("only recovers from transport, throttling, timeout, or server errors", () => {
     const withStatus = (status: number) => Object.assign(new Error("Access check failed"), { status });
     for (const status of [408, 429, 500, 502, 503]) {
