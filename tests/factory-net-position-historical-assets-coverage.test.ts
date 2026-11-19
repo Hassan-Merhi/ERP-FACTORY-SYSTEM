@@ -207,9 +207,15 @@ const TABLES = [
 ];
 
 async function baselines(q: Q) {
+  // A database that has booted the server already holds baselines (startup
+  // records them), so pin each one to this test's state instead of inserting.
+  // The surrounding transaction is rolled back, so nothing persists.
   for (const table of TABLES) {
     await q(
-      `INSERT INTO factory_row_history_baselines (table_name, version, baseline_at, snapshot_rows) VALUES ($1, $2, '2026-01-01', 0)`,
+      `INSERT INTO factory_row_history_baselines (table_name, version, baseline_at, snapshot_rows)
+       VALUES ($1, $2, '2026-01-01', 0)
+       ON CONFLICT ON CONSTRAINT factory_row_history_baselines_pkey
+       DO UPDATE SET baseline_at = EXCLUDED.baseline_at, snapshot_rows = EXCLUDED.snapshot_rows`,
       [table, FACTORY_ROW_HISTORY_VERSION]
     );
   }
