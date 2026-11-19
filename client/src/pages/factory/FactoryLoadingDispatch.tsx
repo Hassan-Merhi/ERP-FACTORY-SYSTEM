@@ -1,4 +1,4 @@
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FactoryLoadingDispatchOverview from "./FactoryLoadingDispatchOverview";
 import FactoryLoadingDispatchDetail from "./FactoryLoadingDispatchDetail";
@@ -90,10 +90,6 @@ export default function FactoryLoadingDispatch() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not
-          post stock or accounting changes
-        </div>
       </div>
 
       <FactoryLoadingDispatchDialogSection
