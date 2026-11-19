@@ -1,34 +1,135 @@
+import type { ClientErrorLike } from "@/lib/clientError";
 /** Scheduled containers — a separate company-scoped schedule above container availability. */
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Check, ChevronDown, ChevronRight, Loader2, Plus, Trash2, X } from "lucide-react";
-import { useScheduledContainersTableState } from "./useScheduledContainersTableState";
-import { ScheduledContainersTableTableRow } from "./ScheduledContainersTableTableRow";
+import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+interface ScheduledRow {
+  id: number;
+  date: string;
+  shippingCompany: string;
+  scheduledContainers: number;
+  note: string | null;
+  details: string | null;
+  isArchived: boolean;
+  archivedAt: string | null;
+}
+interface EditingScheduled {
+  id: number;
+  date: string;
+  shippingCompany: string;
+  scheduledContainers: string;
+  note: string;
+  details: string;
+}
+const SCHEDULED_KEY = "/api/factory/scheduled-containers";
 
 export function ScheduledContainersTable() {
+  const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canAddRow = recordChanges.canCreate("POST", SCHEDULED_KEY);
+  const [editing, setEditing] = useState<EditingScheduled | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [newRow, setNewRow] = useState({
+    date: "",
+    shippingCompany: "",
+    scheduledContainers: "",
+    note: "",
+    details: "",
+  });
+
   const {
-    recordChanges,
-    canAddRow,
-    editing,
-    setEditing,
-    setAdding,
-    adding,
-    expanded,
-    setExpanded,
-    newRow,
-    setNewRow,
+    data: rows = [],
     isLoading,
     isError,
     refetch,
-    activeRows,
-    addMutation,
-    saveMutation,
-    deleteMutation,
-    startEdit,
-    handleAddKey,
-    handleEditKey,
-  } = useScheduledContainersTableState();
+  } = useQuery<ScheduledRow[]>({
+    queryKey: [SCHEDULED_KEY],
+    // This is an editable schedule, not a live status feed. Background polling
+    // used to refetch every five seconds while someone was typing into a row.
+    // Successful add/edit/delete actions already invalidate this key.
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+
+  const activeRows = rows.filter((row) => !row.isArchived);
+  const addMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", SCHEDULED_KEY, {
+        date: newRow.date,
+        shippingCompany: newRow.shippingCompany.trim(),
+        scheduledContainers: parseInt(newRow.scheduledContainers) || 0,
+        note: newRow.note.trim() || null,
+        details: newRow.details.trim() || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SCHEDULED_KEY] });
+      setNewRow({ date: "", shippingCompany: "", scheduledContainers: "", note: "", details: "" });
+      setAdding(false);
+      toast({ title: "Row added" });
+    },
+    onError: (e: ClientErrorLike) => toast({ title: "Failed to add", description: e.message, variant: "destructive" }),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (row: EditingScheduled) =>
+      apiRequest("PATCH", `${SCHEDULED_KEY}/${row.id}`, {
+        date: row.date,
+        shippingCompany: row.shippingCompany.trim(),
+        scheduledContainers: parseInt(row.scheduledContainers) || 0,
+        note: row.note.trim() || null,
+        details: row.details.trim() || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SCHEDULED_KEY] });
+      setEditing(null);
+      toast({ title: "Row saved" });
+    },
+    onError: (e: ClientErrorLike) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `${SCHEDULED_KEY}/${id}`, undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SCHEDULED_KEY] });
+      toast({ title: "Row deleted" });
+    },
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
+  });
+
+  function startEdit(row: ScheduledRow) {
+    setEditing({
+      id: row.id,
+      date: row.date,
+      shippingCompany: row.shippingCompany,
+      scheduledContainers: String(row.scheduledContainers),
+      note: row.note || "",
+      details: row.details || "",
+    });
+  }
+
+  function handleAddKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter") addMutation.mutate();
+    if (e.key === "Escape") {
+      setAdding(false);
+      setNewRow({ date: "", shippingCompany: "", scheduledContainers: "", note: "", details: "" });
+    }
+  }
+
+  function handleEditKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && editing) saveMutation.mutate(editing);
+    if (e.key === "Escape") setEditing(null);
+  }
 
   return (
     <div className="space-y-3">
@@ -208,13 +309,91 @@ export function ScheduledContainersTable() {
                       )
                     )}
                     {canAddRow && adding && (
-                      <ScheduledContainersTableTableRow
-                        addMutation={addMutation}
-                        handleAddKey={handleAddKey}
-                        newRow={newRow}
-                        setAdding={setAdding}
-                        setNewRow={setNewRow}
-                      />
+                      <TableRow className="bg-muted/30">
+                        <TableCell>
+                          <Input
+                            type="date"
+                            value={newRow.date}
+                            onChange={(e) => setNewRow({ ...newRow, date: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            autoFocus
+                            data-testid="input-new-scheduled-date"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={newRow.shippingCompany}
+                            onChange={(e) => setNewRow({ ...newRow, shippingCompany: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            placeholder="e.g. Maersk"
+                            data-testid="input-new-scheduled-company"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={newRow.scheduledContainers}
+                            onChange={(e) => setNewRow({ ...newRow, scheduledContainers: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            placeholder="0"
+                            data-testid="input-new-scheduled-count"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={newRow.note}
+                            onChange={(e) => setNewRow({ ...newRow, note: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            placeholder="Optional note"
+                            data-testid="input-new-scheduled-note"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={newRow.details}
+                            onChange={(e) => setNewRow({ ...newRow, details: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            placeholder="Type anything"
+                            data-testid="input-new-scheduled-details"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => addMutation.mutate()}
+                              disabled={addMutation.isPending || !newRow.date || !newRow.shippingCompany.trim()}
+                              data-testid="button-new-scheduled-save"
+                            >
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setAdding(false);
+                                setNewRow({
+                                  date: "",
+                                  shippingCompany: "",
+                                  scheduledContainers: "",
+                                  note: "",
+                                  details: "",
+                                });
+                              }}
+                              data-testid="button-new-scheduled-cancel"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     )}
                   </>
                 )}
