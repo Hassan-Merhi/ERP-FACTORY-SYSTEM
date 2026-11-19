@@ -10,6 +10,7 @@
  * never created at runtime; without it the LAN write guard refuses the route
  * instead of failing mid-adjustment.
  */
+import { capturePcLocalEnvelopeTx, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
 import { EdgeRefusal } from "./edgeRefusal";
@@ -107,12 +108,22 @@ export async function capturePhase9StockTransferTx(
 /**
  * Record stock-item master edits (one event per call) on the "stock" stream.
  * The edit's local reference is its own stream sequence, taken under the
- * outbox order lock. No-op off the LAN primary.
+ * outbox order lock. On a PC in entry mode it goes to the PC's outbox. No-op
+ * elsewhere.
  */
 export async function capturePhase9StockItemEditTx(
   tx: DbTransaction,
   evidence: Omit<Phase9StockItemEditEvidence, "localEditId">
 ): Promise<void> {
+  // A PC in entry mode: the finished envelope goes to its own outbox, with a
+  // local reference from the PC's sequence, in this transaction.
+  if (pcLocalEntryMode()) {
+    const next = await tx.execute(sql`SELECT nextval('pc_local.local_ref_seq')::integer AS ref`);
+    const localEditId = Number((next.rows[0] as { ref: number | string }).ref);
+    const event = phase9StockItemEditEnvelope({ ...evidence, localEditId });
+    await capturePcLocalEnvelopeTx(tx, event, localEditId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
@@ -146,11 +157,16 @@ export async function capturePhase9StockItemCreateTx(
   await appendStockEventTx(tx, String(config.siteId), event, event.localStockItemId);
 }
 
-/** Plan batch 2: a stock item deleted (soft) on the LAN primary; no-op elsewhere. */
+/** Plan batch 2: a stock item deleted (soft) on the LAN primary or a PC in entry mode; no-op elsewhere. */
 export async function capturePhase9StockItemDeleteTx(
   tx: DbTransaction,
   evidence: Phase9StockItemDeleteEvidence
 ): Promise<void> {
+  if (pcLocalEntryMode()) {
+    const event = phase9StockItemDeleteEnvelope(evidence);
+    await capturePcLocalEnvelopeTx(tx, event, event.stockItemId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
   const event = phase9StockItemDeleteEnvelope(evidence);

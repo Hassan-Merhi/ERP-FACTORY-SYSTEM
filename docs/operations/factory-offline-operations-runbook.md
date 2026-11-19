@@ -346,9 +346,23 @@ by a different person than the one who made the payment on the same PC waits,
 because each person is a separate device to the cloud. Covered by
 `tests/pc-sync-offline-edits.test.ts`.
 
+**Stock item edits and deletes on a PC.** In entry mode the PC also accepts the
+stock item master changes the factory LAN server records: a single item's edit,
+bulk prices, categories, renames and units, the barcode, category and name
+imports, opening balances, and location selling prices. Only the fields the
+cloud can replay change (name, unit, selling price, category, stock group,
+active, opening quantity, rate and value, location prices, aliases); changing
+any other field, such as the code, is refused
+(`EDGE_PHASE9_STOCK_ITEM_FIELD_CLOUD_ONLY`). An item can be deleted on a PC only
+while it has no inventory and no stock movements. Each change is recorded as
+"field: before -> after" in the change's own transaction; if the cloud changed
+the same field since the PC copied it, the change is held
+(`PHASE9_STOCK_ITEM_CHANGED`) instead of overwriting. Items made on the PC are
+translated to their cloud items, so they can be edited before the next sync.
+Covered by `tests/pc-sync-offline-stock-item-edits.test.ts`.
+
 Still to come: the remaining offline kinds the cloud can already apply (POS sale
-edits and cancellations, stock item edits and deletes, stock transfer edits and
-reviews, receiving, attachments), which need the factory LAN server's offline
+edits and cancellations, stock transfer edits and reviews, receiving, attachments), which need the factory LAN server's offline
 behaviour (invoice numbers, local ids, transfer references) made available on a
 PC; then the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
