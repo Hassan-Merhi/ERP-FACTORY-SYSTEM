@@ -1,11 +1,3 @@
-import { searchAny } from "@shared/searchNormalization";
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@/lib/form-resolver";
-import { useLocation } from "wouter";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import {
   DaybookHeader,
   DaybookPage,
@@ -13,21 +5,10 @@ import {
   DaybookShowHiddenButton,
   DaybookTabs,
 } from "@/components/daybook/DaybookFrame";
-import { DAYBOOK_TABS, useDaybookTab } from "@/components/daybook/useDaybookTab";
-import { useDaybookDayKeys } from "@/components/daybook/useDaybookDayKeys";
+import { DAYBOOK_TABS } from "@/components/daybook/useDaybookTab";
 import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import {
-  canonicalApiUrl,
-  companyDataKey,
-  frontendQueryPolicies,
-  invalidateCompanyApiFamily,
-} from "@/lib/frontendDataArchitecture";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { DaybookOverview } from "./daybook/DaybookOverview";
-import { exportDaybookDetail, exportDaybookSummary } from "./daybook/exportDaybook";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,632 +20,63 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, LayoutList, Layers } from "lucide-react";
-import { format, addDays } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
-import { isGoldenCoastProgrammeVoucher, isVoucherMutationBlocked } from "@/lib/migratedVoucherGuard";
-import { isBlockingQueryError } from "@/lib/abortError";
-import { useDateJump } from "@/hooks/use-date-jump";
-import { createVoucherSchema } from "./daybook/types";
-import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
-import type {
-  LedgerAccount,
-  BankAccount,
-  Supplier,
-  Employee,
-  FixedAsset,
-  EditVoucherForm,
-  Voucher,
-  OffloadListItem,
-  DaybookRow,
-  DaybookPurchaseOrderData,
-  DaybookUser,
-  DaybookViewEntriesResponse,
-  VoucherEntry,
-  ViewVoucherEntry,
-} from "./daybook/types";
-import { loadDaybookState, saveDaybookState } from "./daybook/state";
-import {
-  openDaybookVoucherEditor,
-  useDaybookDeleteMutation,
-  useDaybookLinkedVoucherIds,
-} from "./useDaybookIntercompany";
+import type { DaybookUser } from "./daybook/types";
+import { saveDaybookState } from "./daybook/state";
 import { DaybookFilters } from "./daybook/DaybookFilters";
 import { DaybookTable } from "./daybook/DaybookTable";
 import { VoucherDetailsDialog } from "./daybook/VoucherDetailsDialog";
 import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
-import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
-import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
-import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
-import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } from "./daybook/voucherBalanceSelection";
+import { useDaybookModel } from "./DaybookModel";
 
 export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const routineAccountingViewFiltered = selectedCompany?.id === 8 && (user?.currentRole ?? user?.role) !== "Developer";
-  const vouchersBase = selectedCompany?.companyType === "properties" ? "/properties/vouchers" : "/vouchers";
-  const { formatDisplayDate, formatDisplayTime } = useDateFormat();
-  const { formatHistoricalBaseAmount: formatAmount, formatTransactionAmount } = useCurrencyContext();
-  const [, navigate] = useLocation();
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
-    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
-  });
-  const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
-  const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
-  const [activeDaybookTab, setActiveDaybookTab] = useDaybookTab();
-  const [isExportingReport, setIsExportingReport] = useState(false);
-  const {
-    periodFilter,
-    filters,
-    voucherPage,
-    setVoucherPage,
-    setPeriodFilter,
-    setFilters,
-    resetFilters: resetDaybookFilters,
-    hasActiveFilters: hasActiveDaybookFilters,
-  } = useDaybookFilterState(selectedCompany?.id);
-  useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
-  const shiftDay = useCallback(
-    (delta: number) => {
-      const fmt = "yyyy-MM-dd";
-      setPeriodFilter((prev) => ({
-        fromDate: format(addDays(new Date(prev.fromDate + "T00:00:00"), delta), fmt),
-        toDate: format(addDays(new Date(prev.toDate + "T00:00:00"), delta), fmt),
-        preset: "custom",
-      }));
-    },
-    [setPeriodFilter]
-  );
-
-  useDaybookDayKeys(shiftDay);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
-  const [selectedDialogRow, setSelectedDialogRow] = useState<number | null>(null);
-  const [viewProfitFilter, setViewProfitFilter] = useState<"all" | "gain" | "loss" | "even">("all");
-
-  useEffect(() => {
-    if (!viewDialogOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      const key = e.key.toLowerCase();
-      if (key === "g") {
-        e.preventDefault();
-        setViewProfitFilter("gain");
-      } else if (key === "l") {
-        e.preventDefault();
-        setViewProfitFilter("loss");
-      } else if (key === "e") {
-        e.preventDefault();
-        setViewProfitFilter("even");
-      } else if (key === "a") {
-        e.preventDefault();
-        setViewProfitFilter("all");
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [viewDialogOpen]);
-
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [voucherToEdit, setVoucherToEdit] = useState<Voucher | null>(null);
-  const [editFormInitialized, setEditFormInitialized] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [voucherToDelete, setVoucherToDelete] = useState<Voucher | null>(null);
-  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [hiddenRowIds, setHiddenRowIds] = useState<Set<string>>(new Set());
-  const [showHidden, setShowHidden] = useState(false);
-  const DAYBOOK_PAGE_SIZE = 200;
-  const VOUCHER_PAGE_SIZE = 100;
-  const [daybookRowLimit, setDaybookRowLimit] = useState(DAYBOOK_PAGE_SIZE);
-  const [viewMode, setViewMode] = useState<"detailed" | "condensed">(() => loadDaybookState()?.viewMode ?? "detailed");
-  const [expandedVoucherId, setExpandedVoucherId] = useState<number | null>(null);
-  const [expandedCondensedGroups, setExpandedCondensedGroups] = useState<Set<string>>(new Set());
-
-  const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: companyDataKey("/api/ledger-accounts", selectedCompany?.id),
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.reference,
-  });
-  const { data: bankAccounts = [] } = useQuery<BankAccount[]>({
-    queryKey: companyDataKey("/api/bank-accounts", selectedCompany?.id),
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.reference,
-  });
-  const { data: suppliers = [] } = useQuery<Supplier[]>({
-    queryKey: companyDataKey("/api/suppliers", selectedCompany?.id),
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.reference,
-  });
-  const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: companyDataKey("/api/employees", selectedCompany?.id),
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.reference,
-  });
-  const { data: fixedAssets = [] } = useQuery<FixedAsset[]>({
-    queryKey: companyDataKey("/api/fixed-assets", selectedCompany?.id),
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.reference,
-  });
-
-  useEffect(() => {
-    setSelectedVoucher(null);
-    setVoucherToEdit(null);
-    setExpandedVoucherId(null);
-    setViewDialogOpen(false);
-    setEditDialogOpen(false);
-    setVoucherPage(1);
-  }, [selectedCompany?.id, setVoucherPage]);
-
-  const [purchaseOrderData, setPurchaseOrderData] = useState<DaybookPurchaseOrderData | null>(null);
-  const [poSupplierBalance, setPoSupplierBalance] = useState<string | null>(null);
-  // Declared here — before any useEffect that references it — to avoid TDZ errors.
-  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
-  const refreshBalances = () => setBalanceRefreshKey((k) => k + 1);
-
-  useEffect(() => {
-    if (!purchaseOrderData?.supplierId) {
-      setPoSupplierBalance(null);
-      return;
-    }
-    fetch(`/api/suppliers/${purchaseOrderData.supplierId}/balance`, { credentials: "include", cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setPoSupplierBalance(d?.balance?.toString() ?? null))
-      .catch(() => setPoSupplierBalance(null));
-  }, [purchaseOrderData?.supplierId, balanceRefreshKey]);
-
-  const viewEntriesUrl = selectedVoucher ? `/api/vouchers/${selectedVoucher.id}/view-entries` : "";
-  const { data: viewVoucherEntriesRaw, isLoading: viewEntriesLoading } = useQuery<DaybookViewEntriesResponse>({
-    queryKey: selectedVoucher ? companyDataKey(viewEntriesUrl, selectedCompany?.id, "daybook-view-entries") : [],
-    enabled: !!selectedVoucher && viewDialogOpen,
-    ...frontendQueryPolicies.live,
-  });
-
-  const viewVoucherEntries: ViewVoucherEntry[] = useMemo(() => {
-    if (!viewVoucherEntriesRaw) return [];
-    return Array.isArray(viewVoucherEntriesRaw) ? viewVoucherEntriesRaw : viewVoucherEntriesRaw.entries || [];
-  }, [viewVoucherEntriesRaw]);
-
-  const expandedEntriesUrl = expandedVoucherId ? `/api/vouchers/${expandedVoucherId}/view-entries` : "";
-  const { data: expandedEntriesRaw, isLoading: expandedLoading } = useQuery<DaybookViewEntriesResponse>({
-    queryKey: expandedVoucherId
-      ? companyDataKey(expandedEntriesUrl, selectedCompany?.id, "daybook-expanded-entries")
-      : [],
-    enabled: !!expandedVoucherId,
-    ...frontendQueryPolicies.live,
-  });
-  const expandedEntries: ViewVoucherEntry[] = useMemo(() => {
-    if (!expandedEntriesRaw) return [];
-    return Array.isArray(expandedEntriesRaw) ? expandedEntriesRaw : expandedEntriesRaw.entries || [];
-  }, [expandedEntriesRaw]);
-
-  const isStockTransferVoucher = !!(
-    selectedVoucher &&
-    (selectedVoucher.voucherType === "Stock Transfer" ||
-      selectedVoucher.voucherType === "StockTransfer" ||
-      selectedVoucher.voucherType === "Transfer")
-  );
-  const {
-    data: voucherRevisions = [],
-    isLoading: revisionsLoading,
-    isError: revisionsError,
-    error: revisionsErrorDetail,
-    refetch: retryVoucherRevisions,
-  } = useQuery({
-    queryKey:
-      selectedVoucher && isStockTransferVoucher && viewDialogOpen
-        ? companyDataKey(
-            `/api/stock-transfers/by-voucher/${selectedVoucher.id}/revisions`,
-            selectedCompany?.id,
-            "daybook-transfer-revisions"
-          )
-        : [],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/api/stock-transfers/by-voucher/${selectedVoucher!.id}/revisions`);
-      if (!response.ok) throw new Error("Could not load revision history");
-      const data = await response.json();
-      return Array.isArray(data) ? data : (data?.revisions ?? []);
-    },
-    enabled: !!selectedVoucher && isStockTransferVoucher && viewDialogOpen,
-    retry: 1,
-  });
-
-  useEffect(() => {
-    setPurchaseOrderData(
-      !viewVoucherEntriesRaw || Array.isArray(viewVoucherEntriesRaw) ? null : viewVoucherEntriesRaw.purchaseOrder
-    );
-  }, [viewVoucherEntriesRaw]);
-
-  const cashAccountId = useMemo(
-    () => selectCashAccountId(selectedVoucher, viewVoucherEntries),
-    [selectedVoucher, viewVoucherEntries]
-  );
-
-  const [cashAccountBalance, setCashAccountBalance] = useState("0");
-  const [entryBalances, setEntryBalances] = useState<Record<number, string>>({});
-  // Incremented after any mutation that changes account balances, forcing a re-fetch.
-  // Reset balance state immediately when the viewed voucher changes so stale
-  // values from the previous voucher don't flash while the new fetch is in flight.
-  useEffect(() => {
-    setCashAccountBalance("0");
-    setEntryBalances({});
-  }, [selectedVoucher?.id]);
-
-  useEffect(() => {
-    if (!cashAccountId || !viewDialogOpen) return;
-    fetch(`/api/accounts/ledger/${cashAccountId}/balance?balanceBasis=book`, {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setCashAccountBalance(data?.balance?.toString() || "0"))
-      .catch(() => {});
-  }, [cashAccountId, viewDialogOpen, balanceRefreshKey]);
-
-  useEffect(() => {
-    if (!viewDialogOpen || !selectedVoucher) {
-      setEntryBalances({});
-      return;
-    }
-    const vt = selectedVoucher.voucherType;
-
-    const displayEntries = selectBalanceDisplayEntries(vt, viewVoucherEntries);
-
-    const results: Record<number, string> = {};
-    Promise.all(
-      displayEntries.map(async (entry) => {
-        const url = entryBalanceUrl(entry);
-        if (!url) return;
-        try {
-          const res = await fetch(url, { credentials: "include", cache: "no-store" });
-          if (res.ok) {
-            const d = await res.json();
-            results[entry.id] = d.balance?.toString() || "0";
-          }
-        } catch {
-          // Failure here is non-fatal and the surrounding flow continues deliberately.
-        }
-      })
-    ).then(() => setEntryBalances(results));
-  }, [viewDialogOpen, selectedVoucher, viewVoucherEntries, balanceRefreshKey]);
-
-  useEffect(() => {
-    setSelectedDialogRow(null);
-  }, [viewDialogOpen]);
-  useEffect(() => {
-    if (selectedDialogRow !== null)
-      document
-        .querySelector(`[data-dialog-row="${selectedDialogRow}"]`)
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [selectedDialogRow]);
-
-  useEffect(() => {
-    if (!viewDialogOpen || !selectedVoucher) return;
-    const salesItems = viewVoucherEntries.filter((e) => e.isStockItem || e.stockItemId);
-    if (salesItems.length === 0) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || (e.target as HTMLElement)?.isContentEditable) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedDialogRow((p) => (p === null ? 0 : Math.min(p + 1, salesItems.length - 1)));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedDialogRow((p) => (p === null ? salesItems.length - 1 : Math.max(p - 1, 0)));
-      } else if (e.altKey && (e.key === "s" || e.key === "S")) {
-        e.preventDefault();
-        const itemId = selectedDialogRow !== null ? salesItems[selectedDialogRow]?.stockItemId : null;
-        if (itemId) {
-          navigate(`/stock-query/${itemId}?from=daybook`);
-          setViewDialogOpen(false);
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [viewDialogOpen, selectedVoucher, viewVoucherEntries, navigate, selectedDialogRow]);
-
-  const { data: voucherEntries = [], isLoading: entriesLoading } = useQuery<VoucherEntry[]>({
-    queryKey: voucherToEdit
-      ? companyDataKey(`/api/vouchers/${voucherToEdit.id}/entries`, selectedCompany?.id, "daybook-edit-entries")
-      : [],
-    enabled: !!voucherToEdit && editDialogOpen,
-    ...frontendQueryPolicies.operational,
-  });
-
-  const editForm = useForm<EditVoucherForm>({
-    resolver: zodResolver(createVoucherSchema),
-    defaultValues: {
-      voucherType: "Journal",
-      voucherDate: format(new Date(), "yyyy-MM-dd"),
-      description: "",
-      optional: false,
-      entries: [],
-    },
-  });
-  const {
-    fields: editFields,
-    append: editAppend,
-    remove: editRemove,
-  } = useFieldArray({ control: editForm.control, name: "entries" });
-
-  useEffect(() => {
-    if (voucherToEdit && voucherEntries.length > 0 && !entriesLoading && !editFormInitialized) {
-      editForm.reset({
-        voucherType: voucherToEdit.voucherType as
-          "Journal" | "Payment" | "Receipt" | "Stock Transfer" | "Sales" | "Purchase" | "Contra" | undefined,
-        voucherDate: voucherToEdit.voucherDate,
-        description: voucherToEdit.description || "",
-        optional: voucherToEdit.optional,
-        entries: voucherEntries.map((e) => ({
-          // NOTE: /api/vouchers/:id/entries can also return "factorySupplier"
-          // and "customer" account types, which the edit form's enum does not
-          // offer. The raw value is passed through unchanged (historical
-          // behavior) rather than being silently remapped.
-          accountType: e.accountType as EditVoucherForm["entries"][number]["accountType"],
-          accountId: e.accountId,
-          accountName: e.accountName,
-          debitAmount: e.debitAmount || "0",
-          creditAmount: e.creditAmount || "0",
-          narration: e.narration || "",
-        })),
-      });
-      setEditFormInitialized(true);
-    }
-  }, [voucherToEdit, voucherEntries, entriesLoading, editFormInitialized, editForm]);
-
-  const [accountNameCache] = useState<Record<number, string>>({});
-  const {
-    response: voucherPageResponse,
-    summary: voucherSummary,
-    vouchers,
-    isLoading,
-    isError,
-    error,
-    refetch: refetchVouchers,
-    loadAllVouchers,
-  } = usePaginatedDaybookVouchers({
-    companyId: selectedCompany?.id,
-    fromDate: periodFilter.fromDate,
-    toDate: periodFilter.toDate,
-    filters,
-    page: voucherPage,
-    pageSize: VOUCHER_PAGE_SIZE,
-  });
-
-  // A cancelled request is not a failure, and a failed refetch that left the
-  // previous page on screen is not worth a full-table error either.
-  const daybookErrorMessage = isBlockingQueryError(isError ? error : null, vouchers.length > 0)
-    ? error instanceof Error
-      ? error.message
-      : "Failed to load transactions"
-    : null;
-
-  useEffect(() => {
-    setVoucherPage(1);
-    setDaybookRowLimit(DAYBOOK_PAGE_SIZE);
-  }, [
-    selectedCompany?.id,
-    periodFilter.fromDate,
-    periodFilter.toDate,
-    filters.voucherType,
-    filters.searchQuery,
-    filters.sortOrder,
-    filters.minAmount,
-    filters.maxAmount,
-    filters.statusFilter,
-    setVoucherPage,
-  ]);
-
-  const offloadsUrl = useMemo(
-    () =>
-      canonicalApiUrl("/api/offloads", {
-        startDate: periodFilter.fromDate,
-        endDate: periodFilter.toDate,
-      }),
-    [periodFilter.fromDate, periodFilter.toDate]
-  );
-  const { data: offloads = [] } = useQuery<OffloadListItem[]>({
-    queryKey: companyDataKey(offloadsUrl, selectedCompany?.id, "daybook-offloads"),
-    queryFn: async ({ signal }) => {
-      const response = await fetch(offloadsUrl, { credentials: "include", signal });
-      if (!response.ok) throw new Error("Failed to load offloads");
-      return response.json();
-    },
-    enabled: !!selectedCompany,
-    ...frontendQueryPolicies.operational,
-  });
-
-  const filteredVouchers = useMemo(() => {
-    return vouchers
-      .filter((v) => {
-        if (filters.voucherType !== "all" && v.voucherType !== filters.voucherType) return false;
-        if (filters.statusFilter === "active" && v.optional) return false;
-        if (filters.statusFilter === "optional" && !v.optional) return false;
-        if (filters.minAmount && parseFloat(v.totalAmount) < parseFloat(filters.minAmount)) return false;
-        if (filters.maxAmount && parseFloat(v.totalAmount) > parseFloat(filters.maxAmount)) return false;
-        if (filters.searchQuery) {
-          return searchAny(
-            filters.searchQuery,
-            v.voucherNumber,
-            v.description,
-            (v as { locationName?: string }).locationName
-          );
-        }
-        return true;
-      })
-      .sort((a, b) => (filters.sortOrder === "asc" ? a.id - b.id : b.id - a.id));
-  }, [vouchers, filters]);
-
-  const allRows: DaybookRow[] = useMemo(() => {
-    // Offloads are shown when: (a) no type filter ("all"), or (b) "Offload" is
-    // explicitly selected. Filtering by any other voucher type hides offloads so
-    // they don't bleed through and confuse a filtered view.
-    const includeOffloads = filters.voucherType === "all" || filters.voucherType === "Offload";
-    const rows: DaybookRow[] = [
-      ...filteredVouchers.map((v) => ({ _type: "voucher" as const, data: v })),
-      ...(voucherPage === 1 && includeOffloads ? offloads.map((o) => ({ _type: "offload" as const, data: o })) : []),
-    ];
-    return rows.sort((a, b) => {
-      // Daybook > Offload is a container-number list, not a date/record-ID list.
-      // Sort the entire selected date range A–Z before display limits are applied.
-      if (filters.voucherType === "Offload" && a._type === "offload" && b._type === "offload") {
-        return (
-          (a.data.containerNumber ?? "").localeCompare(b.data.containerNumber ?? "", undefined, {
-            numeric: true,
-            sensitivity: "base",
-          }) || a.data.id - b.data.id
-        );
-      }
-      const da = a._type === "voucher" ? a.data.voucherDate : a.data.offloadedAt.slice(0, 10);
-      const db = b._type === "voucher" ? b.data.voucherDate : b.data.offloadedAt.slice(0, 10);
-      if (da !== db) return filters.sortOrder === "asc" ? da.localeCompare(db) : db.localeCompare(da);
-      const typeA = a._type === "voucher" ? (VOUCHER_TYPE_ORDER[a.data.voucherType] ?? 99) : 99;
-      const typeB = b._type === "voucher" ? (VOUCHER_TYPE_ORDER[b.data.voucherType] ?? 99) : 99;
-      if (typeA !== typeB) return typeA - typeB;
-      const idA = a.data.id,
-        idB = b.data.id;
-      return filters.sortOrder === "asc" ? idA - idB : idB - idA;
-    });
-  }, [filters.voucherType, filters.sortOrder, filteredVouchers, voucherPage, offloads]);
-
-  // Summary amounts/counts come from the same company-scoped, filtered voucher API.
-  // Legacy list responses have no global summary, so their fallback is explicitly page-scoped.
-  const overviewStats = useMemo(() => {
-    const loadedValue = filteredVouchers.reduce((sum, voucher) => sum + (Number(voucher.totalAmount) || 0), 0);
-    return {
-      vouchers: voucherPageResponse?.total ?? filteredVouchers.length,
-      value: voucherSummary?.totalAmount ?? loadedValue,
-      active: voucherSummary?.active ?? filteredVouchers.filter((voucher) => !voucher.optional).length,
-      optional: voucherSummary?.optional ?? filteredVouchers.filter((voucher) => voucher.optional).length,
-      scope: voucherSummary ? "Selected filters" : "Loaded page",
-    };
-  }, [filteredVouchers, voucherPageResponse?.total, voucherSummary]);
-
-  const visibleRows = useMemo(
-    () =>
-      allRows.filter(
-        (r) => showHidden || !hiddenRowIds.has(r._type === "voucher" ? `voucher-${r.data.id}` : `offload-${r.data.id}`)
-      ),
-    [allRows, hiddenRowIds, showHidden]
-  );
-  const displayedRows = useMemo(() => visibleRows.slice(0, daybookRowLimit), [visibleRows, daybookRowLimit]);
-  const linkedVoucherIds = useDaybookLinkedVoucherIds(selectedCompany?.id, displayedRows);
-
-  const canEdit = (v: Voucher) =>
-    recordChanges.allowed &&
-    v.voucherType !== "Purchase" &&
-    user?.role !== "POS" &&
-    !isGoldenCoastProgrammeVoucher(v) &&
-    !isVoucherMutationBlocked(v);
-  const canDelete = () =>
-    recordChanges.allowed && !!(user?.role === "Developer" || user?.role === "Admin" || user?.canDeleteRecords);
-  const handleView = (v: Voucher) => {
-    setSelectedVoucher(v);
-    setViewProfitFilter("all");
-    setViewDialogOpen(true);
-  };
-  const handleEdit = (v: Voucher) => openDaybookVoucherEditor(v, { vouchersBase, navigate, toast });
-
-  const deleteMutation = useDaybookDeleteMutation({
-    recordChanges,
-    voucherToDelete,
-    companyId: selectedCompany?.id,
-    refreshBalances,
-    toast,
-    setDeleteDialogOpen,
-  });
-
-  const editMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: EditVoucherForm }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return apiRequest("PATCH", `/api/vouchers/${id}`, updates);
-    },
-    onSuccess: () => {
-      void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
-      refreshBalances();
-      toast({ title: "Updated", description: "Voucher updated" });
-      setEditDialogOpen(false);
-    },
-  });
-
-  const handleExportToExcel = async () => {
-    await exportDaybookSummary(await loadAllVouchers(), {
-      operationalFiltered: routineAccountingViewFiltered,
-      formatDisplayDate,
-      formatAmount,
-    });
-  };
-  const handleExportDetailedToExcel = async () => {
-    const detailRows = await exportDaybookDetail(await loadAllVouchers(), {
-      operationalFiltered: routineAccountingViewFiltered,
-      formatDisplayDate,
-    });
-    toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
-  };
-
-  const runDaybookExport = async (exportAction: () => Promise<void>) => {
-    if (isExportingReport) return;
-    setIsExportingReport(true);
-    try {
-      await exportAction();
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Unable to export the Daybook.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExportingReport(false);
-    }
-  };
+  const m = useDaybookModel({ user });
 
   return (
     <DaybookPage className="p-3 md:p-6">
       <DaybookHeader
         title="Daybook"
         subtitle={
-          routineAccountingViewFiltered
+          m.routineAccountingViewFiltered
             ? "Operational activity view"
             : "View all accounting transactions chronologically"
         }
-        exportBusy={isExportingReport}
+        exportBusy={m.isExportingReport}
         exportOptions={[
           {
             id: "daybook-summary",
             label: "Summary",
             kind: "excel",
-            onSelect: () => runDaybookExport(handleExportToExcel),
+            onSelect: () => m.runDaybookExport(m.handleExportToExcel),
           },
           {
             id: "daybook-detail",
             label: "Detailed",
             kind: "excel",
-            onSelect: () => runDaybookExport(handleExportDetailedToExcel),
+            onSelect: () => m.runDaybookExport(m.handleExportDetailedToExcel),
           },
         ]}
       >
-        {recordChanges.canCreate("POST", "/api/vouchers") && (
-          <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
+        {m.recordChanges.canCreate("POST", "/api/vouchers") && (
+          <Button onClick={() => m.navigate(m.vouchersBase)} className="daybook-new-voucher gap-2">
             <Plus className="w-4 h-4" />
             New Voucher
           </Button>
         )}
       </DaybookHeader>
 
-      <DaybookOverview stats={overviewStats} hideAmounts={hideAmounts} formatAmount={formatAmount} />
+      <DaybookOverview stats={m.overviewStats} hideAmounts={m.hideAmounts} formatAmount={m.formatAmount} />
 
-      <DaybookTabs value={activeDaybookTab} onValueChange={setActiveDaybookTab} tabs={DAYBOOK_TABS}>
+      <DaybookTabs value={m.activeDaybookTab} onValueChange={m.setActiveDaybookTab} tabs={DAYBOOK_TABS}>
         <DaybookFilters
-          periodFilter={periodFilter}
-          setPeriodFilter={setPeriodFilter}
-          filters={filters}
-          setFilters={setFilters}
-          hasActiveFilters={hasActiveDaybookFilters}
-          onResetFilters={resetDaybookFilters}
-          onPrevDay={() => shiftDay(-1)}
-          onNextDay={() => shiftDay(1)}
+          periodFilter={m.periodFilter}
+          setPeriodFilter={m.setPeriodFilter}
+          filters={m.filters}
+          setFilters={m.setFilters}
+          hasActiveFilters={m.hasActiveDaybookFilters}
+          onResetFilters={m.resetDaybookFilters}
+          onPrevDay={() => m.shiftDay(-1)}
+          onNextDay={() => m.shiftDay(1)}
         />
 
         <DaybookResults
@@ -672,19 +84,19 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           tools={
             <>
               <DaybookShowHiddenButton
-                showHidden={showHidden}
-                onToggle={() => setShowHidden(!showHidden)}
-                hiddenCount={hiddenRowIds.size}
+                showHidden={m.showHidden}
+                onToggle={() => m.setShowHidden(!m.showHidden)}
+                hiddenCount={m.hiddenRowIds.size}
               />
               <div className="daybook-view-toggle" role="group" aria-label="Transaction layout">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setViewMode("detailed");
+                    m.setViewMode("detailed");
                     saveDaybookState({ viewMode: "detailed" });
                   }}
-                  className={cn("gap-1.5", viewMode === "detailed" && "daybook-toggle-active")}
+                  className={cn("gap-1.5", m.viewMode === "detailed" && "daybook-toggle-active")}
                   data-testid="button-view-detailed"
                   data-remote-control-safe="true"
                   data-remote-control-action="toggle-view"
@@ -696,10 +108,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setViewMode("condensed");
+                    m.setViewMode("condensed");
                     saveDaybookState({ viewMode: "condensed" });
                   }}
-                  className={cn("gap-1.5", viewMode === "condensed" && "daybook-toggle-active")}
+                  className={cn("gap-1.5", m.viewMode === "condensed" && "daybook-toggle-active")}
                   data-testid="button-view-condensed"
                   data-remote-control-safe="true"
                   data-remote-control-action="toggle-view"
@@ -712,117 +124,117 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           }
           footer={
             <PaginationBar
-              page={voucherPageResponse?.page ?? voucherPage}
-              totalPages={voucherPageResponse?.totalPages ?? 0}
-              total={voucherPageResponse?.total ?? 0}
-              pageSize={voucherPageResponse?.pageSize ?? VOUCHER_PAGE_SIZE}
+              page={m.voucherPageResponse?.page ?? m.voucherPage}
+              totalPages={m.voucherPageResponse?.totalPages ?? 0}
+              total={m.voucherPageResponse?.total ?? 0}
+              pageSize={m.voucherPageResponse?.pageSize ?? m.VOUCHER_PAGE_SIZE}
               onPageChange={(nextPage) => {
-                setVoucherPage(nextPage);
-                setDaybookRowLimit(DAYBOOK_PAGE_SIZE);
+                m.setVoucherPage(nextPage);
+                m.setDaybookRowLimit(m.DAYBOOK_PAGE_SIZE);
               }}
               noun="vouchers"
             />
           }
         >
           <DaybookTable
-            displayedRows={displayedRows}
-            visibleRows={visibleRows}
-            offloadAlphabetical={filters.voucherType === "Offload"}
-            viewMode={viewMode}
-            selectedRowId={selectedRowId}
-            setSelectedRowId={setSelectedRowId}
-            hiddenRowIds={hiddenRowIds}
-            setHiddenRowIds={setHiddenRowIds}
-            showHidden={showHidden}
-            expandedVoucherId={expandedVoucherId}
-            setExpandedVoucherId={setExpandedVoucherId}
-            expandedCondensedGroups={expandedCondensedGroups}
-            setExpandedCondensedGroups={setExpandedCondensedGroups}
-            hideAmounts={hideAmounts}
-            accountNameCache={accountNameCache}
-            expandedLoading={expandedLoading}
-            expandedEntries={expandedEntries}
-            formatAmount={formatAmount}
-            formatTransactionAmount={formatTransactionAmount}
-            formatDisplayDate={formatDisplayDate}
-            formatDisplayTime={formatDisplayTime}
-            handleView={handleView}
-            handleEdit={handleEdit}
+            displayedRows={m.displayedRows}
+            visibleRows={m.visibleRows}
+            offloadAlphabetical={m.filters.voucherType === "Offload"}
+            viewMode={m.viewMode}
+            selectedRowId={m.selectedRowId}
+            setSelectedRowId={m.setSelectedRowId}
+            hiddenRowIds={m.hiddenRowIds}
+            setHiddenRowIds={m.setHiddenRowIds}
+            showHidden={m.showHidden}
+            expandedVoucherId={m.expandedVoucherId}
+            setExpandedVoucherId={m.setExpandedVoucherId}
+            expandedCondensedGroups={m.expandedCondensedGroups}
+            setExpandedCondensedGroups={m.setExpandedCondensedGroups}
+            hideAmounts={m.hideAmounts}
+            accountNameCache={m.accountNameCache}
+            expandedLoading={m.expandedLoading}
+            expandedEntries={m.expandedEntries}
+            formatAmount={m.formatAmount}
+            formatTransactionAmount={m.formatTransactionAmount}
+            formatDisplayDate={m.formatDisplayDate}
+            formatDisplayTime={m.formatDisplayTime}
+            handleView={m.handleView}
+            handleEdit={m.handleEdit}
             handleDelete={(v) => {
-              setVoucherToDelete(v);
-              setDeleteDialogOpen(true);
+              m.setVoucherToDelete(v);
+              m.setDeleteDialogOpen(true);
             }}
-            canEdit={canEdit}
-            canDelete={canDelete}
-            linkedVoucherIds={linkedVoucherIds}
-            daybookRowLimit={daybookRowLimit}
-            setDaybookRowLimit={setDaybookRowLimit}
-            DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
-            navigate={navigate}
-            isLoading={isLoading}
-            errorMessage={daybookErrorMessage}
-            onRetry={() => void refetchVouchers()}
+            canEdit={m.canEdit}
+            canDelete={m.canDelete}
+            linkedVoucherIds={m.linkedVoucherIds}
+            daybookRowLimit={m.daybookRowLimit}
+            setDaybookRowLimit={m.setDaybookRowLimit}
+            DAYBOOK_PAGE_SIZE={m.DAYBOOK_PAGE_SIZE}
+            navigate={m.navigate}
+            isLoading={m.isLoading}
+            errorMessage={m.daybookErrorMessage}
+            onRetry={() => void m.refetchVouchers()}
           />
         </DaybookResults>
 
         <VoucherDetailsDialog
-          open={viewDialogOpen}
-          onOpenChange={setViewDialogOpen}
-          selectedVoucher={selectedVoucher}
-          viewEntriesLoading={viewEntriesLoading}
-          viewVoucherEntries={viewVoucherEntries}
-          isStockTransferVoucher={isStockTransferVoucher}
-          voucherRevisions={voucherRevisions}
-          revisionsLoading={revisionsLoading}
-          revisionsError={revisionsError}
-          revisionsErrorMessage={revisionsErrorDetail instanceof Error ? revisionsErrorDetail.message : undefined}
-          retryVoucherRevisions={() => void retryVoucherRevisions()}
-          formatAmount={formatAmount}
-          formatDisplayDate={formatDisplayDate}
-          formatDisplayTime={formatDisplayTime}
-          cashAccountBalance={cashAccountBalance}
-          entryBalances={entryBalances}
-          purchaseOrderData={purchaseOrderData}
-          poSupplierBalance={poSupplierBalance}
-          selectedDialogRow={selectedDialogRow}
-          setSelectedDialogRow={setSelectedDialogRow}
-          viewProfitFilter={viewProfitFilter}
-          setViewProfitFilter={setViewProfitFilter}
+          open={m.viewDialogOpen}
+          onOpenChange={m.setViewDialogOpen}
+          selectedVoucher={m.selectedVoucher}
+          viewEntriesLoading={m.viewEntriesLoading}
+          viewVoucherEntries={m.viewVoucherEntries}
+          isStockTransferVoucher={m.isStockTransferVoucher}
+          voucherRevisions={m.voucherRevisions}
+          revisionsLoading={m.revisionsLoading}
+          revisionsError={m.revisionsError}
+          revisionsErrorMessage={m.revisionsErrorDetail instanceof Error ? m.revisionsErrorDetail.message : undefined}
+          retryVoucherRevisions={() => void m.retryVoucherRevisions()}
+          formatAmount={m.formatAmount}
+          formatDisplayDate={m.formatDisplayDate}
+          formatDisplayTime={m.formatDisplayTime}
+          cashAccountBalance={m.cashAccountBalance}
+          entryBalances={m.entryBalances}
+          purchaseOrderData={m.purchaseOrderData}
+          poSupplierBalance={m.poSupplierBalance}
+          selectedDialogRow={m.selectedDialogRow}
+          setSelectedDialogRow={m.setSelectedDialogRow}
+          viewProfitFilter={m.viewProfitFilter}
+          setViewProfitFilter={m.setViewProfitFilter}
           user={user}
-          handleEdit={handleEdit}
-          canEdit={canEdit}
-          navigate={navigate}
-          employees={employees}
-          ledgerAccounts={ledgerAccounts}
-          bankAccounts={bankAccounts}
+          handleEdit={m.handleEdit}
+          canEdit={m.canEdit}
+          navigate={m.navigate}
+          employees={m.employees}
+          ledgerAccounts={m.ledgerAccounts}
+          bankAccounts={m.bankAccounts}
         />
 
         <VoucherEditDialog
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-          voucherToEdit={voucherToEdit}
-          entriesLoading={entriesLoading}
-          editForm={editForm}
-          editFields={editFields}
-          editAppend={editAppend}
-          editRemove={editRemove}
-          handleSaveEdit={(d) => voucherToEdit && editMutation.mutate({ id: voucherToEdit.id, updates: d })}
-          editMutationPending={editMutation.isPending}
-          ledgerAccounts={ledgerAccounts}
-          bankAccounts={bankAccounts}
-          suppliers={suppliers}
-          employees={employees}
-          fixedAssets={fixedAssets}
-          formatAmount={formatAmount}
+          open={m.editDialogOpen}
+          onOpenChange={m.setEditDialogOpen}
+          voucherToEdit={m.voucherToEdit}
+          entriesLoading={m.entriesLoading}
+          editForm={m.editForm}
+          editFields={m.editFields}
+          editAppend={m.editAppend}
+          editRemove={m.editRemove}
+          handleSaveEdit={(d) => m.voucherToEdit && m.editMutation.mutate({ id: m.voucherToEdit.id, updates: d })}
+          editMutationPending={m.editMutation.isPending}
+          ledgerAccounts={m.ledgerAccounts}
+          bankAccounts={m.bankAccounts}
+          suppliers={m.suppliers}
+          employees={m.employees}
+          fixedAssets={m.fixedAssets}
+          formatAmount={m.formatAmount}
         />
       </DaybookTabs>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={m.deleteDialogOpen} onOpenChange={m.setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              {voucherToDelete && linkedVoucherIds.has(voucherToDelete.id)
+              {m.voucherToDelete && m.linkedVoucherIds.has(m.voucherToDelete.id)
                 ? "This is an intercompany import voucher. Deleting it removes every original PO and import voucher in BOTH companies and their linked container. No reversal voucher is created. Received stock, payments, revised charges or other dependencies will block deletion."
                 : "This action cannot be undone."}
             </AlertDialogDescription>
@@ -830,9 +242,9 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => voucherToDelete && deleteMutation.mutate(voucherToDelete.id)}
+              onClick={() => m.voucherToDelete && m.deleteMutation.mutate(m.voucherToDelete.id)}
               className="bg-destructive"
-              disabled={deleteMutation.isPending}
+              disabled={m.deleteMutation.isPending}
             >
               Delete
             </AlertDialogAction>

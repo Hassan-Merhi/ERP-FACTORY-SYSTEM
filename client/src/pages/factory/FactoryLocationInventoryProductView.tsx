@@ -2,16 +2,12 @@ import "./FactoryLocationInventoryRedesign.css";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   MapPin,
   Layers,
   Package,
-  Search,
   Printer,
   FileText,
   ClipboardList,
@@ -20,26 +16,20 @@ import {
   Check,
   Pencil,
   Zap,
-  Eye,
   AlertTriangle,
   TrendingUp,
   Weight,
   DollarSign,
-  SlidersHorizontal,
-  ChevronDown,
-  ListFilter,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import type { SortField } from "./factorylocationinventory/types";
 import { StatCard } from "./factorylocationinventory/components/StatCard";
-import { InventoryTableColumns } from "./factorylocationinventory/components/InventoryTableColumns";
 import type { useFactoryLocationInventory } from "./FactoryLocationInventoryModel";
 import { createFactoryLocationProductRenderers } from "./FactoryLocationInventoryProductRenderers";
 import { createFactoryLocationProductMetrics } from "./factorylocationinventory/productMetrics";
 import { FactoryLocationInventoryProductFooterDialogs } from "./factorylocationinventory/ProductFooterDialogs";
-import { SearchField } from "@/components/ui/search-field";
+import { FactoryLocationInventoryProductTable } from "./FactoryLocationInventoryProductTable";
 
-type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
+export type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
 type BreakdownStatCardProps = {
   icon: ReactNode;
@@ -79,91 +69,27 @@ function BreakdownStatCard({ icon, label, total, regular, special, unit, accent 
 }
 
 export function FactoryLocationInventoryProductView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const { selectedLocation } = inventory;
   const mhd = useFactoryMhdView();
   const [categorySearch, setCategorySearch] = useState("");
-  const {
-    activeInventoryData,
-    applyProductionPrices,
-    applySellingPrices,
-    availableLoading,
-    categoryFilter,
-    categoryGroups,
-    deselectAllVisible,
-    editingProformaId,
-    filteredProducts,
-    fmt,
-    formatAmount,
-    handleBackToLocations,
-    handlePrint,
-    hiddenColumns,
-    hideAvgCost,
-    hideSellingPrice,
-    hideZeroAvailable,
-    inventoryLoading,
-    openRenameDialog,
-    canChangeExistingRecords,
-    canCreateProforma,
-    printRef,
-    prodSortDir,
-    prodSortField,
-    productSearch,
-    proformaAutoSave,
-    proformaMode,
-    proformaName,
-    regularProducts,
-    selectAllVisible,
-    selectedLocation,
-    selections,
-    setCategoryFilter,
-    setHideZeroAvailable,
-    setProdSortDir,
-    setProdSortField,
-    setProductSearch,
-    setShowSelectedOnly,
-    setShowZeroStock,
-    showSelectedOnly,
-    showZeroStock,
-    specialProducts,
-    toggleProformaAutoSave,
-    toggleProformaMode,
-  } = inventory;
   if (!selectedLocation) return null;
 
   // ─── View 2: Product table ────────────────────────────────────────────────
-  const {
-    allCategoryNames,
-    col,
-    colSpan,
-    spTotalBales,
-    spTotalKg,
-    spTotalProdValue,
-    spTotalSellValue,
-    regularBales,
-    regularKg,
-    specialBales,
-    specialKg,
-    statsCostValue,
-    statsSellValue,
-    toggleCol,
-    totalBales,
-    totalKg,
-    totalProdValue,
-    totalSellValue,
-  } = createFactoryLocationProductMetrics(inventory);
+  const metrics = createFactoryLocationProductMetrics(inventory);
 
-  const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory, mhd.nameFor);
-  const matchingCategoryNames = allCategoryNames.filter((name) =>
+  const renderers = createFactoryLocationProductRenderers(inventory, mhd.nameFor);
+  const matchingCategoryNames = metrics.allCategoryNames.filter((name) =>
     name.toLocaleLowerCase().includes(categorySearch.trim().toLocaleLowerCase())
   );
 
   return (
     <div
-      className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}
+      className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${inventory.proformaMode && inventory.selections.size > 0 ? "pb-24" : ""}`}
     >
       {/* Header */}
       <PageHeader
         title={selectedLocation.name}
-        onBack={handleBackToLocations}
+        onBack={inventory.handleBackToLocations}
         backButtonTestId="breadcrumb-locations"
         meta={
           <>
@@ -177,29 +103,35 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           </>
         }
       >
-        {canChangeExistingRecords && (
+        {inventory.canChangeExistingRecords && (
           <Button
             variant="ghost"
             size="icon"
-            onClick={(e) => openRenameDialog(selectedLocation, e)}
+            onClick={(e) => inventory.openRenameDialog(selectedLocation, e)}
             data-testid="button-rename-selected-location"
             title="Rename location"
           >
             <Pencil className="h-4 w-4" />
           </Button>
         )}
-        {(proformaMode || canCreateProforma) && (
+        {(inventory.proformaMode || inventory.canCreateProforma) && (
           <Button
-            variant={proformaMode ? "destructive" : "outline"}
+            variant={inventory.proformaMode ? "destructive" : "outline"}
             size="sm"
-            onClick={toggleProformaMode}
+            onClick={inventory.toggleProformaMode}
             data-testid="button-toggle-proforma-mode"
           >
             <ClipboardList className="h-4 w-4 mr-1.5" />
-            {proformaMode ? "Exit Proforma" : "Proforma Mode"}
+            {inventory.proformaMode ? "Exit Proforma" : "Proforma Mode"}
           </Button>
         )}
-        <Button variant="outline" size="icon" onClick={() => handlePrint()} data-testid="button-print" title="Print">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => inventory.handlePrint()}
+          data-testid="button-print"
+          title="Print"
+        >
           <Printer className="h-4 w-4" />
         </Button>
         <Button
@@ -207,8 +139,8 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           size="icon"
           onClick={() => {
             const p = new URLSearchParams();
-            if (hideAvgCost) p.set("includeCost", "0");
-            if (hideSellingPrice) p.set("includeSellPrice", "0");
+            if (inventory.hideAvgCost) p.set("includeCost", "0");
+            if (inventory.hideSellingPrice) p.set("includeSellPrice", "0");
             const qs = p.toString();
             window.open(
               `/api/factory/location-inventory/${selectedLocation.id}/export/excel${qs ? "?" + qs : ""}`,
@@ -223,23 +155,23 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       </PageHeader>
 
       {/* KPI cards: each stock quantity shows the combined total and both categories. */}
-      {!inventoryLoading && (
+      {!inventory.inventoryLoading && (
         <div className="inventory-kpi-grid grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <BreakdownStatCard
             icon={<Package className="h-4 w-4 text-blue-400" />}
             label="Total Bales"
-            total={(regularBales + specialBales).toLocaleString()}
-            regular={regularBales.toLocaleString()}
-            special={specialBales.toLocaleString()}
+            total={(metrics.regularBales + metrics.specialBales).toLocaleString()}
+            regular={metrics.regularBales.toLocaleString()}
+            special={metrics.specialBales.toLocaleString()}
             unit="Bales"
             accent="bg-blue-500/10"
           />
           <BreakdownStatCard
             icon={<Weight className="h-4 w-4 text-emerald-400" />}
             label="Total KG"
-            total={fmt(regularKg + specialKg)}
-            regular={fmt(regularKg)}
-            special={fmt(specialKg)}
+            total={inventory.fmt(metrics.regularKg + metrics.specialKg)}
+            regular={inventory.fmt(metrics.regularKg)}
+            special={inventory.fmt(metrics.specialKg)}
             unit="KG"
             accent="bg-emerald-500/10"
           />
@@ -247,26 +179,26 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             className="inventory-stat-card inventory-kpi-categories"
             icon={<Layers className="h-4 w-4 text-purple-400" />}
             label="Categories"
-            value={String(categoryGroups.length)}
-            sub={`${activeInventoryData.length} products total`}
+            value={String(inventory.categoryGroups.length)}
+            sub={`${inventory.activeInventoryData.length} products total`}
             accent="bg-purple-500/10"
           />
-          {!hideAvgCost && (
+          {!inventory.hideAvgCost && (
             <StatCard
               className="inventory-stat-card inventory-kpi-cost"
               icon={<DollarSign className="h-4 w-4 text-amber-400" />}
               label="Cost Value"
-              value={formatAmount(statsCostValue)}
+              value={inventory.formatAmount(metrics.statsCostValue)}
               sub="production price basis"
               accent="bg-amber-500/10"
             />
           )}
-          {!hideSellingPrice && (
+          {!inventory.hideSellingPrice && (
             <StatCard
               className="inventory-stat-card inventory-kpi-selling"
               icon={<TrendingUp className="h-4 w-4 text-green-400" />}
               label="Sell Value"
-              value={formatAmount(statsSellValue)}
+              value={inventory.formatAmount(metrics.statsSellValue)}
               sub="at current selling price"
               accent="bg-green-500/10"
             />
@@ -275,7 +207,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       )}
 
       {/* Proforma advisory — only visible inside proforma mode */}
-      {proformaMode && (
+      {inventory.proformaMode && (
         <div
           className="mb-3 flex items-start gap-2 px-3 py-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-sm text-amber-800 dark:text-amber-300"
           data-testid="note-proforma-advisory"
@@ -289,55 +221,60 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       )}
 
       {/* Proforma controls */}
-      {proformaMode && (
+      {inventory.proformaMode && (
         <div className="mb-4 flex items-center gap-2 flex-wrap">
-          {editingProformaId && (
+          {inventory.editingProformaId && (
             <div className="w-full flex items-center gap-2 mb-1 p-2 rounded-md bg-primary/10 border border-primary/20">
               <FileText className="h-4 w-4 text-primary shrink-0" />
               <span className="text-sm font-medium text-primary">
-                Editing proforma: <span className="font-bold">{proformaName}</span>
+                Editing proforma: <span className="font-bold">{inventory.proformaName}</span>
               </span>
               <span className="text-xs text-muted-foreground ml-1 flex-1">
-                {proformaAutoSave
+                {inventory.proformaAutoSave
                   ? "— Changes auto-save 2 s after you stop editing"
                   : "— Select items and click Update Proforma to save changes"}
               </span>
               <button
-                onClick={toggleProformaAutoSave}
+                onClick={inventory.toggleProformaAutoSave}
                 className={`flex items-center gap-1.5 px-2.5 h-7 rounded border text-xs font-medium transition-colors shrink-0 ${
-                  proformaAutoSave
+                  inventory.proformaAutoSave
                     ? "bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400"
                     : "bg-background border-border text-muted-foreground"
                 }`}
                 data-testid="button-proforma-autosave-toggle"
               >
-                <Zap className={`h-3.5 w-3.5 ${proformaAutoSave ? "fill-green-500 text-green-500" : ""}`} />
+                <Zap className={`h-3.5 w-3.5 ${inventory.proformaAutoSave ? "fill-green-500 text-green-500" : ""}`} />
                 Autosave
                 <span
-                  className={`w-7 h-3.5 rounded-full relative transition-colors ${proformaAutoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
+                  className={`w-7 h-3.5 rounded-full relative transition-colors ${inventory.proformaAutoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
                 >
                   <span
-                    className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-transform ${proformaAutoSave ? "translate-x-3.5" : "translate-x-0.5"}`}
+                    className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-transform ${inventory.proformaAutoSave ? "translate-x-3.5" : "translate-x-0.5"}`}
                   />
                 </span>
               </button>
             </div>
           )}
-          <Button variant="outline" size="sm" onClick={selectAllVisible} data-testid="button-select-all">
+          <Button variant="outline" size="sm" onClick={inventory.selectAllVisible} data-testid="button-select-all">
             <Check className="h-4 w-4 mr-1" /> Select All
           </Button>
-          <Button variant="outline" size="sm" onClick={deselectAllVisible} data-testid="button-deselect-all">
+          <Button variant="outline" size="sm" onClick={inventory.deselectAllVisible} data-testid="button-deselect-all">
             <X className="h-4 w-4 mr-1" /> Deselect All
           </Button>
-          {selections.size > 0 && (
+          {inventory.selections.size > 0 && (
             <>
-              <Button variant="outline" size="sm" onClick={applySellingPrices} data-testid="button-apply-selling-price">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={inventory.applySellingPrices}
+                data-testid="button-apply-selling-price"
+              >
                 Apply Sell Price
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={applyProductionPrices}
+                onClick={inventory.applyProductionPrices}
                 data-testid="button-apply-production-price"
               >
                 Apply Prod Price
@@ -346,8 +283,8 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           )}
           <div className="flex items-center gap-1.5 ml-2">
             <Checkbox
-              checked={showSelectedOnly}
-              onCheckedChange={(v) => setShowSelectedOnly(!!v)}
+              checked={inventory.showSelectedOnly}
+              onCheckedChange={(v) => inventory.setShowSelectedOnly(!!v)}
               id="show-selected-only"
               data-testid="checkbox-show-selected-only"
             />
@@ -356,395 +293,32 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             </label>
           </div>
           <Button
-            variant={hideZeroAvailable ? "outline" : "secondary"}
+            variant={inventory.hideZeroAvailable ? "outline" : "secondary"}
             size="sm"
-            onClick={() => setHideZeroAvailable((v) => !v)}
+            onClick={() => inventory.setHideZeroAvailable((v) => !v)}
             data-testid="button-toggle-zero-available"
           >
-            {hideZeroAvailable ? "Show 0" : "Hide 0"}
+            {inventory.hideZeroAvailable ? "Show 0" : "Hide 0"}
           </Button>
-          {selections.size > 0 && (
+          {inventory.selections.size > 0 && (
             <Badge variant="secondary" className="text-sm ml-auto">
-              {selections.size} items, {Array.from(selections.values()).reduce((s, v) => s + v.selectedQty, 0)} bales
+              {inventory.selections.size} items,{" "}
+              {Array.from(inventory.selections.values()).reduce((s, v) => s + v.selectedQty, 0)} bales
             </Badge>
           )}
         </div>
       )}
 
       {/* Main card — toolbar + table */}
-      <div className="inventory-table-shell rounded-xl border overflow-hidden w-full" ref={printRef}>
-        {/* Toolbar strip */}
-        <div className="inventory-toolbar flex flex-col gap-2 px-4 py-3 border-b bg-muted/20">
-          <SearchField
-            placeholder="Search product or article code..."
-            value={productSearch}
-            onValueChange={setProductSearch}
-            className="inventory-search-input"
-            data-testid="input-search-products"
-          />
-          <div className="flex items-center gap-2 flex-wrap">
-            <Popover
-              onOpenChange={(open) => {
-                if (!open) setCategorySearch("");
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="inventory-filter-button gap-1.5 h-8"
-                  data-testid="button-category-filter"
-                >
-                  <ListFilter className="h-3.5 w-3.5" />
-                  {categoryFilter.length === 0
-                    ? "All Categories"
-                    : categoryFilter.length === 1
-                      ? categoryFilter[0]
-                      : `${categoryFilter.length} categories`}
-                  <ChevronDown className="h-3 w-3 opacity-50 ml-0.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-1" align="start">
-                <div className="relative p-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    value={categorySearch}
-                    onChange={(event) => setCategorySearch(event.target.value)}
-                    placeholder="Search categories..."
-                    aria-label="Search categories"
-                    className="h-8 pl-8 text-xs"
-                    data-testid="input-search-categories"
-                  />
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <div
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
-                    onClick={() => setCategoryFilter([])}
-                    data-testid="badge-category-all"
-                  >
-                    <Checkbox
-                      checked={categoryFilter.length === 0}
-                      onCheckedChange={() => setCategoryFilter([])}
-                      className="h-3 w-3 shrink-0"
-                    />
-                    <span className="font-medium">All Categories</span>
-                  </div>
-                  <div className="border-t my-1" />
-                  {matchingCategoryNames.map((name) => (
-                    <div
-                      key={name}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
-                      onClick={() =>
-                        setCategoryFilter((prev) =>
-                          prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]
-                        )
-                      }
-                      data-testid={`badge-category-${name}`}
-                    >
-                      <Checkbox
-                        checked={categoryFilter.includes(name)}
-                        onClick={(event) => event.stopPropagation()}
-                        onCheckedChange={() =>
-                          setCategoryFilter((prev) =>
-                            prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]
-                          )
-                        }
-                        className="h-3 w-3 shrink-0"
-                      />
-                      <span className="truncate">{name}</span>
-                    </div>
-                  ))}
-                  {matchingCategoryNames.length === 0 && (
-                    <p className="px-2 py-3 text-xs text-muted-foreground text-center">No matching categories</p>
-                  )}
-                </div>
-                {categoryFilter.length > 0 && (
-                  <div className="border-t mt-1 pt-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-full text-xs text-muted-foreground"
-                      onClick={() => setCategoryFilter([])}
-                    >
-                      Clear selection
-                    </Button>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
-            <div className="flex items-center gap-1">
-              {(["name", "bales", "kg", "value"] as SortField[]).map((field) => (
-                <Badge
-                  key={field}
-                  variant={prodSortField === field ? "default" : "outline"}
-                  className={`inventory-sort-chip cursor-pointer ${prodSortField === field ? "is-active" : ""}`}
-                  onClick={() => setProdSortField(field)}
-                  data-testid={`badge-sort-${field}`}
-                >
-                  {field === "name" ? "Name" : field === "bales" ? "Bales" : field === "kg" ? "KG" : "Value"}
-                </Badge>
-              ))}
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setProdSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              data-testid="button-sort-dir"
-            >
-              {prodSortDir === "asc" ? "↑" : "↓"}
-            </Button>
-            {!proformaMode && (
-              <Button
-                variant={showZeroStock ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowZeroStock((v) => !v)}
-                data-testid="button-show-zero-stock"
-                className="gap-1.5"
-              >
-                <Eye className="h-4 w-4" />
-                {showZeroStock ? "Hide zero" : "Show zero"}
-              </Button>
-            )}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="inventory-columns-button gap-1.5 ml-auto"
-                  data-testid="button-columns"
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Columns
-                  {hiddenColumns.size > 0 && (
-                    <Badge variant="secondary" className="ml-1 text-xs px-1 py-0">
-                      {hiddenColumns.size}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-3" align="end">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Show / Hide Columns
-                </p>
-                <div className="space-y-1">
-                  {[
-                    { key: "category", label: "Category" },
-                    { key: "avg_kg", label: "Avg KG/Bale" },
-                    ...(!hideSellingPrice
-                      ? [
-                          { key: "sell_price", label: "Sell Price" },
-                          { key: "sell_value", label: "Sell Value" },
-                          { key: "cost_price", label: "Cost Price" },
-                          { key: "cost_value", label: "Cost Value" },
-                        ]
-                      : []),
-                    { key: "total_kg", label: "Total KG" },
-                    ...(!proformaMode ? [{ key: "actions", label: "Actions" }] : []),
-                  ].map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 py-0.5 cursor-pointer">
-                      <Checkbox
-                        checked={!hiddenColumns.has(key)}
-                        onCheckedChange={() => toggleCol(key)}
-                        data-testid={`checkbox-col-${key}`}
-                      />
-                      <span className="text-sm">{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        {/* Loading skeleton */}
-        {(inventoryLoading || (proformaMode && availableLoading)) && (
-          <div className="p-4 space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        )}
-
-        {/* Mobile cards */}
-        {!inventoryLoading && !(proformaMode && availableLoading) && (
-          <div className="md:hidden p-4 space-y-3">
-            {regularProducts.length === 0 && specialProducts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground" data-testid="text-no-products">
-                No products found
-                {productSearch || categoryFilter.length > 0 ? " matching your filters" : " at this location"}
-              </div>
-            ) : (
-              <>
-                {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderMobileCard(prod))}
-                {regularProducts.length > 0 && (
-                  <div
-                    className="inventory-mobile-total rounded-xl border p-3 bg-muted/30"
-                    data-testid="text-product-totals"
-                  >
-                    <div className="flex items-center justify-between gap-2 font-bold text-sm">
-                      <span>
-                        Total ({regularProducts.length} products, {totalBales.toLocaleString()} bales)
-                      </span>
-                      <span className="font-mono">{fmt(totalKg)} KG</span>
-                    </div>
-                    {!hideSellingPrice && (
-                      <div className="flex justify-between text-sm font-mono font-bold">
-                        <span>{formatAmount(totalSellValue)} sell</span>
-                        <span>{formatAmount(totalProdValue)} prod</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {specialProducts.length > 0 && (
-                  <>
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">
-                      Wipers &amp; Garbage
-                    </p>
-                    {mhd
-                      .sortRows(specialProducts, (prod) => prod.articleCode)
-                      .map((prod) => renderMobileCard(prod, "-sp"))}
-                    <div
-                      className="inventory-mobile-total rounded-xl border p-3 bg-muted/30"
-                      data-testid="text-special-product-totals"
-                    >
-                      <div className="flex items-center justify-between gap-2 font-bold text-sm">
-                        <span>
-                          Total ({specialProducts.length} products, {spTotalBales.toLocaleString()} bales)
-                        </span>
-                        <span className="font-mono">{fmt(spTotalKg)} KG</span>
-                      </div>
-                      {!hideSellingPrice && (
-                        <div className="text-right text-sm font-mono font-bold">
-                          {formatAmount(spTotalSellValue)} sell
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Desktop table */}
-        {!inventoryLoading && !(proformaMode && availableLoading) && (
-          <div className="hidden md:block space-y-0 w-full">
-            <div
-              data-horizontal-scroll="true"
-              className="inventory-table-frame inventory-scroll-frame rounded-md border w-full overflow-auto"
-              role="region"
-              aria-label="Regular location inventory items"
-              tabIndex={0}
-              data-testid="location-inventory-regular-scroll"
-            >
-              <table className="inventory-stock-table table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
-                <InventoryTableColumns proformaMode={proformaMode} hideSellingPrice={hideSellingPrice} col={col} />
-                <tbody>
-                  {regularProducts.length === 0 && specialProducts.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={colSpan}
-                        className="text-center py-8 text-muted-foreground"
-                        data-testid="text-no-products-desktop"
-                      >
-                        No products found
-                        {productSearch || categoryFilter.length > 0 ? " matching your filters" : " at this location"}
-                      </td>
-                    </tr>
-                  ) : (
-                    <>
-                      {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod))}
-                    </>
-                  )}
-                </tbody>
-                <tfoot>
-                  {regularProducts.length > 0 && (
-                    <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
-                      {proformaMode && <td></td>}
-                      <td className="px-3" colSpan={col("category") ? 2 : 1}>
-                        Total ({regularProducts.length} products)
-                      </td>
-                      <td className="text-right px-3 font-mono">{totalBales.toLocaleString()}</td>
-                      {proformaMode && <td></td>}
-                      {proformaMode && <td></td>}
-                      {col("avg_kg") && (
-                        <td className="text-right px-3 font-mono">{proformaMode ? fmt(totalKg) : ""}</td>
-                      )}
-                      {!hideSellingPrice && col("sell_price") && <td></td>}
-                      {!hideSellingPrice && col("sell_value") && (
-                        <td className="text-right px-3 font-mono">{formatAmount(totalSellValue)}</td>
-                      )}
-                      {!hideSellingPrice && col("cost_price") && <td></td>}
-                      {!hideSellingPrice && col("cost_value") && (
-                        <td className="text-right px-3 font-mono">{formatAmount(totalProdValue)}</td>
-                      )}
-                      {col("total_kg") && <td className="text-right px-3 font-mono">{fmt(totalKg)}</td>}
-                      {!proformaMode && col("actions") && <td></td>}
-                    </tr>
-                  )}
-                </tfoot>
-              </table>
-            </div>
-
-            {specialProducts.length > 0 && (
-              <div className="mt-6">
-                <p className="inventory-special-heading text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                  <Layers className="inventory-special-icon h-4 w-4" /> Wipers &amp; Garbage
-                </p>
-                <div
-                  className="inventory-table-frame inventory-scroll-frame rounded-md border w-full overflow-auto"
-                  role="region"
-                  aria-label="Wipers and garbage inventory items"
-                  tabIndex={0}
-                  data-testid="location-inventory-special-scroll"
-                >
-                  <table
-                    className="inventory-stock-table table-fixed text-sm"
-                    style={{ minWidth: "820px", width: "100%" }}
-                  >
-                    <InventoryTableColumns proformaMode={proformaMode} hideSellingPrice={hideSellingPrice} col={col} />
-                    <tbody>
-                      {mhd
-                        .sortRows(specialProducts, (prod) => prod.articleCode)
-                        .map((prod) => renderProductRow(prod, "-sp"))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
-                        {proformaMode && <td></td>}
-                        <td className="px-3" colSpan={col("category") ? 2 : 1}>
-                          Total ({specialProducts.length} products)
-                        </td>
-                        <td className="text-right px-3 font-mono">{spTotalBales.toLocaleString()}</td>
-                        {proformaMode && <td></td>}
-                        {proformaMode && <td></td>}
-                        {col("avg_kg") && (
-                          <td className="text-right px-3 font-mono">{proformaMode ? fmt(spTotalKg) : ""}</td>
-                        )}
-                        {!hideSellingPrice && col("sell_price") && <td></td>}
-                        {!hideSellingPrice && col("sell_value") && (
-                          <td className="text-right px-3 font-mono">{formatAmount(spTotalSellValue)}</td>
-                        )}
-                        {!hideSellingPrice && col("cost_price") && <td></td>}
-                        {!hideSellingPrice && col("cost_value") && (
-                          <td className="text-right px-3 font-mono">{formatAmount(spTotalProdValue)}</td>
-                        )}
-                        {col("total_kg") && <td className="text-right px-3 font-mono">{fmt(spTotalKg)}</td>}
-                        {!proformaMode && col("actions") && <td></td>}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!inventoryLoading && filteredProducts.length > 0 && (
-          <div className="inventory-table-footer px-4 py-3 border-t text-xs text-muted-foreground">
-            Showing {filteredProducts.length} of {activeInventoryData.length} products
-          </div>
-        )}
-      </div>
+      <FactoryLocationInventoryProductTable
+        inventory={inventory}
+        metrics={metrics}
+        renderers={renderers}
+        mhd={mhd}
+        categorySearch={categorySearch}
+        setCategorySearch={setCategorySearch}
+        matchingCategoryNames={matchingCategoryNames}
+      />
 
       <FactoryLocationInventoryProductFooterDialogs inventory={inventory} />
     </div>

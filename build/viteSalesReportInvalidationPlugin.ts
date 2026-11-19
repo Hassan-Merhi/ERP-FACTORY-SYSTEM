@@ -1,8 +1,10 @@
 import type { Plugin } from "vite";
+import { readModuleFamilySource } from "./moduleFamilySource.ts";
 import {
   SALES_COMPARISON_SUFFIX,
   SALES_DETAIL_SUFFIX,
   SALES_REPORT_SUFFIX,
+  compactSalesReportSourceApplied,
   transformSalesReportBandwidthSource,
 } from "./viteSalesReportBandwidthPlugin.ts";
 
@@ -36,12 +38,6 @@ function replaceExpected(
   return source.split(before).join(after);
 }
 
-function compactTransformAlreadyApplied(source: string, normalizedId: string): boolean {
-  if (normalizedId.endsWith(SALES_REPORT_SUFFIX)) return source.includes("fetchSalesReportSummary");
-  if (normalizedId.endsWith(SALES_DETAIL_SUFFIX)) return source.includes('params.get("stockGroupName")');
-  if (normalizedId.endsWith(SALES_COMPARISON_SUFFIX)) return source.includes("/api/dashboard/sales-report-comparison");
-  return false;
-}
 
 export function salesReportInvalidationPlugin(): Plugin {
   return {
@@ -58,12 +54,18 @@ export function salesReportInvalidationPlugin(): Plugin {
         normalizedId.endsWith(SALES_DETAIL_SUFFIX) ||
         normalizedId.endsWith(SALES_COMPARISON_SUFFIX)
       ) {
-        if (compactTransformAlreadyApplied(source, normalizedId)) return null;
+        if (compactSalesReportSourceApplied(source, normalizedId)) return null;
         const compactCode = transformSalesReportBandwidthSource(source, id);
         return compactCode === null ? null : { code: compactCode, map: null };
       }
 
       if (normalizedId.endsWith(ORPHANED_RECORDS_SUFFIX)) {
+        // The bandwidth-safe invalidation is committed to the source (possibly in an
+        // extracted sibling); only rewrite a module that still carries the legacy form.
+        const family = readModuleFamilySource(normalizedId, source);
+        if (!family.includes(LEGACY_INVALIDATION) && family.includes('key.startsWith("/api/dashboard/sales-report")')) {
+          return null;
+        }
         return {
           code: replaceExpected(
             source,

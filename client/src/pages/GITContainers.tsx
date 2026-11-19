@@ -1,6 +1,5 @@
 import { ChangeEvent } from "react";
 import { Redirect } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ship, AlertTriangle, Filter, ChevronDown, X } from "lucide-react";
@@ -16,6 +15,7 @@ import { ImportResultBanner } from "./git-containers/ImportResultBanner";
 import { useGITContainersState } from "./useGITContainersState";
 import { GITContainersPopoverSection, GITContainersSection, GITContainersSection2 } from "./GITContainersSection";
 import { SearchField } from "@/components/ui/search-field";
+import { sendGitContainersToWhatsApp } from "./gitContainersWhatsApp";
 
 export default function GITContainers(props: { embedded?: boolean }) {
   const {
@@ -189,21 +189,7 @@ export default function GITContainers(props: { embedded?: boolean }) {
   }
 
   async function sendToWhatsApp() {
-    setWaSending(true);
-    try {
-      // Send no image payload — the server generates the PDF report itself,
-      // avoiding the 2 MB Express JSON body limit that a base64 screenshot would exceed.
-      await apiRequest("POST", "/api/git/send-containers-whatsapp", {});
-      toast({ title: "Sent", description: "Container report sent to WhatsApp group." });
-    } catch (error: unknown) {
-      toast({
-        title: "Failed to send",
-        description: error instanceof Error ? error.message : "Unable to send the container report.",
-        variant: "destructive",
-      });
-    } finally {
-      setWaSending(false);
-    }
+    await sendGitContainersToWhatsApp({ setWaSending, toast });
   }
 
   if (userLoading)

@@ -153,14 +153,17 @@ assert.match(
   "Vite must install the always-on Sales Report hardening plugin"
 );
 
-assert.match(
-  salesReport,
-  /const singleCompanyQueryKey = queryString \? `\/api\/sales-report\?\$\{queryString\}` : "\/api\/sales-report";/,
+// The compact transform is now committed to the Sales Report source (and the
+// plugins skip it there); either the transform marker or the committed compact
+// form must be present.
+assert.ok(
+  /const singleCompanyQueryKey = queryString \? `\/api\/sales-report\?\$\{queryString\}` : "\/api\/sales-report";/.test(salesReport) ||
+    salesReport.includes("fetchSalesReportSummary"),
   "current Sales Report source marker must remain available for the fail-loud transform"
 );
-assert.match(
-  salesReport,
-  /const handleExportExcel = \(\) => exportSalesReportExcel\(salesData\);/,
+assert.ok(
+  /const handleExportExcel = \(\) => exportSalesReportExcel\(salesData\);/.test(salesReport) ||
+    salesReport.includes("fetchSalesReportRows("),
   "current export source marker must remain available for on-demand raw-row transformation"
 );
 assert.match(
@@ -168,9 +171,9 @@ assert.match(
   /const stockGroupId = params\.get\("stockGroupId"\)/,
   "refactored Sales Report detail source marker must remain available"
 );
-assert.match(
-  salesComparison,
-  /queryKey: \["\/api\/dashboard\/sales-report-all", queryString\]/,
+assert.ok(
+  /queryKey: \["\/api\/dashboard\/sales-report-all", queryString\]/.test(salesComparison) ||
+    salesComparison.includes("/api/dashboard/sales-report-comparison"),
   "comparison source marker must remain available for compact transform"
 );
 assert.match(

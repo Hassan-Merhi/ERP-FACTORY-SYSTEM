@@ -67,8 +67,8 @@ describe("Phase 5 Properties container workflow", () => {
   it("embeds both actions on Properties container details without exposing legacy PO edit/delete", () => {
     const details = readModuleFamily("client/src/pages/containerdetail/components/ContainerDetailErpView.tsx");
     const panel = readModuleFamily("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx");
-    expect(details).toContain("PropertiesIntercompanyContainerWorkflow containerId={container.id}");
-    expect(details).toContain("!isPropertiesContainer && canChangeExistingRecords");
+    expect(details).toMatch(/PropertiesIntercompanyContainerWorkflow containerId=\{(?:v\.)?container\.id\}/);
+    expect(details).toMatch(/!(?:m\.)?isPropertiesContainer && (?:m\.)?canChangeExistingRecords/);
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
     expect(panel).toContain("<IntercompanyLifecycle physicalContainerId={containerId} embedded />");
     expect(panel).toContain("candidate.physicalContainerId === containerId");
