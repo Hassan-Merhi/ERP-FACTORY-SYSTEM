@@ -43,7 +43,7 @@ export function FactoryLoadingDispatchPageHeaderSection({
     <PageHeader
       title="Dispatch Management"
       icon={<Truck className="h-5 w-5" />}
-      subtitle="Scan actual bales on each trip, then compare all trips against Pending Loading."
+      subtitle="Scan trips, review charges, and finalize the loading."
       onBack={backToLoading}
       backButtonTestId="button-return-to-loading"
       meta={
@@ -63,7 +63,7 @@ export function FactoryLoadingDispatchPageHeaderSection({
         }
         data-testid="button-dispatch-reports"
       >
-        <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
+        <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Report
       </Button>
       <Button
         size="sm"
@@ -71,7 +71,7 @@ export function FactoryLoadingDispatchPageHeaderSection({
         onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
         data-testid="button-compare-all-dispatches"
       >
-        <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
+        <FileSearch className="mr-1.5 h-4 w-4" /> Compare
       </Button>
       <Button
         size="sm"
@@ -79,8 +79,10 @@ export function FactoryLoadingDispatchPageHeaderSection({
         onClick={() => void refresh()}
         disabled={tripsQuery.isFetching || orderQuery.isFetching}
         data-testid="button-refresh-dispatch"
+        aria-label="Refresh dispatches"
+        title="Refresh dispatches"
       >
-        <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
+        <RefreshCw className="h-4 w-4" /> <span className="sr-only">Refresh</span>
       </Button>
       {canCreate && (
         <Button
@@ -91,7 +93,7 @@ export function FactoryLoadingDispatchPageHeaderSection({
           }}
           data-testid="button-new-dispatch"
         >
-          <Plus className="mr-1.5 h-4 w-4" /> Add Dispatch
+          <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
         </Button>
       )}
     </PageHeader>
