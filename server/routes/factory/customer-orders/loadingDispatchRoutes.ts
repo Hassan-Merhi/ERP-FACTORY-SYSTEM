@@ -250,9 +250,10 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
   });
 
 
-  // "Delete Dispatch" archives a never-finalized open trip. Keep the parent
-  // and append-only evidence for audit/FK integrity; release active verification
-  // and expected reservations without touching the main loading or accounting.
+  // "Delete Dispatch" archives an open trip, including a previously closed
+  // trip that a supervisor has explicitly reopened. Preserve all signed closure
+  // revisions and audit evidence; release only active scans and reservations
+  // without changing the parent loading or accounting.
   app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel",
     requireAuth, loadingAccess, async (req, res) => {
       try {
@@ -292,13 +293,39 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           if (trip.status !== "OPEN") {
             return { status: 409, message: "Only open, unfinalized dispatches can be deleted" };
           }
-          const closed = resultRows(await tx.execute(sql`
+          // Reopening records a reason and timestamp on the signed closure
+          // without altering its frozen snapshot. An OPEN trip with only
+          // reopened closures may be archived; an unreopened closure must not
+          // be bypassed by a stale/inconsistent dispatch status.
+          const activeClosures = resultRows(await tx.execute(sql`
             SELECT id FROM factory_loading_dispatch_closure_history
              WHERE company_id = ${companyId} AND order_id = ${orderId}
-               AND dispatch_id = ${dispatchId} LIMIT 1
+               AND dispatch_id = ${dispatchId} AND reopened_at IS NULL LIMIT 1
           `));
-          if (closed.length) {
-            return { status: 409, message: "This dispatch has signed closure history and cannot be deleted" };
+          if (activeClosures.length) {
+            return { status: 409, message: "Reopen this completed dispatch before deleting it" };
+          }
+          // A signed all-truck reconciliation locks the physical evidence,
+          // even if the loading status was subsequently changed.
+          const reconciliationSchema = resultRows(await tx.execute(sql`
+            SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL
+                   AND EXISTS (
+                     SELECT 1 FROM information_schema.columns
+                      WHERE table_schema = 'public'
+                        AND table_name = 'factory_dispatch_order_consolidations'
+                        AND column_name = 'reconciled_at'
+                   ) AS installed
+          `))[0];
+          if (reconciliationSchema?.installed === true) {
+            const signed = resultRows(await tx.execute(sql`
+              SELECT id FROM factory_dispatch_order_consolidations
+               WHERE company_id = ${companyId} AND order_id = ${orderId}
+                 AND reconciled_at IS NOT NULL AND status IN ('DRAFT', 'FINALIZED')
+               LIMIT 1
+            `));
+            if (signed.length) {
+              return { status: 409, message: "This loading has a signed all-truck reconciliation and its dispatches cannot be deleted" };
+            }
           }
           // Any financial draft, posted or reversed record must be resolved
           // through the financial workflow; never orphan its accounting links.
@@ -353,6 +380,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
               'DISPATCH_CANCELLED', ${actorUserId}, ${actorUsername},
               ${JSON.stringify({ reason, dispatchNumber: Number(trip.dispatchNumber),
                 removedScanIds: removedScans.map((s) => String(s.id)),
+                previouslyClosed: false,
                 releasedExpectedBales: releasedBales.length,
                 removedArticleTargets: removedTargets.length })}::jsonb)
           `);
