@@ -33,7 +33,7 @@ export function browserSyncEnabled(env: NodeJS.ProcessEnv = process.env): boolea
   return env.OFFLINE_BROWSER_SYNC_ENABLED === "1";
 }
 
-const operationSchema = z
+export const operationSchema = z
   .object({
     deviceId: z.string().uuid(),
     operationId: z.string().uuid(),
@@ -49,14 +49,14 @@ const receiptsSchema = z
   .object({ deviceId: z.string().uuid(), operationIds: z.array(z.string().uuid()).max(500) })
   .strict();
 
-function actorOf(req: Request): BrowserActor | null {
+export function actorOf(req: Request): BrowserActor | null {
   const companyId = Number(req.session.currentCompanyId);
   const userId = req.session.userId == null ? "" : String(req.session.userId);
   if (!Number.isSafeInteger(companyId) || companyId < 1 || !userId) return null;
   return { companyId, userId, username: req.session.username || "unknown" };
 }
 
-async function guard(req: Request, res: Response): Promise<BrowserActor | null> {
+export async function guard(req: Request, res: Response): Promise<BrowserActor | null> {
   if (!browserSyncEnabled()) {
     res.status(404).json({ code: "OFFLINE_BROWSER_SYNC_DISABLED" });
     return null;
@@ -73,7 +73,7 @@ async function guard(req: Request, res: Response): Promise<BrowserActor | null> 
   return actor;
 }
 
-function refusal(res: Response, error: unknown): Response {
+export function refusal(res: Response, error: unknown): Response {
   if (error instanceof BrowserSyncRefusal) return res.status(error.status).json({ code: error.message });
   if (error instanceof BrowserOperationRefusal) return res.status(422).json({ code: error.message });
   logger.error("Browser offline sync failed", { error });

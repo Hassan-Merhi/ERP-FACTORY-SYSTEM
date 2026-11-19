@@ -46,6 +46,134 @@ CREATE TABLE IF NOT EXISTS pc_local.local_logins (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Phase B: entries made on this PC while offline.
+ALTER TABLE pc_local.state ADD COLUMN IF NOT EXISTS device_id uuid NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE pc_local.state ADD COLUMN IF NOT EXISTS cloud_user_id text;
+
+CREATE TABLE IF NOT EXISTS pc_local.outbox (
+  id bigserial PRIMARY KEY,
+  operation_id uuid NOT NULL UNIQUE,
+  kind text NOT NULL,
+  input jsonb NOT NULL,
+  local_ref integer,
+  captured_at timestamptz NOT NULL DEFAULT now(),
+  user_id text NOT NULL,
+  company_id integer NOT NULL,
+  -- unconfirmed: the local save may or may not have committed (the server
+  -- stopped mid-request); someone at the PC sends or discards it.
+  status text NOT NULL CHECK (status IN ('capturing', 'unconfirmed', 'pending', 'waiting', 'applied', 'conflict', 'refused')),
+  code text,
+  overridable boolean NOT NULL DEFAULT false,
+  receipt jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Local refs for operations that do not name a created row (never a cloud id).
+CREATE SEQUENCE IF NOT EXISTS pc_local.local_ref_seq START 1900000000 MINVALUE 1900000000 MAXVALUE 2147483647;
+
+-- Every write the local ERP server makes (never the agent's: it applies with
+-- session_replication_role = replica, which skips these triggers), so the PC
+-- can return to the cloud's version once its entries are delivered.
+CREATE TABLE IF NOT EXISTS pc_local.local_writes (
+  id bigserial PRIMARY KEY,
+  table_name text NOT NULL,
+  row_key jsonb NOT NULL,
+  op char(1) NOT NULL CHECK (op IN ('I', 'U', 'D')),
+  old_row jsonb
+);
+
+CREATE TABLE IF NOT EXISTS pc_local.table_keys (
+  table_name text PRIMARY KEY,
+  key_columns text[] NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION pc_local.capture_local_write()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $pc_local$
+DECLARE
+  cols text[];
+  source jsonb;
+BEGIN
+  SELECT key_columns INTO cols FROM pc_local.table_keys WHERE table_name = TG_TABLE_NAME;
+  source := CASE WHEN TG_OP = 'INSERT' THEN to_jsonb(NEW) ELSE to_jsonb(OLD) END;
+  INSERT INTO pc_local.local_writes (table_name, row_key, op, old_row)
+  SELECT TG_TABLE_NAME,
+         (SELECT jsonb_object_agg(c, source -> c) FROM unnest(cols) AS c),
+         left(TG_OP, 1),
+         CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE source END;
+  RETURN NULL;
+END
+$pc_local$;
+
+CREATE OR REPLACE FUNCTION pc_local.install_write_capture(p_tables text[])
+RETURNS void
+LANGUAGE plpgsql
+AS $pc_local$
+DECLARE
+  item record;
+BEGIN
+  FOR item IN
+    SELECT c.relname AS tbl, array_agg(a.attname::text ORDER BY array_position(i.indkey::int2[], a.attnum)) AS cols
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+      JOIN pg_index i ON i.indrelid = c.oid AND i.indisprimary
+      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY (i.indkey)
+     WHERE c.relname = ANY (p_tables)
+     GROUP BY c.relname
+  LOOP
+    INSERT INTO pc_local.table_keys (table_name, key_columns) VALUES (item.tbl, item.cols)
+    ON CONFLICT (table_name) DO UPDATE SET key_columns = EXCLUDED.key_columns;
+    EXECUTE format('DROP TRIGGER IF EXISTS pc_local_capture ON public.%I', item.tbl);
+    EXECUTE format(
+      'CREATE TRIGGER pc_local_capture AFTER INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION pc_local.capture_local_write()',
+      item.tbl);
+  END LOOP;
+END
+$pc_local$;
+
+-- Rows the PC creates itself get ids from 1,000,000,000 up (the offline range
+-- the cloud translates), so they never collide with a cloud row.
+CREATE OR REPLACE FUNCTION pc_local.use_local_id_range()
+RETURNS void
+LANGUAGE plpgsql
+AS $pc_local$
+DECLARE
+  item record;
+BEGIN
+  FOR item IN
+    SELECT s.schemaname, s.sequencename
+      FROM pg_sequences s
+     WHERE s.schemaname = 'public' AND s.max_value >= 1500000000
+       AND COALESCE(s.last_value, 0) < 1000000000
+  LOOP
+    PERFORM setval(format('%I.%I', item.schemaname, item.sequencename)::regclass, 1000000000, false);
+  END LOOP;
+END
+$pc_local$;
+
+-- Put back the cloud's version of every row the local server changed.
+CREATE OR REPLACE FUNCTION pc_local.revert_local_writes()
+RETURNS integer
+LANGUAGE plpgsql
+AS $pc_local$
+DECLARE
+  item record;
+  n integer := 0;
+BEGIN
+  FOR item IN SELECT * FROM pc_local.local_writes ORDER BY id DESC LOOP
+    IF item.op = 'I' THEN
+      PERFORM pc_local.delete_row(item.table_name, item.row_key);
+    ELSE
+      PERFORM pc_local.apply_row(item.table_name, item.row_key, item.old_row);
+    END IF;
+    n := n + 1;
+  END LOOP;
+  DELETE FROM pc_local.local_writes;
+  RETURN n;
+END
+$pc_local$;
+
 CREATE OR REPLACE FUNCTION pc_local.apply_row(p_table text, p_key jsonb, p_row jsonb)
 RETURNS void
 LANGUAGE plpgsql
@@ -145,6 +273,38 @@ $pc_local$;
 export async function prepareLocalDatabase(client, redact) {
   await client.query(STATIC_SQL);
   await client.query("SELECT pc_local.allow_empty_secrets($1::jsonb)", [JSON.stringify(redact ?? {})]);
+  await client.query("SELECT pc_local.use_local_id_range()");
+  // A copy made before entries existed has no write capture yet: install it
+  // for the synced tables on every start (idempotent).
+  const { rows } = await client.query("SELECT tables FROM pc_local.state WHERE id = 1");
+  if (rows[0]?.tables?.length) await installLocalWriteCapture(client, rows[0].tables);
+}
+
+/**
+ * One lock shared by every entry the local server records and taken alone by
+ * the sync process while it checks for outstanding entries, undoes local
+ * writes and pulls: an entry can never start in the middle of that.
+ */
+export const PC_LOCAL_ENTRY_LOCK = 7314002;
+
+/** Records every write the local ERP server makes to these tables (Phase B). */
+export async function installLocalWriteCapture(client, tables) {
+  await client.query("SELECT pc_local.install_write_capture($1::text[])", [tables]);
+}
+
+/**
+ * Puts back the cloud's version of every row the local server changed. Call
+ * inside inApplyTransaction once the PC's entries are delivered; returns how
+ * many writes were undone.
+ */
+export async function revertLocalWrites(client) {
+  const { rows } = await client.query("SELECT pc_local.revert_local_writes() AS n");
+  return Number(rows[0].n);
+}
+
+export async function countLocalWrites(client) {
+  const { rows } = await client.query("SELECT count(*)::int AS n FROM pc_local.local_writes");
+  return rows[0].n;
 }
 
 /** The schema version of the PC's database, compared with the cloud's before loading. */
@@ -157,7 +317,7 @@ export async function localSchemaVersion(client) {
 
 export async function readLocalState(client) {
   const { rows } = await client.query(
-    "SELECT cursor, schema_version, tables, copy_complete, last_sync_at, cloud_user_id FROM pc_local.state WHERE id = 1"
+    "SELECT cursor, schema_version, tables, copy_complete, last_sync_at, device_id, cloud_user_id FROM pc_local.state WHERE id = 1"
   );
   return rows[0];
 }
