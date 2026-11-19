@@ -19,9 +19,47 @@ import {
   factoryAttendance,
 } from "@shared/schema";
 
-import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { checkFactoryWorkerContractAccess, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 import { sumMoney } from "../../lib/money";
-import { registerFactoryWorkerCrudRoutesPart1 } from "./registerFactoryWorkerCrudRoutesPart1";
+
+/**
+ * Persist absence for the closed inactive interval. Use calendar dates (not local
+ * Date increments) and upsert so a previously defaulted Present cannot survive
+ * an inactive interval. The interval ends *before* the reactivation date.
+ */
+async function recordInactiveDays(
+  db: Database,
+  companyId: number,
+  workerId: number,
+  startDate: string,
+  endExclusive: string
+) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(endExclusive)) return;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endExclusive}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return;
+  const batch: { companyId: number; workerId: number; attendanceDate: string; status: string; notes: string }[] = [];
+  for (let day = start; day < end; day += 86_400_000) {
+    batch.push({
+      companyId,
+      workerId,
+      attendanceDate: new Date(day).toISOString().slice(0, 10),
+      status: "Absent",
+      notes: "Auto-absent (inactive)",
+    });
+    if (batch.length === 500 || day + 86_400_000 >= end) {
+      await db
+        .insert(factoryAttendance)
+        .values(batch)
+        .onConflictDoUpdate({
+          target: [factoryAttendance.workerId, factoryAttendance.attendanceDate],
+          set: { status: "Absent", notes: "Auto-absent (inactive)", updatedAt: new Date() },
+        });
+      batch.length = 0;
+    }
+  }
+}
 
 export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/:id - Get single worker with computed stats
@@ -174,5 +212,185 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
     }
   });
 
-  registerFactoryWorkerCrudRoutesPart1(app, requireAuth, db);
+  // PATCH /api/factory/workers/:id - Update worker
+  app.patch("/api/factory/workers/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.body.companyId || getFactoryCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const id = parseId(req.params.id);
+
+      if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
+      if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
+      const todayForStatus = getClientDate(req);
+      const updateData = { ...req.body };
+      const becomingInactive = previousWorker.active && updateData.active === false;
+      const becomingActive = !previousWorker.active && updateData.active === true;
+      if (becomingInactive && !updateData.contractEndDate) updateData.contractEndDate = todayForStatus;
+      if (!previousWorker.active && !becomingActive && !updateData.contractEndDate) {
+        updateData.contractEndDate = previousWorker.contractEndDate;
+      }
+      if (becomingActive) updateData.contractEndDate = null;
+      for (const f of [
+        "dateOfBirth",
+        "dateJoined",
+        "contractStartDate",
+        "contractEndDate",
+        "visaExpiry",
+        "workPermitExpiry",
+        "residentialPermitExpiry",
+      ]) {
+        if (updateData[f] === "" || updateData[f] === undefined) updateData[f] = null;
+      }
+      for (const f of [
+        "baseSalary",
+        "perBaleRate",
+        "perKgRate",
+        "overtimeRate",
+        "hourlyRate",
+        "weeklySalary",
+        "biWeeklySalary",
+      ]) {
+        if (updateData[f] === "" || updateData[f] === undefined) updateData[f] = "0";
+      }
+      if (updateData.transportAllowance === "") updateData.transportAllowance = null;
+      if (updateData.numberOfChildren === "" || updateData.numberOfChildren === undefined)
+        updateData.numberOfChildren = 0;
+      const [updated] = await db
+        .update(factoryWorkers)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)))
+        .returning();
+
+      if (!updated) return res.status(404).json({ message: "Worker not found" });
+
+      if (becomingInactive) {
+        const tomorrow = new Date(Date.parse(`${todayForStatus}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+        await recordInactiveDays(db, companyId, updated.id, todayForStatus, tomorrow);
+      }
+      if (becomingActive) {
+        const inactiveStart =
+          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || todayForStatus;
+        await recordInactiveDays(db, companyId, updated.id, inactiveStart, todayForStatus);
+      }
+      if (!updated.active) {
+        await removeFactoryWorkerFromCategories(db, companyId, updated.id);
+      }
+
+      const today = getClientDate(req);
+      await writeDaybookEntry(db, {
+        companyId,
+        txDate: today,
+        txType: "WORKER_EDITED",
+        referenceId: updated.id,
+        referenceTable: "factory_workers",
+        description: `Worker updated: ${updated.fullName}`,
+        createdBy: req.session.userId ?? undefined,
+      });
+
+      res.json(updated);
+    } catch (error: unknown) {
+      logger.error("Error updating factory worker:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // POST /api/factory/workers/:id/end-contract - End contract
+  app.post("/api/factory/workers/:id/end-contract", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!checkFactoryWorkerContractAccess(req, res)) return;
+      const companyId = req.body.companyId || getFactoryCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const id = parseId(req.params.id);
+
+      if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const today = getClientDate(req);
+
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
+      if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
+      const [updated] = await db
+        .update(factoryWorkers)
+        .set({ active: false, contractEndDate: today, updatedAt: new Date() })
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)))
+        .returning();
+
+      if (!updated) return res.status(404).json({ message: "Worker not found" });
+
+      if (previousWorker.active) {
+        const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+        await recordInactiveDays(db, companyId, updated.id, today, tomorrow);
+      }
+      await removeFactoryWorkerFromCategories(db, companyId, updated.id);
+
+      await writeDaybookEntry(db, {
+        companyId,
+        txDate: today,
+        txType: "CONTRACT_ENDED",
+        referenceId: updated.id,
+        referenceTable: "factory_workers",
+        description: `Contract ended for worker: ${updated.fullName} (${updated.employeeCode || "N/A"})`,
+        createdBy: req.session.userId ?? undefined,
+      });
+
+      res.json(updated);
+    } catch (error: unknown) {
+      logger.error("Error ending worker contract:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // POST /api/factory/workers/:id/reactivate - Reactivate an inactive worker
+  app.post("/api/factory/workers/:id/reactivate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.body.companyId || getFactoryCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const id = parseId(req.params.id);
+
+      if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const today = getClientDate(req);
+
+      const [previousWorker] = await db
+        .select()
+        .from(factoryWorkers)
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)));
+      if (!previousWorker) return res.status(404).json({ message: "Worker not found" });
+      const [updated] = await db
+        .update(factoryWorkers)
+        .set({ active: true, contractEndDate: null, updatedAt: new Date() })
+        .where(and(eq(factoryWorkers.id, id), eq(factoryWorkers.companyId, companyId)))
+        .returning();
+
+      if (!updated) return res.status(404).json({ message: "Worker not found" });
+
+      if (!previousWorker.active) {
+        const inactiveStart =
+          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || today;
+        await recordInactiveDays(db, companyId, updated.id, inactiveStart, today);
+      }
+
+      await writeDaybookEntry(db, {
+        companyId,
+        txDate: today,
+        txType: "CONTRACT_REACTIVATED",
+        referenceId: updated.id,
+        referenceTable: "factory_workers",
+        description: `Contract reactivated for worker: ${updated.fullName} (${updated.employeeCode || "N/A"})`,
+        createdBy: req.session.userId ?? undefined,
+      });
+
+      res.json(updated);
+    } catch (error: unknown) {
+      logger.error("Error reactivating worker:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
 }
