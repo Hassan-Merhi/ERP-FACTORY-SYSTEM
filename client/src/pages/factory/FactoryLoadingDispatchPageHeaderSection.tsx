@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { blankForm } from "./FactoryLoadingDispatchTripEditor";
+import { blankForm, tripPath } from "./FactoryLoadingDispatchTripEditor";
 import { useFactoryLoadingDispatchState } from "./useFactoryLoadingDispatchState";
 
 export function FactoryLoadingDispatchPageHeaderSection({
@@ -43,9 +43,9 @@ export function FactoryLoadingDispatchPageHeaderSection({
     <PageHeader
       title="Dispatch Management"
       icon={<Truck className="h-5 w-5" />}
-      subtitle="Scan trips, review charges, and finalize the loading."
-      onBack={backToLoading}
-      backButtonTestId="button-return-to-loading"
+      subtitle={dispatchId === null ? "Scan trips, review charges, and finalize the loading." : "Scan bales, review this trip, then compare against loading."}
+      onBack={dispatchId === null ? backToLoading : () => navigate(tripPath(orderId))}
+      backButtonTestId={dispatchId === null ? "button-return-to-loading" : "button-dispatch-back"}
       meta={
         <>
           <Badge variant="secondary">Loading #{orderId}</Badge>
@@ -53,6 +53,8 @@ export function FactoryLoadingDispatchPageHeaderSection({
         </>
       }
     >
+      {dispatchId === null && (
+        <>
       <Button
         size="sm"
         variant="outline"
@@ -95,6 +97,8 @@ export function FactoryLoadingDispatchPageHeaderSection({
         >
           <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
         </Button>
+      )}
+        </>
       )}
     </PageHeader>
   );
