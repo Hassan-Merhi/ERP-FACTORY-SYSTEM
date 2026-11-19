@@ -69,5 +69,4 @@ describe("ABO JABER: zero balance by source-verified attribution, not by masking
     expect(s).not.toContain("<LedgerBalancePanel");
     expect(s).toContain("<SupplierStatementRows");
   });
-
 });
