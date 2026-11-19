@@ -10,6 +10,7 @@ import { postStockMovementTx } from "../../inventory/stockMovementIntegrityServi
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 import { buildItemMap } from "./types";
+import { assertNoLinkedSupplierReturnsTx } from "./assertNoLinkedSupplierReturnsTx";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -31,6 +32,8 @@ export async function reverseExistingOffload(
   existingOffload: typeof schema.containerOffloads.$inferSelect,
   lineItems: Array<{ stockItemId: number; quantity: string; rate: string }>
 ): Promise<Decimal> {
+  // Also protect edit/re-offload flows that reverse the original receipt.
+  await assertNoLinkedSupplierReturnsTx(tx, container.companyId, existingOffload.id);
   let subLedgerDelta: Decimal = new MoneyDecimal(0);
   const storedItems = await tx
     .select()

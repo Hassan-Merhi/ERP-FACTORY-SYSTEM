@@ -24,6 +24,10 @@ import {
   syncContainerStockInTx,
 } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
+import {
+  assertNoLinkedSupplierReturnsTx,
+  OffloadLinkedSupplierReturnError,
+} from "../../../services/containers/offload-lifecycle/assertNoLinkedSupplierReturnsTx";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -66,6 +70,9 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
           (offloadRecord.offloadedAt ? new Date(offloadRecord.offloadedAt).toISOString().slice(0, 10) : null);
 
         await db.transaction(async (tx) => {
+          // Fail before any stock or voucher changes when a supplier return
+          // still points to this offload. Never break its accounting audit.
+          await assertNoLinkedSupplierReturnsTx(tx, container.companyId, offloadRecord.id);
           let subLedgerDelta: Decimal = new MoneyDecimal(0);
           const storedOffloadItems = await tx
             .select()
@@ -251,6 +258,9 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
 
         res.json({ success: true, message: "Container offload reversed successfully" });
       } catch (error: unknown) {
+        if (error instanceof OffloadLinkedSupplierReturnError) {
+          return res.status(error.status).json({ code: error.code, message: error.message });
+        }
         logger.error("Reverse offload error:", { error });
         res.status(500).json({ message: getErrorMessage(error) });
       }
