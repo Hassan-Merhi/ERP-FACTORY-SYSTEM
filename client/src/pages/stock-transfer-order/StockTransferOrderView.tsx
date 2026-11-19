@@ -1,4 +1,5 @@
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Check, GitBranch } from "lucide-react";
+import { VoucherActionBar } from "@/pages/vouchers/VoucherActionBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RevisionDialog } from "./dialogs/RevisionDialog";
@@ -20,6 +21,7 @@ interface StockTransferOrderViewProps {
 }
 
 export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTransferOrderViewProps) {
+  const orderSummary = `${model.orderItems.length} items · ${model.totalBales} bales`;
   const {
     hasDraft,
     editVoucherId,
@@ -124,6 +126,49 @@ export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTra
         <StockTransferOrderMatrix model={model} />
         <StockTransferOrderPanel model={model} />
       </div>
+
+      <VoucherActionBar
+        isEditing={!!editVoucherId}
+        saving={model.isProcessing}
+        disabled={model.orderItems.length === 0 || !model.destinationLocationId}
+        onSave={model.handleProcessOrder}
+        saveTestId="button-process-order"
+        data-testid="transfer-order-actions"
+        className="rounded-lg border"
+        summary={
+          <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+            {orderSummary}
+          </span>
+        }
+        phoneSummary={orderSummary}
+        status={
+          model.orderItems.length === 0
+            ? { ok: false, label: "Add an item" }
+            : !model.destinationLocationId
+              ? { ok: false, label: "Choose destination" }
+              : undefined
+        }
+        secondary={
+          <>
+            <Button type="button" variant="outline" onClick={model.handleValidate} data-testid="button-validate-order">
+              <Check className="h-4 w-4 mr-1" />
+              Validate
+            </Button>
+            {editVoucherId && existingTransfer?.id && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={model.handleSaveAsRevision}
+                disabled={isSavingRevision || !model.destinationLocationId}
+                data-testid="button-save-as-revision"
+              >
+                <GitBranch className="h-4 w-4 mr-1" />
+                Save as Revision
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <RevisionHistoryPanel
         editVoucherId={editVoucherId}

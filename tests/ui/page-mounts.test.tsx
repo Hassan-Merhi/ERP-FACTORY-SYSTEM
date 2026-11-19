@@ -180,12 +180,6 @@ const PAGES: PageCase[] = [
     factory: true,
   },
   {
-    name: "FactoryDispatchBatches",
-    load: () => import("@/pages/factory/FactoryDispatchBatches"),
-    landmark: "button-tab-list",
-    factory: true,
-  },
-  {
     name: "FactoryEmployeeAdvancesTab",
     load: () => import("@/pages/factory/FactoryEmployeeAdvancesTab"),
     landmark: "select-emp-filter",
@@ -231,12 +225,6 @@ const PAGES: PageCase[] = [
     name: "FactoryPriceList",
     load: () => import("@/pages/factory/FactoryPriceList"),
     landmark: "input-price-upload-file",
-    factory: true,
-  },
-  {
-    name: "FactoryStockAllocationV3",
-    load: () => import("@/pages/factory/FactoryStockAllocationV3"),
-    landmark: "button-v3-tab-overview",
     factory: true,
   },
   {
@@ -391,7 +379,7 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/pos/POSContainerTracking"),
     landmark: "pos-container-tracking-page",
   },
-  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "button-create-customer" },
+  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "input-search-customers" },
   { name: "POSDaybook", load: () => import("@/pages/pos/POSDaybook"), landmark: "pos-daybook-period-filter" },
   { name: "PosTransferOrders", load: () => import("@/pages/pos/PosTransferOrders"), landmark: "input-date-filter" },
 
@@ -451,19 +439,8 @@ const PAGES: PageCase[] = [
   },
 
   // Supplier Partner and properties.
-  { name: "SpOpeningStock", load: () => import("@/pages/sp/SpOpeningStock"), landmark: "input-sp-opn-article" },
   { name: "SpReports", load: () => import("@/pages/sp/SpReports"), landmark: "tabs-sp-reports" },
   { name: "SpSetupPanel", load: () => import("@/pages/sp/SpSetupPanel"), landmark: "button-sp-setup" },
-  {
-    name: "FreshStartHadiPaymentPanel",
-    load: () => import("@/pages/sp/golden-coast/FreshStartHadiPaymentPanel"),
-    landmark: "input-gc-fs-hadi-amount",
-  },
-  {
-    name: "HadiProceedsRemittancePanel",
-    load: () => import("@/pages/sp/golden-coast/HadiProceedsRemittancePanel"),
-    landmark: "input-gc-p16-remit-amount",
-  },
 ];
 
 describe("wave 4 page mounts", () => {

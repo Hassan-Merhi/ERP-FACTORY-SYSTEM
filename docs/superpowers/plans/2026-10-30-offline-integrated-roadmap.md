@@ -194,6 +194,39 @@ the reasons for everything still online-only:
 - Phase 16: offline panel (banner drawer and Factory settings) with counters,
   Sync now, Pause/Resume, conflict decisions, storage and a recovery copy.
 
+## Full offline mode (Tally-style), Phase A (2026-11-17, development)
+
+Every PC keeps a full local copy of its companies; the cloud applies each PC's
+entries once and sends everyone's changes back. Owner decisions and the phase
+plan are in the plan document and the
+[runbook](../../operations/factory-offline-operations-runbook.md#full-offline-mode-phase-a-cloud-change-feed).
+
+- Phase A1 (#3299, switched off): table policy for all tables with a CI
+  check, DBA-installed change feed with redaction, and the paged
+  `GET /api/offline/pc-sync/changes` reader (`OFFLINE_PC_SYNC_ENABLED`).
+- Phase A2 (switched off): initial full copy, `GET /api/offline/pc-sync/snapshot/start`
+  and `GET /api/offline/pc-sync/snapshot`, table by table in key order, then
+  feed replay from the start cursor.
+- Phase A3a (switched off): PC sync agent (`scripts/pc-sync/local/`: copy,
+  resume, feed replay, TRUNCATE reload, offline sign-in only for people who
+  signed in on that PC, 24h warning / 2-day block rule) and the read-only local
+  server mode (`OFFLINE_PC_LOCAL_MODE=read-only`).
+- Phase A3b (off unless enabled per PC): desktop app starts an embedded
+  PostgreSQL, the sync process and the read-only local server on 127.0.0.1 and
+  opens the local copy when the cloud cannot be reached; "Connect this PC" and
+  "Sync now" in the menu; staging script and Mac target. Not yet tested on real
+  Windows/Mac PCs.
+- Phase B1 (off unless enabled per PC): the five offline entry types recorded
+  on the PC's local server, delivered exactly once through the browser-sync
+  apply path, conflicts held for Admin/Developer approval, local writes undone
+  and the feed pulled once nothing is outstanding; 2-day block on new entries.
+- Phase B2: a PC's offline entry that takes stock below zero is applied and
+  flagged (`offline_negative_stock_flags`, migration 0010); Admin/Developer list
+  and close flags; other conflicts stay held.
+- Negative-stock flags screen: a card in the Conflict Center for Admin/Developer
+  (list, close with a note), in English, Arabic and French.
+- Next: more voucher types; then Phases C to E.
+
 ## Resume checklist (next session)
 
 All development in the owner-approved offline plan is merged (#2871, 2026-11-06). The coverage audit (`node scripts/edge/audit-write-coverage.mjs`) reports 39 captured routes, 17 of them waiting for drill approval, and 1,140 refused; `--require-complete` stays red by design. What remains is rollout and certification:

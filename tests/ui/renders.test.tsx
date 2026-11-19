@@ -5,7 +5,7 @@
  * All network calls are intercepted; real DB is never hit.
  */
 import React from "react";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { renderWithProviders, stubFetch } from "./helpers";
 import { FACTORY_MY_ACCESS_URL, factoryFullAccess } from "./pageMocks";
 
@@ -207,6 +207,84 @@ describe("Settings", () => {
     expect(screen.queryByRole("button", { name: "Appearance & Seasonal" })).not.toBeInTheDocument();
   });
 
+  it.each(["Owner", "User", "POS", "View Only"])(
+    "hides internal Settings pages and empty category headings for %s",
+    async (role) => {
+      const { default: Settings } = await import("@/pages/Settings");
+      renderWithProviders(<Settings />, {
+        seedQueries: [[["/api/auth/me"], { id: "test-user", role, currentRole: role }]],
+      });
+      const nav = screen.getByRole("navigation");
+      for (const name of [
+        "Sessions & Users",
+        "Supplier Defaults",
+        "Scheduled Messages",
+        "Recurring Journals",
+        "Excel Export Appearance",
+        "System Tools",
+      ]) {
+        expect(within(nav).queryByRole("button", { name })).not.toBeInTheDocument();
+      }
+      for (const heading of ["Tracking", "WhatsApp", "Accounting", "POS", "Factory", "System"]) {
+        expect(within(nav).queryByText(heading, { exact: true })).not.toBeInTheDocument();
+      }
+      expect(within(nav).getByRole("button", { name: "Users & Permissions" })).toBeInTheDocument();
+    }
+  );
+
+  it("restores only the standard System Tools to Admin", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-admin", role: "Admin", currentRole: "Admin" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    fireEvent.click(within(nav).getByRole("button", { name: "System Tools" }));
+    expect(await screen.findByText("Deleted Items")).toBeInTheDocument();
+    expect(screen.getByText("Import Cycle Diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Net Position Details")).toBeInTheDocument();
+    expect(screen.getByText("Group Net Position")).toBeInTheDocument();
+    for (const advanced of ["Master parent company", "Reset company data", "Clean empty accounts"]) {
+      expect(screen.queryByText(advanced)).not.toBeInTheDocument();
+    }
+    expect(within(nav).queryByRole("button", { name: "Sessions & Users" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "Recurring Journals" })).not.toBeInTheDocument();
+  });
+
+  it("keeps internal Settings sections and headings visible in Developer mode", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-dev", role: "Developer", currentRole: "Developer" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    for (const name of [
+      "Sessions & Users",
+      "Supplier Defaults",
+      "Scheduled Messages",
+      "Recurring Journals",
+      "Excel Export Appearance",
+      "System Tools",
+    ]) {
+      expect(within(nav).getByRole("button", { name })).toBeInTheDocument();
+    }
+    for (const heading of ["POS", "Factory", "System"]) {
+      expect(within(nav).getByText(heading, { exact: true })).toBeInTheDocument();
+    }
+  });
+
+  it("respects the active company role instead of a Developer base role", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-dev", role: "Developer", currentRole: "Admin" }]],
+    });
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).queryByRole("button", { name: "Sessions & Users" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "Excel Export Appearance" })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "System Tools" })).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "System Tools" }));
+    expect(screen.queryByText("Master parent company")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reset company data")).not.toBeInTheDocument();
+  });
+
   it("renders settings shell with non-empty content", async () => {
     const { default: Settings } = await import("@/pages/Settings");
     const { container } = renderWithProviders(<Settings />);
@@ -251,6 +329,21 @@ describe("FactoryDaybook page", () => {
     renderWithProviders(<FactoryDaybook />);
     const heading = await screen.findByTestId("text-page-title");
     expect(heading).toHaveTextContent("Factory Daybook");
+  });
+
+  it("opens the tab named in ?tab= once access is known and keeps it in the URL", async () => {
+    window.history.replaceState({}, "", "/factory/daybook?tab=activity");
+    try {
+      const { default: FactoryDaybook } = await import("@/pages/factory/FactoryDaybook");
+      renderWithProviders(<FactoryDaybook />, {
+        seedQueries: [[[FACTORY_MY_ACCESS_URL, mockCompany.selectedCompany.id], factoryFullAccess()]],
+      });
+      expect(await screen.findByRole("tab", { name: "Edits & Activity" })).toHaveAttribute("data-state", "active");
+      expect(screen.getByRole("tab", { name: "Transactions" })).toHaveAttribute("data-state", "inactive");
+      expect(window.location.search).toBe("?tab=activity");
+    } finally {
+      window.history.replaceState({}, "", "/");
+    }
   });
 });
 

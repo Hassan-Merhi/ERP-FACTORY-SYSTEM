@@ -1,491 +1,75 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { memo, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Layers3, Package, Scale, TrendingDown, TrendingUp, X } from "lucide-react";
-
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
+import { AlertTriangle, ArrowLeftRight, BarChart3, Package, Scale, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { pctChange } from "@/pages/factory/productioncomparison/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  ResponsiveChartPanel,
-  ResponsiveChartViewport,
-  ResponsiveMetricGrid,
-  ResponsiveReportGrid,
-} from "@/components/ui/responsive-report";
+import { ResponsiveMetricGrid, ResponsiveReportGrid } from "@/components/ui/responsive-report";
 import { MultiSelectFilter } from "@/pages/factory/productioncomparison/components/MultiSelectFilter";
-import type { ProductRow, ReportData } from "@/pages/factory/productioncomparison/types";
-import { deriveGrade, fmtKg, fmtNum, pctChange } from "@/pages/factory/productioncomparison/utils";
+import { fmtNum } from "@/pages/factory/productioncomparison/utils";
 
-import {
-  buildAutomaticComparisonRanges,
-  currentDayValue,
-  currentMonthValue,
-  currentYearValue,
-  isValidComparisonRange,
-  parseLocalIsoDate,
-  type ComparisonDirection,
-  type ComparisonRange,
-  type ProductComparisonPeriod,
-} from "./utils";
+import { type ProductComparisonPeriod } from "./utils";
 import "./product-comparison-premium.css";
-
-type Metric = "bales" | "weight";
-
-interface BaleProductCatalogRow {
-  id: number;
-  code?: string | null;
-  articleCode?: string | null;
-  name?: string | null;
-  nameAr?: string | null;
-  nameFr?: string | null;
-  categoryId?: number | null;
-  active?: boolean | null;
-}
-
-interface CategoryRow {
-  id: number;
-  name: string;
-  nameAr?: string | null;
-  nameFr?: string | null;
-}
-
-function normalizeArticle(value: string | null | undefined): string {
-  return (value || "").trim().toUpperCase();
-}
-
-function productKey(product: BaleProductCatalogRow): string {
-  return normalizeArticle(product.articleCode || product.code);
-}
-
-function reportMap(rows: ProductRow[] | undefined): Map<string, ProductRow> {
-  const map = new Map<string, ProductRow>();
-  for (const row of rows ?? []) {
-    map.set(normalizeArticle(row.articleCode), row);
-  }
-  return map;
-}
-
-function formatMetric(value: number, metric: Metric): string {
-  return metric === "bales" ? fmtNum(value) : `${fmtKg(value)} kg`;
-}
-
-function metricValue(row: ProductRow | undefined, metric: Metric): number {
-  if (!row) return 0;
-  return metric === "bales" ? row.qty : row.totalWeightKg;
-}
-
-function localeFor(language: "en" | "ar" | "fr"): string {
-  if (language === "ar") return "ar";
-  if (language === "fr") return "fr-FR";
-  return "en-US";
-}
-
-function localizedProductName(product: BaleProductCatalogRow, language: "en" | "ar" | "fr"): string {
-  if (language === "ar" && product.nameAr?.trim()) return product.nameAr.trim();
-  if (language === "fr" && product.nameFr?.trim()) return product.nameFr.trim();
-  return product.name?.trim() || product.articleCode?.trim() || product.code?.trim() || String(product.id);
-}
-
-function localizedCategoryName(category: CategoryRow, language: "en" | "ar" | "fr"): string {
-  if (language === "ar" && category.nameAr?.trim()) return category.nameAr.trim();
-  if (language === "fr" && category.nameFr?.trim()) return category.nameFr.trim();
-  return category.name;
-}
-
-function formatRangeLabel(range: ComparisonRange, period: ProductComparisonPeriod, locale: string): string {
-  // Date inputs can briefly be empty while the user edits a custom range.
-  // Never pass an invalid Date into Intl.DateTimeFormat because it throws "Invalid time value".
-  if (!isValidComparisonRange(range)) return "—";
-
-  const from = parseLocalIsoDate(range.from);
-  const to = parseLocalIsoDate(range.to);
-  if (period === "day") {
-    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(from);
-  }
-  if (period === "month") {
-    return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(from);
-  }
-  if (period === "year") return String(from.getFullYear());
-  const formatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" });
-  if (range.from === range.to) return formatter.format(from);
-  return `${formatter.format(from)} – ${formatter.format(to)}`;
-}
-
-type StatKind = "products" | "selected" | "compared" | "difference";
-type StatTone = "violet" | "blue" | "green" | "rose";
-
-function Stat({ label, value, sub, kind, tone }: {
-  label: string;
-  value: string;
-  sub?: string;
-  kind: StatKind;
-  tone: StatTone;
-}) {
-  const Icon = kind === "products" ? Layers3 : kind === "selected" ? Package : kind === "compared" ? TrendingUp : TrendingDown;
-
-  return (
-    <Card className={`pc-stat-card pc-stat-card--${tone} min-w-0`}>
-      <CardContent className="flex h-full min-h-[112px] items-center gap-3 p-4 sm:p-5">
-        <span className="pc-stat-icon" aria-hidden="true"><Icon className="h-6 w-6" /></span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide pc-stat-label">{label}</p>
-          <p className="mt-1 break-words text-2xl font-extrabold tabular-nums tracking-tight">{value}</p>
-          {sub ? <p className="mt-0.5 break-words text-xs pc-stat-sub">{sub}</p> : null}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-const ProductChartCard = memo(function ProductChartCard({
-  product,
-  selectedRow,
-  comparisonRow,
-  selectedLabel,
-  comparisonLabel,
-  metric,
-  language,
-  currentLabel,
-  comparedLabel,
-  differenceLabel,
-  changeLabel,
-  noProductionLabel,
-  inactiveLabel,
-  balesLabel,
-  weightLabel,
-  chartRegionLabel,
-  notAvailableLabel,
-}: {
-  product: BaleProductCatalogRow;
-  selectedRow?: ProductRow;
-  comparisonRow?: ProductRow;
-  selectedLabel: string;
-  comparisonLabel: string;
-  metric: Metric;
-  language: "en" | "ar" | "fr";
-  currentLabel: string;
-  comparedLabel: string;
-  differenceLabel: string;
-  changeLabel: string;
-  noProductionLabel: string;
-  inactiveLabel: string;
-  balesLabel: string;
-  weightLabel: string;
-  chartRegionLabel: string;
-  notAvailableLabel: string;
-}) {
-  const selectedValue = metricValue(selectedRow, metric);
-  const comparisonValue = metricValue(comparisonRow, metric);
-  const difference = selectedValue - comparisonValue;
-  const change = pctChange(selectedValue, comparisonValue);
-  const localizedName = localizedProductName(product, language);
-  const chartData = [
-    { period: selectedLabel, value: selectedValue },
-    { period: comparisonLabel, value: comparisonValue },
-  ];
-
-  return (
-    <ResponsiveChartPanel
-      className="pc-product-chart min-h-[410px]"
-      data-testid={`product-comparison-chart-${product.id}`}
-      style={{ contentVisibility: "auto", containIntrinsicSize: "410px" }}
-    >
-      <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="pc-product-icon" aria-hidden="true"><Package className="h-4 w-4" /></span>
-          <h3 className="min-w-0 wrap-break-word text-base font-bold">{localizedName}</h3>
-        </div>
-        {product.active === false ? (
-          <Badge variant="outline" className="shrink-0">
-            {inactiveLabel}
-          </Badge>
-        ) : null}
-      </div>
-
-      <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-        <div className="pc-value-card pc-value-card--selected p-3">
-          <p className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full pc-value-dot--selected" aria-hidden="true" />
-            {currentLabel}
-          </p>
-          <p className="mt-1 text-base font-bold tabular-nums">{formatMetric(selectedValue, metric)}</p>
-        </div>
-        <div className="pc-value-card pc-value-card--compared p-3">
-          <p className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full pc-value-dot--compared" aria-hidden="true" />
-            {comparedLabel}
-          </p>
-          <p className="mt-1 font-semibold tabular-nums">{formatMetric(comparisonValue, metric)}</p>
-        </div>
-      </div>
-
-      <ResponsiveChartViewport label={`${chartRegionLabel}: ${localizedName}`}>
-        <div className="h-[245px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-              <defs>
-                <linearGradient id={`pc-current-bar-${product.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--pc-bar-blue-top)" />
-                  <stop offset="100%" stopColor="var(--pc-bar-blue-bottom)" />
-                </linearGradient>
-                <linearGradient id={`pc-compared-bar-${product.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--pc-bar-green-top)" />
-                  <stop offset="100%" stopColor="var(--pc-bar-green-bottom)" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--pc-chart-grid)" strokeDasharray="3 4" vertical={false} />
-              <XAxis dataKey="period" tick={{ fontSize: 11, fill: "var(--pc-chart-label)" }} interval={0} />
-              <YAxis
-                allowDecimals={metric === "weight"}
-                tick={{ fontSize: 11, fill: "var(--pc-chart-label)" }}
-                tickFormatter={(value) => (metric === "bales" ? fmtNum(Number(value)) : fmtKg(Number(value)))}
-              />
-              <Tooltip
-                contentStyle={{ background: "var(--pc-tooltip-bg)", border: "1px solid var(--pc-border)", color: "var(--pc-text)", borderRadius: 12 }}
-                labelStyle={{ color: "var(--pc-text)" }}
-                formatter={(value) => [
-                  formatMetric(Number(value), metric),
-                  metric === "bales" ? balesLabel : weightLabel,
-                ]}
-              />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={96}>
-                <Cell fill={`url(#pc-current-bar-${product.id})`} />
-                <Cell fill={`url(#pc-compared-bar-${product.id})`} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </ResponsiveChartViewport>
-
-      <div className="pc-chart-footer mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs">
-        <div>
-          <p className="text-muted-foreground">{differenceLabel}</p>
-          <p className="mt-0.5 font-semibold tabular-nums">
-            {difference > 0 ? "+" : ""}
-            {formatMetric(difference, metric)}
-          </p>
-        </div>
-        <div>
-          <p className="text-muted-foreground">{changeLabel}</p>
-          <p className="mt-0.5 font-semibold tabular-nums">
-            {change === null ? notAvailableLabel : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`}
-          </p>
-        </div>
-      </div>
-
-      {selectedValue === 0 && comparisonValue === 0 ? (
-        <p className="mt-3 text-center text-xs text-muted-foreground">{noProductionLabel}</p>
-      ) : null}
-    </ResponsiveChartPanel>
-  );
-});
-
-function LazyProductChartCard(props: ComponentProps<typeof ProductChartCard>) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "500px 0px" }
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={ref} className="min-h-[410px]">
-      {visible ? <ProductChartCard {...props} /> : <Skeleton className="h-[410px] w-full rounded-xl" />}
-    </div>
-  );
-}
+import {
+  LazyProductChartCard,
+  Stat,
+  formatMetric,
+  localizedProductName,
+  metricValue,
+  productKey,
+} from "./ProductComparisonChartsStat";
+import { ProductComparisonChartsCardSection, useProductComparisonChartsState } from "./useProductComparisonChartsState";
 
 export default function ProductComparisonCharts() {
-  const { language } = useApplicationLanguage();
-  const copy = getFactoryProductComparisonCopy(language);
-  const locale = localeFor(language);
-
-  const [period, setPeriod] = useState<ProductComparisonPeriod>("month");
-  const [direction, setDirection] = useState<ComparisonDirection>("previous");
-  const [metric, setMetric] = useState<Metric>("bales");
-  const [day, setDay] = useState(() => currentDayValue());
-  const [month, setMonth] = useState(() => currentMonthValue());
-  const [year, setYear] = useState(() => currentYearValue());
-  const [customA, setCustomA] = useState<[string, string]>(() => {
-    const today = currentDayValue();
-    return [today, today];
-  });
-  const [customB, setCustomB] = useState<[string, string]>(() => {
-    const today = currentDayValue();
-    return [today, today];
-  });
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
-
-  const { data: catalog = [] } = useQuery<BaleProductCatalogRow[]>({
-    queryKey: ["/api/factory/bale-products"],
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: categories = [] } = useQuery<CategoryRow[]>({
-    queryKey: ["/api/factory/categories"],
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const activeCatalog = useMemo(() => catalog.filter((product) => product.active !== false), [catalog]);
-
-  useEffect(() => {
-    if (catalog.length === 0) return;
-
-    const activeKeys = new Set(activeCatalog.map(productKey).filter(Boolean));
-    setSelectedProducts((current) => {
-      const next = current.filter((key) => activeKeys.has(key));
-      return next.length === current.length ? current : next;
-    });
-  }, [catalog.length, activeCatalog]);
-
-  const ranges = useMemo(() => {
-    if (period === "custom") {
-      return {
-        selected: { from: customA[0], to: customA[1] },
-        comparison: { from: customB[0], to: customB[1] },
-      };
-    }
-    return buildAutomaticComparisonRanges(period, direction, { day, month, year });
-  }, [period, direction, day, month, year, customA, customB]);
-
-  const selectedRangeValid = isValidComparisonRange(ranges.selected);
-  const comparisonRangeValid = isValidComparisonRange(ranges.comparison);
-  const queriesEnabled = selectedProducts.length > 0 && selectedRangeValid && comparisonRangeValid;
-
-  const selectedReport = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", ranges.selected.from, ranges.selected.to, "product-comparison"],
-    enabled: queriesEnabled,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
-    queryFn: async () => {
-      const params = new URLSearchParams({ from: ranges.selected.from, to: ranges.selected.to });
-      const response = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? copy.requestFailed);
-      return response.json();
-    },
-  });
-
-  const comparisonReport = useQuery<ReportData>({
-    queryKey: [
-      "/api/factory/production-value-report",
-      ranges.comparison.from,
-      ranges.comparison.to,
-      "product-comparison",
-    ],
-    enabled: queriesEnabled,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
-    queryFn: async () => {
-      const params = new URLSearchParams({ from: ranges.comparison.from, to: ranges.comparison.to });
-      const response = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? copy.requestFailed);
-      return response.json();
-    },
-  });
-
-  const gradeOptions = useMemo(() => {
-    const grades = new Set<string>();
-    for (const product of activeCatalog) {
-      const grade = deriveGrade(product.articleCode || product.code || "");
-      if (grade !== "—") grades.add(grade);
-    }
-    return [...grades].sort();
-  }, [activeCatalog]);
-
-  const categoryOptions = useMemo(
-    () =>
-      categories
-        .slice()
-        .sort((a, b) => localizedCategoryName(a, language).localeCompare(localizedCategoryName(b, language), locale))
-        .map((category) => ({ value: String(category.id), label: localizedCategoryName(category, language) })),
-    [categories, language, locale]
-  );
-
-  const catalogByKey = useMemo(() => {
-    const map = new Map<string, BaleProductCatalogRow>();
-    for (const product of activeCatalog) {
-      const key = productKey(product);
-      if (key) map.set(key, product);
-    }
-    return map;
-  }, [activeCatalog]);
-
-  const productOptions = useMemo(() => {
-    return activeCatalog
-      .filter((product) => {
-        const key = productKey(product);
-        if (!key) return false;
-        if (selectedProducts.includes(key)) return true;
-        if (selectedCategories.length > 0 && !selectedCategories.includes(String(product.categoryId ?? "")))
-          return false;
-        const grade = deriveGrade(product.articleCode || product.code || "");
-        if (selectedGrades.length > 0 && !selectedGrades.includes(grade)) return false;
-        return true;
-      })
-      .map((product) => ({
-        value: productKey(product),
-        label: localizedProductName(product, language),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [activeCatalog, selectedProducts, selectedCategories, selectedGrades, language, locale]);
-
-  const selectedRows = useMemo(() => reportMap(selectedReport.data?.production.byProduct), [selectedReport.data]);
-  const comparisonRows = useMemo(() => reportMap(comparisonReport.data?.production.byProduct), [comparisonReport.data]);
-
-  const selectedLabel = formatRangeLabel(ranges.selected, period, locale);
-  const comparisonLabel = formatRangeLabel(ranges.comparison, period, locale);
-
-  const selectedCatalogRows = useMemo(
-    () =>
-      selectedProducts
-        .map((key) => catalogByKey.get(key))
-        .filter((product): product is BaleProductCatalogRow => !!product),
-    [selectedProducts, catalogByKey]
-  );
-
-  const totals = useMemo(() => {
-    let selected = 0;
-    let comparison = 0;
-    for (const key of selectedProducts) {
-      selected += metricValue(selectedRows.get(key), metric);
-      comparison += metricValue(comparisonRows.get(key), metric);
-    }
-    const difference = selected - comparison;
-    return { selected, comparison, difference, change: pctChange(selected, comparison) };
-  }, [selectedProducts, selectedRows, comparisonRows, metric]);
-
-  const isLoading = queriesEnabled && (selectedReport.isFetching || comparisonReport.isFetching);
-  const error = selectedReport.error || comparisonReport.error;
-  const hasFilter = selectedCategories.length > 0 || selectedGrades.length > 0;
+  const {
+    categoryOptions,
+    comparisonLabel,
+    comparisonRangeValid,
+    comparisonRows,
+    copy,
+    customA,
+    customB,
+    day,
+    direction,
+    error,
+    gradeOptions,
+    hasFilter,
+    isLoading,
+    language,
+    metric,
+    month,
+    period,
+    productOptions,
+    ranges,
+    selectedCatalogRows,
+    selectedCategories,
+    selectedGrades,
+    selectedLabel,
+    selectedProducts,
+    selectedRangeValid,
+    selectedRows,
+    setCustomA,
+    setCustomB,
+    setDay,
+    setDirection,
+    setMetric,
+    setMonth,
+    setPeriod,
+    setSelectedCategories,
+    setSelectedGrades,
+    setSelectedProducts,
+    setYear,
+    totals,
+    year,
+  } = useProductComparisonChartsState();
 
   return (
     <div className="product-comparison-premium space-y-5" data-testid="factory-product-comparison">
       <div className="pc-page-heading flex items-center gap-4">
-        <span className="pc-heading-icon" aria-hidden="true"><BarChart3 className="h-6 w-6" /></span>
+        <span className="pc-heading-icon" aria-hidden="true">
+          <BarChart3 className="h-6 w-6" />
+        </span>
         <div className="min-w-0">
           <h2 className="text-2xl font-extrabold tracking-tight">{copy.title}</h2>
           <p className="mt-0.5 text-sm pc-heading-subtitle">{copy.subtitle}</p>
@@ -543,6 +127,45 @@ export default function ProductComparisonCharts() {
           </div>
         ) : null}
 
+        <RowsExportMenu
+          title={`${copy.title} ${metric === "bales" ? copy.bales : copy.weight}`}
+          sheetName={copy.title}
+          rows={selectedCatalogRows}
+          columns={[
+            { header: copy.products, value: (product) => localizedProductName(product, language) },
+            {
+              header: `${copy.current}: ${selectedLabel}`,
+              value: (product) => metricValue(selectedRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: `${copy.compared}: ${comparisonLabel}`,
+              value: (product) => metricValue(comparisonRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: copy.difference,
+              value: (product) =>
+                metricValue(selectedRows.get(productKey(product)), metric) -
+                metricValue(comparisonRows.get(productKey(product)), metric),
+              type: "number",
+            },
+            {
+              header: `${copy.change} %`,
+              value: (product) =>
+                pctChange(
+                  metricValue(selectedRows.get(productKey(product)), metric),
+                  metricValue(comparisonRows.get(productKey(product)), metric)
+                ),
+              type: "number",
+            },
+          ]}
+          footer={[copy.selectedTotal, totals.selected, totals.comparison, totals.difference, totals.change]}
+          period={{ from: ranges.selected.from, to: ranges.selected.to }}
+          resource="factory.production"
+          className="pc-control-button"
+        />
+
         <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-auto">
           <Button
             type="button"
@@ -571,96 +194,24 @@ export default function ProductComparisonCharts() {
         </div>
       </div>
 
-      <Card className="pc-date-panel">
-        <CardContent className="p-4 sm:p-5">
-          {period === "custom" ? (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {[
-                { label: copy.periodA, value: customA, setter: setCustomA },
-                { label: copy.periodB, value: customB, setter: setCustomB },
-              ].map(({ label, value, setter }) => (
-                <div key={label} className="space-y-2">
-                  <p className="text-sm font-semibold">{label}</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <label className="space-y-1 text-xs text-muted-foreground">
-                      <span>{copy.from}</span>
-                      <input
-                        type="date"
-                        className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
-                        value={value[0]}
-                        onChange={(event) => setter([event.target.value, value[1]])}
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs text-muted-foreground">
-                      <span>{copy.to}</span>
-                      <input
-                        type="date"
-                        className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
-                        value={value[1]}
-                        onChange={(event) => setter([value[0], event.target.value])}
-                      />
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,320px)_1fr] lg:items-end">
-              <label className="space-y-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {period === "day" ? copy.day : period === "month" ? copy.month : copy.year}
-                </span>
-                {period === "day" ? (
-                  <input
-                    type="date"
-                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
-                    value={day}
-                    onChange={(event) => setDay(event.target.value)}
-                    data-testid="product-comparison-anchor-day"
-                  />
-                ) : period === "month" ? (
-                  <input
-                    type="month"
-                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
-                    value={month}
-                    onChange={(event) => setMonth(event.target.value)}
-                    data-testid="product-comparison-anchor-month"
-                  />
-                ) : (
-                  <input
-                    type="number"
-                    min="1900"
-                    max="2200"
-                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
-                    value={year}
-                    onChange={(event) => setYear(event.target.value)}
-                    data-testid="product-comparison-anchor-year"
-                  />
-                )}
-              </label>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="pc-period-summary rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">{copy.selectedPeriod}</p>
-                  <p className="mt-1 text-sm font-semibold">{selectedLabel}</p>
-                </div>
-                <div className="pc-period-summary pc-period-summary--comparison rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">{copy.comparisonPeriod}</p>
-                  <p className="mt-1 text-sm font-semibold">{comparisonLabel}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {period === "custom" && (!selectedRangeValid || !comparisonRangeValid) ? (
-            <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{copy.invalidRange}</span>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      <ProductComparisonChartsCardSection
+        comparisonLabel={comparisonLabel}
+        comparisonRangeValid={comparisonRangeValid}
+        copy={copy}
+        customA={customA}
+        customB={customB}
+        day={day}
+        month={month}
+        period={period}
+        selectedLabel={selectedLabel}
+        selectedRangeValid={selectedRangeValid}
+        setCustomA={setCustomA}
+        setCustomB={setCustomB}
+        setDay={setDay}
+        setMonth={setMonth}
+        setYear={setYear}
+        year={year}
+      />
 
       <div className="pc-filters flex flex-wrap items-center gap-2">
         <MultiSelectFilter
@@ -739,8 +290,20 @@ export default function ProductComparisonCharts() {
         <>
           <ResponsiveMetricGrid>
             <Stat label={copy.selectedProducts} value={fmtNum(selectedProducts.length)} kind="products" tone="violet" />
-            <Stat label={copy.selectedTotal} value={formatMetric(totals.selected, metric)} sub={selectedLabel} kind="selected" tone="blue" />
-            <Stat label={copy.comparisonTotal} value={formatMetric(totals.comparison, metric)} sub={comparisonLabel} kind="compared" tone="green" />
+            <Stat
+              label={copy.selectedTotal}
+              value={formatMetric(totals.selected, metric)}
+              sub={selectedLabel}
+              kind="selected"
+              tone="blue"
+            />
+            <Stat
+              label={copy.comparisonTotal}
+              value={formatMetric(totals.comparison, metric)}
+              sub={comparisonLabel}
+              kind="compared"
+              tone="green"
+            />
             <Stat
               label={copy.difference}
               kind="difference"

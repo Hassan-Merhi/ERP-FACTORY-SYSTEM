@@ -32,24 +32,7 @@ import type { InsertBankAccount, UpdateLedgerAccount } from "@shared/schema";
 import { Account, Transaction, WaRule, WaChat } from "../accounts/accountTypes";
 import { readNotInLedger } from "./NotInLedgerSection";
 import { buildAccountStatementTabUrl } from "./accountStatementNavigation";
-
-/** Voucher type → Vouchers page tab, for statement row navigation. */
-const VOUCHER_TAB_MAP: Record<string, string> = {
-  payment: "payment",
-  receipt: "receipt",
-  journal: "journal",
-  contra: "journal",
-  stocktransfer: "transferorder",
-  "stock transfer": "transferorder",
-  transfer: "transfer",
-  creditnote: "creditnote",
-  "credit note": "creditnote",
-  debitnote: "creditnote",
-  "debit note": "creditnote",
-  production: "adjustment",
-  consumption: "adjustment",
-  mixed: "adjustment",
-};
+import { VOUCHER_TAB_MAP, type VoucherSearchResult } from "./useAccountsLegacyModelConstants";
 
 const DEFAULT_WA_RULE: WaRule = {
   enabled: false,
@@ -58,17 +41,6 @@ const DEFAULT_WA_RULE: WaRule = {
   sendOnReceipt: true,
   sendOnJournal: true,
 };
-
-interface VoucherSearchResult {
-  id: number;
-  voucherType?: string | null;
-  locationName?: string | null;
-  description?: string | null;
-  totalAmount?: string | null;
-  currency?: string | null;
-  effectiveDate?: string | null;
-  voucherDate: string;
-}
 
 interface GroupOption {
   id: number;

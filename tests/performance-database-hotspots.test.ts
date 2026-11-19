@@ -2,11 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const route = readFileSync(
-  resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"),
-  "utf8"
-);
+const route = readModuleFamily(resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"));
 const productionBalanceOnTable = readFileSync(
   resolve(process.cwd(), "server/services/factory/productionBalanceOnTable.ts"),
   "utf8"
@@ -20,9 +18,8 @@ const snapshotService = readFileSync(
   resolve(process.cwd(), "server/services/factoryBilingualSnapshotService.ts"),
   "utf8"
 );
-const baleScanRoute = readFileSync(
-  resolve(process.cwd(), "server/routes/factory/customer-orders/bale-scanning/scan.ts"),
-  "utf8"
+const baleScanRoute = readModuleFamily(
+  resolve(process.cwd(), "server/routes/factory/customer-orders/bale-scanning/scan.ts")
 );
 const incrementalTotals = readFileSync(
   resolve(process.cwd(), "server/routes/factory/customer-orders/bale-scanning/incrementalTotals.ts"),

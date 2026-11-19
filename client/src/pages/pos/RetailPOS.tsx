@@ -1,478 +1,115 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Percent, ShoppingCart, RotateCcw } from "lucide-react";
+import { CalendarDays, MapPin, ShoppingCart, RotateCcw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useLocation as useLocationContext } from "@/contexts/LocationContext";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
-import { RetailErpPosSaleGrid, RetailErpPosItemPicker } from "./RetailErpPosWorkspace";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { PosCheckoutField, PosCheckoutPanel } from "./pos-components/PosCheckoutPanel";
+import { PosSaleHeader, PosSaleSubmitButton } from "./pos-components/PosSaleHeader";
+import { PosSaleScreen } from "./pos-components/PosSaleLayout";
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
-import { RetailPaymentPanel } from "./RetailPaymentPanel";
-import {
-  paymentAccountValue,
-  paymentFromAccount,
-  RetailPaymentAccountOptions,
-  type RetailPaymentAccounts,
-} from "./RetailPaymentAccountSelect";
-import { RetailLastSaleSummary } from "./RetailPOSPanels";
-import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
-import { useRetailReceiptPrinter } from "./retailReceipt";
+import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions } from "./RetailPaymentAccountSelect";
+import { RetailShiftPanel } from "./RetailShiftPanel";
 import { RetailApprovalDialog } from "./RetailApprovalDialog";
-import { useRetailBarcodeScanner } from "./useRetailBarcodeScanner";
 import { RetailCustomerPicker } from "./RetailCustomerPicker";
 import { RetailLineAdjustDialog, type LineAdjustment } from "./RetailLineAdjustDialog";
-import { fetchRetailCartPreview, requestRetailDiscountApproval, type CartRequestLine } from "./retailPosApi";
-import type { RetailCartPreview, RetailCustomerSummary } from "./retailTypes";
-import {
-  canSellIntoNegative,
-  lookupRetailBarcode,
-  makeKey,
-  money,
-  readJson,
-  scanBeep,
-  type CartLine,
-  type Location,
-  type RetailPaymentDraft,
-  type RetailPosItem,
-  type RetailSale,
-  type ScanOutcome,
-} from "./retailPosTypes";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { money, type RetailPaymentDraft } from "./retailPosTypes";
+import { useRetailPOSState } from "./useRetailPOSState";
+import { RetailPOSPosWorkspaceColumnsSection } from "./RetailPOSPosWorkspaceColumnsSection";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export default function RetailPOS() {
-  const { selectedCompany } = useCompany();
-  const { selectedLocation, setSelectedLocation } = useLocationContext();
-  const { toast } = useToast();
-  const [scanText, setScanText] = useState("");
-  const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [notes, setNotes] = useState("");
-  const [lastScan, setLastScan] = useState<ScanOutcome | null>(null);
-  const [lastSale, setLastSale] = useState<RetailSale | null>(null);
-  const [exchangeSale, setExchangeSale] = useState<RetailSale | null>(null);
-  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [currentShift, setCurrentShift] = useState<RetailShift | null>(null);
-  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: null }]);
-  const [customer, setCustomer] = useState<RetailCustomerSummary | null>(null);
-  const [orderDiscount, setOrderDiscount] = useState<{
-    type: "none" | "percent" | "fixed";
-    value: number;
-    reason: string;
-  }>({ type: "none", value: 0, reason: "" });
-  const [orderDiscountOpen, setOrderDiscountOpen] = useState(false);
-  const [adjustLine, setAdjustLine] = useState<CartLine | null>(null);
-  const [approvalToken, setApprovalToken] = useState<string | null>(null);
-  const [approvalRequest, setApprovalRequest] = useState<{
-    open: boolean;
-    reasons: string[];
-    pending: boolean;
-    error: string | null;
-  }>({ open: false, reasons: [], pending: false, error: null });
-  const scanInputRef = useRef<HTMLInputElement | null>(null);
-  const saleAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const allowNegative = canSellIntoNegative(selectedCompany);
-
-  const locationsQuery = useQuery({
-    queryKey: ["retail-pos-locations", selectedCompany?.id],
-    queryFn: () => readJson<Location[]>("/api/locations"),
-    enabled: selectedCompany?.companyType === "retail",
-  });
-  const paymentAccountsQuery = useQuery<RetailPaymentAccounts>({
-    queryKey: ["retail-payment-accounts", selectedCompany?.id],
-    queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
-    enabled: selectedCompany?.companyType === "retail",
-  });
-  const paymentAccounts = paymentAccountsQuery.data;
-  const isPosRole = selectedCompany?.role === "POS";
-  const assignedLocationId = selectedCompany?.assignedLocationId ?? null;
-  const locations = (locationsQuery.data ?? [])
-    .filter((location) => location.id > 0)
-    .filter((location) => !isPosRole || location.id === assignedLocationId);
   const {
+    addItem,
+    adjustLine,
+    approvalMutation,
+    approvalRequest,
+    canCompleteSale,
+    cart,
+    creditAmount,
+    currentShift,
+    customer,
+    exchangeSale,
+    focusScan,
+    hasCreditTender,
+    isPosRole,
+    itemsQuery,
+    ladder,
+    lastSale,
+    lastScan,
+    locations,
+    notes,
+    orderDiscount,
+    orderDiscountOpen,
+    paymentAccounts,
+    payments,
     printReceipt,
-    portal: receiptPortal,
-    paperWidth: receiptPaperWidth,
-    setPaperWidth: setReceiptPaperWidth,
-  } = useRetailReceiptPrinter(selectedCompany?.name, selectedLocation?.name);
-
-  const focusScan = useCallback(() => {
-    window.setTimeout(() => scanInputRef.current?.focus({ preventScroll: true }), 30);
-  }, []);
-
-  useEffect(() => {
-    if (isPosRole) {
-      const assignedLocation = locations.find((location) => location.id === assignedLocationId) ?? null;
-      if (selectedLocation?.id !== assignedLocation?.id) setSelectedLocation(assignedLocation);
-      return;
-    }
-    if (!selectedLocation && locations.length === 1) setSelectedLocation(locations[0]);
-  }, [assignedLocationId, isPosRole, locations, selectedLocation, setSelectedLocation]);
-
-  useEffect(() => {
-    setCart([]);
-    setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
-    setNotes("");
-    setScanText("");
-    setSearch("");
-    setLastScan(null);
-    setLastSale(null);
-    setReturnDialogOpen(false);
-    setCustomer(null);
-    setOrderDiscount({ type: "none", value: 0, reason: "" });
-    setOrderDiscountOpen(false);
-    setAdjustLine(null);
-    setApprovalToken(null);
-  }, [selectedCompany?.id, selectedLocation?.id]);
-
-  // Typing filters the item grid; debounce so a hardware scan does not fire a query per character.
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(scanText.trim()), 300);
-    return () => window.clearTimeout(timer);
-  }, [scanText]);
-
-  // Keep the scan field ready whenever the cashier comes back to the window.
-  useEffect(() => {
-    window.addEventListener("focus", focusScan);
-    return () => window.removeEventListener("focus", focusScan);
-  }, [focusScan]);
-
-  const itemsQuery = useQuery({
-    queryKey: ["retail-pos-items", selectedCompany?.id, selectedLocation?.id, search],
-    queryFn: () =>
-      readJson<RetailPosItem[]>(
-        `/api/pos/retail/items?locationId=${selectedLocation!.id}&search=${encodeURIComponent(search)}&limit=60`
-      ),
-    enabled: selectedCompany?.companyType === "retail" && Boolean(selectedLocation?.id),
-  });
-
-  const checkoutItems: CartRequestLine[] = useMemo(
-    () =>
-      cart.map((line) => ({
-        variantId: line.variantId,
-        quantity: line.cartQuantity,
-        priceOverride: line.priceOverride ?? null,
-        discountType: line.discountType ?? "none",
-        discountValue: line.discountValue ?? 0,
-        discountReason: line.discountReason ?? null,
-      })),
-    [cart]
-  );
-
-  const orderDiscountPayload = useMemo(
-    () => ({ type: orderDiscount.type, value: orderDiscount.value, reason: orderDiscount.reason.trim() || null }),
-    [orderDiscount]
-  );
-
-  const previewSignature = JSON.stringify({
-    locationId: selectedLocation?.id ?? null,
-    items: checkoutItems,
-    order: orderDiscountPayload,
-  });
-
-  /** Authoritative Subtotal → Discount → Tax → Total ladder and the approval policy. */
-  const previewQuery = useQuery({
-    queryKey: ["retail-cart-preview", previewSignature],
-    queryFn: () => fetchRetailCartPreview(checkoutItems, orderDiscountPayload, selectedLocation?.id),
-    enabled: selectedCompany?.companyType === "retail" && Boolean(selectedLocation?.id) && cart.length > 0,
-    staleTime: 30_000,
-  });
-  const preview: RetailCartPreview | null = previewQuery.data ?? null;
-
-  // Any change to the cart or order discount invalidates a manager approval issued for it.
-  useEffect(() => {
-    setApprovalToken(null);
-  }, [previewSignature]);
-
-  const refreshRetailPos = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-pos-sales"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-shift-summary"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-shift-ledger-balance"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-current-shift"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-pos-customer-balance"] }),
-      queryClient.invalidateQueries({ queryKey: ["retail-accounting-customer-history", selectedCompany?.id] }),
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] }),
-      queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] }),
-    ]);
-  };
-
-  const cartQuantityOf = (variantId: number, lines: CartLine[] = cart) =>
-    lines.find((line) => line.variantId === variantId)?.cartQuantity ?? 0;
-
-  /** Adds one unit, enforcing the same stock rule the server applies at checkout. */
-  const addItem = (item: RetailPosItem, quantity = 1): ScanOutcome => {
-    const nextQuantity = cartQuantityOf(item.variantId) + quantity;
-    if (nextQuantity > item.quantity && !allowNegative) {
-      return { status: "out", item, cartQuantity: nextQuantity - quantity };
-    }
-    setCart((current) => {
-      const existing = current.find((line) => line.variantId === item.variantId);
-      if (existing) {
-        return current.map((line) =>
-          line.variantId === item.variantId ? { ...line, ...item, cartQuantity: line.cartQuantity + quantity } : line
-        );
-      }
-      return [...current, { ...item, cartQuantity: quantity }];
-    });
-    return {
-      status: "added",
-      item,
-      cartQuantity: nextQuantity,
-      warning: nextQuantity > item.quantity ? `Only ${item.quantity} in stock here` : undefined,
-    };
-  };
-
-  const scanBarcode = useCallback(
-    async (rawBarcode: string) => {
-      const barcode = rawBarcode.trim();
-      if (!barcode) return;
-      if (!selectedLocation?.id) {
-        toast({ title: "Select a location first", variant: "destructive" });
-        return;
-      }
-      let outcome: ScanOutcome;
-      try {
-        const result = await lookupRetailBarcode(barcode, selectedLocation.id);
-        if (result.kind === "unknown") outcome = { status: "unknown", barcode };
-        else if (result.kind === "inactive") outcome = { status: "inactive", item: result.item };
-        else outcome = addItem(result.item);
-      } catch (error) {
-        outcome = { status: "error", barcode, message: error instanceof Error ? error.message : String(error) };
-      }
-      setLastScan(outcome);
-      scanBeep(outcome.status === "added");
-      // Clear after every scanner read so the next scan never appends to a stale code. Keep free
-      // text that is clearly a product search (letters only / words) so the grid stays filtered.
-      if (outcome.status !== "unknown" || /^\S*\d\S*$/.test(barcode)) setScanText("");
-      focusScan();
-    },
-    // addItem reads the latest cart through state; recreate when the cart or location changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedLocation?.id, cart, allowNegative, focusScan, toast]
-  );
-
-  useRetailBarcodeScanner(scanBarcode);
-
-  const saleMutation = useMutation({
-    // The approval token can be passed explicitly so the retry right after a manager
-    // approves uses the fresh token instead of the state value from this render.
-    mutationFn: async (options?: { approvalToken?: string | null }) => {
-      if (!selectedLocation?.id || !cart.length) throw new Error("Select a location and add at least one item");
-      if (orderDiscount.type !== "none" && !orderDiscount.reason.trim()) {
-        throw new Error("A reason is required for the whole-sale discount");
-      }
-      if (isPosRole && !currentShift) throw new Error("Open a cashier shift before completing a sale");
-      if (!preview) throw previewQuery.error ?? new Error();
-      const fingerprint = JSON.stringify({
-        locationId: selectedLocation.id,
-        shiftId: currentShift?.id ?? null,
-        previewSignature,
-        customerId: customer?.id ?? null,
-        notes: notes.trim(),
-        payments,
-      });
-      const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-      if (Math.abs(paymentTotal - preview.pricing.totalAmount) > 0.005) {
-        throw new Error("Payments must equal the sale total");
-      }
-      if (
-        payments.some(
-          (payment) =>
-            payment.method === "cash" &&
-            payment.tenderedAmount != null &&
-            Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount)
-        )
-      ) {
-        throw new Error("Cash tendered cannot be less than the cash payment");
-      }
-      if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {
-        saleAttemptRef.current = { fingerprint, key: makeKey("retail-sale") };
-      }
-      const response = await apiRequest("POST", "/api/pos/retail/sales", {
-        locationId: selectedLocation.id,
-        idempotencyKey: saleAttemptRef.current.key,
-        notes: notes.trim() || undefined,
-        customerId: customer?.id ?? null,
-        customerName: customer?.legalName ?? null,
-        shiftId: currentShift?.id ?? undefined,
-        payments,
-        items: checkoutItems,
-        orderDiscount: orderDiscount.type === "none" ? undefined : orderDiscountPayload,
-        approvalToken: options?.approvalToken ?? approvalToken ?? undefined,
-      });
-      return (await response.json()) as { replayed: boolean; sale: RetailSale };
-    },
-    onSuccess: async (data) => {
-      saleAttemptRef.current = null;
-      setCart([]);
-      setNotes("");
-      setLastScan(null);
-      setLastSale(data.sale);
-      setCustomer(null);
-      // A credit or split tender belongs to the completed sale only.
-      setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
-      setOrderDiscount({ type: "none", value: 0, reason: "" });
-      setOrderDiscountOpen(false);
-      setApprovalToken(null);
-      setApprovalRequest({ open: false, reasons: [], pending: false, error: null });
-      focusScan();
-      await refreshRetailPos();
-      toast(
-        data.replayed
-          ? {
-              title: "Sale already recorded",
-              description: "This checkout was already saved. Stock was not deducted twice.",
-            }
-          : { title: "Sale completed", description: "Exact variant stock was deducted." }
-      );
-      focusScan();
-    },
-    onError: (error) => {
-      const status = (error as Error & { status?: number }).status;
-      const code = (error as Error & { code?: string }).code;
-      if (status === 428 && code === "DISCOUNT_APPROVAL_REQUIRED") {
-        setApprovalRequest({ open: true, reasons: preview?.policy.reasons ?? [], pending: false, error: null });
-        toast({ title: "Manager approval required", description: error.message });
-        return;
-      }
-      toast({ title: "Sale failed", description: error.message, variant: "destructive" });
-      focusScan();
-    },
-  });
-
-  const approvalMutation = useMutation({
-    mutationFn: (credentials: { username: string; password: string }) =>
-      requestRetailDiscountApproval({
-        managerUsername: credentials.username,
-        managerPassword: credentials.password,
-        reason: orderDiscount.reason.trim() || undefined,
-        items: checkoutItems,
-        orderDiscount: orderDiscount.type === "none" ? null : orderDiscountPayload,
-      }),
-    onSuccess: (data) => {
-      if (!data.approvalToken) {
-        setApprovalRequest({ open: false, reasons: [], pending: false, error: null });
-        return;
-      }
-      setApprovalToken(data.approvalToken);
-      setApprovalRequest({ open: false, reasons: [], pending: false, error: null });
-      toast({
-        title: "Discount approved",
-        description: `Approved by ${data.managerName ?? "manager"}. Completing sale…`,
-      });
-      saleMutation.mutate({ approvalToken: data.approvalToken });
-    },
-    onError: (error) => setApprovalRequest((current) => ({ ...current, pending: false, error: error.message })),
-  });
-
-  const total = preview?.pricing.totalAmount ?? cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0);
-  const units = cart.reduce((sum, line) => sum + line.cartQuantity, 0);
-  const ladder = preview?.pricing ?? null;
-  const settings = preview?.settings ?? null;
-  const requiresApproval = Boolean(preview?.policy.requiresApproval) && !approvalToken;
-
-  // Reprice the default single tender without silently reverting a cashier's selected
-  // card/bank method to cash. A split tender is kept intact for manual rebalancing.
-  useEffect(() => {
-    const amount = Number(total.toFixed(2));
-    setPayments((current) => {
-      if (current.length !== 1) return current;
-      const payment = current[0];
-      return [
-        {
-          ...payment,
-          amount,
-          tenderedAmount: payment.method === "cash" ? Math.max(amount, Number(payment.tenderedAmount ?? 0)) : null,
-        },
-      ];
-    });
-  }, [total]);
-
-  const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-  const hasCreditTender = payments.some((payment) => payment.method === "credit");
-  const creditAmount = payments.reduce(
-    (sum, payment) => (payment.method === "credit" ? sum + Number(payment.amount || 0) : sum),
-    0
-  );
-  const paymentsValid =
-    (!hasCreditTender || Boolean(customer?.id)) &&
-    Boolean(paymentAccounts) &&
-    Math.abs(paymentTotal - total) <= 0.005 &&
-    payments.every(
-      (payment) =>
-        Number(payment.amount) > 0 &&
-        (payment.method === "credit"
-          ? Boolean(customer?.id)
-          : Boolean(payment.ledgerAccountId || payment.bankAccountId)) &&
-        (payment.method !== "cash" ||
-          payment.tenderedAmount == null ||
-          Number(payment.tenderedAmount) + 0.000001 >= Number(payment.amount))
-    );
-  const canCompleteSale = Boolean(
-    cart.length &&
-    preview &&
-    !previewQuery.isFetching &&
-    !saleMutation.isPending &&
-    paymentsValid &&
-    (!isPosRole || currentShift)
-  );
-
-  // Credit is owed by the selected customer; clearing the customer must never
-  // leave an on-account tender that the server would reject at checkout.
-  const selectCustomer = (next: RetailCustomerSummary | null) => {
-    if (!next?.id) {
-      setPayments((current) =>
-        current.map((payment) =>
-          payment.method === "credit"
-            ? ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
-            : payment
-        )
-      );
-    }
-    setCustomer(next);
-  };
+    receiptPaperWidth,
+    receiptPortal,
+    refreshRetailPos,
+    requiresApproval,
+    returnDialogOpen,
+    saleMutation,
+    scanBarcode,
+    scanInputRef,
+    scanText,
+    selectCustomer,
+    selectedCompany,
+    selectedLocation,
+    setAdjustLine,
+    setApprovalRequest,
+    setCart,
+    setCurrentShift,
+    setExchangeSale,
+    setLastSale,
+    setLastScan,
+    setNotes,
+    setOrderDiscount,
+    setOrderDiscountOpen,
+    setPayments,
+    setReceiptPaperWidth,
+    setReturnDialogOpen,
+    setScanText,
+    setSelectedLocation,
+    settings,
+    total,
+    units,
+  } = useRetailPOSState();
+  const { t } = useApplicationLanguage();
 
   if (selectedCompany?.companyType !== "retail") return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
+    <PosSaleScreen variant="retail">
       {receiptPortal}
-      {/* Retail uses the normal ERP POS arrangement; posting stays on variant-aware retail services. */}
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b py-2">
-        <h1 className="border-l-2 border-primary pl-3 text-2xl font-semibold tracking-tight">Point of Sale</h1>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setReturnDialogOpen(true)}
-          disabled={!selectedLocation?.id}
-          data-testid="retail-open-returns"
-        >
-          <RotateCcw className="mr-2 h-4 w-4" /> Return / Exchange
-        </Button>
-        <Button
-          type="button"
-          disabled={!canCompleteSale}
-          onClick={() => saleMutation.mutate()}
-          data-testid="button-save-sale"
-        >
-          {saleMutation.isPending ? "Saving…" : "Save"}
-        </Button>
-      </header>
+      {/* Retail shares the ERP POS header, fields, cart grid and buttons; posting stays on variant-aware retail services. */}
+      <PosSaleHeader
+        title="Point of Sale"
+        subtitle={t("pos.modern.createSale")}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReturnDialogOpen(true)}
+              disabled={!selectedLocation?.id}
+              data-testid="retail-open-returns"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" /> Return / Exchange
+            </Button>
+            <PosSaleSubmitButton
+              type="button"
+              disabled={!canCompleteSale}
+              onClick={() => saleMutation.mutate()}
+              data-testid="button-save-sale"
+              pending={saleMutation.isPending}
+              pendingLabel="Saving…"
+              label="Save"
+            />
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-start gap-3 border-b bg-muted/10 px-1 py-2" aria-label="Retail sale details">
-        <div className="space-y-1">
-          <label htmlFor="retail-pos-location" className="text-xs text-muted-foreground">
-            Location
-          </label>
+      <PosCheckoutPanel ariaLabel={t("pos.modern.saleSettings")}>
+        <PosCheckoutField field="location" icon={MapPin} label={t("pos.modern.location")} htmlFor="retail-pos-location">
           <Select
             disabled={isPosRole}
             value={selectedLocation ? String(selectedLocation.id) : "__none__"}
@@ -493,28 +130,22 @@ export default function RetailPOS() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="retail-pos-date" className="text-xs text-muted-foreground">
-            Date
-          </label>
+        </PosCheckoutField>
+        <PosCheckoutField field="date" icon={CalendarDays} label={t("pos.modern.date")} htmlFor="retail-pos-date">
           <input
             id="retail-pos-date"
             type="date"
-            className="block h-9 rounded-md border bg-muted/40 px-3 font-mono text-sm"
+            className="block h-9 w-full rounded-md border bg-muted/40 px-3 font-mono text-sm"
             value={new Date().toLocaleDateString("sv-SE")}
             readOnly
             aria-label="Sale date (set by server at checkout)"
             title="Retail sales use the actual checkout date; backdated posting is not enabled"
           />
-        </div>
-        <div className="min-w-[200px] space-y-1">
-          <label htmlFor="retail-pos-account" className="text-xs text-muted-foreground">
-            Payment account
-          </label>
+        </PosCheckoutField>
+        <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")} htmlFor="retail-pos-account">
           <select
             id="retail-pos-account"
-            className="block h-9 w-full min-w-[200px] max-w-[340px] rounded-md border bg-background px-3 text-sm"
+            className="block h-9 w-full rounded-md border bg-background px-3 text-sm"
             value={paymentAccountValue(payments[0] ?? { method: "cash", amount: 0 })}
             onChange={(event) => {
               if (!paymentAccounts) return;
@@ -537,7 +168,7 @@ export default function RetailPOS() {
               customerName={customer?.legalName}
             />
           </select>
-        </div>
+        </PosCheckoutField>
         <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
           <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />
         </div>
@@ -549,7 +180,7 @@ export default function RetailPOS() {
             {customer ? `On account: ${money(creditAmount)}` : "Choose a customer to post credit"}
           </span>
         )}
-      </div>
+      </PosCheckoutPanel>
 
       <RetailShiftPanel
         locationId={selectedLocation?.id ?? null}
@@ -557,206 +188,44 @@ export default function RetailPOS() {
         onShiftChange={setCurrentShift}
       />
 
-      <PosWorkspaceColumns layout="retail">
-        <div className="flex min-w-0 flex-col gap-3">
-          <RetailErpPosSaleGrid
-            cart={cart}
-            pricingLines={ladder?.lines ?? []}
-            units={units}
-            total={total}
-            onDecrease={(variantId) =>
-              setCart((current) =>
-                current.map((line) =>
-                  line.variantId === variantId ? { ...line, cartQuantity: Math.max(1, line.cartQuantity - 1) } : line
-                )
-              )
-            }
-            onIncrease={(line) => {
-              const outcome = addItem(line);
-              setLastScan(outcome);
-              if (outcome.status !== "added") scanBeep(false);
-            }}
-            onAdjust={setAdjustLine}
-            onRemove={(variantId) => setCart((current) => current.filter((line) => line.variantId !== variantId))}
-          />
-          <Textarea
-            placeholder="Notes (optional)"
-            value={notes}
-            maxLength={2000}
-            onChange={(event) => setNotes(event.target.value)}
-            className="min-h-12 resize-y text-sm"
-            aria-label="Sale notes"
-            data-testid="retail-pos-notes"
-          />
-          <div className="rounded-lg border p-3" aria-label="Retail checkout">
-            <div className="space-y-2 border-t pt-3">
-              <div className="rounded-lg border p-2">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between text-sm"
-                  onClick={() => setOrderDiscountOpen((value) => !value)}
-                  data-testid="retail-order-discount-toggle"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Percent className="h-3.5 w-3.5" /> Whole-sale discount
-                  </span>
-                  <span className="text-muted-foreground">
-                    {orderDiscount.type === "none"
-                      ? "None"
-                      : orderDiscount.type === "percent"
-                        ? `${orderDiscount.value}%`
-                        : money(orderDiscount.value)}
-                  </span>
-                </button>
-                {orderDiscountOpen && (
-                  <div className="mt-2 space-y-2">
-                    <div className="flex gap-2">
-                      <Select
-                        value={orderDiscount.type}
-                        onValueChange={(v) =>
-                          setOrderDiscount((current) => ({
-                            ...current,
-                            type: v as "none" | "percent" | "fixed",
-                          }))
-                        }
-                      >
-                        <SelectTrigger
-                          className="h-9 flex-1 text-sm"
-                          data-testid="retail-order-discount-type"
-                          aria-label="Order discount type"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No discount</SelectItem>
-                          <SelectItem value="percent">Percent</SelectItem>
-                          <SelectItem value="fixed">Fixed amount</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {orderDiscount.type !== "none" && (
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="h-9 w-28"
-                          value={Number.isFinite(orderDiscount.value) && orderDiscount.value ? orderDiscount.value : ""}
-                          onChange={(event) =>
-                            setOrderDiscount((current) => ({ ...current, value: Number(event.target.value) }))
-                          }
-                          data-testid="retail-order-discount-value"
-                        />
-                      )}
-                    </div>
-                    {orderDiscount.type !== "none" && (
-                      <Input
-                        className="h-9"
-                        placeholder="Reason (required)"
-                        value={orderDiscount.reason}
-                        onChange={(event) =>
-                          setOrderDiscount((current) => ({ ...current, reason: event.target.value }))
-                        }
-                        data-testid="retail-order-discount-reason"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span data-testid="cart-list-subtotal">
-                    {money(ladder?.listSubtotal ?? cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0))}
-                  </span>
-                </div>
-                {Boolean(ladder && ladder.discountTotal > 0) && (
-                  <>
-                    <div className="flex justify-between text-destructive" data-testid="cart-discount-total">
-                      <span>Discount</span>
-                      <span>-{money(ladder!.discountTotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Net</span>
-                      <span>{money(ladder!.subtotal)}</span>
-                    </div>
-                  </>
-                )}
-                {settings?.taxEnabled && (
-                  <div className="flex justify-between" data-testid="cart-tax">
-                    <span className="text-muted-foreground">
-                      {settings.taxLabel}
-                      {settings.taxRatePercent
-                        ? ` (${settings.taxRatePercent}%${settings.taxInclusive ? ", incl." : ""})`
-                        : ""}
-                    </span>
-                    <span>{money(ladder?.taxAmount ?? 0)}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between border-t pt-2 text-lg font-semibold">
-                <span>Total</span>
-                <span data-testid="cart-total">{money(total)}</span>
-              </div>
-              {requiresApproval && (
-                <div
-                  className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-                  data-testid="retail-approval-hint"
-                >
-                  Manager approval will be requested when the sale is completed.
-                </div>
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <RetailPaymentPanel
-                total={total}
-                value={payments}
-                onChange={setPayments}
-                canUseCredit={Boolean(customer?.id)}
-                accounts={paymentAccounts}
-                customerName={customer?.legalName}
-              />
-            )}
-            {isPosRole && !currentShift && cart.length > 0 && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
-                Open a cashier shift before completing this sale.
-              </div>
-            )}
-            <Button
-              type="button"
-              size="lg"
-              className="mt-3 h-11 w-full"
-              disabled={!canCompleteSale}
-              onClick={() => saleMutation.mutate()}
-            >
-              {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
-            </Button>
-            {lastSale && (
-              <RetailLastSaleSummary
-                sale={lastSale}
-                onPrint={() => printReceipt(lastSale)}
-                paperWidth={receiptPaperWidth}
-                onPaperWidthChange={setReceiptPaperWidth}
-              />
-            )}
-          </div>
-        </div>
-        <RetailErpPosItemPicker
-          items={itemsQuery.data ?? []}
-          loading={itemsQuery.isLoading}
-          hasLocation={Boolean(selectedLocation?.id)}
-          searchText={scanText}
-          onSearchChange={setScanText}
-          onBarcodeSubmit={(barcode) => void scanBarcode(barcode)}
-          scanInputRef={scanInputRef}
-          lastScan={lastScan}
-          onPick={(item) => {
-            const outcome = addItem(item);
-            setLastScan(outcome);
-            if (outcome.status !== "added") scanBeep(false);
-            focusScan();
-          }}
-        />
-      </PosWorkspaceColumns>
+      <RetailPOSPosWorkspaceColumnsSection
+        addItem={addItem}
+        canCompleteSale={canCompleteSale}
+        cart={cart}
+        currentShift={currentShift}
+        customer={customer}
+        focusScan={focusScan}
+        isPosRole={isPosRole}
+        itemsQuery={itemsQuery}
+        ladder={ladder}
+        lastSale={lastSale}
+        lastScan={lastScan}
+        notes={notes}
+        orderDiscount={orderDiscount}
+        orderDiscountOpen={orderDiscountOpen}
+        paymentAccounts={paymentAccounts}
+        payments={payments}
+        printReceipt={printReceipt}
+        receiptPaperWidth={receiptPaperWidth}
+        requiresApproval={requiresApproval}
+        saleMutation={saleMutation}
+        scanBarcode={scanBarcode}
+        scanInputRef={scanInputRef}
+        scanText={scanText}
+        selectedLocation={selectedLocation}
+        setAdjustLine={setAdjustLine}
+        setCart={setCart}
+        setLastScan={setLastScan}
+        setNotes={setNotes}
+        setOrderDiscount={setOrderDiscount}
+        setOrderDiscountOpen={setOrderDiscountOpen}
+        setPayments={setPayments}
+        setReceiptPaperWidth={setReceiptPaperWidth}
+        setScanText={setScanText}
+        settings={settings}
+        total={total}
+        units={units}
+      />
 
       {cart.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur-sm xl:hidden">
@@ -772,9 +241,15 @@ export default function RetailPOS() {
               </div>
               <div className="text-lg font-semibold">{money(total)}</div>
             </button>
-            <Button className="h-12 px-6 text-base" disabled={!canCompleteSale} onClick={() => saleMutation.mutate()}>
-              {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
-            </Button>
+            <PosSaleSubmitButton
+              className="h-12 px-6 text-base"
+              disabled={!canCompleteSale}
+              onClick={() => saleMutation.mutate()}
+              pending={saleMutation.isPending}
+              pendingLabel="Completing sale…"
+              label="Complete Sale"
+              showIcon={false}
+            />
           </div>
         </div>
       )}
@@ -836,6 +311,6 @@ export default function RetailPOS() {
           focusScan();
         }}
       />
-    </div>
+    </PosSaleScreen>
   );
 }

@@ -90,14 +90,9 @@
         "server/routes/factory/factoryStockAllocationV3Routes.ts",
         "server/routes/factory/factoryStockAllocationV5Routes.ts",
         "server/routes/factory/factoryStockAllocationV5PaginationRoutes.ts",
-        "client/src/pages/factory/FactoryStockAllocationV2.tsx",
-        "client/src/pages/factory/FactoryStockAllocationV3.tsx",
         "client/src/pages/factory/FactoryStockAllocationV5.tsx",
-        "client/src/pages/factory/factorystockallocationv3/types.ts",
-        "client/src/pages/factory/factorystockallocationv3/components/ScanningPanel.tsx",
         "client/src/lib/v5AllocationPaginationClient.ts",
         "server/routes/factory/factoryDispatchBatchRoutes.ts",
-        "client/src/pages/factory/FactoryDispatchBatches.tsx",
         "client/src/pages/factory/FactoryDispatchBatchDetail.tsx",
         "client/src/pages/factory/FactoryDispatchBatchScan.tsx"
       ]

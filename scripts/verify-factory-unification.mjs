@@ -5,10 +5,15 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
-const source = (path) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path) => readModuleFamily(resolve(process.cwd(), path));
 const fixture = JSON.parse(source("docs/factory-unification/phase-1-source-fixture.json"));
-const registry = source("shared/factoryAccessRegistry.ts");
+// Phase 3 split the page table into two modules; read them in registry order
+// (FACTORY_PRIMARY_PAGES then FACTORY_FINANCE_OTHER_PAGES).
+const registry = ["shared/factoryAccessRegistry.ts", "shared/factoryAccessPagesPrimary.ts", "shared/factoryAccessPagesFinanceOther.ts"]
+  .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
+  .join("\n");
 const router = source("client/src/components/FactoryRoutes.tsx");
 const keys = [...registry.matchAll(/^\s*key:\s*"(factory\/[^"]+)"/gm)];
 const pages = keys.map((item, index) => {

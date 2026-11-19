@@ -3,7 +3,6 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageCircle, Trash2, Check, CheckCircle2, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -16,10 +15,11 @@ import {
   LIST_KEY,
   STATUS_ORDER,
   fmtDate,
-  statusColor,
-  statusLabel,
+  ShippingStatusBadge,
   stickyCellBase,
   stickyHeadBase,
+  shippingCostUsd,
+  localIsoDate,
 } from "./factoryshippingcontainers/utils";
 import { DocIndicator } from "./factoryshippingcontainers/components/DocIndicator";
 import { EditableCellInput } from "./factoryshippingcontainers/components/EditableCellInput";
@@ -31,6 +31,7 @@ import { ScheduledContainersTable } from "./factoryshippingcontainers/components
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
 import { ShippingToolbar } from "./factoryshippingcontainers/components/ShippingToolbar";
+import { ShippingListExport } from "./factoryshippingcontainers/components/ShippingListExport";
 import { DoneContainersSection } from "./factoryshippingcontainers/components/DoneContainersSection";
 import { ShippingConfirmDialogs } from "./factoryshippingcontainers/components/ShippingConfirmDialogs";
 import {
@@ -44,7 +45,6 @@ import {
 } from "./factoryshippingcontainers/components/ShippingStatusChips";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
-import { formatUsd } from "@/lib/moneyDisplay";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
@@ -245,14 +245,7 @@ export default function FactoryShippingContainers() {
   }, [activeRows, trackingMap]);
 
   // ── Shipping filters and local pagination (backing rows are unchanged). ──
-  const today = (() => {
-    const date = new Date();
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-    ].join("-");
-  })();
+  const today = localIsoDate();
 
   const destinations = useMemo(
     () => [...new Set(allDisplayRows.map((r) => r.destination?.trim()).filter((v): v is string => Boolean(v)))].sort(),
@@ -346,7 +339,6 @@ export default function FactoryShippingContainers() {
           allowNewOrder={Boolean(me?.role && !isExistingRecordReadOnlyRole(me.role))}
           showOrderValue={colVis.containerCost}
         />
-        {/* ── Compact search + controls ── */}
         <ShippingToolbar
           search={search}
           onSearch={setSearch}
@@ -368,9 +360,9 @@ export default function FactoryShippingContainers() {
           toggleCol={toggleCol}
           showAllCols={showAllCols}
           hiddenCount={hiddenCount}
+          exportMenu={<ShippingListExport rows={filtered} colVis={colVis} period={{ from: dateFrom, to: dateTo }} />}
         />
 
-        {/* ── Filter Panel ── */}
         {showFilters && (
           <FilterPanel
             filterDocs={filterDocs}
@@ -505,11 +497,7 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge
-                            className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}
-                          >
-                            {statusLabel(r.status)}
-                          </Badge>
+                          <ShippingStatusBadge status={r.status} />
                         </button>
                       </TableCell>
                     )}
@@ -603,7 +591,7 @@ export default function FactoryShippingContainers() {
                     {colVis.containerCost && (
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {r.grandTotal ? (
-                          <span className="shipping-cost">{formatUsd(Number(r.grandTotal), 0, 3)}</span>
+                          <span className="shipping-cost">{shippingCostUsd(r.grandTotal)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

@@ -94,8 +94,8 @@ describe("Mobile responsiveness Phase 8 POS", () => {
       'data-pos-workspace="true"',
       "max-sm:[&_button]:min-h-11",
       "max-sm:[&_input]:text-base",
-      "pt-[max(0.5rem,env(safe-area-inset-top))]",
-      "pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+      "<AppTopBar",
+      "<PosSidebar",
     ]) {
       expect(shell).toContain(token);
     }
@@ -203,7 +203,6 @@ describe("Mobile responsiveness Phase 8 POS", () => {
     expect(orders).toContain("html.dark [data-pos-transfer-orders]");
     expect(orders).toContain('html[data-christmas-mode="on"][data-christmas-garlands="on"]');
     expect(shell).toContain("hasAdminSearch &&");
-    expect(shell).toContain("pos-shell-wordmark");
   });
 
   it("keeps the mobile layout free from POS mutations", () => {

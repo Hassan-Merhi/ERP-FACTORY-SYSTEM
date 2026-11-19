@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -10,12 +9,13 @@ import {
   tableRowLevelSecurity,
   triggerDefinition,
 } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 // The approval foundation used to be applied at boot (startup-schema/039 and 040
 // via ensureStockTransferOrderWhatsAppApprovalSchema) and mirrored in an SQL file.
 // Migrations now define it; the archived SQL is kept as history.
 const root = process.cwd();
-const file = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
+const file = (name: string) => readModuleFamily(path.join(root, name));
 const archivedSql = file("migrations/archive/legacy/20261111_001_stock_transfer_order_whatsapp_approval_phase1.sql");
 
 describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {

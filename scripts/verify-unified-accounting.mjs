@@ -11,12 +11,13 @@ import assert from "node:assert/strict";
 import {readFileSync,existsSync} from "node:fs";
 import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const content=new Map();
 const read=file=>{
  const path=resolve(root,file);
  assert.ok(existsSync(path),`Missing Phase 15 source: ${file}`);
- if(!content.has(file))content.set(file,readFileSync(path,"utf8"));
+ if(!content.has(file))content.set(file,readModuleFamily(path));
  return content.get(file);
 };
 function has(file,fragments){

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { formatCount } from "@/lib/formatNumber";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Shuffle } from "lucide-react";
 import type { ContainerPlannerReconciliation as Reconciliation } from "@shared/containerPlanner";
@@ -25,10 +26,6 @@ interface ReconcileResponse extends ReconciliationResponse {
 interface Props {
   planId: number;
   onPlanChanged: () => void;
-}
-
-function formatQty(value: number): string {
-  return Math.round(Number(value || 0)).toLocaleString();
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -166,37 +163,41 @@ export function ContainerPlannerReconciliation({ planId, onPlanChanged }: Props)
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Current available</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.currentPlannableTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatCount(reconciliation.currentPlannableTotal)}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Plan total</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.plannedTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{formatCount(reconciliation.plannedTotal)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">New / unplanned</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.unplannedTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{formatCount(reconciliation.unplannedTotal)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Over-planned</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.overplannedTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{formatCount(reconciliation.overplannedTotal)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Locked conflicts</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.lockedConflictTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{formatCount(reconciliation.lockedConflictTotal)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Customer committed now</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatQty(reconciliation.currentCommittedTotal)}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatCount(reconciliation.currentCommittedTotal)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -214,7 +215,7 @@ export function ContainerPlannerReconciliation({ planId, onPlanChanged }: Props)
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
             <span className="font-medium text-destructive">
-              {formatQty(reconciliation.lockedConflictTotal)} locked bales conflict with current stock.
+              {formatCount(reconciliation.lockedConflictTotal)} locked bales conflict with current stock.
             </span>{" "}
             <span className="text-muted-foreground">
               Unlock the affected container or containers first. Phase 3 will never silently reduce a locked container.
@@ -258,20 +259,20 @@ export function ContainerPlannerReconciliation({ planId, onPlanChanged }: Props)
                     <div className="font-mono text-[11px] text-muted-foreground">{product.articleCode}</div>
                   </td>
                   <td className="border-b border-r px-3 py-2 text-right font-mono tabular-nums">
-                    {formatQty(product.currentPlannableQty)}
+                    {formatCount(product.currentPlannableQty)}
                   </td>
                   <td className="border-b border-r px-3 py-2 text-right font-mono tabular-nums">
-                    {formatQty(product.plannedQty)}
+                    {formatCount(product.plannedQty)}
                   </td>
                   <td className="border-b border-r px-3 py-2 text-right font-mono tabular-nums">
                     {product.deltaQty > 0 ? "+" : ""}
-                    {formatQty(product.deltaQty)}
+                    {formatCount(product.deltaQty)}
                   </td>
                   <td className="border-b border-r px-3 py-2 text-right font-mono tabular-nums">
-                    {formatQty(product.lockedQty)}
+                    {formatCount(product.lockedQty)}
                   </td>
                   <td className="border-b px-3 py-2 text-right font-mono tabular-nums">
-                    {formatQty(product.lockedConflictQty)}
+                    {formatCount(product.lockedConflictQty)}
                   </td>
                 </tr>
               ))}

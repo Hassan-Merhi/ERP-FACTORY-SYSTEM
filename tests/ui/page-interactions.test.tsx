@@ -90,7 +90,6 @@ const PAGES: Array<{
   { name: "FactoryBaleRelabeling", load: () => import("@/pages/factory/FactoryBaleRelabeling"), factory: true },
   { name: "FactoryContainerCreate", load: () => import("@/pages/factory/FactoryContainerCreate"), factory: true },
   { name: "FactoryContainers", load: () => import("@/pages/factory/FactoryContainers"), factory: true },
-  { name: "FactoryDispatchBatches", load: () => import("@/pages/factory/FactoryDispatchBatches"), factory: true },
   {
     name: "FactoryEmployeeAdvancesTab",
     load: () => import("@/pages/factory/FactoryEmployeeAdvancesTab"),
@@ -107,7 +106,6 @@ const PAGES: Array<{
   { name: "FactoryPendingInvoices", load: () => import("@/pages/factory/FactoryPendingInvoices"), factory: true },
   { name: "FactoryPendingLoadings", load: () => import("@/pages/factory/FactoryPendingLoadings"), factory: true },
   { name: "FactoryPriceList", load: () => import("@/pages/factory/FactoryPriceList"), factory: true },
-  { name: "FactoryStockAllocationV3", load: () => import("@/pages/factory/FactoryStockAllocationV3"), factory: true },
   { name: "FactorySupplierReport", load: () => import("@/pages/factory/FactorySupplierReport"), factory: true },
   { name: "FactorySupplierStatement", load: () => import("@/pages/factory/FactorySupplierStatement"), factory: true },
   { name: "FactoryTransporters", load: () => import("@/pages/factory/FactoryTransporters"), factory: true },
@@ -307,7 +305,14 @@ describe("wave 4 page interaction sweep", () => {
         fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
       }
 
-      expect(pressed).toBeGreaterThan(0);
+      if (name === "POSCustomers") {
+        // This generic fixture has no authorized user. Customer creation must
+        // stay hidden, while the always-visible search control still renders.
+        expect(document.querySelector('[data-testid="input-search-customers"]')).not.toBeNull();
+        expect(document.querySelector('[data-testid="button-create-customer"]')).toBeNull();
+      } else {
+        expect(pressed).toBeGreaterThan(0);
+      }
       expect(uncaught).toEqual([]);
       view.unmount();
     });

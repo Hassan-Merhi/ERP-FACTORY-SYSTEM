@@ -2,7 +2,6 @@
  * Phase 4 regression contract. Authored for later developer-run checks.
  * This task intentionally DID NOT execute tests or CI.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MoneyDecimal } from "../server/lib/money";
@@ -10,9 +9,10 @@ import {
   buildTripChargePreview,
   type TripChargeRow,
 } from "../server/routes/factory/customer-orders/loadingDispatchFinancialChargeModel";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const file = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
+const file = (p: string) => readModuleFamily(path.join(root, p));
 const posting = file("server/services/factory/dispatchTripFinancialPosting.ts");
 const routes = file("server/routes/factory/customer-orders/loadingDispatchFinancialPostingRoutes.ts");
 const legacyFinalize = file("server/routes/factory/customer-orders/finalize-loading/finalize.ts");

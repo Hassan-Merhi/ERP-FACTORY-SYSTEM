@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastHadiTransferRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastHadiTransfer.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastHadiTransferRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const serviceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastHadiTransfer.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 7 HADI transfer route surface", () => {

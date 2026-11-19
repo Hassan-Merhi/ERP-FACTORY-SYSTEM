@@ -204,13 +204,6 @@ const PAGES: PageCase[] = [
     factory: true,
   },
   {
-    name: "FactoryDispatchBatches",
-    load: () => import("@/pages/factory/FactoryDispatchBatches"),
-    landmark: "button-tab-list",
-    factory: true,
-    showsRows: true,
-  },
-  {
     name: "FactoryEmployeeAdvancesTab",
     load: () => import("@/pages/factory/FactoryEmployeeAdvancesTab"),
     landmark: "select-emp-filter",
@@ -259,12 +252,6 @@ const PAGES: PageCase[] = [
     landmark: "input-price-upload-file",
     factory: true,
     showsRows: true,
-  },
-  {
-    name: "FactoryStockAllocationV3",
-    load: () => import("@/pages/factory/FactoryStockAllocationV3"),
-    landmark: "button-v3-tab-overview",
-    factory: true,
   },
   {
     name: "FactorySupplierReport",
@@ -414,7 +401,7 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/pos/POSContainerTracking"),
     landmark: "pos-container-tracking-page",
   },
-  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "button-create-customer" },
+  { name: "POSCustomers", load: () => import("@/pages/pos/POSCustomers"), landmark: "input-search-customers" },
   { name: "PosTransferOrders", load: () => import("@/pages/pos/PosTransferOrders"), landmark: "input-date-filter" },
   {
     name: "AgentDutyWhatsAppSection",
@@ -471,24 +458,8 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/settings/datatoolstab/components/MergeStockItemsCard"),
     landmark: "merge-keep-item",
   },
-  {
-    name: "SpOpeningStock",
-    load: () => import("@/pages/sp/SpOpeningStock"),
-    landmark: "input-sp-opn-article",
-    showsRows: true,
-  },
   { name: "SpReports", load: () => import("@/pages/sp/SpReports"), landmark: "tabs-sp-reports" },
   { name: "SpSetupPanel", load: () => import("@/pages/sp/SpSetupPanel"), landmark: "button-sp-setup" },
-  {
-    name: "FreshStartHadiPaymentPanel",
-    load: () => import("@/pages/sp/golden-coast/FreshStartHadiPaymentPanel"),
-    landmark: "input-gc-fs-hadi-amount",
-  },
-  {
-    name: "HadiProceedsRemittancePanel",
-    load: () => import("@/pages/sp/golden-coast/HadiProceedsRemittancePanel"),
-    landmark: "input-gc-p16-remit-amount",
-  },
   {
     name: "StockAdjustmentForm",
     load: () => import("@/pages/vouchers/StockAdjustmentForm"),

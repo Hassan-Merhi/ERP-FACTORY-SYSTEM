@@ -3,9 +3,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
-const read = (relativePath) => fs.readFile(path.join(ROOT, relativePath), "utf8");
+const read = async (relativePath) => readModuleFamily(path.join(ROOT, relativePath));
 
 const [main, client, server, plugin, source] = await Promise.all([
   read("client/src/main.tsx"),

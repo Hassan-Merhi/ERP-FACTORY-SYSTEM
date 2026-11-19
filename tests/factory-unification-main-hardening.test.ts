@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Factory Phase 2 follow-up isolation on main", () => {
   const scopedPages: Record<string, string[]> = {
@@ -24,8 +24,6 @@ describe("Factory Phase 2 follow-up isolation on main", () => {
       "/api/factory/bale-products",
       "/api/factory/categories",
     ],
-    "client/src/pages/factory/FactoryStockAllocationV2.tsx": ["/api/factory/v2/stock-allocation"],
-    "client/src/pages/factory/FactoryStockAllocationV3.tsx": ["/api/factory/v3/loads", "/api/factory/v3/proformas"],
     "client/src/pages/factory/factorysettings/useFactorySettingsModel.ts": [
       "/api/factory/settings?scope=attendance",
       "/api/factory/weekly-report-wa-settings",

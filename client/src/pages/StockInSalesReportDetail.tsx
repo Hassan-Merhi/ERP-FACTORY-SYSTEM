@@ -14,53 +14,8 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatNumber";
-
-interface Metrics {
-  openingStockQty: number;
-  openingStockValue: number;
-  stockInQty: number;
-  stockInValue: number;
-  stockInAvgRate: number;
-  stockAdjustmentQty: number;
-  stockAdjustmentValue: number;
-  totalAvailableQty: number;
-  stockOutQty: number;
-  stockOutValue: number;
-  closingStockQty: number;
-  closingStockValue: number;
-  totalSales: number;
-  costOfSales: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-}
-
-interface StockInRow {
-  id: number;
-  activityDate: string;
-  containerNumber: string;
-  locationName: string;
-  stockItemId?: number;
-  stockItemName: string;
-  quantity: number;
-  avgRate: number;
-  totalValue: number;
-}
-
-interface StockOutRow {
-  id: number;
-  sourceType: "Sale" | "Credit Note" | "Debit Note";
-  activityDate: string;
-  isCreditSale: boolean | null;
-  locationName: string;
-  stockItemId?: number;
-  stockItemName: string;
-  quantity: number;
-  sellingRate?: number;
-  totalSales: number;
-  totalCost: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-}
+import { useLocation } from "wouter";
+import type { Metrics, StockInRow, StockOutRow } from "./StockInSalesReportDetailTypes";
 
 interface StockAdjustmentRow {
   id: number;
@@ -253,6 +208,7 @@ function profitClassName(value: number): string {
 }
 
 export default function StockInSalesReportDetail() {
+  const [, navigate] = useLocation();
   const { selectedCompany } = useCompany();
   const { formatAmount, selectedCurrency, convertToDisplay, displayCurrency } = useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
@@ -496,7 +452,7 @@ export default function StockInSalesReportDetail() {
       <div className="container mx-auto p-0 sm:p-6">
         <PageHeader title="Stock Flow Details" />
         <p className="mt-3 text-sm text-muted-foreground">A valid report period is required.</p>
-        <Button className="mt-4" variant="outline" onClick={() => (window.location.href = "/stock-in-sales-report")}>
+        <Button className="mt-4" variant="outline" onClick={() => navigate("/stock-in-sales-report")}>
           Back to report
         </Button>
       </div>

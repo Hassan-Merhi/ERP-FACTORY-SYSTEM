@@ -2,9 +2,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
-const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
+const read = (file) => readModuleFamily(path.join(ROOT, file));
 const failures = [];
 
 const lazyPages = await read("client/src/lazyPages.ts");
@@ -115,7 +116,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/Daybook.tsx",
     token: "useDaybookFilterState",
-    controls: "client/src/pages/daybook/DaybookFilters.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/transactionjournal/useTransactionJournalModel.ts",
@@ -125,7 +127,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/factory/daybook/useFactoryDaybookModel.ts",
     token: "loadFactoryDaybookState",
-    controls: "client/src/pages/factory/daybook/FactoryDaybookFilters.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/stockitems/useStockItems.ts",
@@ -150,7 +153,8 @@ const protectedFilterModules = [
   {
     file: "client/src/pages/pos/POSDaybook.tsx",
     token: "usePaginatedFilterState",
-    controls: "client/src/pages/pos/POSDaybook.tsx",
+    // The reset-all control lives in the shared Daybook filter bar.
+    controls: "client/src/components/daybook/DaybookFilterBar.tsx",
   },
   {
     file: "client/src/pages/pos/POSCustomers.tsx",

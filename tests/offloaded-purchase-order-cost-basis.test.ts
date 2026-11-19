@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -59,7 +59,7 @@ describe("offloaded purchase order cost-basis integrity", () => {
   });
 
   it("protects both item-edit and charge-only routes inside locked transactions", () => {
-    const source = (file: string) => readFileSync(path.resolve(process.cwd(), file), "utf8");
+    const source = (file: string) => readModuleFamily(path.resolve(process.cwd(), file));
     const itemRoute = source("server/routes/containers/purchaseOrderItemsUpdate.ts");
     const chargeRoute = source("server/routes/containers/containerFreightWriteRoutes.ts");
     expect(itemRoute).toContain("assertOffloadedPurchaseOrderCostBasisUnchanged(currentLineItems, valuedItems)");

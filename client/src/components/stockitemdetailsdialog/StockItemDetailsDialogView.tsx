@@ -8,76 +8,78 @@ import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatNumber } from "@/lib/formatNumber";
-import { Edit, ExternalLink, Package, Plus, Save, Trash2, X } from "lucide-react";
+import { Edit, ExternalLink, Package, Plus, Trash2 } from "lucide-react";
+import {
+  useStockItemDetailsDialogViewState,
+  type StockItemDetailsDialogModel,
+} from "./useStockItemDetailsDialogViewState";
+import { StockItemDetailsDialogViewTabsContentSection } from "./StockItemDetailsDialogViewTabsContentSection";
+import { StockItemDetailsDialogViewTabsContentSection2 } from "./StockItemDetailsDialogViewTabsContentSection2";
 
-import type { useStockItemDetailsDialog } from "./useStockItemDetailsDialog";
-
-type StockItemDetailsDialogModel = ReturnType<typeof useStockItemDetailsDialog>;
-
-export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetailsDialogModel }) {
+export function StockItemDetailsDialogView(props: { dialog: StockItemDetailsDialogModel }) {
   const {
-    open,
-    onOpenChange,
-    stockItemName,
-    toast,
-    navigate,
-    isEditingDetails,
-    setIsEditingDetails,
-    editedCode,
-    setEditedCode,
-    editedName,
-    setEditedName,
-    editedUom,
-    setEditedUom,
-    editedStockGroupId,
-    setEditedStockGroupId,
-    editedCategoryId,
-    setEditedCategoryId,
-    editingTransaction,
-    editedStockItemId,
-    setEditedStockItemId,
-    editedQuantity,
-    setEditedQuantity,
-    editedRate,
-    setEditedRate,
-    newAliasCode,
-    setNewAliasCode,
-    newAliasDescription,
-    setNewAliasDescription,
-    newLocationId,
-    setNewLocationId,
-    newLocationPrice,
-    setNewLocationPrice,
-    editingLocationPriceId,
-    setEditingLocationPriceId,
-    stockItem,
-    loadingItem,
-    stockGroups,
-    stockCategories,
     allStockItems,
-    transactions,
-    loadingTransactions,
     codeAliases,
-    loadingAliases,
-    locations,
-    locationPrices,
-    loadingLocationPrices,
-    updateItemMutation,
-    updateTransactionMutation,
     createAliasMutation,
     deleteAliasMutation,
-    upsertLocationPriceMutation,
     deleteLocationPriceMutation,
-    handleEditDetails,
-    handleSaveDetails,
-    handleEditTransaction,
-    handleSaveTransaction,
-    handleCancelTransactionEdit,
+    editedCategoryId,
+    editedCode,
+    editedName,
+    editedQuantity,
+    editedRate,
+    editedStockGroupId,
+    editedStockItemId,
+    editedUom,
+    editingLocationPriceId,
+    editingTransaction,
     handleAddAlias,
-    pendingDelete,
-    setPendingDelete,
+    handleCancelTransactionEdit,
     handleDeleteAlias,
-  } = dialog;
+    handleEditDetails,
+    handleEditTransaction,
+    handleSaveDetails,
+    handleSaveTransaction,
+    isEditingDetails,
+    loadingAliases,
+    loadingItem,
+    loadingLocationPrices,
+    loadingTransactions,
+    locationPrices,
+    locations,
+    navigate,
+    newAliasCode,
+    newAliasDescription,
+    newLocationId,
+    newLocationPrice,
+    onOpenChange,
+    open,
+    pendingDelete,
+    setEditedCategoryId,
+    setEditedCode,
+    setEditedName,
+    setEditedQuantity,
+    setEditedRate,
+    setEditedStockGroupId,
+    setEditedStockItemId,
+    setEditedUom,
+    setEditingLocationPriceId,
+    setIsEditingDetails,
+    setNewAliasCode,
+    setNewAliasDescription,
+    setNewLocationId,
+    setNewLocationPrice,
+    setPendingDelete,
+    stockCategories,
+    stockGroups,
+    stockItem,
+    stockItemName,
+    toast,
+    transactions,
+    updateItemMutation,
+    updateTransactionMutation,
+    upsertLocationPriceMutation,
+  } = useStockItemDetailsDialogViewState(props);
 
   return (
     <>
@@ -108,302 +110,42 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
               </TabsList>
             </div>
 
-            <TabsContent value="details" className="space-y-4 mt-4">
-              <div className="border-b pb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Item Details</h3>
-                  {!isEditingDetails ? (
-                    <Button onClick={handleEditDetails} variant="outline" size="sm" data-testid="button-edit-details">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleSaveDetails}
-                        size="sm"
-                        disabled={updateItemMutation.isPending}
-                        data-testid="button-save-details"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Save
-                      </Button>
-                      <Button
-                        onClick={() => setIsEditingDetails(false)}
-                        variant="outline"
-                        size="sm"
-                        disabled={updateItemMutation.isPending}
-                        data-testid="button-cancel-details"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
+            <StockItemDetailsDialogViewTabsContentSection2
+              editedCategoryId={editedCategoryId}
+              editedCode={editedCode}
+              editedName={editedName}
+              editedStockGroupId={editedStockGroupId}
+              editedUom={editedUom}
+              handleEditDetails={handleEditDetails}
+              handleSaveDetails={handleSaveDetails}
+              isEditingDetails={isEditingDetails}
+              loadingItem={loadingItem}
+              setEditedCategoryId={setEditedCategoryId}
+              setEditedCode={setEditedCode}
+              setEditedName={setEditedName}
+              setEditedStockGroupId={setEditedStockGroupId}
+              setEditedUom={setEditedUom}
+              setIsEditingDetails={setIsEditingDetails}
+              stockCategories={stockCategories}
+              stockGroups={stockGroups}
+              stockItem={stockItem}
+              updateItemMutation={updateItemMutation}
+            />
 
-                {loadingItem ? (
-                  <LoadingState className="py-8" />
-                ) : stockItem ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="code">Code</Label>
-                      {isEditingDetails ? (
-                        <Input
-                          id="code"
-                          value={editedCode}
-                          onChange={(e) => setEditedCode(e.target.value)}
-                          data-testid="input-code"
-                        />
-                      ) : (
-                        <p className="text-sm font-mono p-2 bg-muted rounded-sm" data-testid="text-code">
-                          {stockItem.code}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Name</Label>
-                      {isEditingDetails ? (
-                        <Input
-                          id="name"
-                          value={editedName}
-                          onChange={(e) => setEditedName(e.target.value)}
-                          data-testid="input-name"
-                        />
-                      ) : (
-                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-name">
-                          {stockItem.name}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="uom">Unit of Measure</Label>
-                      {isEditingDetails ? (
-                        <Input
-                          id="uom"
-                          value={editedUom}
-                          onChange={(e) => setEditedUom(e.target.value)}
-                          data-testid="input-uom"
-                        />
-                      ) : (
-                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-uom">
-                          {stockItem.uom}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="stockGroup">Stock Group</Label>
-                      {isEditingDetails ? (
-                        <Select
-                          value={editedStockGroupId?.toString() || ""}
-                          onValueChange={(value) => setEditedStockGroupId(value ? parseInt(value) : null)}
-                        >
-                          <SelectTrigger data-testid="select-stock-group">
-                            <SelectValue placeholder="Select stock group" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {stockGroups.map((group) => (
-                              <SelectItem key={group.id} value={group.id.toString()}>
-                                {group.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-stock-group">
-                          {stockGroups.find((g) => g.id === stockItem.stockGroupId)?.name || "Uncategorized"}
-                        </p>
-                      )}
-                    </div>
-
-                    {stockCategories.length > 0 && (
-                      <div className="space-y-2">
-                        <Label htmlFor="category">Category</Label>
-                        {isEditingDetails ? (
-                          <Select
-                            value={editedCategoryId?.toString() || "none"}
-                            onValueChange={(value) => setEditedCategoryId(value === "none" ? null : parseInt(value))}
-                          >
-                            <SelectTrigger data-testid="select-category">
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">— No Category —</SelectItem>
-                              {stockCategories.map((cat) => (
-                                <SelectItem key={cat.id} value={cat.id.toString()}>
-                                  {cat.name}
-                                  {!cat.active ? " (inactive)" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-category">
-                            {stockCategories.find((c) => c.id === stockItem.categoryId)?.name || "—"}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="prices" className="space-y-4 mt-4">
-              <h3 className="text-lg font-semibold mb-4" data-testid="tab-location-prices">
-                Location Prices
-              </h3>
-              <div className="space-y-4">
-                <Card className="p-4">
-                  <h4 className="font-medium mb-3">Add Location Price</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="locationSelect">Location *</Label>
-                      <Select value={newLocationId} onValueChange={setNewLocationId}>
-                        <SelectTrigger data-testid="select-location-price">
-                          <SelectValue placeholder="Select location" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {locations.map((loc) => (
-                            <SelectItem key={loc.id} value={loc.id.toString()}>
-                              {loc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="locationPrice">Selling Price *</Label>
-                      <Input
-                        id="locationPrice"
-                        type="number"
-                        step="0.01"
-                        value={newLocationPrice}
-                        onChange={(e) => setNewLocationPrice(e.target.value)}
-                        placeholder="0.00"
-                        data-testid="input-location-price"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <Button
-                      onClick={() => {
-                        if (!newLocationId || !newLocationPrice) {
-                          toast({
-                            title: "Missing information",
-                            description: "Please fill in all fields",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-                        upsertLocationPriceMutation.mutate({
-                          locationId: parseInt(newLocationId),
-                          sellingPrice: newLocationPrice,
-                        });
-                      }}
-                      size="sm"
-                      data-testid="button-add-location-price"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Price
-                    </Button>
-                  </div>
-                </Card>
-
-                {loadingLocationPrices ? (
-                  <LoadingState className="py-4" />
-                ) : locationPrices.length === 0 ? (
-                  <EmptyState title="No location prices added yet" className="py-4" />
-                ) : (
-                  <div className="space-y-2">
-                    {locationPrices.map((price) => (
-                      <Card key={price.id} className="p-3 flex items-center justify-between">
-                        {editingLocationPriceId === price.id ? (
-                          <>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{price.locationName}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={newLocationPrice}
-                                onChange={(e) => setNewLocationPrice(e.target.value)}
-                                className="w-24"
-                                data-testid="input-edit-location-price"
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  if (!newLocationPrice) {
-                                    toast({
-                                      title: "Missing information",
-                                      description: "Please enter a price",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  upsertLocationPriceMutation.mutate({
-                                    locationId: price.locationId,
-                                    sellingPrice: newLocationPrice,
-                                  });
-                                }}
-                                data-testid="button-save-location-price"
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setEditingLocationPriceId(null);
-                                  setNewLocationPrice("");
-                                }}
-                                data-testid="button-cancel-location-price"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{price.locationName}</p>
-                              <p className="text-sm text-muted-foreground">{price.sellingPrice}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingLocationPriceId(price.id);
-                                  setNewLocationPrice(price.sellingPrice);
-                                }}
-                                data-testid={`button-edit-location-price-${price.id}`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => deleteLocationPriceMutation.mutate(price.id)}
-                                disabled={deleteLocationPriceMutation.isPending}
-                                data-testid={`button-delete-location-price-${price.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
+            <StockItemDetailsDialogViewTabsContentSection
+              deleteLocationPriceMutation={deleteLocationPriceMutation}
+              editingLocationPriceId={editingLocationPriceId}
+              loadingLocationPrices={loadingLocationPrices}
+              locationPrices={locationPrices}
+              locations={locations}
+              newLocationId={newLocationId}
+              newLocationPrice={newLocationPrice}
+              setEditingLocationPriceId={setEditingLocationPriceId}
+              setNewLocationId={setNewLocationId}
+              setNewLocationPrice={setNewLocationPrice}
+              toast={toast}
+              upsertLocationPriceMutation={upsertLocationPriceMutation}
+            />
 
             <TabsContent value="aliases" className="space-y-4 mt-4">
               <h3 className="text-lg font-semibold mb-4" data-testid="tab-aliases">

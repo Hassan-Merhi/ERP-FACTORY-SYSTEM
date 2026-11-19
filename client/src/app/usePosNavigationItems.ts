@@ -9,7 +9,6 @@ import {
   Users,
   Upload,
   MessageSquare,
-  Cog,
   KeyRound,
   Tag,
   ClipboardList,
@@ -92,7 +91,6 @@ export function usePosNavigationItems({
   const isOnCustomers = currentLocation === "/pos-customers";
   const isOnTransfer = currentLocation.startsWith("/vouchers");
   const isOnChat = currentLocation === "/pos-chat";
-  const isOnSettings = currentLocation === "/pos-settings";
   const isOnPriceList = currentLocation === "/pos-price-list";
   const isOnTransferOrders = currentLocation === "/pos-transfer-orders";
 
@@ -201,13 +199,13 @@ export function usePosNavigationItems({
         ]
       : []),
     {
-      label: "Settings",
+      label: "My Settings",
       group: "tools",
-      icon: Cog,
-      active: isOnSettings,
-      testId: "button-settings-tab",
-      path: "/pos-settings",
-      onClick: () => setLocation("/pos-settings"),
+      icon: KeyRound,
+      active: currentLocation === "/my-settings",
+      testId: "button-pos-my-settings-tab",
+      path: "/my-settings",
+      onClick: () => setLocation("/my-settings"),
     },
     {
       label: "Help & Training",

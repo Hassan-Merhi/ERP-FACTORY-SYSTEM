@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey, isCompanySessionQueryKey } from "../client/src/lib/companyQueryScope";
 import { factoryActionCapabilities } from "../shared/factoryActionCapabilities";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Factory Phase 2 continuation: selected-company source invariants", () => {
   it("isolates staff-tracking and attendance keys by company and preserves URL-first prefix", () => {

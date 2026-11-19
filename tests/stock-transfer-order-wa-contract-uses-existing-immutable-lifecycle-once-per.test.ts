@@ -3,10 +3,10 @@
  * selection policy are in stock-transfer-order-wa-policy.test.ts.
  * The database-backed approval transaction is integration-tested in Phase 7.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 const executor = read("server/services/stockTransferOrderWhatsAppBatchExecution.ts");
 const worker = read("server/services/stockTransferOrderWhatsAppApprovalWorker.ts");
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");

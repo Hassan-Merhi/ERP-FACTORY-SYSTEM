@@ -1,6 +1,5 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
@@ -32,8 +31,10 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
+import { ALL_VOUCHER_TABS, FACTORY_VOUCHER_HIDDEN_KEYS, useSendWaStatementMutation } from "./vouchersPageSupport";
+import type { VoucherTab, VouchersProps } from "./vouchersPageSupport";
 import { getApiRequest } from "@/lib/factoryApi";
-import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import StockTransferOrder from "@/pages/StockTransferOrder.tsx";
 import { PrintTemplate } from "@/components/vouchers/PrintTemplate";
@@ -64,31 +65,6 @@ import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPoli
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
-type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
-
-const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
-  payment: "hide_tab_vouchers_payment",
-  receipt: "hide_tab_vouchers_receipt",
-  journal: "hide_tab_vouchers_journal",
-  transfer: "hide_tab_vouchers_transfer",
-  transferorder: "hide_tab_vouchers_transferorder",
-  adjustment: "hide_tab_vouchers_adjustment",
-  creditnote: "hide_tab_vouchers_creditnote",
-};
-const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
-  "payment",
-  "receipt",
-  "journal",
-  "transfer",
-  "transferorder",
-  "adjustment",
-  "creditnote",
-];
-
-interface VouchersProps {
-  posUser?: Pick<AuthMe, "assignedLocationId"> | null;
-}
-
 export default function Vouchers({ posUser }: VouchersProps = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -117,11 +93,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
     ...erpPageAccessQueryOptions(selectedCompany?.id, !isPOS && appMode === "erp"),
   });
-  const showOptionalDrafts =
-    !isPOS &&
-    appMode === "erp" &&
-    !isRetailCompany &&
-    (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true);
+  const showOptionalDrafts = !isPOS && (
+    (appMode === "factory" && isFactoryCompany) ||
+    (appMode === "erp" && !isRetailCompany &&
+      (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true))
+  );
   const posLocationId = posUser?.assignedLocationId;
 
   const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
@@ -421,6 +397,13 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     activeTab,
     voucherIdToEdit,
     isWalletPayment,
+    fxWalletDraft: isWalletPayment && selectedFxWallet
+      ? {
+          eurBalance: selectedFxWallet.state.eur,
+          bookUsd: selectedFxWallet.state.totalBookUsd,
+          payoutCurrency: fxPayoutCurrency,
+        }
+      : null,
     postWalletPayment,
     resetWalletPayment,
     selectedCurrency,
@@ -439,27 +422,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     discardPaymentDraft,
   });
 
-  const sendWaStatementMutation = useMutation({
-    mutationFn: async ({ accountId, month }: { accountId: number; month: string }) => {
-      const url =
-        appMode === "factory"
-          ? `/api/factory/accounts/${accountId}/send-statement-whatsapp`
-          : `/api/accounts/${accountId}/send-statement-whatsapp`;
-      const res = await modeApiRequest("POST", url, { month });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Failed to send WhatsApp");
-      return json;
-    },
-    onSuccess: () => {
-      toast({ title: "Statement sent to WhatsApp" });
-      setWaPendingPrompt(null);
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "WhatsApp send failed", description: error.message, variant: "destructive" });
-      setWaPendingPrompt(null);
-    },
-  });
+  const sendWaStatementMutation = useSendWaStatementMutation({ appMode, modeApiRequest, toast, setWaPendingPrompt });
 
   const handleOpenCreateAccountModal = (tab: "payment" | "receipt" | "journal", rowIndex?: number) => {
     setCreateAccountContext({ tab, rowIndex });
@@ -510,7 +473,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     exportVoucherHelper({ formData: form.getValues(), activeTab, toast, detailed });
 
   const onSubmit = async (data: VoucherFormData) => {
-    if (paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
+    if (!(isWalletPayment && data.optional) && paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
       toast({
         title: "Approved USD/ZMW rate required",
         description: "Enter a company exchange rate effective on the voucher date before posting.",
@@ -558,7 +521,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
-    if (isWalletPayment && !(await confirmWalletPayment(validEntries, toast))) return;
+    if (isWalletPayment && !data.optional && !(await confirmWalletPayment(validEntries, toast))) return;
     saveMutation.mutate({
       ...data,
       entries: validEntries,
@@ -577,11 +540,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
         />
       ) : (
-        // One header for ERP, Factory and Properties; the drafts link is ERP-only via showOptionalDrafts.
+        // Shared voucher header; drafts are available in authorized ERP and Factory workflows.
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (
             <Link
-              href="/optional-vouchers"
+              href={appMode === "factory" ? "/factory/optional-vouchers" : "/optional-vouchers"}
               className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
               data-testid="link-vouchers-optional-drafts"
             >
@@ -765,19 +728,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && (
             <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {(isPOS || (canShowVoucherTab("transfer") && activeTab === "transfer")) && (
             <StockTransferForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} posUser={posUser ?? undefined} />
           )}
-
           {!isPOS && canShowVoucherTab("adjustment") && activeTab === "adjustment" && (
             <StockAdjustmentForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
-
           {!isPOS && canShowVoucherTab("creditnote") && activeTab === "creditnote" && (
             <div className="space-y-4">
               <CreditNoteTab
@@ -786,7 +745,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
               />
             </div>
           )}
-
           {!isPOS && canShowVoucherTab("transferorder") && activeTab === "transferorder" && (
             <StockTransferOrder
               onSwitchToNormalView={() => {
@@ -799,7 +757,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
         </div>
       </div>
-
       <CreateAccountModal
         open={showCreateAccountModal}
         onClose={() => {
@@ -810,7 +767,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         onAccountCreated={handleAccountCreated}
         apiRequestFn={modeApiRequest}
       />
-
       <AlertDialog
         open={!!waPendingPrompt}
         onOpenChange={(open) => {

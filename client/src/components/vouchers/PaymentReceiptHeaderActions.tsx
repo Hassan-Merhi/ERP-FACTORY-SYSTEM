@@ -11,7 +11,7 @@ interface PaymentReceiptHeaderActionsProps {
   handleExportVoucher?: (detailed: boolean) => void;
 }
 
-/** Print and Export controls in the payment/receipt voucher header strip. */
+/** Print and Export controls of the payment/receipt voucher, shown in its action bar. */
 export function PaymentReceiptHeaderActions({
   canPrint,
   canExport,
@@ -29,12 +29,11 @@ export function PaymentReceiptHeaderActions({
             <ExportButton
               kind="print"
               iconOnlyOnPhone
-              variant="ghost"
-              size="sm"
+              variant="outline"
               disabled={!canPrint}
               onClick={handlePrint}
               data-testid="button-print"
-              className={cn("h-8 text-muted-foreground", !canPrint && "pointer-events-none")}
+              className={cn(!canPrint && "pointer-events-none")}
             />
           </span>
         </TooltipTrigger>
@@ -51,11 +50,10 @@ export function PaymentReceiptHeaderActions({
           <TooltipTrigger asChild>
             <span className={!canExport ? "cursor-not-allowed" : ""}>
               <ReportExportMenu
-                variant="ghost"
-                size="sm"
+                variant="outline"
                 disabled={!canExport}
                 data-testid="button-export"
-                className={cn("h-8 text-muted-foreground", !canExport && "pointer-events-none")}
+                className={cn(!canExport && "pointer-events-none")}
                 options={[
                   {
                     id: "voucher-summary",

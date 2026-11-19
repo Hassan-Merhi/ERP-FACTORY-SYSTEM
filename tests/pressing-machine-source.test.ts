@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(path, "utf8");
+const source = (path: string) => readModuleFamily(path);
 const scanner = source("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const gate = source("client/src/pages/factory/pressing-scanner/continuousScanGate.ts");
 const manager = source("client/src/pages/factory/PressingMachineManagement.tsx");
@@ -19,7 +19,7 @@ describe("Pressing Machine Phase 3 integration contract", () => {
   it("stops/restarts video with actual tab visibility and worker assignment", () => {
     expect(scanner).toContain('document.addEventListener("visibilitychange"');
     expect(scanner).toContain("const running = usable && requested && visible");
-    expect(scanner).toContain("stream?.getTracks().forEach(track => track.stop())");
+    expect(scanner).toContain("stream?.getTracks().forEach((track) => track.stop())");
     expect(stockEntry).toContain('<PressingMachineManagement active={activeTab === "pressing-machines"} />');
   });
   it("has fallback, safe audio, vibration, torch and device timestamp support", () => {

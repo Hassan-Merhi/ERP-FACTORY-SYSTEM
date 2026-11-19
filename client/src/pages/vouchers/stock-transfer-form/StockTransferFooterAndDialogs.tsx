@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
@@ -18,14 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowRightLeft, ChevronDown, FileDown, GitBranch } from "lucide-react";
+import { ChevronDown, FileDown, GitBranch } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import { StockTransferRevisionHistory } from "../StockTransferRevisionHistory";
 import { ApproveRevisionDialog } from "./dialogs/ApproveRevisionDialog";
 import { ImportTransferExcelDialog } from "./dialogs/ImportTransferExcelDialog";
 import { SaveAsRevisionDialog } from "./dialogs/SaveAsRevisionDialog";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
+import { VoucherActionBar, VoucherOptionalSwitch } from "../VoucherActionBar";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 import { PosStockTransferImportDialog } from "./PosStockTransferImportDialog";
 
@@ -84,14 +82,19 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
     formatAmount,
     transferTotal,
   } = model;
-  const isPhone = useErpPhoneLayout();
-  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
   const filledEntries = transferEntries.filter((entry) => entry.stockItemId > 0).length;
   const totalQuantity = Math.floor(transferEntries.reduce((sum, entry) => sum + parseFloat(entry.quantity || "0"), 0));
+  const transferSummary = `${filledEntries} items · ${totalQuantity} qty${isPOS ? "" : ` · ${formatAmount(transferTotal)}`}`;
 
   return (
     <>
-      <div className={isPOS ? "pos-transfer-footer mt-4 flex flex-wrap items-start gap-2 sm:gap-4" : "mt-4 flex flex-wrap items-start gap-2 sm:gap-4"}>
+      <div
+        className={
+          isPOS
+            ? "pos-transfer-footer mt-4 flex flex-wrap items-start gap-2 sm:gap-4"
+            : "mt-4 flex flex-wrap items-start gap-2 sm:gap-4"
+        }
+      >
         <FormField
           control={stockTransferForm.control}
           name="notes"
@@ -109,93 +112,79 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
             </FormItem>
           )}
         />
-        <FormField
-          control={stockTransferForm.control}
-          name="optional"
-          render={({ field }) => (
-            <FormItem className={isPOS ? "pos-transfer-optional flex items-center gap-2 space-y-0" : "flex items-center gap-2 space-y-0"}>
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  data-testid="checkbox-transfer-optional"
-                />
-              </FormControl>
-              <FormLabel className="text-sm">Optional</FormLabel>
-            </FormItem>
-          )}
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={transferEntries.filter((entry) => entry.stockItemId > 0).length === 0}
-              data-testid="button-export-stock-transfer"
-              className={isPOS ? "pos-transfer-export" : undefined}
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              Export
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleExportStockTransfer(false)} data-testid="export-transfer-summary">
-              Summary Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExportStockTransfer(true)} data-testid="export-transfer-detailed">
-              Detailed Export
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {!isPhone && (
-          <Button
-            type="submit"
-            disabled={
-              stockTransferMutation.isPending || transferEntries.filter((entry) => entry.stockItemId > 0).length === 0
-            }
-            data-testid="button-save-transfer-voucher"
-            className={isPOS ? "pos-transfer-save" : undefined}
-          >
-            {isPOS && <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {stockTransferMutation.isPending ? "Saving..." : "Save Transfer"}
-          </Button>
-        )}
-        {!isPhone && voucherIdToEdit && stockTransferToEdit?.id && (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isTransferSavingRevision || transferEntries.filter((entry) => entry.stockItemId > 0).length === 0}
-            onClick={handleTransferSaveAsRevision}
-            data-testid="button-save-transfer-revision"
-          >
-            <GitBranch className="h-4 w-4 mr-1" />
-            Save as Revision
-          </Button>
-        )}
       </div>
 
-      <VoucherPhoneActionBar
-        summary={`${filledEntries} items · ${totalQuantity} qty${isPOS ? "" : ` · ${formatAmount(transferTotal)}`}`}
-        saveLabel="Save Transfer"
+      <VoucherActionBar
+        isEditing={!!voucherIdToEdit}
         saving={stockTransferMutation.isPending}
         disabled={filledEntries === 0}
-        onCancel={cancelEdit}
-        extra={
-          voucherIdToEdit && stockTransferToEdit?.id ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isTransferSavingRevision || filledEntries === 0}
-              onClick={handleTransferSaveAsRevision}
-              data-testid="button-save-transfer-revision"
-            >
-              <GitBranch className="h-4 w-4 mr-1" />
-              Save as Revision
-            </Button>
-          ) : undefined
+        saveTestId="button-save-transfer-voucher"
+        saveClassName={isPOS ? "pos-transfer-save" : undefined}
+        data-testid="transfer-actions"
+        summary={
+          <span className="font-mono text-sm tabular-nums text-muted-foreground" dir="ltr">
+            {transferSummary}
+          </span>
         }
-        data-testid="transfer-phone-actions"
+        phoneSummary={transferSummary}
+        optional={
+          <FormField
+            control={stockTransferForm.control}
+            name="optional"
+            render={({ field }) => (
+              <VoucherOptionalSwitch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-transfer-optional"
+              />
+            )}
+          />
+        }
+        secondary={
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={filledEntries === 0}
+                  data-testid="button-export-stock-transfer"
+                  className={isPOS ? "pos-transfer-export" : undefined}
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => handleExportStockTransfer(false)}
+                  data-testid="export-transfer-summary"
+                >
+                  Summary Export
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleExportStockTransfer(true)}
+                  data-testid="export-transfer-detailed"
+                >
+                  Detailed Export
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {voucherIdToEdit && stockTransferToEdit?.id && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isTransferSavingRevision || filledEntries === 0}
+                onClick={handleTransferSaveAsRevision}
+                data-testid="button-save-transfer-revision"
+              >
+                <GitBranch className="h-4 w-4 mr-1" />
+                Save as Revision
+              </Button>
+            )}
+          </>
+        }
       />
 
       <ApproveRevisionDialog

@@ -1,31 +1,26 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { KeyRound, CalendarDays, LayoutPanelLeft } from "lucide-react";
-import { useDateFormat } from "@/contexts/DateFormatContext";
+import { KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { DateFormatSettingsCard } from "@/pages/settings/DateFormatSettingsCard";
+import { FloatingWidgetsSettingsCard } from "@/pages/settings/FloatingWidgetsSettingsCard";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { ChristmasModePreferenceCard } from "@/pages/settings/ChristmasModePreferenceCard";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 
-type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
-
 export default function MySettings() {
   const t =
     useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const { toast } = useToast();
-  const { dateFormat } = useDateFormat();
-  const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
   const factoryMhd = useFactoryMhdView();
   const { selectedCompany } = useCompany();
 
@@ -57,25 +52,6 @@ export default function MySettings() {
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       setClientError(error.message);
-    },
-  });
-
-  const updateDateFormatMutation = useMutation({
-    mutationFn: async (newFormat: DateFormatType) => {
-      const res = await apiRequest("PUT", "/api/user-preferences", { dateFormat: newFormat });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to update date format");
-      }
-      return res.json();
-    },
-    onSuccess: (_data, newFormat) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user-preferences"] });
-      toast({ title: "Date format updated", description: `Dates will now display as ${newFormat}.` });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -132,87 +108,9 @@ export default function MySettings() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CalendarDays className="h-4 w-4" />
-            Date Format
-          </CardTitle>
-          <CardDescription>Choose how dates are displayed across your account.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <Label htmlFor="select-date-format">Display format</Label>
-            <Select
-              value={dateFormat}
-              onValueChange={(val) => updateDateFormatMutation.mutate(val as DateFormatType)}
-              disabled={updateDateFormatMutation.isPending}
-            >
-              <SelectTrigger id="select-date-format" data-testid="select-date-format">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MM/DD/YYYY" data-testid="option-date-format-mmddyyyy">
-                  MM/DD/YYYY
-                </SelectItem>
-                <SelectItem value="DD/MM/YYYY" data-testid="option-date-format-ddmmyyyy">
-                  DD/MM/YYYY
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <DateFormatSettingsCard />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <LayoutPanelLeft className="h-4 w-4" />
-            Floating Widgets
-          </CardTitle>
-          <CardDescription>Show or hide the floating tools that appear on every page.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium leading-none">AI Agent Chatbot</p>
-              <p className="text-xs text-muted-foreground mt-1">The floating chat bubble in the bottom-right corner.</p>
-            </div>
-            <Switch
-              checked={prefs?.showChatWidget !== false}
-              disabled={prefsPending}
-              onCheckedChange={(val) => {
-                updatePref({ showChatWidget: val });
-                toast({
-                  title: val ? "Chatbot enabled" : "Chatbot hidden",
-                  description: val ? "The AI chat widget is now visible." : "The AI chat widget has been hidden.",
-                });
-              }}
-              data-testid="switch-show-chat-widget"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium leading-none">Notebook</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                The floating notepad panel on the side of the screen.
-              </p>
-            </div>
-            <Switch
-              checked={prefs?.showNotesPanel !== false}
-              disabled={prefsPending}
-              onCheckedChange={(val) => {
-                updatePref({ showNotesPanel: val });
-                toast({
-                  title: val ? "Notebook enabled" : "Notebook hidden",
-                  description: val ? "The notebook panel is now visible." : "The notebook panel has been hidden.",
-                });
-              }}
-              data-testid="switch-show-notes-panel"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <FloatingWidgetsSettingsCard />
 
       <Card>
         <CardHeader>

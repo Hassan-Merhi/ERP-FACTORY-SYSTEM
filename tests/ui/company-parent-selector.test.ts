@@ -1,9 +1,9 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
-const companiesTab = fs.readFileSync(path.resolve(process.cwd(), "client/src/pages/settings/CompaniesTab.tsx"), "utf8");
-const setupPanel = fs.readFileSync(path.resolve(process.cwd(), "client/src/pages/sp/SpSetupPanel.tsx"), "utf8");
+const companiesTab = readModuleFamily(path.resolve(process.cwd(), "client/src/pages/settings/CompaniesTab.tsx"));
+const setupPanel = readModuleFamily(path.resolve(process.cwd(), "client/src/pages/sp/SpSetupPanel.tsx"));
 
 describe("Company parent selector", () => {
   // The selector started out as a Supplier Partner affordance. Making parent configuration

@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
 import { factoryActionCapabilities } from "../shared/factoryActionCapabilities";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const code = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const code = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Factory Phase 2 further source coverage", () => {
   it("locks nested Factory hub navigation to selected-company access", () => {
@@ -30,7 +30,6 @@ describe("Factory Phase 2 further source coverage", () => {
     const expected: Record<string, string[]> = {
       "FactoryInvoices.tsx": ["/api/factory/customers", "/api/factory/customer-orders"],
       "FactoryPendingInvoices.tsx": ["status=PENDING_VERIFICATION", "status=VERIFIED", "status=FINALIZED"],
-      "FactoryDispatchBatches.tsx": ["/api/factory/dispatch-batches", "/api/factory/dispatch-reports/summary"],
       "FactoryCustomerStatement.tsx": ["/api/factory/customer-price-lists", "/api/factory/customers"],
       "FactorySheetsAndSacks.tsx": ["/api/factory/sheets-sacks", "/api/factory/my-access"],
       "FactoryDashboard.tsx": ["/api/factory/dashboard", "/api/factory/containers"],

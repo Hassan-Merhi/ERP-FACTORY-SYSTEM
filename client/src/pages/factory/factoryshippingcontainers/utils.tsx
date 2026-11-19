@@ -4,7 +4,9 @@
  * Extracted from FactoryShippingContainers.tsx during the Phase 4 god-file split.
  */
 
-import type {ShippingColId} from "./types";
+import type { ShippingColId } from "./types";
+import { formatUsd } from "@/lib/moneyDisplay";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export const LIST_KEY = "/api/factory/shipping-container-rows";
 
@@ -19,21 +21,25 @@ export const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-export const STATUS_COLORS: Record<string, string> = {
-  LOADING: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  PENDING_VERIFICATION: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  VERIFIED: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  FINALIZED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  DRAFT: "bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400",
-  CANCELLED: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-};
-
 export function statusLabel(s: string) {
   return STATUS_LABEL[s] ?? s.replace(/_/g, " ").toLowerCase();
 }
 
-export function statusColor(s: string) {
-  return STATUS_COLORS[s] ?? "bg-gray-100 text-gray-600";
+/** StatusBadge kind for a shipping row; pending verification reads (and is coloured) as Verified. */
+export function shippingStatusKind(s: string) {
+  return s === "PENDING_VERIFICATION" ? "VERIFIED" : s;
+}
+
+/** The status pill of a shipping row, on the shared StatusBadge. */
+export function ShippingStatusBadge({ status }: { status: string }) {
+  return (
+    <StatusBadge
+      status={shippingStatusKind(status)}
+      label={statusLabel(status)}
+      showIcon={false}
+      className="shipping-status whitespace-nowrap cursor-pointer"
+    />
+  );
 }
 
 export const STATUS_ORDER: Record<string, number> = {
@@ -100,3 +106,18 @@ export const CTR_LEFT = 130 + 144; // 274
 // ─── Document count indicator ──────────────────────────────────────────────────
 
 export const AVAIL_KEY = "/api/factory/shipping-availability";
+
+/** Shipping grand total in USD (up to 3 decimals). */
+export function shippingCostUsd(value: string | number | null): string {
+  return formatUsd(Number(value), 0, 3);
+}
+
+/** Today's date in the browser's local time zone as YYYY-MM-DD. */
+export function localIsoDate(): string {
+  const date = new Date();
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}

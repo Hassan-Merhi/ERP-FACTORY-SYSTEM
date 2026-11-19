@@ -4,10 +4,10 @@
  * no FX-REVAL posting is introduced by saving a rate.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 const exchangeRoutes = source("server/routes/exchangeRateRoutes.ts");
 const settings = source("client/src/components/ExchangeRateSettings.tsx");
 const popup = source("client/src/components/DailyRateModal.tsx");

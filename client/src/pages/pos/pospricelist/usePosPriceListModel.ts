@@ -31,6 +31,7 @@ import type {
   PriceListRow,
 } from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
+import { buildPosPriceListExportRow, posPriceListExportColumns } from "./posPriceListExportRow";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
 
@@ -76,6 +77,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
 
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isPrivileged = PRIVILEGED_ROLES.includes(currentUser?.role || "");
+  const posViewOnly = Boolean((posUser as { posViewOnly?: boolean } | undefined)?.posViewOnly);
+  const canEdit = !posViewOnly;
+  const canEditPrices = canEdit && recordChanges.allowed;
 
   const { data: posAssignedLocations = [], isLoading: posLocationsLoading } = useQuery<Location[]>({
     queryKey: ["/api/my-locations"],
@@ -156,7 +160,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
 
   const locationPricedList = useMemo<PriceListRow[]>(() => {
     if (isAllMode) return masterItems;
-    if (!posUser) return priceList;
+    if (!posUser || canEditPrices) return priceList;
     return priceList.filter((item) => {
       // Keep the usual POS view limited to stocked items with a custom price.
       if (item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0) {
@@ -166,7 +170,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       // The base-price fallback is valid here; unpriced items remain hidden.
       return showZeroQty && Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0;
     });
-  }, [priceList, masterItems, posUser, isAllMode, showZeroQty]);
+  }, [priceList, masterItems, posUser, isAllMode, showZeroQty, canEditPrices]);
 
   const stockGroups = useMemo(() => {
     const groups = new Set<string>();
@@ -222,14 +226,14 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   );
 
   const zeroQtyCount = useMemo(() => {
-    if (posUser && !isAllMode) {
+    if (posUser && !isAllMode && !canEditPrices) {
       // Count the additional zero-stock, priced rows even before they are shown.
       return priceList.filter(
         (item) => Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0
       ).length;
     }
     return locationPricedList.filter((item) => itemQty(item) === 0).length;
-  }, [itemQty, locationPricedList, priceList, posUser, isAllMode]);
+  }, [itemQty, locationPricedList, priceList, posUser, isAllMode, canEditPrices]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -269,7 +273,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       locationId: number;
       sellingPrice: string;
     }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!canEditPrices) throw new Error(recordChanges.reason ?? "Price editing is disabled.");
       const res = await apiRequest("POST", `/api/stock-items/${stockItemId}/location-prices`, {
         locationId,
         sellingPrice,
@@ -305,7 +309,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   });
 
   const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
-    if (posUser || !recordChanges.allowed) return;
+    if (!canEditPrices) return;
     lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
     const hasValue = currentPrice && parseFloat(currentPrice) > 0;
     setEditingItem({ stockItemId, locationId, value: hasValue ? currentPrice : "" });
@@ -442,9 +446,6 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     });
   };
 
-  const canEdit = !posUser;
-  // Price edits and imports change existing items; read-only roles keep the view filters only.
-  const canEditPrices = canEdit && recordChanges.allowed;
   const showCostPrice = (isPrivileged || currentUser?.role === "View Only") && !posUser;
 
   const [exporting, setExporting] = useState(false);
@@ -586,40 +587,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (filteredItems.length === 0) return;
     setExporting(true);
     try {
-      const rows = filteredItems.map((item) => {
-        const row: Record<string, unknown> = {
-          Code: item.code || "",
-          "Item Name": item.name,
-          Group: item.stockGroupName || "",
-        };
-
-        if (showCostPrice) {
-          row["Cost Price"] = item.costPrice && parseFloat(item.costPrice) > 0 ? parseFloat(item.costPrice) : "";
-          const offloadTotal = parseFloat(item.costPrice ?? "0") + parseFloat(item.offloadingCost ?? "0");
-          row["Cost + Offloading"] = offloadTotal > 0 ? offloadTotal : "";
-        }
-
-        if (isAllMode) {
-          row["Total Qty"] = parseFloat(item.totalQuantity ?? "0");
-          for (const m of masters) {
-            const price = masterPriceFor(item, m.id);
-            row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
-          }
-        } else {
-          row["Highest Price Sold"] = item.highestPriceSold == null ? "" : Number(item.highestPriceSold);
-          row["Lowest Price Sold"] = item.lowestPriceSold == null ? "" : Number(item.lowestPriceSold);
-          row["Qty Sold"] = Number(item.qtySold ?? 0);
-          row["Selling Price"] =
-            item.sellingPrice && parseFloat(item.sellingPrice) > 0
-              ? parseFloat(item.sellingPrice)
-              : item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0
-                ? parseFloat(item.baseSellingPrice)
-                : "";
-          row["Qty in Stock"] = item.quantity && parseFloat(item.quantity) > 0 ? parseFloat(item.quantity) : "";
-        }
-
-        return row;
-      });
+      const rows = filteredItems.map((item) =>
+        buildPosPriceListExportRow(item, { showCostPrice, isAllMode, masters, masterPriceFor })
+      );
 
       const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
       const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
@@ -627,17 +597,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const dateStr = new Date().toLocaleDateString("en-CA");
 
       const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-      const headers = [
-        "Code",
-        "Item Name",
-        "Group",
-        ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
-        ...(isAllMode
-          ? ["Total Qty", ...masters.map((master) => master.name)]
-          : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
-      ];
-      const types: Record<string, "auto" | "money" | "decimal"> = {};
-      for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
+      const { headers, types } = posPriceListExportColumns({ showCostPrice, isAllMode, masters });
       // In All Locations mode these price lists are intentionally re-importable:
       // the parser expects Code and location names in the first worksheet row.
       await exportOperationalWorkbook({
@@ -655,6 +615,12 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
             }),
           },
         ],
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unable to export",
+        variant: "destructive",
       });
     } finally {
       setExporting(false);

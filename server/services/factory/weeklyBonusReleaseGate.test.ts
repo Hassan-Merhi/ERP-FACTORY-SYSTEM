@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { hasTable, tableConstraints } from "../../../tests/helpers/schemaManifest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
@@ -14,7 +14,7 @@ const normalizeCode = (code: string) =>
     .replace(/,([}\])])/g, "$1");
 const expectCode = (code: string, expected: string) => expect(normalizeCode(code)).toContain(normalizeCode(expected));
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 /** Static wiring safety gate; real SQL and voucher-posting integration must run separately. */
 describe("Phase 16 weekly bonus end-to-end source wiring", () => {

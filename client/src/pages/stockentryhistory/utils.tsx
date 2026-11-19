@@ -20,17 +20,6 @@ export const STATUS_OPTIONS = [
   "DELETED",
 ];
 
-export const STATUS_COLORS: Record<string, string> = {
-  IN_STOCK: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  FINALIZED: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  SOLD: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  REMOVED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  DELETED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  DISPATCHED: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  RESERVED: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  RESERVED_FOR_ORDER: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-};
-
 export /** Fetches all pages of a stock-entry-history query using limit=250 per page.
  *  Safety cap: 100 pages. Use only for actions requiring every matching row
  *  (exports, bulk ops, print). Never use for the normal paginated screen list. */
@@ -137,7 +126,5 @@ export function formatHistoryDateTime(iso: string | null): string {
 export function formatHistoryTime(iso: string | null): string {
   if (!iso) return "—";
   const date = new Date(normalizeHistoryTimestamp(iso));
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

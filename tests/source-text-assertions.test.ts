@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 
 // @ts-expect-error - plain ESM audit script shared with the npm audit task.
 import { auditSourceTextAssertions } from "../scripts/audit-source-text-assertions.mjs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 interface Baseline {
   maxSourceCoupledTests: number;
@@ -61,7 +62,7 @@ const ALLOWANCES_PATH = path.join(process.cwd(), "config/ci-ratchet-allowances.j
 const report = auditSourceTextAssertions() as AuditReport;
 
 if (process.env.UPDATE_SOURCE_TEXT_BASELINE === "1") {
-  const existing = JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8")) as Record<string, unknown>;
+  const existing = JSON.parse(readModuleFamily(BASELINE_PATH)) as Record<string, unknown>;
   const regenerated = {
     ...existing,
     maxSourceCoupledTests: report.summary.sourceCoupledTests,
@@ -82,8 +83,8 @@ if (process.env.UPDATE_SOURCE_TEXT_BASELINE === "1") {
   fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(regenerated, null, 2)}\n`, "utf8");
 }
 
-const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8")) as Baseline;
-const allowances = JSON.parse(fs.readFileSync(ALLOWANCES_PATH, "utf8")) as RatchetAllowances;
+const baseline = JSON.parse(readModuleFamily(BASELINE_PATH)) as Baseline;
+const allowances = JSON.parse(readModuleFamily(ALLOWANCES_PATH)) as RatchetAllowances;
 const sourceTextDelta = allowances.sourceTextAssertionDelta;
 
 describe("source-text assertion ratchet", () => {
@@ -95,10 +96,7 @@ describe("source-text assertion ratchet", () => {
   });
 
   it("does not add unreviewed source-coupled tests", () => {
-    const known = new Set([
-      ...baseline.sourceCoupledTests,
-      ...sourceTextDelta.additionalSourceCoupledTests,
-    ]);
+    const known = new Set([...baseline.sourceCoupledTests, ...sourceTextDelta.additionalSourceCoupledTests]);
     const added = report.entries
       .filter((entry) => entry.classification === "source-coupled")
       .map((entry) => entry.test)
@@ -113,8 +111,7 @@ describe("source-text assertion ratchet", () => {
   });
 
   it("does not increase literal text assertions beyond the reviewed delta", () => {
-    const reviewedCeiling =
-      baseline.maxTotalTextAssertions + sourceTextDelta.maxAdditionalTextAssertions;
+    const reviewedCeiling = baseline.maxTotalTextAssertions + sourceTextDelta.maxAdditionalTextAssertions;
 
     expect(
       report.summary.totalTextAssertions,
@@ -125,16 +122,13 @@ describe("source-text assertion ratchet", () => {
 
   it("keeps the reviewed source-text delta exact and current", () => {
     const present = new Set(
-      report.entries
-        .filter((entry) => entry.classification === "source-coupled")
-        .map((entry) => entry.test)
+      report.entries.filter((entry) => entry.classification === "source-coupled").map((entry) => entry.test)
     );
     const stale = sourceTextDelta.additionalSourceCoupledTests.filter((test) => !present.has(test));
 
-    expect(
-      stale,
-      `Reviewed source-text allowances no longer present should be removed:\n${stale.join("\n")}`
-    ).toEqual([]);
+    expect(stale, `Reviewed source-text allowances no longer present should be removed:\n${stale.join("\n")}`).toEqual(
+      []
+    );
   });
 
   it("does not pin additional god files", () => {

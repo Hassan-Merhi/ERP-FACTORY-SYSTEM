@@ -1,4 +1,5 @@
 import { CheckCircle2, AlertTriangle, ShieldOff, ShieldCheck } from "lucide-react";
+import { posCustomerAccessText } from "@shared/posCustomerAccess";
 
 interface PermissionEntry {
   label: string;
@@ -72,7 +73,7 @@ function getPermissions(
   }
 
   if (flags.canAccessCustomers) {
-    perms.push({ label: "Access customer balances and ledger", dangerous: false });
+    perms.push({ label: posCustomerAccessText.summary, dangerous: false });
   }
 
   if ((flags.daybookEditDays ?? 0) > 0) {

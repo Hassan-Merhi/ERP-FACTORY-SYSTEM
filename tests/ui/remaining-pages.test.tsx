@@ -269,7 +269,6 @@ const PAGES: PageCase[] = [
     landmark: "tab-supplier-hub-report",
     factory: true,
   },
-  { name: "POSSettings", load: () => import("@/pages/pos/POSSettings"), landmark: "input-current-password" },
   {
     name: "PropertiesAccounts",
     load: () => import("@/pages/properties/PropertiesAccounts"),
@@ -294,15 +293,6 @@ const PAGES: PageCase[] = [
     landmark: "button-add-user",
     sweep: true,
   },
-  {
-    name: "SpAliases",
-    load: () => import("@/pages/sp/SpAliases"),
-    landmark: "input-sp-alias-code",
-    showsRows: true,
-    sweep: true,
-  },
-  { name: "SpGoldenCoast", load: () => import("@/pages/sp/SpGoldenCoast"), landmark: "sp-golden-coast" },
-  { name: "SpOverview", load: () => import("@/pages/sp/SpOverview"), landmark: "sp-overview", showsRows: true },
   { name: "SpSetup", load: () => import("@/pages/sp/SpSetup"), landmark: "sp-administration-hub", sweep: true },
 ];
 

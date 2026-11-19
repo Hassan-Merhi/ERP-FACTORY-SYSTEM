@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 describe("Factory Phase 2 transporter company isolation", () => {
-  const code = readFileSync(resolve(process.cwd(), "client/src/pages/factory/FactoryTransporters.tsx"), "utf8");
+  const code = readModuleFamily(resolve(process.cwd(), "client/src/pages/factory/FactoryTransporters.tsx"));
 
   it("scopes transporter list and statements without changing the endpoint", () => {
     expect(code).toContain("companyQueryKey(API, selectedCompany?.id)");

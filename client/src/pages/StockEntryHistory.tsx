@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstac
 import { AlignJustify, ChevronDown, ChevronRight, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/page-state";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -14,17 +15,13 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
 import type { StockEntryWorker } from "./stockentryhistory/derived";
 import type { BaleDetail, GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
+import { buildStockEntryWorkerGroups, buildStockEntryWorkerTargets } from "./stockEntryHistoryWorkerGroups";
 import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
 import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import {
-  STATUS_COLORS,
-  fetchAllStockEntryHistoryPages,
-  formatDailyNum,
-  formatHistoryTime,
-} from "./stockentryhistory/utils";
+import { fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -147,68 +144,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     refetchOnWindowFocus: false,
   });
 
-  const workerTargets = useMemo<
-    Record<number, { targetBales: number; producedBales: number; workerCount: number }>
-  >(() => {
-    const targets: Record<number, { targetBales: number; producedBales: number; workerCount: number }> = {};
-    for (const row of productionTargets?.rows ?? []) {
-      if (row.targetBales === null || row.targetBales === undefined) continue;
-      const targetBales = Number(row.targetBales);
-      const producedBales = Number(row.producedBales ?? 0);
-      if (!Number.isFinite(targetBales) || !Number.isFinite(producedBales)) continue;
-      targets[row.personId] = { targetBales, producedBales, workerCount: 1 };
-    }
-    return targets;
-  }, [productionTargets]);
+  const workerTargets = useMemo(() => buildStockEntryWorkerTargets(productionTargets), [productionTargets]);
 
-  const workerGroups = useMemo(() => {
-    const workerMap = new Map<
-      string,
-      {
-        workerKey: string;
-        workerId: number | null;
-        workerName: string | null;
-        totalBales: number;
-        totalWeight: number;
-        groups: GroupRow[];
-      }
-    >();
-
-    for (const group of groups) {
-      const key = group.workerId != null ? String(group.workerId) : "unassigned";
-      const existing = workerMap.get(key) ?? {
-        workerKey: key,
-        workerId: group.workerId,
-        workerName: group.workerName,
-        totalBales: 0,
-        totalWeight: 0,
-        groups: [],
-      };
-      existing.totalBales += group.baleCount;
-      existing.totalWeight += parseFloat(group.totalWeight || "0");
-      existing.groups.push(group);
-      workerMap.set(key, existing);
-    }
-
-    const workerNameById = new Map(
-      workers.map((worker) => [worker.id, worker.fullName ?? worker.full_name ?? worker.name ?? ""])
-    );
-    for (const workerIdString of Object.keys(workerTargets)) {
-      const workerId = Number(workerIdString);
-      const key = String(workerId);
-      if (workerMap.has(key)) continue;
-      workerMap.set(key, {
-        workerKey: key,
-        workerId,
-        workerName: workerNameById.get(workerId) || null,
-        totalBales: 0,
-        totalWeight: 0,
-        groups: [],
-      });
-    }
-
-    return Array.from(workerMap.values()).sort((left, right) => right.totalBales - left.totalBales);
-  }, [groups, workerTargets, workers]);
+  const workerGroups = useMemo(
+    () => buildStockEntryWorkerGroups(groups, workerTargets, workers),
+    [groups, workerTargets, workers]
+  );
 
   const expandedGroupBaleKeys = useMemo(
     () => Array.from(expandedKeys).filter((key) => key.endsWith("-bales")),
@@ -579,11 +520,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                                   {formatDailyNum(parseFloat(bale.weightKg || "0"))}
                                                 </td>
                                                 <td className="py-1 pr-4">
-                                                  <span
-                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
-                                                  >
-                                                    {bale.status}
-                                                  </span>
+                                                  <StatusBadge
+                                                    status={bale.status}
+                                                    label={bale.status}
+                                                    showIcon={false}
+                                                    className="px-1.5 py-0.5 text-[11px]"
+                                                  />
                                                 </td>
                                                 <td className="py-1">{formatHistoryTime(bale.finalizedAt)}</td>
                                               </tr>

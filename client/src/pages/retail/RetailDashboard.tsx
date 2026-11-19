@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -14,6 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,170 +22,23 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
 import { RetailVariantReports } from "./RetailVariantReports";
 import { RetailFinancialPanel } from "./RetailFinancialPanel";
+import {
+  RankingTable,
+  SummaryCard,
+  getJson,
+  isoDateInput,
+  money,
+  quantity,
+  type DashboardRow,
+  type RetailAudit,
+  type RetailDashboardData,
+} from "./RetailDashboardRankingTable";
+import { brandLabel, locationLabel, productLabel, rankingSheet, sizeLabel, stockSheet } from "./retailDashboardExport";
 
 interface Location {
   id: number;
   name: string;
   active?: boolean;
-}
-
-interface DashboardRow {
-  product_id?: number;
-  location_id?: number;
-  variant_id?: number;
-  product_name?: string;
-  product_code?: string;
-  code?: string;
-  name?: string;
-  brand?: string;
-  brand_name?: string;
-  color?: string;
-  size?: string;
-  barcode?: string;
-  location_name?: string;
-  quantity?: number;
-  revenue?: number;
-  cogs?: number;
-  profit?: number;
-  threshold?: number;
-  last_sale_at?: string | null;
-}
-
-interface RetailDashboardData {
-  period: { from: string; to: string; locationId: number | null };
-  summary: {
-    inventory_quantity: number;
-    inventory_value: number;
-    product_count: number;
-    variant_count: number;
-    low_stock_count: number;
-    out_of_stock_count: number;
-    revenue: number;
-    cogs: number;
-    gross_profit: number;
-    units_sold: number;
-    sale_lines: number;
-  };
-  bestSellingProducts: DashboardRow[];
-  bestSellingBrands: DashboardRow[];
-  bestSellingSizes: DashboardRow[];
-  salesByLocation: DashboardRow[];
-  lowStock: DashboardRow[];
-  outOfStock: DashboardRow[];
-  slowMoving: DashboardRow[];
-  profitByProduct: DashboardRow[];
-  profitByBrand: DashboardRow[];
-}
-
-interface RetailAudit {
-  ready: boolean;
-  errors: number;
-  warnings: number;
-  issues: Array<{
-    code: string;
-    severity: "error" | "warning";
-    count: number;
-    message: string;
-  }>;
-}
-
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || `Request failed (${response.status})`);
-  }
-  return response.json();
-}
-
-const money = (value: number | undefined) =>
-  new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value ?? 0));
-
-const quantity = (value: number | undefined) =>
-  new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value ?? 0));
-
-function isoDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function SummaryCard({
-  title,
-  value,
-  subtitle,
-  icon,
-}: {
-  title: string;
-  value: string;
-  subtitle?: string;
-  icon: ReactNode;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4 md:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-            {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
-          </div>
-          <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RankingTable({
-  title,
-  rows,
-  label,
-  showProfit = false,
-}: {
-  title: string;
-  rows: DashboardRow[];
-  label: (row: DashboardRow) => string;
-  showProfit?: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 overflow-x-auto">
-        <table className="w-full min-w-[420px] text-sm">
-          <thead>
-            <tr className="border-y bg-muted/30 text-left text-xs text-muted-foreground">
-              <th className="px-4 py-2">Name</th>
-              <th className="px-3 py-2 text-right">Qty</th>
-              <th className="px-3 py-2 text-right">Revenue</th>
-              {showProfit ? <th className="px-4 py-2 text-right">Profit</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length ? (
-              rows.map((row, index) => (
-                <tr key={`${label(row)}-${index}`} className="border-b last:border-0">
-                  <td className="px-4 py-2.5 font-medium">{label(row)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{quantity(row.quantity)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{money(row.revenue)}</td>
-                  {showProfit ? <td className="px-4 py-2.5 text-right tabular-nums">{money(row.profit)}</td> : null}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={showProfit ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
-                  No activity in this period.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </CardContent>
-    </Card>
-  );
 }
 
 function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]; mode: "low" | "out" | "slow" }) {
@@ -315,6 +169,26 @@ export default function RetailDashboard() {
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
+        {data && (
+          <RowsExportMenu
+            title="Retail Dashboard"
+            period={{ from, to }}
+            size="default"
+            sheetName="Best-selling products"
+            rows={data.bestSellingProducts}
+            columns={rankingSheet("Best-selling products", data.bestSellingProducts, productLabel, true).columns}
+            extraSheets={[
+              rankingSheet("Best-selling brands", data.bestSellingBrands, brandLabel, true),
+              rankingSheet("Best-selling sizes", data.bestSellingSizes, sizeLabel),
+              rankingSheet("Sales by location", data.salesByLocation, locationLabel, true),
+              stockSheet("Low-stock items", data.lowStock, "low"),
+              stockSheet("Out-of-stock products", data.outOfStock, "out"),
+              stockSheet("Slow-moving inventory", data.slowMoving, "slow"),
+            ]}
+            resource="retail.pos"
+            data-testid="button-export-retail-dashboard"
+          />
+        )}
       </PageHeader>
 
       <Card>
@@ -463,26 +337,12 @@ export default function RetailDashboard() {
             <RankingTable
               title="Best-selling products"
               rows={data.bestSellingProducts}
-              label={(row) => row.product_name ?? row.name ?? "—"}
+              label={productLabel}
               showProfit
             />
-            <RankingTable
-              title="Best-selling brands"
-              rows={data.bestSellingBrands}
-              label={(row) => row.name ?? row.brand_name ?? row.brand ?? "—"}
-              showProfit
-            />
-            <RankingTable
-              title="Best-selling sizes"
-              rows={data.bestSellingSizes}
-              label={(row) => row.name ?? row.size ?? "—"}
-            />
-            <RankingTable
-              title="Sales by location"
-              rows={data.salesByLocation}
-              label={(row) => row.name ?? row.location_name ?? "—"}
-              showProfit
-            />
+            <RankingTable title="Best-selling brands" rows={data.bestSellingBrands} label={brandLabel} showProfit />
+            <RankingTable title="Best-selling sizes" rows={data.bestSellingSizes} label={sizeLabel} />
+            <RankingTable title="Sales by location" rows={data.salesByLocation} label={locationLabel} showProfit />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">

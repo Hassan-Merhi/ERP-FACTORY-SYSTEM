@@ -21,6 +21,8 @@ interface WorkspaceHeaderControlsProps {
   user: WorkspaceUser;
   onLogout: () => void;
   simplifyMobileNavigation?: boolean;
+  /** False hides the notifications bell (POS sessions have no notifications feed). */
+  showNotifications?: boolean;
 }
 
 interface MobileWorkspaceControlsProps extends WorkspaceHeaderControlsProps {
@@ -51,6 +53,7 @@ export function WorkspaceHeaderControls({
   user,
   onLogout,
   simplifyMobileNavigation = false,
+  showNotifications = true,
 }: WorkspaceHeaderControlsProps) {
   return (
     <>
@@ -58,7 +61,7 @@ export function WorkspaceHeaderControls({
         <PendingSyncIndicator />
       </div>
 
-      {simplifyMobileNavigation ? (
+      {!showNotifications ? null : simplifyMobileNavigation ? (
         <div className="hidden sm:block">
           <NotificationsCenter />
         </div>
@@ -91,6 +94,7 @@ export default function MobileWorkspaceControls({
   open: controlledOpen,
   onOpenChange,
   simplifyMobileNavigation = false,
+  showNotifications = true,
 }: MobileWorkspaceControlsProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const direction = useApplicationDirection();
@@ -225,7 +229,7 @@ export default function MobileWorkspaceControls({
               <span className="text-sm">{t("workspace.pendingSync")}</span>
               <PendingSyncIndicator />
             </div>
-            {simplifyMobileNavigation && (
+            {simplifyMobileNavigation && showNotifications && (
               <div className="flex min-h-11 items-center justify-between gap-3 border-b py-3">
                 <span className="text-sm">{t("workspace.notifications")}</span>
                 <NotificationsCenter />

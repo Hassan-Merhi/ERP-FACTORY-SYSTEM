@@ -41,13 +41,12 @@ import {
   PropertiesAccounts,
   PropertiesAnalytics,
   PropertiesCreate,
-  PropertiesDashboard,
   PropertiesDaybook,
   PropertiesLedgerMonthly,
   PropertiesLedgerVouchers,
   PropertiesSettings,
   PropertiesVoucherDetail,
-  PropertiesVoucherEdit,
+  LegacyVoucherEditRedirect,
   PropertiesVouchers,
   TrackingHub,
   ContainersPage,
@@ -82,8 +81,8 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   return (
     <Switch>
       <Route path="/properties/help-training">{() => <PropertiesHelpTraining user={user} />}</Route>
-      {/* Compatibility-only dashboard: real cash/payable management remains reachable by old bookmarks. */}
-      <Route path="/properties/dashboard" component={PropertiesDashboard} />
+      {/* Retired compatibility dashboard (owner decision 13): old bookmarks open the Properties home. */}
+      <Route path="/properties/dashboard">{() => <Redirect replace to="/properties/daybook" />}</Route>
       <Route path="/properties/accounts" component={PropertiesAccounts} />
       {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}
       {isDeveloper && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
@@ -96,7 +95,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {isDeveloper && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
       {isDeveloper && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       {isDeveloper && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}
-      <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
+      <Route path="/properties/vouchers/:id/edit" component={LegacyVoucherEditRedirect} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
       <Route path="/properties/create" component={PropertiesCreate} />

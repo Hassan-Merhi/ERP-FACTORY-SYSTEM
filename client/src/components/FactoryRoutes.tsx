@@ -60,7 +60,7 @@ import {
   FactoryDaybook,
   FactoryDispatchBatchDetail,
   FactoryDispatchBatchScan,
-  FactoryDispatchBatches,
+  FactoryDispatchLoadings,
   FactoryEmployeeDetail,
   FactoryFinancialHub,
   FactoryFinancialSnapshot,
@@ -88,8 +88,6 @@ import {
   FactoryRentalWarehouses,
   FactoryReprintLabels,
   FactorySheetsAndSacks,
-  FactoryStockAllocation,
-  FactoryStockAllocationV3,
   FactoryStockAllocationV5,
   FactoryStockBaleList,
   FactoryStockItemDetail,
@@ -115,10 +113,11 @@ import {
   Settings,
   SpreadsheetEditor,
   VoucherDetail,
-  VoucherEdit,
+  LegacyVoucherEditRedirect,
   WipersReEntry,
 } from "@/lazyPages";
 
+const FactoryOptionalVouchers = lazy(() => import("@/pages/OptionalVouchers"));
 const FactoryOthers = lazy(() => import("@/pages/factory/FactoryOthers"));
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const FactoryMonthlyProductionMatrix = lazy(() => import("@/pages/factory/FactoryMonthlyProductionMatrix"));
@@ -248,7 +247,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
-      <Route path="/factory/vouchers/:id/edit" component={VoucherEdit} />
+      <Route path="/factory/optional-vouchers" component={FactoryOptionalVouchers} />
+      <Route path="/factory/vouchers/:id/edit" component={LegacyVoucherEditRedirect} />
       <Route path="/factory/voucher-detail/:voucherId" component={VoucherDetail} />
       <Route path="/factory/create" component={AccountingCreate} />
       <Route path="/factory/payroll" component={Payroll} />
@@ -282,11 +282,16 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/bale-tracking" component={FactoryBaleTracking} />
       <Route path="/factory/dispatch-batches/:batchId/rides/:rideId/scan" component={FactoryDispatchBatchScan} />
       <Route path="/factory/dispatch-batches/:id" component={FactoryDispatchBatchDetail} />
-      <Route path="/factory/dispatch-batches" component={FactoryDispatchBatches} />
+      {/* Dispatch Batches list retired for Loading Dispatch: the page key's route shows Container Loadings. */}
+      <Route path="/factory/dispatch-batches" component={FactoryDispatchLoadings} />
       <Route path="/factory/invoicing/proformas/:id/edit" component={FactoryStockAllocationV5EditProforma} />
       <Route path="/factory/invoicing" component={FactoryInvoicing} />
-      <Route path="/factory/stock-allocation" component={FactoryStockAllocation} />
-      <Route path="/factory/stock-allocation-v3" component={FactoryStockAllocationV3} />
+      <Route path="/factory/stock-allocation">
+        <Redirect replace to="/factory/stock-allocation-v5" />
+      </Route>
+      <Route path="/factory/stock-allocation-v3">
+        <Redirect replace to="/factory/stock-allocation-v5" />
+      </Route>
       <Route path="/factory/stock-allocation-v5/proformas/new" component={FactoryStockAllocationV5CreateProforma} />
       <Route path="/factory/stock-allocation-v5/proformas/:id/edit" component={FactoryStockAllocationV5EditProforma} />
       <Route path="/factory/stock-allocation-v5" component={FactoryStockAllocationV5} />

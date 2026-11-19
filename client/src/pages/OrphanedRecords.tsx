@@ -15,55 +15,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { AlertCircle, RefreshCw, AlertTriangle, Archive, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-interface OrphanedVoucher {
-  id: number;
-  voucherNumber: string;
-  voucherType: string;
-  voucherDate: string;
-  locationId: number | null;
-  locationName: string | null;
-  totalAmount: string;
-  description: string | null;
-  createdAt: string;
-}
-
-interface UnbalancedVoucher {
-  id: number;
-  voucherNumber: string;
-  voucherType: string;
-  voucherDate: string;
-  locationId: number | null;
-  locationName: string | null;
-  totalAmount: string;
-  description: string | null;
-  createdAt: string;
-  totalDebits: string;
-  totalCredits: string;
-  imbalance: string;
-}
-
-interface OrphanedRecordsResponse {
-  orphanedVouchers: OrphanedVoucher[];
-  unbalancedVouchers: UnbalancedVoucher[];
-}
-
-interface StockGroupArchive {
-  id: number;
-  companyId: number;
-  locationId: number;
-  stockGroupId: number;
-  locationName: string;
-  stockGroupName: string;
-  totalQuantity: string;
-  totalValue: string;
-  itemCount: number;
-  archivedBy: string;
-  archivedAt: string;
-  restoredAt: string | null;
-  deletedAt: string | null;
-  notes: string | null;
-}
+import type { OrphanedRecordsResponse, StockGroupArchive } from "./orphanedRecordsTypes";
 
 export default function OrphanedRecordsPage() {
   const appMode = useAppMode();

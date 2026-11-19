@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import {
   INTERCOMPANY_CANONICAL_DESTINATIONS,
   LEGACY_PROPERTIES_INTERCOMPANY_ROUTES,
@@ -109,7 +109,7 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
   });
 
   it("keeps old Properties route handlers guarded and redirect-only, while preserving new canonical screens", () => {
-    const routes = readFileSync("client/src/app/PropertiesRoutes.tsx", "utf8");
+    const routes = readModuleFamily("client/src/app/PropertiesRoutes.tsx");
     expect(routes).toContain("canTrade &&");
     expect(routes).toContain('legacyPropertiesIntercompanyDestination("linked-trades"');
     expect(routes).toContain('legacyPropertiesIntercompanyDestination("intercompany-payments"');
@@ -123,7 +123,7 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
   });
 
   it("moves the ERP payment page into Vouchers without removing destination ERP receiving access", () => {
-    const routes = readFileSync("client/src/routes/ErpRoutes.tsx", "utf8");
+    const routes = readModuleFamily("client/src/routes/ErpRoutes.tsx");
     expect(routes).toContain("LegacyIntercompanyPaymentRedirect");
     expect(routes).toContain('canAccess("vouchers") && canAccess("containers")');
     expect(routes).toContain('"/intercompany/payments"');
@@ -135,10 +135,10 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
   });
 
   it("retains linked PO, freight, receiving and cancellation in the real Properties container", () => {
-    const details = readFileSync("client/src/pages/containerdetail/components/ContainerDetailErpView.tsx", "utf8");
-    const panel = readFileSync("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx", "utf8");
-    const vouchers = readFileSync("client/src/pages/Vouchers.tsx", "utf8");
-    const payment = readFileSync("client/src/pages/intercompany/IntercompanyPayments.tsx", "utf8");
+    const details = readModuleFamily("client/src/pages/containerdetail/components/ContainerDetailErpView.tsx");
+    const panel = readModuleFamily("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx");
+    const vouchers = readModuleFamily("client/src/pages/Vouchers.tsx");
+    const payment = readModuleFamily("client/src/pages/intercompany/IntercompanyPayments.tsx");
     expect(details).toContain("PropertiesIntercompanyContainerWorkflow containerId={container.id}");
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
     expect(panel).toContain("<IntercompanyLifecycle physicalContainerId={containerId} embedded />");
@@ -152,10 +152,10 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
   });
 
   it("leaves accounting-side transaction and audit protections in place", () => {
-    const posting = readFileSync("server/services/intercompany/paymentSync.ts", "utf8");
-    const receipt = readFileSync("server/services/intercompany/receipt.ts", "utf8");
-    const cancel = readFileSync("server/services/intercompany/cancel.ts", "utf8");
-    const role = readFileSync("server/services/intercompany/pairedPaymentAuthorization.ts", "utf8");
+    const posting = readModuleFamily("server/services/intercompany/paymentSync.ts");
+    const receipt = readModuleFamily("server/services/intercompany/receipt.ts");
+    const cancel = readModuleFamily("server/services/intercompany/cancel.ts");
+    const role = readModuleFamily("server/services/intercompany/pairedPaymentAuthorization.ts");
     expect(posting).toContain("await requirePairedCashAuthorization(pair, actor)");
     expect(posting).toContain("db.transaction(async (tx)");
     expect(posting).toContain("postErpVoucherTx(tx");

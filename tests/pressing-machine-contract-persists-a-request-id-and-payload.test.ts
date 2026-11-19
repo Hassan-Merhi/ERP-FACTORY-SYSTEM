@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-const source = (file: string) => readFileSync(file, "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const source = (file: string) => readModuleFamily(file);
 const queue = source("client/src/pages/factory/pressing-scanner/pressingOfflineQueue.ts");
 const hook = source("client/src/pages/factory/pressing-scanner/usePressingOfflineSync.ts");
 const transport = source("client/src/pages/factory/pressing-scanner/pressingConfirmClient.ts");

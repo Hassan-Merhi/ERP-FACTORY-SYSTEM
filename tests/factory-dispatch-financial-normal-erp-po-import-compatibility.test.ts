@@ -17,6 +17,7 @@ import {
   parseFactoryTripPoIdentity,
   validateFactoryDispatchPoImport,
 } from "../server/routes/import/factoryDispatchPoImportGuard";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const fakeStock = { id: 33, code: "A100", name: "T-Shirts", deletedAt: null };
 const fakeSupplier = { id: 7, code: "SUP-01", active: true, deletedAt: null };
@@ -155,7 +156,7 @@ describe("Factory dispatch → Normal ERP PO import compatibility", () => {
 
   it("guards import-at-write, not only parse or validate, and never posts automatically from Factory", () => {
     const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
-    const importer = read("server/routes/import/po-import.ts");
+    const importer = readModuleFamily(path.join(process.cwd(), "server/routes/import/po-import.ts"));
     const parser = read("server/routes/bankAssetRoutes.ts");
     const exporter = read("server/routes/factory/customer-orders/loadingDispatchPoExportRoutes.ts");
     expect(parser).toContain("parseFactoryTripPoIdentity");

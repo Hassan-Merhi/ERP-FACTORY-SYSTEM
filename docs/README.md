@@ -16,7 +16,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Repository file length warning and hard cap |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | ERP file-upload and Excel-export size limits |
 | [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
 | [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
 | [erp-supplier-returns-phase4-stock-integrity.md](erp-supplier-returns-phase4-stock-integrity.md) | Return stock deduction, rollback and audit-integrity contract |
@@ -57,7 +57,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Current source file size warning and hard cap policy |
+| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning and 500-line source-code cap |
 
 ## How the business logic works
 
@@ -379,6 +379,7 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [factory-mix-cost-integrity-phase7.md](factory-mix-cost-integrity-phase7.md) | Factory Mix Cost Integrity — Phase 7 |
 | [file-size-limits-20261113.md](file-size-limits-20261113.md) | File upload and export size limits (source of truth: `shared/fileSizePolicy.ts`) |
 | [ui-unification/plan.md](ui-unification/plan.md) | UI Unification — standards, phased plan, owner decisions and progress tracker |
+| [ui-unification/closeout.md](ui-unification/closeout.md) | UI Unification — phases 1–4 close-out: status of every audit finding, exports added and what is still open |
 | [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
 | [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
 | [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |

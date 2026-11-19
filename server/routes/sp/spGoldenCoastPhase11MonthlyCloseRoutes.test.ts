@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url), "utf8");
-const indexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastMonthlyClose.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url));
+const indexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const serviceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastMonthlyClose.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 11 monthly close route surface", () => {

@@ -1,14 +1,11 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPosSalePostingRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const phase6RouteSource = readFileSync(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url), "utf8");
-const legacySalesSource = readFileSync(new URL("./spSalesRoutes.ts", import.meta.url), "utf8");
-const saleServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url),
-  "utf8"
-);
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPosSalePostingRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const phase6RouteSource = readModuleFamily(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url));
+const legacySalesSource = readModuleFamily(new URL("./spSalesRoutes.ts", import.meta.url));
+const saleServiceSource = readModuleFamily(new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url));
 
 describe("Golden Coast Phase 5 POS sale retirement", () => {
   it("keeps the Phase 5 implementation in source history but no longer mounts it", () => {

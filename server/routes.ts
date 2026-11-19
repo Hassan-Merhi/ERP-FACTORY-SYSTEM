@@ -4,8 +4,7 @@ import type { Server } from "http";
 import { registerApplicationRoutes } from "./routes/applicationRoutes";
 import { registerOperationalMonitoringRoutes } from "./routes/admin/operationalMonitoringRoutes";
 import { registerTrainingMediaRoutes } from "./routes/trainingMediaRoutes";
-import { registerLegacyQueueDecisionRoutes } from "./routes/offline/legacyQueueDecisionRoutes";
-import { registerBrowserSyncRoutes } from "./routes/offline/browserSyncRoutes";
+import { registerOfflineRoutes } from "./routes/offline/offlineRoutes";
 import { registerSeasonalAppearanceRoutes } from "./routes/seasonalAppearanceRoutes";
 import { registerTenantIsolationBoundary } from "./routes/tenantBoundaryRegistrar";
 import { registerStockTransferOrderWaApprovalWebhookRoutes } from "./routes/stockTransferOrderWaApprovalWebhookRoutes";
@@ -22,8 +21,7 @@ export function registerRoutes(app: Express): Promise<Server> {
   registerVoucherPathPhase5to6Boundary(app);
   registerOperationalMonitoringRoutes(app);
   registerTrainingMediaRoutes(app);
-  registerLegacyQueueDecisionRoutes(app);
-  registerBrowserSyncRoutes(app);
+  registerOfflineRoutes(app);
   registerSeasonalAppearanceRoutes(app);
   return registerApplicationRoutes(app);
 }

@@ -4,6 +4,8 @@
  * Extracted from FactoryWorkerDetail.tsx during the Phase 4 god-file split.
  */
 
+import { formatUsd } from "@/lib/moneyDisplay";
+
 export const PAYROLL_STATUS: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "border-amber-400 text-amber-700 dark:text-amber-400" },
   APPROVED: { label: "Approved", className: "border-blue-400 text-blue-700 dark:text-blue-400" },
@@ -37,7 +39,7 @@ export function getInitials(name: string) {
 
 export function fmt(val: string | number | null | undefined) {
   const n = parseFloat(String(val || 0));
-  return isNaN(n) ? "$0.00" : `$${n.toFixed(2)}`;
+  return isNaN(n) ? "$0.00" : formatUsd(n, 2);
 }
 
 export function fmtNum(val: string | number | null | undefined) {

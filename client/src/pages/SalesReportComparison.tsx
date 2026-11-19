@@ -11,88 +11,20 @@ import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
+import { SalesReportComparisonExport } from "./SalesReportComparisonExport";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Building2, ChevronDown } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
-
-interface SalesItem {
-  stockItemId: number;
-  stockItemCode: string;
-  stockItemName: string;
-  stockGroupName: string | null;
-  quantity: string;
-  totalSales: string;
-  costProfit: string;
-  configuredProfit: number;
-  configuredProfitPercentage: number;
-  costProfitPercentage: number;
-  totalConfiguredCost: number;
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-}
-
-interface ItemRow {
-  stockItemCode: string;
-  stockItemName: string;
-  stockGroupName: string;
-  byCompany: Record<
-    string,
-    {
-      totalSales: number;
-      totalQty: number;
-      costProfit: number;
-    }
-  >;
-}
-
-type ViewFilter = "all" | "gaining" | "losing";
-
-interface Company {
-  code: string;
-  name: string;
-}
-
-function getAiResult(row: ItemRow, companies: Company[]): string {
-  if (companies.length < 2) return "—";
-
-  const data = companies.map((c) => ({
-    code: c.code,
-    name: c.name.toUpperCase(),
-    qty: row.byCompany[c.code]?.totalQty ?? 0,
-    profit: row.byCompany[c.code]?.costProfit ?? 0,
-  }));
-
-  const hasAnyData = data.some((d) => d.qty > 0 || d.profit !== 0);
-  if (!hasAnyData) return "—";
-
-  const maxQty = Math.max(...data.map((d) => d.qty));
-  const maxProfit = Math.max(...data.map((d) => d.profit));
-
-  const qtyWinners = data.filter((d) => d.qty === maxQty);
-  const profitWinners = data.filter((d) => d.profit === maxProfit);
-
-  const qtyTied = qtyWinners.length > 1;
-  const profitTied = profitWinners.length > 1;
-
-  if (qtyTied && profitTied) return "EQUAL IN BOTH";
-
-  const sameWinner = !qtyTied && !profitTied && qtyWinners[0].code === profitWinners[0].code;
-
-  if (sameWinner) {
-    return `${qtyWinners[0].name} BETTER IN SALES & PROFIT`;
-  }
-
-  const salesPart = qtyTied ? "SALES EQUAL" : `${qtyWinners[0].name} BETTER IN SALES`;
-  const profitPart = profitTied ? "PROFIT EQUAL" : `${profitWinners[0].name} BETTER IN PROFIT`;
-
-  if (qtyTied) return profitPart;
-  if (profitTied) return salesPart;
-  return `${profitPart} — ${salesPart}`;
-}
+import {
+  getAiResult,
+  summaryForCompany,
+  type SalesItem,
+  type ItemRow,
+  type ViewFilter,
+} from "./salesReportComparisonModel";
 
 export default function SalesReportComparison() {
   const [, navigate] = useLocation();
@@ -250,19 +182,6 @@ export default function SalesReportComparison() {
     );
   };
 
-  const summaryForCompany = (code: string) => {
-    let totalSales = 0,
-      totalProfit = 0;
-    for (const row of tableData) {
-      const entry = row.byCompany[code];
-      if (entry) {
-        totalSales += entry.totalSales;
-        totalProfit += entry.costProfit;
-      }
-    }
-    return { totalSales, totalProfit };
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -271,7 +190,11 @@ export default function SalesReportComparison() {
           title="Company Comparison"
           subtitle="Compare sales performance across companies"
           onBack={() => navigate("/sales-report")}
-        />
+        >
+          {enabled && (
+            <SalesReportComparisonExport rows={tableData} companies={displayCompanies} from={startDate} to={endDate} />
+          )}
+        </PageHeader>
 
         {/* Controls */}
         <ErpMobileFilters
@@ -441,7 +364,7 @@ export default function SalesReportComparison() {
             {/* Summary cards */}
             <div className="flex flex-wrap gap-3 mb-6">
               {displayCompanies.map((c) => {
-                const { totalSales, totalProfit } = summaryForCompany(c.code);
+                const { totalSales, totalProfit } = summaryForCompany(tableData, c.code);
                 return (
                   <Card key={c.code} className="flex-1 min-w-44">
                     <CardContent className="p-4">

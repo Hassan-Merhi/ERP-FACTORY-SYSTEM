@@ -12,6 +12,8 @@ import Decimal from "decimal.js";
 import { storage } from "../../storage";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { companyRateDateSchema, companyRateValueSchema } from "@shared/companyRatePolicy";
+import { calculateZmwSaleAmounts, type ZmwSaleLine } from "@shared/posZmwMoney";
+import { exactCfaSaleAmounts } from "@shared/posCfaMoney";
 
 export class PosZmwRateError extends Error {
   readonly statusCode = 409;
@@ -106,4 +108,40 @@ export function assertZmwImportPrices(
       );
     }
   }
+}
+
+export { calculateZmwSaleAmounts };
+
+/**
+ * The exact local-currency total a sale posts, with its USD value, or null
+ * when the sale posts its USD total x rate as before. Kwacha sales always
+ * carry their typed prices (throws otherwise). A CFA sale does when the
+ * client sent them and they agree with the USD prices. `keepUsdPosting` holds
+ * a CFA sale on the previous posting: supplier-partner companies split the
+ * payable in USD, and a sale captured on the factory LAN is replayed to the
+ * cloud from cent-rounded prices, so both sides must post the same way.
+ */
+export function posNativeSaleAmounts(
+  lines: readonly ZmwSaleLine[],
+  lockedCurrency: LockedPosCurrency,
+  keepUsdPosting: boolean,
+  allowZmwReconstruction = false
+): { nativeTotal: string; usdTotal: number } | null {
+  if (lockedCurrency.currency === "ZMW") {
+    return calculateZmwSaleAmounts(lines, lockedCurrency.exchangeRate!, allowZmwReconstruction);
+  }
+  if (lockedCurrency.currency === "CFA" && !keepUsdPosting) {
+    return exactCfaSaleAmounts(lines, lockedCurrency.exchangeRate);
+  }
+  return null;
+}
+
+/** A new sale: reject forged Kwacha prices first, then resolve what it posts. */
+export function checkedPosNativeSaleAmounts(
+  lines: readonly (ZmwSaleLine & { rate: unknown })[],
+  lockedCurrency: LockedPosCurrency,
+  keepUsdPosting: boolean
+): { nativeTotal: string; usdTotal: number } | null {
+  assertZmwImportPrices(lines, lockedCurrency);
+  return posNativeSaleAmounts(lines, lockedCurrency, keepUsdPosting);
 }

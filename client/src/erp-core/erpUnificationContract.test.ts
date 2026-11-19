@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { moduleFamilyFiles, readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(path, "utf8");
+const source = (path: string) => readModuleFamily(path);
 
 describe("ERP unification final regression contracts", () => {
   it("keeps the generic barrel free from eager React Hook Form evaluation", () => {
@@ -51,8 +52,16 @@ describe("ERP unification final regression contracts", () => {
       "client/src/pages/ItemMarketAnalysis.tsx",
     ];
     for (const path of migrated) {
-      const imports = source(path).match(/from "@\/erp-core";/g) ?? [];
-      expect(imports.length, path).toBe(1);
+      // Split pages are a family of modules: no member may import ERP core twice,
+      // and the family must still use it.
+      const counts = moduleFamilyFiles(path).map(
+        (member: string) => (readFileSync(member, "utf8").match(/from "@\/erp-core";/g) ?? []).length
+      );
+      for (const count of counts) expect(count, path).toBeLessThanOrEqual(1);
+      expect(
+        counts.reduce((sum: number, count: number) => sum + count, 0),
+        path
+      ).toBeGreaterThanOrEqual(1);
     }
   });
   it("uses company-scoped ERP page grants in every remaining reader", () => {

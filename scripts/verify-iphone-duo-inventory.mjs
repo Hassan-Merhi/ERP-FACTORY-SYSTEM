@@ -13,7 +13,7 @@ const required = {
     "/factory/monthly-production-matrix",
     "/factory/production-bonuses",
   ],
-  properties: ["/properties/dashboard", "/properties/rentals", "/properties/vouchers"],
+  properties: ["/properties/daybook", "/properties/rentals", "/properties/vouchers"],
   "supplier-partner": ["/sp", "/sp/reports"],
   "retail-admin": ["/retail/inventory", "/retail/pos", "/retail/reports"],
   pos: ["/pos-containers", "/pos-daybook", "/pos-transfer-orders"],

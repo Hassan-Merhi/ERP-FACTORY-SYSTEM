@@ -1,32 +1,27 @@
-import type Decimal from "decimal.js";
 /** Confirmed HP-borne shared invoices: exact proportional allocation and controlled revisions. */
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   containerCharges,
   containers,
   intercompanyAuditEvents,
-  intercompanyPermissionGrants,
   intercompanySharedChargeAllocations,
   intercompanySharedChargeInvoices,
   intercompanySharedChargePoAllocations,
   intercompanyTrades,
-  userCompanyRoles,
 } from "@shared/schema";
-import { db, type DbTransaction } from "../../db";
-import { MoneyDecimal, sumMoney } from "../../lib/money";
+import { db } from "../../db";
+import { MoneyDecimal } from "../../lib/money";
 import {
   applyCostDeltasTx,
   beginRevisionTx,
   completeRevisionTx,
   type EditIdentity,
   loadTradeTx,
-  postingDay,
   rejectEdit,
   requireUnreceived,
   validateRequestKey,
-  withTradeScope,
 } from "./tradeSync";
-import { allocateByWeights, cents, fullPoCost } from "./tradeRevisionMath";
+import { cents, fullPoCost } from "./tradeRevisionMath";
 import { releaseEditOverallocationTx } from "./paymentAllocationCore";
 import {
   createTenantDatabaseScope,
@@ -37,30 +32,19 @@ import {
   getCompanyRequestRuntimeContext,
   runWithCompanyRequestRuntimeContext,
 } from "../security/companyRequestRuntimeContext";
-
-type ChargeField = "freight" | "surcharge" | "fumigation" | "documentCharges" | "otherCharges";
-const FIELDS = new Set<ChargeField>(["freight", "surcharge", "fumigation", "documentCharges", "otherCharges"]);
-const CODES: Record<ChargeField, string> = {
-  freight: "Freight",
-  surcharge: "Surcharge",
-  fumigation: "Fumigation",
-  documentCharges: "Document Charges",
-  otherCharges: "Other Charges",
-};
-const IMPORT_LOCK = 741235;
-
-export type SharedChargeEntry = { tradeId: number; expectedVersion: number; amount: string };
-export type ConfirmSharedChargeInput = {
-  sourceCompanyId: number;
-  invoiceKey: string;
-  chargeType: ChargeField;
-  faceAmount: string;
-  evidenceReference: string;
-  postingDate: string;
-  requestKey: string;
-  reason: string;
-  allocations: SharedChargeEntry[];
-};
+import {
+  CODES,
+  hasSharedChargeGrant,
+  lockSource,
+  poSplit,
+  requireInputs,
+  validateAllocations,
+  type ChargeField,
+  type SharedChargeEntry,
+} from "./previewSharedChargeAllocation";
+export { previewSharedChargeAllocation } from "./previewSharedChargeAllocation";
+export type { ConfirmSharedChargeInput, SharedChargeEntry } from "./previewSharedChargeAllocation";
+export { confirmSharedCharge } from "./confirmSharedCharge";
 export type ReviseSharedChargeInput = {
   invoiceId: number;
   expectedInvoiceVersion: number;
@@ -69,105 +53,6 @@ export type ReviseSharedChargeInput = {
   reason: string;
   allocations: SharedChargeEntry[];
 };
-
-function requireInputs(input: { postingDate: string; requestKey: string; reason: string }) {
-  postingDay(input.postingDate);
-  validateRequestKey(input.requestKey);
-  if (typeof input.reason !== "string" || input.reason.trim().length < 3 || input.reason.length > 1000) {
-    rejectEdit("Enter a meaningful invoice allocation reason", "IC_CHARGE_REASON", 422);
-  }
-}
-function validateAllocations(allocations: SharedChargeEntry[], face: Decimal) {
-  if (!Array.isArray(allocations) || !allocations.length || allocations.length > 100) {
-    rejectEdit("Select one to one hundred eligible containers", "IC_CHARGE_ALLOCATION", 422);
-  }
-  if (new Set(allocations.map((x) => x.tradeId)).size !== allocations.length) {
-    rejectEdit("Each container must appear only once on the invoice", "IC_CHARGE_DUPLICATE", 422);
-  }
-  const values = allocations.map((x) => {
-    if (
-      !Number.isSafeInteger(x.tradeId) ||
-      x.tradeId <= 0 ||
-      !Number.isSafeInteger(x.expectedVersion) ||
-      x.expectedVersion <= 0 ||
-      typeof x.amount !== "string" ||
-      !/^\d+(\.\d{1,2})?$/.test(x.amount)
-    ) {
-      rejectEdit(
-        "Container allocation requires a positive trade ID, version and cent-exact amount",
-        "IC_CHARGE_ALLOCATION",
-        422
-      );
-    }
-    const value = cents(x.amount);
-    if (value.lt(0)) rejectEdit("Shared charge allocation cannot be negative");
-    return value;
-  });
-  if (!sumMoney(values).eq(face)) {
-    rejectEdit(
-      "Shared allocation total must equal the unchanged external invoice face amount",
-      "IC_CHARGE_TOTAL_MISMATCH",
-      422
-    );
-  }
-  return values;
-}
-function assertInvoiceInput(input: ConfirmSharedChargeInput) {
-  requireInputs(input);
-  if (
-    !Number.isSafeInteger(input.sourceCompanyId) ||
-    input.sourceCompanyId <= 0 ||
-    !/^[A-Za-z0-9._/:-]{3,120}$/.test(input.invoiceKey) ||
-    !FIELDS.has(input.chargeType) ||
-    !input.evidenceReference?.trim() ||
-    input.evidenceReference.trim().length < 3 ||
-    input.evidenceReference.length > 500 ||
-    typeof input.faceAmount !== "string" ||
-    !/^\d+(\.\d{1,2})?$/.test(input.faceAmount)
-  ) {
-    rejectEdit("Invalid original supplier invoice reference, type, evidence or USD amount", "IC_CHARGE_INVALID", 422);
-  }
-  const face = cents(input.faceAmount);
-  if (!face.gt(0)) rejectEdit("External shared invoice amount must be positive", "IC_CHARGE_INVALID", 422);
-  return face;
-}
-/** A specific grant makes ordinary users eligible. Admin is not a default charge editor. */
-async function hasSharedChargeGrant(
-  identity: EditIdentity,
-  invoiceKey: string,
-  relations: readonly number[],
-  scopeSourceId: number
-) {
-  if (identity.initiatingCompanyId === scopeSourceId && ["Owner", "Developer"].includes(identity.actorRole))
-    return true;
-  const [member] = await db
-    .select()
-    .from(userCompanyRoles)
-    .where(
-      and(
-        eq(userCompanyRoles.userId, identity.actorUserId),
-        eq(userCompanyRoles.companyId, identity.initiatingCompanyId)
-      )
-    );
-  if (!member && identity.actorRole !== "Developer") return false;
-  const grants = await db
-    .select()
-    .from(intercompanyPermissionGrants)
-    .where(
-      and(
-        eq(intercompanyPermissionGrants.userId, identity.actorUserId),
-        eq(intercompanyPermissionGrants.grantingCompanyId, identity.initiatingCompanyId),
-        eq(intercompanyPermissionGrants.permission, "shared_charge_editor"),
-        isNull(intercompanyPermissionGrants.revokedAt),
-        inArray(intercompanyPermissionGrants.relationshipId, [...relations])
-      )
-    );
-  const invoiceGrant = grants.some((g) => g.scope === "invoice" && g.invoiceKey === invoiceKey);
-  const relationshipCoverage = relations.every((id) =>
-    grants.some((g) => g.scope === "relationship" && g.relationshipId === id)
-  );
-  return invoiceGrant || relationshipCoverage;
-}
 /** Only invoked AFTER explicit related-invoice permission verification. */
 async function withGrantedInvoiceScope<T>(
   identity: EditIdentity,
@@ -194,235 +79,6 @@ async function withGrantedInvoiceScope<T>(
         run
       )
     : run();
-}
-async function lockSource(tx: DbTransaction, sourceCompanyId: number) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK}, ${sourceCompanyId})`);
-}
-function poSplit(data: Awaited<ReturnType<typeof loadTradeTx>>, amount: Decimal) {
-  const groups = data.source;
-  const weights = groups.map((g) => cents(g.po.itemsTotal ?? "0"));
-  return allocateByWeights(amount, weights).map((share, i) => ({ poId: groups[i].po.id, amount: share }));
-}
-
-/** Suggested allocation is purchase-value weighted, but is NEVER confirmed without user approval. */
-export async function previewSharedChargeAllocation(
-  input: {
-    sourceCompanyId: number;
-    tradeIds: number[];
-    amount: string;
-  },
-  identity: EditIdentity
-) {
-  if (input.sourceCompanyId !== identity.initiatingCompanyId || !["Owner", "Developer"].includes(identity.actorRole)) {
-    rejectEdit("Only the Properties Owner/Developer can create a shared invoice", "IC_CHARGE_FORBIDDEN", 403);
-  }
-  if (
-    !Array.isArray(input.tradeIds) ||
-    !input.tradeIds.length ||
-    input.tradeIds.length > 100 ||
-    new Set(input.tradeIds).size !== input.tradeIds.length ||
-    !/^\d+(\.\d{1,2})?$/.test(input.amount)
-  ) {
-    rejectEdit("Select unique trade IDs and a cent-exact confirmed amount", "IC_CHARGE_INPUT", 422);
-  }
-  const face = cents(input.amount);
-  if (!face.gt(0)) rejectEdit("Shared invoice amount must be positive");
-  const tradeRows = await db.select().from(intercompanyTrades).where(inArray(intercompanyTrades.id, input.tradeIds));
-  if (
-    tradeRows.length !== input.tradeIds.length ||
-    tradeRows.some((trade) => trade.sourceCompanyId !== input.sourceCompanyId || trade.state !== "active")
-  ) {
-    rejectEdit("All shared invoice containers must be active and belong to one Properties source");
-  }
-  return withTradeScope(
-    identity,
-    tradeRows.map((trade) => trade.destinationCompanyId),
-    async () => {
-      return db.transaction(async (tx) => {
-        const records = [];
-        for (const id of input.tradeIds) {
-          const data = await loadTradeTx(tx, id, false);
-          requireUnreceived(data);
-          records.push({
-            tradeId: id,
-            version: data.trade.version,
-            containerNumber: data.physical.containerNumber,
-            weight: cents(data.physical.itemsTotal ?? "0"),
-          });
-        }
-        const proposed = allocateByWeights(
-          face,
-          records.map((r) => r.weight)
-        );
-        return {
-          faceAmount: face.toFixed(2),
-          allocations: records.map((r, i) => ({
-            tradeId: r.tradeId,
-            containerNumber: r.containerNumber,
-            expectedVersion: r.version,
-            suggestedAmount: proposed[i].toFixed(2),
-          })),
-        };
-      });
-    }
-  );
-}
-export async function confirmSharedCharge(input: ConfirmSharedChargeInput, identity: EditIdentity) {
-  const face = assertInvoiceInput(input);
-  const amounts = validateAllocations(input.allocations, face);
-  if (input.sourceCompanyId !== identity.initiatingCompanyId || !["Owner", "Developer"].includes(identity.actorRole)) {
-    rejectEdit(
-      "Only the Properties Owner/Developer can confirm a new external shared invoice",
-      "IC_CHARGE_FORBIDDEN",
-      403
-    );
-  }
-  const trades = await db
-    .select()
-    .from(intercompanyTrades)
-    .where(
-      inArray(
-        intercompanyTrades.id,
-        input.allocations.map((a) => a.tradeId)
-      )
-    );
-  if (
-    trades.length !== input.allocations.length ||
-    trades.some((t) => t.sourceCompanyId !== input.sourceCompanyId || t.state !== "active")
-  ) {
-    rejectEdit("Invoice must contain distinct active containers of one Properties company");
-  }
-  return withTradeScope(
-    identity,
-    trades.map((t) => t.destinationCompanyId),
-    () =>
-      db.transaction(async (tx) => {
-        await lockSource(tx, input.sourceCompanyId);
-        const [same] = await tx
-          .select()
-          .from(intercompanySharedChargeInvoices)
-          .where(
-            and(
-              eq(intercompanySharedChargeInvoices.sourceCompanyId, input.sourceCompanyId),
-              eq(intercompanySharedChargeInvoices.externalInvoiceKey, input.invoiceKey)
-            )
-          );
-        if (same) rejectEdit("That external shared invoice has already been entered", "IC_CHARGE_DUPLICATE");
-        const data = [];
-        for (const entry of input.allocations) {
-          const snap = await loadTradeTx(tx, entry.tradeId);
-          requireUnreceived(snap);
-          if (snap.trade.version !== entry.expectedVersion) {
-            rejectEdit("The container price changed; refresh the invoice allocation", "IC_CHARGE_STALE_VERSION");
-          }
-          data.push(snap);
-        }
-        const [invoice] = await tx
-          .insert(intercompanySharedChargeInvoices)
-          .values({
-            sourceCompanyId: input.sourceCompanyId,
-            externalInvoiceKey: input.invoiceKey,
-            chargeType: input.chargeType,
-            faceAmount: face.toFixed(2),
-            evidenceReference: input.evidenceReference.trim(),
-            currency: "USD",
-            createdBy: identity.actorUserId,
-            state: "draft",
-          })
-          .returning();
-        const result = [];
-        for (const [index, snap] of data.entries()) {
-          const amount = amounts[index];
-          const pos = poSplit(snap, amount);
-          const before = fullPoCost(snap.destination.po);
-          const revision = await beginRevisionTx(tx, snap, {
-            expectedVersion: snap.trade.version,
-            requestKey:
-              "ic-charge:" + invoice.id + ":" + snap.trade.id + ":" + validateRequestKey(input.requestKey).slice(0, 64),
-            kind: "shared_invoice_confirm",
-            actorUserId: identity.actorUserId,
-            initiatingCompanyId: identity.initiatingCompanyId,
-            postingDate: input.postingDate,
-            amountAfter: before.plus(amount).toFixed(2),
-            reason: input.reason,
-            evidence: {
-              externalInvoiceKey: input.invoiceKey,
-              invoiceId: invoice.id,
-              allocatedAmount: amount.toFixed(2),
-            },
-          });
-          const [charge] = await tx
-            .insert(containerCharges)
-            .values({
-              containerId: snap.physical.id,
-              chargeType: CODES[input.chargeType],
-              amount: amount.toFixed(2),
-            })
-            .returning();
-          await tx.insert(intercompanySharedChargeAllocations).values({
-            invoiceId: invoice.id,
-            tradeId: snap.trade.id,
-            amount: amount.toFixed(2),
-            containerChargeId: charge.id,
-          });
-          await tx.insert(intercompanySharedChargePoAllocations).values(
-            pos.map((p) => ({
-              invoiceId: invoice.id,
-              tradeId: snap.trade.id,
-              sourcePoId: p.poId,
-              amount: p.amount.toFixed(2),
-            }))
-          );
-          const applied = await applyCostDeltasTx(tx, snap, {
-            revisionId: revision.id,
-            postingDate: input.postingDate,
-            actorUserId: identity.actorUserId,
-            reason: input.reason,
-            poDeltas: pos.map((p) => ({
-              poId: p.poId,
-              goods: new MoneyDecimal(0),
-              charge: p.amount,
-              chargeField: input.chargeType,
-            })),
-          });
-          const version = await completeRevisionTx(
-            tx,
-            snap,
-            revision.id,
-            applied.amountAfter,
-            applied.vouchers,
-            identity,
-            "shared_invoice_confirm",
-            { invoiceId: invoice.id, amount: amount.toFixed(2), invoiceReference: input.invoiceKey }
-          );
-          result.push({ tradeId: snap.trade.id, version, amount: amount.toFixed(2), landedCost: applied.amountAfter });
-        }
-        await tx
-          .update(intercompanySharedChargeInvoices)
-          .set({ state: "confirmed", confirmedAt: new Date() })
-          .where(eq(intercompanySharedChargeInvoices.id, invoice.id));
-        await tx.insert(intercompanyAuditEvents).values({
-          eventKey: "ic-shared-invoice:" + invoice.id + ":1",
-          sourceCompanyId: input.sourceCompanyId,
-          actorUserId: identity.actorUserId,
-          eventType: "shared-invoice-confirmed",
-          sourceReference: input.invoiceKey,
-          payload: {
-            invoiceId: invoice.id,
-            faceAmount: face.toFixed(2),
-            chargeType: input.chargeType,
-            allocations: result,
-          },
-        });
-        return {
-          invoiceId: invoice.id,
-          version: 1,
-          externalInvoiceKey: input.invoiceKey,
-          faceAmount: face.toFixed(2),
-          allocations: result,
-        };
-      })
-  );
 }
 /** Returns only this invoiced set of linked containers; unrelated finances are never exposed. */
 export async function sharedInvoiceDetail(invoiceId: number, identity: EditIdentity) {

@@ -235,16 +235,17 @@ describe("transaction journal page behavior", () => {
   it("resets pagination for every filter path and can clear the complete filter set", () => {
     render(<TransactionJournal />);
 
-    fireEvent.click(screen.getByTestId("button-next-page"));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+    expect(screen.getByTestId("journal-pagination")).toHaveTextContent("Showing 51–100 of 150 transactions");
     fireEvent.click(screen.getByTestId("chip-type-payment"));
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("button-next-page"));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     fireEvent.click(screen.getByTestId("checkbox-company-4"));
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("button-next-page"));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     fireEvent.change(screen.getByTestId("input-search"), { target: { value: "PAY-101" } });
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
 

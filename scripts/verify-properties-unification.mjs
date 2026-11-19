@@ -52,7 +52,7 @@ const checks = [
   ["cross-module Properties payment deletion UI blocked", () => content.premium.includes("mayOfferRentalPaymentDelete")],
   ["payment day display is timezone neutral", () => content.paymentUi.includes('timeZone: "UTC"')],
   ["six pinned Properties pages", () => (content.navigation.match(/navigation: "pinned"/g) ?? []).length === 6],
-  ["operational legacy dashboard retained", () => content.routes.includes('path="/properties/dashboard" component={PropertiesDashboard}')],
+  ["retired compatibility dashboard redirects to the daybook", () => content.routes.includes('<Route path="/properties/dashboard">{() => <Redirect replace to="/properties/daybook" />}</Route>')],
   ["compatibility dashboard hidden from pinned navigation", () => content.navigation.includes('path: "/properties/dashboard", label: "Compatibility Dashboard", parent: null, capability: "workspace", navigation: "hidden"')],
   ["legacy rental redirects registered from manifest", () => content.routes.includes("Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map")],
   ["unknown routes safely redirect with replace", () => content.routes.includes('<Redirect replace to="/properties/daybook" />')],

@@ -1,11 +1,11 @@
 /** Phase 5 route/workflow safeguards; full PostgreSQL/Green API E2E in Phase 7. */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { columnDefinition, hasPolicy, tableRowLevelSecurity, triggerDefinition } from "./helpers/schemaManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 
 const snapshot = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
 const delivery = read("server/services/stockTransferOrderWaDeliveryWorker.ts");

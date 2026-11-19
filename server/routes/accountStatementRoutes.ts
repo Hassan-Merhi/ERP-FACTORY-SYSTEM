@@ -10,98 +10,29 @@ import { toArrayBuffer } from "../lib/bufferCompatibility";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import {
-  assertValidPdfBuffer,
-  normalizeStatementDate,
-  statementDateKey,
-  validateStatementDateRange,
-} from "../lib/accountStatementExportSafety";
+import { normalizeStatementDate, validateStatementDateRange } from "../lib/accountStatementExportSafety";
 import path from "path";
 import fs from "fs";
-import { eq, and, desc, isNotNull, type SQL } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
-import { MoneyDecimal, toMoney } from "../lib/money";
-import { storage } from "../storage";
+import { toMoney } from "../lib/money";
 import { requireAuth } from "../auth";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
-import {
-  loadCustomerLedgerEntryRows,
-  loadCustomerNotInLedger,
-} from "../services/accounting/balances/customerLedgerStatement";
+import { loadCustomerNotInLedger } from "../services/accounting/balances/customerLedgerStatement";
 import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { projectCustomerStatementLines } from "./factory/customers-core/heldUnfinalizedCustomerCharges";
 import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
-import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
+import { summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
+import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts, voucherEntries } from "@shared/schema";
 import {
-  bankAccounts,
-  companies,
-  customers,
-  employees,
-  fixedAssets,
-  ledgerAccounts,
-  suppliers,
-  voucherEntries,
-  vouchers,
-} from "@shared/schema";
-import type { AccountStatementEntryRow } from "../storage/accounting/vouchers";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+  registerAccountStatementRoutesPart1,
+  registerAccountStatementRoutesPart2,
+} from "./registerAccountStatementRoutesPart2";
+import { accountStatementRoutesStep } from "./accountStatementRoutesStep";
 
 export function registerAccountStatementRoutes(app: Express) {
-  app.get("/api/accounts/:type/:id/deleted-vouchers", requireAuth, async (req, res) => {
-    try {
-      const accountType = req.params.type;
-      const accountId = parseInt(req.params.id);
-      const companyId = req.session.currentCompanyId;
-
-      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid ID" });
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      let entryFilter: SQL<unknown> | undefined;
-      switch (accountType) {
-        case "ledger":
-          entryFilter = eq(voucherEntries.ledgerAccountId, accountId);
-          break;
-        case "bank":
-          entryFilter = eq(voucherEntries.bankAccountId, accountId);
-          break;
-        case "fixed-asset":
-          entryFilter = eq(voucherEntries.fixedAssetId, accountId);
-          break;
-        case "supplier":
-          entryFilter = eq(voucherEntries.supplierId, accountId);
-          break;
-        case "employee":
-          entryFilter = eq(voucherEntries.employeeId, accountId);
-          break;
-        case "customer":
-          entryFilter = eq(voucherEntries.customerId, accountId);
-          break;
-        default:
-          return res.json([]);
-      }
-
-      const results = await db
-        .selectDistinct({
-          id: vouchers.id,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          voucherDate: vouchers.voucherDate,
-          totalAmount: vouchers.totalAmount,
-          description: vouchers.description,
-          locationName: vouchers.locationName,
-          deletedAt: vouchers.deletedAt,
-        })
-        .from(vouchers)
-        .innerJoin(voucherEntries, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(eq(vouchers.companyId, companyId), isNotNull(vouchers.deletedAt), entryFilter))
-        .orderBy(desc(vouchers.deletedAt));
-
-      res.json(results);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerAccountStatementRoutesPart1(app);
 
   const readAgentPrePeriodBalance = async (req: Request, res: Response) => {
     try {
@@ -217,312 +148,39 @@ export function registerAccountStatementRoutes(app: Express) {
     requireFactoryAgentStatementAccount,
     readAgentPrePeriodBalance
   );
+  registerAccountStatementRoutesPart2(app);
+  registerAccountStatementRoutesPart3(app);
+}
 
-  app.get("/api/accounts/:type/:id/statement-pdf", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const accountType = req.params.type;
-      const accountId = parseInt(req.params.id);
-      const companyId = req.session.currentCompanyId;
-      const { startDate: startDateRaw, endDate: endDateRaw, lang: langRaw } = req.query;
-
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
-      // Anything outside this set reached the generator's trailing else and
-      // threw "Unknown account type", which the catch reported as a 500. These
-      // are exactly the types the generator branches on, and the same set the
-      // statement route above validates against.
-      if (!["ledger", "bank", "fixed-asset", "supplier", "employee", "customer"].includes(accountType)) {
-        return res.status(400).json({ message: "Unknown account type" });
-      }
-      if (startDateRaw !== undefined && typeof startDateRaw !== "string") {
-        return res.status(400).json({ message: "startDate must be a single YYYY-MM-DD value" });
-      }
-      if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
-        return res.status(400).json({ message: "endDate must be a single YYYY-MM-DD value" });
-      }
-      if (langRaw !== undefined && typeof langRaw !== "string") {
-        return res.status(400).json({ message: "lang must be a single string value" });
-      }
-      const startDate = startDateRaw;
-      const endDate = endDateRaw;
-      const lang = langRaw ?? "en";
-      const dateRange = validateStatementDateRange(startDate, endDate);
-      if (!dateRange.ok) return res.status(400).json({ message: dateRange.message });
-
-      const { generateAccountStatementPdf } = await import("../lib/accountStatementPdfGenerator");
-      const pdfBuf = await generateAccountStatementPdf({ accountType, accountId, companyId, startDate, endDate, lang });
-      assertValidPdfBuffer(pdfBuf);
-
-      let resolvedName = `${accountType}_${accountId}`;
-      try {
-        if (accountType === "ledger") {
-          const [r] = await db
-            .select({ name: ledgerAccounts.name })
-            .from(ledgerAccounts)
-            .where(eq(ledgerAccounts.id, accountId));
-          resolvedName = r?.name ?? resolvedName;
-        } else if (accountType === "bank") {
-          const [r] = await db
-            .select({ name: bankAccounts.name })
-            .from(bankAccounts)
-            .where(eq(bankAccounts.id, accountId));
-          resolvedName = r?.name ?? resolvedName;
-        } else if (accountType === "fixed-asset") {
-          const [r] = await db
-            .select({ name: fixedAssets.name })
-            .from(fixedAssets)
-            .where(eq(fixedAssets.id, accountId));
-          resolvedName = r?.name ?? resolvedName;
-        } else if (accountType === "supplier") {
-          const [r] = await db.select({ name: suppliers.legalName }).from(suppliers).where(eq(suppliers.id, accountId));
-          resolvedName = r?.name ?? resolvedName;
-        } else if (accountType === "customer") {
-          const [r] = await db.select({ name: customers.legalName }).from(customers).where(eq(customers.id, accountId));
-          resolvedName = r?.name ?? resolvedName;
-        } else if (accountType === "employee") {
-          const [r] = await db
-            .select({ firstName: employees.firstName, lastName: employees.lastName })
-            .from(employees)
-            .where(eq(employees.id, accountId));
-          if (r) resolvedName = `${r.firstName} ${r.lastName}`.trim();
-        }
-      } catch {
-        // filename fallback is non-fatal
-      }
-      const safeAccName = resolvedName.replace(/[^\w\s.()-]/g, "_").replace(/\s+/g, "_");
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=statement_${safeAccName}.pdf`);
-      res.setHeader("Content-Length", String(pdfBuf.length));
-      res.setHeader("Cache-Control", "no-store");
-      res.end(pdfBuf);
-      return;
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "StatementAccountNotFoundError") {
-        if (!res.headersSent) res.status(404).json({ message: "Account not found" });
-        return;
-      }
-      logger.error("Statement PDF error:", { error: err });
-      if (!res.headersSent) res.status(500).json({ message: getErrorMessage(err) });
-    }
-  });
-
+function registerAccountStatementRoutesPart3(app: Express) {
   app.get("/api/accounts/statement/export-excel", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.currentCompanyId as number;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const accountTypeRaw = req.query.accountType;
-      const accountIdRaw = req.query.accountId;
-      const startDateRaw = req.query.startDate;
-      const endDateRaw = req.query.endDate;
-      if (accountTypeRaw !== undefined && typeof accountTypeRaw !== "string") {
-        return res.status(400).json({ message: "accountType must be a single string value" });
-      }
-      if (typeof accountIdRaw !== "string") {
-        return res.status(400).json({ message: "Invalid accountId" });
-      }
-      if (startDateRaw !== undefined && typeof startDateRaw !== "string") {
-        return res.status(400).json({ message: "startDate must be a single YYYY-MM-DD value" });
-      }
-      if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
-        return res.status(400).json({ message: "endDate must be a single YYYY-MM-DD value" });
-      }
-
-      const accountType = accountTypeRaw || "ledger";
-      const accountId = Number.parseInt(accountIdRaw, 10);
-      if (!Number.isSafeInteger(accountId) || accountId <= 0) {
-        return res.status(400).json({ message: "Invalid accountId" });
-      }
-      const startDate = startDateRaw;
-      const endDate = endDateRaw;
-      const dateRange = validateStatementDateRange(startDate, endDate);
-      if (!dateRange.ok) return res.status(400).json({ message: dateRange.message });
-
-      let accountName = "Account";
-      let ownedCustomerId: number | null = null;
-
-      const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
-
-      // Wave 18 C: every master is read with the company check, and every
-      // family opens at the balance engine's period opening (the on-screen
-      // statement's pre-period balance): the master's opening with the
-      // engine's side rule (sideless by account type) plus the lines the engine
-      // attributes to it before startDate, in this company's vouchers, by
-      // COALESCE(effective_date, voucher_date). Bank, fixed-asset and employee
-      // exports carry that opening forward (they opened at zero).
-      if (accountType === "ledger") {
-        const [acct] = await db
-          .select({ name: ledgerAccounts.name })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        accountName = acct.name;
-        // A ledger a customer owns exports that customer's ledger statement
-        // (balance engine lines and the customer-owned opening).
-        const owner = await getCustomerByLedgerId(accountId);
-        if (owner && owner.companyId === companyId) ownedCustomerId = owner.id;
-      } else if (accountType === "bank") {
-        const [acct] = await db
-          .select({ name: bankAccounts.name })
-          .from(bankAccounts)
-          .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Bank account not found" });
-        accountName = acct.name;
-      } else if (accountType === "fixed-asset") {
-        const [acct] = await db
-          .select({ name: fixedAssets.name })
-          .from(fixedAssets)
-          .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Fixed asset not found" });
-        accountName = acct.name;
-      } else if (accountType === "supplier") {
-        const [acct] = await db
-          .select({ name: companyScopedSuppliers.legalName, companyId: companyScopedSuppliers.companyId })
-          .from(companyScopedSuppliers)
-          .where(eq(companyScopedSuppliers.id, accountId));
-        // A supplier of another company is exported only when this company posted to it.
-        const postedHere =
-          acct && acct.companyId && acct.companyId !== companyId
-            ? (await getPartyBalance(db, { companyId, kind: "supplier", id: accountId })) !== null
-            : true;
-        if (!acct || !postedHere) return res.status(404).json({ message: "Supplier not found" });
-        accountName = acct.name ?? "Supplier";
-      } else if (accountType === "employee") {
-        const [acct] = await db
-          .select({ firstName: employees.firstName, lastName: employees.lastName })
-          .from(employees)
-          .where(and(eq(employees.id, accountId), eq(employees.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Employee not found" });
-        accountName = `${acct.firstName} ${acct.lastName}`.trim();
-      }
-
-      const engineKind =
-        ownedCustomerId !== null
-          ? ("customer" as const)
-          : (
-              {
-                ledger: "ledger",
-                bank: "bank",
-                "fixed-asset": "fixedAsset",
-                supplier: "supplier",
-                employee: "employee",
-              } as const
-            )[accountType as "ledger" | "bank" | "fixed-asset" | "supplier" | "employee"];
-      const party = engineKind
-        ? await getPartyBalance(db, {
-            companyId,
-            kind: engineKind,
-            id: ownedCustomerId ?? accountId,
-            from: startDate ?? null,
-            asOf: endDate ?? null,
-          })
-        : null;
-      // Dr positive (the worksheet's balance column).
-      const masterOpening = toMoney(party?.masterOpening);
-      const openingBalanceExact = masterOpening.abs();
-      const openingBalanceSide = masterOpening.isNegative() ? "Cr" : "Dr";
-
-      let txRows: AccountStatementEntryRow[] = [];
-      let heldBeforeExport = new MoneyDecimal(0);
-      if (ownedCustomerId !== null) {
-        txRows = await loadCustomerLedgerEntryRows(db, {
-          companyId,
-          customerId: ownedCustomerId,
-          from: startDate ?? null,
-          to: endDate ?? null,
-        });
-        const projected = await projectCustomerStatementLines(
-          companyId,
-          ownedCustomerId,
-          txRows,
-          startDate ?? null,
-          endDate ?? null
-        );
-        txRows = projected.rows;
-        heldBeforeExport = projected.heldBefore;
-      } else if (accountType === "ledger") {
-        txRows = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
-      } else if (accountType === "bank") {
-        txRows = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId, {
-          ownedOnly: true,
-        });
-      } else if (accountType === "fixed-asset") {
-        txRows = await storage.getVoucherEntriesByFixedAsset(accountId, startDate, endDate, companyId, {
-          ownedOnly: true,
-        });
-      } else if (accountType === "supplier") {
-        txRows = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate, {
-          ownedOnly: true,
-        });
-      } else if (accountType === "employee") {
-        txRows = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate, {
-          ownedOnly: true,
-        });
-      }
-      // The supplier and employee lists come newest first; the running balance needs them in date order.
-      txRows = [...txRows].sort(
-        (x, y) =>
-          (statementDateKey(x.voucherDate) ?? "").localeCompare(statementDateKey(y.voucherDate) ?? "") ||
-          Number(x.voucherId) - Number(y.voucherId)
-      );
-
-      // Balances are kept exact and become numbers only for the worksheet cells.
-      const openingBalance = openingBalanceExact.toNumber();
-      const signedOpening = masterOpening;
-      // Brought forward: the engine's period opening (masterOpening without a start date).
-      const bfExact = toMoney(party?.opening).minus(heldBeforeExport);
-      const bfBalance = bfExact.toNumber();
-
-      let runExact = startDate ? bfExact : signedOpening;
-      let totalDrExact = new MoneyDecimal(0);
-      let totalCrExact = new MoneyDecimal(0);
-      const enrichedRows = txRows.map((r) => {
-        const projected = projectExportCurrencyRow(r as Record<string, unknown>);
-        // Employee Excel must foot to the on-screen employee ledger. The
-        // balance engine and statement use posted debit/credit amounts, not
-        // a separate FX projection that can restate the exported closing.
-        const drExact = accountType === "employee" ? toMoney(r.debitAmount) : toMoney(projected.historicalBaseDebit);
-        const crExact = accountType === "employee" ? toMoney(r.creditAmount) : toMoney(projected.historicalBaseCredit);
-        runExact = runExact.plus(drExact).minus(crExact);
-        totalDrExact = totalDrExact.plus(drExact);
-        totalCrExact = totalCrExact.plus(crExact);
-        return { ...r, dr: drExact.toNumber(), cr: crExact.toNumber(), runBal: runExact.toNumber(), projected };
-      });
-
-      const totalDr = totalDrExact.toNumber();
-      const totalCr = totalCrExact.toNumber();
-      const closingRaw = runExact.toNumber();
-      const closingBalance2 = Math.abs(closingRaw);
-      const closingBalanceSide2 = closingRaw >= 0 ? "Dr" : "Cr";
-
-      const numFmt = "#,##0.00";
-      const navyFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FF1F3864" } };
-      const lightBlueFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFEFF3FB" } };
-      const greyFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFF5F5F5" } };
-      const allBorders = {
-        top: { style: "thin" as const },
-        bottom: { style: "thin" as const },
-        left: { style: "thin" as const },
-        right: { style: "thin" as const },
-      };
-
-      const ExcelJS = (await import("exceljs")).default;
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = "Business OS";
-      workbook.created = new Date();
-      workbook.modified = new Date();
-      const sheet = workbook.addWorksheet("Statement", {
-        properties: { defaultRowHeight: 18 },
-        pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
-      });
-      sheet.pageSetup.margins = {
-        left: 0.25,
-        right: 0.25,
-        top: 0.5,
-        bottom: 0.5,
-        header: 0.2,
-        footer: 0.2,
-      };
+      const asr1 = await accountStatementRoutesStep({ req, res });
+      if (asr1.done) return asr1.value;
+      const {
+        sheet,
+        workbook,
+        company,
+        accountName,
+        accountType,
+        openingBalance,
+        openingBalanceSide,
+        startDate,
+        endDate,
+        navyFill,
+        allBorders,
+        lightBlueFill,
+        numFmt,
+        bfExact,
+        bfBalance,
+        enrichedRows,
+        greyFill,
+        totalDr,
+        totalCr,
+        closingBalanceSide2,
+        closingBalance2,
+        txRows,
+      } = asr1;
 
       sheet.columns = [
         { key: "date", width: 13 },

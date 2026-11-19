@@ -1,342 +1,83 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  FileText,
-  TrendingUp,
-  TrendingDown,
-  Scale,
-  Trash2,
-  MessageCircle,
-  FileDown,
-  FileSpreadsheet,
-  X,
-  Clock,
-  Send,
-  Loader2,
-  ArrowLeft,
-  ChevronRight,
-  Landmark,
-} from "lucide-react";
+import { FileText, TrendingUp, TrendingDown, Scale, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PeriodFilter } from "@/components/ui/period-filter";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { PeriodFilterValue } from "@/components/ui/period-filter";
-import type { Account, Transaction, WaRule } from "./accountTypes";
 import { AccountTransactionRows } from "./AccountTransactionRows";
 import { AccountStatementCards } from "./AccountStatementCards";
-import { PropertiesWhatsAppStatement } from "./PropertiesWhatsAppStatement";
-import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
-import { FxAgentEurStatement, fxEurStatementUrl } from "./FxAgentEurStatement";
-import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { FxAgentEurStatement } from "./FxAgentEurStatement";
+import { ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { drCrClass } from "@/lib/formatNumber";
-import { useToast } from "@/hooks/use-toast";
-import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   AccountStatementOpeningBalanceKpi,
   OpeningBalanceAmount,
   openingBalanceLabel,
 } from "./AccountStatementOpeningBalance";
+import type { AccountStatementViewProps } from "./AccountStatementViewTypes";
+import { useAccountStatementViewState } from "./useAccountStatementViewState";
+import { AccountStatementViewSection } from "./AccountStatementViewSection";
+import { AccountStatementViewAccountStatementPhoneHeader } from "./AccountStatementViewAccountStatementPhoneHeader";
 
-interface AccountStatementRow extends Transaction {
-  totalDebit: number;
-  totalCredit: number;
-  runningBalance: number;
-}
-
-interface AccountStatementPageMetadata {
-  customerId?: number;
-  total?: number;
-  periodDebitTotal?: number;
-  periodCreditTotal?: number;
-  closingNetBalance?: number;
-}
-
-interface StatementSendMutation {
-  isPending: boolean;
-  mutate: (input: { accountId: number; month: string }) => void;
-}
-
-interface AccountStatementViewProps {
-  selectedAccount: Account;
-  onClose: () => void;
-  periodFilter: PeriodFilterValue;
-  setPeriodFilter: Dispatch<SetStateAction<PeriodFilterValue>>;
-  vouchersWithBalance: AccountStatementRow[];
-  statementCustomerId: number | null;
-  closingBalance: number;
-  openingBalance: number;
-  transactionsLoading: boolean;
-  transactionError?: string | null;
-  selectedVoucherIds: Set<number>;
-  toggleSelectAll: () => void;
-  setShowBulkDeleteConfirm: Dispatch<SetStateAction<boolean>>;
-  showDeletedVouchers: boolean;
-  setShowDeletedVouchers: Dispatch<SetStateAction<boolean>>;
-  formatAmount: (amt: number) => string;
-  hideBalances: boolean;
-  printRef: RefObject<HTMLDivElement | null>;
-  appMode: string;
-  formatDisplayDate: (date: Date | string) => string;
-  toggleVoucherSelection: (id: number) => void;
-  handleOpenVoucher: (voucher: AccountStatementRow) => void;
-  waRule: WaRule | null;
-  openWaRuleDialog: () => void;
-  sendWaStatementMutation: StatementSendMutation;
-  isBrokerSupplier: boolean;
-  factoryStatementLoading: boolean;
-  brokerStatementLoading: boolean;
-}
-
-export function AccountStatementView({
-  selectedAccount,
-  onClose,
-  periodFilter,
-  setPeriodFilter,
-  vouchersWithBalance,
-  statementCustomerId,
-  closingBalance,
-  openingBalance,
-  transactionsLoading,
-  selectedVoucherIds,
-  toggleSelectAll,
-  setShowBulkDeleteConfirm,
-  showDeletedVouchers,
-  setShowDeletedVouchers,
-  formatAmount,
-  hideBalances,
-  printRef,
-  appMode,
-  formatDisplayDate,
-  toggleVoucherSelection,
-  handleOpenVoucher,
-  openWaRuleDialog,
-  waRule,
-  sendWaStatementMutation,
-  isBrokerSupplier,
-  factoryStatementLoading,
-  brokerStatementLoading,
-  transactionError,
-}: AccountStatementViewProps) {
-  // View Only and Create Only cannot delete existing vouchers (server-enforced too).
-  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
-  const { formatTransactionAmount } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
-  const { language } = useApplicationLanguage();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
-  const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
-  const isPhone = useErpPhoneLayout();
-  const ledgerCompanyLabel = appMode === "properties" ? "Properties" : appMode === "factory" ? "Factory" : "ERP";
-  const nativeWallet = selectedAccount.fxWallet;
-  const fxWalletId = nativeWallet?.wallet?.id;
-  const [fxTabChoice, setFxTabChoice] = useState<{ accountId: number; tab: "eur" | "usd" } | null>(null);
-  const hasFxTabs = selectedAccount.type === "ledger" && !!fxWalletId;
-  const activeFxTab =
-    fxTabChoice?.accountId === selectedAccount.accountId
-      ? fxTabChoice.tab
-      : Number(nativeWallet?.state.eur || 0) > 0
-        ? "eur"
-        : "usd";
-  const isEurTab = hasFxTabs && activeFxTab === "eur";
-
-  const statementMetadata = queryClient.getQueryData<AccountStatementPageMetadata>([
-    "account-statement",
-    selectedCompany?.id,
-    selectedAccount.type,
-    selectedAccount.accountId,
-    periodFilter.fromDate || null,
-    periodFilter.toDate || null,
-  ]);
-  // Linked Factory customer accounts still appear as type "ledger". Use the
-  // current statement's reactive customer identity, not a non-subscribed React
-  // Query cache snapshot. Keep the column visible if returned customer rows
-  // already carry destination metadata during query/cache transitions.
-  const showCustomerDestination = shouldShowFactoryCustomerDestination({
+export function AccountStatementView(props: AccountStatementViewProps) {
+  const {
     appMode,
-    accountType: selectedAccount.type,
-    statementCustomerId,
-    destinations: vouchersWithBalance.map((row) => row.destination),
-  });
-  const [destinationFilter, setDestinationFilter] = useState("all");
-  useEffect(() => {
-    setDestinationFilter("all");
-  }, [selectedCompany?.id, selectedAccount.type, selectedAccount.accountId]);
-  const destinationOptions = useMemo(
-    () =>
-      [...new Set(vouchersWithBalance.map((row) => row.destination?.trim()).filter((s): s is string => !!s))].sort(
-        (a, b) => a.localeCompare(b)
-      ),
-    [vouchersWithBalance]
-  );
-  const filteredCount =
-    !showCustomerDestination || destinationFilter === "all"
-      ? vouchersWithBalance.length
-      : vouchersWithBalance.filter((row) =>
-          destinationFilter === "__none__" ? !row.destination?.trim() : row.destination?.trim() === destinationFilter
-        ).length;
-  const destinationSelect = showCustomerDestination ? (
-    <Select
-      value={destinationFilter}
-      onValueChange={(value) => {
-        // A new filter must not retain bulk-delete selections from hidden rows.
-        for (const voucherId of selectedVoucherIds) toggleVoucherSelection(voucherId);
-        setDestinationFilter(value);
-      }}
-    >
-      <SelectTrigger
-        className="w-[190px] h-9"
-        aria-label="Filter customer ledger by destination"
-        data-testid="filter-customer-destination"
-      >
-        <SelectValue placeholder="All destinations" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All destinations</SelectItem>
-        {destinationOptions.map((destination) => (
-          <SelectItem key={destination} value={destination}>
-            {destination}
-          </SelectItem>
-        ))}
-        <SelectItem value="__none__">No destination</SelectItem>
-      </SelectContent>
-    </Select>
-  ) : null;
-  const rawOpeningBalance = Number.parseFloat(String(selectedAccount.openingBalance ?? 0)) || 0;
-  const signedStoredOpening = selectedAccount.openingBalanceSide === "Cr" ? -rawOpeningBalance : rawOpeningBalance;
-  const hasServerClosing = Number.isFinite(statementMetadata?.closingNetBalance);
-  const isGoldenCoastFreshStart =
-    selectedCompany?.companyType === "supplier_partner" && selectedAccount.subType === "gc_partner_capital";
-  // Golden Coast Fresh Start is intentionally projected to Net Position in AccountsLegacy.
-  // Every other paginated account uses the explicit server period aggregate carried by the
-  // same React Query response, so financial totals no longer depend on the global pagination snapshot.
-  const displayClosingBalance =
-    !isGoldenCoastFreshStart && hasServerClosing
-      ? signedStoredOpening +
-        Number(statementMetadata?.closingNetBalance) +
-        (Number(
-          (
-            statementMetadata as AccountStatementPageMetadata & {
-              notInLedger?: { total?: string; prePeriodTotal?: string };
-            }
-          )?.notInLedger?.total ?? 0
-        ) || 0) +
-        (Number(
-          (
-            statementMetadata as AccountStatementPageMetadata & {
-              notInLedger?: { total?: string; prePeriodTotal?: string };
-            }
-          )?.notInLedger?.prePeriodTotal ?? 0
-        ) || 0)
-      : closingBalance;
-
-  const pdfTypeMap: Record<string, string> = {
-    ledger: "ledger",
-    bank: "bank",
-    "bank-account": "bank",
-    supplier: "supplier",
-    employee: "employee",
-    customer: "customer",
-    "fixed-asset": "fixed-asset",
-  };
-
-  const buildPdfUrl = (lang: "en" | "fr" | "ar" = pdfLang) => {
-    if (!selectedAccount) return null;
-    if (isEurTab && fxWalletId) return fxEurStatementUrl(fxWalletId, periodFilter, ".pdf");
-    const serverType = pdfTypeMap[selectedAccount.type] || "ledger";
-    const params = new URLSearchParams({ lang });
-    if (periodFilter?.fromDate) params.set("startDate", periodFilter.fromDate);
-    if (periodFilter?.toDate) params.set("endDate", periodFilter.toDate);
-    return `/api/accounts/${serverType}/${selectedAccount.accountId}/statement-pdf?${params.toString()}`;
-  };
-
-  const canExportExcel = ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type);
-  const downloadStatementExcel = async (url: string, subject: string) => {
-    try {
-      await downloadFromUrl(url, {
-        fileName: exportFileName(subject, "xlsx", { from: periodFilter?.fromDate, to: periodFilter?.toDate }),
-      });
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-  const exportExcel = () => {
-    if (isEurTab && fxWalletId) {
-      void downloadStatementExcel(
-        fxEurStatementUrl(fxWalletId, periodFilter, ".xlsx"),
-        `account statement EUR ${selectedAccount.name}`
-      );
-      return;
-    }
-    const typeMap: Record<string, string> = {
-      ledger: "ledger",
-      bank: "bank",
-      "bank-account": "bank",
-      supplier: "supplier",
-      employee: "employee",
-    };
-    const serverType = typeMap[selectedAccount.type] || "ledger";
-    const params = new URLSearchParams({
-      accountType: serverType,
-      accountId: String(selectedAccount.accountId),
-    });
-    if (periodFilter?.fromDate) params.set("startDate", periodFilter.fromDate);
-    if (periodFilter?.toDate) params.set("endDate", periodFilter.toDate);
-    void downloadStatementExcel(
-      `/api/accounts/statement/export-excel?${params.toString()}`,
-      `account statement ${selectedAccount.name}`
-    );
-  };
-  const sendWaStatement = () => {
-    const month = periodFilter?.toDate ? periodFilter.toDate.substring(0, 7) : new Date().toISOString().substring(0, 7);
-    sendWaStatementMutation.mutate({ accountId: selectedAccount.accountId, month });
-  };
-  const openPdf = (lang: "en" | "fr" | "ar") => {
-    const url = buildPdfUrl(lang);
-    if (url) window.open(url, "_blank");
-  };
-  // Rule changes and statement sends are business writes; read-only roles do not see them.
-  const showWhatsApp = canChangeExistingRecords && (appMode === "factory" || appMode === "erp");
-  // The phone header's one-tap PDF follows the interface language; other languages stay in the menu.
-  const phonePdfLanguage: "en" | "fr" | "ar" = language === "ar" || language === "fr" ? language : "en";
-
-  const totalDebit = useMemo(
-    () =>
-      Number.isFinite(statementMetadata?.periodDebitTotal)
-        ? Number(statementMetadata?.periodDebitTotal)
-        : vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0),
-    [statementMetadata?.periodDebitTotal, vouchersWithBalance]
-  );
-  const totalCredit = useMemo(
-    () =>
-      Number.isFinite(statementMetadata?.periodCreditTotal)
-        ? Number(statementMetadata?.periodCreditTotal)
-        : vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0),
-    [statementMetadata?.periodCreditTotal, vouchersWithBalance]
-  );
-  const transactionCount = Number.isFinite(statementMetadata?.total)
-    ? Number(statementMetadata?.total)
-    : vouchersWithBalance.length;
-
-  const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
-  const openingSide =
-    selectedAccount.type === "supplier" ? (openingBalance > 0 ? "Cr" : "Dr") : balSide(openingBalance);
-  const showNativeBalance = !!nativeWallet?.synchronized;
+    balSide,
+    brokerStatementLoading,
+    buildPdfUrl,
+    canChangeExistingRecords,
+    canExportExcel,
+    destinationFilter,
+    destinationSelect,
+    displayClosingBalance,
+    exportExcel,
+    factoryStatementLoading,
+    filteredCount,
+    formatAmount,
+    formatDisplayDate,
+    formatTransactionAmount,
+    fxWalletId,
+    handleOpenVoucher,
+    hasFxTabs,
+    hideBalances,
+    isBrokerSupplier,
+    isEurTab,
+    isFactorySupplierAccount,
+    isPhone,
+    ledgerCompanyLabel,
+    nativeWallet,
+    onClose,
+    openPdf,
+    openWaRuleDialog,
+    openingBalance,
+    openingSide,
+    pdfLang,
+    periodFilter,
+    phonePdfLanguage,
+    printRef,
+    selectedAccount,
+    selectedVoucherIds,
+    sendWaStatement,
+    sendWaStatementMutation,
+    setFxTabChoice,
+    setPdfLang,
+    setPeriodFilter,
+    setShowBulkDeleteConfirm,
+    setShowDeletedVouchers,
+    showCustomerDestination,
+    showDeletedVouchers,
+    showNativeBalance,
+    showWhatsApp,
+    toggleSelectAll,
+    toggleVoucherSelection,
+    totalCredit,
+    totalDebit,
+    transactionCount,
+    transactionError,
+    transactionsLoading,
+    vouchersWithBalance,
+    waRule,
+  } = useAccountStatementViewState(props);
 
   if (isFactorySupplierAccount) {
     return (
@@ -382,310 +123,66 @@ export function AccountStatementView({
   return (
     <div className="account-ledger-modern space-y-4">
       {isPhone ? (
-        <div className="space-y-3" data-testid="account-statement-phone-header">
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-start gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                aria-label="Back to accounts"
-                data-testid="button-close-ledger"
-                className="-ms-1 shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
-              </Button>
-              <div className="min-w-0 flex-1">
-                <p className="wrap-break-word text-base font-semibold leading-snug">{selectedAccount?.name}</p>
-                {selectedAccount?.accountId && (
-                  <p className="font-mono text-xs text-muted-foreground">#{selectedAccount.accountId}</p>
-                )}
-              </div>
-              {appMode === "properties" &&
-                selectedAccount.type === "ledger" &&
-                canChangeExistingRecords &&
-                !isEurTab && (
-                  <PropertiesWhatsAppStatement
-                    key={selectedAccount.accountId}
-                    accountId={selectedAccount.accountId}
-                    accountName={selectedAccount.name}
-                    fromDate={periodFilter.fromDate}
-                    toDate={periodFilter.toDate}
-                    compact
-                  />
-                )}
-              <ErpMobileActionsMenu
-                iconOnly
-                data-testid="button-statement-actions"
-                actions={[
-                  showWhatsApp && {
-                    label: "WhatsApp rule",
-                    icon: MessageCircle,
-                    onSelect: openWaRuleDialog,
-                    testId: "button-wa-rule",
-                  },
-                  !isEurTab &&
-                    showWhatsApp &&
-                    waRule?.enabled && {
-                      label: "Send statement via WhatsApp",
-                      icon: Send,
-                      disabled: sendWaStatementMutation.isPending,
-                      onSelect: sendWaStatement,
-                      testId: "button-wa-send",
-                    },
-                  canExportExcel && {
-                    label: "Export Excel",
-                    icon: FileSpreadsheet,
-                    onSelect: exportExcel,
-                    separated: true,
-                    testId: "button-export-excel",
-                  },
-                  {
-                    label: isEurTab ? "Export PDF (EUR)" : "Export PDF (English)",
-                    icon: FileDown,
-                    onSelect: () => openPdf("en"),
-                    testId: "button-pdf-en",
-                  },
-                  !isEurTab && {
-                    label: "Export PDF (Français)",
-                    icon: FileDown,
-                    onSelect: () => openPdf("fr"),
-                    testId: "button-pdf-fr",
-                  },
-                  !isEurTab && {
-                    label: "Export PDF (العربية)",
-                    icon: FileDown,
-                    onSelect: () => openPdf("ar"),
-                    testId: "button-pdf-ar",
-                  },
-                  !isEurTab && {
-                    label: showDeletedVouchers ? "Hide Deleted" : "Show Deleted",
-                    icon: Clock,
-                    onSelect: () => setShowDeletedVouchers((p: boolean) => !p),
-                    separated: true,
-                    testId: "button-show-deleted",
-                  },
-                  !isEurTab &&
-                    canChangeExistingRecords &&
-                    selectedVoucherIds.size > 0 && {
-                      label: `Delete Selected (${selectedVoucherIds.size})`,
-                      icon: Trash2,
-                      destructive: true,
-                      onSelect: () => setShowBulkDeleteConfirm(true),
-                      testId: "button-bulk-delete",
-                    },
-                ]}
-              />
-            </div>
-            {!hideBalances &&
-              (showNativeBalance ? (
-                <div className="mt-2">
-                  <FxAgentNativeBalance wallet={nativeWallet!} compact />
-                </div>
-              ) : (
-                <p
-                  className={`mt-2 font-mono text-2xl font-semibold tabular-nums ${drCrClass(balSide(displayClosingBalance))}`}
-                  dir="ltr"
-                  style={{ textAlign: "start" }}
-                >
-                  {formatAmount(Math.abs(displayClosingBalance))}
-                  <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
-                </p>
-              ))}
-            {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
-                settings and deleted-voucher controls remain in the Actions menu. */}
-            <div className="mt-3 grid grid-cols-2 gap-2 *:min-h-11" data-testid="account-statement-phone-actions">
-              <Button
-                type="button"
-                variant="outline"
-                className={showWhatsApp && waRule?.enabled && !isEurTab ? undefined : "col-span-2"}
-                onClick={() => openPdf(phonePdfLanguage)}
-                data-testid="button-pdf-phone"
-              >
-                <FileDown className="me-2 h-4 w-4" aria-hidden="true" />
-                {isEurTab ? "EUR PDF" : "PDF"}
-              </Button>
-              {!isEurTab && showWhatsApp && waRule?.enabled && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={sendWaStatement}
-                  disabled={sendWaStatementMutation.isPending}
-                  data-testid="button-wa-send-phone"
-                >
-                  <Send className="me-2 h-4 w-4" aria-hidden="true" />
-                  WhatsApp
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="*:w-full">
-            <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />
-            {destinationSelect}
-          </div>
-        </div>
+        <AccountStatementViewAccountStatementPhoneHeader
+          appMode={appMode}
+          balSide={balSide}
+          canChangeExistingRecords={canChangeExistingRecords}
+          canExportExcel={canExportExcel}
+          destinationSelect={destinationSelect}
+          displayClosingBalance={displayClosingBalance}
+          exportExcel={exportExcel}
+          formatAmount={formatAmount}
+          hideBalances={hideBalances}
+          isEurTab={isEurTab}
+          nativeWallet={nativeWallet}
+          onClose={onClose}
+          openPdf={openPdf}
+          openWaRuleDialog={openWaRuleDialog}
+          periodFilter={periodFilter}
+          phonePdfLanguage={phonePdfLanguage}
+          selectedAccount={selectedAccount}
+          selectedVoucherIds={selectedVoucherIds}
+          sendWaStatement={sendWaStatement}
+          sendWaStatementMutation={sendWaStatementMutation}
+          setPeriodFilter={setPeriodFilter}
+          setShowBulkDeleteConfirm={setShowBulkDeleteConfirm}
+          setShowDeletedVouchers={setShowDeletedVouchers}
+          showDeletedVouchers={showDeletedVouchers}
+          showNativeBalance={showNativeBalance}
+          showWhatsApp={showWhatsApp}
+          waRule={waRule}
+        />
       ) : (
-        <div className="account-ledger-desktop-header">
-          <nav className="account-ledger-breadcrumb" aria-label="Breadcrumb">
-            <span>{ledgerCompanyLabel}</span>
-            <ChevronRight className="h-3 w-3" aria-hidden="true" />
-            <span>Accounts</span>
-            <ChevronRight className="h-3 w-3" aria-hidden="true" />
-            <strong>Ledger</strong>
-          </nav>
-          {/* Compact account info bar */}
-          <div className="account-ledger-account-bar">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <span className="text-xs text-muted-foreground shrink-0">Account</span>
-              <span className="font-semibold truncate max-w-[240px]">{selectedAccount?.name}</span>
-              {selectedAccount?.accountId && (
-                <span className="font-mono text-xs text-muted-foreground shrink-0">#{selectedAccount.accountId}</span>
-              )}
-              {!hideBalances && (
-                <>
-                  <span className="text-muted-foreground text-xs shrink-0">|</span>
-                  {showNativeBalance ? (
-                    <FxAgentNativeBalance wallet={nativeWallet!} compact />
-                  ) : (
-                    <span
-                      className={`text-sm font-mono tabular-nums shrink-0 ${drCrClass(balSide(displayClosingBalance))}`}
-                    >
-                      {formatAmount(Math.abs(displayClosingBalance))}
-                      <span className="ml-1 text-[11px] opacity-70">{balSide(displayClosingBalance)}</span>
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {showWhatsApp && (
-                <>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={openWaRuleDialog}
-                    title="Configure WhatsApp rule"
-                    data-testid="button-wa-rule"
-                  >
-                    <MessageCircle className={`h-4 w-4 ${waRule?.enabled ? "text-green-500" : ""}`} />
-                  </Button>
-                  {!isEurTab && waRule?.enabled && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      disabled={sendWaStatementMutation.isPending}
-                      onClick={sendWaStatement}
-                      title="Send statement via WhatsApp"
-                      data-testid="button-wa-send"
-                    >
-                      {sendWaStatementMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4 text-green-500" />
-                      )}
-                    </Button>
-                  )}
-                </>
-              )}
-              {appMode === "properties" &&
-                selectedAccount.type === "ledger" &&
-                canChangeExistingRecords &&
-                !isEurTab && (
-                  <PropertiesWhatsAppStatement
-                    key={selectedAccount.accountId}
-                    accountId={selectedAccount.accountId}
-                    accountName={selectedAccount.name}
-                    fromDate={periodFilter.fromDate}
-                    toDate={periodFilter.toDate}
-                  />
-                )}
-              {selectedAccount &&
-                ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type) && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    title={isEurTab ? "Export EUR Excel Statement" : "Export Excel Statement"}
-                    aria-label={isEurTab ? "Export Excel (EUR)" : "Export Excel"}
-                    data-testid="button-export-excel"
-                    onClick={exportExcel}
-                  >
-                    <FileSpreadsheet className="h-4 w-4 text-green-600" />
-                  </Button>
-                )}
-              {/* Language selection applies to the historical USD PDF only. */}
-              {!isEurTab && (
-                <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
-                  {(["en", "fr", "ar"] as const).map((l) => (
-                    <button
-                      key={l}
-                      onClick={() => setPdfLang(l)}
-                      data-testid={`button-lang-${l}`}
-                      className={`px-1.5 py-0.5 leading-none transition-colors ${pdfLang === l ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
-                    >
-                      {l === "en" ? "EN" : l === "fr" ? "FR" : "عر"}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* PDF download */}
-              <Button
-                size="icon"
-                variant="ghost"
-                title={isEurTab ? "Download EUR PDF Statement" : "Download PDF Statement"}
-                aria-label={isEurTab ? "Export PDF (EUR)" : "Export PDF"}
-                data-testid="button-pdf-download"
-                onClick={() => {
-                  const url = buildPdfUrl();
-                  if (url) window.open(url, "_blank");
-                }}
-              >
-                <FileDown className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={onClose} title="Close" data-testid="button-close-ledger">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Ledger heading + filters */}
-          <div className="account-ledger-heading-row">
-            <div className="account-ledger-heading-title">
-              <div className="account-ledger-heading-icon">
-                <Landmark className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <p className="account-ledger-subtitle">Account statement · #{selectedAccount.accountId}</p>
-                <h3>Ledger: {selectedAccount?.name}</h3>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {!isEurTab && canChangeExistingRecords && selectedVoucherIds.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowBulkDeleteConfirm(true)}
-                  data-testid="button-bulk-delete"
-                >
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete Selected ({selectedVoucherIds.size})
-                </Button>
-              )}
-              <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />
-              {destinationSelect}
-              {!isEurTab && (
-                <Button
-                  variant={showDeletedVouchers ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => setShowDeletedVouchers((p: boolean) => !p)}
-                  data-testid="button-show-deleted"
-                >
-                  <Clock className="h-4 w-4 mr-1" />
-                  {showDeletedVouchers ? "Hide Deleted" : "Show Deleted"}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <AccountStatementViewSection
+          appMode={appMode}
+          balSide={balSide}
+          buildPdfUrl={buildPdfUrl}
+          canChangeExistingRecords={canChangeExistingRecords}
+          destinationSelect={destinationSelect}
+          displayClosingBalance={displayClosingBalance}
+          exportExcel={exportExcel}
+          formatAmount={formatAmount}
+          hideBalances={hideBalances}
+          isEurTab={isEurTab}
+          ledgerCompanyLabel={ledgerCompanyLabel}
+          nativeWallet={nativeWallet}
+          onClose={onClose}
+          openWaRuleDialog={openWaRuleDialog}
+          pdfLang={pdfLang}
+          periodFilter={periodFilter}
+          selectedAccount={selectedAccount}
+          selectedVoucherIds={selectedVoucherIds}
+          sendWaStatement={sendWaStatement}
+          sendWaStatementMutation={sendWaStatementMutation}
+          setPdfLang={setPdfLang}
+          setPeriodFilter={setPeriodFilter}
+          setShowBulkDeleteConfirm={setShowBulkDeleteConfirm}
+          setShowDeletedVouchers={setShowDeletedVouchers}
+          showDeletedVouchers={showDeletedVouchers}
+          showNativeBalance={showNativeBalance}
+          showWhatsApp={showWhatsApp}
+          waRule={waRule}
+        />
       )}
 
       {hasFxTabs && (

@@ -1,22 +1,19 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastContainerOffloadRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const phase4RouteSource = readFileSync(new URL("./spGoldenCoastCutoverFifoRoutes.ts", import.meta.url), "utf8");
-const phase4ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastCutoverFifo.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastContainerOffloadRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const phase4RouteSource = readModuleFamily(new URL("./spGoldenCoastCutoverFifoRoutes.ts", import.meta.url));
+const phase4ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastCutoverFifo.ts", import.meta.url)
 );
-const migrationReconcileSource = readFileSync(new URL("./spMigrationReconcile.ts", import.meta.url), "utf8");
-const phase8ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastContainerOffload.ts", import.meta.url),
-  "utf8"
+const migrationReconcileSource = readModuleFamily(new URL("./spMigrationReconcile.ts", import.meta.url));
+const phase8ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastContainerOffload.ts", import.meta.url)
 );
-const phase5ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url),
-  "utf8"
+const phase5ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 8 container/offload route", () => {
@@ -134,6 +131,7 @@ describe("Golden Coast Phase 8 container/offload route", () => {
     expect(phase8ServiceSource).toContain("GC_PHASE8_CHARGE_FUNDING_REQUIRED");
     // The reserve ceiling and the Hassan Savings sweep are Phase 8-only; cutover
     // and Fresh Start Excel containers never funded a reserve to sweep.
+    // Whitespace-insensitive: Prettier may wrap this expression across lines.
     expect(phase8ServiceSource.replace(/\s+/g, " ")).toContain(
       'const unused = funded.origin === "cutover" || funded.origin === "fresh_start_excel" ? new Decimal(0) : reserve.minus(actual);'
     );

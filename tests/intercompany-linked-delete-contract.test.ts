@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const service = readFileSync("server/services/intercompany/linkedTradePhysicalDelete.ts", "utf8");
-const daybook = readFileSync("client/src/pages/Daybook.tsx", "utf8");
-const routes = readFileSync("server/routes/import/intercompany-receiving.ts", "utf8");
-const importService = readFileSync("server/services/intercompany/containerTradingImport.ts", "utf8");
-const storage = readFileSync("server/storage/containers-store/containers.ts", "utf8");
-const pagination = readFileSync("server/routes/containers/containerListPaginationRoutes.ts", "utf8");
+const service = readModuleFamily("server/services/intercompany/linkedTradePhysicalDelete.ts");
+const daybook = readModuleFamily("client/src/pages/Daybook.tsx");
+const routes = readModuleFamily("server/routes/import/intercompany-receiving.ts");
+const importService = readModuleFamily("server/services/intercompany/containerTradingImport.ts");
+const storage = readModuleFamily("server/storage/containers-store/containers.ts");
+const pagination = readModuleFamily("server/routes/containers/containerListPaginationRoutes.ts");
 
 describe("linked intercompany container and Daybook deletion contract", () => {
   it("records every original source and destination voucher ID on import", () => {
@@ -56,8 +56,8 @@ describe("linked intercompany container and Daybook deletion contract", () => {
       expect(service).toContain(marker);
   });
   it("qualifies canonical container columns inside linked-company subqueries", () => {
-    const source = readFileSync("server/storage/containers-store/containers.ts", "utf8");
-    const pagination = readFileSync("server/routes/containers/containerListPaginationRoutes.ts", "utf8");
+    const source = readModuleFamily("server/storage/containers-store/containers.ts");
+    const pagination = readModuleFamily("server/routes/containers/containerListPaginationRoutes.ts");
     for (const text of [source, pagination]) {
       expect(text).toContain('trade.physical_container_id = "containers"."id"');
       expect(text).toContain('trade.source_company_id = "containers"."company_id"');

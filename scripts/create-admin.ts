@@ -46,12 +46,13 @@ async function createAdmin() {
     console.log(`  Code: ${company.code}`);
     console.log('════════════════════════════════════════\n');
 
-  } catch (error: any) {
-    if (error.message?.includes('duplicate key')) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('duplicate key')) {
       console.error('\n❌ Error: Admin user or company already exists!');
       console.error('   If you need to reset, delete the existing data first.\n');
     } else {
-      console.error('\n❌ Error creating admin:', error.message);
+      console.error('\n❌ Error creating admin:', message);
     }
     process.exit(1);
   }

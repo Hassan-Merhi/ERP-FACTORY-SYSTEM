@@ -1,11 +1,11 @@
 /** Phase 7 tests staged in GitHub. Per owner instruction, DO NOT RUN CI/tests. */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   calculateOrderDispatchReconciliation,
   type OrderReconciliationInput,
 } from "../server/routes/factory/customer-orders/loadingDispatchOrderReconciliationModel";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function fixture(): OrderReconciliationInput {
   return {
@@ -175,7 +175,7 @@ describe("Phase 7 all-truck financial reconciliation", () => {
     expect(exported.trips[0].erpPoFileStatus).toBe("GENERATED_NOT_CONFIRMED_IMPORTED");
   });
   it("keeps unshipped removal atomic, audited and separate from final invoice posting", () => {
-    const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+    const read = (p: string) => readModuleFamily(path.join(process.cwd(), p));
     const routes = read("server/routes/factory/customer-orders/loadingDispatchOrderReconciliationRoutes.ts");
     const page = read("client/src/pages/factory/FactoryLoadingDispatchCompare.tsx");
     const source = read("server/routes/factory/customer-orders/bale-scanning/remove.ts");

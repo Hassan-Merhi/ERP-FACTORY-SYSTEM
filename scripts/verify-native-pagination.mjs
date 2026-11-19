@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const files = {
   registration: "server/routes/factoryRoutes.ts",
@@ -15,7 +16,7 @@ const files = {
 
 const source = Object.fromEntries(
   await Promise.all(
-    Object.entries(files).map(async ([key, file]) => [key, await fs.readFile(file, "utf8")])
+    Object.entries(files).map(async ([key, file]) => [key, readModuleFamily(file)])
   )
 );
 

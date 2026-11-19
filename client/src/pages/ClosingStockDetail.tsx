@@ -4,6 +4,7 @@ import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Package } from "lucide-react";
@@ -71,7 +72,22 @@ export default function ClosingStockDetail() {
         icon={<Package className="h-5 w-5" />}
         onBack={handleBack}
         meta={<span>Closing Stock Items - {selectedCompany?.name}</span>}
-      />
+      >
+        <RowsExportMenu
+          title={`Closing Stock ${groupName}`}
+          sheetName="Closing Stock"
+          rows={data?.items ?? []}
+          columns={[
+            { header: "Code", value: (item) => item.code },
+            { header: "Item Name", value: (item) => item.name },
+            { header: "Quantity (BL)", value: (item) => item.closing.quantity || null, type: "number" },
+            { header: "Rate", value: (item) => item.closing.rate, type: "number" },
+            { header: "Value", value: (item) => item.closing.value, type: "number" },
+          ]}
+          footer={data?.totals ? ["Total", null, data.totals.quantity, data.totals.rate, data.totals.value] : undefined}
+          resource="erp.inventory"
+        />
+      </PageHeader>
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

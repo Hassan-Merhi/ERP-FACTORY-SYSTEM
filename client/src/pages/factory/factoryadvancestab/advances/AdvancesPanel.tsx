@@ -1,19 +1,5 @@
-import {
-  Plus,
-  Trash2,
-  Banknote,
-  RotateCcw,
-  BookOpen,
-  Loader2,
-  Users,
-  CalendarDays,
-  ChevronDown,
-  SlidersHorizontal,
-  SearchCheck,
-} from "lucide-react";
+import { Banknote, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,13 +9,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmt } from "../utils";
 import { BulkAdvanceDialog } from "../dialogs/BulkAdvanceDialog";
@@ -42,84 +21,87 @@ import { ConfirmRepaymentDialog } from "../dialogs/ConfirmRepaymentDialog";
 import { PostAccountingPreviewDialog } from "../dialogs/PostAccountingPreviewDialog";
 import { ReconcileBalancesDialog } from "../dialogs/ReconcileBalancesDialog";
 import type { useAdvancesModel } from "./useAdvancesModel";
+import { useAdvancesPanelState } from "./useAdvancesPanelState";
+import { AdvancesPanelSection } from "./AdvancesPanelSection";
+import { AdvancesPanelSection2 } from "./AdvancesPanelSection2";
 
-export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesModel> }) {
+export function AdvancesPanel(props: { model: ReturnType<typeof useAdvancesModel> }) {
   const {
     addOpen,
-    setAddOpen,
-    postAccountingOpen,
-    setPostAccountingOpen,
-    postCashAccountId,
-    setPostCashAccountId,
-    filterWorker,
-    setFilterWorker,
-    filterStatus,
-    setFilterStatus,
-    deleteTarget,
-    setDeleteTarget,
-    reverseTarget,
-    setReverseTarget,
-    selectedIds,
-    setSelectedIds,
-    bulkCashAccountId,
-    setBulkCashAccountId,
-    form,
-    setForm,
-    bulkOpen,
-    setBulkOpen,
-    bulkForm,
-    setBulkForm,
-    bulkAmounts,
-    setBulkAmounts,
-    bulkSelected,
-    setBulkSelected,
     advances,
-    isLoading,
-    workers,
-    cashAccounts,
-    unvouchered,
-    unvoucheredLoading,
-    postAccountingMutation,
-    repayByMonthOpen,
-    setRepayByMonthOpen,
-    repayByMonthForm,
-    setRepayByMonthForm,
-    repayByMonthExpanded,
-    setRepayByMonthExpanded,
-    repayingMonth,
-    setRepayingMonth,
-    confirmRepay,
-    setConfirmRepay,
-    repayByMonthMutation,
-    cashAdjOpen,
-    setCashAdjOpen,
-    cashAdjForm,
-    setCashAdjForm,
-    cashAdjMutation,
-    repayAuditOpen,
-    setRepayAuditOpen,
-    repayAuditForm,
-    setRepayAuditForm,
+    auditCashBalance,
     auditData,
     auditLoading,
-    refetchAudit,
-    auditCashBalance,
-    repayAuditMutation,
-    reconcileOpen,
-    setReconcileOpen,
-    reconcilePreview,
-    reconcilePreviewLoading,
-    reconcileMutation,
+    bulkAmounts,
+    bulkCashAccountId,
+    bulkForm,
+    bulkMutation,
+    bulkOpen,
+    bulkSelected,
+    bulkUpdateCashAccountMutation,
+    canChangeExistingRecords,
+    cashAccounts,
+    cashAdjForm,
+    cashAdjMutation,
+    cashAdjOpen,
+    confirmRepay,
     createMutation,
     deleteMutation,
-    reverseMutation,
-    bulkMutation,
-    bulkUpdateCashAccountMutation,
+    deleteTarget,
+    filterStatus,
+    filterWorker,
     filtered,
-    stats,
+    form,
     formatDate,
-    canChangeExistingRecords,
-  } = model;
+    isLoading,
+    postAccountingMutation,
+    postAccountingOpen,
+    postCashAccountId,
+    reconcileMutation,
+    reconcileOpen,
+    reconcilePreview,
+    reconcilePreviewLoading,
+    refetchAudit,
+    repayAuditForm,
+    repayAuditMutation,
+    repayAuditOpen,
+    repayByMonthExpanded,
+    repayByMonthForm,
+    repayByMonthMutation,
+    repayByMonthOpen,
+    repayingMonth,
+    reverseMutation,
+    reverseTarget,
+    selectedIds,
+    setAddOpen,
+    setBulkAmounts,
+    setBulkCashAccountId,
+    setBulkForm,
+    setBulkOpen,
+    setBulkSelected,
+    setCashAdjForm,
+    setCashAdjOpen,
+    setConfirmRepay,
+    setDeleteTarget,
+    setFilterStatus,
+    setFilterWorker,
+    setForm,
+    setPostAccountingOpen,
+    setPostCashAccountId,
+    setReconcileOpen,
+    setRepayAuditForm,
+    setRepayAuditOpen,
+    setRepayByMonthExpanded,
+    setRepayByMonthForm,
+    setRepayByMonthOpen,
+    setRepayingMonth,
+    setReverseTarget,
+    setSelectedIds,
+    stats,
+    unvouchered,
+    unvoucheredLoading,
+    workers,
+  } = useAdvancesPanelState(props);
   return (
     <div className="space-y-5">
       {/* Stats pills */}
@@ -161,80 +143,23 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
       </div>
 
       {/* Filter + actions row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={filterWorker} onValueChange={setFilterWorker}>
-          <SelectTrigger className="w-48" data-testid="select-filter-worker">
-            <SelectValue placeholder="All Workers" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Workers</SelectItem>
-            {(workers || []).map((w) => (
-              <SelectItem key={w.id} value={String(w.id)}>
-                {w.fullName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40" data-testid="select-filter-status">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="outstanding">Outstanding</SelectItem>
-            <SelectItem value="paid">Fully Paid</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" data-testid="button-advances-actions">
-                Actions <ChevronDown className="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {canChangeExistingRecords && (
-                <DropdownMenuItem onClick={() => setRepayByMonthOpen(true)} data-testid="button-repay-by-month">
-                  <CalendarDays className="h-4 w-4" />
-                  Repay by Month
-                </DropdownMenuItem>
-              )}
-              {canChangeExistingRecords && (
-                <DropdownMenuItem onClick={() => setPostAccountingOpen(true)} data-testid="button-post-accounting">
-                  <BookOpen className="h-4 w-4" />
-                  Post Accounting
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setRepayAuditOpen(true)} data-testid="button-repayment-audit">
-                <SearchCheck className="h-4 w-4" />
-                Repayment Audit
-              </DropdownMenuItem>
-              {canChangeExistingRecords && (
-                <DropdownMenuItem onClick={() => setCashAdjOpen(true)} data-testid="button-cash-adjustment">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Cash Adjustment
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setReconcileOpen(true)} data-testid="button-reconcile-advances">
-                <RotateCcw className="h-4 w-4" />
-                Reconcile Balances
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {canChangeExistingRecords && (
-            <>
-              <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="button-bulk-advance">
-                <Users className="h-4 w-4 mr-2" />
-                Bulk Advance
-              </Button>
-              <Button onClick={() => setAddOpen(true)} data-testid="button-add-advance">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Advance
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+      <AdvancesPanelSection2
+        canChangeExistingRecords={canChangeExistingRecords}
+        filterStatus={filterStatus}
+        filterWorker={filterWorker}
+        filtered={filtered}
+        formatDate={formatDate}
+        setAddOpen={setAddOpen}
+        setBulkOpen={setBulkOpen}
+        setCashAdjOpen={setCashAdjOpen}
+        setFilterStatus={setFilterStatus}
+        setFilterWorker={setFilterWorker}
+        setPostAccountingOpen={setPostAccountingOpen}
+        setReconcileOpen={setReconcileOpen}
+        setRepayAuditOpen={setRepayAuditOpen}
+        setRepayByMonthOpen={setRepayByMonthOpen}
+        workers={workers}
+      />
 
       {/* Bulk action bar — visible when rows are selected */}
       {selectedIds.size > 0 && (
@@ -278,182 +203,18 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
       )}
 
       {/* Table */}
-      <div className="border rounded-xl overflow-x-auto">
-        <Table mobileLayout="cards">
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-10 h-9">
-                <Checkbox
-                  checked={filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id))}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedIds(new Set(filtered.map((a) => a.id)));
-                    } else {
-                      setSelectedIds(new Set());
-                    }
-                  }}
-                  data-testid="checkbox-select-all"
-                  aria-label="Select all"
-                />
-              </TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Worker</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Date</TableHead>
-              <TableHead className="text-xs h-9 font-semibold text-right">Amount</TableHead>
-              <TableHead className="text-xs h-9 font-semibold text-right">Remaining</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Type</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Status</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Notes</TableHead>
-              <TableHead className="text-xs h-9 w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              [...Array(5)].map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-4" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-28" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16 ml-auto" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16 ml-auto" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9}>
-                  <div className="flex flex-col items-center gap-2 py-10 text-center">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                      <Banknote className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium">No advances found</p>
-                    <p className="text-xs text-muted-foreground">
-                      {filterWorker !== "all" || filterStatus !== "all"
-                        ? "Try adjusting your filters"
-                        : "Record an advance to get started"}
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((adv) => (
-                <TableRow
-                  key={adv.id}
-                  className={`hover:bg-muted/40 ${selectedIds.has(adv.id) ? "bg-muted/30" : ""}`}
-                  data-testid={`row-advance-${adv.id}`}
-                >
-                  <TableCell className="py-3">
-                    <Checkbox
-                      checked={selectedIds.has(adv.id)}
-                      onCheckedChange={(checked) => {
-                        setSelectedIds((prev) => {
-                          const next = new Set(prev);
-                          if (checked) next.add(adv.id);
-                          else next.delete(adv.id);
-                          return next;
-                        });
-                      }}
-                      data-testid={`checkbox-advance-${adv.id}`}
-                      aria-label={`Select advance for ${adv.workerName}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium py-3" data-testid={`text-advance-worker-${adv.id}`}>
-                    {adv.workerName}
-                  </TableCell>
-                  <TableCell className="py-3 text-sm text-muted-foreground" data-testid={`text-advance-date-${adv.id}`}>
-                    {formatDate(adv.advanceDate)}
-                  </TableCell>
-                  <TableCell
-                    className="py-3 text-right font-mono text-sm"
-                    data-testid={`text-advance-amount-${adv.id}`}
-                  >
-                    {fmt(adv.amount)}
-                  </TableCell>
-                  <TableCell
-                    className="py-3 text-right font-mono text-sm"
-                    data-testid={`text-advance-remaining-${adv.id}`}
-                  >
-                    {fmt(adv.remainingBalance)}
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Badge
-                      variant="secondary"
-                      className={`text-xs no-default-active-elevate ${
-                        adv.repaymentType === "manual_repayment"
-                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                      data-testid={`badge-advance-type-${adv.id}`}
-                    >
-                      {adv.repaymentType === "manual_repayment" ? "Loan" : "Salary Ded."}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Badge
-                      variant="secondary"
-                      className={`text-xs no-default-active-elevate ${
-                        adv.fullyPaid
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                      }`}
-                      data-testid={`badge-advance-status-${adv.id}`}
-                    >
-                      {adv.fullyPaid ? "Paid" : "Outstanding"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-3 text-sm text-muted-foreground max-w-[200px] truncate">
-                    {adv.notes || "\u2014"}
-                  </TableCell>
-                  <TableCell className="py-3">
-                    {canChangeExistingRecords && (
-                      <div className="flex items-center gap-1">
-                        {adv.fullyPaid ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setReverseTarget(adv)}
-                            title="Reverse this advance"
-                            data-testid={`button-reverse-advance-${adv.id}`}
-                          >
-                            <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(adv)}
-                            data-testid={`button-delete-advance-${adv.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <AdvancesPanelSection
+        canChangeExistingRecords={canChangeExistingRecords}
+        filterStatus={filterStatus}
+        filterWorker={filterWorker}
+        filtered={filtered}
+        formatDate={formatDate}
+        isLoading={isLoading}
+        selectedIds={selectedIds}
+        setDeleteTarget={setDeleteTarget}
+        setReverseTarget={setReverseTarget}
+        setSelectedIds={setSelectedIds}
+      />
 
       <BulkAdvanceDialog
         bulkAmounts={bulkAmounts}

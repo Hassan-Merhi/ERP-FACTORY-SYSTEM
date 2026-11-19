@@ -14,6 +14,14 @@ import { stockItems, stockTransferVouchers, stockTransferItems, vouchers, locati
 import { eq, and, desc, inArray, isNull, gte, lte } from "drizzle-orm";
 import { registerFinancialSalesRoutes } from "../financialSalesRoutes";
 import { moneyString, sumMoney } from "../../lib/money";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { posDaybookTransferText } from "@shared/posDaybookTransferText";
+import {
+  getPosDaybookLocations,
+  getPosTransferScope,
+  getPosTransferScopes,
+  posTransferVisibleItems,
+} from "../../services/pos/posDaybookTransferAccess";
 
 export function registerStockTransferReadRoutes(app: Express) {
   registerFinancialSalesRoutes(app);
@@ -61,20 +69,20 @@ export function registerStockTransferReadRoutes(app: Express) {
         if (r.sourceLocationId) locationIds.add(r.sourceLocationId);
         if (r.destinationLocationId) locationIds.add(r.destinationLocationId);
       }
-      // Determine if this is a POS user and their assigned location
-      const isPosUserList = req.user?.role === "POS";
-      const posLocationIdList = isPosUserList
-        ? (req.user?.assignedLocationId ?? req.session?.currentLocationId ?? null)
-        : null;
-
-      if (posLocationIdList) locationIds.add(posLocationIdList);
+      const access = await getActiveCompanyPermissionContext(req);
+      const isPosUserList = access.role === "POS";
+      const assignedLocations = isPosUserList ? await getPosDaybookLocations(access) : new Map<number, string>();
+      const transferScopes = isPosUserList
+        ? await getPosTransferScopes(companyId, rows.map((row) => row.voucherId), assignedLocations)
+        : new Map();
+      for (const locationId of assignedLocations.keys()) locationIds.add(locationId);
 
       const locationRows =
         locationIds.size > 0
           ? await db
               .select({ id: locations.id, name: locations.name })
               .from(locations)
-              .where(inArray(locations.id, Array.from(locationIds)))
+              .where(and(eq(locations.companyId, companyId), inArray(locations.id, Array.from(locationIds))))
               .execute()
           : [];
       const locationMap = new Map(locationRows.map((l) => [l.id, l.name]));
@@ -100,40 +108,29 @@ export function registerStockTransferReadRoutes(app: Express) {
           ? await db
               .select({ id: stockItems.id, name: stockItems.name })
               .from(stockItems)
-              .where(inArray(stockItems.id, stockItemIds))
+              .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, stockItemIds)))
               .execute()
           : [];
       const stockItemMap = new Map(stockItemRows.map((s) => [s.id, s.name]));
 
       // Group all items by transfer
       const itemsByTransfer = new Map<number, typeof itemRows>();
-      // Track which transfers have at least one item sourced from the POS user's location
-      const transfersWithMySourceItem = new Set<number>();
       for (const item of itemRows) {
         const arr = itemsByTransfer.get(item.transferId) || [];
         arr.push(item);
         itemsByTransfer.set(item.transferId, arr);
-        if (posLocationIdList !== null && item.sourceLocationId === posLocationIdList) {
-          transfersWithMySourceItem.add(item.transferId);
-        }
       }
 
       const allResult = rows.map((r) => {
         const allItems = itemsByTransfer.get(r.transferId) || [];
-        // Destination-side POS users see all items; source-side see only their items:
-        //   - Items with item-level sourceLocationId matching their location
-        //   - Items with no item-level sourceLocationId AND voucher-level source matches
-        const isDestUser = posLocationIdList !== null && r.destinationLocationId === posLocationIdList;
-        const myItems =
-          posLocationIdList !== null
-            ? isDestUser
-              ? allItems
-              : allItems.filter(
-                  (i) =>
-                    i.sourceLocationId === posLocationIdList ||
-                    (i.sourceLocationId === null && r.sourceLocationId === posLocationIdList)
-                )
-            : allItems;
+        const posScope = transferScopes.get(r.voucherId);
+        const posLocationIdList = posScope?.displayLocationId ?? null;
+        const isDestUser = posScope?.isDestination ?? false;
+        const myItems = isPosUserList
+          ? posScope
+            ? posTransferVisibleItems(allItems, posScope)
+            : []
+          : allItems;
         const totalAmount = sumMoney(myItems.map((i) => i.totalAmount));
         const stockItemNames = [...new Set(myItems.map((i) => stockItemMap.get(i.stockItemId) ?? "").filter(Boolean))];
         return {
@@ -156,23 +153,15 @@ export function registerStockTransferReadRoutes(app: Express) {
           destinationLocationId: r.destinationLocationId,
           destinationLocationName: locationMap.get(r.destinationLocationId) ?? "Unknown",
           itemCount: myItems.length,
-          totalAmount: Number(moneyString(totalAmount)),
+          totalAmount: isPosUserList ? 0 : Number(moneyString(totalAmount)),
           stockItemNames,
           createdAt: r.createdAt,
         };
       });
 
-      // For POS users: show transfers where their location is destination OR source
-      // (Kolwezi/Kolwezi 2 are destinations; Hadi 1/2/3/4 are sources)
-      const result =
-        posLocationIdList !== null
-          ? allResult.filter(
-              (r) =>
-                r.destinationLocationId === posLocationIdList ||
-                r.sourceLocationId === posLocationIdList ||
-                transfersWithMySourceItem.has(r.transferId)
-            )
-          : allResult;
+      const result = isPosUserList
+        ? allResult.filter((row) => transferScopes.has(row.voucherId))
+        : allResult;
 
       res.json(result);
     } catch (error: unknown) {
@@ -189,8 +178,32 @@ export function registerStockTransferReadRoutes(app: Express) {
         return res.status(400).json({ message: "voucherId query parameter is required" });
       }
 
+      const access = await getActiveCompanyPermissionContext(req);
       const transfer = await storage.getStockTransferByVoucherId(voucherId);
-      res.json(transfer);
+      if (!transfer) return res.status(404).json({ message: posDaybookTransferText.notFound });
+      const [voucher] = await db
+        .select({ id: vouchers.id })
+        .from(vouchers)
+        .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, access.companyId), isNull(vouchers.deletedAt)))
+        .limit(1);
+      if (!voucher) return res.status(404).json({ message: posDaybookTransferText.notFound });
+      if (access.role !== "POS") return res.json(transfer);
+      const scope = await getPosTransferScope(access, voucherId);
+      if (!scope) return res.status(404).json({ message: posDaybookTransferText.notFound });
+      return res.json({
+        id: transfer.id,
+        voucherId: transfer.voucherId,
+        sourceLocationId: scope.isDestination ? transfer.sourceLocationId : scope.displayLocationId,
+        destinationLocationId: transfer.destinationLocationId,
+        notes: transfer.notes,
+        inventoryApplied: transfer.inventoryApplied,
+        items: posTransferVisibleItems(transfer.items, scope).map((item) => ({
+          id: item.id,
+          stockItemId: item.stockItemId,
+          sourceLocationId: item.sourceLocationId,
+          quantity: item.quantity,
+        })),
+      });
     } catch (error: unknown) {
       logger.error("[Stock Transfer GET] Error:", { error: getErrorMessage(error) });
       res.status(500).json({ message: getErrorMessage(error) });

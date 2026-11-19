@@ -197,6 +197,12 @@ jobs:
       - name: Type-escape ratchet
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:type-escapes
+      - name: Cleaned maintenance scripts type gate
+        if: always() && steps.install.outcome == 'success'
+        run: npm run verify:clean-maintenance-types
+      - name: Type/environment regression policy fixtures
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:type-env-policy
       - name: Documentation state index
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:doc-index
@@ -212,6 +218,9 @@ jobs:
       - name: Script inventory
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:scripts
+      - name: UI unification ratchet
+        if: always() && steps.install.outcome == 'success'
+        run: npm run audit:ui-unification
       - name: Route access declaration coverage (fail on missing, stale or drifted routes)
         if: always() && steps.install.outcome == 'success'
         # This job has no PostgreSQL service. The gate only registers routes and

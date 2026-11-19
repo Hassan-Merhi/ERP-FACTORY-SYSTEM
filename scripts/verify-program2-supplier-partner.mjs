@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const requiredFiles = [
   "server/services/pos/postSaleAccounting.ts",
@@ -11,7 +12,7 @@ const requiredFiles = [
 for (const file of requiredFiles) if (!fs.existsSync(file)) throw new Error(`Program 2 Phase 6 missing required file: ${file}`);
 const read = (file) => fs.readFileSync(file, "utf8");
 const accounting = read(requiredFiles[0]);
-const createSale = read(requiredFiles[1]);
+const createSale = readModuleFamily(requiredFiles[1]);
 const editSale = read(requiredFiles[2]);
 // Split into a directory during the god-file cleanup: assert over every source file in it.
 const readModule = (dir) =>

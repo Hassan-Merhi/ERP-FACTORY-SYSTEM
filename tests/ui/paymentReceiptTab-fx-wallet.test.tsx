@@ -145,7 +145,9 @@ describe("PaymentReceiptTab — FX wallet, USD payout at an agreed rate", () => 
 
     const save = screen.getByTestId("button-save-voucher");
     expect(save).toBeEnabled();
-    expect(save).toHaveTextContent("Post Payment · USD 1140.00");
+    // One save label everywhere; the FX payout currency shows in the action bar total.
+    expect(save).toHaveTextContent("Save Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("USD 1140.00");
     expect(screen.getByTestId("text-hero-total")).toHaveTextContent("$1140.00");
   });
 
@@ -169,6 +171,28 @@ describe("PaymentReceiptTab — FX wallet, USD payout at an agreed rate", () => 
     const optional = await screen.findByTestId("checkbox-optional");
     expect(optional).toBeDisabled();
     expect(optional).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("enables Optional for a direct EUR supplier draft without posting balances", async () => {
+    renderWithProviders(
+      <Harness
+        paymentAccountId={13}
+        entries={[SUPPLIER_ROW]}
+        fxWallet={WALLET}
+        fxPayoutCurrency="EUR"
+        fxSupplierEurBalance={800}
+      />
+    );
+    const optional = await screen.findByTestId("checkbox-optional");
+    expect(optional).toBeEnabled();
+    expect(optional).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByTestId("text-fx-optional-draft")).toHaveTextContent("no wallet or supplier balance changes");
+    expect(screen.getByTestId("button-save-voucher")).toBeEnabled();
+
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "true"));
   });
 
   it("warns and blocks when the wallet ledger is out of sync or short of EUR", async () => {
@@ -228,7 +252,8 @@ describe("PaymentReceiptTab — FX wallet, USD payout at an agreed rate", () => 
     expect(screen.getByTestId("text-voucher-number")).toHaveTextContent("#PV-0042");
     expect(screen.queryByTestId("fx-payment-voucher")).not.toBeInTheDocument();
     expect(screen.getByTestId("card-selected-source")).toBeInTheDocument();
-    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Update Voucher · $1140.00");
+    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Update Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("$1140.00");
   });
 });
 
@@ -279,7 +304,9 @@ describe("PaymentReceiptTab — FX wallet, direct EUR supplier payment", () => {
 
     const save = screen.getByTestId("button-save-voucher");
     expect(save).toBeEnabled();
-    expect(save).toHaveTextContent("Post Payment · EUR 800.00");
+    // One save label everywhere; the FX payout currency shows in the action bar total.
+    expect(save).toHaveTextContent("Save Voucher");
+    expect(screen.getByTestId("text-total-amount")).toHaveTextContent("EUR 800.00");
   });
 
   it("blocks paying more than the supplier's EUR balance", async () => {
@@ -293,6 +320,11 @@ describe("PaymentReceiptTab — FX wallet, direct EUR supplier payment", () => {
       />
     );
     expect(await screen.findByTestId("fx-payment-voucher")).toHaveTextContent("Amount exceeds supplier EUR balance.");
+    // A direct EUR payment starts as an Optional draft, which moves no balances (#3320);
+    // posting it for real is what the supplier's EUR balance must cover.
+    const optional = screen.getByTestId("checkbox-optional");
+    fireEvent.click(optional);
+    await waitFor(() => expect(optional).toHaveAttribute("aria-checked", "false"));
     expect(screen.getByTestId("button-save-voucher")).toBeDisabled();
   });
 

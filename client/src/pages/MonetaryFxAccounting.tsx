@@ -15,69 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { MonetaryFxExportMenu } from "./MonetaryFxExportMenu";
+import type { Account, Domain, RateMatrix, RealizedList, Valuation } from "./monetaryFxAccountingTypes";
 
 // Phase 15 source-only rollout: an independent financial release is still required.
 const UNIFIED_FINANCIAL_POSTING_CERTIFIED = false;
-type Domain = "customer" | "supplier" | "factory_supplier";
-type Account = { accountKind: "bank" | "ledger"; accountId: number; name: string };
-type Rate = {
-  currency: string;
-  baseCurrency: string;
-  effectiveDate: string;
-  rateBasePerUnit: string;
-  rateUnitPerBase: string;
-  source: string;
-  rateId: number | null;
-};
-type RateMatrix = { asOfDate: string; baseCurrency: string; rates: Array<{ currency: string; rate: Rate | null }> };
-type Bucket = {
-  currency: string;
-  nativeBalance: string;
-  historicalUsdBasis: string;
-  rate: Rate | null;
-  translatedUsd: string | null;
-  unrealizedDifferenceUsd: string | null;
-  verified: boolean;
-  issues: string[];
-  journalTreatment: string;
-};
-type Valuation = {
-  accountName: string;
-  accountKind: string;
-  asOfDate: string;
-  accountId: number;
-  buckets: Bucket[];
-  totals: {
-    historicalUsd: string;
-    translatedUsd: string | null;
-    unrealizedDifferenceUsd: string | null;
-    unresolvedCurrencies: string[];
-    posting: string;
-  };
-};
-type Realized = {
-  matchId: number;
-  domain: Domain;
-  partyId: number;
-  nativeCurrency: string;
-  nativeMatchedAmount: string;
-  chargeVoucher: string;
-  settlementVoucher: string;
-  chargeHistoricalUsd: string;
-  settlementHistoricalUsd: string;
-  realizedGainUsd: string;
-  status: "ready" | "no_difference" | "recognized" | "reversed" | "blocked";
-  postable: boolean;
-  issue: string | null;
-  recognitionVoucherId: number | null;
-};
-type RealizedList = {
-  items: Realized[];
-  asOfDate: string;
-  limitedToMostRecent: number;
-  recognitionStatusAsOf: boolean;
-  asOfLimitations: string;
-};
 async function load<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: "include" });
   const body = await response.json().catch(() => ({}));
@@ -162,7 +104,14 @@ export default function MonetaryFxAccounting() {
       <PageHeader
         title="Multi-Currency Accounting"
         subtitle="Dated foreign-exchange rates, monetary cash/bank valuation and separately recognized invoice/payment exchange differences — ERP, Factory and Rentals."
-      />
+      >
+        <MonetaryFxExportMenu
+          asOfDate={asOfDate}
+          rates={rates.data}
+          valuation={valuation.data}
+          realized={realized.data}
+        />
+      </PageHeader>
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-2">
           <div className="space-y-1">

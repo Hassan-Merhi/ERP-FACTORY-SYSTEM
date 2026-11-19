@@ -3,10 +3,10 @@
  * these assertions are NOT a substitute for live company reconciliation.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (file: string) => readFileSync(resolve(process.cwd(), file), "utf8");
+const source = (file: string) => readModuleFamily(resolve(process.cwd(), file));
 const rateReader = source("server/services/accounting/monetaryFxRates.ts");
 const history = source("server/services/accounting/monetaryFxHistoricalRatePreview.ts");
 const route = source("server/routes/stats/statsMultiCurrencyRoutes.ts");

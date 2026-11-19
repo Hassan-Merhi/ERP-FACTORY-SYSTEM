@@ -1,15 +1,10 @@
-import { SearchField } from "@/components/ui/search-field";
-import { X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { readCostCenterApi, type CostCenterCatalog } from "@/api/costCentersApi";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
-import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { PeriodFilter, PeriodFilterValue } from "@/components/ui/period-filter";
+import { DaybookFilterBar, type DaybookFilterChip } from "@/components/daybook/DaybookFilterBar";
+import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FilterStateAction } from "@/hooks/use-paginated-filter-state";
 import type { DaybookFiltersState } from "./filterState";
@@ -37,6 +32,8 @@ export function DaybookFilters({
   setFilters,
   hasActiveFilters,
   onResetFilters,
+  onPrevDay,
+  onNextDay,
 }: DaybookFiltersProps) {
   const { selectedCompany } = useCompany();
   // The cost-center filter reveals allocations, so it follows the same ERP
@@ -64,6 +61,7 @@ export function DaybookFilters({
     filters.statusFilter !== "all" ||
     (filters.costCenterId || "all") !== "all";
 
+  const costCenterId = filters.costCenterId || "all";
   const activeFilterCount = [
     filters.voucherType !== "all",
     filters.statusFilter !== "all",
@@ -71,201 +69,134 @@ export function DaybookFilters({
     !!filters.minAmount,
     !!filters.maxAmount,
   ].filter(Boolean).length;
-
-  const searchControl = (
-    <SearchField
-      id="search"
-      value={filters.searchQuery}
-      onValueChange={(value) => setFilters({ ...filters, searchQuery: value })}
-      placeholder="Voucher # or description..."
-      wrapperClassName="lg:col-span-2 xl:col-span-1"
-      className="daybook-filter-search"
-      data-testid="input-search"
-    />
-  );
+  const chips: DaybookFilterChip[] = [
+    ...(filters.voucherType !== "all"
+      ? [
+          {
+            id: "type",
+            label: filters.voucherType,
+            onRemove: () => setFilters({ ...filters, voucherType: "all" }),
+            testId: "chip-type",
+          },
+        ]
+      : []),
+    ...(costCenterId !== "all"
+      ? [
+          {
+            id: "cost-center",
+            label: <>Cost center: {centers.find((c) => String(c.id) === costCenterId)?.name || costCenterId}</>,
+            onRemove: () => setFilters({ ...filters, costCenterId: "all" }),
+          },
+        ]
+      : []),
+    ...(filters.statusFilter !== "all"
+      ? [
+          {
+            id: "status",
+            label: filters.statusFilter === "active" ? "Active Only" : "Optional Only",
+            onRemove: () => setFilters({ ...filters, statusFilter: "all" }),
+            testId: "chip-status",
+          },
+        ]
+      : []),
+    ...(filters.minAmount
+      ? [
+          {
+            id: "min",
+            label: <>Min: {filters.minAmount}</>,
+            onRemove: () => setFilters({ ...filters, minAmount: "" }),
+            testId: "chip-min",
+          },
+        ]
+      : []),
+    ...(filters.maxAmount
+      ? [
+          {
+            id: "max",
+            label: <>Max: {filters.maxAmount}</>,
+            onRemove: () => setFilters({ ...filters, maxAmount: "" }),
+            testId: "chip-max",
+          },
+        ]
+      : []),
+    ...(filters.searchQuery
+      ? [
+          {
+            id: "search",
+            label: <>Search: {filters.searchQuery}</>,
+            onRemove: () => setFilters({ ...filters, searchQuery: "" }),
+            testId: "chip-search",
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <ErpMobileFilters
-        label="Daybook filters"
-        primary={<PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />}
-        quick={searchControl}
-        activeCount={activeFilterCount}
-        onClear={onResetFilters}
-        canClear={!!hasActiveFilters || hasActiveNonPeriodFilters}
-        data-testid="daybook-filters"
+    <DaybookFilterBar
+      period={periodFilter}
+      onPeriodChange={setPeriodFilter}
+      onPrevDay={onPrevDay}
+      onNextDay={onNextDay}
+      search={filters.searchQuery}
+      onSearchChange={(value) => setFilters({ ...filters, searchQuery: value })}
+      searchPlaceholder="Voucher # or description..."
+      activeCount={activeFilterCount}
+      chips={chips}
+      hasActiveFilters={!!hasActiveFilters || hasActiveNonPeriodFilters}
+      onClearFilters={onResetFilters}
+    >
+      <Select value={filters.voucherType} onValueChange={(value) => setFilters({ ...filters, voucherType: value })}>
+        <SelectTrigger id="voucher-type" data-testid="select-voucher-type" className="daybook-filter-control w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Types</SelectItem>
+          <SelectItem value="Sales">Sales</SelectItem>
+          <SelectItem value="Purchase">Purchase</SelectItem>
+          <SelectItem value="Payment">Payment</SelectItem>
+          <SelectItem value="Receipt">Receipt</SelectItem>
+          <SelectItem value="Journal">Journal</SelectItem>
+          <SelectItem value="Contra">Contra</SelectItem>
+          <SelectItem value="Offload">Offload</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.statusFilter}
+        onValueChange={(value) => setFilters({ ...filters, statusFilter: value as "all" | "active" | "optional" })}
       >
-        {(layout) => (
-          <CoreErpFilterGrid
-            className={
-              layout === "sheet" ? "gap-3 border-0 bg-transparent p-0" : "daybook-filter-grid gap-2 p-2 sm:p-3"
-            }
-            label="Daybook filters"
+        <SelectTrigger id="status-filter" data-testid="select-status-filter" className="daybook-filter-control w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Status</SelectItem>
+          <SelectItem value="active">Active Only</SelectItem>
+          <SelectItem value="optional">Optional Only</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {canFilterByCostCenter && (
+        <Select value={costCenterId} onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}>
+          <SelectTrigger
+            id="cost-center-filter"
+            data-testid="select-daybook-cost-center"
+            className="daybook-filter-control w-full"
           >
-            {layout === "inline" && (
-              <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+            <SelectValue placeholder="All Cost Centers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cost Centers</SelectItem>
+            {centers.map((center) => (
+              <SelectItem key={center.id} value={String(center.id)}>
+                {center.code} — {center.name}
+              </SelectItem>
+            ))}
+            {costCenterId !== "all" && !centers.some((c) => String(c.id) === costCenterId) && (
+              <SelectItem value={costCenterId}>Selected Cost Center #{costCenterId}</SelectItem>
             )}
-
-            <Select
-              value={filters.voucherType}
-              onValueChange={(value) => setFilters({ ...filters, voucherType: value })}
-            >
-              <SelectTrigger
-                id="voucher-type"
-                data-testid="select-voucher-type"
-                className="daybook-filter-control w-full"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Sales">Sales</SelectItem>
-                <SelectItem value="Purchase">Purchase</SelectItem>
-                <SelectItem value="Payment">Payment</SelectItem>
-                <SelectItem value="Receipt">Receipt</SelectItem>
-                <SelectItem value="Journal">Journal</SelectItem>
-                <SelectItem value="Contra">Contra</SelectItem>
-                <SelectItem value="Offload">Offload</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.statusFilter}
-              onValueChange={(value) =>
-                setFilters({ ...filters, statusFilter: value as "all" | "active" | "optional" })
-              }
-            >
-              <SelectTrigger
-                id="status-filter"
-                data-testid="select-status-filter"
-                className="daybook-filter-control w-full"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active Only</SelectItem>
-                <SelectItem value="optional">Optional Only</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {canFilterByCostCenter && (
-              <Select
-                value={filters.costCenterId || "all"}
-                onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}
-              >
-                <SelectTrigger
-                  id="cost-center-filter"
-                  data-testid="select-daybook-cost-center"
-                  className="daybook-filter-control w-full"
-                >
-                  <SelectValue placeholder="All Cost Centers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cost Centers</SelectItem>
-                  {centers.map((center) => (
-                    <SelectItem key={center.id} value={String(center.id)}>
-                      {center.code} — {center.name}
-                    </SelectItem>
-                  ))}
-                  {filters.costCenterId !== "all" && !centers.some((c) => String(c.id) === filters.costCenterId) && (
-                    <SelectItem value={filters.costCenterId}>Selected Cost Center #{filters.costCenterId}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            )}
-
-            {layout === "inline" && searchControl}
-          </CoreErpFilterGrid>
-        )}
-      </ErpMobileFilters>
-
-      {(hasActiveFilters || hasActiveNonPeriodFilters) && (
-        <div
-          className="flex max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain pb-1"
-          aria-label="Active Daybook filters"
-        >
-          <span className="shrink-0 text-xs text-muted-foreground">Active:</span>
-          {filters.voucherType !== "all" && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, voucherType: "all" })}
-              data-testid="chip-type"
-            >
-              {filters.voucherType}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {filters.costCenterId !== "all" && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, costCenterId: "all" })}
-            >
-              Cost center: {centers.find((c) => String(c.id) === filters.costCenterId)?.name || filters.costCenterId}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {filters.statusFilter !== "all" && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, statusFilter: "all" })}
-              data-testid="chip-status"
-            >
-              {filters.statusFilter === "active" ? "Active Only" : "Optional Only"}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {filters.minAmount && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, minAmount: "" })}
-              data-testid="chip-min"
-            >
-              Min: {filters.minAmount}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {filters.maxAmount && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, maxAmount: "" })}
-              data-testid="chip-max"
-            >
-              Max: {filters.maxAmount}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {!!filters.searchQuery && (
-            <Badge
-              variant="secondary"
-              className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({ ...filters, searchQuery: "" })}
-              data-testid="chip-search"
-            >
-              Search: {filters.searchQuery}
-              <X className="h-3 w-3" />
-            </Badge>
-          )}
-          {onResetFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-6 shrink-0 gap-1 px-2 text-xs"
-              onClick={onResetFilters}
-              data-testid="button-reset-filters"
-            >
-              <X className="h-3 w-3" />
-              Reset Filters
-            </Button>
-          )}
-        </div>
+          </SelectContent>
+        </Select>
       )}
-    </div>
+    </DaybookFilterBar>
   );
 }

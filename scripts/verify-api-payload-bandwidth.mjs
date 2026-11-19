@@ -2,9 +2,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 
 function assert(condition, message) {
   if (!condition) {
@@ -28,7 +29,7 @@ const products = read("server/routes/factory/products/productReadRoutes.ts");
 const mixBatches = read("server/routes/factory/mix-batches/reads.ts");
 const accounts = read("server/routes/accounts/all.ts");
 const microcache = read("server/routes/performance/readMicrocache.ts");
-const bandwidth = read("server/middleware/bandwidthDebug.ts");
+const bandwidth = read("server/middleware/bandwidthDebugHelpers.ts");
 const phase4 = read("client/src/lib/bandwidthFetch.ts");
 const phase4Test = read("client/src/lib/bandwidthFetch.test.ts");
 const baleHistory = read("client/src/pages/factory/baleshistory/useBalesHistoryModel.tsx");
@@ -105,7 +106,7 @@ requireText(gitServer, "createGitContinuousSnapshot", "GIT server must snapshot 
 requireText(gitServer, "readGitContinuousSnapshot", "GIT later chunks must read the snapshot instead of rerunning enrichment.");
 
 const migratedPickerFiles = [
-  "client/src/pages/factory/ProductionComparison.tsx",
+  "client/src/pages/factory/productioncomparison/useProductionComparisonModel.ts",
   "client/src/pages/factory/FactoryWorkerBonusesTab.tsx",
 ];
 for (const file of migratedPickerFiles) {
@@ -113,7 +114,7 @@ for (const file of migratedPickerFiles) {
 }
 
 for (const file of [
-  "client/src/pages/factory/ProductionComparison.tsx",
+  "client/src/pages/factory/productioncomparison/useProductionComparisonModel.ts",
   "client/src/pages/factory/ProformaAddLine.tsx",
   "client/src/pages/factory/FactoryMixOptimizer.tsx",
 ]) {

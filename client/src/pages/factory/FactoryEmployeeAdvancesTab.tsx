@@ -1,13 +1,5 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Plus, Trash2, RotateCcw, Banknote, Loader2 } from "lucide-react";
+import { Plus, Banknote, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,227 +12,40 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { ErrorState } from "@/components/ui/page-state";
-import { formatUsd } from "@/lib/moneyDisplay";
-
-interface Employee {
-  id: number;
-  code: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface AdvanceRecord {
-  id: number;
-  employeeId: number;
-  advanceDate: string;
-  amount: string;
-  remainingBalance: string;
-  cashAccountId: number | null;
-  cashAccountName: string | null;
-  notes: string | null;
-  fullyPaid: boolean;
-  firstName: string;
-  lastName: string;
-  employeeCode: string;
-}
-
-interface RepaymentRecord {
-  id: number;
-  advanceId: number;
-  employeeId: number;
-  repaymentDate: string;
-  amount: string;
-  notes: string | null;
-  firstName: string;
-  lastName: string;
-}
-
-interface CashAccount {
-  id: number;
-  name: string;
-  code: string;
-}
-
-function fmt(val: string | number | null | undefined) {
-  const n = parseFloat(String(val || 0));
-  return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtUsd(val: string | number | null | undefined) {
-  const n = parseFloat(String(val || 0));
-  return formatUsd(isNaN(n) ? 0 : n, 2);
-}
-
-const today = () => new Date().toLocaleDateString("en-CA");
+import { fmt, fmtUsd } from "./FactoryEmployeeAdvancesTabTypes";
+import { useFactoryEmployeeAdvancesTabState } from "./useFactoryEmployeeAdvancesTabState";
+import { FactoryEmployeeAdvancesTabSection } from "./FactoryEmployeeAdvancesTabSection";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
 
 export default function FactoryEmployeeAdvancesTab() {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "paid">("open");
-  const [empFilter, setEmpFilter] = useState<string>("all");
-  const [addOpen, setAddOpen] = useState(false);
-  const [repayOpen, setRepayOpen] = useState<AdvanceRecord | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<AdvanceRecord | null>(null);
-
-  const [addForm, setAddForm] = useState({
-    employeeId: "",
-    advanceDate: today(),
-    amount: "",
-    cashAccountId: "",
-    notes: "",
-  });
-  const [repayForm, setRepayForm] = useState({ repaymentDate: today(), amount: "", cashAccountId: "", notes: "" });
-
-  const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/employees", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-  });
-
-  const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const qKey = useMemo(
-    () => companyQueryKey("/api/factory/employee-advances", selectedCompany?.id, statusFilter, empFilter),
-    [selectedCompany?.id, statusFilter, empFilter]
-  );
-
   const {
-    data: advancesData,
-    isLoading,
-    isError,
     refetch,
-  } = useQuery<AdvanceRecord[]>({
-    queryKey: qKey,
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (empFilter !== "all") params.set("employeeId", empFilter);
-      const res = await fetch(`/api/factory/employee-advances?${params}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-  });
-  const advances = useMemo(() => advancesData ?? [], [advancesData]);
-
-  useQuery<RepaymentRecord[]>({
-    queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/employee-advance-repayments", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
-
-  const addMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/factory/employee-advances", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          employeeId: parseInt(addForm.employeeId),
-          advanceDate: addForm.advanceDate,
-          amount: addForm.amount,
-          cashAccountId: addForm.cashAccountId || null,
-          notes: addForm.notes || null,
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Advance recorded" });
-      setAddOpen(false);
-      setAddForm({ employeeId: "", advanceDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
-      });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const repayMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      if (!repayOpen) return;
-      const res = await fetch(`/api/factory/employee-advances/${repayOpen.id}/repay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          repaymentDate: repayForm.repaymentDate,
-          amount: repayForm.amount,
-          cashAccountId: repayForm.cashAccountId || null,
-          notes: repayForm.notes || null,
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Repayment recorded" });
-      setRepayOpen(null);
-      setRepayForm({ repaymentDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
-      });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await fetch(`/api/factory/employee-advances/${id}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Advance deleted" });
-      setDeleteConfirm(null);
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
-      });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
-  });
-
-  const totalOutstanding = useMemo(
-    () => advances.filter((a) => !a.fullyPaid).reduce((s, a) => s + parseFloat(a.remainingBalance || "0"), 0),
-    [advances]
-  );
+    isError,
+    advancesData,
+    addForm,
+    addMutation,
+    addOpen,
+    advances,
+    cashAccounts,
+    deleteConfirm,
+    deleteMutation,
+    empFilter,
+    employees,
+    isLoading,
+    recordChanges,
+    repayForm,
+    repayMutation,
+    repayOpen,
+    setAddForm,
+    setAddOpen,
+    setDeleteConfirm,
+    setEmpFilter,
+    setRepayForm,
+    setRepayOpen,
+    setStatusFilter,
+    statusFilter,
+    totalOutstanding,
+  } = useFactoryEmployeeAdvancesTabState();
 
   return (
     <div className="space-y-5">
@@ -281,142 +86,48 @@ export default function FactoryEmployeeAdvancesTab() {
             </span>
           </div>
         )}
-        {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
-          <Button onClick={() => setAddOpen(true)} className="ml-auto" data-testid="button-add-advance">
-            <Plus className="h-4 w-4 mr-2" /> Add Advance
-          </Button>
-        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <RowsExportMenu
+            title="Employee Advances"
+            rows={advances}
+            columns={[
+              { header: "Employee", value: (adv) => `${adv.firstName} ${adv.lastName}` },
+              { header: "Date", value: (adv) => adv.advanceDate },
+              { header: "Amount (USD)", value: (adv) => parseFloat(String(adv.amount ?? 0)), type: "number" },
+              {
+                header: "Remaining (USD)",
+                value: (adv) => (adv.fullyPaid ? null : parseFloat(String(adv.remainingBalance ?? 0))),
+                type: "number",
+              },
+              { header: "Status", value: (adv) => (adv.fullyPaid ? "Paid" : "Open") },
+              { header: "Notes", value: (adv) => adv.notes },
+            ]}
+            resource="factory.payroll"
+            size="default"
+            data-testid="button-export-employee-advances"
+          />
+          {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
+            <Button onClick={() => setAddOpen(true)} data-testid="button-add-advance">
+              <Plus className="h-4 w-4 mr-2" /> Add Advance
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
-      <div className="border rounded-xl overflow-x-auto">
-        <Table mobileLayout="cards">
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="text-xs h-9 font-semibold">Employee</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Date</TableHead>
-              <TableHead className="text-xs h-9 font-semibold text-right">Amount</TableHead>
-              <TableHead className="text-xs h-9 font-semibold text-right">Remaining</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Status</TableHead>
-              <TableHead className="text-xs h-9 font-semibold">Notes</TableHead>
-              <TableHead className="text-xs h-9 w-24"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              [...Array(4)].map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-28" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16 ml-auto" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16 ml-auto" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-16 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              ))
-            ) : isError && !advancesData ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
-                </TableCell>
-              </TableRow>
-            ) : advances.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <div className="flex flex-col items-center gap-2 py-10 text-center">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                      <Banknote className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium">No advances found</p>
-                    <p className="text-xs text-muted-foreground">
-                      {statusFilter !== "all" || empFilter !== "all"
-                        ? "Try adjusting your filters"
-                        : "Add an advance to get started"}
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              advances.map((adv) => (
-                <TableRow key={adv.id} className="hover:bg-muted/40" data-testid={`row-advance-${adv.id}`}>
-                  <TableCell className="font-medium py-3">
-                    {adv.firstName} {adv.lastName}
-                  </TableCell>
-                  <TableCell className="py-3 text-sm text-muted-foreground">{adv.advanceDate}</TableCell>
-                  <TableCell className="py-3 text-right font-mono text-sm">{fmtUsd(adv.amount)}</TableCell>
-                  <TableCell className="py-3 text-right font-mono text-sm">
-                    {adv.fullyPaid ? (
-                      <span className="text-muted-foreground/40">—</span>
-                    ) : (
-                      <span className="text-amber-600 dark:text-amber-400">{fmtUsd(adv.remainingBalance)}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Badge
-                      variant="secondary"
-                      className={`text-xs no-default-active-elevate ${
-                        adv.fullyPaid
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                      }`}
-                    >
-                      {adv.fullyPaid ? "Paid" : "Open"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-3 text-sm text-muted-foreground max-w-32 truncate">
-                    {adv.notes || "—"}
-                  </TableCell>
-                  <TableCell className="py-3">
-                    {recordChanges.allowed && (
-                      <div className="flex gap-1 justify-end">
-                        {!adv.fullyPaid && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setRepayOpen(adv);
-                              setRepayForm({
-                                repaymentDate: today(),
-                                amount: adv.remainingBalance,
-                                cashAccountId: "",
-                                notes: "",
-                              });
-                            }}
-                            data-testid={`button-repay-${adv.id}`}
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" /> Repay
-                          </Button>
-                        )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteConfirm(adv)}
-                          data-testid={`button-delete-advance-${adv.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <FactoryEmployeeAdvancesTabSection
+        refetch={refetch}
+        isError={isError}
+        advancesData={advancesData}
+        advances={advances}
+        empFilter={empFilter}
+        isLoading={isLoading}
+        recordChanges={recordChanges}
+        setDeleteConfirm={setDeleteConfirm}
+        setRepayForm={setRepayForm}
+        setRepayOpen={setRepayOpen}
+        statusFilter={statusFilter}
+      />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>

@@ -7,7 +7,6 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
-import { parseId } from "../../../../lib/parseId";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
@@ -16,77 +15,32 @@ import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
-import {
-  factoryBaleProducts,
-  factoryBales,
-  customerProformaLines,
-  customerOrders,
-  customerOrderBales,
-} from "@shared/schema";
+import { factoryBales, customerProformaLines, customerOrders, customerOrderBales } from "@shared/schema";
 import { eq, and, or, sql, inArray } from "drizzle-orm";
 import { resultRows, firstRow } from "../../../../lib/queryResult";
-import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 import { toMoney } from "../../../../lib/money";
+import { bulkImportStep } from "./bulkImportStep";
 
 export function registerOrderBaleBulkImportRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales/bulk-import", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const orderId = parseId(req.params.id);
-
-      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { locationId, items, refNumbers: refNumbersRaw } = req.body;
-      const ignoreProforma = req.body.allowBypassProforma === true;
-      const hasRefNumbers = Array.isArray(refNumbersRaw) && refNumbersRaw.length > 0;
-      const hasItems = Array.isArray(items) && items.length > 0;
-      if (!locationId || (!hasItems && !hasRefNumbers)) {
-        return res.status(400).json({ message: "locationId and either items or refNumbers are required" });
-      }
-      if (!(await isFactorySessionLocation(req.session, locationId))) {
-        return res.status(400).json({ message: "Location not found" });
-      }
-      const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
-
-      const [order] = await db
-        .select()
-        .from(customerOrders)
-        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order || order.deletedAt) return res.status(404).json({ message: "Order not found" });
-      if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(order.status)) {
-        return res
-          .status(400)
-          .json({ message: "Can only add bales to DRAFT, LOADING, or PENDING_VERIFICATION orders" });
-      }
-
-      // V5 guard: proformaIdUsed IS NOT NULL
-      // V5 bales are SOLD once the order reaches PENDING_VERIFICATION — no further bulk scanning allowed.
-      // Legacy V2/V3 behavior (PENDING_VERIFICATION scan allowed) is unchanged.
-      if (order.proformaIdUsed && order.status === "PENDING_VERIFICATION") {
-        return res
-          .status(400)
-          .json({ message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" });
-      }
-
-      const parsedLocationId = parseInt(locationId);
-
-      // Get all products for this company for matching
-      const allProducts = await db
-        .select()
-        .from(factoryBaleProducts)
-        .where(eq(factoryBaleProducts.companyId, companyId));
-
-      // Get bales already in this order
-      const existingOrderBales = await db
-        .select({ baleId: customerOrderBales.baleId })
-        .from(customerOrderBales)
-        .where(eq(customerOrderBales.orderId, orderId));
-      const alreadyAddedBaleIds = new Set(existingOrderBales.map((b) => b.baleId));
-
-      let totalAdded = 0;
-      const notFound: Array<{ articleCode: string; requestedQty: number; foundQty: number }> = [];
-      const notFoundRefs: string[] = [];
+      const bbi1 = await bulkImportStep({ req, res });
+      if (bbi1.done) return bbi1.value;
+      const {
+        hasRefNumbers,
+        refNumbersRaw,
+        order,
+        companyId,
+        orderId,
+        alreadyAddedBaleIds,
+        allProducts,
+        ignoreProforma,
+        parsedLocationId,
+        scannerName,
+        notFoundRefs,
+        items,
+        notFound,
+      } = bbi1;
 
       // ── REF-NUMBER / REF-CODE MODE ──────────────────────────────────────────
       if (hasRefNumbers) {
@@ -116,7 +70,11 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
               .from(customerOrders)
               .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
               .for("update");
-            if (!currentOrder || currentOrder.deletedAt || !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
+            if (
+              !currentOrder ||
+              currentOrder.deletedAt ||
+              !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)
+            ) {
               return { kind: "notFound" as const };
             }
 
@@ -205,15 +163,20 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             }
             let hasContainerPrice = false;
             if (order.proformaIdUsed && effectiveArticleCode) {
-              const extra = resultRows<{ price: string }>(await tx.execute(sql`
+              const extra = resultRows<{ price: string }>(
+                await tx.execute(sql`
                 SELECT price_per_bale::text AS price
                 FROM customer_order_extra_expected_lines
                 WHERE company_id = ${companyId} AND order_id = ${orderId}
                   AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
                 LIMIT 1
-              `))[0];
+              `)
+              )[0];
               // Container-local agreed price wins over the reusable proforma.
-              if (extra) { priceUsed = extra.price; hasContainerPrice = true; }
+              if (extra) {
+                priceUsed = extra.price;
+                hasContainerPrice = true;
+              }
             }
             if (priceUsed === "0" && !hasContainerPrice && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
@@ -252,13 +215,19 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
           }
           if (refResult.kind === "skipDuplicate") continue;
           alreadyAddedBaleIds.add(refResult.baleId);
-          totalAdded++;
+          bbi1.totalAdded++;
         }
 
         await recalculateOrderTotals(db, orderId);
         const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
-        return res.json({ added: totalAdded, notFound: [], notFoundRefs, order: updatedOrder, bales: updatedBales });
+        return res.json({
+          added: bbi1.totalAdded,
+          notFound: [],
+          notFoundRefs,
+          order: updatedOrder,
+          bales: updatedBales,
+        });
       }
 
       // ── V5 cross-order block set (ARTICLE mode) ─────────────────────────────
@@ -433,15 +402,20 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             }
             let hasContainerPrice = false;
             if (order.proformaIdUsed && effectiveArticleCode) {
-              const extra = resultRows<{ price: string }>(await tx.execute(sql`
+              const extra = resultRows<{ price: string }>(
+                await tx.execute(sql`
                 SELECT price_per_bale::text AS price
                 FROM customer_order_extra_expected_lines
                 WHERE company_id = ${companyId} AND order_id = ${orderId}
                   AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
                 LIMIT 1
-              `))[0];
+              `)
+              )[0];
               // Container-local agreed price wins over the reusable proforma.
-              if (extra) { priceUsed = extra.price; hasContainerPrice = true; }
+              if (extra) {
+                priceUsed = extra.price;
+                hasContainerPrice = true;
+              }
             }
             if (priceUsed === "0" && !hasContainerPrice && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
@@ -482,7 +456,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
         }
         for (const id of articleResult) {
           alreadyAddedBaleIds.add(id);
-          totalAdded++;
+          bbi1.totalAdded++;
         }
       }
 
@@ -500,9 +474,9 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
       const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
       const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
 
-      res.json({ added: totalAdded, notFound, order: updatedOrder, bales: updatedBales });
+      res.json({ added: bbi1.totalAdded, notFound, order: updatedOrder, bales: updatedBales });
     } catch (error: unknown) {
-      logger.error("Error bulk importing bales:", { error: error });
+      logger.error("Error bulk importing bales:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

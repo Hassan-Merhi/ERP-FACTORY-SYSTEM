@@ -1,21 +1,9 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { queryClient } from "@/lib/queryClient";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
+import { RowsExportMenu } from "@/components/export/RowsExportMenu";
+import { deletedItemsExportColumns } from "@/pages/deleted-items/deletedItemsExport";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/page-state";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,310 +14,42 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Trash2,
-  RotateCcw,
-  AlertTriangle,
-  MapPin,
-  Package,
-  Package2,
-  FolderTree,
-  BookOpen,
-  Users,
-  User,
-  Truck,
-  Building2,
-  Loader2,
-  Receipt,
-  FileText,
-  FlaskConical,
-  Layers,
-  Boxes,
-  Container,
-  ShoppingCart,
-  ClipboardList,
-  Eye,
-  X,
-} from "lucide-react";
+import { Trash2, RotateCcw, AlertTriangle, Package, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import type { LucideIcon } from "lucide-react";
+import { typeIcons, typeLabels, useDeletedItemsState } from "./useDeletedItemsState";
+import { DeletedItemsCardSection } from "./DeletedItemsCardSection";
 import { formatUsd } from "@/lib/moneyDisplay";
 
-interface DeletedItem {
-  id: number;
-  type: string;
-  name: string;
-  code: string;
-  accountType?: string;
-  deletedAt: string;
-  amount?: number;
-  date?: string;
-  locationName?: string;
-  voucherType?: string;
-}
-
-interface DeletedItemsResponse {
-  locations: DeletedItem[];
-  stockItems: DeletedItem[];
-  stockGroups: DeletedItem[];
-  ledgerAccounts: DeletedItem[];
-  employees: DeletedItem[];
-  customers: DeletedItem[];
-  suppliers: DeletedItem[];
-  bankAccounts: DeletedItem[];
-  vouchers: DeletedItem[];
-  orphanedPosSales: DeletedItem[];
-  factoryCategories?: DeletedItem[];
-  factoryBaleProducts?: DeletedItem[];
-  factoryContainers?: DeletedItem[];
-  factoryRawStock?: DeletedItem[];
-  factoryRawMaterialAdjustments?: DeletedItem[];
-  factoryMixBatches?: DeletedItem[];
-  factoryBales?: DeletedItem[];
-  customerProformas?: DeletedItem[];
-  customerOrders?: DeletedItem[];
-  totalCount: number;
-}
-
-const typeLabels: Record<string, string> = {
-  location: "Location",
-  stockItem: "Stock Item",
-  stockGroup: "Stock Group",
-  ledgerAccount: "Ledger Account",
-  employee: "Employee",
-  customer: "Customer",
-  supplier: "Supplier",
-  bankAccount: "Bank Account",
-  voucher: "Voucher",
-  orphanedPosSale: "Orphaned POS Sale",
-  factoryCategory: "Factory Category",
-  factoryBaleProduct: "Bale Product",
-  factoryContainer: "Container",
-  factoryRawStock: "Raw Stock Receipt",
-  factoryRawMaterialAdjustment: "Raw Material Adjustment",
-  factoryMixBatch: "Mix Batch",
-  factoryBale: "Bale",
-  customerProforma: "Proforma Invoice",
-  customerOrder: "Customer Invoice/Order",
-};
-
-const typeIcons: Record<string, LucideIcon> = {
-  location: MapPin,
-  stockItem: Package,
-  stockGroup: FolderTree,
-  ledgerAccount: BookOpen,
-  employee: Users,
-  customer: User,
-  supplier: Truck,
-  bankAccount: Building2,
-  voucher: FileText,
-  orphanedPosSale: Receipt,
-  factoryCategory: FolderTree,
-  factoryBaleProduct: Package2,
-  factoryContainer: Container,
-  factoryRawStock: Boxes,
-  factoryRawMaterialAdjustment: ClipboardList,
-  factoryMixBatch: FlaskConical,
-  factoryBale: Layers,
-  customerProforma: FileText,
-  customerOrder: ShoppingCart,
-};
-
 export default function DeletedItems() {
-  const { toast } = useToast();
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { formatDisplayDate } = useDateFormat();
-  const [filterType, setFilterType] = useState<string>("all");
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    action: "restore" | "delete";
-    item: DeletedItem | null;
-  }>({ open: false, action: "restore", item: null });
-  const [detailItem, setDetailItem] = useState<DeletedItem | null>(null);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
-
-  const { data, isLoading, error } = useQuery<DeletedItemsResponse>({
-    queryKey: ["/api/deleted-items"],
-  });
-
-  // Fetch journal entries for the selected voucher (to show accounts + descriptions)
-  const { data: voucherEntries = [], isLoading: entriesLoading } = useQuery<
-    { id?: number; accountName?: string; description?: string; debitAmount?: string; creditAmount?: string }[]
-  >({
-    queryKey: ["/api/vouchers", detailItem?.id, "view-entries"],
-    queryFn: async () => {
-      const res = await fetch(`/api/vouchers/${detailItem!.id}/view-entries`, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!detailItem && detailItem.type === "voucher",
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: async ({ type, id }: { type: string; id: number }) => {
-      return modeApiRequest("POST", `/api/deleted-items/${type}/${id}/restore`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deleted-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/locations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-items/light"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-groups"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      toast({
-        title: "Item Restored",
-        description: "The item has been restored successfully.",
-      });
-      setConfirmDialog({ open: false, action: "restore", item: null });
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({
-        title: "Restore failed",
-        description: error.message || "Failed to restore item",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: async ({ type, id }: { type: string; id: number }) => {
-      return modeApiRequest("DELETE", `/api/deleted-items/${type}/${id}/permanent`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deleted-items"] });
-      toast({
-        title: "Permanently Deleted",
-        description: "The item has been permanently removed.",
-        variant: "destructive",
-      });
-      setConfirmDialog({ open: false, action: "delete", item: null });
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({
-        title: "Delete failed",
-        description: error.message || "Failed to permanently delete item",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (itemsToDelete: { type: string; id: number }[]) => {
-      await Promise.all(
-        itemsToDelete.map(({ type, id }) => modeApiRequest("DELETE", `/api/deleted-items/${type}/${id}/permanent`))
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deleted-items"] });
-      setSelectedItems(new Set());
-      setShowBulkDeleteDialog(false);
-      toast({
-        title: "Permanently Deleted",
-        description: "All selected items have been permanently removed.",
-        variant: "destructive",
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if (error?._handledGlobally) return;
-      toast({
-        title: "Delete failed",
-        description: error.message || "Failed to delete some items",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const itemKey = (item: DeletedItem) => `${item.type}-${item.id}`;
-
-  const toggleItem = (item: DeletedItem) => {
-    setSelectedItems((prev) => {
-      const next = new Set(prev);
-      const key = itemKey(item);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const toggleAll = (currentItems: DeletedItem[]) => {
-    const allKeys = currentItems.map(itemKey);
-    const allSelected = allKeys.every((k) => selectedItems.has(k));
-    if (allSelected) {
-      setSelectedItems((prev) => {
-        const next = new Set(prev);
-        allKeys.forEach((k) => next.delete(k));
-        return next;
-      });
-    } else {
-      setSelectedItems((prev) => {
-        const next = new Set(prev);
-        allKeys.forEach((k) => next.add(k));
-        return next;
-      });
-    }
-  };
-
-  const getAllItems = (): DeletedItem[] => {
-    if (!data) return [];
-    const allItems = [
-      ...data.locations,
-      ...data.stockItems,
-      ...data.stockGroups,
-      ...data.ledgerAccounts,
-      ...data.employees,
-      ...data.customers,
-      ...data.suppliers,
-      ...data.bankAccounts,
-      ...(data.vouchers || []),
-      ...(data.orphanedPosSales || []),
-      ...(data.factoryCategories || []),
-      ...(data.factoryBaleProducts || []),
-      ...(data.factoryContainers || []),
-      ...(data.factoryRawStock || []),
-      ...(data.factoryRawMaterialAdjustments || []),
-      ...(data.factoryMixBatches || []),
-      ...(data.factoryBales || []),
-      ...(data.customerProformas || []),
-      ...(data.customerOrders || []),
-    ];
-    if (filterType === "all") return allItems;
-    return allItems.filter((item) => item.type === filterType);
-  };
-
-  const items = getAllItems();
-
-  const handleRestore = (item: DeletedItem) => {
-    setConfirmDialog({ open: true, action: "restore", item });
-  };
-
-  const handlePermanentDelete = (item: DeletedItem) => {
-    setConfirmDialog({ open: true, action: "delete", item });
-  };
-
-  const confirmAction = () => {
-    if (!confirmDialog.item) return;
-    if (confirmDialog.action === "restore") {
-      restoreMutation.mutate({
-        type: confirmDialog.item.type,
-        id: confirmDialog.item.id,
-      });
-    } else {
-      permanentDeleteMutation.mutate({
-        type: confirmDialog.item.type,
-        id: confirmDialog.item.id,
-      });
-    }
-  };
+  const {
+    bulkDeleteMutation,
+    confirmAction,
+    confirmDialog,
+    data,
+    detailItem,
+    entriesLoading,
+    error,
+    filterType,
+    formatDisplayDate,
+    handlePermanentDelete,
+    handleRestore,
+    isLoading,
+    itemKey,
+    items,
+    permanentDeleteMutation,
+    restoreMutation,
+    selectedItems,
+    setConfirmDialog,
+    setDetailItem,
+    setFilterType,
+    setSelectedItems,
+    setShowBulkDeleteDialog,
+    showBulkDeleteDialog,
+    toggleAll,
+    toggleItem,
+    voucherEntries,
+  } = useDeletedItemsState();
 
   if (isLoading) {
     return (
@@ -353,282 +73,32 @@ export default function DeletedItems() {
         title={<span data-testid="title-deleted-items">Deleted Items</span>}
         subtitle="View and manage deleted records. You can restore items or permanently delete them."
         icon={<Trash2 className="h-5 w-5" />}
+      >
+        <RowsExportMenu
+          title="Deleted Items"
+          rows={items}
+          columns={deletedItemsExportColumns(typeLabels, formatDisplayDate)}
+          resource="erp.accounts"
+        />
+      </PageHeader>
+      <DeletedItemsCardSection
+        data={data}
+        filterType={filterType}
+        formatDisplayDate={formatDisplayDate}
+        handlePermanentDelete={handlePermanentDelete}
+        handleRestore={handleRestore}
+        itemKey={itemKey}
+        items={items}
+        permanentDeleteMutation={permanentDeleteMutation}
+        restoreMutation={restoreMutation}
+        selectedItems={selectedItems}
+        setDetailItem={setDetailItem}
+        setFilterType={setFilterType}
+        setSelectedItems={setSelectedItems}
+        setShowBulkDeleteDialog={setShowBulkDeleteDialog}
+        toggleAll={toggleAll}
+        toggleItem={toggleItem}
       />
-      <Card>
-        <CardHeader className="p-3 sm:p-6">
-          <div className="flex flex-wrap items-center justify-end gap-4">
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <span className="text-sm text-muted-foreground">Filter:</span>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-filter-type">
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types ({data?.totalCount || 0})</SelectItem>
-                  <SelectItem value="location">Locations ({data?.locations.length || 0})</SelectItem>
-                  <SelectItem value="stockItem">Stock Items ({data?.stockItems.length || 0})</SelectItem>
-                  <SelectItem value="stockGroup">Stock Groups ({data?.stockGroups.length || 0})</SelectItem>
-                  <SelectItem value="ledgerAccount">Ledger Accounts ({data?.ledgerAccounts.length || 0})</SelectItem>
-                  <SelectItem value="employee">Employees ({data?.employees.length || 0})</SelectItem>
-                  <SelectItem value="customer">Customers ({data?.customers.length || 0})</SelectItem>
-                  <SelectItem value="supplier">Suppliers ({data?.suppliers.length || 0})</SelectItem>
-                  <SelectItem value="bankAccount">Bank Accounts ({data?.bankAccounts.length || 0})</SelectItem>
-                  <SelectItem value="voucher">Vouchers ({data?.vouchers?.length || 0})</SelectItem>
-                  <SelectItem value="orphanedPosSale">
-                    Orphaned POS Sales ({data?.orphanedPosSales?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="factoryCategory">
-                    Factory Categories ({data?.factoryCategories?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="factoryBaleProduct">
-                    Bale Products ({data?.factoryBaleProducts?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="factoryContainer">Containers ({data?.factoryContainers?.length || 0})</SelectItem>
-                  <SelectItem value="factoryRawStock">
-                    Raw Stock Receipts ({data?.factoryRawStock?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="factoryRawMaterialAdjustment">
-                    Raw Material Adjustments ({data?.factoryRawMaterialAdjustments?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="factoryMixBatch">Mix Batches ({data?.factoryMixBatches?.length || 0})</SelectItem>
-                  <SelectItem value="factoryBale">Bales ({data?.factoryBales?.length || 0})</SelectItem>
-                  <SelectItem value="customerProforma">
-                    Proforma Invoices ({data?.customerProformas?.length || 0})
-                  </SelectItem>
-                  <SelectItem value="customerOrder">
-                    Customer Invoices/Orders ({data?.customerOrders?.length || 0})
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {selectedItems.size > 0 && (
-            <div className="flex items-center justify-between gap-3 mb-4 px-3 py-2 rounded-md bg-destructive/10 border border-destructive/20">
-              <span className="text-sm font-medium text-destructive">
-                {selectedItems.size} item{selectedItems.size !== 1 ? "s" : ""} selected
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedItems(new Set())}
-                  data-testid="button-clear-selection"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowBulkDeleteDialog(true)}
-                  data-testid="button-bulk-delete"
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Delete All Selected
-                </Button>
-              </div>
-            </div>
-          )}
-          {items.length === 0 ? (
-            <EmptyState
-              icon={Trash2}
-              title="No deleted items"
-              description={
-                filterType === "all"
-                  ? "Items you delete will appear here for recovery."
-                  : filterType === "orphanedPosSale"
-                    ? "No orphaned POS sales found. These are vouchers linked to deleted locations."
-                    : `No deleted ${typeLabels[filterType]?.toLowerCase() || filterType}s found.`
-              }
-              className="py-12"
-            />
-          ) : (
-            <>
-              <div className="hidden md:block phone-land:hidden">
-                <Table>
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead className="w-10">
-                        <Checkbox
-                          checked={items.length > 0 && items.every((item) => selectedItems.has(itemKey(item)))}
-                          onCheckedChange={() => toggleAll(items)}
-                          data-testid="checkbox-select-all"
-                        />
-                      </TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Deleted At</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item) => {
-                      const IconComponent = typeIcons[item.type] || Package;
-                      return (
-                        <TableRow
-                          key={`${item.type}-${item.id}`}
-                          data-testid={`row-deleted-${item.type}-${item.id}`}
-                          className="cursor-pointer hover-elevate"
-                          onClick={() => setDetailItem(item)}
-                        >
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedItems.has(itemKey(item))}
-                              onCheckedChange={() => toggleItem(item)}
-                              data-testid={`checkbox-item-${item.type}-${item.id}`}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <IconComponent className="h-4 w-4 text-muted-foreground" />
-                              <Badge variant="outline">{typeLabels[item.type] || item.type}</Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{item.code || "-"}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span>{item.name}</span>
-                              {item.accountType && (
-                                <span className="text-xs text-muted-foreground">{item.accountType}</span>
-                              )}
-                              {item.type === "orphanedPosSale" && (
-                                <span className="text-xs text-muted-foreground">
-                                  {item.locationName} | {formatUsd(item.amount ?? 0, 0, 3)}
-                                </span>
-                              )}
-                              {item.type === "voucher" && (
-                                <span className="text-xs text-muted-foreground">
-                                  {item.voucherType} | {formatUsd(item.amount ?? 0, 0, 3)}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {item.deletedAt
-                              ? `${formatDisplayDate(item.deletedAt)} ${format(new Date(item.deletedAt), "h:mm a")}`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDetailItem(item);
-                                }}
-                                data-testid={`button-view-${item.type}-${item.id}`}
-                                data-remote-control-safe="true"
-                                data-remote-control-action="view-details"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              {item.type !== "orphanedPosSale" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRestore(item);
-                                  }}
-                                  disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
-                                  data-testid={`button-restore-${item.type}-${item.id}`}
-                                >
-                                  <RotateCcw className="h-4 w-4 mr-1" />
-                                  Restore
-                                </Button>
-                              )}
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePermanentDelete(item);
-                                }}
-                                disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
-                                data-testid={`button-delete-permanent-${item.type}-${item.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Delete Forever
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="md:hidden phone-land:block space-y-3">
-                {items.map((item) => {
-                  const IconComponent = typeIcons[item.type] || Package;
-                  return (
-                    <Card
-                      key={`${item.type}-${item.id}`}
-                      className="p-4 cursor-pointer hover-elevate"
-                      onClick={() => setDetailItem(item)}
-                      data-testid={`card-deleted-${item.type}-${item.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2">
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedItems.has(itemKey(item))}
-                              onCheckedChange={() => toggleItem(item)}
-                              data-testid={`checkbox-card-${item.type}-${item.id}`}
-                            />
-                          </div>
-                          <IconComponent className="h-4 w-4 text-muted-foreground" />
-                          <Badge variant="outline">{typeLabels[item.type] || item.type}</Badge>
-                        </div>
-                        <span className="font-mono text-xs text-muted-foreground">{item.code || "-"}</span>
-                      </div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      {item.accountType && <p className="text-xs text-muted-foreground">{item.accountType}</p>}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.deletedAt
-                          ? `${formatDisplayDate(item.deletedAt)} ${format(new Date(item.deletedAt), "h:mm a")}`
-                          : "-"}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {item.type !== "orphanedPosSale" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRestore(item);
-                            }}
-                            disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
-                          >
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                            Restore
-                          </Button>
-                        )}
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePermanentDelete(item);
-                          }}
-                          disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
 
       <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
         <AlertDialogContent>

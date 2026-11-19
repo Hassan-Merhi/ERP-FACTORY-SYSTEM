@@ -1,0 +1,57 @@
+name: Code file line limits (300 warning, 500 cap)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, audit/loc-300-500-20261113]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: file-line-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-size:
+    name: Source file line policy
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository with baseline history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+
+      - name: Test source-size guardrail rules
+        run: node --test tests/file-line-policy.node.test.mjs
+
+      - name: Enforce limits and grandfathered one-way ratchet
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/code-line-policy
+          options=()
+          if [[ -n "${BASE_SHA}" ]]; then
+            options+=(--compare-ref "${BASE_SHA}")
+          fi
+          node scripts/audit-file-lines.mjs "${options[@]}" --output artifacts/code-line-policy/report.json
+
+      - name: Upload full line-count report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: code-line-policy-report
+          path: artifacts/code-line-policy/report.json
+          retention-days: 30
+          if-no-files-found: warn

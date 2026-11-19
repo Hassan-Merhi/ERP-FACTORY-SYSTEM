@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import { mayReceiveFromProperties } from "../server/services/intercompany/receivingAccess";
 
@@ -32,18 +32,18 @@ describe("Phase 5 Properties container workflow", () => {
     expect(mayReceiveFromProperties(pair, actor(10, "Developer"), "properties", "factory", "Owner")).toBe(false);
   });
   it("keeps the canonical container ID in both lifecycle and linked PO list responses", () => {
-    const lifecycle = readFileSync("server/routes/import/intercompany-receiving.ts", "utf8");
-    const linked = readFileSync("server/routes/import/intercompany-pricing.ts", "utf8");
+    const lifecycle = readModuleFamily("server/routes/import/intercompany-receiving.ts");
+    const linked = readModuleFamily("server/routes/import/intercompany-pricing.ts");
     expect(lifecycle).toContain("physicalContainerId: trade.physicalContainerId");
     expect(linked).toContain("physicalContainerId: t.physicalContainerId");
     expect(linked).toContain("req.query.physicalContainerId");
-    const editor = readFileSync("client/src/pages/intercompany/LinkedTradesEditor.tsx", "utf8");
+    const editor = readModuleFamily("client/src/pages/intercompany/LinkedTradesEditor.tsx");
     expect(editor).toContain('"?physicalContainerId=" + physicalContainerId');
   });
   it("uses the existing protected receipt/cancel endpoints from the embedded lifecycle", () => {
-    const lifecycle = readFileSync("client/src/pages/intercompany/IntercompanyLifecycle.tsx", "utf8");
-    const receipt = readFileSync("server/services/intercompany/receipt.ts", "utf8");
-    const permissions = readFileSync("server/services/intercompany/receivingAccess.ts", "utf8");
+    const lifecycle = readModuleFamily("client/src/pages/intercompany/IntercompanyLifecycle.tsx");
+    const receipt = readModuleFamily("server/services/intercompany/receipt.ts");
+    const permissions = readModuleFamily("server/services/intercompany/receivingAccess.ts");
     expect(lifecycle).toContain("physicalContainerId?: number; embedded?: boolean");
     expect(lifecycle).toContain('"/receiving-options"');
     expect(lifecycle).toContain('"/receive"');
@@ -54,19 +54,19 @@ describe("Phase 5 Properties container workflow", () => {
     expect(receipt).toContain("receiveInventoryAtValue(tx");
   });
   it("automatically selects only a unique verified INVENTORY asset account in the correct ERP company", () => {
-    const routes = readFileSync("server/routes/import/intercompany-receiving.ts", "utf8");
+    const routes = readModuleFamily("server/routes/import/intercompany-receiving.ts");
     expect(routes).toContain("lifecycle/:tradeId/receiving-options");
     expect(routes).toContain("eq(ledgerAccounts.companyId, trade.destinationCompanyId)");
     expect(routes).toContain('eq(ledgerAccounts.code, "INVENTORY")');
     expect(routes).toContain("eligible.length === 1 ? eligible[0].id : null");
     expect(routes).toContain("await requireReceivingPairPermission(trade, identity)");
-    const screen = readFileSync("client/src/pages/intercompany/IntercompanyLifecycle.tsx", "utf8");
+    const screen = readModuleFamily("client/src/pages/intercompany/IntercompanyLifecycle.tsx");
     expect(screen).toContain("receivingOptions.data?.inventoryAccountId");
     expect(screen).not.toContain("Choose verified inventory account</option>");
   });
   it("embeds both actions on Properties container details without exposing legacy PO edit/delete", () => {
-    const details = readFileSync("client/src/pages/containerdetail/components/ContainerDetailErpView.tsx", "utf8");
-    const panel = readFileSync("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx", "utf8");
+    const details = readModuleFamily("client/src/pages/containerdetail/components/ContainerDetailErpView.tsx");
+    const panel = readModuleFamily("client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx");
     expect(details).toContain("PropertiesIntercompanyContainerWorkflow containerId={container.id}");
     expect(details).toContain("!isPropertiesContainer && canChangeExistingRecords");
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
@@ -75,8 +75,8 @@ describe("Phase 5 Properties container workflow", () => {
     expect(panel).toContain("candidate.sourceCompanyId");
   });
   it("keeps the original financial reversal and freight allocation services intact", () => {
-    const cancel = readFileSync("server/services/intercompany/cancel.ts", "utf8");
-    const freight = readFileSync("client/src/pages/intercompany/LinkedTradesEditor.tsx", "utf8");
+    const cancel = readModuleFamily("server/services/intercompany/cancel.ts");
+    const freight = readModuleFamily("client/src/pages/intercompany/LinkedTradesEditor.tsx");
     expect(cancel).toContain("confirmNoRealCashReversal");
     expect(cancel).toContain("requireUnreceived(data)");
     expect(freight).toContain('BASE + "/shared-charges/confirm"');

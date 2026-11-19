@@ -36,6 +36,12 @@ const statusAppearance: Record<string, { label: string; className: string }> = {
   },
 };
 
+/** The badge's text, also used by the Excel export. */
+export function getBaleHistoryStatusLabel(bale: BaleItem): string {
+  const status = getBaleHistoryDisplayStatus(bale);
+  return statusAppearance[status]?.label ?? status.replace(/_/g, " ");
+}
+
 export function BaleHistoryStatusBadge({ bale }: { bale: BaleItem }) {
   const status = getBaleHistoryDisplayStatus(bale);
   const appearance = statusAppearance[status];
@@ -45,7 +51,7 @@ export function BaleHistoryStatusBadge({ bale }: { bale: BaleItem }) {
       variant="outline"
       className={`w-fit text-[11px] px-1.5 py-0.5 font-medium no-default-active-elevate ${appearance?.className ?? ""}`}
     >
-      {appearance?.label ?? status.replace(/_/g, " ")}
+      {getBaleHistoryStatusLabel(bale)}
     </Badge>
   );
 }

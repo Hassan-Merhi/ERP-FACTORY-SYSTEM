@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,11 +7,12 @@ import {
   canNavigateProperties,
   findPropertiesNavigationEntry,
 } from "../client/src/properties/config/propertiesNavigation";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const property = { companyType: "properties" as const, role: "User" };
 const admin = { companyType: "properties" as const, role: "Admin" };
 const developer = { companyType: "properties" as const, role: "Developer" };
-const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+const source = (path: string) => readModuleFamily(fileURLToPath(new URL(path, import.meta.url)));
 
 describe("Phase 10 Properties navigation and legacy compatibility", () => {
   it("keeps exactly six visible pinned workspace roots without the compatibility dashboard", () => {
@@ -84,13 +84,11 @@ describe("Phase 10 Properties navigation and legacy compatibility", () => {
     ).toBe(false);
   });
 
-  it("keeps registered dashboard actions and a directly routed compatibility page", () => {
+  it("sends the retired compatibility dashboard to the Properties home", () => {
     const routeSource = source("../client/src/app/PropertiesRoutes.tsx");
-    const pageSource = source("../client/src/pages/properties/PropertiesDashboard.tsx");
-    expect(routeSource).toContain('<Route path="/properties/dashboard" component={PropertiesDashboard} />');
-    expect(pageSource).toContain("apiRequest");
-    expect(pageSource).toContain("dashboard-cash-accounts");
-    expect(pageSource).toContain("dashboard-payable-accounts");
+    expect(routeSource).toContain(
+      '<Route path="/properties/dashboard">{() => <Redirect replace to="/properties/daybook" />}</Route>'
+    );
     expect(routeSource).toContain("Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map");
     expect(routeSource).toContain("<Redirect replace to={to} />");
     expect(routeSource).toContain('<Redirect replace to="/properties/daybook" />');

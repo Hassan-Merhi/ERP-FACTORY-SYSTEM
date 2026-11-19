@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { FACTORY_ACCESS_REGISTRY, factoryPageAllowsRole, resolveFactoryPage } from "../shared/factoryAccessRegistry";
 import { companyQueryKey, isCompanySessionQueryKey, isGlobalQueryKey } from "../client/src/lib/companyQueryScope";
 import { factoryActionCapabilities } from "../shared/factoryActionCapabilities";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 type BaselineRegistryPage = {
   key: string;
@@ -23,11 +24,18 @@ type Phase1Fixture = {
   routerPaths: string[];
 };
 
-const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const readSource = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 const fixture = JSON.parse(readSource("docs/factory-unification/phase-1-source-fixture.json")) as Phase1Fixture;
 
 function registryFromSource(): BaselineRegistryPage[] {
-  const source = readSource("shared/factoryAccessRegistry.ts");
+  // Phase 3 split the page table; read it in registry order (primary, then finance/other).
+  const source = [
+    "shared/factoryAccessRegistry.ts",
+    "shared/factoryAccessPagesPrimary.ts",
+    "shared/factoryAccessPagesFinanceOther.ts",
+  ]
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
   const keys = [...source.matchAll(/^\s*key:\s*"(factory\/[^"]+)"/gm)];
   return keys.map((item, index) => {
     // Key-anchored rather than object-start parsing: comments within an object
@@ -63,7 +71,7 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
     expect(FACTORY_ACCESS_REGISTRY.length).toBe(actual.length);
   });
 
-  it("pins all 151 declared route paths, including four non-Factory utility routes", () => {
+  it("pins all 152 declared route paths, including four non-Factory utility routes", () => {
     const paths = routesFromSource();
     expect(paths).toEqual(fixture.routerPaths);
     expect(paths.length).toBe(fixture.counts.routerDeclarations);

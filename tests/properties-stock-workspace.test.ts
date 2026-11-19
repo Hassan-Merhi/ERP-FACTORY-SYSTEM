@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import {
   canNavigateProperties,
@@ -6,7 +6,7 @@ import {
   getPropertiesParentRoute,
 } from "../client/src/properties/config/propertiesNavigation";
 
-const source = (path: string) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+const source = (path: string) => readModuleFamily(new URL("../" + path, import.meta.url));
 const company = (role: string) => ({ companyType: "properties" as const, role });
 
 describe("Properties Stock/OTW workspace", () => {
@@ -65,6 +65,6 @@ describe("Properties Stock/OTW workspace", () => {
     expect(query).toContain("/properties/stock-query/");
     expect(detail).toContain('useRoute("/properties/stock-query/:id")');
     expect(detail).toContain('"/properties/stock?tab=query"');
-    expect(detail).toContain("/properties/vouchers/");
+    expect(detail).toContain('isProperties ? "/properties/vouchers" : "/vouchers"');
   });
 });

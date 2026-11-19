@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizeFactoryVoucherEntryAmounts } from "../server/services/factory/factoryVoucherEntryAmounts";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const read = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Phase 5 post-offload reconciliation", () => {
   it("normalizes USD voucher entries as base-currency identity amounts", () => {

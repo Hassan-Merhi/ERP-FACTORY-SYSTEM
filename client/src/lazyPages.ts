@@ -43,7 +43,8 @@ export const AICommandCenter = lazy(() => import("@/pages/AICommandCenter"));
 export const ContainerDetailPage = lazy(() => import("@/pages/ContainerDetailPage"));
 export const LocationInventory = lazy(() => import("@/pages/LocationInventory"));
 export const Settings = lazy(() => import("@/pages/Settings"));
-export const VoucherEdit = lazy(() => import("@/pages/VoucherEdit"));
+// Old /vouchers/:id/edit (and Factory/Properties) links redirect to the Daybook voucher editor.
+export const LegacyVoucherEditRedirect = lazy(() => import("@/pages/daybook/LegacyVoucherEditRedirect"));
 export const Payroll = lazy(() => import("@/pages/Payroll"));
 export const ImportStockItems = lazy(() => import("@/pages/ImportStockItems"));
 export const StockItemDetail = lazy(() => import("@/pages/StockItemDetail"));
@@ -107,9 +108,7 @@ export const POSPage = lazy(() => import("@/pages/pos/POSPage"));
 export const POSImport = lazy(() => import("@/pages/pos/POSImport"));
 export const POSItemReplacement = lazy(() => import("@/pages/POSItemReplacement"));
 export const POSDaybook = lazy(() => import("@/pages/pos/POSDaybook"));
-export const POSDashboard = lazy(() => import("@/pages/pos/POSDashboard"));
 export const POSCustomers = lazy(() => import("@/pages/pos/POSCustomers"));
-export const POSSettings = lazy(() => import("@/pages/pos/POSSettings"));
 export const POSPriceList = lazy(() => import("@/pages/pos/POSPriceList"));
 export const PosTransferOrders = lazy(() => import("@/pages/pos/PosTransferOrders"));
 export const POSContainerTracking = lazy(() => import("@/pages/pos/POSContainerTracking"));
@@ -172,12 +171,10 @@ export const FactoryCustomerStatement = lazy(() => import("@/pages/factory/Facto
 export const FactoryInvoicing = lazy(() => import("@/pages/factory/FactoryInvoicing"));
 export const FactoryPOS = lazy(() => import("@/pages/factory/FactoryPOS"));
 export const FactoryInvoiceCreate = lazy(() => import("@/pages/factory/FactoryInvoiceCreate"));
-export const FactoryDispatchBatches = lazy(() => import("@/pages/factory/FactoryDispatchBatches"));
+export const FactoryDispatchLoadings = lazy(() => import("@/pages/factory/FactoryDispatchLoadings"));
 export const FactoryDispatchBatchDetail = lazy(() => import("@/pages/factory/FactoryDispatchBatchDetail"));
 export const FactoryDispatchBatchScan = lazy(() => import("@/pages/factory/FactoryDispatchBatchScan"));
 export const FactoryBaleTracking = lazy(() => import("@/pages/factory/FactoryBaleTracking"));
-export const FactoryStockAllocation = lazy(() => import("@/pages/factory/FactoryStockAllocationV2"));
-export const FactoryStockAllocationV3 = lazy(() => import("@/pages/factory/FactoryStockAllocationV3"));
 export const FactoryStockAllocationV5 = lazy(() => import("@/pages/factory/FactoryStockAllocationV5"));
 export const ProformaAddLine = lazy(() => import("@/pages/factory/ProformaAddLine"));
 export const FactoryPriceList = lazy(() => import("@/pages/factory/FactoryPriceList"));
@@ -200,10 +197,8 @@ export const FactoryRentalPayments = lazy(() => import("@/pages/factory/FactoryR
 export const FactoryContacts = lazy(() => import("@/pages/factory/FactoryContacts"));
 
 // ── Properties pages ──────────────────────────────────────────────────────────
-export const PropertiesDashboard = lazy(() => import("@/pages/properties/PropertiesDashboard"));
 export const PropertiesAccounts = lazy(() => import("@/pages/properties/PropertiesAccounts"));
 export const PropertiesVouchers = lazy(() => import("@/pages/properties/PropertiesVouchers"));
-export const PropertiesVoucherEdit = lazy(() => import("@/pages/properties/PropertiesVoucherEdit"));
 export const PropertiesVoucherDetail = lazy(() => import("@/pages/properties/PropertiesVoucherDetail"));
 export const PropertiesCreate = lazy(() => import("@/pages/properties/PropertiesCreate"));
 export const PropertiesAnalytics = lazy(() => import("@/pages/properties/PropertiesAnalytics"));
@@ -220,5 +215,3 @@ export const ErpRentalPayments = lazy(() => import("@/pages/erp/ErpRentalPayment
 // ── Supplier Partner pages ────────────────────────────────────────────────────
 export const SpSetup = lazy(() => import("@/pages/sp/SpSetup"));
 export const SpReports = lazy(() => import("@/pages/sp/SpReports"));
-export const SpOpeningStock = lazy(() => import("@/pages/sp/SpOpeningStock"));
-export const SpAliases = lazy(() => import("@/pages/sp/SpAliases"));
