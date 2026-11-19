@@ -377,13 +377,22 @@ edit, with duties and charges, exactly as entered) and renaming or moving a
 stored file. Each is recorded in the change's own transaction, as the factory
 LAN server records it. A container the cloud does not have, or whose purchase
 order quantities changed since the PC copied them, is held instead of being
-applied. Uploading and deleting files on a PC are still refused
-(`OFFLINE_PC_LOCAL_READ_ONLY`); uploads need the file's bytes sent with the
-record, which is the next step. Covered by
-`tests/pc-sync-offline-receiving-files.test.ts`.
+applied. Deleting files on a PC is refused (`OFFLINE_PC_LOCAL_READ_ONLY`).
+Covered by `tests/pc-sync-offline-receiving-files.test.ts`.
+
+**File uploads on a PC.** In entry mode the PC also accepts file uploads of at
+most 10 MB, recorded as the factory LAN server records them (name, type, size
+and SHA-256) in the upload's own transaction. When it syncs, the PC first sends
+the file's bytes, read from its own stored copy, to
+`POST /api/offline/pc-sync/files`, which keeps them only when they hash to the
+declared SHA-256; then it sends the record, whose apply stores the file once. A
+record whose bytes never arrived creates nothing. If the PC's copy no longer
+matches its record, the entry is refused on the PC (`PC_SYNC_FILE_CHANGED`, or
+`PC_SYNC_FILE_MISSING` when the copy is gone) instead of sending other bytes.
+Covered by `tests/pc-sync-offline-file-uploads.test.ts`.
 
 Still to come: the remaining offline kinds the cloud can already apply (POS sale
-edits and cancellations, file uploads), which need the factory LAN server's offline
+edits and cancellations), which need the factory LAN server's offline
 behaviour (invoice numbers, local ids, transfer references) made available on a
 PC; then the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files

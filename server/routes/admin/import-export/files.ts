@@ -138,8 +138,8 @@ export function registerFileRoutes(app: Express) {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
         const { description, folderId } = req.body;
         const file = req.file;
-        // Owner policy: offline uploads on the factory LAN server are capped at 10 MB.
-        const lanCapture = isPhase9LanPrimary();
+        // Owner policy: offline uploads on the factory LAN server (or a PC in entry mode) are capped at 10 MB.
+        const lanCapture = isPhase9LanPrimary() || pcLocalEntryMode();
         if (lanCapture && file.size > PHASE9_ATTACHMENT_MAX_BYTES) {
           return res.status(413).json({
             code: "EDGE_ATTACHMENT_TOO_LARGE",
