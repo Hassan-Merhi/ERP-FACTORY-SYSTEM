@@ -13,6 +13,7 @@ import {
 import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryLoadingDispatchScannerCardSection({
+  embedded = false,
   active,
   activeSelection,
   allFilteredSelected,
@@ -75,10 +76,10 @@ export function FactoryLoadingDispatchScannerCardSection({
   | "toggleSelection"
   | "visibleCount"
   | "visibleScans"
->) {
+> & { embedded?: boolean }) {
   return (
-    <Card className="border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
-      <CardContent className="space-y-3 p-4 sm:p-5">
+    <Card className={embedded ? "border-0 bg-transparent shadow-none" : "border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}>
+      <CardContent className={embedded ? "space-y-3 p-0" : "space-y-3 p-4 sm:p-5"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold">Verified truck bales</h3>
@@ -96,7 +97,7 @@ export function FactoryLoadingDispatchScannerCardSection({
             </Button>
           </div>
         </div>
-        <SearchField
+        {(active.length > 0 || Boolean(filterText)) && <SearchField
           wrapperClassName="max-w-sm"
           className="h-9"
           placeholder="Search reference, article, operator"
@@ -106,8 +107,8 @@ export function FactoryLoadingDispatchScannerCardSection({
             setVisibleCount(PAGE_CHUNK);
           }}
           data-testid="input-search-dispatch-scans"
-        />
-        {canCorrect && (
+        />}
+        {canCorrect && active.length > 0 && (
           <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
             <Button
               size="sm"
@@ -170,8 +171,8 @@ export function FactoryLoadingDispatchScannerCardSection({
           </div>
         )}
         {visibleScans.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
-            <table className="w-full min-w-[600px] border-collapse text-left text-xs">
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className={embedded ? "w-full min-w-[350px] border-collapse text-left text-xs" : "w-full min-w-[600px] border-collapse text-left text-xs"}>
               <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                 <tr>
                   {canCorrect && (
@@ -185,9 +186,9 @@ export function FactoryLoadingDispatchScannerCardSection({
                     </th>
                   )}
                   <th className="px-3 py-2 font-medium">Reference / Article</th>
-                  <th className="px-3 py-2 font-medium">Product</th>
+                  {!embedded && <th className="px-3 py-2 font-medium">Product</th>}
                   <th className="px-3 py-2 text-right font-medium">Kg</th>
-                  <th className="px-3 py-2 font-medium">Scanned by / Time</th>
+                  {!embedded && <th className="px-3 py-2 font-medium">Scanned by / Time</th>}
                   <th className="px-3 py-2 text-right font-medium">Action</th>
                 </tr>
               </thead>
@@ -210,22 +211,28 @@ export function FactoryLoadingDispatchScannerCardSection({
                       </td>
                     )}
                     <td className="px-3 py-2">
-                      <p className="font-mono font-semibold">{scan.baleReference}</p>
+                      <p
+                        className="font-mono font-semibold"
+                        title={embedded ? [scan.productName, scan.scannedByUsername, formatDisplayDateTime(scan.scannedAt)].filter(Boolean).join(" · ") : undefined}
+                      >{scan.baleReference}</p>
                       <p className="text-[11px] text-muted-foreground">{scan.articleCode || "—"}</p>
+                      {embedded && !scan.stillInLoading && (
+                        <span className="text-[11px] font-semibold text-amber-600">Removed from loading since scan</span>
+                      )}
                     </td>
-                    <td className="px-3 py-2">
+                    {!embedded && <td className="px-3 py-2">
                       <p className="max-w-[280px] truncate">{scan.productName || "—"}</p>
                       {!scan.stillInLoading && (
                         <span className="text-[11px] font-semibold text-amber-600">
                           Removed from main loading since scan
                         </span>
                       )}
-                    </td>
+                    </td>}
                     <td className="px-3 py-2 text-right font-mono">{fmtKg(Number(scan.weightKg))}</td>
-                    <td className="px-3 py-2">
+                    {!embedded && <td className="px-3 py-2">
                       <p className="font-medium">{scan.scannedByUsername}</p>
                       <p className="text-muted-foreground">{formatDisplayDateTime(scan.scannedAt)}</p>
-                    </td>
+                    </td>}
                     <td className="px-3 py-2 text-right">
                       {canCorrect ? (
                         <Button
