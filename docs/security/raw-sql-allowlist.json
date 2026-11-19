@@ -9360,7 +9360,7 @@
       "reason": "The only dynamic part is RECEIPT_COLUMNS, a literal column list owned by the edge event store module and shared between its split modules; every value in the query (site id, stream, sequence, payload) is a bound parameter, so no untrusted SQL syntax can reach the text."
     },
     {
-      "id": "8d96abc253faf3e516e6",
+      "id": "9d4cb7e65960a7892f96",
       "path": "server/routes/costCenterRoutes.ts",
       "kind": "query-text",
       "context": "registerCostCenterPrefixPart2",
