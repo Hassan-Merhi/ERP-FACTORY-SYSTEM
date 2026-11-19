@@ -16,7 +16,8 @@ import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { useFactoryLoadingDispatchScannerState, type Props } from "./useFactoryLoadingDispatchScannerState";
 import { FactoryLoadingDispatchScannerCardSection } from "./FactoryLoadingDispatchScannerCardSection";
 
-export default function FactoryLoadingDispatchScanner(props: Props) {
+export default function FactoryLoadingDispatchScanner(props: Props & { embedded?: boolean }) {
+  const embedded = Boolean(props.embedded);
   const {
     active,
     activeSelection,
@@ -65,17 +66,19 @@ export default function FactoryLoadingDispatchScanner(props: Props) {
   } = useFactoryLoadingDispatchScannerState(props);
 
   return (
-    <div className="space-y-4" data-testid="dispatch-verification-scanner">
-      <Card className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
-        <CardContent className="space-y-4 p-4 sm:p-5">
+    <div className={embedded ? "space-y-3" : "space-y-4"} data-testid="dispatch-verification-scanner">
+      <Card className={embedded ? "border-0 bg-transparent shadow-none" : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}>
+        <CardContent className={embedded ? "space-y-3 p-0" : "space-y-4 p-4 sm:p-5"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold">
                 <ScanLine className="h-5 w-5 text-blue-500" /> Truck barcode verification
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Scan the exact reference of each bale entering this truck. This does not change main loading.
-              </p>
+              {!embedded && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Scan the exact reference of each bale entering this truck. This does not change main loading.
+                </p>
+              )}
             </div>
             <Badge
               variant="outline"
@@ -160,6 +163,7 @@ export default function FactoryLoadingDispatchScanner(props: Props) {
       </Card>
 
       <FactoryLoadingDispatchScannerCardSection
+        embedded={embedded}
         active={active}
         activeSelection={activeSelection}
         allFilteredSelected={allFilteredSelected}

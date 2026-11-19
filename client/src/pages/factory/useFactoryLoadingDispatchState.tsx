@@ -285,46 +285,56 @@ export function FactoryLoadingDispatchSection({
           )}
         </div>
       )}
-      <div className="grid gap-3 lg:grid-cols-2">
-        {visibleTrips.map((trip) => (
-          <button
-            type="button"
-            key={trip.id}
-            onClick={() => navigate(tripPath(orderId, trip.id))}
-            className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)] dark:hover:border-blue-400"
-            data-testid={"dispatch-trip-" + trip.id}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/15 dark:text-sky-300">
-                  <Truck className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">Dispatch #{String(trip.dispatchNumber).padStart(3, "0")}</h3>
-                  <p className="text-xs text-muted-foreground">{trip.notes || "No notes"}</p>
-                </div>
-              </div>
-              <TripStatusBadge status={trip.status} />
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
-              <div>
-                <p className="text-[11px] text-muted-foreground">Bales verified</p>
-                <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedBales))}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Verified kg</p>
-                <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedWeightKg), 2)}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>{trip.createdByUsername || "Unknown operator"}</span>
-              <span className="flex items-center gap-1">
-                {formatDisplayDateTime(trip.createdAt)} <ArrowRight className="h-3.5 w-3.5 text-blue-500" />
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
+      {visibleTrips.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full min-w-[620px] text-left text-sm" data-testid="dispatch-trips-table">
+            <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-4 py-3 font-medium">Trip</th>
+                <th scope="col" className="px-4 py-3 font-medium">Created</th>
+                <th scope="col" className="px-4 py-3 font-medium">Scanned bales</th>
+                <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {visibleTrips.map((trip) => (
+                <tr key={trip.id} className="transition-colors hover:bg-muted/30">
+                  <td className="px-4 py-3">
+                    <strong className="font-semibold">Trip #{String(trip.dispatchNumber).padStart(3, "0")}</strong>
+                    <p className="max-w-[240px] truncate text-xs text-muted-foreground">
+                      {trip.truckPlate || trip.notes || "No truck details"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {formatDisplayDateTime(trip.createdAt)}
+                    <p className="text-xs text-muted-foreground">{trip.createdByUsername || "Unknown operator"}</p>
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {printNumber(numberValue(trip.scannedBales))}
+                    <span className="ml-2 font-sans text-xs text-muted-foreground">
+                      ({printNumber(numberValue(trip.scannedWeightKg), 2)} kg)
+                    </span>
+                  </td>
+                  <td className="px-4 py-3"><TripStatusBadge status={trip.status} /></td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(tripPath(orderId, trip.id))}
+                      data-testid={"dispatch-trip-" + trip.id}
+                      aria-label={"Open trip " + trip.dispatchNumber}
+                    >
+                      Open <ArrowRight className="ml-1.5 h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

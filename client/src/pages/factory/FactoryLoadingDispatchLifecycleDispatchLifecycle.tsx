@@ -38,6 +38,7 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
   setShowHistory,
   showHistory,
   status,
+  compact = false,
 }: Pick<
   ReturnType<typeof useFactoryLoadingDispatchLifecycleState>,
   | "canClose"
@@ -60,13 +61,14 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
   | "setShowHistory"
   | "showHistory"
   | "status"
->) {
+> & { compact?: boolean }) {
   return (
     <Card
-      className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      className={compact ? "border-0 bg-transparent shadow-none" : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}
       data-testid="dispatch-lifecycle"
     >
-      <CardContent className="space-y-3 p-4">
+      <CardContent className={compact ? "space-y-2 p-0" : "space-y-3 p-4"}>
+        {!compact && (
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             {status === "CLOSED" ? (
@@ -77,32 +79,38 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
             <div>
               <h3 className="text-sm font-semibold">{status === "CLOSED" ? "Dispatch completed" : "Dispatch finalization"}</h3>
               {status !== "CLOSED" && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Scan bales, then End Dispatch.
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Scan bales, then End Dispatch.</p>
               )}
             </div>
           </div>
           {status !== "CLOSED" && <Badge variant="outline">{factoryStatusLabel("dispatch", status)}</Badge>}
         </div>
 
-        {status === "CLOSED" && latest && (
-          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+        )}
+
+        {!compact && status === "CLOSED" && latest && (
+          <div className="space-y-1 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
             <p className="flex items-center gap-1.5 font-semibold">
-              <CheckCircle2 className="h-4 w-4" />
-              {fmt(latest.summary?.verifiedBales)} bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg
+              <CheckCircle2 className="h-4 w-4" /> Completed by {latest.closedByUsername}
             </p>
-            <p className="mt-1">Completed by {latest.closedByUsername} · {formatDisplayDateTime(latest.closedAt)}</p>
+            <p>
+              {formatDisplayDateTime(latest.closedAt)} · Closure #{latest.revision}
+            </p>
+            <p>
+              {fmt(latest.summary?.verifiedBales)} verified bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg
+            </p>
             {latest.approvedWithDiscrepancies && (
-              <p className="mt-1 font-semibold">Discrepancy: {latest.discrepancyReason}</p>
+              <p className="font-semibold">Discrepancy approval: {latest.discrepancyReason}</p>
             )}
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={compact ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
           {canClose && (
             <Button
               size="sm"
+              className={compact ? "w-full justify-start" : undefined}
+              variant={compact ? "outline" : "default"}
               onClick={() => {
                 setCloseConfirmed(false);
                 setDiscrepancyReason("");
@@ -118,6 +126,7 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
             <Button
               size="sm"
               variant="outline"
+              className={compact ? "w-full justify-start" : undefined}
               onClick={() => {
                 setReopenReason("");
                 setReopenOpen(true);
@@ -130,10 +139,11 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
           <Button
             size="sm"
             variant="outline"
+            className={compact ? "w-full justify-start" : undefined}
             onClick={() => setShowHistory((v) => !v)}
             data-testid="button-dispatch-audit-history"
           >
-            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide history" : "History"}
+            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide history" : compact ? "Trip history" : "Closure & audit history"}
           </Button>
         </div>
         {showHistory && (

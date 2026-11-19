@@ -9,7 +9,13 @@ function source(file: string): string {
 const scanRoutes = source("server/routes/factory/customer-orders/loadingDispatchScanRoutes.ts");
 const dispatchRoutes = source("server/routes/factory/customer-orders/loadingDispatchRoutes.ts");
 const scanner = source("client/src/pages/factory/FactoryLoadingDispatchScanner.tsx");
-const dispatchScreen = source("client/src/pages/factory/FactoryLoadingDispatch.tsx");
+// The simplified trip screen lives in a dedicated child component while
+// the cancel mutation remains in the extracted state module.
+const dispatchScreen = [
+  source("client/src/pages/factory/FactoryLoadingDispatch.tsx"),
+  source("client/src/pages/factory/FactoryLoadingDispatchDetail.tsx"),
+  source("client/src/pages/factory/useFactoryLoadingDispatchState.tsx"),
+].join("\n");
 const manifest = JSON.parse(source("config/route-manifest.json")) as { routes: string[] };
 
 describe("Factory dispatch bulk scan removal", () => {
