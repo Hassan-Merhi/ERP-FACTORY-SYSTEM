@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
+import { errorBody, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
@@ -414,7 +414,7 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json(errorBody(error));
   }
 }
 

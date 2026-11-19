@@ -12,26 +12,35 @@
  * - Vetted: only the writes listed in offlineCoverage.ts, with plain JSON and
  *   no credentials, can be saved.
  */
-import { db, type BrowserDeviceKey, type BrowserOperationRecord, type BrowserOperationState } from "../db";
+import { db, type BrowserOperationRecord, type BrowserOperationState } from "../db";
 import { offlineError } from "./offlineError";
 import { validateOfflinePayload } from "./operationContract";
 import { supportedOfflineKind } from "./offlineCoverage";
+import {
+  UNSYNCED_STATES,
+  ATTENTION_STATES,
+  validActor,
+  keyId,
+  browserDeviceKey,
+  allocateLocalRef,
+  type BrowserActor,
+  type BrowserOperationStatus,
+  type SavedBrowserOperation,
+  type BrowserQueueCounts,
+} from "./browserOutboxHelpers";
+export {
+  BROWSER_LOCAL_REF_BASE,
+  UNSYNCED_STATES,
+  ATTENTION_STATES,
+  browserDeviceKey,
+  type BrowserActor,
+  type BrowserOperationStatus,
+  type SavedBrowserOperation,
+  type BrowserQueueCounts,
+} from "./browserOutboxHelpers";
 
-export interface BrowserActor {
-  companyId: number;
-  userId: string;
-}
-
-export const BROWSER_LOCAL_REF_BASE = 1_000_000_000;
 const MAX_INPUT_BYTES = 512 * 1024;
 const DUPLICATE_WINDOW_MS = 2 * 60 * 1000;
-
-/** States the user sees as "saved on this device, not yet in the cloud". */
-export const UNSYNCED_STATES: readonly BrowserOperationState[] = ["saved", "pending", "sending", "waiting"];
-/** States that need the user's decision. */
-export const ATTENTION_STATES: readonly BrowserOperationState[] = ["conflict", "rejected", "needs_review"];
-
-export type BrowserOperationStatus = "saved-locally" | "pending-sync" | "synced" | "failed" | "discarded";
 
 export function browserOperationStatus(state: BrowserOperationState): BrowserOperationStatus {
   if (state === "saved") return "saved-locally";
@@ -39,14 +48,6 @@ export function browserOperationStatus(state: BrowserOperationState): BrowserOpe
   if (state === "discarded") return "discarded";
   if (ATTENTION_STATES.includes(state)) return "failed";
   return "pending-sync";
-}
-
-function validActor(actor: BrowserActor | null | undefined): actor is BrowserActor {
-  return !!actor && Number.isSafeInteger(actor.companyId) && actor.companyId > 0 && actor.userId.trim().length > 0;
-}
-
-function keyId(actor: BrowserActor): string {
-  return `${actor.companyId}:${actor.userId}`;
 }
 
 function toBase64(bytes: ArrayBuffer | Uint8Array): string {
@@ -61,37 +62,6 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(new ArrayBuffer(raw.length));
   for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
   return out;
-}
-
-/** This user's device key and device id, created on first use; never exported. */
-export async function browserDeviceKey(actor: BrowserActor): Promise<BrowserDeviceKey> {
-  if (!validActor(actor)) throw offlineError("OFFLINE_ACTOR_REQUIRED");
-  const existing = await db.browserDeviceKeys.get(keyId(actor));
-  if (existing) return existing;
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-  const record: BrowserDeviceKey = {
-    id: keyId(actor),
-    key,
-    deviceId: crypto.randomUUID(),
-    nextLocalRef: BROWSER_LOCAL_REF_BASE + 1,
-  };
-  // Another tab may have created it first: keep whichever was stored.
-  await db.transaction("rw", db.browserDeviceKeys, async () => {
-    if (!(await db.browserDeviceKeys.get(record.id))) await db.browserDeviceKeys.put(record);
-  });
-  return (await db.browserDeviceKeys.get(record.id)) ?? record;
-}
-
-async function allocateLocalRef(actor: BrowserActor): Promise<{ deviceId: string; localRef: number; key: CryptoKey }> {
-  await browserDeviceKey(actor);
-  return db.transaction("rw", db.browserDeviceKeys, async () => {
-    const current = await db.browserDeviceKeys.get(keyId(actor));
-    if (!current) throw offlineError("OFFLINE_DEVICE_KEY_MISSING");
-    const localRef = current.nextLocalRef;
-    if (localRef >= 2_147_483_647) throw offlineError("OFFLINE_LOCAL_REFS_EXHAUSTED");
-    await db.browserDeviceKeys.put({ ...current, nextLocalRef: localRef + 1 });
-    return { deviceId: current.deviceId, localRef, key: current.key };
-  });
 }
 
 async function seal(key: CryptoKey, input: unknown): Promise<{ sealed: string; iv: string }> {
@@ -114,12 +84,6 @@ function vetInput(kind: string, input: unknown): Record<string, unknown> {
   }
   if (JSON.stringify(input).length > MAX_INPUT_BYTES) throw offlineError("OFFLINE_PAYLOAD_TOO_LARGE");
   return input as Record<string, unknown>;
-}
-
-export interface SavedBrowserOperation {
-  record: BrowserOperationRecord;
-  /** True when the same entry was already saved moments ago (a double click). */
-  duplicate: boolean;
 }
 
 /** Save one supported write on this device. Nothing is sent from here. */
@@ -286,14 +250,6 @@ export async function clearFinishedBrowserOperations(actor: BrowserActor, olderT
   const done = (await listBrowserOperations(actor, ["synced", "discarded"])).filter((row) => row.updatedAt <= cutoff);
   await db.browserOperations.bulkDelete(done.map((row) => row.id));
   return done.length;
-}
-
-export interface BrowserQueueCounts {
-  savedLocally: number;
-  pendingSync: number;
-  synced: number;
-  failed: number;
-  conflicts: number;
 }
 
 export async function countBrowserOperations(actor: BrowserActor | null): Promise<BrowserQueueCounts> {

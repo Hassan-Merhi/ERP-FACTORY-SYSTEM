@@ -225,7 +225,17 @@ plan are in the plan document and the
   and close flags; other conflicts stay held.
 - Negative-stock flags screen: a card in the Conflict Center for Admin/Developer
   (list, close with a note), in English, Arabic and French.
-- Next: more voucher types; then Phases C to E.
+- Payment / Receipt edits and deletes on a PC: the live route's evidence written
+  as a finished envelope in the change's own transaction, accepted by the cloud
+  only for the signed-in person and company; other deletes refused on a PC.
+- Stock item master edits and deletes on a PC: the same whitelisted
+  "before -> after" record as the LAN server, as a finished envelope in the
+  change's own transaction.
+- Stock transfer edits, finalizes and revisions on a PC; a transfer made on the
+  PC keeps its local id as its reference.
+- Container offloads (receiving) and file renames / moves on a PC.
+- Next: file uploads on a PC (the record plus its bytes), POS edits and
+  cancellations, then new voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 

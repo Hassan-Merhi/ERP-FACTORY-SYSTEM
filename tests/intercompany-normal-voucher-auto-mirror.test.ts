@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import {
   matchNormalIntercompanyVoucher,
@@ -129,7 +130,7 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
   });
 
   it("has no separate Intercompany tab and redirects old links into normal Payment", () => {
-    const page = readFileSync("client/src/pages/Vouchers.tsx", "utf8");
+    const page = readModuleFamily("client/src/pages/Vouchers.tsx");
     const sidebar = readFileSync("client/src/pages/vouchers/voucherSidebarGroups.ts", "utf8");
     expect(page).toContain("normalIntercompany.details");
     const mirror = readFileSync("client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx", "utf8");

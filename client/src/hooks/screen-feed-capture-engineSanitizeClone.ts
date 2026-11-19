@@ -5,6 +5,16 @@ import {
   shouldPreserveScreenFeedBackground,
 } from "./screen-feed-viewing-quality";
 import { normalizeUnsupportedScreenFeedColors } from "./screen-feed-color-compat";
+import type { Html2Canvas, ScrollSnapshotLease } from "./screen-feed-capture-engineSanitizeClone-types";
+export type {
+  CaptureSource,
+  ScreenFeedFailureStage,
+  ScreenFeedClickEvent,
+  ScreenFeedCursorEvent,
+  ScreenFeedCaptureResult,
+  EncodedFrame,
+  CaptureCanvasResult,
+} from "./screen-feed-capture-engineSanitizeClone-types";
 
 export const CAPTURE_TIMEOUT_MS = 9000;
 
@@ -28,59 +38,9 @@ const SCROLL_KEY_ATTRIBUTE = "data-screenfeed-scroll-key";
 
 const isDev = import.meta.env.DEV;
 
-type Html2Canvas = (typeof import("html2canvas-pro"))["default"];
-
-export type CaptureSource = "dom" | "retry" | "fallback";
-
-export type ScreenFeedFailureStage = "render" | "encode" | "upload" | "pipeline";
-
 let html2canvasPromise: Promise<Html2Canvas> | null = null;
 
 let scrollKeySequence = 0;
-
-export interface ScreenFeedClickEvent {
-  x: number;
-  y: number;
-  label: string;
-  ts: number;
-}
-
-export interface ScreenFeedCursorEvent {
-  x: number;
-  y: number;
-  visible: boolean;
-  ts: number;
-}
-
-export interface ScreenFeedCaptureResult {
-  uploaded: boolean;
-  unchanged: boolean;
-  failed: boolean;
-  cancelled: boolean;
-  signature: string | null;
-  latestClickTs: number;
-  /** Wall-clock cost of the render + encode on the employee's main thread. */
-  durationMs: number;
-  failureStage?: ScreenFeedFailureStage;
-  failureReason?: string;
-}
-
-export interface EncodedFrame {
-  blob: Blob;
-  canvas: HTMLCanvasElement;
-  quality: number;
-}
-
-export interface CaptureCanvasResult {
-  canvas: HTMLCanvasElement;
-  source: CaptureSource;
-  failureReason?: string;
-}
-
-interface ScrollSnapshotLease {
-  snapshot: Map<string, { top: number; left: number }>;
-  restore: () => void;
-}
 
 async function loadHtml2Canvas(): Promise<Html2Canvas> {
   if (!html2canvasPromise) {

@@ -6,27 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { AlertTriangle, CheckCircle2, XCircle, Lightbulb, BarChart3 } from "lucide-react";
-import {
-  FileDropZone,
-  VALIDATION_TYPES,
-  useAiValidationPageState,
-  type SummaryCardProps,
-} from "./useAiValidationPageState";
-
-function SummaryCard({ label, value, variant = "default" }: SummaryCardProps) {
-  const colors: Record<string, string> = {
-    default: "text-foreground",
-    good: "text-green-600 dark:text-green-400",
-    bad: "text-destructive",
-    warn: "text-amber-600 dark:text-amber-400",
-  };
-  return (
-    <div className="flex flex-col gap-1 rounded-md border bg-card p-4">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
-      <span className={`text-2xl font-bold ${colors[variant]}`}>{value}</span>
-    </div>
-  );
-}
+import { FileDropZone, VALIDATION_TYPES, useAiValidationPageState } from "./useAiValidationPageState";
+import { SummaryCard } from "./AiValidationPageSummaryCard";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
-import { and, eq, gte, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 
 import { db } from "../../db";
 import {
@@ -19,30 +19,14 @@ import type {
   StockInSalesReportFilters,
   StockInSalesReportResult,
 } from "./stockInSalesReportService";
+import {
+  addItemFilters,
+  type StockInSalesOutboundMetrics,
+  type AggregateRow,
+  type MutableBreakdown,
+} from "./stockInSalesOutboundBreakdownHelpers";
+export type { StockInSalesOutboundMetrics } from "./stockInSalesOutboundBreakdownHelpers";
 
-export interface StockInSalesOutboundMetrics {
-  salesOutQty: number;
-  salesOutValue: number;
-  transferOutQty: number;
-  transferOutValue: number;
-  otherStockOutQty: number;
-  otherStockOutValue: number;
-  netSalesQty: number;
-}
-
-interface AggregateRow {
-  periodKey: string;
-  quantity?: string | number | null;
-  value?: string | number | null;
-}
-interface MutableBreakdown {
-  salesOutQty: Decimal;
-  salesOutValue: Decimal;
-  transferOutQty: Decimal;
-  transferOutValue: Decimal;
-  otherStockOutQty: Decimal;
-  otherStockOutValue: Decimal;
-}
 const ZERO = new Decimal(0);
 function decimal(value: string | number | null | undefined): Decimal {
   if (value === null || value === undefined || value === "") return ZERO;
@@ -69,24 +53,6 @@ function periodKey(dateExpression: SQL, grouping: StockInSalesGrouping): SQL<str
   if (grouping === "monthly") return sql<string>`TO_CHAR(${dateExpression}, 'YYYY-MM')`;
   if (grouping === "yearly") return sql<string>`TO_CHAR(${dateExpression}, 'YYYY')`;
   return sql<string>`TO_CHAR(${dateExpression}, 'YYYY-MM-DD')`;
-}
-function addItemFilters(
-  conditions: SQL[],
-  filters: StockInSalesReportFilters,
-  locationCondition?: SQL,
-  extra: SQL[] = []
-): void {
-  if (locationCondition) conditions.push(locationCondition);
-  if (filters.stockGroupIds.length > 0) conditions.push(inArray(stockItems.stockGroupId, filters.stockGroupIds));
-  if (!filters.search) return;
-  conditions.push(
-    or(
-      punctuationInsensitiveSearch(stockItems.code, filters.search),
-      punctuationInsensitiveSearch(stockItems.name, filters.search),
-      punctuationInsensitiveSearch(stockGroups.name, filters.search),
-      ...extra
-    )!
-  );
 }
 
 async function loadSalesOut(filters: StockInSalesReportFilters): Promise<AggregateRow[]> {

@@ -98,7 +98,7 @@ describe("WhatsApp popup — dialog testid present in source", () => {
   });
   it("Vouchers.tsx — AlertDialog open controlled by waPendingPrompt", () => {
     const s = src("client/src/pages/Vouchers.tsx");
-    expect(s).toMatch(/open=\{!{0,2}waPendingPrompt/);
+    expect(s).toMatch(/open=\{!{0,2}(?:m\.)?waPendingPrompt/);
   });
   it("JournalForm model — waPendingPrompt state variable present", () => {
     expect(src("client/src/pages/vouchers/journalform/useJournalFormModel.tsx")).toContain("waPendingPrompt");

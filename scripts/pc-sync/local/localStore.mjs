@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS pc_local.outbox (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- A finished envelope (edits and deletes): built by the live route in the same
+-- transaction as the change, delivered as is.
+ALTER TABLE pc_local.outbox ADD COLUMN IF NOT EXISTS envelope jsonb;
+
 -- Local refs for operations that do not name a created row (never a cloud id).
 CREATE SEQUENCE IF NOT EXISTS pc_local.local_ref_seq START 1900000000 MINVALUE 1900000000 MAXVALUE 2147483647;
 

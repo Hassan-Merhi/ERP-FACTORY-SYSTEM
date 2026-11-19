@@ -4,43 +4,11 @@
  * loading note. Extracted verbatim from useFactoryContainerLoadingScanModel;
  * the hooks run in the same order at the same call site.
  */
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import { useMutation } from "@tanstack/react-query";
-import type { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
-import type { FactoryContainerLoadingTranslationKey } from "@/i18n/factoryContainerLoadingTranslations";
-import type { getApiRequest } from "@/lib/factoryApi";
-
-type LastScannedRef = { baleReference: string; baleName: string; articleCode: string } | null;
-
-export interface LoadingOrderMutationsInput {
-  orderId: number | null;
-  selectedLocationId: string;
-  capacityProformaId: number | null;
-  modeApiRequest: ReturnType<typeof getApiRequest>;
-  toast: ReturnType<typeof useToast>["toast"];
-  tr: (key: FactoryContainerLoadingTranslationKey, params?: Record<string, string | number>) => string;
-  navigate: (to: string) => void;
-  refreshSharedLoadingQueues: () => void;
-  scannerRef: RefObject<HTMLInputElement | null>;
-  ignoreProformaRef: MutableRefObject<boolean>;
-  setBaleToDelete: Dispatch<SetStateAction<{ id: number; baleReference: string } | null>>;
-  setShowEmptyContainerConfirm: Dispatch<SetStateAction<boolean>>;
-  setLastScannedRef: Dispatch<SetStateAction<LastScannedRef>>;
-  setShowLastScannedPopup: Dispatch<SetStateAction<boolean>>;
-  setPendingBypassBaleRef: Dispatch<SetStateAction<string | null>>;
-  setPendingBypassOverloadRef: Dispatch<SetStateAction<string | null>>;
-  setExpandedGroups: Dispatch<SetStateAction<Set<string>>>;
-  setScanCode: Dispatch<SetStateAction<string>>;
-  setShowImportDialog: Dispatch<SetStateAction<boolean>>;
-  setImportPreview: Dispatch<SetStateAction<Array<{ articleCode: string; qty: number }>>>;
-  setImportRefNumbers: Dispatch<SetStateAction<string[]>>;
-  setOrderId: Dispatch<SetStateAction<number | null>>;
-  setIsResuming: Dispatch<SetStateAction<boolean>>;
-  setLoadingNote: Dispatch<SetStateAction<string>>;
-  setShowFinalizeDialog: Dispatch<SetStateAction<boolean>>;
-}
+import type { LoadingOrderMutationsInput } from "./useLoadingOrderMutationsTypes";
+export type { LoadingOrderMutationsInput } from "./useLoadingOrderMutationsTypes";
 
 export function useLoadingOrderMutations({
   orderId,
@@ -274,7 +242,8 @@ export function useLoadingOrderMutations({
         setShowFinalizeDialog(false);
         toast({
           title: "Continue in Dispatch Comparison",
-          description: "Close and post all trips, reconcile the loading, then finalize one invoice with combined dispatch charges.",
+          description:
+            "Close and post all trips, reconcile the loading, then finalize one invoice with combined dispatch charges.",
         });
         navigate(`/factory/sales/loading/dispatch/${orderId}/compare`);
         return;

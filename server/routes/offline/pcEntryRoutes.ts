@@ -24,11 +24,26 @@ import {
   listNegativeStockFlags,
   resolveNegativeStockFlag,
 } from "../../offline/pcSync/pcOperationApply";
-import { actorOf, guard, operationSchema, refusal } from "./browserSyncRoutes";
+import { actorOf, guard, refusal } from "./browserSyncRoutes";
 import { pcSyncEnabled } from "./pcSyncRoutes";
 
 const REVIEWER_ROLES = new Set(["Admin", "Developer"]);
 const resolveSchema = z.object({ note: z.string().trim().min(1).max(1000) }).strict();
+
+/** The browser-sync operation, or a finished envelope for an edit or delete (exactly one of the two). */
+const pcOperationSchema = z
+  .object({
+    deviceId: z.string().uuid(),
+    operationId: z.string().uuid(),
+    kind: z.string().min(1).max(100),
+    localRef: z.number().int(),
+    capturedAt: z.string().max(40),
+    input: z.record(z.string(), z.unknown()).optional(),
+    envelope: z.record(z.string(), z.unknown()).optional(),
+    override: z.string().max(100).nullable().optional(),
+  })
+  .strict()
+  .refine((body) => (body.input === undefined) !== (body.envelope === undefined));
 
 async function reviewer(req: Request, res: Response): Promise<{ companyId: number; userId: string } | null> {
   if (!pcSyncEnabled()) {
@@ -57,7 +72,7 @@ export function registerPcEntryRoutes(app: Express): void {
     if (!pcSyncEnabled()) return res.status(404).json({ code: "OFFLINE_PC_SYNC_DISABLED" });
     const actor = await guard(req, res);
     if (!actor) return;
-    const parsed = operationSchema.safeParse(req.body);
+    const parsed = pcOperationSchema.safeParse(req.body);
     if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
     try {
       const result = await applyPcOperation(actor, parsed.data);

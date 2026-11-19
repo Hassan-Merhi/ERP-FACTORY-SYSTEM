@@ -1,75 +1,37 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Minus, Equal, AlertCircle, ChevronRight, ChevronLeft, RefreshCw, CalendarDays } from "lucide-react";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
-import { type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { getAppDate } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import type { FactoryNetPositionData } from "./factorynetposition/detailsTypes";
-import { shiftDate, formatDateLabel } from "./factorynetposition/utils";
+import { Plus, Minus, Equal, AlertCircle } from "lucide-react";
 import { CustomNetPositionView } from "./factorynetposition/components/DetailsCustomNetPositionView";
 import { FxHistoryDialog } from "@/components/netposition/FxHistoryDialog";
 import { CollapsibleSection } from "./FactoryNetPositionDetailsCollapsibleSection";
+import { useFactoryNetPositionDetailsState } from "./useFactoryNetPositionDetailsState";
+import { FactoryNetPositionDetailsContent } from "./FactoryNetPositionDetailsContent";
 
 export default function FactoryNetPositionDetails() {
-  const { formatAmount } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
-  const accountOrder = useAccountDisplayOrder();
-  const displayLayout = accountOrder.layout;
-  const orderActions: InlineOrderActions = {
-    canArrange: accountOrder.canArrange,
-    arranging: accountOrder.arranging,
-    isSaving: accountOrder.isSaving,
-    swap: accountOrder.swap,
-    move: accountOrder.move,
-  };
-  // Empty selection means "company business today" resolved by the API.
-  // A browser in a different timezone must not pick the accounting cutoff.
-  const [asOf, setAsOf] = useState<string>("");
-  const [fxHistorySide, setFxHistorySide] = useState<"gain" | "loss" | null>(null);
-  const queryClient = useQueryClient();
-  const isToday = !asOf;
-  const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
-  const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
-
-  const { data, isLoading, error, refetch, isFetching } = useQuery<FactoryNetPositionData>({
-    queryKey: companyQueryKey("/api/factory/net-position", selectedCompany?.id, asOf || "company-today", valuationMode),
-    queryFn: async () => {
-      const params = new URLSearchParams({ valuationMode });
-      if (asOf) params.set("asOf", asOf);
-      const res = await fetch(`/api/factory/net-position?${params.toString()}`, { credentials: "include" });
-      if (!res.ok) {
-        const text = await res.text();
-        // Attach the parsed code so the retry handler can inspect it
-        const err: Error & { code?: string } = new Error(text);
-        try {
-          err.code = JSON.parse(text)?.code;
-        } catch {
-          // Malformed or absent payload — fall through to the default rather than surface a parse error.
-        }
-        throw err;
-      }
-      return res.json();
-    },
-    // Historical data can change after audited late entry/backfill.
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    // Auto-retry when the concurrency guard fires (max 3 attempts, 6 s apart)
-    retry: (failureCount, err: unknown) =>
-      (err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? failureCount < 3 : false,
-    retryDelay: (_, err: unknown) => ((err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? 6_000 : 0),
-  });
-
-  const displayAsOf = asOf || data?.asOf || getAppDate();
-  const companyToday = data?.businessToday || getAppDate();
+  const {
+    formatAmount,
+    accountOrder,
+    displayLayout,
+    orderActions,
+    asOf,
+    setAsOf,
+    setFxHistorySide,
+    fxHistorySide,
+    queryClient,
+    isToday,
+    isSavingValuationMode,
+    updatePref,
+    valuationMode,
+    isLoading,
+    error,
+    refetch,
+    data,
+    isFetching,
+    displayAsOf,
+    companyToday,
+  } = useFactoryNetPositionDetailsState();
 
   if (isLoading) {
     return (
@@ -129,95 +91,18 @@ export default function FactoryNetPositionDetails() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 w-full">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <PageHeader
-            title="Factory Net Position"
-            subtitle={
-              isToday
-                ? "Current factory financial standing — what we have vs what we owe"
-                : `Historical snapshot — as of ${formatDateLabel(displayAsOf)}`
-            }
-          />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 border rounded-md p-0.5" data-testid="valuation-mode-toggle">
-            <Button
-              variant={valuationMode === "cost" ? "default" : "ghost"}
-              size="sm"
-              disabled={isSavingValuationMode}
-              onClick={() => updatePref({ factoryNetPositionValuationMode: "cost" })}
-              data-testid="button-valuation-cost"
-            >
-              Cost Price
-            </Button>
-            <Button
-              variant={valuationMode === "selling" ? "default" : "ghost"}
-              size="sm"
-              disabled={isSavingValuationMode}
-              onClick={() => updatePref({ factoryNetPositionValuationMode: "selling" })}
-              data-testid="button-valuation-selling"
-            >
-              Selling Price
-            </Button>
-          </div>
-          {/* Date navigation */}
-          <div className="flex items-center gap-1 border rounded-md px-1 py-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setAsOf(shiftDate(displayAsOf, -1))}
-              data-testid="button-date-prev"
-              title="Previous day"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-1.5 px-1">
-              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                type="date"
-                value={displayAsOf}
-                max={companyToday}
-                onChange={(e) => e.target.value && setAsOf(e.target.value >= companyToday ? "" : e.target.value)}
-                className="text-sm bg-transparent border-none outline-hidden cursor-pointer w-[120px]"
-                data-testid="input-as-of-date"
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const next = shiftDate(displayAsOf, 1);
-                setAsOf(next >= companyToday ? "" : next);
-              }}
-              disabled={isToday}
-              data-testid="button-date-next"
-              title="Next day"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          {!isToday && (
-            <Button variant="outline" size="sm" onClick={() => setAsOf("")} data-testid="button-date-today">
-              Today
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => {
-              // The payroll breakdown must refresh with its parent total.
-              void queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position/payroll-breakdown"] });
-              void refetch();
-            }}
-            disabled={isFetching}
-            data-testid="button-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <FactoryNetPositionDetailsContent
+        companyToday={companyToday}
+        displayAsOf={displayAsOf}
+        isFetching={isFetching}
+        isSavingValuationMode={isSavingValuationMode}
+        isToday={isToday}
+        queryClient={queryClient}
+        refetch={refetch}
+        setAsOf={setAsOf}
+        updatePref={updatePref}
+        valuationMode={valuationMode}
+      />
 
       {data?.historyCompleteness === "partial" && (
         <div role="status" className="text-sm text-amber-700 dark:text-amber-300" data-testid="historical-data-warning">

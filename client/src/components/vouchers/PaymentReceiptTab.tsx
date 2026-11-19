@@ -1,39 +1,23 @@
 import { VoucherActionBar, VoucherOptionalSwitch } from "@/pages/vouchers/VoucherActionBar";
-import { useState, useMemo, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  AlertCircle,
-  BookOpen,
-} from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AccountAutocomplete } from "@/components/AccountAutocomplete";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
 import AccountSidebar, { Account } from "@/components/AccountSidebar";
-import { VoucherEntriesTable, type VoucherEntry } from "@/components/vouchers/VoucherEntriesTable";
+import { type VoucherEntry } from "@/components/vouchers/VoucherEntriesTable";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
-import { VoucherSourceCard } from "@/components/vouchers/VoucherSourceCard";
-import {
-  FxWalletPaymentSection,
-  FxWalletSourceCard,
-  type FxWalletSummary,
-} from "@/components/vouchers/FxWalletPayment";
+import { type FxWalletSummary } from "@/components/vouchers/FxWalletPayment";
 import { PayFromAccountSheet } from "@/components/vouchers/PayFromAccountSheet";
 import { PaymentReceiptHeaderActions } from "@/components/vouchers/PaymentReceiptHeaderActions";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { usePaymentReceiptTabModel } from "./PaymentReceiptTabModel";
+import { PaymentReceiptTabFields } from "./PaymentReceiptTabFields";
 
 export interface PaymentReceiptTabProps {
   form: UseFormReturn<VoucherFormData>;
@@ -136,175 +120,41 @@ export function PaymentReceiptTab({
   effectiveDate,
   onEffectiveDateChange,
 }: PaymentReceiptTabProps) {
-  const { formatAmount } = useCurrencyContext();
-
-  // Notes collapse state — auto-open if there is already a notes value
-  const [notesOpen, setNotesOpen] = useState<boolean>(() => {
-    const existingNotes = form.getValues("notes");
-    return typeof existingNotes === "string" && existingNotes.trim().length > 0;
-  });
-
-  // Mobile account drawer (entry rows → AccountSidebar)
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  // Mobile Pay From sheet
-  const [payFromSheetOpen, setPayFromSheetOpen] = useState(false);
-  const [payFromSearch, setPayFromSearch] = useState("");
-
-  // Track whether the Pay From / Receive Into autocomplete is the active target
-  const [payFromActive, setPayFromActive] = useState(false);
-
-  // Effective date is optional and rarely used — it stays behind a toggle until asked for,
-  // and reveals itself automatically when the voucher already carries one.
-  const [showEffectiveDate, setShowEffectiveDate] = useState<boolean>(Boolean(effectiveDate));
-
-  // Once an account is chosen the picker collapses into a summary card; "Change" reopens it.
-  const [editingSource, setEditingSource] = useState(false);
-
-  // Required-field warnings wait for a submit attempt or for the user to leave the field,
-  // so an untouched form never opens with an error on it.
-  const [payFromTouched, setPayFromTouched] = useState(false);
-  const showValidation = form.formState.isSubmitted || payFromTouched;
-
-  const isPayment = activeTab === "payment";
-  const isFxPayment = isPayment && !!fxWallet && !isEditMode;
-  const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
-  const fxOptionalDraft = directEurPayment && form.watch("optional");
-  // A USD FX draft needs a durable negotiated rate. EUR supplier drafts can use
-  // the wallet's native currency and are finalized through the atomic FX path.
-  useEffect(() => {
-    if (isFxPayment && !directEurPayment && form.getValues("optional")) form.setValue("optional", false);
-  }, [isFxPayment, directEurPayment, form]);
-  const fxRateValue = Number(fxPaymentRate);
-  const fxEurRequired =
-    isFxPayment && total > 0 ? (directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0) : 0;
-  const fxUnsupportedEntries =
-    isFxPayment &&
-    (entries.length !== 1 ||
-      !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
-      entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId ||
-      (directEurPayment && entries[0]?.accountType !== "factorySupplier"));
-
-  // Tab-specific styling / labels
-  const Icon = isPayment ? ArrowUpCircle : ArrowDownCircle;
-  const accentColor = isPayment ? "#f59e0b" : "#10b981";
-  const title = isPayment ? "Payment Voucher" : "Receipt Voucher";
-  const accountLabel = isPayment ? "Pay From" : "Receive Into";
-  const accountPlaceholder = isPayment ? "Pay from..." : "Receive into...";
-  const accountTestId = isPayment ? "input-pay-from" : "input-receive-in";
-
-  // Active target label shown in the account sidebar / drawer
-  const activeTargetLabel: string | undefined = payFromActive
-    ? accountLabel
-    : activeRowIndex !== null
-      ? `Row ${activeRowIndex + 1}`
-      : undefined;
-
-  // Wrap handleSidebarAccountSelect to also close the mobile drawer
-  const handleAccountSelect = (account: Account) => {
-    handleSidebarAccountSelect(account);
-    setSheetOpen(false);
-  };
-
-  // Action guards
-  const hasExport = Boolean(handleExportVoucher);
-  const hasAnyEntry = entries.some((e) => (e?.accountId ?? 0) > 0);
-  const canRunActions = paymentAccountId !== 0;
-  const canPrint = canRunActions && hasAnyEntry;
-  const canExport = canRunActions && hasAnyEntry && hasExport;
-
-  // Tooltip reason for disabled print/export
-  const printDisabledReason = !canRunActions
-    ? `Select ${accountLabel} account first`
-    : "Add at least one entry with an amount";
-
-  // Validation state for summary warnings
-  const validEntryCount = entries.filter((e) => (e?.accountId ?? 0) > 0 && parseFloat(e?.amount || "0") > 0).length;
-  const missingAccount = paymentAccountId === 0;
-  const missingEntries = validEntryCount === 0;
-
-  // Why Save is disabled, said out loud rather than left to a dead button.
-  const saveHint = missingAccount
-    ? `Select a ${accountLabel} account to save`
-    : total === 0
-      ? "Add at least one line with an amount"
-      : null;
-
-  // Same conditions as before the shared action bar; only where they are evaluated moved.
-  const saveDisabled =
-    paymentAccountId === 0 ||
-    total === 0 ||
-    !!fxWalletsLoading ||
-    (isFxPayment && fxUnsupportedEntries) ||
-    (fxOptionalDraft &&
-      (!fxWallet?.synchronized ||
-        Number(fxWallet.state.eur) <= 0 ||
-        Number(fxWallet.state.totalBookUsd) <= 0)) ||
-    (isFxPayment &&
-      !fxOptionalDraft &&
-      (!fxWallet?.synchronized ||
-        fxSupplierBalanceLoading ||
-        (!directEurPayment && fxRateValue <= 0) ||
-        (directEurPayment &&
-          (fxSupplierEurBalance === null || fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
-        !Number.isFinite(fxEurRequired) ||
-        fxEurRequired > Number(fxWallet!.state.eur)));
-  // An FX wallet payment pays out in the payout currency, so its total says which one.
-  const totalLabel = total > 0 ? (isFxPayment ? `${fxPayoutCurrency} ${total.toFixed(2)}` : formatAmount(total)) : "—";
-
-  // Projected balance after save.
-  // Payment edit: undo the original deduction, apply the new one.
-  // Receipt edit: undo the original addition, apply the new one.
-  const projected = isPayment
-    ? isEditMode
-      ? accountBalance + originalTotal - total
-      : accountBalance - total
-    : isEditMode
-      ? accountBalance - originalTotal + total
-      : accountBalance + total;
-
-  // How much of the source account this voucher consumes, purely as a visual cue.
-  // Capped at 100% so a voucher larger than the balance simply fills the bar.
-  const meterPct = (() => {
-    if (total <= 0) return 0;
-    const capacity = Math.max(Math.abs(accountBalance), total);
-    return capacity > 0 ? Math.min(100, (total / capacity) * 100) : 0;
-  })();
-
-  // When the Pay From / Receive Into field is active, restrict the sidebar and autocomplete to
-  // Cash / Bank / Loans ledger accounts + bank accounts only.
-  const payFromKeys = useMemo(() => {
-    const src = payFromAccounts ?? allAccounts;
-    return new Set(src.map((a) => `${a.type}:${a.id}`));
-  }, [payFromAccounts, allAccounts]);
-
-  const filteredSidebarForPayFrom = useMemo(
-    () => filteredSidebarAccounts.filter((a) => payFromKeys.has(`${a.type}:${a.id}`)),
-    [filteredSidebarAccounts, payFromKeys]
-  );
-
-  // Shared AccountSidebar props
-  const sidebarProps = {
-    accounts: sidebarAccounts,
-    filteredAccounts: payFromActive ? filteredSidebarForPayFrom : filteredSidebarAccounts,
-    onSelectAccount: handleAccountSelect,
-    searchValue: sidebarSearchValue,
-    onSearchChange: setSidebarSearchValue,
-    selectedAccountId,
-    selectedAccountType,
-    highlightedIndex: sidebarHighlightedIndex,
-    onHighlightedIndexChange: setSidebarHighlightedIndex,
+  const m = usePaymentReceiptTabModel({
+    form,
     entries,
-    mode: activeTab,
+    total,
     paymentAccountId,
     paymentAccountType,
-    voucherTotal: total,
-    onCreateAccount: isFactoryCompany ? undefined : onCreateAccount,
+    accountBalance,
+    allAccounts,
+    payFromAccounts,
+    sidebarAccounts,
+    filteredSidebarAccounts,
+    sidebarSearchValue,
+    setSidebarSearchValue,
+    sidebarHighlightedIndex,
+    setSidebarHighlightedIndex,
+    selectedAccountId,
+    selectedAccountType,
+    handleSidebarAccountSelect,
+    handleExportVoucher,
+    activeTab,
+    activeRowIndex,
+    onCreateAccount,
     isFactoryCompany,
     onAutoCreateAccount,
     isAutoCreating,
-    activeTargetLabel,
-  };
+    isEditMode,
+    originalTotal,
+    fxWallet,
+    fxWalletsLoading,
+    fxPaymentRate,
+    fxPayoutCurrency,
+    fxSupplierEurBalance,
+    fxSupplierBalanceLoading,
+    effectiveDate,
+  });
 
   return (
     // Three columns (type nav, form, account picker) only from xl: at lg with the sidebar pinned the
@@ -319,31 +169,36 @@ export function PaymentReceiptTab({
               <div
                 className="voucher-hero relative flex items-center gap-2 px-4 py-3 border-b border-border/50 overflow-hidden flex-wrap rounded-t-lg"
                 style={{
-                  background: `linear-gradient(135deg, ${accentColor}22 0%, ${accentColor}08 55%, transparent 100%)`,
+                  background: `linear-gradient(135deg, ${m.accentColor}22 0%, ${m.accentColor}08 55%, transparent 100%)`,
                 }}
               >
                 {/* Left accent stripe */}
                 <div
                   className="absolute left-0 top-0 bottom-0 w-[3px] rounded-tl-lg"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: m.accentColor }}
                 />
 
                 {/* Icon tile */}
                 <div
                   className="voucher-hero-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white ml-2"
                   style={{
-                    backgroundColor: accentColor,
-                    boxShadow: `0 2px 8px ${accentColor}55, inset 0 1px 0 rgba(255,255,255,0.2)`,
+                    backgroundColor: m.accentColor,
+                    boxShadow: `0 2px 8px ${m.accentColor}55, inset 0 1px 0 rgba(255,255,255,0.2)`,
                   }}
                 >
-                  <Icon className="h-4 w-4" />
+                  <m.Icon className="h-4 w-4" />
                 </div>
-
+                {m.fxOptionalDraft && (
+                  <p className="text-xs text-muted-foreground px-1" data-testid="text-fx-optional-draft">
+                    Optional EUR draft: no wallet or supplier balance changes now. Finalizing later settles both
+                    balances atomically after validating the live EUR payable.
+                  </p>
+                )}
                 {/* Title + badges */}
                 {/* min-w keeps the title readable: the row wraps the date input instead of covering it. */}
                 <div className="voucher-hero-heading flex flex-col gap-0.5 flex-1 min-w-[9rem]">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="voucher-hero-title text-sm font-semibold">{title}</span>
+                    <span className="voucher-hero-title text-sm font-semibold">{m.title}</span>
                     {isEditMode && (
                       <Badge variant="secondary" className="text-xs" data-testid="badge-editing">
                         Editing
@@ -356,10 +211,9 @@ export function PaymentReceiptTab({
                     )}
                   </div>
                   <span className="voucher-hero-subtitle">
-                    {isPayment ? "Create a new payment entry" : "Record incoming funds"}
+                    {m.isPayment ? "Create a new payment entry" : "Record incoming funds"}
                   </span>
                 </div>
-
                 {/* Entry Date input */}
                 <FormField
                   control={form.control}
@@ -387,10 +241,9 @@ export function PaymentReceiptTab({
                     </FormItem>
                   )}
                 />
-
                 {/* Effective Date — optional, revealed on demand */}
                 {onEffectiveDateChange &&
-                  (showEffectiveDate ? (
+                  (m.showEffectiveDate ? (
                     <div className="shrink-0 flex items-center gap-1.5">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">Eff.</span>
                       <Input
@@ -408,270 +261,72 @@ export function PaymentReceiptTab({
                       variant="ghost"
                       size="sm"
                       className="h-8 shrink-0 text-xs text-muted-foreground"
-                      onClick={() => setShowEffectiveDate(true)}
+                      onClick={() => m.setShowEffectiveDate(true)}
                       data-testid="button-show-effective-date"
                     >
                       + Effective date
                     </Button>
                   ))}
-
                 {/* Mobile accounts drawer trigger — hidden on sm+ */}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="sm:hidden shrink-0"
-                  onClick={() => setSheetOpen(true)}
+                  onClick={() => m.setSheetOpen(true)}
                   data-testid="button-open-accounts-drawer"
                 >
                   <BookOpen className="h-4 w-4 mr-1.5" />
                   Accounts
-                  {activeTargetLabel && (
-                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">— {activeTargetLabel}</span>
+                  {m.activeTargetLabel && (
+                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">— {m.activeTargetLabel}</span>
                   )}
                 </Button>
               </div>
               {/* ── Form fields ── */}
-              <div className="voucher-fields p-4 sm:p-5 space-y-6">
-                {/* ── Source account + running total ── */}
-                <div className="grid gap-3 lg:grid-cols-[1fr_minmax(170px,210px)]">
-                  {/* Selected-account summary card — the picker collapses into this */}
-                  {paymentAccountId > 0 && !editingSource && !isFxPayment && (
-                    <VoucherSourceCard
-                      label={accountLabel}
-                      accountName={paymentAccountName}
-                      accentColor={accentColor}
-                      balance={accountBalance}
-                      projected={projected}
-                      total={total}
-                      meterPct={meterPct}
-                      currencyBalances={accountCurrencyBalances}
-                      onChange={() => setEditingSource(true)}
-                    />
-                  )}
-                  {isFxPayment && paymentAccountId > 0 && !editingSource && (
-                    <FxWalletSourceCard
-                      accountName={paymentAccountName}
-                      eurAvailable={fxWallet!.state.eur}
-                      onChange={() => setEditingSource(true)}
-                    />
-                  )}
-                  {/* Account picker — shown until an account is chosen, or on "Change" */}
-                  <FormField
-                    control={form.control}
-                    name="paymentAccountId"
-                    render={() => (
-                      <FormItem
-                        className={cn("min-w-0", paymentAccountId > 0 && !editingSource && "hidden")}
-                        data-testid="field-source-picker"
-                      >
-                        <FormLabel>{accountLabel}</FormLabel>
-                        <FormControl>
-                          <div className="w-full min-w-0">
-                            {/* Mobile: tappable card → opens Pay From sheet */}
-                            <div
-                              className="sm:hidden w-full rounded-md border bg-card px-3 py-2.5 flex items-center justify-between gap-2 cursor-pointer hover-elevate active-elevate-2 min-h-9"
-                              onClick={() => {
-                                setPayFromSearch("");
-                                setPayFromSheetOpen(true);
-                              }}
-                              data-testid={`${accountTestId}-mobile-card`}
-                            >
-                              <span
-                                className={cn(
-                                  "text-sm truncate",
-                                  paymentAccountId > 0 ? "font-medium" : "text-muted-foreground"
-                                )}
-                              >
-                                {paymentAccountId > 0 ? paymentAccountName : accountPlaceholder}
-                              </span>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                            </div>
-                            {/* Desktop: AccountAutocomplete */}
-                            <div
-                              className="hidden sm:block w-full min-w-0"
-                              onFocus={() => {
-                                setPayFromActive(true);
-                                onAccountPickerOpen?.();
-                              }}
-                              onBlur={() => setPayFromTouched(true)}
-                            >
-                              <AccountAutocomplete
-                                value={
-                                  paymentAccountId > 0
-                                    ? { type: paymentAccountType, id: paymentAccountId, name: paymentAccountName }
-                                    : null
-                                }
-                                onChange={(type, id, name) => {
-                                  form.setValue("paymentAccountType", type);
-                                  form.setValue("paymentAccountId", id);
-                                  form.setValue("paymentAccountName", name);
-                                  setEditingSource(false);
-                                }}
-                                allAccounts={payFromAccounts ?? allAccounts}
-                                rowIndex={-1}
-                                placeholder={accountPlaceholder}
-                                testId={accountTestId}
-                                onSearchChange={onAccountSearchChange}
-                              />
-                            </div>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {/* Running total — stated up front, not discovered at the bottom */}
-                  <div className="voucher-total-card rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {title.replace(" Voucher", "")} Total
-                    </span>
-                    <span
-                      className={cn(
-                        "text-2xl font-bold font-mono tabular-nums leading-tight mt-0.5",
-                        total === 0 && "text-muted-foreground"
-                      )}
-                      style={total > 0 ? { color: accentColor } : undefined}
-                      data-testid="text-hero-total"
-                    >
-                      {total > 0 ? (directEurPayment ? `EUR ${total.toFixed(2)}` : formatAmount(total)) : "—"}
-                    </span>
-                    <span className="text-xs text-muted-foreground mt-0.5 tabular-nums">
-                      {validEntryCount} {validEntryCount === 1 ? "line" : "lines"}
-                    </span>
-                  </div>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="paymentAccountNarration"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{accountLabel} narration</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value ?? ""} placeholder="Optional narration for this account" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {isFxPayment && (
-                  <FxWalletPaymentSection
-                    fxWallet={fxWallet!}
-                    directEurPayment={directEurPayment}
-                    showPayoutToggle={entries[0]?.accountType === "factorySupplier"}
-                    fxPayoutCurrency={fxPayoutCurrency}
-                    fxPaymentRate={fxPaymentRate}
-                    fxRateValue={fxRateValue}
-                    fxEurRequired={fxEurRequired}
-                    fxSupplierEurBalance={fxSupplierEurBalance ?? null}
-                    fxSupplierEurBasis={fxSupplierEurBasis}
-                    fxSupplierBalanceLoading={fxSupplierBalanceLoading}
-                    fxUnsupportedEntries={fxUnsupportedEntries}
-                    total={total}
-                    onFxPaymentRateChange={onFxPaymentRateChange}
-                    onFxPayoutCurrencyChange={onFxPayoutCurrencyChange}
-                  />
-                )}
-                {isPayment && fxWalletsLoading && (
-                  <p className="text-xs text-muted-foreground">Loading FX wallet status before payment…</p>
-                )}
-                {/* ── Entries table ── */}
-                <VoucherEntriesTable
-                  amountCurrencyOverride={directEurPayment ? "EUR" : undefined}
-                  form={form}
-                  fieldArray={fieldArray}
-                  entries={entries}
-                  total={total}
-                  mode={activeTab}
-                  onAmountCommit={handleAmountCommit}
-                  activeRow={activeRowIndex}
-                  filteredSidebarAccounts={filteredSidebarAccounts}
-                  sidebarHighlightedIndex={sidebarHighlightedIndex}
-                  setSidebarHighlightedIndex={setSidebarHighlightedIndex}
-                  setSidebarSearchValue={setSidebarSearchValue}
-                  handleSidebarAccountSelect={handleAccountSelect}
-                  sidebarAccounts={sidebarAccounts}
-                  onRowFocus={(rowIndex, fieldName) => {
-                    if (fieldName === "account") {
-                      setPayFromActive(false);
-                      setActiveRowIndex(rowIndex);
-                      const currentAccountName = entries[rowIndex]?.accountName || "";
-                      setSidebarSearchValue(currentAccountName);
-                    }
-                  }}
-                  onRowBlur={() => {
-                    // intentionally blank — amount commit clears active row
-                  }}
-                  isFactoryCompany={isFactoryCompany}
-                  onAutoCreateAccount={onAutoCreateAccount}
-                  isAutoCreating={isAutoCreating}
-                />
-                {/* ── Validation — held back until the form has been touched or submitted ── */}
-                {showValidation && (missingAccount || missingEntries) && (
-                  <div className="flex flex-col gap-1" data-testid="voucher-validation">
-                    {missingAccount && (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span>{accountLabel} account is required</span>
-                      </div>
-                    )}
-                    {!missingAccount && missingEntries && (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span>Add at least one entry with an amount</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* ── Notes (collapsible) ── */}
-                <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
-                  <div className="flex items-center justify-between gap-2">
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center gap-1.5 px-1 text-muted-foreground"
-                        data-testid="button-toggle-notes"
-                      >
-                        {notesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        <span className="text-xs font-medium">Notes</span>
-                      </Button>
-                    </CollapsibleTrigger>
-                    {!notesOpen && form.watch("notes") && (
-                      <span className="text-xs text-muted-foreground truncate max-w-xs italic">
-                        {form.watch("notes")}
-                      </span>
-                    )}
-                  </div>
-                  <CollapsibleContent>
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem className="mt-2">
-                          <FormControl>
-                            <Textarea {...field} placeholder="Additional notes..." rows={3} data-testid="input-notes" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-              {fxOptionalDraft && (
-                <p className="text-xs text-muted-foreground px-1" data-testid="text-fx-optional-draft">
-                  Optional EUR draft: no wallet or supplier balance changes now. Finalizing later settles
-                  both balances atomically after validating the live EUR payable.
-                </p>
-              )}
+              <PaymentReceiptTabFields
+                m={m}
+                paymentAccountId={paymentAccountId}
+                paymentAccountName={paymentAccountName}
+                accountBalance={accountBalance}
+                total={total}
+                accountCurrencyBalances={accountCurrencyBalances}
+                fxWallet={fxWallet}
+                form={form}
+                onAccountPickerOpen={onAccountPickerOpen}
+                paymentAccountType={paymentAccountType}
+                payFromAccounts={payFromAccounts}
+                allAccounts={allAccounts}
+                onAccountSearchChange={onAccountSearchChange}
+                entries={entries}
+                fxPayoutCurrency={fxPayoutCurrency}
+                fxPaymentRate={fxPaymentRate}
+                fxSupplierEurBalance={fxSupplierEurBalance}
+                fxSupplierEurBasis={fxSupplierEurBasis}
+                fxSupplierBalanceLoading={fxSupplierBalanceLoading}
+                onFxPaymentRateChange={onFxPaymentRateChange}
+                onFxPayoutCurrencyChange={onFxPayoutCurrencyChange}
+                fxWalletsLoading={fxWalletsLoading}
+                fieldArray={fieldArray}
+                activeTab={activeTab}
+                handleAmountCommit={handleAmountCommit}
+                activeRowIndex={activeRowIndex}
+                filteredSidebarAccounts={filteredSidebarAccounts}
+                sidebarHighlightedIndex={sidebarHighlightedIndex}
+                setSidebarHighlightedIndex={setSidebarHighlightedIndex}
+                setSidebarSearchValue={setSidebarSearchValue}
+                sidebarAccounts={sidebarAccounts}
+                setActiveRowIndex={setActiveRowIndex}
+                isFactoryCompany={isFactoryCompany}
+                onAutoCreateAccount={onAutoCreateAccount}
+                isAutoCreating={isAutoCreating}
+              />
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <VoucherActionBar
                 isEditing={!!isEditMode}
                 saving={isPending}
-                disabled={saveDisabled}
-                hint={saveHint ? <span data-testid="text-save-hint">{saveHint}</span> : null}
+                disabled={m.saveDisabled}
+                hint={m.saveHint ? <span data-testid="text-save-hint">{m.saveHint}</span> : null}
                 saveTestId="button-save-voucher"
                 data-testid="payment-receipt-actions"
                 className="mt-0"
@@ -681,7 +336,7 @@ export function PaymentReceiptTab({
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Lines
                       </span>
-                      <span className="text-sm font-semibold font-mono tabular-nums">{validEntryCount}</span>
+                      <span className="text-sm font-semibold font-mono tabular-nums">{m.validEntryCount}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -692,23 +347,23 @@ export function PaymentReceiptTab({
                           "text-xl font-bold font-mono tabular-nums leading-tight",
                           total === 0 && "text-muted-foreground"
                         )}
-                        style={total > 0 ? { color: accentColor } : undefined}
+                        style={total > 0 ? { color: m.accentColor } : undefined}
                         data-testid="text-total-amount"
                       >
-                        {totalLabel}
+                        {m.totalLabel}
                       </span>
                     </div>
                   </div>
                 }
-                phoneSummary={`${validEntryCount} ${validEntryCount === 1 ? "line" : "lines"} · ${totalLabel}`}
+                phoneSummary={`${m.validEntryCount} ${m.validEntryCount === 1 ? "line" : "lines"} · ${m.totalLabel}`}
                 optional={
                   <FormField
                     control={form.control}
                     name="optional"
                     render={({ field }) => (
                       <VoucherOptionalSwitch
-                        checked={isFxPayment && !directEurPayment ? false : field.value}
-                        disabled={isFxPayment && !directEurPayment}
+                        checked={m.isFxPayment && !m.directEurPayment ? false : field.value}
+                        disabled={m.isFxPayment && !m.directEurPayment}
                         onCheckedChange={field.onChange}
                         data-testid="checkbox-optional"
                       />
@@ -717,10 +372,10 @@ export function PaymentReceiptTab({
                 }
                 secondary={
                   <PaymentReceiptHeaderActions
-                    canPrint={canPrint}
-                    canExport={canExport}
-                    hasExport={hasExport}
-                    printDisabledReason={printDisabledReason}
+                    canPrint={m.canPrint}
+                    canExport={m.canExport}
+                    hasExport={m.hasExport}
+                    printDisabledReason={m.printDisabledReason}
                     handlePrint={handlePrint}
                     handleExportVoucher={handleExportVoucher}
                   />
@@ -735,43 +390,43 @@ export function PaymentReceiptTab({
         className="hidden sm:block w-full xl:w-[40%] xl:sticky xl:top-4 h-fit"
         style={{ maxHeight: "calc(100dvh - 2rem)" }}
       >
-        <AccountSidebar {...sidebarProps} />
+        <AccountSidebar {...m.sidebarProps} />
       </div>
       {/* ── Mobile Account Drawer (Sheet) — entry rows ── */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Sheet open={m.sheetOpen} onOpenChange={m.setSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col" data-testid="sheet-accounts-drawer">
           <SheetHeader className="p-4 border-b shrink-0">
             <SheetTitle className="text-base">
-              {activeTargetLabel ? `Accounts — ${activeTargetLabel}` : "Select Account"}
+              {m.activeTargetLabel ? `Accounts — ${m.activeTargetLabel}` : "Select Account"}
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-hidden">
-            <AccountSidebar {...sidebarProps} />
+            <AccountSidebar {...m.sidebarProps} />
           </div>
         </SheetContent>
       </Sheet>
       {/* ── Mobile Pay From / Receive Into Sheet ── */}
       <PayFromAccountSheet
-        open={payFromSheetOpen}
+        open={m.payFromSheetOpen}
         onOpenChange={(isOpen) => {
-          setPayFromSheetOpen(isOpen);
-          if (!isOpen) setPayFromSearch("");
+          m.setPayFromSheetOpen(isOpen);
+          if (!isOpen) m.setPayFromSearch("");
         }}
-        accountLabel={accountLabel}
-        payFromSearch={payFromSearch}
-        setPayFromSearch={setPayFromSearch}
+        accountLabel={m.accountLabel}
+        payFromSearch={m.payFromSearch}
+        setPayFromSearch={m.setPayFromSearch}
         sidebarAccounts={sidebarAccounts}
-        payFromKeys={payFromKeys}
+        payFromKeys={m.payFromKeys}
         paymentAccountId={paymentAccountId}
         paymentAccountType={paymentAccountType}
-        formatAmount={formatAmount}
+        formatAmount={m.formatAmount}
         onSelect={(account) => {
           form.setValue("paymentAccountType", account.type);
           form.setValue("paymentAccountId", account.id);
           form.setValue("paymentAccountName", account.name);
-          setEditingSource(false);
-          setPayFromTouched(true);
-          setPayFromSheetOpen(false);
+          m.setEditingSource(false);
+          m.setPayFromTouched(true);
+          m.setPayFromSheetOpen(false);
         }}
       />
     </div>

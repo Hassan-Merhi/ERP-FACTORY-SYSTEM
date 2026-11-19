@@ -7,7 +7,7 @@ import {
   phase9PaymentSnapshotTx,
   phase9PaymentVoucherRefTx,
 } from "../../edge/phase9PaymentOutbox";
-import { sessionRetirementActor, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
+import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { capturePosSaleCancelOfflineTx } from "../../services/pos/posSaleCancelOfflineCapture";
 import { getClientDate } from "../../lib/dateUtils";
@@ -20,12 +20,11 @@ import { getClientDate } from "../../lib/dateUtils";
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db, type DbTransaction } from "../../db";
-import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
-import { syncEmployeeBalancesFromEntries, buildVoucherChangesForDelete } from "../_helpers";
+import { syncEmployeeBalancesFromEntries } from "../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
   vouchers,
@@ -38,78 +37,15 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
-
-type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
-
-/**
- * Wave 9 (ledger safety): deleting one side of an inter-company transfer takes
- * the other company's side out of the books by soft delete — deleted_at set,
- * lines kept, exactly like the voucher being deleted — never by hard delete.
- * The counterpart's audit row is written in the same transaction, under the
- * counterpart's company. The transfer link row is still removed, as before; the
- * audit row keeps a copy of it.
- */
-export async function softDeleteInterCompanyCounterpartTx(
-  tx: DbTransaction,
-  params: {
-    transfer: InterCompanyTransferRow;
-    voucherId: number;
-    voucherNumber: string;
-    actor: { userId?: string | null; username?: string | null };
-  }
-): Promise<void> {
-  const { transfer, voucherId } = params;
-  const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
-  if (!otherVoucherId || otherVoucherId === voucherId) return;
-
-  const [counterpart] = await tx.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
-  if (!counterpart || counterpart.deletedAt) return;
-
-  const deletedAt = new Date();
-  await tx.update(vouchers).set({ deletedAt }).where(eq(vouchers.id, otherVoucherId));
-
-  const entries = await tx
-    .select({
-      ledgerAccountId: voucherEntries.ledgerAccountId,
-      bankAccountId: voucherEntries.bankAccountId,
-      supplierId: voucherEntries.supplierId,
-      customerId: voucherEntries.customerId,
-      employeeId: voucherEntries.employeeId,
-      debitAmount: voucherEntries.debitAmount,
-      creditAmount: voucherEntries.creditAmount,
-      narration: voucherEntries.narration,
-    })
-    .from(voucherEntries)
-    .where(eq(voucherEntries.voucherId, otherVoucherId));
-
-  await writeAuditEvent(
-    {
-      userId: params.actor.userId ?? "unknown",
-      username: params.actor.username || "unknown",
-      companyId: counterpart.companyId,
-      action: "delete",
-      tableName: "vouchers",
-      recordId: otherVoucherId,
-      recordIdentifier: counterpart.voucherNumber,
-      changes: {
-        ...buildVoucherChangesForDelete(counterpart, entries),
-        deletedAt: { old: null, new: deletedAt },
-        interCompanyCounterpartOf: { old: { voucherId, voucherNumber: params.voucherNumber } },
-        interCompanyTransfer: { old: transfer },
-      },
-    },
-    tx
-  );
-}
-
-export interface DeleteVoucherInput {
-  companyId: number;
-  voucher: NonNullable<Awaited<ReturnType<typeof storage.getVoucherById>>>;
-  occurredAt: string;
-  asOfDate: string;
-  actor: { userId: string | undefined; username: string | undefined };
-  retirementActor: VoucherRetirementActor;
-}
+import { assertPcLocalCaptured, pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
+import {
+  softDeleteInterCompanyCounterpartTx,
+  type DeleteVoucherInput,
+} from "./deleteSoftDeleteInterCompanyCounterpartTx";
+export {
+  softDeleteInterCompanyCounterpartTx,
+  type DeleteVoucherInput,
+} from "./deleteSoftDeleteInterCompanyCounterpartTx";
 
 /**
  * The delete of one voucher on the caller's transaction: stock and COGS
@@ -253,10 +189,16 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
       // Wrap balance sync and deletion in a transaction
       const lanCapture = isPhase9LanPrimary();
+      // A PC's offline copy records Payment / Receipt deletes for the cloud and
+      // refuses every other delete (it could not be replayed).
+      const pcEntry = pcLocalEntryMode();
+      const isPaymentVoucher = voucher.voucherType === "Payment" || voucher.voucherType === "Receipt";
+      if (pcEntry && !isPaymentVoucher) {
+        return res.status(423).json({ code: "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED" });
+      }
       // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
       const offlinePayment =
-        (voucher.voucherType === "Payment" || voucher.voucherType === "Receipt") &&
-        phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4);
+        isPaymentVoucher && (pcEntry || phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4));
       if (lanCapture && voucher.voucherType !== "Sales" && !offlinePayment) {
         return res.status(409).json({
           code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
@@ -265,7 +207,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
       }
       await db.transaction(async (tx) => {
         const paymentBefore =
-          lanCapture && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
+          (lanCapture || pcEntry) && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
         await deleteVoucherTx(tx, {
           companyId,
           voucher,
@@ -279,7 +221,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
         if (lanCapture && voucher.voucherType === "Sales") {
           await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
         }
-        if (lanCapture && offlinePayment && paymentBefore) {
+        if (pcEntry) assertPcLocalCaptured(Boolean(offlinePayment && paymentBefore));
+        if ((lanCapture || pcEntry) && offlinePayment && paymentBefore) {
           await capturePhase9PaymentDeleteTx(tx, {
             ...paymentFollowUpActor(req),
             localVoucherId: voucher.id,

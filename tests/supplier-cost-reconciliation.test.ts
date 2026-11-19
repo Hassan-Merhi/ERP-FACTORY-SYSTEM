@@ -30,7 +30,8 @@ describe("Sales Report historical-profit consistency", () => {
   it("shows no supplier reconciliation controls anywhere in the built Sales Report", () => {
     const filename = "client/src/pages/SalesReportLegacy.tsx";
     const source = read(filename);
-    const built = transformSalesReportBandwidthSource(source, path.join(root, filename));
+    // The bandwidth transform is integrated into the source; the plugin returns null for it.
+    const built = transformSalesReportBandwidthSource(source, path.join(root, filename)) ?? source;
     expect(built).toBeTruthy();
     expect(built).toContain("const displayedCostProfit = totals.costProfit;");
     expect(built).not.toContain("SupplierCostReconciliationPanel");

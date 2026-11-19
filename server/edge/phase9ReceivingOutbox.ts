@@ -6,6 +6,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
+import { capturePcLocalEnvelopeTx, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { resultRows } from "../lib/queryResult";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
@@ -35,8 +36,14 @@ export async function phase9ReceivingLineDigestTx(
   );
 }
 
-/** Record the committed offload in the SAME transaction; no-op off the LAN primary. */
+/** Record the committed offload in the SAME transaction (LAN primary or a PC in entry mode); no-op elsewhere. */
 export async function capturePhase9ReceivingTx(tx: DbTransaction, evidence: Phase9ReceivingEvidence): Promise<void> {
+  // A PC in entry mode: the finished envelope goes to its own outbox, in this transaction.
+  if (pcLocalEntryMode()) {
+    const event = phase9ReceivingEnvelope(evidence);
+    await capturePcLocalEnvelopeTx(tx, event, event.localOffloadId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
   const event = phase9ReceivingEnvelope(evidence);

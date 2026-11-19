@@ -11,42 +11,12 @@ import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, RefreshCw, Save, Truck } from "lucide-react";
-
-interface TrackingDefaultSupplier {
-  supplierId: number;
-  supplierCode: string;
-  supplierName: string;
-  locationId: number | null;
-  agentName: string | null;
-  shopName: string | null;
-  dutyFee: string | null;
-}
-
-interface TrackingLocation {
-  id: number;
-  code: string;
-  name: string;
-}
-
-interface TrackingDefaultsResponse {
-  suppliers: TrackingDefaultSupplier[];
-  locations: TrackingLocation[];
-  agentOptions: string[];
-}
-
-interface DraftValue {
-  shopName: string;
-  agentName: string;
-  dutyFee: string;
-}
-
-function toDraft(row: TrackingDefaultSupplier): DraftValue {
-  return {
-    shopName: row.shopName ?? "",
-    agentName: row.agentName ?? "",
-    dutyFee: row.dutyFee ?? "",
-  };
-}
+import {
+  toDraft,
+  type TrackingDefaultSupplier,
+  type TrackingDefaultsResponse,
+  type DraftValue,
+} from "./SupplierTrackingDefaultsTabHelpers";
 
 export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?: boolean }) {
   const { toast } = useToast();

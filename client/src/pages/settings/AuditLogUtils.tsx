@@ -9,6 +9,8 @@ import {
   securityActionSummary,
   securityParts,
 } from "./normalizeAuditChanges";
+import { MODULE_LABEL_MAP, ACTION_LABEL_MAP, type BadgeVariant } from "./AuditLogUtilsModel";
+export { ALL_SUPPORTED_ACTIONS } from "./AuditLogUtilsModel";
 export {
   BUSINESS_FIELD_LABELS,
   fieldLabel,
@@ -87,49 +89,6 @@ export function fmtBusinessValue(field: string, value: unknown): string {
 
 // ── Module/table name mapping ────────────────────────────────────────────────
 
-const MODULE_LABEL_MAP: Record<string, string> = {
-  vouchers: "Vouchers",
-  voucher_entries: "Journal Entries",
-  ledger_accounts: "Accounts",
-  customers: "Customers",
-  suppliers: "Suppliers",
-  stock_items: "Stock Items",
-  inventory: "Inventory",
-  stock_transfers: "Stock Transfers",
-  stock_transfer_revisions: "Stock Transfer Revisions",
-  containers: "Containers",
-  factory_containers: "Factory Containers",
-  factory_offload_charges: "Post-Offload Charges",
-  factory_post_offload_charges: "Post-Offload Charges",
-  factory_container_commissions: "Container Commissions",
-  factory_container_freight: "Container Freight",
-  factory_container_extra_charges: "Container Extra Charges",
-  factory_mix_batches: "Mix Batches",
-  factory_mix_batch_sources: "Mix Batch Sources",
-  production_raw_stock: "Raw Material Stock",
-  factory_raw_stock: "Raw Material Stock",
-  factory_repairs: "Factory Repairs",
-  factory_fx_repairs: "FX Repairs",
-  factory_landed_cost_repairs: "Landed Cost Repairs",
-  bales: "Bales",
-  factory_bales: "Bales",
-  factory_customer_orders: "Factory Customer Orders",
-  users: "Users",
-  user_company_roles: "Roles & Permissions",
-  exchange_rates: "Exchange Rates",
-  company_settings: "Company Settings",
-  reports: "Reports",
-  security_events: "Security Events",
-  remote_support_sessions: "Remote Support",
-  payroll_workers: "Payroll Workers",
-  payroll_salaries: "Payroll Salaries",
-  rental_properties: "Rental Properties",
-  rental_payments: "Rental Payments",
-  pos_shifts: "POS Shifts",
-  pos_sales: "POS Sales",
-  pos_locations: "POS Locations",
-};
-
 /** Returns a human-readable title for a database table name. */
 export function tableShortName(t: string): string {
   if (!t) return "Unknown";
@@ -141,44 +100,6 @@ export function tableShortName(t: string): string {
 }
 
 // ── Action labels and badge variants ─────────────────────────────────────────
-
-const ACTION_LABEL_MAP: Record<string, string> = {
-  create: "Created",
-  update: "Updated",
-  delete: "Deleted",
-  restore: "Restored",
-  reverse: "Reversed",
-  void: "Voided",
-  return: "Returned",
-  recalculate: "Recalculated",
-  repair: "Repaired",
-  import: "Imported",
-  export: "Exported",
-  send_whatsapp: "Sent to WhatsApp",
-  send_email: "Sent by Email",
-  approve: "Approved",
-  cancel: "Cancelled",
-  offload: "Offloaded",
-  transfer: "Transferred",
-  adjust: "Adjusted",
-  login: "Login",
-  permission_change: "Permissions Changed",
-  settings_change: "Settings Changed",
-  remote_support_session_started: "Support Session Started",
-  remote_support_session_stopped: "Support Session Stopped",
-  remote_support_screen_watch_started: "Screen Watch Started",
-  remote_support_screen_watch_ended: "Screen Watch Ended",
-  remote_support_mouse_authorized: "Mouse Control Enabled",
-  remote_support_mouse_revoked: "Mouse Control Disabled",
-  remote_support_keyboard_authorized: "Keyboard Control Enabled",
-  remote_support_keyboard_revoked: "Keyboard Control Disabled",
-  remote_support_mouse_command: "Mouse Command Requested",
-  remote_support_mouse_result: "Mouse Command Result",
-  remote_support_keyboard_command: "Keyboard Command Requested",
-  remote_support_keyboard_result: "Keyboard Command Result",
-  remote_support_command_blocked: "Remote Command Blocked",
-  remote_support_permission_denied: "Remote Support Permission Denied",
-};
 
 /** Returns a readable label for an audit action string. */
 export function actionLabel(action: string): string {
@@ -195,8 +116,6 @@ export function actionLabel(action: string): string {
   return fieldLabel(action);
 }
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
 /** Maps an audit action to a shadcn Badge variant for color-coding. */
 export function actionBadgeVariant(action: string): BadgeVariant {
   const key = (action || "").toLowerCase();
@@ -209,31 +128,6 @@ export function actionBadgeVariant(action: string): BadgeVariant {
   if (key === "create" || key === "approve" || key === "restore") return "default";
   return "secondary";
 }
-
-/** All action values accepted by the /api/audit-log endpoint. */
-export const ALL_SUPPORTED_ACTIONS = [
-  "create",
-  "update",
-  "delete",
-  "restore",
-  "reverse",
-  "void",
-  "return",
-  "recalculate",
-  "repair",
-  "import",
-  "export",
-  "send_whatsapp",
-  "send_email",
-  "approve",
-  "cancel",
-  "offload",
-  "transfer",
-  "adjust",
-  "login",
-  "permission_change",
-  "settings_change",
-] as const;
 
 // ── Record / diff helpers ────────────────────────────────────────────────────
 

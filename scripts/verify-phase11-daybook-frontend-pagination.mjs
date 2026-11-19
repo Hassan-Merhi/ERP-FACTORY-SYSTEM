@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
 const read = (relativePath) => fs.readFile(path.join(ROOT, relativePath), "utf8");
@@ -73,7 +74,12 @@ const exactMarkers = [
   'const handleExportDetailedToExcel = async () => {',
   "exportFactoryDaybookDetailed(filteredEntries, formatDisplayDate)",
 ];
-const sourceWithModel = `${source}\n${await read("client/src/pages/factory/daybook/useFactoryDaybookModel.ts")}`;
+const sourceWithModel = `${source}\n${readModuleFamily(path.join(ROOT, "client/src/pages/factory/daybook/useFactoryDaybookModel.ts"))}`;
+// The model now carries the transform's output in source (the plugin skips it
+// there); its markers replace the pre-transform ones in that case.
+const transformCommitted = /\(await fetchAllDaybookEntries\(new URLSearchParams\((?:\w+\.)?queryParams\)\)\)\.filter\(/.test(
+  sourceWithModel
+);
 assert.match(
   sourceWithModel,
   /return fetchAllDaybookEntries\(new URLSearchParams\(queryParams\), signal\);/,
@@ -84,7 +90,15 @@ assert.doesNotMatch(
   /Loading remaining transactions:/,
   "Daybook must not display partial loaded counts or partial accounting totals"
 );
-for (const marker of exactMarkers) {
+const committedMarkers = [
+  'import { fetchAllDaybookEntries } from "@/lib/daybookPaginationClient";',
+  'queryParams.set("startDate", startDate);',
+  'queryParams.set("endDate", endDate);',
+  'if (statusFilter !== "all") queryParams.set("optionalStatus", statusFilter);',
+  "exportFactoryDaybookSummary(exportEntries, ",
+  "exportFactoryDaybookDetailed(exportEntries, ",
+];
+for (const marker of transformCommitted ? committedMarkers : exactMarkers) {
   const first = sourceWithModel.indexOf(marker);
   assert.ok(first >= 0, `Missing exact Daybook source marker: ${marker}`);
   assert.equal(

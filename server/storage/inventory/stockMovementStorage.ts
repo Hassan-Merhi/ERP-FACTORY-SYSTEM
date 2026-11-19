@@ -1,14 +1,22 @@
-import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import { getLocationById } from "./locationInventoryStorage";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
   postInventoryMovementJournalTx,
   type InventoryMovementLine,
 } from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
+import { getStockGroupLocationArchiveById } from "./stockMovementStorageHelpers";
+import { archiveStockGroupAtLocationPart1 } from "./archiveStockGroupAtLocationPart1";
+export {
+  getStockGroupLocationArchives,
+  getStockGroupLocationArchiveById,
+  getStockGroupLocationArchiveItems,
+  deleteStockGroupLocationArchive,
+  permanentlyDeleteStockGroupLocationArchive,
+} from "./stockMovementStorageHelpers";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -23,72 +31,11 @@ export async function archiveStockGroupAtLocation(
   archivedBy: string,
   notes?: string
 ): Promise<schema.StockGroupLocationArchive> {
-  const location = await getLocationById(locationId);
-
-  let stockGroupName = "Uncategorized";
-  let uncategorizedGroupId: number | null = null;
-
-  if (stockGroupId !== null) {
-    const stockGroup = await db
-      .select()
-      .from(schema.stockGroups)
-      .where(eq(schema.stockGroups.id, stockGroupId))
-      .limit(1);
-    if (!stockGroup.length) throw new Error("Stock group not found");
-    stockGroupName = stockGroup[0].name;
-  } else {
-    const uncategorizedGroup = await db
-      .select()
-      .from(schema.stockGroups)
-      .where(and(eq(schema.stockGroups.companyId, companyId), sql`UPPER(${schema.stockGroups.code}) = 'UNCATEGORIZED'`))
-      .limit(1);
-    if (uncategorizedGroup.length > 0) uncategorizedGroupId = uncategorizedGroup[0].id;
-  }
-
-  if (!location) throw new Error("Location not found");
-
-  let stockItems;
-  if (stockGroupId !== null) {
-    stockItems = await db
-      .select()
-      .from(schema.stockItems)
-      .where(
-        and(
-          eq(schema.stockItems.companyId, companyId),
-          eq(schema.stockItems.stockGroupId, stockGroupId),
-          isNull(schema.stockItems.deletedAt)
-        )
-      );
-  } else {
-    if (uncategorizedGroupId !== null) {
-      stockItems = await db
-        .select()
-        .from(schema.stockItems)
-        .where(
-          and(
-            eq(schema.stockItems.companyId, companyId),
-            or(isNull(schema.stockItems.stockGroupId), eq(schema.stockItems.stockGroupId, uncategorizedGroupId)),
-            isNull(schema.stockItems.deletedAt)
-          )
-        );
-    } else {
-      stockItems = await db
-        .select()
-        .from(schema.stockItems)
-        .where(
-          and(
-            eq(schema.stockItems.companyId, companyId),
-            isNull(schema.stockItems.stockGroupId),
-            isNull(schema.stockItems.deletedAt)
-          )
-        );
-    }
-  }
-
-  if (stockItems.length === 0) throw new Error("No stock items found in this stock group");
-
-  const stockItemIds = stockItems.map((item) => item.id);
-  const occurredAt = new Date().toISOString();
+  const { location, stockGroupName, stockItems, stockItemIds, occurredAt } = await archiveStockGroupAtLocationPart1(
+    companyId,
+    locationId,
+    stockGroupId
+  );
   // Wave 11: header, items, the stock change and its journal are one
   // transaction, so an archive can never exist without its stock having moved
   // (or the other way round).
@@ -208,42 +155,6 @@ export async function archiveStockGroupAtLocation(
 
     return archive;
   });
-}
-
-export async function getStockGroupLocationArchives(companyId: number): Promise<schema.StockGroupLocationArchive[]> {
-  return await db
-    .select()
-    .from(schema.stockGroupLocationArchives)
-    .where(
-      and(
-        eq(schema.stockGroupLocationArchives.companyId, companyId),
-        isNull(schema.stockGroupLocationArchives.deletedAt),
-        isNull(schema.stockGroupLocationArchives.restoredAt)
-      )
-    )
-    .orderBy(desc(schema.stockGroupLocationArchives.archivedAt));
-}
-
-export async function getStockGroupLocationArchiveById(
-  id: number,
-  companyId: number
-): Promise<schema.StockGroupLocationArchive | undefined> {
-  const [archive] = await db
-    .select()
-    .from(schema.stockGroupLocationArchives)
-    .where(
-      and(eq(schema.stockGroupLocationArchives.id, id), eq(schema.stockGroupLocationArchives.companyId, companyId))
-    );
-  return archive;
-}
-
-export async function getStockGroupLocationArchiveItems(
-  archiveId: number
-): Promise<schema.StockGroupLocationArchiveItem[]> {
-  return await db
-    .select()
-    .from(schema.stockGroupLocationArchiveItems)
-    .where(eq(schema.stockGroupLocationArchiveItems.archiveId, archiveId));
 }
 
 export async function restoreStockGroupLocationArchive(
@@ -367,22 +278,4 @@ export async function restoreStockGroupLocationArchive(
       .returning();
     return updated;
   });
-}
-
-export async function deleteStockGroupLocationArchive(archiveId: number, companyId: number): Promise<void> {
-  const archive = await getStockGroupLocationArchiveById(archiveId, companyId);
-  if (!archive) throw new Error("Archive not found");
-  await db
-    .update(schema.stockGroupLocationArchives)
-    .set({ deletedAt: sql`now()` })
-    .where(eq(schema.stockGroupLocationArchives.id, archiveId));
-}
-
-export async function permanentlyDeleteStockGroupLocationArchive(archiveId: number, companyId: number): Promise<void> {
-  const archive = await getStockGroupLocationArchiveById(archiveId, companyId);
-  if (!archive) throw new Error("Archive not found");
-  await db
-    .delete(schema.stockGroupLocationArchiveItems)
-    .where(eq(schema.stockGroupLocationArchiveItems.archiveId, archiveId));
-  await db.delete(schema.stockGroupLocationArchives).where(eq(schema.stockGroupLocationArchives.id, archiveId));
 }

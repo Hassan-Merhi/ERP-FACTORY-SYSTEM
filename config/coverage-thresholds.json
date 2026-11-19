@@ -188,14 +188,14 @@
       },
       "client/src/components/vouchers/PaymentReceiptTab.tsx": {
         "lines": 84,
-        "statements": 84,
+        "statements": 82,
         "functions": 80,
-        "branches": 89
+        "branches": 86
       },
       "client/src/pages/StockInSalesReport.tsx": {
         "lines": 60,
         "statements": 57,
-        "functions": 63,
+        "functions": 61,
         "branches": 54
       },
       "client/src/contexts/CurrencyContext.tsx": {

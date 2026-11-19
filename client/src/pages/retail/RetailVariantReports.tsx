@@ -9,81 +9,14 @@ import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getJson, money, type Brand, type Location, type RetailCatalogFacets } from "./retailInventoryTypes";
-
-interface StockRow {
-  variantId: number;
-  brand: string;
-  style: string;
-  color: string;
-  size: string;
-  barcode: string;
-  sku: string | null;
-  quantity: number;
-  lowStockThreshold: number;
-  stockValue: number;
-  locations: string;
-  lastSaleAt: string | null;
-}
-
-interface SalesRow {
-  variantId: number;
-  brand: string;
-  style: string;
-  color: string;
-  size: string;
-  barcode: string;
-  sku: string | null;
-  soldQuantity: number;
-  returnedQuantity: number;
-  netQuantity: number;
-  netRevenue: number;
-  netCost: number;
-  profit: number;
-}
-
-type ReportKind = "stock" | "sales";
-
-const selectClass = "h-10 px-2 text-sm";
-const ALL = "__all__";
-
-/** Filter dropdown whose "All" choice keeps the empty-string state value. */
-function FilterSelect({
-  label,
-  allLabel,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  allLabel: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
-  return (
-    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? "" : v)}>
-      <SelectTrigger className={selectClass} aria-label={label}>
-        <SelectValue placeholder={allLabel} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "All stock" },
-  { value: "in", label: "In stock" },
-  { value: "low", label: "Low stock" },
-  { value: "out", label: "Out of stock" },
-  { value: "slow", label: "Slow-moving" },
-];
+import {
+  selectClass,
+  FilterSelect,
+  STATUS_OPTIONS,
+  type StockRow,
+  type SalesRow,
+  type ReportKind,
+} from "./RetailVariantReportsParts";
 
 /** Exact-variant stock and sales reports by brand, style, color, size, barcode, SKU and location. */
 export function RetailVariantReports({ companyKey }: { companyKey: number }) {

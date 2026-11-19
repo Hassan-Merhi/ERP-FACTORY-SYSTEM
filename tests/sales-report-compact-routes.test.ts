@@ -4,6 +4,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { transformSalesReportBandwidthSource } from "../build/viteSalesReportBandwidthPlugin";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 /**
  * The Sales Report page does not request the endpoints written in its source.
@@ -122,13 +123,15 @@ function referencedIdentifiers(code: string): Set<string> {
 
 /** Sales-report URLs the built Sales Report pages fetch (raw lines included). */
 function clientRequestedSalesReportUrls(): string[] {
+  // Split pages keep part of their source in extracted siblings.
+  const family = (relativePath: string) => readModuleFamily(path.join(repoRoot, relativePath));
   const pageSources: Array<[string, string]> = [
-    ["client/src/pages/SalesReportLegacy.tsx", read("client/src/pages/SalesReportLegacy.tsx")],
+    ["client/src/pages/SalesReportLegacy.tsx", family("client/src/pages/SalesReportLegacy.tsx")],
     [
       "client/src/pages/salesreportdetail/useSalesReportDetailModel.ts",
-      read("client/src/pages/salesreportdetail/useSalesReportDetailModel.ts"),
+      family("client/src/pages/salesreportdetail/useSalesReportDetailModel.ts"),
     ],
-    ["client/src/pages/SalesReportComparison.tsx", read("client/src/pages/SalesReportComparison.tsx")],
+    ["client/src/pages/SalesReportComparison.tsx", family("client/src/pages/SalesReportComparison.tsx")],
   ];
 
   const urls = new Set<string>();
@@ -167,8 +170,9 @@ describe("compact sales-report routes are mounted by the live registry", () => {
 
   it("keeps the automatic COGS reconciliation query and its bindings in the built Sales Report", () => {
     const file = "client/src/pages/SalesReportLegacy.tsx";
-    const source = read(file);
-    const built = transformSalesReportBandwidthSource(source, path.join(repoRoot, file)) ?? source;
+    // The page is split across its module family; the bandwidth transform is integrated into it.
+    const source = readModuleFamily(path.join(repoRoot, file));
+    const built = transformSalesReportBandwidthSource(read(file), path.join(repoRoot, file)) ?? source;
 
     // The built page still requests the reconciliation endpoint...
     expect(clientRequestedSalesReportUrls()).toEqual(expect.arrayContaining(["/api/sales-report/cogs-reconciliation"]));

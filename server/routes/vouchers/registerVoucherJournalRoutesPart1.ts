@@ -1,7 +1,7 @@
 // Extracted from ./voucherJournalRoutes.ts to keep that module under the source-size cap.
 import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express } from "express";
-import { errorStatus, getErrorMessage } from "../../lib/httpHandlers";
+import { errorBody, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
@@ -243,7 +243,7 @@ export function registerVoucherJournalRoutesPart1(app: Express) {
         error,
       });
       logger.error("Error creating journal voucher:", { error: error });
-      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json(errorBody(error));
     }
   });
 }

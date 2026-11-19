@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSpreadsheetEditorState } from "./useSpreadsheetEditorState";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
+import { TOOLBAR_ITEMS } from "./SpreadsheetEditorConstants";
 
 function formatRelativeTime(ts: string | Date): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -29,53 +30,6 @@ function formatRelativeTime(ts: string | Date): string {
     day: "numeric",
   });
 }
-
-// Reorder toolbar so merge, colors, borders, conditionFormat, filter are
-// visible before the wide font-name / font-size selectors.
-const TOOLBAR_ITEMS = [
-  "undo",
-  "redo",
-  "|",
-  "bold",
-  "italic",
-  "underline",
-  "strike-through",
-  "|",
-  "font-color",
-  "background",
-  "border",
-  "|",
-  "merge-cell",
-  "|",
-  "horizontal-align",
-  "vertical-align",
-  "text-wrap",
-  "|",
-  "conditionFormat",
-  "filter",
-  "freeze",
-  "|",
-  "font",
-  "|",
-  "font-size",
-  "|",
-  "format-painter",
-  "clear-format",
-  "|",
-  "currency-format",
-  "percentage-format",
-  "number-decrease",
-  "number-increase",
-  "format",
-  "text-rotation",
-  "link",
-  "image",
-  "comment",
-  "quick-formula",
-  "dataVerification",
-  "screenshot",
-  "search",
-];
 
 export default function SpreadsheetEditor() {
   const {

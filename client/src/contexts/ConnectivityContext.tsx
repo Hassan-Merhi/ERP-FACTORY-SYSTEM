@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from "react";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { queryClient } from "@/lib/queryClient";
 import {
@@ -8,20 +8,13 @@ import {
   isDocumentVisible,
   runWhenIdle,
 } from "@/lib/mobilePerformance";
-
-export type ConnectivityStatus = "online" | "offline" | "syncing" | "error";
-
-interface ConnectivityContextValue {
-  status: ConnectivityStatus;
-  isOnline: boolean;
-  isSyncing: boolean;
-  lastSyncedAt: number | null;
-  pendingCount: number;
-  failedCount: number;
-  conflictCount: number;
-  triggerSync: () => void;
-  refreshCounts: () => Promise<void>;
-}
+import {
+  pingServer,
+  type ConnectivityStatus,
+  type ConnectivityContextValue,
+  type Props,
+} from "./ConnectivityContextHelpers";
+export type { ConnectivityStatus } from "./ConnectivityContextHelpers";
 
 const ConnectivityContext = createContext<ConnectivityContextValue>({
   status: "online",
@@ -37,28 +30,6 @@ const ConnectivityContext = createContext<ConnectivityContextValue>({
 
 export function useConnectivity(): ConnectivityContextValue {
   return useContext(ConnectivityContext);
-}
-
-const PING_TIMEOUT_MS = 5_000;
-
-async function pingServer(): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
-    const res = await fetch("/api/health", {
-      credentials: "include",
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    window.clearTimeout(timer);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-interface Props {
-  children: ReactNode;
 }
 
 function StubConnectivityProvider({ children }: Props) {
