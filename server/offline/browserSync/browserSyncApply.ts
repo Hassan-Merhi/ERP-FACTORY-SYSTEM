@@ -117,6 +117,12 @@ function refusalFrom(error: unknown): BrowserOperationRefusal {
 }
 
 /** Build and validate the evidence envelope; refusals are the browser's input being wrong. */
+/** Handler refusals that no retry can fix (the entry is refused, not retried). */
+const PERMANENT_APPLY_REFUSALS: ReadonlySet<string> = new Set([
+  "PHASE9_ATTACHMENT_FILE_NOT_STAGED",
+  "PHASE9_ATTACHMENT_FILE_SIZE_MISMATCH",
+]);
+
 /** Kinds a PC may deliver as a finished envelope, and their stream. */
 export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze({
   [PHASE9_PAYMENT_EDIT_KIND]: "payments",
@@ -437,6 +443,11 @@ export async function applyBrowserOperation(
       };
     }
     if (error instanceof Phase9StockItemNotYetSynced) return { status: "waiting", code: error.message };
+    // A PC sends a file's bytes before its record, so these cannot succeed on a
+    // retry: refuse the entry instead of answering "try again" forever.
+    if (error instanceof Error && PERMANENT_APPLY_REFUSALS.has(error.message)) {
+      return { status: "invalid", code: error.message };
+    }
     throw error;
   }
 }

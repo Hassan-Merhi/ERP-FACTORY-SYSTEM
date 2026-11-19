@@ -114,8 +114,23 @@ describe("PC offline file uploads: in the cloud", () => {
     const operationId = randomUUID();
     const envelope = phase9AttachmentEnvelope(evidence(operationId, 1_000_000_801, bytes, "missing.pdf"));
     const res = await agent.post("/api/offline/pc-sync/operations").send(operation(envelope, operationId));
-    expect(res.status).not.toBe(200);
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ code: "PHASE9_ATTACHMENT_FILE_NOT_STAGED" });
     expect(await filesNamed("missing.pdf")).toEqual([]);
+  });
+
+  it("refuses a record whose size does not describe its bytes", async () => {
+    const bytes = Buffer.from("%PDF-1.4 sized wrongly");
+    expect((await sendBytes(bytes, sha(bytes))).status).toBe(200);
+    const operationId = randomUUID();
+    const envelope = phase9AttachmentEnvelope({
+      ...evidence(operationId, 1_000_000_803, bytes, "wrong-size.pdf"),
+      fileSize: 1,
+    });
+    const res = await agent.post("/api/offline/pc-sync/operations").send(operation(envelope, operationId));
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ code: "PHASE9_ATTACHMENT_FILE_SIZE_MISMATCH" });
+    expect(await filesNamed("wrong-size.pdf")).toEqual([]);
   });
 
   it("stores a file once its bytes arrived, and only once", async () => {

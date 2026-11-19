@@ -75,6 +75,9 @@ async function apply(
   if (!context.siteId) throw new Phase9ApplyRefusal("PHASE9_ATTACHMENT_SITE_MISSING");
   const bytes = await readPhase9StagedFile(client, context.siteId, p.sha256);
   if (!bytes) throw new Phase9ApplyRefusal("PHASE9_ATTACHMENT_FILE_NOT_STAGED");
+  // Bytes are staged by their SHA-256; the record's size must describe them too
+  // (a PC sends its bytes on their own, so nothing else ties the two together).
+  if (bytes.length !== p.fileSize) throw new Phase9ApplyRefusal("PHASE9_ATTACHMENT_FILE_SIZE_MISMATCH");
 
   let folderId = p.folderId;
   if (folderId !== null) {
