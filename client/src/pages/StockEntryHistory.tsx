@@ -1,219 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignJustify, ChevronDown, ChevronRight, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/page-state";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useToast } from "@/hooks/use-toast";
-import { canUseFactorySurface } from "@/lib/factoryClientAccess";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import type { FactoryMyAccess } from "@shared/apiTypes";
 
-import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
-import type { StockEntryWorker } from "./stockentryhistory/derived";
-import type { BaleDetail, GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
-import { buildStockEntryWorkerGroups, buildStockEntryWorkerTargets } from "./stockEntryHistoryWorkerGroups";
+import type { StockEntryHistoryProps } from "./stockentryhistory/types";
 import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
 import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
-import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
-import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import { fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
+import { groupKey } from "./stockentryhistory/groupBaleHelpers";
+import { formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
+import { useStockEntryHistoryModel } from "./StockEntryHistoryModel";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
-  const { formatDisplayDate } = useDateFormat();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { selectedCompany } = useCompany();
-  const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    staleTime: 5 * 60_000,
-  });
-  const companyAccess = myAccess?.companyId === selectedCompany?.id && selectedCompany?.id ? myAccess : undefined;
-  const canReadWorkerPicker =
-    canUseFactorySurface(companyAccess, "factory/stock-entry", ["hide_tab_stockentry_history"]) ||
-    canUseFactorySurface(companyAccess, "factory/payroll-hub", ["hide_tab_payrollhub_workers"]);
-  const canReadProductionTargets = canUseFactorySurface(companyAccess, "factory/stock-entry", [
-    "hide_tab_stockentry_production_targets",
-  ]);
-  const today = new Date().toLocaleDateString("en-CA");
-
-  const [fromDate, setFromDate] = useState(today);
-  const [toDate, setToDate] = useState(today);
-  const [selectedWorkerId, setSelectedWorkerId] = useState("all");
-  const dateRangeValid = !!fromDate && !!toDate && fromDate <= toDate;
-  const isSingleDay = dateRangeValid && fromDate === toDate;
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [includeUnassigned, setIncludeUnassigned] = useState(true);
-  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"condensed" | "detailed">("condensed");
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    onActiveDateChange?.(isSingleDay ? fromDate : null);
-  }, [onActiveDateChange, isSingleDay, fromDate]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(timeout);
-  }, [search]);
-
-  const useLite = viewMode === "condensed";
-  const params = new URLSearchParams();
-  if (dateRangeValid) {
-    params.set("startDate", fromDate);
-    params.set("endDate", toDate);
-  }
-  if (selectedWorkerId !== "all") params.set("workerId", selectedWorkerId);
-  if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-  if (!includeUnassigned) params.set("includeUnassigned", "false");
-  if (useLite) params.set("lite", "1");
-  params.set("limit", "250");
-
-  const {
-    data: historyPages,
-    isLoading,
-    isError,
-    refetch,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery<StockEntryHistoryPage, Error>({
-    queryKey: companyQueryKey("/api/factory/bales/stock-entry-history", selectedCompany?.id, params.toString()),
-    initialPageParam: 1,
-    queryFn: async ({ pageParam }) => {
-      const pageParams = new URLSearchParams(params);
-      pageParams.set("page", String(pageParam));
-      const response = await fetch(`/api/factory/bales/stock-entry-history?${pageParams.toString()}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error(`Stock entry history failed: ${response.status}`);
-      const data = await response.json();
-      if (!Array.isArray(data.items)) throw new Error("Invalid response: items is not an array");
-      return data as StockEntryHistoryPage;
-    },
-    getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.page + 1 : undefined),
-    enabled: Boolean(selectedCompany?.id) && dateRangeValid,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
-
-  useEffect(() => {
-    const element = loadMoreRef.current;
-    if (!element || !hasNextPage || isFetchingNextPage || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) void fetchNextPage();
-      },
-      { rootMargin: "300px" }
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, viewMode]);
-
-  const firstPage = historyPages?.pages[0];
-  const groups: GroupRow[] = useMemo(() => historyPages?.pages.flatMap((page) => page.items) ?? [], [historyPages]);
-  const allBales = useMemo(() => groups.flatMap((group) => group.bales ?? []), [groups]);
-  const totalBales = useMemo(() => groups.reduce((sum, group) => sum + group.baleCount, 0), [groups]);
-  const totalWeight = useMemo(
-    () => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0),
-    [groups]
-  );
-
-  const { data: workers = [] } = useQuery<StockEntryWorker[]>({
-    queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    enabled: canReadWorkerPicker,
-  });
-
-  const targetDate = isSingleDay ? fromDate : null;
-  const { data: productionTargets } = useQuery<ProductionResponse>({
-    // prettier-ignore
-    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", "daily", targetDate, targetDate),
-    queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
-    enabled: canReadProductionTargets && Boolean(targetDate),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
-
-  const workerTargets = useMemo(() => buildStockEntryWorkerTargets(productionTargets), [productionTargets]);
-
-  const workerGroups = useMemo(
-    () => buildStockEntryWorkerGroups(groups, workerTargets, workers),
-    [groups, workerTargets, workers]
-  );
-
-  const expandedGroupBaleKeys = useMemo(
-    () => Array.from(expandedKeys).filter((key) => key.endsWith("-bales")),
-    [expandedKeys]
-  );
-  const groupBaleQueries = useQueries({
-    queries: expandedGroupBaleKeys.map((key) => {
-      const baseKey = key.replace(/-bales$/, "");
-      const group = groups.find((item) => groupKey(item) === baseKey);
-      if (!group) {
-        return {
-          queryKey: ["stock-entry-history", selectedCompany?.id ?? "no-company", "missing-group", key],
-          queryFn: async () => [] as BaleDetail[],
-          enabled: false,
-        };
-      }
-
-      const groupParams = new URLSearchParams();
-      groupParams.set("startDate", group.stockEntryDate);
-      groupParams.set("endDate", group.stockEntryDate);
-      if (group.workerId) groupParams.set("workerId", String(group.workerId));
-      if (group.productId) groupParams.set("productId", String(group.productId));
-      if (group.erpLocationId) groupParams.set("locationId", String(group.erpLocationId));
-      if (debouncedSearch.trim()) groupParams.set("search", debouncedSearch.trim());
-
-      return {
-        queryKey: companyQueryKey(
-          "/api/factory/bales/stock-entry-history/group",
-          selectedCompany?.id,
-          groupParams.toString()
-        ),
-        queryFn: (): Promise<BaleDetail[]> =>
-          fetchAllStockEntryHistoryPages(groupParams).then((rows) => rows.flatMap((item) => item.bales ?? [])),
-        staleTime: 5 * 60 * 1000,
-        refetchOnWindowFocus: false,
-        enabled: useLite && Boolean(selectedCompany?.id),
-      };
-    }),
-  });
-
-  const { getGroupBales, resolveGroupBaleIds, isGroupBalesLoading } = createStockEntryHistoryGroupBaleHelpers({
-    useLite,
-    expandedGroupBaleKeys,
-    groupBaleQueries,
-    queryClient,
-    params,
-    companyId: selectedCompany?.id,
-  });
-
-  function toggleExpand(key: string) {
-    setExpandedKeys((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  const { updateDateMutation, bulkAssignMutation } = useStockEntryHistoryMutations({
-    fromActive: isSingleDay,
-    fromDate: fromDate || today,
-    today,
-    setEditingDateKey,
-  });
+  const seh = useStockEntryHistoryModel({ onActiveDateChange });
 
   return (
     <div className="p-4 space-y-3">
@@ -230,10 +30,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
 
         <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
           <Button
-            variant={viewMode === "condensed" ? "default" : "ghost"}
+            variant={seh.viewMode === "condensed" ? "default" : "ghost"}
             size="sm"
             className="h-7 px-2.5 text-xs rounded-md"
-            onClick={() => setViewMode("condensed")}
+            onClick={() => seh.setViewMode("condensed")}
             data-testid="button-view-condensed"
             data-remote-control-safe="true"
             data-remote-control-action="toggle-view"
@@ -241,10 +41,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
             <AlignJustify className="w-3 h-3 mr-1" /> Condensed
           </Button>
           <Button
-            variant={viewMode === "detailed" ? "default" : "ghost"}
+            variant={seh.viewMode === "detailed" ? "default" : "ghost"}
             size="sm"
             className="h-7 px-2.5 text-xs rounded-md"
-            onClick={() => setViewMode("detailed")}
+            onClick={() => seh.setViewMode("detailed")}
             data-testid="button-view-detailed"
             data-remote-control-safe="true"
             data-remote-control-action="toggle-view"
@@ -255,23 +55,23 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       </div>
 
       <HistoryFilters
-        fromDate={fromDate}
-        toDate={toDate}
-        onFromDateChange={setFromDate}
-        onToDateChange={setToDate}
-        selectedWorkerId={selectedWorkerId}
+        fromDate={seh.fromDate}
+        toDate={seh.toDate}
+        onFromDateChange={seh.setFromDate}
+        onToDateChange={seh.setToDate}
+        selectedWorkerId={seh.selectedWorkerId}
         onWorkerChange={(workerId) => {
-          setSelectedWorkerId(workerId);
-          if (workerId !== "all") setViewMode("detailed");
+          seh.setSelectedWorkerId(workerId);
+          if (workerId !== "all") seh.setViewMode("detailed");
         }}
-        workers={workers}
-        groups={groups}
-        search={search}
-        onSearchChange={setSearch}
-        includeUnassigned={includeUnassigned}
-        onIncludeUnassignedChange={setIncludeUnassigned}
+        workers={seh.workers}
+        groups={seh.groups}
+        search={seh.search}
+        onSearchChange={seh.setSearch}
+        includeUnassigned={seh.includeUnassigned}
+        onIncludeUnassignedChange={seh.setIncludeUnassigned}
       />
-      {!dateRangeValid && (
+      {!seh.dateRangeValid && (
         <p className="text-xs text-destructive">Choose a valid From and To date (From must be on or before To).</p>
       )}
 
@@ -279,25 +79,25 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-slate-500/10 border-slate-500/20">
           <span className="text-xs font-semibold text-slate-500">Groups</span>
           <span className="text-sm font-bold tabular-nums text-slate-600 dark:text-slate-300">
-            {(firstPage?.total ?? groups.length).toLocaleString()}
+            {(seh.firstPage?.total ?? seh.groups.length).toLocaleString()}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
           <span className="text-xs font-semibold text-emerald-500">Bales</span>
           <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-            {(firstPage?.totalBales ?? totalBales).toLocaleString()}
+            {(seh.firstPage?.totalBales ?? seh.totalBales).toLocaleString()}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-sky-500/10 border-sky-500/20">
           <span className="text-xs font-semibold text-sky-500">Weight</span>
           <span className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">
-            {formatDailyNum(firstPage?.totalWeight ?? totalWeight)}
+            {formatDailyNum(seh.firstPage?.totalWeight ?? seh.totalWeight)}
           </span>
           <span className="text-xs text-sky-600/70 dark:text-sky-400/70">kg</span>
         </div>
       </div>
 
-      {viewMode === "condensed" && (
+      {seh.viewMode === "condensed" && (
         <div className="rounded-xl border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-30 bg-muted border-b-2 border-border/60">
@@ -322,30 +122,30 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
+              {seh.isLoading && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               )}
-              {!isLoading && isError && !historyPages && (
+              {!seh.isLoading && seh.isError && !seh.historyPages && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8">
-                    <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
+                    <ErrorState onAction={() => void seh.refetch()} actionLabel="Try again" />
                   </td>
                 </tr>
               )}
-              {!isLoading && !(isError && !historyPages) && workerGroups.length === 0 && (
+              {!seh.isLoading && !(seh.isError && !seh.historyPages) && seh.workerGroups.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     No stock entry records found for the selected filters.
                   </td>
                 </tr>
               )}
-              {workerGroups.map((workerGroup) => {
-                const workerExpanded = expandedKeys.has(workerGroup.workerKey);
-                const targetInfo = workerGroup.workerId != null ? workerTargets[workerGroup.workerId] : undefined;
+              {seh.workerGroups.map((workerGroup) => {
+                const workerExpanded = seh.expandedKeys.has(workerGroup.workerKey);
+                const targetInfo = workerGroup.workerId != null ? seh.workerTargets[workerGroup.workerId] : undefined;
                 const target = targetInfo?.targetBales ?? 0;
                 const workerCount = targetInfo?.workerCount ?? 0;
                 const diff = (targetInfo?.producedBales ?? 0) - target;
@@ -354,7 +154,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                   <tr
                     key={workerGroup.workerKey}
                     className="border-t hover-elevate cursor-pointer bg-muted/30"
-                    onClick={() => toggleExpand(workerGroup.workerKey)}
+                    onClick={() => seh.toggleExpand(workerGroup.workerKey)}
                     data-testid={`row-worker-${workerGroup.workerKey}`}
                   >
                     <td className="px-3 py-2 text-muted-foreground">
@@ -408,12 +208,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                           <tbody>
                             {workerGroup.groups.map((group) => {
                               const key = groupKey(group);
-                              const groupExpanded = expandedKeys.has(key + "-bales");
+                              const groupExpanded = seh.expandedKeys.has(key + "-bales");
                               return [
                                 <tr
                                   key={key}
                                   className="border-t border-border/40 hover-elevate cursor-pointer"
-                                  onClick={() => toggleExpand(key + "-bales")}
+                                  onClick={() => seh.toggleExpand(key + "-bales")}
                                   data-testid={`row-group-${key}`}
                                 >
                                   <td className="px-8 py-1.5 text-muted-foreground">
@@ -427,16 +227,16 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                     <StockEntryHistoryEditableDateCell
                                       dateStr={group.stockEntryDate}
                                       editKey={`group-${key}`}
-                                      editingDateKey={editingDateKey}
-                                      setEditingDateKey={setEditingDateKey}
-                                      formatDisplayDate={formatDisplayDate}
+                                      editingDateKey={seh.editingDateKey}
+                                      setEditingDateKey={seh.setEditingDateKey}
+                                      formatDisplayDate={seh.formatDisplayDate}
                                       onSave={async (newDate) => {
-                                        const baleIds = await resolveGroupBaleIds(group);
+                                        const baleIds = await seh.resolveGroupBaleIds(group);
                                         if (baleIds.length === 0) {
-                                          toast({ title: "No bales found", variant: "destructive" });
+                                          seh.toast({ title: "No bales found", variant: "destructive" });
                                           return;
                                         }
-                                        updateDateMutation.mutate({ ids: baleIds, stockEntryDate: newDate });
+                                        seh.updateDateMutation.mutate({ ids: baleIds, stockEntryDate: newDate });
                                       }}
                                     />
                                   </td>
@@ -459,16 +259,16 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                       value={group.workerId ? String(group.workerId) : ""}
                                       onValueChange={async (value) => {
                                         const workerId = parseInt(value, 10);
-                                        const baleIds = await resolveGroupBaleIds(group);
+                                        const baleIds = await seh.resolveGroupBaleIds(group);
                                         if (baleIds.length === 0) {
-                                          toast({
+                                          seh.toast({
                                             title: "Reassign failed",
                                             description: "Could not find any bales for this group.",
                                             variant: "destructive",
                                           });
                                           return;
                                         }
-                                        bulkAssignMutation.mutate({ baleIds, workerId });
+                                        seh.bulkAssignMutation.mutate({ baleIds, workerId });
                                       }}
                                     >
                                       <SelectTrigger
@@ -478,7 +278,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                         <SelectValue placeholder="Reassign…" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {workers
+                                        {seh.workers
                                           .filter((worker) => worker.active)
                                           .map((worker) => (
                                             <SelectItem key={worker.id} value={String(worker.id)}>
@@ -502,14 +302,14 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {isGroupBalesLoading(group) ? (
+                                          {seh.isGroupBalesLoading(group) ? (
                                             <tr>
                                               <td colSpan={4} className="py-2 text-xs text-muted-foreground">
                                                 Loading bale details…
                                               </td>
                                             </tr>
                                           ) : (
-                                            getGroupBales(group).map((bale) => (
+                                            seh.getGroupBales(group).map((bale) => (
                                               <tr
                                                 key={bale.id}
                                                 className="border-t border-border/30"
@@ -550,22 +350,27 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
         </div>
       )}
 
-      {viewMode === "detailed" && (
+      {seh.viewMode === "detailed" && (
         <DetailedHistoryTable
-          isLoading={isLoading}
-          allBales={allBales}
-          workers={workers}
-          editingDateKey={editingDateKey}
-          setEditingDateKey={setEditingDateKey}
-          formatDisplayDate={formatDisplayDate}
-          onUpdateDate={(baleId, stockEntryDate) => updateDateMutation.mutate({ ids: [baleId], stockEntryDate })}
-          onAssignWorker={(baleId, workerId) => bulkAssignMutation.mutate({ baleIds: [baleId], workerId })}
+          isLoading={seh.isLoading}
+          allBales={seh.allBales}
+          workers={seh.workers}
+          editingDateKey={seh.editingDateKey}
+          setEditingDateKey={seh.setEditingDateKey}
+          formatDisplayDate={seh.formatDisplayDate}
+          onUpdateDate={(baleId, stockEntryDate) => seh.updateDateMutation.mutate({ ids: [baleId], stockEntryDate })}
+          onAssignWorker={(baleId, workerId) => seh.bulkAssignMutation.mutate({ baleIds: [baleId], workerId })}
         />
       )}
-      {hasNextPage && (
-        <div ref={loadMoreRef} className="flex justify-center pt-2">
-          <Button variant="outline" size="sm" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? "Loading more entries…" : "Load more entries"}
+      {seh.hasNextPage && (
+        <div ref={seh.loadMoreRef} className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void seh.fetchNextPage()}
+            disabled={seh.isFetchingNextPage}
+          >
+            {seh.isFetchingNextPage ? "Loading more entries…" : "Load more entries"}
           </Button>
         </div>
       )}

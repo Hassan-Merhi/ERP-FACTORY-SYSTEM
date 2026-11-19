@@ -1,249 +1,32 @@
-import { searchAny } from "@shared/searchNormalization";
-import type { ClientErrorLike } from "@/lib/clientError";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient as useTQClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Radio,
   Loader2,
   Package,
-  Pencil,
   Ship,
   Truck,
-  CheckCircle2,
   DollarSign,
   Clock,
   Filter,
   ChevronDown,
   Scale,
   Upload,
-  Copy,
   RefreshCcw,
   CalendarDays,
-  LayoutList,
-  AlertTriangle,
-  FileCheck2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import type { ContainerWithSupplier, OtwTrackingTabProps } from "./factoryotwtrackingtab/types";
-import {
-  STATUS_ACTIVE,
-  calcDelayDays,
-  ccySym,
-  containerCost,
-  fmtAmt,
-  isOverdue,
-  num,
-} from "./factoryotwtrackingtab/utils";
+import type { OtwTrackingTabProps } from "./factoryotwtrackingtab/types";
+import { fmtAmt } from "./factoryotwtrackingtab/utils";
 import { SummaryCard } from "./factoryotwtrackingtab/components/SummaryCard";
-import { EtaCell } from "./factoryotwtrackingtab/components/EtaCell";
-import { NotesCell } from "./factoryotwtrackingtab/components/NotesCell";
-import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import type { AuthMe } from "@shared/apiTypes";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { SearchField } from "@/components/ui/search-field";
+import { useFactoryOtwTrackingTabModel } from "./FactoryOtwTrackingTabModel";
+import { FactoryOtwTrackingTable } from "./FactoryOtwTrackingTable";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const tqClient = useTQClient();
-  // ETA, docs and notes edit existing containers; read-only roles see them without editors.
-  const recordChanges = useExistingRecordChangeAccess();
-  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const [supplierFilter, setSupplierFilter] = useState<string>("all");
-  const [freightFilter, setFreightFilter] = useState<string>("all");
-  const [weightFilter, setWeightFilter] = useState<string>("all");
-  const [docsFilter, setDocsFilter] = useState<string>("all");
-  const [delayedFilter, setDelayedFilter] = useState<string>("all");
-  const [sortOrder, setSortOrder] = useState<string>("DEFAULT");
-  const [search, setSearch] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [detailedView, setDetailedView] = useState(false);
-  // Use activeOnly=true so the backend pre-filters to PENDING/IN_TRANSIT/ARRIVED.
-  // Canonical scoped query key retains the URL-first prefix for invalidations.
-  const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({
-    queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id, "otw"),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/containers?activeOnly=true", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch containers");
-      return res.json();
-    },
-  });
-  const otwContainers = (containers || []).filter((c) => STATUS_ACTIVE.has(c.status));
-  // Supplier list for filter
-  const suppliers = Array.from(
-    new Map(otwContainers.map((c) => [String(c.supplierId ?? "none"), c.supplierName || "No Supplier"])).entries()
-  ).sort((a, b) => a[1].localeCompare(b[1]));
-  // Apply filters + sort
-  let filtered = otwContainers.filter((c) => {
-    if (supplierFilter !== "all" && String(c.supplierId ?? "none") !== supplierFilter) return false;
-    if (freightFilter === "has_freight" && !(num(c.freight) > 0)) return false;
-    if (freightFilter === "no_freight" && num(c.freight) > 0) return false;
-    if (weightFilter === "has_weight" && !(num(c.totalKg) > 0)) return false;
-    if (weightFilter === "no_weight" && num(c.totalKg) > 0) return false;
-    if (docsFilter === "received" && !c.otwDocsReceived) return false;
-    if (docsFilter === "not_received" && !!c.otwDocsReceived) return false;
-    if (delayedFilter === "delayed" && calcDelayDays(c) === 0) return false;
-    if (delayedFilter === "overdue" && !isOverdue(c)) return false;
-    if (delayedFilter === "on_time" && (!c.arrivalDate || isOverdue(c))) return false;
-    if (delayedFilter === "eta_missing" && !!c.arrivalDate) return false;
-    if (search.trim()) {
-      if (!searchAny(search, c.containerNumber, c.supplierName)) return false;
-    }
-    return true;
-  });
-  // Sort
-  filtered = [...filtered].sort((a, b) => {
-    if (sortOrder === "ETA_ASC" || sortOrder === "ETA_DESC") {
-      const da = a.arrivalDate ? new Date(a.arrivalDate).getTime() : sortOrder === "ETA_ASC" ? Infinity : -Infinity;
-      const db = b.arrivalDate ? new Date(b.arrivalDate).getTime() : sortOrder === "ETA_ASC" ? Infinity : -Infinity;
-      if (da !== db) return sortOrder === "ETA_ASC" ? da - db : db - da;
-    }
-    const sa = (a.supplierName || "").toLowerCase();
-    const sb = (b.supplierName || "").toLowerCase();
-    return sa.localeCompare(sb);
-  });
-  // Summary stats
-  const inTransit = otwContainers.filter((c) => c.status === "IN_TRANSIT").length;
-  const arrived = otwContainers.filter((c) => c.status === "ARRIVED").length;
-  const delayed = otwContainers.filter((c) => calcDelayDays(c) > 0).length;
-  // Cost totals grouped by currency
-  const costByCurrency = filtered.reduce<Record<string, { symbol: string; amount: number }>>((acc, c) => {
-    const { symbol, amount } = containerCost(c);
-    const ccy = c.currencyCode || "USD";
-    if (amount > 0) {
-      if (!acc[ccy]) acc[ccy] = { symbol, amount: 0 };
-      acc[ccy].amount += amount;
-    }
-    return acc;
-  }, {});
-  // Freight totals grouped by currency
-  const freightByCurrency = filtered.reduce<Record<string, { symbol: string; amount: number }>>((acc, c) => {
-    const freightAmt = num(c.freight);
-    if (freightAmt <= 0) return acc;
-    const ccy = c.freightCurrencyCode || c.currencyCode || "USD";
-    const sym = ccySym(ccy);
-    if (!acc[ccy]) acc[ccy] = { symbol: sym, amount: 0 };
-    acc[ccy].amount += freightAmt;
-    return acc;
-  }, {});
-  // Commission totals grouped by currency — there's no dedicated Commission KPI card;
-  // instead its USD portion is folded into the "Total (USD)" card below so that card
-  // represents the full USD balance (container cost + freight + commission), matching
-  // how "Total (USD)" already implicitly combines cost-in-USD across containers.
-  const commissionByCurrency = filtered.reduce<Record<string, { symbol: string; amount: number }>>((acc, c) => {
-    const commAmt = num(c.commissionAmount);
-    if (commAmt <= 0) return acc;
-    const ccy = c.commissionCurrencyCode || "USD";
-    const sym = ccySym(ccy);
-    if (!acc[ccy]) acc[ccy] = { symbol: sym, amount: 0 };
-    acc[ccy].amount += commAmt;
-    return acc;
-  }, {});
-  // "Total (USD)" = USD-priced container cost + USD freight + USD commission.
-  // Other currencies' Total cards are left as cost-only (freight/commission for those
-  // currencies already appear on their own Freight (CCY) card, and commission has no
-  // separate card at all, per request — its USD amount rolls into Total (USD) instead).
-  const totalByCurrencyWithUsdBalance: Record<string, { symbol: string; amount: number }> = { ...costByCurrency };
-  {
-    const usdFreight = freightByCurrency.USD?.amount || 0;
-    const usdCommission = commissionByCurrency.USD?.amount || 0;
-    const extraUsd = usdFreight + usdCommission;
-    if (extraUsd > 0) {
-      const existing = totalByCurrencyWithUsdBalance.USD;
-      totalByCurrencyWithUsdBalance.USD = {
-        symbol: existing?.symbol || ccySym("USD"),
-        amount: (existing?.amount || 0) + extraUsd,
-      };
-    }
-  }
-  const docsReceived = filtered.filter((c) => !!c.otwDocsReceived).length;
-  const totalWeight = filtered.reduce((sum, c) => sum + num(c.totalKg), 0);
-  const onTime = otwContainers.filter((c) => !!c.arrivalDate && !isOverdue(c)).length;
-  const missingEta = otwContainers.filter((c) => !c.arrivalDate).length;
-  const activeFilterCount =
-    [supplierFilter, freightFilter, weightFilter, docsFilter, delayedFilter].filter((v) => v !== "all").length +
-    (search.trim() ? 1 : 0) +
-    (sortOrder !== "DEFAULT" ? 1 : 0);
-  /** Immediately patch the in-memory cache entry so the UI reflects the new
-   *  value without waiting for the background refetch to complete. */
-  function patchCacheContainer(id: number, patch: Partial<ContainerWithSupplier>) {
-    tqClient.setQueriesData<ContainerWithSupplier[]>(
-      { queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) },
-      (old) => old?.map((c) => (c.id === id ? { ...c, ...patch } : c))
-    );
-  }
-  async function saveNote(id: number, val: string) {
-    if (!recordChanges.allowed) return;
-    try {
-      await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwNote: val || null });
-      patchCacheContainer(id, { otwNote: val || null });
-      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
-    } catch (err) {
-      toast({
-        title: "Failed to save note",
-        description: getErrorDetails(err).optionalMessage,
-        variant: "destructive",
-      });
-    }
-  }
-  async function toggleDoc(id: number, checked: boolean) {
-    if (!recordChanges.allowed) return;
-    try {
-      await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwDocsReceived: checked });
-      patchCacheContainer(id, { otwDocsReceived: checked });
-      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
-    } catch (err) {
-      toast({
-        title: "Failed to update docs",
-        description: getErrorDetails(err).optionalMessage,
-        variant: "destructive",
-      });
-    }
-  }
-  const etaMutation = useMutation({
-    mutationFn: async ({ id, arrivalDate }: { id: number; arrivalDate: string | null }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, {
-        arrivalDate: arrivalDate || null,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed to update ETA");
-      }
-      return res.json();
-    },
-    onSuccess: (_data, variables) => {
-      patchCacheContainer(variables.id, { arrivalDate: variables.arrivalDate });
-      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Failed to update ETA", description: err?.message, variant: "destructive" });
-    },
-  });
-  function saveEta(id: number, val: string | null) {
-    etaMutation.mutate({ id, arrivalDate: val });
-  }
-  function clearFilters() {
-    setSearch("");
-    setSupplierFilter("all");
-    setFreightFilter("all");
-    setWeightFilter("all");
-    setDocsFilter("all");
-    setDelayedFilter("all");
-    setSortOrder("DEFAULT");
-  }
-  const { importing, exportCsv, handleImportFile, canImport } = useOtwCsvTools(filtered, otwContainers);
+  const m = useFactoryOtwTrackingTabModel();
 
-  if (isLoading) {
+  if (m.isLoading) {
     return (
       <div className="space-y-4 p-4">
         <div className="flex flex-wrap gap-2">
@@ -255,7 +38,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
       </div>
     );
   }
-  if (otwContainers.length === 0) {
+  if (m.otwContainers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
         <Radio className="h-12 w-12 opacity-20" />
@@ -298,33 +81,33 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <SummaryCard
           label="Active containers"
-          value={otwContainers.length}
+          value={m.otwContainers.length}
           icon={<Package className="h-5 w-5 text-blue-500" />}
           accent="bg-blue-500/10"
           helper="Currently tracked"
         />
         <SummaryCard
           label="In transit"
-          value={inTransit}
+          value={m.inTransit}
           icon={<Truck className="h-5 w-5 text-cyan-500" />}
           accent="bg-cyan-500/10"
-          helper={arrived + " arrived"}
+          helper={m.arrived + " arrived"}
         />
         <SummaryCard
           label="Delayed"
-          value={delayed}
+          value={m.delayed}
           icon={<Clock className="h-5 w-5 text-red-500" />}
           accent="bg-red-500/10"
           helper="Past ETA date"
         />
         <SummaryCard
           label="Total weight"
-          value={Math.round(totalWeight).toLocaleString() + " KG"}
+          value={Math.round(m.totalWeight).toLocaleString() + " KG"}
           icon={<Scale className="h-5 w-5 text-violet-500" />}
           accent="bg-violet-500/10"
           helper="Filtered containers"
         />
-        {Object.entries(totalByCurrencyWithUsdBalance).map(([ccy, item]) => (
+        {Object.entries(m.totalByCurrencyWithUsdBalance).map(([ccy, item]) => (
           <SummaryCard
             key={"total-" + ccy}
             label={"Total (" + ccy + ")"}
@@ -334,7 +117,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             helper={ccy === "USD" ? "Cost + freight + commission" : "Container cost"}
           />
         ))}
-        {Object.entries(freightByCurrency).map(([ccy, item]) => (
+        {Object.entries(m.freightByCurrency).map(([ccy, item]) => (
           <SummaryCard
             key={"freight-" + ccy}
             label={"Freight (" + ccy + ")"}
@@ -352,21 +135,21 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
       >
         <div className="flex flex-wrap items-center gap-2.5">
           <SearchField
-            value={search}
-            onValueChange={setSearch}
+            value={m.search}
+            onValueChange={m.setSearch}
             placeholder="Search container # or supplier..."
             wrapperClassName="min-w-[210px] flex-[2_1_320px]"
             className="h-10 rounded-xl bg-background/80"
             data-testid="input-otw-search"
           />
           <div className="min-w-[150px] flex-[1_1_155px]">
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <Select value={m.supplierFilter} onValueChange={m.setSupplierFilter}>
               <SelectTrigger className="h-10 rounded-xl" data-testid="select-supplier-filter">
                 <SelectValue placeholder="All suppliers" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All suppliers</SelectItem>
-                {suppliers.map(([key, name]) => (
+                {m.suppliers.map(([key, name]) => (
                   <SelectItem key={key} value={key}>
                     {name}
                   </SelectItem>
@@ -375,7 +158,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             </Select>
           </div>
           <div className="min-w-[130px] flex-[1_1_135px]">
-            <Select value={delayedFilter} onValueChange={setDelayedFilter}>
+            <Select value={m.delayedFilter} onValueChange={m.setDelayedFilter}>
               <SelectTrigger className="h-10 rounded-xl" data-testid="select-delayed-filter">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -389,7 +172,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             </Select>
           </div>
           <div className="min-w-[135px] flex-[1_1_145px]">
-            <Select value={sortOrder} onValueChange={setSortOrder}>
+            <Select value={m.sortOrder} onValueChange={m.setSortOrder}>
               <SelectTrigger className="h-10 rounded-xl" data-testid="select-sort-order">
                 <CalendarDays className="mr-1 h-4 w-4 shrink-0 text-muted-foreground" />
                 <SelectValue />
@@ -404,27 +187,32 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           <Button
             variant="outline"
             className="h-10 rounded-xl"
-            onClick={() => setShowFilters((v) => !v)}
-            aria-expanded={showFilters}
+            onClick={() => m.setShowFilters((v) => !v)}
+            aria-expanded={m.showFilters}
             data-testid="button-otw-filters"
           >
             <Filter className="mr-1.5 h-4 w-4" /> Filters
-            {activeFilterCount > 0 && (
+            {m.activeFilterCount > 0 && (
               <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
-                {activeFilterCount}
+                {m.activeFilterCount}
               </span>
             )}
-            <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", showFilters && "rotate-180")} />
+            <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", m.showFilters && "rotate-180")} />
           </Button>
-          <Button variant="ghost" className="h-10 rounded-xl" onClick={clearFilters} data-testid="button-clear-filters">
+          <Button
+            variant="ghost"
+            className="h-10 rounded-xl"
+            onClick={m.clearFilters}
+            data-testid="button-clear-filters"
+          >
             <RefreshCcw className="mr-1.5 h-4 w-4" /> Reset
           </Button>
         </div>
-        {showFilters && (
+        {m.showFilters && (
           <div className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Freight</p>
-              <Select value={freightFilter} onValueChange={setFreightFilter}>
+              <Select value={m.freightFilter} onValueChange={m.setFreightFilter}>
                 <SelectTrigger className="h-9" data-testid="select-freight-filter">
                   <SelectValue />
                 </SelectTrigger>
@@ -437,7 +225,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             </div>
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Weight</p>
-              <Select value={weightFilter} onValueChange={setWeightFilter}>
+              <Select value={m.weightFilter} onValueChange={m.setWeightFilter}>
                 <SelectTrigger className="h-9" data-testid="select-weight-filter">
                   <SelectValue />
                 </SelectTrigger>
@@ -450,7 +238,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             </div>
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Documents</p>
-              <Select value={docsFilter} onValueChange={setDocsFilter}>
+              <Select value={m.docsFilter} onValueChange={m.setDocsFilter}>
                 <SelectTrigger className="h-9" data-testid="select-docs-filter">
                   <SelectValue />
                 </SelectTrigger>
@@ -461,26 +249,26 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                 </SelectContent>
               </Select>
             </div>
-            {currentUser?.role === "Developer" && (
+            {m.currentUser?.role === "Developer" && (
               <div className="flex flex-wrap gap-2 sm:col-span-3">
                 <ExportButton
                   kind="csv"
                   className="h-9"
-                  onClick={exportCsv}
-                  disabled={filtered.length === 0}
+                  onClick={m.exportCsv}
+                  disabled={m.filtered.length === 0}
                   data-testid="button-export-csv"
                 />
-                {canImport && (
+                {m.canImport && (
                   <>
                     <Button
                       variant="outline"
                       className="h-9"
-                      disabled={importing}
+                      disabled={m.importing}
                       title="Import CSV to bulk-update ETA. Columns: Container #, Supplier, ETA (YYYY-MM-DD)"
                       data-testid="button-import-csv"
                       onClick={() => document.getElementById("otw-import-input")?.click()}
                     >
-                      {importing ? (
+                      {m.importing ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                       ) : (
                         <Upload className="mr-1.5 h-4 w-4" />
@@ -492,7 +280,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                       type="file"
                       accept=".csv,.txt"
                       className="hidden"
-                      onChange={handleImportFile}
+                      onChange={m.handleImportFile}
                     />
                   </>
                 )}
@@ -502,207 +290,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         )}
       </section>
 
-      <section
-        aria-label="OTW container list"
-        className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span>
-              <strong className="text-foreground">{filtered.length}</strong> of {otwContainers.length} active containers
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              On time {onTime}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              Overdue {delayed}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              No ETA {missingEta}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <FileCheck2 className="h-3.5 w-3.5 text-blue-500" />
-              Docs {docsReceived}/{filtered.length}
-            </span>
-          </div>
-          <Button
-            variant={detailedView ? "secondary" : "outline"}
-            size="sm"
-            className="h-8 rounded-lg"
-            onClick={() => setDetailedView((v) => !v)}
-            aria-pressed={detailedView}
-            data-testid="button-otw-detailed-view"
-          >
-            <LayoutList className="mr-1.5 h-4 w-4" /> {detailedView ? "Compact view" : "Detailed view"}
-          </Button>
-        </div>
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
-            <Radio className="h-9 w-9 opacity-30" />
-            <p className="text-sm">No containers match your filters.</p>
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          </div>
-        ) : (
-          <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
-            <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_49%_16%)] dark:hover:bg-[hsl(var(--factory-hue)_49%_16%)]">
-                <TableHead className="w-10 font-semibold">#</TableHead>
-                <TableHead className="font-semibold">Container #</TableHead>
-                <TableHead className="font-semibold">Supplier</TableHead>
-                <TableHead className="font-semibold">ETA</TableHead>
-                <TableHead className="text-right font-semibold">Cost</TableHead>
-                <TableHead className="text-right font-semibold">Freight</TableHead>
-                {detailedView && <TableHead className="text-right font-semibold">Commission</TableHead>}
-                {detailedView && <TableHead className="text-right font-semibold">Duty</TableHead>}
-                {detailedView && <TableHead className="font-semibold">Location</TableHead>}
-                <TableHead className="text-right font-semibold">Weight (KG)</TableHead>
-                <TableHead className="font-semibold">Delayed</TableHead>
-                <TableHead className="text-center font-semibold">Docs</TableHead>
-                <TableHead className="min-w-[150px] font-semibold">Notes</TableHead>
-                <TableHead className="w-20 text-right font-semibold">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c, idx) => {
-                const cost = containerCost(c);
-                const frSym = ccySym(c.freightCurrencyCode || c.currencyCode);
-                const commSym = ccySym(c.commissionCurrencyCode || "USD");
-                const dutySym = ccySym(c.currencyCode);
-                const delayDays = calcDelayDays(c);
-                const overdue = isOverdue(c);
-                return (
-                  <TableRow
-                    key={c.id}
-                    className={cn(
-                      "border-b border-border/45 transition-colors hover:bg-blue-500/[0.035] dark:hover:bg-blue-400/[0.07]",
-                      overdue && "border-l-2 border-l-red-500/70"
-                    )}
-                    data-testid={"row-otw-container-" + c.id}
-                  >
-                    <TableCell className="py-3 text-muted-foreground">{idx + 1}</TableCell>
-                    <TableCell className="py-3 font-mono font-semibold text-foreground">
-                      {c.containerNumber || "—"}
-                    </TableCell>
-                    <TableCell className="py-3 font-medium text-foreground/85">{c.supplierName || "—"}</TableCell>
-                    <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
-                      <EtaCell
-                        containerId={c.id}
-                        arrivalDate={c.arrivalDate}
-                        overdue={overdue}
-                        onSave={saveEta}
-                        readOnly={!recordChanges.allowed}
-                      />
-                    </TableCell>
-                    <TableCell className="py-3 text-right font-semibold tabular-nums">
-                      {cost.amount > 0 ? fmtAmt(cost.symbol, cost.amount) : "—"}
-                    </TableCell>
-                    <TableCell className="py-3 text-right tabular-nums text-muted-foreground">
-                      {num(c.freight) > 0 ? fmtAmt(frSym, num(c.freight)) : "—"}
-                    </TableCell>
-                    {detailedView && (
-                      <TableCell className="py-3 text-right tabular-nums text-muted-foreground">
-                        {num(c.commissionAmount) > 0 ? fmtAmt(commSym, num(c.commissionAmount)) : "—"}
-                      </TableCell>
-                    )}
-                    {detailedView && (
-                      <TableCell className="py-3 text-right tabular-nums text-muted-foreground">
-                        {num(c.dutyAmount) > 0 ? fmtAmt(dutySym, num(c.dutyAmount)) : "—"}
-                      </TableCell>
-                    )}
-                    {detailedView && (
-                      <TableCell className="py-3 text-muted-foreground">{c.destination || "—"}</TableCell>
-                    )}
-                    <TableCell className="py-3 text-right tabular-nums text-foreground/80">
-                      {c.totalKg ? Number(c.totalKg).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
-                    </TableCell>
-                    <TableCell className="py-3">
-                      {delayDays > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2 py-1 font-semibold text-red-700 dark:text-red-300">
-                          <Clock className="h-3 w-3" />
-                          {delayDays}d
-                        </span>
-                      ) : c.arrivalDate ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 font-medium text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle2 className="h-3 w-3" />
-                          On time
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-300">
-                          <AlertTriangle className="h-3 w-3" />
-                          No ETA
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={!!c.otwDocsReceived}
-                        onCheckedChange={(v) => toggleDoc(c.id, !!v)}
-                        disabled={!recordChanges.allowed}
-                        data-testid={"checkbox-docs-" + c.id}
-                        aria-label={"Docs received for " + (c.containerNumber || "container")}
-                      />
-                    </TableCell>
-                    <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
-                      <NotesCell
-                        containerId={c.id}
-                        note={c.otwNote ?? ""}
-                        onSave={saveNote}
-                        readOnly={!recordChanges.allowed}
-                      />
-                    </TableCell>
-                    <TableCell className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-lg"
-                          title="Copy container number"
-                          aria-label={"Copy number " + (c.containerNumber || "")}
-                          data-testid={"button-otw-copy-" + c.id}
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(c.containerNumber || "");
-                              toast({ title: "Container number copied" });
-                            } catch {
-                              toast({ title: "Could not copy container number", variant: "destructive" });
-                            }
-                          }}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        {onEdit && recordChanges.allowed && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-lg"
-                            title="Edit container"
-                            aria-label={"Edit " + (c.containerNumber || "container")}
-                            onClick={() => onEdit(c)}
-                            data-testid={"button-otw-edit-" + c.id}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-        <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
-          <span>
-            Showing {filtered.length} of {otwContainers.length} containers
-          </span>
-          {recordChanges.allowed && <span className="hidden sm:inline">Click an ETA or note to edit</span>}
-        </div>
-      </section>
+      <FactoryOtwTrackingTable m={m} onEdit={onEdit} />
     </div>
   );
 }

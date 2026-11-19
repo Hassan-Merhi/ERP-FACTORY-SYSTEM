@@ -1,7 +1,3 @@
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -10,230 +6,40 @@ import {
   Loader2,
   MessageCircle,
   SlidersHorizontal,
-  Building2,
-  Layers3,
   MapPin,
   RotateCcw,
   Warehouse,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { gitContainersUrl, groupBySupplier } from "./helpers";
-import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
+import { groupBySupplier } from "./helpers";
 import { STATUS_BADGE as STATUS_BADGE_MAP } from "./types";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErpMobileRecordCard, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
-import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTabTruckLocationModel } from "./TabTruckLocationModel";
+import { TabTruckLocationPrintReport } from "./TabTruckLocationPrintReport";
 
 export function TabTruckLocation() {
-  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const role = viewer?.currentRole ?? viewer?.role;
-  const isTester = role === "ERP Tester";
-  const isViewer = isExistingRecordReadOnlyRole(role);
-  const restrictedViewer = isTester || isViewer;
-  const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
-  const [waSending, setWaSending] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [truckView, setTruckView] = useState<"with" | "without" | "all">("with");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [shopFilter, setShopFilter] = useState("all");
-  const [showFilters, setShowFilters] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-  const isPhone = useErpPhoneLayout();
+  const m = useTabTruckLocationModel();
 
-  const queryUrl = gitContainersUrl({ allCompanies: companyMode === "all", includeOffloaded: true });
-
-  const { data, isLoading, isError, error } = useQuery<GitContainersResponse>({
-    queryKey: [queryUrl],
-    staleTime: 60_000,
-    retry: 1,
-  });
-
-  const allContainers: EnrichedContainerApi[] = data?.containers ?? [];
-  const withTruck = allContainers.filter((r) => !!(r.numberPlate ?? "").trim());
-  const noTruck = allContainers.filter((r) => !(r.numberPlate ?? "").trim());
-  const shops = [...new Set(withTruck.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort();
-  const shopOptions = [...new Set(allContainers.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-  );
-  const statusOptions = [...new Set(allContainers.map((r) => r.status))].filter(Boolean).sort();
-  const search = searchQuery.trim().toLocaleLowerCase();
-  const visibleRows = allContainers.filter((row) => {
-    const hasTruck = Boolean((row.numberPlate ?? "").trim());
-    if (truckView === "with" && !hasTruck) return false;
-    if (truckView === "without" && hasTruck) return false;
-    if (statusFilter !== "all" && row.status !== statusFilter) return false;
-    const shop = row.shopName ?? row.companyName ?? "Unknown";
-    if (shopFilter !== "all" && shop !== shopFilter) return false;
-    if (!search) return true;
-    return [
-      row.containerNumber,
-      row.supplierCode,
-      row.numberPlate,
-      row.trackingLocation,
-      row.agent,
-      row.transporter,
-      row.status,
-      shop,
-    ].some((value) =>
-      String(value ?? "")
-        .toLocaleLowerCase()
-        .includes(search)
-    );
-  });
-  const visibleShops = [...new Set(visibleRows.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-  );
-  const activeFilterCount = Number(statusFilter !== "all") + Number(shopFilter !== "all");
-
-  function resetFilters() {
-    setSearchQuery("");
-    setTruckView("with");
-    setStatusFilter("all");
-    setShopFilter("all");
-  }
-
-  async function sendToWhatsApp() {
-    if (!printRef.current) return;
-    setWaSending(true);
-    try {
-      const html2canvas = (await import("html2canvas")).default;
-      const el = printRef.current;
-      const sourceCanvas = await html2canvas(el, {
-        scale: 1,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#f8fafc",
-        logging: false,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-      });
-
-      const today = new Date().toISOString().substring(0, 10);
-      const fileName = `TruckLocation_${today}.jpg`;
-      // The API has a 2 MB JSON body limit. Base64 expands binary data by ~33%,
-      // so enforce the actual serialized request size instead of estimating only
-      // the decoded JPEG size. Keep headroom for middleware/proxy overhead.
-      const MAX_JSON_BYTES = 1.55 * 1024 * 1024;
-      const dimensionScales = [1, 0.86, 0.72, 0.6, 0.5];
-      const qualities = [0.78, 0.64, 0.52, 0.42, 0.34];
-      let imageBase64 = "";
-
-      outer: for (const scale of dimensionScales) {
-        let candidateCanvas = sourceCanvas;
-        if (scale !== 1) {
-          candidateCanvas = document.createElement("canvas");
-          candidateCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
-          candidateCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
-          const context = candidateCanvas.getContext("2d");
-          if (!context) continue;
-          context.drawImage(sourceCanvas, 0, 0, candidateCanvas.width, candidateCanvas.height);
-        }
-
-        for (const quality of qualities) {
-          const candidate = candidateCanvas.toDataURL("image/jpeg", quality);
-          const payloadBytes = new TextEncoder().encode(
-            JSON.stringify({ imageBase64: candidate, fileName })
-          ).byteLength;
-          if (payloadBytes <= MAX_JSON_BYTES) {
-            imageBase64 = candidate;
-            break outer;
-          }
-        }
-      }
-
-      if (!imageBase64) {
-        toast({
-          title: "Failed to send",
-          description: "The tracking report is too large to fit in one WhatsApp image even after compression.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      try {
-        await apiRequest("POST", "/api/git/send-containers-whatsapp", {
-          imageBase64,
-          fileName,
-        });
-      } catch (apiErr) {
-        const msg =
-          getErrorDetails(apiErr).status === 413 ||
-          String(getErrorDetails(apiErr).optionalMessage).toLowerCase().includes("too large")
-            ? "Tracking report is still too large to send to WhatsApp."
-            : (getErrorDetails(apiErr).optionalMessage ?? "Failed to send");
-        toast({ title: "Failed to send", description: msg, variant: "destructive" });
-        return;
-      }
-
-      toast({ title: "Sent", description: "Truck / Location report sent to WhatsApp group." });
-    } catch (err) {
-      toast({ title: "Failed to send", description: getErrorDetails(err).message, variant: "destructive" });
-    } finally {
-      setWaSending(false);
-    }
-  }
-
-  const modeSelector = (
-    <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-2">
-      <span className="mr-1 hidden text-xs font-medium text-muted-foreground sm:inline">Viewing</span>
-      <Button
-        size="sm"
-        variant={companyMode === "session" ? "default" : "outline"}
-        className={cn(
-          "rounded-lg shadow-none",
-          companyMode === "session" &&
-            "bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
-        )}
-        onClick={() => setCompanyMode("session")}
-        data-testid="btn-truck-mode-session"
-      >
-        <Building2 className="mr-1.5 h-3.5 w-3.5" />
-        My Company
-      </Button>
-      {!restrictedViewer && (
-        <Button
-          size="sm"
-          variant={companyMode === "all" ? "default" : "outline"}
-          className={cn(
-            "rounded-lg shadow-none",
-            companyMode === "all" &&
-              "bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
-          )}
-          onClick={() => setCompanyMode("all")}
-          data-testid="btn-truck-mode-all"
-        >
-          <Layers3 className="mr-1.5 h-3.5 w-3.5" />
-          All Accessible Companies
-        </Button>
-      )}
-    </div>
-  );
-
-  if (isLoading)
+  if (m.isLoading)
     return (
       <div className="space-y-4">
-        {modeSelector}
+        {m.modeSelector}
         <Skeleton className="h-24 w-full rounded-2xl" />
         <Skeleton className="h-60 w-full rounded-2xl" />
       </div>
     );
 
-  if (isError)
+  if (m.isError)
     return (
       <div className="space-y-3">
-        {modeSelector}
+        {m.modeSelector}
         <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <div className="font-semibold">Failed to load container data</div>
-            <div className="mt-0.5 text-xs">{(error as Error)?.message ?? "Network or server error."}</div>
+            <div className="mt-0.5 text-xs">{(m.error as Error)?.message ?? "Network or server error."}</div>
           </div>
         </div>
       </div>
@@ -264,16 +70,16 @@ export function TabTruckLocation() {
 
       <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-[minmax(280px,1fr)_repeat(3,minmax(0,190px))]">
         <div className="flex min-w-0 items-center rounded-xl border border-border/70 bg-card/70 px-3 py-2.5 shadow-sm lg:col-span-3 xl:col-span-1">
-          {modeSelector}
+          {m.modeSelector}
         </div>
         <button
           type="button"
-          aria-pressed={truckView === "with"}
-          onClick={() => setTruckView("with")}
+          aria-pressed={m.truckView === "with"}
+          onClick={() => m.setTruckView("with")}
           data-testid="git-trucks-view-with"
           className={cn(
             "flex items-center gap-3 rounded-xl border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            truckView === "with"
+            m.truckView === "with"
               ? "border-violet-400/60 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/15"
               : "border-border/70 bg-card hover:bg-muted/50"
           )}
@@ -283,17 +89,17 @@ export function TabTruckLocation() {
           </span>
           <span className="min-w-0">
             <span className="block text-[11px] text-muted-foreground">With Truck</span>
-            <strong className="block text-xl leading-tight tabular-nums">{withTruck.length}</strong>
+            <strong className="block text-xl leading-tight tabular-nums">{m.withTruck.length}</strong>
           </span>
         </button>
         <button
           type="button"
-          aria-pressed={truckView === "without"}
-          onClick={() => setTruckView("without")}
+          aria-pressed={m.truckView === "without"}
+          onClick={() => m.setTruckView("without")}
           data-testid="git-trucks-view-without"
           className={cn(
             "flex items-center gap-3 rounded-xl border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            truckView === "without"
+            m.truckView === "without"
               ? "border-sky-400/60 bg-sky-50 dark:border-sky-500/50 dark:bg-sky-500/15"
               : "border-border/70 bg-card hover:bg-muted/50"
           )}
@@ -303,7 +109,7 @@ export function TabTruckLocation() {
           </span>
           <span className="min-w-0">
             <span className="block text-[11px] text-muted-foreground">No Truck</span>
-            <strong className="block text-xl leading-tight tabular-nums">{noTruck.length}</strong>
+            <strong className="block text-xl leading-tight tabular-nums">{m.noTruck.length}</strong>
           </span>
         </button>
         <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-3 shadow-sm">
@@ -312,15 +118,15 @@ export function TabTruckLocation() {
           </span>
           <span className="min-w-0">
             <span className="block text-[11px] text-muted-foreground">Shops</span>
-            <strong className="block text-xl leading-tight tabular-nums">{shops.length}</strong>
+            <strong className="block text-xl leading-tight tabular-nums">{m.shops.length}</strong>
           </span>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm">
         <SearchField
-          value={searchQuery}
-          onValueChange={setSearchQuery}
+          value={m.searchQuery}
+          onValueChange={m.setSearchQuery}
           placeholder="Search container, plate, supplier, location..."
           aria-label="Search tracking containers"
           data-testid="git-trucks-search"
@@ -331,46 +137,46 @@ export function TabTruckLocation() {
           type="button"
           size="sm"
           variant="outline"
-          aria-expanded={showFilters}
-          onClick={() => setShowFilters(!showFilters)}
+          aria-expanded={m.showFilters}
+          onClick={() => m.setShowFilters(!m.showFilters)}
           className="h-9 rounded-lg"
           data-testid="git-trucks-filters-toggle"
         >
           <SlidersHorizontal className="mr-1.5 h-4 w-4" />
-          Filters{activeFilterCount > 0 ? " (" + activeFilterCount + ")" : ""}
+          Filters{m.activeFilterCount > 0 ? " (" + m.activeFilterCount + ")" : ""}
         </Button>
-        {!restrictedViewer && (
+        {!m.restrictedViewer && (
           <Button
             size="sm"
-            onClick={sendToWhatsApp}
-            disabled={waSending || withTruck.length === 0}
+            onClick={m.sendToWhatsApp}
+            disabled={m.waSending || m.withTruck.length === 0}
             data-testid="button-send-wa-truck-location"
             className="h-9 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
-            {waSending ? (
+            {m.waSending ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             ) : (
               <MessageCircle className="mr-1.5 h-4 w-4" />
             )}
-            {waSending ? "Sending…" : "Send to WhatsApp"}
+            {m.waSending ? "Sending…" : "Send to WhatsApp"}
           </Button>
         )}
       </div>
 
-      {showFilters && (
+      {m.showFilters && (
         <div
           className="flex flex-wrap items-end gap-3 rounded-xl border border-border/70 bg-muted/20 p-3"
           data-testid="git-trucks-filters"
         >
           <label className="min-w-[160px] flex-1 space-y-1 text-xs font-medium text-muted-foreground">
             Status
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={m.statusFilter} onValueChange={m.setStatusFilter}>
               <SelectTrigger aria-label="Filter by status" className="h-9 w-full rounded-lg text-sm text-foreground">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {statusOptions.map((status) => (
+                {m.statusOptions.map((status) => (
                   <SelectItem key={status} value={status}>
                     {status}
                   </SelectItem>
@@ -380,13 +186,13 @@ export function TabTruckLocation() {
           </label>
           <label className="min-w-[160px] flex-1 space-y-1 text-xs font-medium text-muted-foreground">
             Shop
-            <Select value={shopFilter} onValueChange={setShopFilter}>
+            <Select value={m.shopFilter} onValueChange={m.setShopFilter}>
               <SelectTrigger aria-label="Filter by shop" className="h-9 w-full rounded-lg text-sm text-foreground">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All shops</SelectItem>
-                {shopOptions.map((shop) => (
+                {m.shopOptions.map((shop) => (
                   <SelectItem key={shop} value={shop}>
                     {shop}
                   </SelectItem>
@@ -399,11 +205,11 @@ export function TabTruckLocation() {
             size="sm"
             variant="outline"
             className="h-9 rounded-lg"
-            onClick={() => setTruckView("all")}
+            onClick={() => m.setTruckView("all")}
           >
             All Containers
           </Button>
-          <Button type="button" size="sm" variant="ghost" className="h-9 rounded-lg" onClick={resetFilters}>
+          <Button type="button" size="sm" variant="ghost" className="h-9 rounded-lg" onClick={m.resetFilters}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
           </Button>
         </div>
@@ -411,25 +217,25 @@ export function TabTruckLocation() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-0.5 text-xs text-muted-foreground">
         <span>
-          Showing <strong className="font-semibold text-foreground">{visibleRows.length}</strong> of{" "}
-          {allContainers.length} containers
+          Showing <strong className="font-semibold text-foreground">{m.visibleRows.length}</strong> of{" "}
+          {m.allContainers.length} containers
         </span>
-        {truckView === "all" && <span>All containers · With and without trucks</span>}
+        {m.truckView === "all" && <span>All containers · With and without trucks</span>}
       </div>
 
-      {visibleRows.length === 0 && (
+      {m.visibleRows.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center text-sm text-muted-foreground">
-          {allContainers.length === 0
+          {m.allContainers.length === 0
             ? "No active containers found."
             : "No containers match the selected view or filters."}
         </div>
       )}
 
       {/* Phones retain the concise cards, with the same live search, scope and filters. */}
-      {isPhone && visibleRows.length > 0 && (
+      {m.isPhone && m.visibleRows.length > 0 && (
         <div className="space-y-4" data-testid="git-trucks-cards">
-          {visibleShops.map((shop, shopIndex) => {
-            const shopRows = visibleRows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
+          {m.visibleShops.map((shop, shopIndex) => {
+            const shopRows = m.visibleRows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
             const supplierGroups = groupBySupplier(shopRows);
             return (
               <section key={shop} className="space-y-2" data-testid={"git-trucks-shop-" + shop}>
@@ -491,7 +297,7 @@ export function TabTruckLocation() {
       )}
 
       {/* Center the shop names in full-width branded bars; keep the counts off to the right. */}
-      {!isPhone && visibleRows.length > 0 && (
+      {!m.isPhone && m.visibleRows.length > 0 && (
         <div
           className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
           data-testid="git-trucks-table"
@@ -510,8 +316,8 @@ export function TabTruckLocation() {
                 </tr>
               </thead>
               <tbody>
-                {visibleShops.flatMap((shop, shopIndex) => {
-                  const shopRows = visibleRows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
+                {m.visibleShops.flatMap((shop, shopIndex) => {
+                  const shopRows = m.visibleRows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
                   const supplierGroups = groupBySupplier(shopRows);
                   const shopHeader = (
                     <tr key={"shop-" + shop}>
@@ -596,244 +402,7 @@ export function TabTruckLocation() {
       )}
 
       {/* Hidden Full-HD print template for WhatsApp image capture */}
-      <div
-        ref={printRef}
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: 0,
-          backgroundColor: "#f8fafc",
-          color: "#1e293b",
-          fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-          fontSize: "22px",
-          width: "1600px",
-          padding: "44px 48px 36px",
-          boxSizing: "border-box",
-        }}
-        aria-hidden="true"
-      >
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: "32px",
-            paddingBottom: "24px",
-            borderBottom: "5px solid #f59e0b",
-          }}
-        >
-          <div
-            style={{ fontSize: "52px", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.5px", lineHeight: 1.15 }}
-          >
-            HMD International Group
-          </div>
-          <div
-            style={{
-              fontSize: "26px",
-              fontWeight: 700,
-              color: "#b45309",
-              marginTop: "10px",
-              letterSpacing: "1.2px",
-              textTransform: "uppercase",
-            }}
-          >
-            Truck / Location Status — Live Tracking Report
-          </div>
-          <div style={{ fontSize: "22px", color: "#475569", marginTop: "12px", fontWeight: 500 }}>
-            {new Date().toLocaleDateString("en-GB", {
-              weekday: "long",
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}
-            {" · "}
-            {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}
-          </div>
-          <div
-            style={{
-              display: "inline-block",
-              marginTop: "16px",
-              padding: "10px 28px",
-              backgroundColor: "#fef3c7",
-              border: "2px solid #f59e0b",
-              borderRadius: "28px",
-              fontSize: "22px",
-              fontWeight: 800,
-              color: "#78350f",
-            }}
-          >
-            {withTruck.length} Container{withTruck.length !== 1 ? "s" : ""} on the road
-          </div>
-        </div>
-
-        {(() => {
-          const allShops = [...new Set(withTruck.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-          );
-          const cell: React.CSSProperties = {
-            padding: "16px 14px",
-            fontSize: "22px",
-            overflow: "hidden",
-            whiteSpace: "nowrap",
-            borderBottom: "1px solid #cbd5e1",
-            color: "#1e293b",
-          };
-          const hdrCols = [
-            { label: "#", align: "center" as const },
-            { label: "Container #", align: "center" as const },
-            { label: "Supplier", align: "center" as const },
-            { label: "Truck #", align: "center" as const },
-            { label: "Location", align: "center" as const },
-            { label: "Agent", align: "center" as const },
-            { label: "Transporter", align: "center" as const },
-            { label: "Status", align: "center" as const },
-          ];
-          return (
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "52px" }} />
-                <col style={{ width: "270px" }} />
-                <col style={{ width: "230px" }} />
-                <col style={{ width: "210px" }} />
-                <col style={{ width: "240px" }} />
-                <col style={{ width: "180px" }} />
-                <col style={{ width: "230px" }} />
-                <col style={{ width: "92px" }} />
-              </colgroup>
-              <thead>
-                <tr style={{ backgroundColor: "#1e3a5f" }}>
-                  {hdrCols.map((h) => (
-                    <th
-                      key={h.label}
-                      style={{
-                        padding: "18px 14px",
-                        textAlign: h.align,
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "20px",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.8px",
-                      }}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {allShops.flatMap((shop) => {
-                  const shopRows = withTruck.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
-                  let idx = 0;
-                  return [
-                    <tr key={`hd-shop-${shop}`}>
-                      <td
-                        colSpan={8}
-                        style={{
-                          padding: "14px 16px",
-                          backgroundColor: "#fef3c7",
-                          fontWeight: 800,
-                          color: "#78350f",
-                          fontSize: "22px",
-                          letterSpacing: "0.5px",
-                          textAlign: "center",
-                          textTransform: "uppercase",
-                          borderTop: "3px solid #f59e0b",
-                          borderBottom: "3px solid #f59e0b",
-                        }}
-                      >
-                        {shop}
-                        <span
-                          style={{
-                            fontWeight: 500,
-                            color: "#92400e",
-                            marginLeft: "14px",
-                            fontSize: "19px",
-                            textTransform: "none",
-                          }}
-                        >
-                          ({shopRows.length} container{shopRows.length !== 1 ? "s" : ""})
-                        </span>
-                      </td>
-                    </tr>,
-                    ...shopRows.map((r) => {
-                      idx++;
-                      const rowBg = idx % 2 === 0 ? "#f1f5f9" : "#f8fafc";
-                      return (
-                        <tr key={`hd-row-${r.id}`} style={{ backgroundColor: rowBg }}>
-                          <td style={{ ...cell, textAlign: "center", color: "#94a3b8", fontSize: "18px" }}>{idx}</td>
-                          <td
-                            style={{
-                              ...cell,
-                              textAlign: "center",
-                              fontFamily: "monospace",
-                              fontWeight: 700,
-                              color: "#1d4ed8",
-                            }}
-                          >
-                            {r.containerNumber}
-                          </td>
-                          <td style={{ ...cell, textAlign: "center", fontWeight: 500 }}>{r.supplierCode ?? "—"}</td>
-                          <td
-                            style={{
-                              ...cell,
-                              textAlign: "center",
-                              fontFamily: "monospace",
-                              fontWeight: 700,
-                              color: "#6d28d9",
-                            }}
-                          >
-                            {r.numberPlate ?? "—"}
-                          </td>
-                          <td style={{ ...cell, textAlign: "center", fontWeight: 700, color: "#065f46" }}>
-                            {r.trackingLocation ?? "—"}
-                          </td>
-                          <td style={{ ...cell, textAlign: "center", fontWeight: 500 }}>{r.agent ?? "—"}</td>
-                          <td style={{ ...cell, textAlign: "center", color: "#92400e", fontWeight: 700 }}>
-                            {r.transporter ?? "—"}
-                          </td>
-                          <td style={{ ...cell, textAlign: "center" }}>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "6px 10px",
-                                borderRadius: "5px",
-                                fontSize: "17px",
-                                fontWeight: 800,
-                                backgroundColor: "#dbeafe",
-                                color: "#1e40af",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.6px",
-                              }}
-                            >
-                              {r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    }),
-                  ];
-                })}
-              </tbody>
-            </table>
-          );
-        })()}
-
-        <div
-          style={{
-            marginTop: "28px",
-            paddingTop: "18px",
-            borderTop: "1px solid #cbd5e1",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div style={{ fontSize: "16px", color: "#64748b" }}>
-            HMD International Group — ERP System — Auto-generated report
-          </div>
-          <div style={{ fontSize: "16px", color: "#64748b" }}>
-            {new Date().toISOString().replace("T", " ").substring(0, 16)} UTC
-          </div>
-        </div>
-      </div>
+      <TabTruckLocationPrintReport m={m} />
     </div>
   );
 }

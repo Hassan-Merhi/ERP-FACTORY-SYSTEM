@@ -430,3 +430,4 @@ export function usePropertyRentalPageState({ rentalModule, unitType, testIdPrefi
     usesRentExpensePaidBasis,
   };
 }
+export type PropertyRentalPageState = ReturnType<typeof usePropertyRentalPageState>;

@@ -5,8 +5,8 @@
  * the road showed up as 50.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
 import path from "path";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 import { gitContainersUrl } from "@/pages/git-mockup/helpers";
 import { parseGitPagination } from "../../server/routes/git/gitListingProfiles";
 
@@ -36,7 +36,7 @@ describe("git report listing URLs", () => {
   });
 
   it.each(REPORT_TABS)("%s builds its query through gitContainersUrl", (tab) => {
-    const source = readFileSync(path.resolve(__dirname, `../../client/src/pages/git-mockup/${tab}.tsx`), "utf8");
+    const source = readModuleFamily(path.resolve(__dirname, `../../client/src/pages/git-mockup/${tab}.tsx`));
     expect(source).toContain("gitContainersUrl(");
     expect(source).not.toMatch(/queryUrl\s*=\s*[\s\S]{0,120}"\/api\/git\/containers(\?[^"]*)?"/);
   });

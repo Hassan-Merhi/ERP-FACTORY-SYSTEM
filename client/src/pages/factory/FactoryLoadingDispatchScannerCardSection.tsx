@@ -13,6 +13,7 @@ import { SearchField } from "@/components/ui/search-field";
 import { FactoryLoadingDispatchScannerCardSectionContent } from "./FactoryLoadingDispatchScannerCardSectionContent";
 
 export function FactoryLoadingDispatchScannerCardSection({
+  embedded = false,
   active,
   activeSelection,
   allFilteredSelected,
@@ -75,10 +76,16 @@ export function FactoryLoadingDispatchScannerCardSection({
   | "toggleSelection"
   | "visibleCount"
   | "visibleScans"
->) {
+> & { embedded?: boolean }) {
   return (
-    <Card className="border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
-      <CardContent className="space-y-3 p-4 sm:p-5">
+    <Card
+      className={
+        embedded
+          ? "border-0 bg-transparent shadow-none"
+          : "border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      }
+    >
+      <CardContent className={embedded ? "space-y-3 p-0" : "space-y-3 p-4 sm:p-5"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold">Verified truck bales</h3>
@@ -96,18 +103,20 @@ export function FactoryLoadingDispatchScannerCardSection({
             </Button>
           </div>
         </div>
-        <SearchField
-          wrapperClassName="max-w-sm"
-          className="h-9"
-          placeholder="Search reference, article, operator"
-          value={filterText}
-          onValueChange={(v) => {
-            setFilterText(v);
-            setVisibleCount(PAGE_CHUNK);
-          }}
-          data-testid="input-search-dispatch-scans"
-        />
-        {canCorrect && (
+        {(active.length > 0 || Boolean(filterText)) && (
+          <SearchField
+            wrapperClassName="max-w-sm"
+            className="h-9"
+            placeholder="Search reference, article, operator"
+            value={filterText}
+            onValueChange={(v) => {
+              setFilterText(v);
+              setVisibleCount(PAGE_CHUNK);
+            }}
+            data-testid="input-search-dispatch-scans"
+          />
+        )}
+        {canCorrect && active.length > 0 && (
           <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
             <Button
               size="sm"
@@ -171,6 +180,7 @@ export function FactoryLoadingDispatchScannerCardSection({
         )}
         {visibleScans.length > 0 && (
           <FactoryLoadingDispatchScannerCardSectionContent
+            embedded={embedded}
             allFilteredSelected={allFilteredSelected}
             bulkBusy={bulkBusy}
             canCorrect={canCorrect}

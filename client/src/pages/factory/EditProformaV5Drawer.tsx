@@ -8,7 +8,6 @@ import {
   Loader2,
   CheckCircle2,
   Save,
-  Trash2,
   BookmarkCheck,
   FilePenLine,
   Package,
@@ -18,201 +17,26 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
-import { useEditProformaV5DrawerState, type ArticleRow, type Props } from "./useEditProformaV5DrawerState";
+import { type Props } from "./useEditProformaV5DrawerState";
 import { SearchField } from "@/components/ui/search-field";
-import { formatUsd } from "@/lib/moneyDisplay";
+import { useEditProformaV5DrawerModel } from "./EditProformaV5DrawerModel";
+import { EditProformaV5LinesTable } from "./EditProformaV5LinesTable";
 
 export default function EditProformaV5Drawer(props: Props) {
-  const {
-    appliedPrice,
-    applyCatalogProductionPrice,
-    applyCatalogSellingPrice,
-    articleRows,
-    articleSearch,
-    catalogCategories,
-    catalogFilter,
-    customerPriceListQuery,
-    destination,
-    hideNonPositive,
-    initialized,
-    isActive,
-    kgPrices,
-    onClose,
-    prices,
-    pricingModes,
-    productMap,
-    productsQuery,
-    proformaName,
-    proformaQuery,
-    qtyRefs,
-    quantities,
-    saveMutation,
-    setAppliedPrice,
-    setArticleSearch,
-    setCatalogFilter,
-    setDestination,
-    setHideNonPositive,
-    setIsActive,
-    setKgPrices,
-    setPrices,
-    setPricingModes,
-    setProformaName,
-    setQuantities,
-    setShowGarbageWipers,
-    setShowZeroItems,
-    showGarbageWipers,
-    showZeroItems,
-    toast,
-  } = useEditProformaV5DrawerState(props);
-
-  function applySavedAgreedPrices() {
-    const availableCodes = new Set(articleRows.map((row) => row.articleCode));
-    const agreedPrices: Record<string, string> = {};
-    for (const row of customerPriceListQuery.data ?? []) {
-      if (availableCodes.has(row.article_code) && Number(row.price_per_bale) > 0) {
-        agreedPrices[row.article_code] = row.price_per_bale;
-      }
-    }
-    const matchedCodes = Object.keys(agreedPrices);
-    if (matchedCodes.length === 0) {
-      toast({
-        title: "No matching agreed prices",
-        description: "No saved customer prices match the articles in this allocation.",
-      });
-      return;
-    }
-
-    // Agreed prices are saved per bale. Switching matched rows to /bale ensures
-    // the new price is visible and persisted instead of keeping a stale /kg rate.
-    setPrices((prev) => ({ ...prev, ...agreedPrices }));
-    setPricingModes((prev) => {
-      const next = { ...prev };
-      for (const code of matchedCodes) next[code] = "per_bale";
-      return next;
-    });
-    setAppliedPrice("customer");
-    toast({
-      title: "Agreed prices applied",
-      description: `${matchedCodes.length} matching article price${matchedCodes.length === 1 ? "" : "s"} updated. Click Save to save the proforma.`,
-    });
-  }
-
-  function handleQtyKeyDown(e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number) {
-    if (e.key === "ArrowDown" || e.key === "Enter") {
-      e.preventDefault();
-      const next = qtyRefs.current[rowIdx + 1];
-      if (next) {
-        next.focus();
-        next.select();
-      }
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prev = qtyRefs.current[rowIdx - 1];
-      if (prev) {
-        prev.focus();
-        prev.select();
-      }
-    } else if (e.key === "Escape") {
-      e.currentTarget.blur();
-    }
-  }
-
-  const map = productMap();
-
-  function isGarbageOrWipers(row: ArticleRow) {
-    const n = row.productName.toLowerCase();
-    return n.includes("wiper") || n.includes("garbage");
-  }
-
-  const zeroItemCount = articleRows.filter((r) => r.stockAvailable === 0).length;
-  const nonPositiveCount = articleRows.filter((r) => r.freeToPromise <= 0).length;
-  const garbageWipersCount = articleRows.filter(isGarbageOrWipers).length;
-
-  const existingLineCodes = new Set((proformaQuery.data?.lines ?? []).map((l) => l.articleCode));
-
-  // Keep rows that have existing/entered quantities even when hiding zeros
-  const visibleRows = (() => {
-    let base = showZeroItems
-      ? articleRows
-      : articleRows.filter(
-          (r) =>
-            r.stockAvailable > 0 ||
-            r.expectedToLoad > 0 ||
-            (quantities[r.articleCode] && parseInt(quantities[r.articleCode]) > 0)
-        );
-    if (hideNonPositive)
-      base = base.filter(
-        (r) => r.freeToPromise > 0 || (quantities[r.articleCode] && parseInt(quantities[r.articleCode]) > 0)
-      );
-    if (!showGarbageWipers)
-      base = base.filter(
-        (r) =>
-          !isGarbageOrWipers(r) ||
-          existingLineCodes.has(r.articleCode) ||
-          (quantities[r.articleCode] && parseInt(quantities[r.articleCode]) > 0)
-      );
-    if (catalogFilter !== "__all__")
-      base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
-    if (articleSearch.trim()) {
-      const term = articleSearch.trim().toLowerCase();
-      base = base.filter(
-        (row) => row.productName.toLowerCase().includes(term) || row.articleCode.toLowerCase().includes(term)
-      );
-    }
-    return base.slice().sort((a, b) => a.productName.localeCompare(b.productName));
-  })();
-
-  const visibleTotalBalance = visibleRows.reduce((s, r) => s + r.freeToPromise, 0);
-
-  // Display-only totals must match the currently visible stock-allocation rows.
-  // Saving still includes quantities for every article, even if a filter hides it.
-  const filledLines = visibleRows.filter((r) => {
-    const v = quantities[r.articleCode];
-    return v && parseInt(v) > 0;
-  }).length;
-  const totalQty = visibleRows.reduce((s, r) => {
-    const v = parseInt(quantities[r.articleCode] || "0");
-    return s + (isNaN(v) || v < 0 ? 0 : v);
-  }, 0);
-  const totalKg = visibleRows.reduce((s, r) => {
-    const qty = parseInt(quantities[r.articleCode] || "0");
-    if (isNaN(qty) || qty <= 0) return s;
-    const p = map.get(r.articleCode);
-    const w = parseFloat(p?.weightPerBaleKg || "0");
-    return s + qty * w;
-  }, 0);
-  const totalValue = visibleRows.reduce((s, r) => {
-    const qty = parseInt(quantities[r.articleCode] || "0");
-    if (isNaN(qty) || qty <= 0) return s;
-    const mode = pricingModes[r.articleCode] ?? "per_bale";
-    if (mode === "per_kg") {
-      const pkgRate = parseFloat(kgPrices[r.articleCode] || "0");
-      const p = map.get(r.articleCode);
-      const avgWt = parseFloat(p?.weightPerBaleKg || "0");
-      return s + qty * avgWt * pkgRate;
-    }
-    const price = parseFloat(prices[r.articleCode] || "0");
-    return s + qty * price;
-  }, 0);
-  const warningCount = visibleRows.filter((r) => {
-    const qty = parseInt(quantities[r.articleCode] || "0");
-    return !isNaN(qty) && qty > 0 && r.freeToPromise < 0;
-  }).length;
-
-  const isLoading = proformaQuery.isLoading;
+  const m = useEditProformaV5DrawerModel(props);
 
   return (
     <div className="flex min-w-0 flex-col bg-background pb-5" data-testid="page-edit-proforma-v5">
       <section className="px-3 pb-3 pt-5 sm:px-5">
         <PageHeader title="Edit Proforma" subtitle="Stock Allocation" icon={<FilePenLine className="h-5 w-5" />} />
-        {!isLoading && !proformaQuery.isError && (
+        {!m.isLoading && !m.proformaQuery.isError && (
           <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
             <div className="flex min-w-0 items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-3.5 shadow-sm">
               <Package className="hidden h-9 w-9 shrink-0 rounded-lg bg-violet-500/15 p-2 text-violet-500 sm:block" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Total Products</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-violet-500">
-                  {visibleRows.length.toLocaleString()}
+                  {m.visibleRows.length.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -220,43 +44,43 @@ export default function EditProformaV5Drawer(props: Props) {
               <Boxes className="hidden h-9 w-9 shrink-0 rounded-lg bg-emerald-500/15 p-2 text-emerald-500 sm:block" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Qty / Container</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-500">{totalQty.toLocaleString()}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-500">{m.totalQty.toLocaleString()}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3.5 shadow-sm">
               <Scale className="hidden h-9 w-9 shrink-0 rounded-lg bg-amber-500/15 p-2 text-amber-500 sm:block" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Total KG</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-500">{totalKg.toLocaleString()}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-500">{m.totalKg.toLocaleString()}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] p-3.5 shadow-sm">
               <Save className="hidden h-9 w-9 shrink-0 rounded-lg bg-sky-500/15 p-2 text-sky-500 sm:block" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Total Value</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-sky-500">{totalValue.toLocaleString()}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-sky-500">{m.totalValue.toLocaleString()}</p>
               </div>
             </div>
             <div className="col-span-2 lg:col-span-1 flex min-w-0 items-center gap-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] p-3.5 shadow-sm">
               <AlertTriangle className="hidden h-9 w-9 shrink-0 rounded-lg bg-rose-500/15 p-2 text-rose-500 sm:block" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Shortages</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-rose-500">{warningCount.toLocaleString()}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-rose-500">{m.warningCount.toLocaleString()}</p>
               </div>
             </div>
           </div>
         )}
       </section>
 
-      {isLoading ? (
+      {m.isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : proformaQuery.isError ? (
+      ) : m.proformaQuery.isError ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 text-center" role="alert">
           <AlertTriangle className="h-6 w-6 text-destructive" />
-          <p className="text-sm text-destructive">Could not load this proforma: {proformaQuery.error.message}</p>
-          <Button variant="outline" onClick={() => proformaQuery.refetch()}>
+          <p className="text-sm text-destructive">Could not load this proforma: {m.proformaQuery.error.message}</p>
+          <Button variant="outline" onClick={() => m.proformaQuery.refetch()}>
             Retry
           </Button>
         </div>
@@ -271,8 +95,8 @@ export default function EditProformaV5Drawer(props: Props) {
               <Input
                 id="edit-v5-proforma-name"
                 data-testid="input-edit-v5-proforma-name"
-                value={proformaName}
-                onChange={(e) => setProformaName(e.target.value)}
+                value={m.proformaName}
+                onChange={(e) => m.setProformaName(e.target.value)}
                 placeholder="Proforma name"
               />
             </div>
@@ -284,10 +108,10 @@ export default function EditProformaV5Drawer(props: Props) {
               <Input
                 id="edit-v5-proforma-destination"
                 data-testid="input-edit-v5-proforma-destination"
-                value={destination}
+                value={m.destination}
                 onChange={(e) => {
-                  setDestination(e.target.value);
-                  setAppliedPrice(null);
+                  m.setDestination(e.target.value);
+                  m.setAppliedPrice(null);
                 }}
                 placeholder="e.g. L'SHI, MALI, KINSHASA"
                 list="edit-proforma-destination-suggestions"
@@ -297,7 +121,7 @@ export default function EditProformaV5Drawer(props: Props) {
                 <option value="MALI" />
                 <option value="KINSHASA" />
               </datalist>
-              {!proformaQuery.data?.destination && (
+              {!m.proformaQuery.data?.destination && (
                 <p className="text-xs text-muted-foreground">
                   Old proforma: assign its destination here. Existing prices are preserved until you explicitly apply
                   destination prices.
@@ -308,15 +132,19 @@ export default function EditProformaV5Drawer(props: Props) {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium">Status</Label>
               <div className="flex items-center gap-2 h-9">
-                <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-edit-v5-proforma-active" />
-                <span className="text-sm text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
+                <Switch
+                  checked={m.isActive}
+                  onCheckedChange={m.setIsActive}
+                  data-testid="switch-edit-v5-proforma-active"
+                />
+                <span className="text-sm text-muted-foreground">{m.isActive ? "Active" : "Inactive"}</span>
               </div>
             </div>
             <div className="w-full sm:w-72">
               <Label className="mb-1 block text-xs font-medium">Search</Label>
               <SearchField
-                value={articleSearch}
-                onValueChange={setArticleSearch}
+                value={m.articleSearch}
+                onValueChange={m.setArticleSearch}
                 placeholder="Search product name or code..."
                 className="h-10 rounded-lg text-sm"
                 data-testid="input-v5-edit-search"
@@ -325,18 +153,18 @@ export default function EditProformaV5Drawer(props: Props) {
             </div>
             <div className="w-full sm:w-56">
               <Label className="mb-1 block text-xs font-medium">Catalog</Label>
-              <Select value={catalogFilter} onValueChange={setCatalogFilter}>
+              <Select value={m.catalogFilter} onValueChange={m.setCatalogFilter}>
                 <SelectTrigger className="h-10 rounded-lg" data-testid="select-v5-edit-catalog">
                   <SelectValue placeholder="All Catalogs" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All Catalogs</SelectItem>
-                  {catalogCategories.map((category) => (
+                  {m.catalogCategories.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
                     </SelectItem>
                   ))}
-                  {articleRows.some((row) => !row.categoryName?.trim()) && (
+                  {m.articleRows.some((row) => !row.categoryName?.trim()) && (
                     <SelectItem value="__uncategorized__">Uncategorized</SelectItem>
                   )}
                 </SelectContent>
@@ -344,48 +172,48 @@ export default function EditProformaV5Drawer(props: Props) {
             </div>
           </div>
           <div className="mx-3 flex flex-wrap items-center gap-2 border-x border-b bg-card/70 px-3.5 py-3 sm:mx-5 sm:px-4">
-            {zeroItemCount > 0 && (
+            {m.zeroItemCount > 0 && (
               <div className="">
                 <Button
                   size="default"
-                  variant={showZeroItems ? "secondary" : "outline"}
-                  onClick={() => setShowZeroItems((v) => !v)}
+                  variant={m.showZeroItems ? "secondary" : "outline"}
+                  onClick={() => m.setShowZeroItems((v) => !v)}
                   data-testid="button-edit-v5-toggle-zero"
                   className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
-                  {showZeroItems ? `Hide 0-stock (${zeroItemCount})` : `Show 0-stock (${zeroItemCount})`}
+                  {m.showZeroItems ? `Hide 0-stock (${m.zeroItemCount})` : `Show 0-stock (${m.zeroItemCount})`}
                 </Button>
               </div>
             )}
 
-            {nonPositiveCount > 0 && (
+            {m.nonPositiveCount > 0 && (
               <div className="">
                 <Button
                   size="default"
-                  variant={hideNonPositive ? "default" : "outline"}
-                  onClick={() => setHideNonPositive((v) => !v)}
+                  variant={m.hideNonPositive ? "default" : "outline"}
+                  onClick={() => m.setHideNonPositive((v) => !v)}
                   data-testid="button-edit-v5-hide-non-positive"
                   className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
-                  {hideNonPositive
-                    ? `Show all (${nonPositiveCount} hidden)`
-                    : `Hide 0 & negative (${nonPositiveCount})`}
+                  {m.hideNonPositive
+                    ? `Show all (${m.nonPositiveCount} hidden)`
+                    : `Hide 0 & negative (${m.nonPositiveCount})`}
                 </Button>
               </div>
             )}
 
-            {garbageWipersCount > 0 && (
+            {m.garbageWipersCount > 0 && (
               <div>
                 <Button
                   size="default"
-                  variant={showGarbageWipers ? "secondary" : "outline"}
-                  onClick={() => setShowGarbageWipers((v) => !v)}
+                  variant={m.showGarbageWipers ? "secondary" : "outline"}
+                  onClick={() => m.setShowGarbageWipers((v) => !v)}
                   data-testid="button-edit-v5-toggle-garbage-wipers"
                   className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
-                  {showGarbageWipers
-                    ? `Hide Garbage/Wipers (${garbageWipersCount})`
-                    : `Show Garbage/Wipers (${garbageWipersCount})`}
+                  {m.showGarbageWipers
+                    ? `Hide Garbage/Wipers (${m.garbageWipersCount})`
+                    : `Show Garbage/Wipers (${m.garbageWipersCount})`}
                 </Button>
               </div>
             )}
@@ -393,60 +221,60 @@ export default function EditProformaV5Drawer(props: Props) {
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
-                variant={appliedPrice === "sell" ? "secondary" : "outline"}
-                onClick={applyCatalogSellingPrice}
-                disabled={!productsQuery.data}
+                variant={m.appliedPrice === "sell" ? "secondary" : "outline"}
+                onClick={m.applyCatalogSellingPrice}
+                disabled={!m.productsQuery.data}
                 data-testid="button-edit-v5-apply-sell-price"
                 className={cn(
                   "h-9 rounded-full px-4 text-xs font-semibold",
-                  appliedPrice === "sell" && "ring-2 ring-violet-500/40"
+                  m.appliedPrice === "sell" && "ring-2 ring-violet-500/40"
                 )}
               >
-                {appliedPrice === "sell" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
+                {m.appliedPrice === "sell" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Apply Sell Price
               </Button>
               <Button
                 size="sm"
-                variant={appliedPrice === "prod" ? "secondary" : "outline"}
-                onClick={applyCatalogProductionPrice}
-                disabled={!productsQuery.data}
+                variant={m.appliedPrice === "prod" ? "secondary" : "outline"}
+                onClick={m.applyCatalogProductionPrice}
+                disabled={!m.productsQuery.data}
                 data-testid="button-edit-v5-apply-prod-price"
                 className={cn(
                   "h-9 rounded-full px-4 text-xs font-semibold",
-                  appliedPrice === "prod" && "ring-2 ring-violet-500/40"
+                  m.appliedPrice === "prod" && "ring-2 ring-violet-500/40"
                 )}
               >
-                {appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
+                {m.appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Apply Prod Price
               </Button>
               <Button
                 size="sm"
-                variant={appliedPrice === "customer" ? "secondary" : "outline"}
-                onClick={applySavedAgreedPrices}
+                variant={m.appliedPrice === "customer" ? "secondary" : "outline"}
+                onClick={m.applySavedAgreedPrices}
                 disabled={
-                  !initialized ||
-                  customerPriceListQuery.isFetching ||
-                  customerPriceListQuery.isError ||
-                  !customerPriceListQuery.data?.length
+                  !m.initialized ||
+                  m.customerPriceListQuery.isFetching ||
+                  m.customerPriceListQuery.isError ||
+                  !m.customerPriceListQuery.data?.length
                 }
                 data-testid="button-edit-v5-apply-customer-price"
                 title={
-                  customerPriceListQuery.isError
+                  m.customerPriceListQuery.isError
                     ? "Could not load saved agreed prices for this customer"
-                    : customerPriceListQuery.data?.length
-                      ? `Apply ${customerPriceListQuery.data.length} saved agreed price(s) for this customer`
+                    : m.customerPriceListQuery.data?.length
+                      ? `Apply ${m.customerPriceListQuery.data.length} saved agreed price(s) for this customer`
                       : "No agreed prices saved for this customer yet"
                 }
                 className={cn(
                   "h-9 rounded-full px-4 text-xs font-semibold",
-                  appliedPrice === "customer" && "ring-2 ring-violet-500/40"
+                  m.appliedPrice === "customer" && "ring-2 ring-violet-500/40"
                 )}
               >
-                {appliedPrice === "customer" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
+                {m.appliedPrice === "customer" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 <BookmarkCheck className="h-3.5 w-3.5 mr-1.5" />
                 Apply Saved Agreed Prices
-                {customerPriceListQuery.data && customerPriceListQuery.data.length > 0 && (
-                  <span className="ml-1 text-[11px] opacity-70">({customerPriceListQuery.data.length})</span>
+                {m.customerPriceListQuery.data && m.customerPriceListQuery.data.length > 0 && (
+                  <span className="ml-1 text-[11px] opacity-70">({m.customerPriceListQuery.data.length})</span>
                 )}
               </Button>
             </div>
@@ -455,306 +283,59 @@ export default function EditProformaV5Drawer(props: Props) {
           {/* Table */}
           <V5ProformaMobileLines
             variant="edit"
-            rows={visibleRows}
-            quantities={quantities}
-            prices={prices}
-            kgPrices={kgPrices}
-            pricingModes={pricingModes}
-            onQuantityChange={(code, value) => setQuantities((previous) => ({ ...previous, [code]: value }))}
-            onPriceChange={(code, value) => setPrices((previous) => ({ ...previous, [code]: value }))}
-            onKgPriceChange={(code, value) => setKgPrices((previous) => ({ ...previous, [code]: value }))}
-            onModeChange={(code, value) => setPricingModes((previous) => ({ ...previous, [code]: value }))}
-            weightPerBale={(code) => Number(map.get(code)?.weightPerBaleKg || 0)}
+            rows={m.visibleRows}
+            quantities={m.quantities}
+            prices={m.prices}
+            kgPrices={m.kgPrices}
+            pricingModes={m.pricingModes}
+            onQuantityChange={(code, value) => m.setQuantities((previous) => ({ ...previous, [code]: value }))}
+            onPriceChange={(code, value) => m.setPrices((previous) => ({ ...previous, [code]: value }))}
+            onKgPriceChange={(code, value) => m.setKgPrices((previous) => ({ ...previous, [code]: value }))}
+            onModeChange={(code, value) => m.setPricingModes((previous) => ({ ...previous, [code]: value }))}
+            weightPerBale={(code) => Number(m.map.get(code)?.weightPerBaleKg || 0)}
             shortageCount={(row, qty) => (qty > 0 && row.freeToPromise < 0 ? Math.abs(row.freeToPromise) : 0)}
-            existingCodes={new Set(proformaQuery.data?.lines.map((line) => line.articleCode) ?? [])}
-            onClear={(code) => setQuantities((previous) => ({ ...previous, [code]: "0" }))}
+            existingCodes={new Set(m.proformaQuery.data?.lines.map((line) => line.articleCode) ?? [])}
+            onClear={(code) => m.setQuantities((previous) => ({ ...previous, [code]: "0" }))}
           />
-          <div className="mx-3 hidden min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
-            <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
-              <colgroup>
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "19%" }} />
-                <col style={{ width: "4%" }} />
-              </colgroup>
-              <thead>
-                <tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
-                  <th className="sticky left-0 z-20 border-b border-r bg-slate-100 px-4 py-3 text-left text-xs font-semibold dark:bg-slate-800/95">
-                    Product
-                  </th>
-                  <th className="border-b border-r px-3 py-3 text-left text-xs font-semibold">Code</th>
-                  <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
-                    Available Balance
-                  </th>
-                  <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
-                    Qty / Container
-                  </th>
-                  <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap text-muted-foreground">
-                    Total KG
-                  </th>
-                  <th className="border-b px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">Price</th>
-                  <th className="border-b px-2 py-3 text-center text-xs font-semibold"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row, idx) => {
-                  const rawVal = quantities[row.articleCode] ?? "";
-                  const parsed = parseInt(rawVal);
-                  const qty = isNaN(parsed) ? 0 : parsed;
-                  const shortage = qty > 0 && row.freeToPromise < 0;
-                  const p = map.get(row.articleCode);
-                  const w = parseFloat(p?.weightPerBaleKg || "0");
-                  const totalKgRow = qty > 0 && w > 0 ? qty * w : null;
-                  const hasExistingLine = !!proformaQuery.data?.lines.find((l) => l.articleCode === row.articleCode);
-
-                  return (
-                    <tr
-                      key={row.articleCode}
-                      className={cn(
-                        "border-b transition-colors",
-                        idx % 2 === 0 ? "bg-card" : "bg-muted/25",
-                        qty > 0 && "bg-violet-500/[0.06]"
-                      )}
-                      data-testid={`row-v5-edit-${row.articleCode}`}
-                    >
-                      <td className="sticky left-0 z-10 border-r bg-inherit px-4 py-2.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          {hasExistingLine && qty > 0 && (
-                            <span
-                              className="h-2 w-2 shrink-0 rounded-full bg-violet-500"
-                              title="Line exists in proforma"
-                            />
-                          )}
-                          <span className="block truncate text-xs font-semibold sm:text-sm" title={row.productName}>
-                            {row.productName}
-                          </span>
-                        </div>
-                      </td>
-                      <td
-                        className="border-r px-3 py-2.5 font-mono text-xs text-muted-foreground"
-                        title={row.articleCode}
-                      >
-                        {row.articleCode}
-                      </td>
-
-                      <td
-                        className={cn(
-                          "border-r px-2 py-2.5 text-center font-mono tabular-nums text-xs font-semibold",
-                          row.freeToPromise < 0
-                            ? "text-destructive"
-                            : row.freeToPromise === 0
-                              ? "text-muted-foreground"
-                              : "text-green-700 dark:text-green-400"
-                        )}
-                      >
-                        {row.freeToPromise < 0 && <AlertTriangle className="inline h-3 w-3 mr-0.5 mb-0.5" />}
-                        {row.freeToPromise > 0 ? "+" : ""}
-                        {row.freeToPromise.toLocaleString()}
-                      </td>
-
-                      <td className="border-r px-2 py-2.5">
-                        <div className="flex flex-col gap-0.5 items-center">
-                          <Input
-                            ref={(el) => {
-                              qtyRefs.current[idx] = el;
-                            }}
-                            type="number"
-                            min={0}
-                            value={rawVal}
-                            onChange={(e) => setQuantities((prev) => ({ ...prev, [row.articleCode]: e.target.value }))}
-                            onFocus={(e) => e.target.select()}
-                            onKeyDown={(e) => handleQtyKeyDown(e, idx)}
-                            placeholder="0"
-                            className={cn(
-                              "h-7 text-center text-xs tabular-nums w-full",
-                              shortage && "border-amber-400 bg-amber-50/30 dark:bg-amber-950/20"
-                            )}
-                            data-testid={`input-edit-v5-qty-${row.articleCode}`}
-                          />
-                          {shortage && (
-                            <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 whitespace-nowrap">
-                              <AlertTriangle className="h-2.5 w-2.5" />
-                              Low stock
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="border-r px-2 py-2.5 text-center text-xs text-muted-foreground tabular-nums">
-                        {totalKgRow != null ? (
-                          <span className="text-foreground font-medium">
-                            {totalKgRow.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/40">—</span>
-                        )}
-                      </td>
-
-                      <td className="px-2 py-2.5">
-                        {(() => {
-                          const mode = pricingModes[row.articleCode] ?? "per_bale";
-                          return (
-                            <div className="flex items-center gap-1">
-                              <div className="flex rounded-sm border shrink-0 overflow-hidden text-[11px] font-semibold">
-                                <button
-                                  className={cn(
-                                    "px-1.5 py-0.5 transition-colors",
-                                    mode === "per_bale"
-                                      ? "bg-primary text-primary-foreground"
-                                      : "text-muted-foreground hover:bg-muted"
-                                  )}
-                                  onClick={() =>
-                                    setPricingModes((prev) => ({ ...prev, [row.articleCode]: "per_bale" }))
-                                  }
-                                  data-testid={`button-edit-v5-mode-bale-${row.articleCode}`}
-                                  title="Price per bale"
-                                >
-                                  /bale
-                                </button>
-                                <button
-                                  className={cn(
-                                    "px-1.5 py-0.5 transition-colors",
-                                    mode === "per_kg"
-                                      ? "bg-primary text-primary-foreground"
-                                      : "text-muted-foreground hover:bg-muted"
-                                  )}
-                                  onClick={() => setPricingModes((prev) => ({ ...prev, [row.articleCode]: "per_kg" }))}
-                                  data-testid={`button-edit-v5-mode-kg-${row.articleCode}`}
-                                  title="Price per kg"
-                                >
-                                  /kg
-                                </button>
-                              </div>
-                              {mode === "per_kg" ? (
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.001"
-                                  value={kgPrices[row.articleCode] ?? ""}
-                                  onChange={(e) =>
-                                    setKgPrices((prev) => ({ ...prev, [row.articleCode]: e.target.value }))
-                                  }
-                                  onFocus={(e) => e.target.select()}
-                                  placeholder="0.000"
-                                  className="h-7 text-right text-xs tabular-nums w-full"
-                                  data-testid={`input-edit-v5-kgprice-${row.articleCode}`}
-                                />
-                              ) : (
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={prices[row.articleCode] ?? ""}
-                                  onChange={(e) =>
-                                    setPrices((prev) => ({ ...prev, [row.articleCode]: e.target.value }))
-                                  }
-                                  onFocus={(e) => e.target.select()}
-                                  placeholder="0.00"
-                                  className="h-7 text-right text-xs tabular-nums w-full"
-                                  data-testid={`input-edit-v5-price-${row.articleCode}`}
-                                />
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      <td className="px-1 py-1 text-center">
-                        {hasExistingLine && qty > 0 && (
-                          <button
-                            className="text-muted-foreground/40 hover:text-destructive transition-colors"
-                            title="Remove line (set qty to 0)"
-                            onClick={() => setQuantities((prev) => ({ ...prev, [row.articleCode]: "0" }))}
-                            data-testid={`button-edit-v5-clear-${row.articleCode}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="sticky bottom-0 z-20 border-t-2 bg-slate-100 text-xs font-semibold dark:bg-slate-800">
-                  <td className="sticky left-0 z-10 border-r bg-slate-100 px-4 py-3 dark:bg-slate-800">
-                    <span className="text-foreground">Totals</span>
-                    <span className="ml-1.5 font-normal text-muted-foreground">
-                      ({visibleRows.length} visible products)
-                    </span>
-                  </td>
-                  <td className="border-r px-3 py-3 text-xs text-muted-foreground">Total</td>
-                  <td
-                    className={cn(
-                      "border-r px-2 py-3 text-center font-mono tabular-nums",
-                      visibleTotalBalance < 0
-                        ? "text-destructive"
-                        : visibleTotalBalance > 0
-                          ? "text-green-700 dark:text-green-400"
-                          : "text-muted-foreground"
-                    )}
-                  >
-                    {visibleTotalBalance > 0 ? `+${visibleTotalBalance}` : visibleTotalBalance}
-                  </td>
-                  <td className="border-r px-2 py-3 text-center font-mono tabular-nums text-foreground">
-                    {totalQty > 0 ? totalQty : <span className="text-muted-foreground/40">—</span>}
-                  </td>
-                  <td className="border-r px-2 py-3 text-center font-mono tabular-nums text-muted-foreground">
-                    {totalKg > 0 ? (
-                      <span className="text-foreground">
-                        {totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-3 text-center font-mono tabular-nums text-foreground" colSpan={2}>
-                    {totalValue > 0 ? formatUsd(totalValue, 2) : <span className="text-muted-foreground/40">—</span>}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <EditProformaV5LinesTable m={m} />
 
           {/* Footer */}
           <div className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card/90 px-4 py-3 shadow-sm sm:mx-5">
             <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
               <span>
-                <span className="font-semibold text-foreground">{filledLines}</span> line
-                {filledLines !== 1 ? "s" : ""} visible
+                <span className="font-semibold text-foreground">{m.filledLines}</span> line
+                {m.filledLines !== 1 ? "s" : ""} visible
               </span>
               <span>
-                <span className="font-semibold text-foreground">{totalQty}</span> visible bales
+                <span className="font-semibold text-foreground">{m.totalQty}</span> visible bales
               </span>
-              {totalKg > 0 && (
+              {m.totalKg > 0 && (
                 <span>
                   <span className="font-semibold text-foreground">
-                    {totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                    {m.totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                   </span>{" "}
                   kg
                 </span>
               )}
-              {warningCount > 0 && (
+              {m.warningCount > 0 && (
                 <span className="flex items-center gap-1 text-destructive">
                   <AlertTriangle className="h-3 w-3" />
-                  {warningCount} product{warningCount !== 1 ? "s" : ""} with shortage
+                  {m.warningCount} product{m.warningCount !== 1 ? "s" : ""} with shortage
                 </span>
               )}
               <span className="text-[11px] text-muted-foreground/60">Ctrl/⌘+S to save</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={onClose} data-testid="button-edit-v5-cancel">
+              <Button variant="outline" onClick={m.onClose} data-testid="button-edit-v5-cancel">
                 Cancel
               </Button>
               <Button
-                onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || !proformaName.trim()}
+                onClick={() => m.saveMutation.mutate()}
+                disabled={m.saveMutation.isPending || !m.proformaName.trim()}
                 data-testid="button-edit-v5-save"
                 className="bg-violet-600 text-white hover:bg-violet-700"
               >
-                {saveMutation.isPending ? (
+                {m.saveMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
