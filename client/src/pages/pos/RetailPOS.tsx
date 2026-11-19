@@ -1,20 +1,17 @@
-import { CalendarDays, MapPin, ShoppingCart, RotateCcw, Wallet } from "lucide-react";
+import { ShoppingCart, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { PosCheckoutField, PosCheckoutPanel } from "./pos-components/PosCheckoutPanel";
 import { PosSaleHeader, PosSaleSubmitButton } from "./pos-components/PosSaleHeader";
 import { PosSaleScreen } from "./pos-components/PosSaleLayout";
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
-import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions } from "./RetailPaymentAccountSelect";
 import { RetailShiftPanel } from "./RetailShiftPanel";
 import { RetailApprovalDialog } from "./RetailApprovalDialog";
-import { RetailCustomerPicker } from "./RetailCustomerPicker";
 import { RetailLineAdjustDialog, type LineAdjustment } from "./RetailLineAdjustDialog";
-import { money, type RetailPaymentDraft } from "./retailPosTypes";
+import { money } from "./retailPosTypes";
 import { useRetailPOSState } from "./useRetailPOSState";
 import { RetailPOSPosWorkspaceColumnsSection } from "./RetailPOSPosWorkspaceColumnsSection";
-import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
+import { RetailPOSPosCheckoutPanel } from "./RetailPOSPosCheckoutPanel";
 
 export default function RetailPOS() {
   const {
@@ -108,79 +105,20 @@ export default function RetailPOS() {
         }
       />
 
-      <PosCheckoutPanel ariaLabel={t("pos.modern.saleSettings")}>
-        <PosCheckoutField field="location" icon={MapPin} label={t("pos.modern.location")} htmlFor="retail-pos-location">
-          <Select
-            disabled={isPosRole}
-            value={selectedLocation ? String(selectedLocation.id) : "__none__"}
-            onValueChange={(v) => {
-              const location = locations.find((entry) => entry.id === Number(v === "__none__" ? "" : v)) ?? null;
-              setSelectedLocation(location);
-            }}
-          >
-            <SelectTrigger id="retail-pos-location" className="h-9 min-w-[154px] max-w-[220px] text-sm">
-              <SelectValue placeholder="Select location" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">Select location</SelectItem>
-              {locations.map((location) => (
-                <SelectItem key={location.id} value={String(location.id)}>
-                  {location.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </PosCheckoutField>
-        <PosCheckoutField field="date" icon={CalendarDays} label={t("pos.modern.date")} htmlFor="retail-pos-date">
-          <input
-            id="retail-pos-date"
-            type="date"
-            className="block h-9 w-full rounded-md border bg-muted/40 px-3 font-mono text-sm"
-            value={new Date().toLocaleDateString("sv-SE")}
-            readOnly
-            aria-label="Sale date (set by server at checkout)"
-            title="Retail sales use the actual checkout date; backdated posting is not enabled"
-          />
-        </PosCheckoutField>
-        <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")} htmlFor="retail-pos-account">
-          <select
-            id="retail-pos-account"
-            className="block h-9 w-full rounded-md border bg-background px-3 text-sm"
-            value={paymentAccountValue(payments[0] ?? { method: "cash", amount: 0 })}
-            onChange={(event) => {
-              if (!paymentAccounts) return;
-              const value = event.target.value;
-              setPayments((current) =>
-                current.map((payment, index) =>
-                  index !== 0
-                    ? payment
-                    : value
-                      ? paymentFromAccount(value, payment.amount, paymentAccounts)
-                      : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
-                )
-              );
-            }}
-            data-testid="retail-pos-account"
-          >
-            <RetailPaymentAccountOptions
-              accounts={paymentAccounts}
-              allowCredit={Boolean(customer?.id)}
-              customerName={customer?.legalName}
-            />
-          </select>
-        </PosCheckoutField>
-        <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
-          <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />
-        </div>
-        {hasCreditTender && (
-          <span
-            className="self-center text-xs font-medium text-amber-700 dark:text-amber-300"
-            data-testid="retail-credit-amount"
-          >
-            {customer ? `On account: ${money(creditAmount)}` : "Choose a customer to post credit"}
-          </span>
-        )}
-      </PosCheckoutPanel>
+      <RetailPOSPosCheckoutPanel
+        creditAmount={creditAmount}
+        customer={customer}
+        hasCreditTender={hasCreditTender}
+        isPosRole={isPosRole}
+        locations={locations}
+        paymentAccounts={paymentAccounts}
+        payments={payments}
+        selectCustomer={selectCustomer}
+        selectedLocation={selectedLocation}
+        setPayments={setPayments}
+        setSelectedLocation={setSelectedLocation}
+        t={t}
+      />
 
       <RetailShiftPanel
         locationId={selectedLocation?.id ?? null}

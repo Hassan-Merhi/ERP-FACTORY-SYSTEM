@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, Upload, RotateCcw, ImageIcon, CheckCircle, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { Loader2, Upload, RotateCcw, CheckCircle, Plus, Pencil, Trash2, X, Check } from "lucide-react";
 import { confirmAction } from "@/components/ConfirmHost";
 import { LabelBannersSettingsCardAddColorForm, useLabelBannersSettingsState } from "./useLabelBannersSettingsState";
+import { LabelBannersSettingsCard } from "./LabelBannersSettingsCard";
 
 export default function LabelBannersSettings() {
   const {
@@ -275,27 +276,7 @@ export default function LabelBannersSettings() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            How this works
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            Each color slot maps to a design option that can be assigned to a bale product. When printing an A4 label,
-            the banner image for that color fills the top of the page.
-          </p>
-          <p>
-            Built-in colors (purple, green, gold, white, red) cannot be deleted, but you can upload a custom banner for
-            any of them. Custom colors you add here appear in the design picker on all product forms.
-          </p>
-          <p>
-            Recommended banner size: <strong>1240 × 350 px</strong> · JPG gives the best file size for photos.
-          </p>
-        </CardContent>
-      </Card>
+      <LabelBannersSettingsCard />
     </div>
   );
 }
