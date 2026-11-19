@@ -24,6 +24,62 @@ import {
 import { isRealBonusDate } from "../../services/factory/targetBonusPaymentPolicy";
 import { actor, allowed, company, fail, guard, rows, usd } from "./productionBonusCheckoutRoutesCreditedCategories";
 import { calculateOffers } from "./productionBonusCheckoutRoutesCalculateOffers";
+import { z } from "zod";
+import {
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+
+// parseManualBonusCommand, parseTargetBonusPaymentCommand and the handlers keep
+// their own checks and messages; these schemas fix the shape the Production
+// Targets bonus panels send.
+const amountLike = z.union([z.number(), z.string()]);
+const paymentCommandFields = {
+  confirm: z.boolean().optional(),
+  currency: z.string().nullable().optional(),
+  paymentDate: z.string().optional(),
+  cashAccountId: z.number().optional(),
+};
+const manualPayInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    ...paymentCommandFields,
+    weekStart: z.string().optional(),
+    rosterDate: z.string().optional(),
+    requestKey: z.string().optional(),
+    selections: z.array(z.strictObject({ workerId: z.number(), amount: amountLike })).optional(),
+  }),
+} satisfies RequestSchemas;
+const manualReverseInput = {
+  params: z.strictObject({ paymentId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    reversalDate: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const checkoutPayInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    ...paymentCommandFields,
+    method: z.string().optional(),
+    rosterDate: z.string().nullable().optional(),
+    selections: z
+      .array(
+        z.strictObject({
+          date: z.string(),
+          workerId: z.number(),
+          expectedAmount: amountLike,
+          token: z.string().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerProductionBonusCheckoutRoutes(app: Express): void {
   // Manually entered payments are separate from calculated daily/weekly awards.
@@ -64,6 +120,7 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
     "/api/factory/production-target-bonuses/checkout/manual-pay",
     requireAuth,
     guard,
+    validateRequest(manualPayInput),
     async (req: Request, res: Response) => {
       if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const id = company(req);
@@ -96,13 +153,13 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
     "/api/factory/production-target-bonuses/checkout/manual-payments/:paymentId/reverse",
     requireAuth,
     guard,
+    validateRequest(manualReverseInput),
     async (req: Request, res: Response) => {
       if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const id = company(req),
-        paymentId = Number(req.params.paymentId);
+        { paymentId } = validatedInput(req, manualReverseInput).params;
       if (!id) return res.status(400).json({ message: "Factory company required" });
-      if (!Number.isSafeInteger(paymentId) || paymentId <= 0 || req.body?.confirm !== true)
-        return res.status(400).json({ message: "Confirm a valid manual bonus reversal" });
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirm a valid manual bonus reversal" });
       try {
         const result = await reverseManualProductionBonus(
           id,
@@ -160,6 +217,7 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
     "/api/factory/production-target-bonuses/checkout/pay",
     requireAuth,
     guard,
+    validateRequest(checkoutPayInput),
     async (req: Request, res: Response) => {
       if (!allowed(req))
         return res.status(403).json({ message: bonusServerText(req.headers["accept-language"], "adminOnly") });

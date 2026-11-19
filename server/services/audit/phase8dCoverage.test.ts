@@ -43,9 +43,11 @@ describe("Phase 8D audit coverage", () => {
     const payroll = moduleSource("server/routes/erp-payroll");
     const guidance = moduleSource("docs/archive/phase-8d-domain-auditing.md");
 
-    expect(payroll).toContain('app.post("/api/payroll/runs"');
-    expect(payroll).toContain('app.patch("/api/payroll/runs/:id"');
-    expect(payroll).toContain('app.post("/api/payroll/runs/:id/undo"');
+    // Whitespace-insensitive: Prettier may wrap a registration onto several lines.
+    const compactPayroll = payroll.replace(/\s+/g, "");
+    expect(compactPayroll).toContain('app.post("/api/payroll/runs"');
+    expect(compactPayroll).toContain('app.patch("/api/payroll/runs/:id"');
+    expect(compactPayroll).toContain('app.post("/api/payroll/runs/:id/undo"');
     expect(guidance).toContain("documented safety exception");
     expect(guidance).toContain("legacy multi-step payroll mutations");
   });

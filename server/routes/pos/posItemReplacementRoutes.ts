@@ -7,6 +7,7 @@ import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import { applyPosItemReplacements, listPosItemReplacementCandidates } from "../../services/pos/itemReplacementService";
 import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
+import { emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
 
 const candidateQuerySchema = z.object({
   locationId: z.coerce.number().int().positive(),
@@ -20,16 +21,18 @@ const lastSoldPriceQuerySchema = z.object({
   stockItemId: z.coerce.number().int().positive(),
 });
 
-const replacementSchema = z.object({
+const replacementSchema = z.strictObject({
   saleItemId: z.coerce.number().int().positive(),
   replacementStockItemId: z.coerce.number().int().positive(),
   quantity: z.coerce.number().positive().finite(),
 });
 
-const bulkReplacementSchema = z.object({
+const bulkReplacementSchema = z.strictObject({
   locationId: z.coerce.number().int().positive(),
   replacements: z.array(replacementSchema).min(1).max(500),
 });
+
+const bulkReplacementInput = { query: emptyQuery, body: bulkReplacementSchema } satisfies RequestSchemas;
 
 async function ensureErpCorrectionAccess(req: Request, res: Response): Promise<boolean> {
   const role = req.session?.currentRole ?? req.user?.role;
@@ -126,25 +129,22 @@ export function registerPosItemReplacementRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/item-replacements", requireAuth, async (req, res) => {
+  app.post("/api/pos/item-replacements", requireAuth, validateRequest(bulkReplacementInput), async (req, res) => {
     try {
       if (!(await ensureErpCorrectionAccess(req, res))) return;
 
-      const parsed = bulkReplacementSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid replacement request" });
-      }
+      const body = validatedInput(req, bulkReplacementInput).body;
 
       const result = await applyPosItemReplacements(
         {
           companyId: req.session.currentCompanyId!,
-          locationId: parsed.data.locationId,
+          locationId: body.locationId,
           userId: req.session.userId!,
           username: req.session.username || "unknown",
           userRole: req.user?.role,
           canSellNegativeStock: req.user?.canSellNegativeStock || false,
         },
-        parsed.data.replacements
+        body.replacements
       );
       return res.status(result.status).json(result.body);
     } catch (error: unknown) {

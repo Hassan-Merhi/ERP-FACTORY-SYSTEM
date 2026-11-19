@@ -6,12 +6,43 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   loadTargetBonusRows,
   targetBonusIsValidDate,
   targetBonusValidRange,
   type TargetBonusRow,
 } from "../../services/factory/targetBonusReview";
+
+// parseDecision and the rate handler keep their own checks and messages; the
+// schemas fix the shape and the JSON types the review screens send.
+const numberLike = z.union([z.number(), z.string()]);
+const decideInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    decisions: z
+      .array(
+        z.strictObject({
+          date: z.string(),
+          workerId: numberLike,
+          decision: z.string(),
+          expectedAmount: numberLike,
+          expectedProducedBales: numberLike.nullable().optional(),
+          expectedTargetBales: numberLike.nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+const rateInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    workerId: numberLike.optional(),
+    effectiveFrom: z.string().optional(),
+    ratePerBale: numberLike.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const requireProductionTargets = requireFactoryTabAccess(
   "factory/stock-entry",
@@ -28,14 +59,16 @@ function httpError(status: number, message: string) {
   return Object.assign(new Error(message), { status });
 }
 function sendError(res: Response, error: unknown): Response {
-  const status = typeof (error as { status?: unknown })?.status === "number"
-    ? (error as { status: number }).status : 500;
+  const status =
+    typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 500;
   return res.status(status).json({
     message: status === 500 ? "Could not complete production bonus request" : (error as Error).message,
   });
 }
 type BonusDecision = {
-  date: string; workerId: number; decision: "approved" | "rejected";
+  date: string;
+  workerId: number;
+  decision: "approved" | "rejected";
   expectedAmount: number;
   expectedProducedBales?: number;
   expectedTargetBales?: number;
@@ -46,22 +79,22 @@ function parseDecision(raw: unknown): BonusDecision | null {
   const date = value.date;
   const workerId = Number(value.workerId);
   const expectedAmount = Number(value.expectedAmount);
-  const expectedProducedBales = value.expectedProducedBales === undefined
-    ? undefined : Number(value.expectedProducedBales);
-  const expectedTargetBales = value.expectedTargetBales === undefined
-    ? undefined : Number(value.expectedTargetBales);
+  const expectedProducedBales =
+    value.expectedProducedBales === undefined ? undefined : Number(value.expectedProducedBales);
+  const expectedTargetBales = value.expectedTargetBales === undefined ? undefined : Number(value.expectedTargetBales);
   if (
     !targetBonusIsValidDate(date) ||
-    !Number.isSafeInteger(workerId) || workerId <= 0 ||
+    !Number.isSafeInteger(workerId) ||
+    workerId <= 0 ||
     (value.decision !== "approved" && value.decision !== "rejected") ||
-    !Number.isFinite(expectedAmount) || expectedAmount < 0 ||
+    !Number.isFinite(expectedAmount) ||
+    expectedAmount < 0 ||
     (expectedProducedBales !== undefined &&
       (!Number.isSafeInteger(expectedProducedBales) || expectedProducedBales < 0)) ||
-    (expectedTargetBales !== undefined &&
-      (!Number.isFinite(expectedTargetBales) || expectedTargetBales < 0))
-  ) return null;
-  return { date, workerId, decision: value.decision, expectedAmount,
-    expectedProducedBales, expectedTargetBales };
+    (expectedTargetBales !== undefined && (!Number.isFinite(expectedTargetBales) || expectedTargetBales < 0))
+  )
+    return null;
+  return { date, workerId, decision: value.decision, expectedAmount, expectedProducedBales, expectedTargetBales };
 }
 function decisionKey(date: string, workerId: number): string {
   return date + ":" + workerId;
@@ -81,7 +114,8 @@ function totals(rows: TargetBonusRow[]) {
 export function registerFactoryTargetBonusRoutes(app: Express): void {
   app.get(
     "/api/factory/staff-tracking/production-bonuses",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
     async (req: Request, res: Response) => {
       try {
         const companyId = company(req);
@@ -95,12 +129,18 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
         // bonuses and review history are confidential to Owners and Admins.
         if (!canDecide(req)) {
           return res.json({
-            start, end, rows: [], totals: totals([]), canDecide: false,
+            start,
+            end,
+            rows: [],
+            totals: totals([]),
+            canDecide: false,
           });
         }
         const rows = await loadTargetBonusRows(db, companyId, start, end);
         return res.json({ start, end, rows, totals: totals(rows), canDecide: canDecide(req) });
-      } catch (error: unknown) { return sendError(res, error); }
+      } catch (error: unknown) {
+        return sendError(res, error);
+      }
     }
   );
 
@@ -109,7 +149,9 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
   // payroll records. Accounting posting is a separate later phase.
   app.post(
     "/api/factory/staff-tracking/production-bonuses/decide",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
+    validateRequest(decideInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = company(req);
@@ -148,22 +190,25 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
           for (const choice of valid) {
             // Category and legacy worker/day bonus reviews are mutually exclusive.
             // Both routes hold advisory lock 84023 for the company.
-            const categoryReview = resultRows(await tx.execute(sql`
+            const categoryReview = resultRows(
+              await tx.execute(sql`
               SELECT id FROM factory_target_bonus_category_reviews
               WHERE company_id = ${companyId} AND production_date = ${choice.date}::date
                 AND worker_id = ${choice.workerId} LIMIT 1
-            `));
+            `)
+            );
             if (categoryReview.length)
               throw httpError(409, "Category-weighted bonus was already reviewed for this worker/day");
             // Reverse guard: a weekly review locks all source days for that worker.
             // This shares company advisory lock 84023 with the weekly decision route.
-            const weeklyReview = resultRows(await tx.execute(sql`
+            const weeklyReview = resultRows(
+              await tx.execute(sql`
               SELECT id FROM factory_target_bonus_weekly_reviews
               WHERE company_id = ${companyId} AND worker_id = ${choice.workerId}
                 AND ${choice.date}::date BETWEEN week_start AND week_end LIMIT 1
-            `));
-            if (weeklyReview.length)
-              throw httpError(409, "This worker/week already has a weekly flat bonus review");
+            `)
+            );
+            if (weeklyReview.length) throw httpError(409, "This worker/week already has a weekly flat bonus review");
             const item = index.get(decisionKey(choice.date, choice.workerId));
             if (!item) throw httpError(409, "No production record for this worker/date");
             if (item.status !== "pending") {
@@ -178,20 +223,23 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             const monday = mondayOfProductionBonusWeek(choice.date)!;
             let method = weeklyModes.get(monday);
             if (method === undefined) {
-              const methodRow = resultRows(await tx.execute(sql`
+              const methodRow = resultRows(
+                await tx.execute(sql`
                 SELECT method FROM factory_production_target_bonus_weekly_methods
                 WHERE company_id = ${companyId} AND effective_week <= ${monday}::date
                 ORDER BY effective_week DESC, id DESC LIMIT 1
-              `)) as Array<{ method: string }>;
-              method = methodRow[0]?.method ?? 'per_extra_bale';
+              `)
+              ) as Array<{ method: string }>;
+              method = methodRow[0]?.method ?? "per_extra_bale";
               weeklyModes.set(monday, method);
             }
-            if (method === 'weekly_flat')
-              throw httpError(409, 'Weekly flat bonus is selected for this week; daily per-bale reviews are disabled');
-            if ((choice.expectedProducedBales !== undefined &&
-                item.producedBales !== choice.expectedProducedBales) ||
-                (choice.expectedTargetBales !== undefined &&
-                Math.round(item.targetBales * 100) !== Math.round(choice.expectedTargetBales * 100))) {
+            if (method === "weekly_flat")
+              throw httpError(409, "Weekly flat bonus is selected for this week; daily per-bale reviews are disabled");
+            if (
+              (choice.expectedProducedBales !== undefined && item.producedBales !== choice.expectedProducedBales) ||
+              (choice.expectedTargetBales !== undefined &&
+                Math.round(item.targetBales * 100) !== Math.round(choice.expectedTargetBales * 100))
+            ) {
               throw httpError(409, "Worker production or target changed since review; refresh before approving");
             }
             if (Math.round(item.proposedAmount * 100) !== Math.round(choice.expectedAmount * 100)) {
@@ -199,7 +247,10 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             }
             if (choice.decision === "approved" && item.targetConfigured === false)
               throw httpError(409, "Set a valid production target before approving this live bonus");
-            if (choice.decision === "approved" && (item.ratePerBale == null || item.ratePerBale <= 0 || item.extraBales <= 0)) {
+            if (
+              choice.decision === "approved" &&
+              (item.ratePerBale == null || item.ratePerBale <= 0 || item.extraBales <= 0)
+            ) {
               throw httpError(409, "Set a positive rate and verify extra bales before approving");
             }
             const inserted = await tx.execute(sql`
@@ -220,7 +271,9 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
           return { saved, unchanged };
         });
         return res.json({ success: true, ...result });
-      } catch (error: unknown) { return sendError(res, error); }
+      } catch (error: unknown) {
+        return sendError(res, error);
+      }
     }
   );
 
@@ -228,7 +281,9 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
   // reprices UNPAID bonus offers; payment claims always remain immutable.
   app.post(
     "/api/factory/staff-tracking/production-bonuses/rate",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
+    validateRequest(rateInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = company(req);
@@ -239,10 +294,15 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
         const rawRate: unknown = req.body?.ratePerBale;
         const rateString = String(rawRate ?? "");
         if (
-          !Number.isSafeInteger(workerId) || workerId <= 0 ||
+          !Number.isSafeInteger(workerId) ||
+          workerId <= 0 ||
           !targetBonusIsValidDate(effectiveFrom) ||
-          !/^(?:\d{1,9})(?:\.\d{1,4})?$/.test(rateString) || Number(rateString) <= 0
-        ) return res.status(400).json({ message: "Valid worker, effective date and positive rate (max 4 decimals) required" });
+          !/^(?:\d{1,9})(?:\.\d{1,4})?$/.test(rateString) ||
+          Number(rateString) <= 0
+        )
+          return res
+            .status(400)
+            .json({ message: "Valid worker, effective date and positive rate (max 4 decimals) required" });
 
         await db.transaction(async (tx) => {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
@@ -266,7 +326,9 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
           `);
         });
         return res.json({ success: true });
-      } catch (error: unknown) { return sendError(res, error); }
+      } catch (error: unknown) {
+        return sendError(res, error);
+      }
     }
   );
 }

@@ -6,6 +6,8 @@
  */
 import type { Express, Request, Response } from "express";
 import type { AppDb, AuthMiddleware } from "../routeBoundaryTypes";
+import { validateRequest } from "../../lib/validateRequest";
+import { importWorkersInput, reassignWorkerCodesInput } from "./factoryWorkerWriteSchemas";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
@@ -184,6 +186,7 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
     "/api/factory/workers/import-excel",
     requireAuth,
     workerSpreadsheetUpload.single("file"),
+    validateRequest(importWorkersInput),
     async (req: Request, res: Response) => {
       try {
         // Always use the session's current company; never trust client-provided companyId
@@ -374,34 +377,39 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
   );
 
   // POST /api/factory/workers/reassign-codes - Bulk reassign HMD001, HMD002... codes
-  app.post("/api/factory/workers/reassign-codes", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/workers/reassign-codes",
+    requireAuth,
+    validateRequest(reassignWorkerCodesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.body.companyId || getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const prefix = (req.body.prefix as string) || "HMD";
+        const prefix = (req.body.prefix as string) || "HMD";
 
-      const allWorkers = await db
-        .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
-        .from(factoryWorkers)
-        .where(eq(factoryWorkers.companyId, companyId))
-        .orderBy(factoryWorkers.id);
+        const allWorkers = await db
+          .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
+          .from(factoryWorkers)
+          .where(eq(factoryWorkers.companyId, companyId))
+          .orderBy(factoryWorkers.id);
 
-      const results: { id: number; name: string; code: string }[] = [];
+        const results: { id: number; name: string; code: string }[] = [];
 
-      for (let i = 0; i < allWorkers.length; i++) {
-        const code = `${prefix}${String(i + 1).padStart(3, "0")}`;
-        await db
-          .update(factoryWorkers)
-          .set({ employeeCode: code, updatedAt: new Date() })
-          .where(and(eq(factoryWorkers.id, allWorkers[i].id), eq(factoryWorkers.companyId, companyId)));
-        results.push({ id: allWorkers[i].id, name: allWorkers[i].fullName, code });
+        for (let i = 0; i < allWorkers.length; i++) {
+          const code = `${prefix}${String(i + 1).padStart(3, "0")}`;
+          await db
+            .update(factoryWorkers)
+            .set({ employeeCode: code, updatedAt: new Date() })
+            .where(and(eq(factoryWorkers.id, allWorkers[i].id), eq(factoryWorkers.companyId, companyId)));
+          results.push({ id: allWorkers[i].id, name: allWorkers[i].fullName, code });
+        }
+
+        res.json({ updated: results.length, codes: results });
+      } catch (error: unknown) {
+        logger.error("Error reassigning worker codes:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      res.json({ updated: results.length, codes: results });
-    } catch (error: unknown) {
-      logger.error("Error reassigning worker codes:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

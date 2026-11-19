@@ -6,19 +6,47 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { errorStatus, getErrorMessage, translateDatabaseError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { emptyQuery, idParams, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
 import {
   isRealBonusDate,
   parseTargetBonusPaymentCommand,
   TargetBonusPaymentPolicyError,
 } from "../../services/factory/targetBonusPaymentPolicy";
-import {
-  postTargetBonusPayments,
-  reverseTargetBonusPayment,
-} from "../../services/factory/targetBonusPaymentService";
+import { postTargetBonusPayments, reverseTargetBonusPayment } from "../../services/factory/targetBonusPaymentService";
 
 const requireProductionTargets = requireFactoryTabAccess(
-  "factory/stock-entry", "hide_tab_stockentry_production_targets"
+  "factory/stock-entry",
+  "hide_tab_stockentry_production_targets"
 );
+// parseTargetBonusPaymentCommand keeps its own checks and messages.
+const payInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    paymentDate: z.string().optional(),
+    currency: z.string().nullable().optional(),
+    cashAccountId: z.number().optional(),
+    selections: z
+      .array(
+        z.strictObject({
+          date: z.string(),
+          workerId: z.number(),
+          expectedAmount: z.union([z.number(), z.string()]),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+const reverseInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    reversalDate: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 function company(req: Request): number | null {
   const id = Number(req.session.factoryCompanyId || req.session.currentCompanyId);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
@@ -33,8 +61,7 @@ function actor(req: Request) {
   };
 }
 function respondError(res: Response, error: unknown) {
-  if (error instanceof TargetBonusPaymentPolicyError)
-    return res.status(error.status).json({ message: error.message });
+  if (error instanceof TargetBonusPaymentPolicyError) return res.status(error.status).json({ message: error.message });
   const translated = translateDatabaseError(error);
   if (translated) return res.status(translated.statusCode).json({ message: translated.message });
   const status = errorStatus(error);
@@ -48,7 +75,8 @@ function respondError(res: Response, error: unknown) {
 export function registerFactoryTargetBonusPaymentRoutes(app: Express): void {
   app.get(
     "/api/factory/staff-tracking/production-bonuses/payment-accounts",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
     async (req: Request, res: Response) => {
       if (!canPost(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const companyId = company(req);
@@ -63,21 +91,28 @@ export function registerFactoryTargetBonusPaymentRoutes(app: Express): void {
           ORDER BY account_type, name, id
         `);
         return res.json({ accounts: resultRows(accounts), currency: "USD" });
-      } catch (error) { return respondError(res, error); }
-    },
+      } catch (error) {
+        return respondError(res, error);
+      }
+    }
   );
 
   app.get(
     "/api/factory/staff-tracking/production-bonuses/payments",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
     async (req: Request, res: Response) => {
       if (!canPost(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const companyId = company(req);
       if (!companyId) return res.status(400).json({ message: "Factory company required" });
       const start = req.query.start;
       const end = req.query.end;
-      if (!isRealBonusDate(start) || !isRealBonusDate(end) || start > end ||
-          (Date.parse(end) - Date.parse(start)) / 86400000 > 366)
+      if (
+        !isRealBonusDate(start) ||
+        !isRealBonusDate(end) ||
+        start > end ||
+        (Date.parse(end) - Date.parse(start)) / 86400000 > 366
+      )
         return res.status(400).json({ message: "Choose a valid date range of up to one year" });
       try {
         const result = await db.execute(sql`
@@ -105,13 +140,17 @@ export function registerFactoryTargetBonusPaymentRoutes(app: Express): void {
           LIMIT 20000
         `);
         return res.json({ start, end, payments: resultRows(result) });
-      } catch (error) { return respondError(res, error); }
-    },
+      } catch (error) {
+        return respondError(res, error);
+      }
+    }
   );
 
   app.post(
     "/api/factory/staff-tracking/production-bonuses/pay",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
+    validateRequest(payInput),
     async (req: Request, res: Response) => {
       if (!canPost(req)) return res.status(403).json({ message: "Admin or Owner approval required" });
       const companyId = company(req);
@@ -121,30 +160,36 @@ export function registerFactoryTargetBonusPaymentRoutes(app: Express): void {
         const result = await postTargetBonusPayments(companyId, command, actor(req));
         if (result.posted === 0) res.setHeader("X-Idempotent-Replay", "true");
         return res.status(result.posted === 0 ? 200 : 201).json(result);
-      } catch (error) { return respondError(res, error); }
-    },
+      } catch (error) {
+        return respondError(res, error);
+      }
+    }
   );
 
   app.post(
     "/api/factory/staff-tracking/production-bonuses/payments/:id/reverse",
-    requireAuth, requireProductionTargets,
+    requireAuth,
+    requireProductionTargets,
+    validateRequest(reverseInput),
     async (req: Request, res: Response) => {
       if (!canPost(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const companyId = company(req);
       if (!companyId) return res.status(400).json({ message: "Factory company required" });
-      const paymentId = Number(req.params.id);
-      if (!Number.isSafeInteger(paymentId) || paymentId <= 0)
-        return res.status(400).json({ message: "Invalid payment ID" });
-      if (req.body?.confirm !== true)
-        return res.status(400).json({ message: "Review and confirm the reversal" });
+      const paymentId = validatedInput(req, reverseInput).params.id;
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Review and confirm the reversal" });
       try {
         const result = await reverseTargetBonusPayment(
-          companyId, paymentId, String(req.body?.reversalDate || ""),
-          String(req.body?.reason || ""), actor(req),
+          companyId,
+          paymentId,
+          String(req.body?.reversalDate || ""),
+          String(req.body?.reason || ""),
+          actor(req)
         );
         if (result.replayed) res.setHeader("X-Idempotent-Replay", "true");
         return res.json(result);
-      } catch (error) { return respondError(res, error); }
-    },
+      } catch (error) {
+        return respondError(res, error);
+      }
+    }
   );
 }

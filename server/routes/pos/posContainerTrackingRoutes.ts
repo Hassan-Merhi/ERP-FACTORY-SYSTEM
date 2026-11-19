@@ -6,6 +6,15 @@ import { db } from "../../db";
 import { ACTIVE_STATUSES, fetchActiveContainers, type RawContainerRow } from "../../lib/gitHelpers";
 import { storage } from "../../storage";
 import { parseMoneyInput } from "../../lib/money";
+import { z } from "zod";
+import { emptyQuery, idParams, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
+
+// The departure-date editor sends exactly { portDepartureDate } (a YYYY-MM-DD string or null).
+const departureDateInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ portDepartureDate: z.string().nullable() }),
+} satisfies RequestSchemas;
 
 type PosTrackingContext = {
   companyId: number;
@@ -145,53 +154,57 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
   });
 
   /** POS-only write: cannot mutate any other tracking or accounting field. */
-  app.patch("/api/pos/containers-otw/:id/departure-date", requireAuth, requireRole("POS"), async (req, res) => {
-    try {
-      // requireRole also lets Developers through; do not permit them on this POS-only endpoint.
-      if (req.user?.role !== "POS") return res.status(403).json({ message: "POS role required" });
+  app.patch(
+    "/api/pos/containers-otw/:id/departure-date",
+    requireAuth,
+    requireRole("POS"),
+    validateRequest(departureDateInput),
+    async (req, res) => {
+      try {
+        // requireRole also lets Developers through; do not permit them on this POS-only endpoint.
+        if (req.user?.role !== "POS") return res.status(403).json({ message: "POS role required" });
 
-      const context = await resolvePosTrackingContext(req, res);
-      if (!context) return;
-      const containerId = Number(req.params.id);
-      if (!Number.isSafeInteger(containerId) || containerId <= 0) {
-        return res.status(400).json({ message: "Invalid container ID" });
-      }
-      const body = req.body;
-      if (!body || typeof body !== "object" || Array.isArray(body) ||
-          Object.keys(body).length !== 1 || !Object.prototype.hasOwnProperty.call(body, "portDepartureDate")) {
-        return res.status(400).json({ message: "Only portDepartureDate can be changed" });
-      }
-      const portDepartureDate = parsePortDepartureDate(body.portDepartureDate);
-      if (portDepartureDate === undefined) {
-        return res.status(400).json({ message: "Enter a valid port departure date, or null to clear it" });
-      }
+        const context = await resolvePosTrackingContext(req, res);
+        if (!context) return;
+        const { params, body } = validatedInput(req, departureDateInput);
+        const containerId = params.id;
+        const portDepartureDate = parsePortDepartureDate(body.portDepartureDate);
+        if (portDepartureDate === undefined) {
+          return res.status(400).json({ message: "Enter a valid port departure date, or null to clear it" });
+        }
 
-      const [[container], includeUnassigned] = await Promise.all([
-        fetchActiveContainers([context.companyId], { containerId }),
-        canShowUnassignedContainers(context),
-      ]);
-      if (!container || !containerMatchesAssignedLocation(container, context, includeUnassigned)) {
-        return res.status(404).json({ message: "Container not found for your location" });
-      }
+        const [[container], includeUnassigned] = await Promise.all([
+          fetchActiveContainers([context.companyId], { containerId }),
+          canShowUnassignedContainers(context),
+        ]);
+        if (!container || !containerMatchesAssignedLocation(container, context, includeUnassigned)) {
+          return res.status(404).json({ message: "Container not found for your location" });
+        }
 
-      // Check company, original shop and active status in the UPDATE itself, to
-      // protect against another user moving/offloading the container after the read.
-      const [updated] = await db.update(containers)
-        .set({ portDepartureDate })
-        .where(and(
-          eq(containers.id, containerId),
-          eq(containers.companyId, context.companyId),
-          container.shopName === null ? isNull(containers.shopName) : eq(containers.shopName, container.shopName),
-          inArray(containers.status, [...ACTIVE_STATUSES])
-        ))
-        .returning({ id: containers.id, portDepartureDate: containers.portDepartureDate });
-      if (!updated) return res.status(404).json({ message: "Container is no longer available" });
-      res.setHeader("Cache-Control", "no-store");
-      return res.json(updated);
-    } catch (error) {
-      return res.status(500).json({ message: error instanceof Error ? error.message : "Could not save departure date" });
+        // Check company, original shop and active status in the UPDATE itself, to
+        // protect against another user moving/offloading the container after the read.
+        const [updated] = await db
+          .update(containers)
+          .set({ portDepartureDate })
+          .where(
+            and(
+              eq(containers.id, containerId),
+              eq(containers.companyId, context.companyId),
+              container.shopName === null ? isNull(containers.shopName) : eq(containers.shopName, container.shopName),
+              inArray(containers.status, [...ACTIVE_STATUSES])
+            )
+          )
+          .returning({ id: containers.id, portDepartureDate: containers.portDepartureDate });
+        if (!updated) return res.status(404).json({ message: "Container is no longer available" });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json(updated);
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ message: error instanceof Error ? error.message : "Could not save departure date" });
+      }
     }
-  });
+  );
 
   app.get("/api/pos/containers-otw/:id", requireAuth, requireRole("POS"), async (req, res) => {
     try {

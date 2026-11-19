@@ -5,6 +5,8 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   calculateProductionTargetBonusDay,
   resolveProductionTargetBonusRate,
@@ -14,11 +16,26 @@ import {
 } from "@shared/factoryProductionTargetBonusCore";
 
 /** READ-ONLY previews and append-only settings. No bonuses are posted here. */
+// The settings handler keeps its own checks and message; this fixes the shape.
+const settingsNumber = z.union([z.number(), z.string()]);
+const saveSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    scope: z.string().nullable().optional(),
+    workerId: settingsNumber.nullable().optional(),
+    effectiveFrom: z.string().optional(),
+    enabled: z.boolean().optional(),
+    ratePerExtraBale: settingsNumber.optional(),
+    note: z.string().nullable().optional(),
+    requestKey: settingsNumber.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const companyFor = (req: Request) => Number(req.session.factoryCompanyId || req.session.currentCompanyId) || null;
 function hasBonusAccess(req: Request, res: Response): boolean {
   const role = String(req.session.currentRole || req.user?.role || "");
-  if (["Admin", "Owner", "Developer"].includes(role) || Number(req.session.factoryAdminOverrideUntil || 0) > Date.now()) return true;
+  if (["Admin", "Owner", "Developer"].includes(role) || Number(req.session.factoryAdminOverrideUntil || 0) > Date.now())
+    return true;
   res.status(403).json({ message: "Admin or owner authorization required" });
   return false;
 }
@@ -29,7 +46,12 @@ function parseDate(value: unknown): string | null {
   return utc.toISOString().slice(0, 10) === value ? value : null;
 }
 function todayBeirut() {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Beirut",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
   const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
   return part("year") + "-" + part("month") + "-" + part("day");
 }
@@ -54,9 +76,15 @@ function parseRate(input: unknown): string | null {
   return value.greaterThan(10000) ? null : value.toFixed(4);
 }
 type RawRule = {
-  id: number | string; scope: "company" | "worker"; workerId: number | string | null;
-  effectiveFrom: string; enabled: boolean; ratePerExtraBale: string;
-  note: string | null; createdBy: string | null; createdAt: string;
+  id: number | string;
+  scope: "company" | "worker";
+  workerId: number | string | null;
+  effectiveFrom: string;
+  enabled: boolean;
+  ratePerExtraBale: string;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
 };
 type RateWithHistory = ProductionTargetBonusRate & Pick<RawRule, "note" | "createdBy" | "createdAt">;
 async function readRates(companyId: number): Promise<RateWithHistory[]> {
@@ -68,12 +96,20 @@ async function readRates(companyId: number): Promise<RateWithHistory[]> {
     ORDER BY effective_from DESC, id DESC
   `);
   return (resultRows(found) as RawRule[]).map((row) => ({
-    ...row, id: Number(row.id), workerId: row.workerId == null ? null : Number(row.workerId),
+    ...row,
+    id: Number(row.id),
+    workerId: row.workerId == null ? null : Number(row.workerId),
   }));
 }
 type SnapshotRow = {
-  date: string; workerId: number | string; workerName: string; employeeCode: string | null;
-  category: string | null; status: string; targetBales: string | null; producedBales: string | null;
+  date: string;
+  workerId: number | string;
+  workerName: string;
+  employeeCode: string | null;
+  category: string | null;
+  status: string;
+  targetBales: string | null;
+  producedBales: string | null;
 };
 type LinkRow = { id: number | string; fromDate: string; toDate: string | null; workerIds: number[] | string };
 export function registerProductionTargetBonusCoreRoutes(app: Express): void {
@@ -122,8 +158,10 @@ export function registerProductionTargetBonusCoreRoutes(app: Express): void {
       for (const row of resultRows(source) as SnapshotRow[]) {
         const list = byDay.get(row.date) ?? [];
         list.push({
-          workerId: Number(row.workerId), workerName: row.workerName,
-          employeeCode: row.employeeCode, category: row.category,
+          workerId: Number(row.workerId),
+          workerName: row.workerName,
+          employeeCode: row.employeeCode,
+          category: row.category,
           status: row.status === "Absent" || row.status === "New" ? row.status : "Present",
           targetBales: row.targetBales == null ? null : Number(row.targetBales),
           producedBales: row.producedBales == null ? null : Number(row.producedBales),
@@ -131,28 +169,47 @@ export function registerProductionTargetBonusCoreRoutes(app: Express): void {
         byDay.set(row.date, list);
       }
       const links = (resultRows(linkResult) as LinkRow[]).map((row) => ({
-        id: Number(row.id), fromDate: row.fromDate, toDate: row.toDate,
-        workerIds: (Array.isArray(row.workerIds) ? row.workerIds : String(row.workerIds).replace(/[{}]/g, "").split(","))
-          .map(Number).filter((id) => Number.isSafeInteger(id) && id > 0),
+        id: Number(row.id),
+        fromDate: row.fromDate,
+        toDate: row.toDate,
+        workerIds: (Array.isArray(row.workerIds)
+          ? row.workerIds
+          : String(row.workerIds).replace(/[{}]/g, "").split(",")
+        )
+          .map(Number)
+          .filter((id) => Number.isSafeInteger(id) && id > 0),
       }));
-      const days = range.days.map((date) => calculateProductionTargetBonusDay({
-        date, finalized: closed.has(date),
-        workers: byDay.get(date) ?? [],
-        links: closed.has(date) ? links.filter(
-          (link) => link.fromDate <= date && (!link.toDate || link.toDate > date),
-        ).map(({ id, workerIds }) => ({ id, workerIds })) : [],
-      }, rates));
+      const days = range.days.map((date) =>
+        calculateProductionTargetBonusDay(
+          {
+            date,
+            finalized: closed.has(date),
+            workers: byDay.get(date) ?? [],
+            links: closed.has(date)
+              ? links
+                  .filter((link) => link.fromDate <= date && (!link.toDate || link.toDate > date))
+                  .map(({ id, workerIds }) => ({ id, workerIds }))
+              : [],
+          },
+          rates
+        )
+      );
       const workers = summarizeProductionTargetBonusDays(days);
       const total = days.reduce((sum, day) => sum.plus(day.proposedBonusUsd), new Decimal(0));
       res.json({
-        currency: "USD", calculationVersion: "production-target-bonus-v1",
-        startDate: range.startDate, endDate: range.endDate,
+        currency: "USD",
+        calculationVersion: "production-target-bonus-v1",
+        startDate: range.startDate,
+        endDate: range.endDate,
         source: "finalized-production-targets-daily",
-        proposalOnly: true, canApprove: false, canPost: false,
+        proposalOnly: true,
+        canApprove: false,
+        canPost: false,
         totalProposedBonusUsd: total.toFixed(2),
         finalizedDays: days.filter((d) => d.finalized).length,
         blockedDays: days.filter((d) => !d.payoutReady).length,
-        days, workers,
+        days,
+        workers,
       });
     } catch (error: unknown) {
       logger.error("[ProductionTargetBonus] preview failure", { error });
@@ -168,14 +225,17 @@ export function registerProductionTargetBonusCoreRoutes(app: Express): void {
       const asOf = req.query.asOf ? parseDate(req.query.asOf) : todayBeirut();
       if (!asOf) return res.status(400).json({ message: "Invalid asOf date" });
       const rates = await readRates(companyId);
-      const uniqueWorkers = [...new Set(rates.flatMap((rate) => rate.workerId == null ? [] : [rate.workerId]))];
+      const uniqueWorkers = [...new Set(rates.flatMap((rate) => (rate.workerId == null ? [] : [rate.workerId])))];
       res.json({
-        currency: "USD", asOf,
+        currency: "USD",
+        asOf,
         companyRate: resolveProductionTargetBonusRate(0, asOf, rates),
         workerRates: uniqueWorkers.map((workerId) => ({
-          workerId, effective: resolveProductionTargetBonusRate(workerId, asOf, rates),
+          workerId,
+          effective: resolveProductionTargetBonusRate(workerId, asOf, rates),
         })),
-        history: rates.slice(0, 500), historyTruncated: rates.length > 500,
+        history: rates.slice(0, 500),
+        historyTruncated: rates.length > 500,
         payoutsEnabled: false,
       });
     } catch (error: unknown) {
@@ -184,47 +244,63 @@ export function registerProductionTargetBonusCoreRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/factory/production-target-bonuses/settings", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = companyFor(req);
-      if (!companyId) return res.status(400).json({ message: "No factory company selected" });
-      if (!hasBonusAccess(req, res)) return;
-      const scope = String(req.body?.scope ?? "");
-      const workerId = scope === "worker" ? Number(req.body?.workerId) : null;
-      const effectiveFrom = parseDate(req.body?.effectiveFrom);
-      const enabled = req.body?.enabled;
-      const rate = parseRate(req.body?.ratePerExtraBale);
-      const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
-      const requestKey = String(req.body?.requestKey ?? "").trim();
-      if (
-        !["company", "worker"].includes(scope) || !effectiveFrom || typeof enabled !== "boolean" ||
-        rate === null || !/^[A-Za-z0-9_-]{8,128}$/.test(requestKey) ||
-        (scope === "company" && req.body?.workerId != null) ||
-        (scope === "worker" && (!Number.isSafeInteger(workerId) || (workerId ?? 0) <= 0))
-      ) return res.status(400).json({ message: "Invalid rate setting (scope, workerId, date, enabled, rate or requestKey)" });
+  app.post(
+    "/api/factory/production-target-bonuses/settings",
+    requireAuth,
+    validateRequest(saveSettingsInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = companyFor(req);
+        if (!companyId) return res.status(400).json({ message: "No factory company selected" });
+        if (!hasBonusAccess(req, res)) return;
+        const scope = String(req.body?.scope ?? "");
+        const workerId = scope === "worker" ? Number(req.body?.workerId) : null;
+        const effectiveFrom = parseDate(req.body?.effectiveFrom);
+        const enabled = req.body?.enabled;
+        const rate = parseRate(req.body?.ratePerExtraBale);
+        const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
+        const requestKey = String(req.body?.requestKey ?? "").trim();
+        if (
+          !["company", "worker"].includes(scope) ||
+          !effectiveFrom ||
+          typeof enabled !== "boolean" ||
+          rate === null ||
+          !/^[A-Za-z0-9_-]{8,128}$/.test(requestKey) ||
+          (scope === "company" && req.body?.workerId != null) ||
+          (scope === "worker" && (!Number.isSafeInteger(workerId) || (workerId ?? 0) <= 0))
+        )
+          return res
+            .status(400)
+            .json({ message: "Invalid rate setting (scope, workerId, date, enabled, rate or requestKey)" });
 
-      const response = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(7641, ${companyId})`);
-        if (workerId != null) {
-          const w = await tx.execute(sql`SELECT id FROM factory_workers WHERE company_id = ${companyId} AND id = ${workerId} LIMIT 1`);
-          if (!resultRows(w).length) return { status: 404, message: "Worker not found in company" };
-        }
-        const seen = await tx.execute(sql`
+        const response = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(7641, ${companyId})`);
+          if (workerId != null) {
+            const w = await tx.execute(
+              sql`SELECT id FROM factory_workers WHERE company_id = ${companyId} AND id = ${workerId} LIMIT 1`
+            );
+            if (!resultRows(w).length) return { status: 404, message: "Worker not found in company" };
+          }
+          const seen = await tx.execute(sql`
           SELECT id, scope, worker_id AS "workerId", effective_from::text AS "effectiveFrom",
                  enabled, rate_per_extra_bale::text AS "ratePerExtraBale", note
           FROM factory_production_target_bonus_rates
           WHERE company_id = ${companyId} AND request_key = ${requestKey} LIMIT 1
         `);
-        const previous = resultRows(seen)[0];
-        if (previous) {
-          if (!(previous.scope === scope && Number(previous.workerId ?? 0) === (workerId ?? 0)
-            && previous.effectiveFrom === effectiveFrom && previous.enabled === enabled
-            && new Decimal(String(previous.ratePerExtraBale)).equals(rate)
-            && String(previous.note ?? "") === note
-          )) return { status: 409, message: "requestKey already used for a different change" };
-          return { status: 200, versionId: Number(previous.id), replayed: true };
-        }
-        const insert = await tx.execute(sql`
+          const previous = resultRows(seen)[0];
+          if (previous) {
+            if (!(
+              previous.scope === scope &&
+              Number(previous.workerId ?? 0) === (workerId ?? 0) &&
+              previous.effectiveFrom === effectiveFrom &&
+              previous.enabled === enabled &&
+              new Decimal(String(previous.ratePerExtraBale)).equals(rate) &&
+              String(previous.note ?? "") === note
+            ))
+              return { status: 409, message: "requestKey already used for a different change" };
+            return { status: 200, versionId: Number(previous.id), replayed: true };
+          }
+          const insert = await tx.execute(sql`
           INSERT INTO factory_production_target_bonus_rates
             (company_id, scope, worker_id, effective_from, enabled, rate_per_extra_bale,
              note, request_key, created_by)
@@ -232,13 +308,14 @@ export function registerProductionTargetBonusCoreRoutes(app: Express): void {
                   ${enabled}, ${rate}, ${note || null}, ${requestKey}, ${String(req.session.userId ?? "")})
           RETURNING id
         `);
-        return { status: 201, versionId: Number(resultRows(insert)[0]?.id), replayed: false };
-      });
-      if ("message" in response) return res.status(response.status).json({ message: response.message });
-      res.status(response.status).json({ ...response, currency: "USD" });
-    } catch (error: unknown) {
-      logger.error("[ProductionTargetBonus] settings write failure", { error });
-      res.status(500).json({ message: "Could not save production bonus rate" });
+          return { status: 201, versionId: Number(resultRows(insert)[0]?.id), replayed: false };
+        });
+        if ("message" in response) return res.status(response.status).json({ message: response.message });
+        res.status(response.status).json({ ...response, currency: "USD" });
+      } catch (error: unknown) {
+        logger.error("[ProductionTargetBonus] settings write failure", { error });
+        res.status(500).json({ message: "Could not save production bonus rate" });
+      }
     }
-  });
+  );
 }

@@ -5,11 +5,42 @@ import { requireAuth } from "../../auth";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { emptyQuery, idParams, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
 import { errorStatus, getErrorMessage, translateDatabaseError } from "../../lib/httpHandlers";
 import { isRealBonusDate, TargetBonusPaymentPolicyError } from "../../services/factory/targetBonusPaymentPolicy";
 import { parseWeeklyBonusPaymentCommand } from "../../services/factory/weeklyBonusPaymentPolicy";
 import { postWeeklyBonusPayments, reverseWeeklyBonusPayment } from "../../services/factory/weeklyBonusPaymentService";
 
+// parseWeeklyBonusPaymentCommand and the reverse handler keep their own checks
+// and messages; these schemas fix the shape the weekly payments panel sends.
+const postWeeklyPaymentsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    currency: z.string().nullable().optional(),
+    paymentDate: z.string().optional(),
+    cashAccountId: z.number().optional(),
+    selections: z
+      .array(
+        z.strictObject({
+          weekStart: z.string(),
+          workerId: z.number(),
+          expectedAmount: z.union([z.number(), z.string()]),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+const reverseWeeklyPaymentInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    reversalDate: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
 const authorized = (req: Request) =>
   ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
@@ -22,34 +53,42 @@ const actor = (req: Request) => ({
   username: String(req.session.username || req.session.userId || ""),
 });
 function safeError(res: Response, error: unknown) {
-  if (error instanceof TargetBonusPaymentPolicyError)
-    return res.status(error.status).json({message:error.message});
+  if (error instanceof TargetBonusPaymentPolicyError) return res.status(error.status).json({ message: error.message });
   const database = translateDatabaseError(error);
-  if (database) return res.status(database.statusCode).json({message: database.message});
+  if (database) return res.status(database.statusCode).json({ message: database.message });
   const status = errorStatus(error);
-  if (status >= 500) logger.error("Weekly Production Targets payment failure", {error});
+  if (status >= 500) logger.error("Weekly Production Targets payment failure", { error });
   return res.status(status).json({
     message: status >= 500 ? "Unable to complete weekly bonus payment" : getErrorMessage(error),
   });
 }
-function rangeQuery(req: Request): {start:string;end:string} | null {
-  const start = req.query.start, end = req.query.end;
-  if (!isRealBonusDate(start) || !isRealBonusDate(end) || start > end ||
-      (Date.parse(end) - Date.parse(start)) / 86400000 > 366) return null;
-  return {start,end};
+function rangeQuery(req: Request): { start: string; end: string } | null {
+  const start = req.query.start,
+    end = req.query.end;
+  if (
+    !isRealBonusDate(start) ||
+    !isRealBonusDate(end) ||
+    start > end ||
+    (Date.parse(end) - Date.parse(start)) / 86400000 > 366
+  )
+    return null;
+  return { start, end };
 }
 
 /** Financial endpoints remain fully separate from immutable review decisions. */
 export function registerProductionTargetBonusWeeklyPaymentRoutes(app: Express): void {
-  app.get("/api/factory/production-target-bonuses/weekly-payments",
-    requireAuth, guard, async(req:Request,res:Response)=>{
-      if(!authorized(req))return res.status(403).json({message:"Admin or Owner required"});
-      const companyId=companyFor(req);
-      if(!companyId)return res.status(400).json({message:"Factory company required"});
-      const query=rangeQuery(req);
-      if(!query)return res.status(400).json({message:"Select up to 366 valid calendar days"});
-      try{
-        const result=await db.execute(sql`
+  app.get(
+    "/api/factory/production-target-bonuses/weekly-payments",
+    requireAuth,
+    guard,
+    async (req: Request, res: Response) => {
+      if (!authorized(req)) return res.status(403).json({ message: "Admin or Owner required" });
+      const companyId = companyFor(req);
+      if (!companyId) return res.status(400).json({ message: "Factory company required" });
+      const query = rangeQuery(req);
+      if (!query) return res.status(400).json({ message: "Select up to 366 valid calendar days" });
+      try {
+        const result = await db.execute(sql`
           SELECT rv.id AS "reviewId", rv.week_start::text AS "weekStart",
             rv.week_end::text AS "weekEnd", rv.worker_id AS "workerId",
             rv.worker_name_snapshot AS "workerName",
@@ -74,45 +113,62 @@ export function registerProductionTargetBonusWeeklyPaymentRoutes(app: Express): 
           ORDER BY rv.week_start DESC, rv.worker_name_snapshot, rv.worker_id
           LIMIT 20000
         `);
-        res.setHeader("Cache-Control","private, no-store");
+        res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-          start:query.start,end:query.end,currency:"USD",
-          payments:resultRows(result),paymentClassification:"Payroll Deposit Expense",
+          start: query.start,
+          end: query.end,
+          currency: "USD",
+          payments: resultRows(result),
+          paymentClassification: "Payroll Deposit Expense",
         });
-      }catch(error){return safeError(res,error);}
-    },
+      } catch (error) {
+        return safeError(res, error);
+      }
+    }
   );
-  app.post("/api/factory/production-target-bonuses/weekly-payments/post",
-    requireAuth,guard,async(req:Request,res:Response)=>{
-      if(!authorized(req))return res.status(403).json({message:"Admin or Owner required"});
-      const companyId=companyFor(req);
-      if(!companyId)return res.status(400).json({message:"Factory company required"});
-      try{
-        const command=parseWeeklyBonusPaymentCommand(req.body);
-        const result=await postWeeklyBonusPayments(companyId,command,actor(req));
-        if(result.posted===0)res.setHeader("X-Idempotent-Replay","true");
-        return res.status(result.posted?201:200).json(result);
-      }catch(error){return safeError(res,error);}
-    },
+  app.post(
+    "/api/factory/production-target-bonuses/weekly-payments/post",
+    requireAuth,
+    guard,
+    validateRequest(postWeeklyPaymentsInput),
+    async (req: Request, res: Response) => {
+      if (!authorized(req)) return res.status(403).json({ message: "Admin or Owner required" });
+      const companyId = companyFor(req);
+      if (!companyId) return res.status(400).json({ message: "Factory company required" });
+      try {
+        const command = parseWeeklyBonusPaymentCommand(req.body);
+        const result = await postWeeklyBonusPayments(companyId, command, actor(req));
+        if (result.posted === 0) res.setHeader("X-Idempotent-Replay", "true");
+        return res.status(result.posted ? 201 : 200).json(result);
+      } catch (error) {
+        return safeError(res, error);
+      }
+    }
   );
-  app.post("/api/factory/production-target-bonuses/weekly-payments/:id/reverse",
-    requireAuth,guard,async(req:Request,res:Response)=>{
-      if(!authorized(req))return res.status(403).json({message:"Admin or Owner required"});
-      const companyId=companyFor(req);
-      if(!companyId)return res.status(400).json({message:"Factory company required"});
-      const paymentId=Number(req.params.id);
-      if(!Number.isSafeInteger(paymentId)||paymentId<=0)
-        return res.status(400).json({message:"Invalid weekly payment ID"});
-      if(req.body?.confirm!==true)
-        return res.status(400).json({message:"Review and confirm reversal"});
-      try{
-        const result=await reverseWeeklyBonusPayment(
-          companyId,paymentId,String(req.body?.reversalDate || ""),
-          String(req.body?.reason || ""),actor(req),
+  app.post(
+    "/api/factory/production-target-bonuses/weekly-payments/:id/reverse",
+    requireAuth,
+    guard,
+    validateRequest(reverseWeeklyPaymentInput),
+    async (req: Request, res: Response) => {
+      if (!authorized(req)) return res.status(403).json({ message: "Admin or Owner required" });
+      const companyId = companyFor(req);
+      if (!companyId) return res.status(400).json({ message: "Factory company required" });
+      const paymentId = validatedInput(req, reverseWeeklyPaymentInput).params.id;
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Review and confirm reversal" });
+      try {
+        const result = await reverseWeeklyBonusPayment(
+          companyId,
+          paymentId,
+          String(req.body?.reversalDate || ""),
+          String(req.body?.reason || ""),
+          actor(req)
         );
-        if(result.replayed)res.setHeader("X-Idempotent-Replay","true");
+        if (result.replayed) res.setHeader("X-Idempotent-Replay", "true");
         return res.json(result);
-      }catch(error){return safeError(res,error);}
-    },
+      } catch (error) {
+        return safeError(res, error);
+      }
+    }
   );
 }

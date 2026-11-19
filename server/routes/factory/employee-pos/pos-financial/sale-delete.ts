@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { voidFactoryPosSaleInput } from "./saleInputSchemas";
 import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
@@ -18,86 +20,91 @@ import { writeAuditEvent } from "../../../../services/audit/auditService";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
-  app.delete("/api/factory/pos/sales/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const saleId = parseInt(req.params.id);
-      const [sale] = await db
-        .select()
-        .from(factoryPosSales)
-        .where(and(eq(factoryPosSales.id, saleId), eq(factoryPosSales.companyId, companyId)));
-      if (!sale) return res.status(404).json({ message: "Sale not found" });
-      if (sale.status === "VOIDED") return res.status(400).json({ message: "Sale already voided" });
+  app.delete(
+    "/api/factory/pos/sales/:id",
+    requireAuth,
+    validateRequest(voidFactoryPosSaleInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const saleId = parseInt(req.params.id);
+        const [sale] = await db
+          .select()
+          .from(factoryPosSales)
+          .where(and(eq(factoryPosSales.id, saleId), eq(factoryPosSales.companyId, companyId)));
+        if (!sale) return res.status(404).json({ message: "Sale not found" });
+        if (sale.status === "VOIDED") return res.status(400).json({ message: "Sale already voided" });
 
-      await db.transaction(async (tx) => {
-        // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
-        await removeFactoryPosCogsTx(tx, companyId, saleId);
-        // Wave 11: put back exactly the bales the sale recorded. A sale written
-        // before that record falls back to re-opening the most recent SOLD bales
-        // of each product at its location.
-        const released = await releasePosSaleBalesTx(tx, companyId, saleId);
-        const items = released.legacy
-          ? await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId))
-          : [];
-        for (const item of items) {
-          if (item.productId && sale.locationId) {
-            // Re-open the most recently SOLD bales for that product at that location
-            const soldBales = await tx
-              .select({ id: factoryBales.id })
-              .from(factoryBales)
-              .where(
-                and(
-                  eq(factoryBales.companyId, companyId),
-                  eq(factoryBales.productId, item.productId),
-                  eq(factoryBales.erpLocationId, sale.locationId),
-                  eq(factoryBales.status, "SOLD")
+        await db.transaction(async (tx) => {
+          // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
+          await removeFactoryPosCogsTx(tx, companyId, saleId);
+          // Wave 11: put back exactly the bales the sale recorded. A sale written
+          // before that record falls back to re-opening the most recent SOLD bales
+          // of each product at its location.
+          const released = await releasePosSaleBalesTx(tx, companyId, saleId);
+          const items = released.legacy
+            ? await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId))
+            : [];
+          for (const item of items) {
+            if (item.productId && sale.locationId) {
+              // Re-open the most recently SOLD bales for that product at that location
+              const soldBales = await tx
+                .select({ id: factoryBales.id })
+                .from(factoryBales)
+                .where(
+                  and(
+                    eq(factoryBales.companyId, companyId),
+                    eq(factoryBales.productId, item.productId),
+                    eq(factoryBales.erpLocationId, sale.locationId),
+                    eq(factoryBales.status, "SOLD")
+                  )
                 )
-              )
-              .orderBy(desc(factoryBales.id))
-              .limit(item.quantity)
-              .for("update");
-            const baleIds = soldBales.map((b) => b.id);
-            if (baleIds.length > 0) {
-              await tx
-                .update(factoryBales)
-                .set({ status: "IN_STOCK", updatedAt: new Date() })
-                .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+                .orderBy(desc(factoryBales.id))
+                .limit(item.quantity)
+                .for("update");
+              const baleIds = soldBales.map((b) => b.id);
+              if (baleIds.length > 0) {
+                await tx
+                  .update(factoryBales)
+                  .set({ status: "IN_STOCK", updatedAt: new Date() })
+                  .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+              }
             }
           }
-        }
-        // Take the sale's daybook rows (main #2129), its operational receivable
-        // rows (wave 14) and its revenue/receipt voucher (wave 8.4: FPOS-RCPT-{sale}
-        // or a legacy FPOS-{sale}-{timestamp}, retired) back out of the books.
-        await reverseFactoryPosSaleFinancialsTx(tx, companyId, saleId);
-        // Mark sale as voided
-        await tx.update(factoryPosSales).set({ status: "VOIDED" }).where(eq(factoryPosSales.id, saleId));
-        // Phase 21 (B): the void was unaudited; its audit row (the sale and its
-        // lines as they were) commits with it.
-        const saleItems = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
-        await writeAuditEvent(
-          {
-            userId: req.session.userId ?? undefined,
-            username: req.session.username ?? undefined,
-            companyId,
-            action: "void",
-            tableName: "factory_pos_sales",
-            recordId: saleId,
-            recordIdentifier: `Factory POS sale #${saleId}`,
-            changes: {
-              status: { old: sale.status, new: "VOIDED" },
-              sale: { old: sale },
-              items: { old: saleItems },
+          // Take the sale's daybook rows (main #2129), its operational receivable
+          // rows (wave 14) and its revenue/receipt voucher (wave 8.4: FPOS-RCPT-{sale}
+          // or a legacy FPOS-{sale}-{timestamp}, retired) back out of the books.
+          await reverseFactoryPosSaleFinancialsTx(tx, companyId, saleId);
+          // Mark sale as voided
+          await tx.update(factoryPosSales).set({ status: "VOIDED" }).where(eq(factoryPosSales.id, saleId));
+          // Phase 21 (B): the void was unaudited; its audit row (the sale and its
+          // lines as they were) commits with it.
+          const saleItems = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
+          await writeAuditEvent(
+            {
+              userId: req.session.userId ?? undefined,
+              username: req.session.username ?? undefined,
+              companyId,
+              action: "void",
+              tableName: "factory_pos_sales",
+              recordId: saleId,
+              recordIdentifier: `Factory POS sale #${saleId}`,
+              changes: {
+                status: { old: sale.status, new: "VOIDED" },
+                sale: { old: sale },
+                items: { old: saleItems },
+              },
             },
-          },
-          tx
-        );
-      });
+            tx
+          );
+        });
 
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      logger.error("Error voiding factory POS sale:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.json({ ok: true });
+      } catch (error: unknown) {
+        logger.error("Error voiding factory POS sale:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

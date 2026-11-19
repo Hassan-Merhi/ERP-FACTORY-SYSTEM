@@ -4,25 +4,51 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import {
-  isBonusCategoryDate, normalizeBonusCategory, parseBonusCategoryRate,
+  isBonusCategoryDate,
+  normalizeBonusCategory,
+  parseBonusCategoryRate,
   type ProductionBonusCategoryRateVersion,
 } from "@shared/productionTargetBonusCategoryRates";
 
+// The handler keeps its own checks and message; this fixes the shape the
+// category rates panel sends.
+const saveCategoryRateInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    category: z.string().optional(),
+    effectiveFrom: z.string().optional(),
+    enabled: z.boolean().optional(),
+    ratePerExtraBale: z.union([z.number(), z.string()]).optional(),
+    note: z.string().nullable().optional(),
+    requestKey: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
 const companyFor = (req: Request) => Number(req.session.factoryCompanyId || req.session.currentCompanyId) || null;
-const allowed = (req: Request) =>
-  ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
+const allowed = (req: Request) => ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
 
 type StoredCategoryRate = ProductionBonusCategoryRateVersion & {
-  note: string | null; requestKey: string; createdBy: string | null; createdAt: string;
+  note: string | null;
+  requestKey: string;
+  createdBy: string | null;
+  createdAt: string;
 };
 
 type DbRate = {
-  id: number | string; categoryKey: string; categoryLabel: string;
-  effectiveFrom: string; enabled: boolean; ratePerExtraBale: string;
-  note: string | null; requestKey: string; createdBy: string | null; createdAt: string;
+  id: number | string;
+  categoryKey: string;
+  categoryLabel: string;
+  effectiveFrom: string;
+  enabled: boolean;
+  ratePerExtraBale: string;
+  note: string | null;
+  requestKey: string;
+  createdBy: string | null;
+  createdAt: string;
 };
 
 async function readVersions(companyId: number): Promise<StoredCategoryRate[]> {
@@ -37,14 +63,17 @@ async function readVersions(companyId: number): Promise<StoredCategoryRate[]> {
     ORDER BY effective_from DESC, id DESC
     LIMIT 3000
   `);
-  return (resultRows(found) as DbRate[]).map(row => ({ ...row, id: Number(row.id) }));
+  return (resultRows(found) as DbRate[]).map((row) => ({ ...row, id: Number(row.id) }));
 }
 
 export function registerProductionTargetBonusCategoryRateRoutes(app: Express): void {
   // This is settings-only. No worker-day/category attribution or payment logic
   // is changed until audited Phase 9–13 integration.
-  app.get("/api/factory/production-target-bonuses/category-rates",
-    requireAuth, guard, async (req: Request, res: Response) => {
+  app.get(
+    "/api/factory/production-target-bonuses/category-rates",
+    requireAuth,
+    guard,
+    async (req: Request, res: Response) => {
       if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const companyId = companyFor(req);
       if (!companyId) return res.status(400).json({ message: "Factory company required" });
@@ -90,28 +119,37 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
           const parsed = normalizeBonusCategory(row.category);
           if (parsed && !catalog.has(parsed.key)) catalog.set(parsed.key, parsed.label);
         }
-        const categories = [...catalog].map(([key, label]) => ({
-          categoryKey: key, categoryLabel: label,
-          // Display the same latest configured rate used by unpaid checkout,
-          // including previously worked weeks. Paid claims retain their snapshot.
-          effective: [...versions].filter(v=>v.categoryKey===key)
-            .sort((a,b)=>b.id-a.id)[0] ?? null,
-        })).sort((a, b) => a.categoryLabel.localeCompare(b.categoryLabel));
+        const categories = [...catalog]
+          .map(([key, label]) => ({
+            categoryKey: key,
+            categoryLabel: label,
+            // Display the same latest configured rate used by unpaid checkout,
+            // including previously worked weeks. Paid claims retain their snapshot.
+            effective: [...versions].filter((v) => v.categoryKey === key).sort((a, b) => b.id - a.id)[0] ?? null,
+          }))
+          .sort((a, b) => a.categoryLabel.localeCompare(b.categoryLabel));
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-          currency: "USD", asOf, categories,
-          history: versions, historyTruncated: versions.length >= 3000,
+          currency: "USD",
+          asOf,
+          categories,
+          history: versions,
+          historyTruncated: versions.length >= 3000,
           configuredForPayments: true,
         });
       } catch (error) {
         logger.error("Cannot load Production Targets category rates", { error });
         return res.status(500).json({ message: "Cannot load category bonus rate settings" });
       }
-    },
+    }
   );
 
-  app.post("/api/factory/production-target-bonuses/category-rates",
-    requireAuth, guard, async (req: Request, res: Response) => {
+  app.post(
+    "/api/factory/production-target-bonuses/category-rates",
+    requireAuth,
+    guard,
+    validateRequest(saveCategoryRateInput),
+    async (req: Request, res: Response) => {
       if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
       const companyId = companyFor(req);
       if (!companyId) return res.status(400).json({ message: "Factory company required" });
@@ -121,50 +159,69 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
       const rate = parseBonusCategoryRate(req.body?.ratePerExtraBale);
       const requestKey = req.body?.requestKey;
       const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
-      if (!category || !isBonusCategoryDate(effectiveFrom) || typeof enabled !== "boolean" ||
-          rate === null || (enabled && Number(rate) <= 0) ||
-          typeof requestKey !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(requestKey) ||
-          note.length > 500) {
+      if (
+        !category ||
+        !isBonusCategoryDate(effectiveFrom) ||
+        typeof enabled !== "boolean" ||
+        rate === null ||
+        (enabled && Number(rate) <= 0) ||
+        typeof requestKey !== "string" ||
+        !/^[A-Za-z0-9_-]{8,128}$/.test(requestKey) ||
+        note.length > 500
+      ) {
         return res.status(400).json({ message: "Invalid category, date, rate, note or request key" });
       }
       try {
-        const result = await db.transaction(async tx => {
+        const result = await db.transaction(async (tx) => {
           // Serialize rate changes with bonus payment/approval posting.
           await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7642, ${companyId})`);
           // Category rates may only be set for categories explicitly used by
           // Production Targets. Worker groups and arbitrary new labels are not rates.
-          const knownCategories = resultRows(await tx.execute(sql`
+          const knownCategories = resultRows(
+            await tx.execute(sql`
             SELECT category FROM factory_staff_tracking_entries
             WHERE company_id=${companyId} AND page_type='production'
               AND category IS NOT NULL AND BTRIM(category)<>''
             UNION
             SELECT category FROM factory_worker_production_target_defaults
             WHERE company_id=${companyId} AND category IS NOT NULL AND BTRIM(category)<>''
-          `)) as Array<{category:string}>;
-          if (!knownCategories.some(row => normalizeBonusCategory(row.category)?.key === category.key))
-            return {status:409,message:"Select an existing category from Production Targets"};
-          const prior = resultRows(await tx.execute(sql`
+          `)
+          ) as Array<{ category: string }>;
+          if (!knownCategories.some((row) => normalizeBonusCategory(row.category)?.key === category.key))
+            return { status: 409, message: "Select an existing category from Production Targets" };
+          const prior = resultRows(
+            await tx.execute(sql`
             SELECT id, category_key AS "categoryKey",
                    effective_from::text AS "effectiveFrom", enabled,
                    rate_per_extra_bale::text AS "ratePerExtraBale", note
             FROM factory_production_target_bonus_category_rates
             WHERE company_id = ${companyId} AND request_key = ${requestKey}
             LIMIT 1
-          `)) as Array<{
-            id: number | string; categoryKey: string; effectiveFrom: string;
-            enabled: boolean; ratePerExtraBale: string; note: string | null;
+          `)
+          ) as Array<{
+            id: number | string;
+            categoryKey: string;
+            effectiveFrom: string;
+            enabled: boolean;
+            ratePerExtraBale: string;
+            note: string | null;
           }>;
           const previous = prior[0];
           if (previous) {
-            if (previous.categoryKey !== category.key || previous.effectiveFrom !== effectiveFrom ||
-                previous.enabled !== enabled || Number(previous.ratePerExtraBale) !== Number(rate) ||
-                (previous.note ?? "") !== note) {
+            if (
+              previous.categoryKey !== category.key ||
+              previous.effectiveFrom !== effectiveFrom ||
+              previous.enabled !== enabled ||
+              Number(previous.ratePerExtraBale) !== Number(rate) ||
+              (previous.note ?? "") !== note
+            ) {
               return { status: 409, message: "requestKey already belongs to a different rate change" };
             }
             return { status: 200, versionId: Number(previous.id), replayed: true };
           }
-          const inserted = resultRows(await tx.execute(sql`
+          const inserted = resultRows(
+            await tx.execute(sql`
             INSERT INTO factory_production_target_bonus_category_rates (
               company_id, category_key, category_label, effective_from,
               enabled, rate_per_extra_bale, note, request_key, created_by
@@ -173,19 +230,24 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
               ${effectiveFrom}::date, ${enabled}, ${rate},
               ${note || null}, ${requestKey}, ${String(req.session.userId ?? "")}
             ) RETURNING id
-          `)) as Array<{ id: number | string }>;
+          `)
+          ) as Array<{ id: number | string }>;
           return { status: 201, versionId: Number(inserted[0].id), replayed: false };
         });
         if ("message" in result) return res.status(result.status).json({ message: result.message });
         return res.status(result.status).json({
-          ...result, currency: "USD", category: category.label,
-          appliedToHistoricalApprovals: false, repricesUnpaidBonusOffers: true,
-          paidClaimsRemainLocked: true, configuredForPayments: true,
+          ...result,
+          currency: "USD",
+          category: category.label,
+          appliedToHistoricalApprovals: false,
+          repricesUnpaidBonusOffers: true,
+          paidClaimsRemainLocked: true,
+          configuredForPayments: true,
         });
       } catch (error) {
         logger.error("Cannot save Production Targets category rate", { error });
         return res.status(500).json({ message: "Cannot save category bonus rate" });
       }
-    },
+    }
   );
 }

@@ -7,6 +7,13 @@ import { locations, retailBrands, retailProducts, retailProductVariants, retailV
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { ensureCompanyLocation, requireRetailCompany, toNumber } from "./retailPosContext";
 import { evaluateRetailDiscountPolicy } from "../../services/retail/retailDiscountApproval";
 import {
@@ -26,7 +33,7 @@ const idempotencyKeySchema = z.string().trim().min(8).max(191);
 
 const positiveQuantitySchema = z.coerce.number().finite().positive();
 
-const paymentSchema = z.object({
+const paymentSchema = z.strictObject({
   method: z.enum(["cash", "card", "bank", "mobile", "other", "credit"]),
   amount: z.coerce.number().finite().positive(),
   // Non-cash and customer-credit tenders do not have a cash-tendered amount.
@@ -36,7 +43,7 @@ const paymentSchema = z.object({
   bankAccountId: z.number().int().positive().nullable().optional(),
 });
 
-const saleItemSchema = z.object({
+const saleItemSchema = z.strictObject({
   variantId: z.coerce.number().int().positive(),
   quantity: positiveQuantitySchema,
   priceOverride: z.coerce.number().finite().nonnegative().nullable().optional(),
@@ -45,7 +52,7 @@ const saleItemSchema = z.object({
   discountReason: z.string().trim().max(500).nullable().optional(),
 });
 
-export const saleSchema = z.object({
+export const saleSchema = z.strictObject({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
@@ -54,7 +61,7 @@ export const saleSchema = z.object({
   customerId: z.coerce.number().int().positive().nullable().optional(),
   customerName: z.string().trim().max(191).nullable().optional(),
   orderDiscount: z
-    .object({
+    .strictObject({
       type: z.enum(["none", "percent", "fixed"]),
       value: z.coerce.number().finite().nonnegative().optional(),
       reason: z.string().trim().max(500).nullable().optional(),
@@ -64,11 +71,11 @@ export const saleSchema = z.object({
   items: z.array(saleItemSchema).min(1).max(250),
 });
 
-const cartPreviewSchema = z.object({
+const cartPreviewSchema = z.strictObject({
   locationId: z.coerce.number().int().positive().optional(),
   items: z.array(saleItemSchema).min(1).max(250),
   orderDiscount: z
-    .object({
+    .strictObject({
       type: z.enum(["none", "percent", "fixed"]),
       value: z.coerce.number().finite().nonnegative().optional(),
       reason: z.string().trim().max(500).nullable().optional(),
@@ -76,7 +83,7 @@ const cartPreviewSchema = z.object({
     .optional(),
 });
 
-export const returnSchema = z.object({
+export const returnSchema = z.strictObject({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   shiftId: z.coerce.number().int().positive().optional(),
@@ -86,7 +93,7 @@ export const returnSchema = z.object({
   refundBankAccountId: z.number().int().positive().nullable().optional(),
   items: z
     .array(
-      z.object({
+      z.strictObject({
         saleItemId: z.coerce.number().int().positive(),
         quantity: positiveQuantitySchema,
         restock: z.boolean().default(true),
@@ -96,7 +103,7 @@ export const returnSchema = z.object({
     .max(250),
 });
 
-export const transferSchema = z.object({
+export const transferSchema = z.strictObject({
   idempotencyKey: idempotencyKeySchema,
   variantId: z.coerce.number().int().positive(),
   fromLocationId: z.coerce.number().int().positive(),
@@ -105,7 +112,7 @@ export const transferSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
-export const adjustmentSchema = z.object({
+export const adjustmentSchema = z.strictObject({
   idempotencyKey: idempotencyKeySchema,
   variantId: z.coerce.number().int().positive(),
   locationId: z.coerce.number().int().positive(),
@@ -116,6 +123,16 @@ export const adjustmentSchema = z.object({
   reason: z.string().trim().min(1).max(500),
   reference: z.string().trim().max(191).optional(),
 });
+
+export const cartPreviewInput = { query: emptyQuery, body: cartPreviewSchema } satisfies RequestSchemas;
+export const saleInput = { query: emptyQuery, body: saleSchema } satisfies RequestSchemas;
+export const returnInput = {
+  params: z.strictObject({ saleId: positiveIntParam }),
+  query: emptyQuery,
+  body: returnSchema,
+} satisfies RequestSchemas;
+export const transferInput = { query: emptyQuery, body: transferSchema } satisfies RequestSchemas;
+export const adjustmentInput = { query: emptyQuery, body: adjustmentSchema } satisfies RequestSchemas;
 
 export function registerRetailPosRoutesPart1(app: Express) {
   app.get("/api/pos/retail/items", requireAuth, async (req, res) => {
@@ -226,11 +243,11 @@ export function registerRetailPosRoutesPart1(app: Express) {
    * Subtotal → Discount → Tax → Total ladder and to warn the cashier that a manager
    * approval is required, so the client never re-implements the money math.
    */
-  app.post("/api/pos/retail/cart-preview", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/cart-preview", requireAuth, validateRequest(cartPreviewInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const body = cartPreviewSchema.parse(req.body ?? {});
+      const body = validatedInput(req, cartPreviewInput).body;
       if (body.locationId) await ensureCompanyLocation(companyId, body.locationId);
       const requestedLines: RetailSaleLineRequest[] = body.items.map((item) => ({
         variantId: item.variantId,

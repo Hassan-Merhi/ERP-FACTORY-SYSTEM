@@ -206,9 +206,15 @@ describe("PATCH /api/factory/advances/:id", () => {
   it("updates the notes and date but leaves the amount alone", async () => {
     const advance = await giveAdvance("120.00");
 
-    const response = await agent
+    // An amount is not an accepted field: the request is refused whole.
+    const withAmount = await agent
       .patch(`/api/factory/advances/${advance.id}`)
       .send({ notes: "corrected note", advanceDate: "2026-04-12", amount: "9999.00" });
+    expect(withAmount.status).toBe(400);
+
+    const response = await agent
+      .patch(`/api/factory/advances/${advance.id}`)
+      .send({ notes: "corrected note", advanceDate: "2026-04-12" });
 
     expect(response.status).toBe(200);
     const row = await advanceRow(advance.id);

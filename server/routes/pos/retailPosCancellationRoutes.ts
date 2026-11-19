@@ -5,6 +5,13 @@ import { retailPosSaleItems, retailPosSales, retailStockOperations } from "@shar
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import { lineAmount, MoneyDecimal, toMoney } from "../../lib/money";
 import {
@@ -24,12 +31,16 @@ import {
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 
-const cancelSchema = z.object({
-  locationId: z.coerce.number().int().positive(),
-  idempotencyKey: idempotencyKeySchema,
-  shiftId: z.coerce.number().int().positive().optional(),
-  reason: z.string().trim().min(1).max(500).optional(),
-});
+const cancelInput = {
+  params: z.strictObject({ saleId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    locationId: z.coerce.number().int().positive(),
+    idempotencyKey: idempotencyKeySchema,
+    shiftId: z.coerce.number().int().positive().optional(),
+    reason: z.string().trim().min(1).max(500).optional(),
+  }),
+} satisfies RequestSchemas;
 
 function toNumber(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
@@ -38,13 +49,12 @@ function toNumber(value: string | number | null | undefined): number {
 
 /** Cancels a whole retail sale: restores stock, refunds tenders and reverses its journal. */
 export function registerRetailPosCancellationRoute(app: Express): void {
-  app.post("/api/pos/retail/sales/:saleId/cancel", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/cancel", requireAuth, validateRequest(cancelInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const saleId = Number(req.params.saleId);
-      if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
-      const body = cancelSchema.parse(req.body);
+      const { params, body } = validatedInput(req, cancelInput);
+      const saleId = params.saleId;
       await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
       const result = await db.transaction(async (tx) => {

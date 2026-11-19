@@ -9,140 +9,175 @@ import { eq, and, sql } from "drizzle-orm";
 import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { employeeAdvancesBonusRoutesStep } from "./employeeAdvancesBonusRoutesStep";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const numeric = z.union([z.number(), z.string()]);
+const text = z.string().nullable().optional();
+
+// The handler parses the employee id with parseInt and the amount with
+// parseMoneyInput and answers its own 400s for missing fields.
+const createEmployeeBonusInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    employeeId: numeric.nullable().optional(),
+    bonusDate: text,
+    amount: numeric.nullable().optional(),
+    notes: text,
+    // Request identity: the client fetch guard adds it and operationalVoucherRequestBoundary claims it.
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteEmployeeBonusInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function employeeAdvancesBonusRoutesStep2({ app }: { app: Express }) {
   employeeAdvancesBonusRoutesStep({ app });
 
-  app.post("/api/factory/employee-bonuses", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { employeeId, bonusDate, amount, notes } = req.body;
-      if (!employeeId || !bonusDate || !amount)
-        return res.status(400).json({ message: "employeeId, bonusDate, amount required" });
-      const amt = parseMoneyInput(amount);
-      if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
+  app.post(
+    "/api/factory/employee-bonuses",
+    requireAuth,
+    validateRequest(createEmployeeBonusInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { employeeId, bonusDate, amount, notes } = req.body;
+        if (!employeeId || !bonusDate || !amount)
+          return res.status(400).json({ message: "employeeId, bonusDate, amount required" });
+        const amt = parseMoneyInput(amount);
+        if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
 
-      const [emp] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.id, parseInt(employeeId)), eq(employees.companyId, companyId)));
-      if (!emp) return res.status(404).json({ message: "Employee not found" });
+        const [emp] = await db
+          .select()
+          .from(employees)
+          .where(and(eq(employees.id, parseInt(employeeId)), eq(employees.companyId, companyId)));
+        if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-      // Get or create PAYROLL_DEPOSIT_EXPENSE ledger account
-      let [payrollExpenseAccount] = await db
-        .select()
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, "PAYROLL_DEPOSIT_EXPENSE")));
-      if (!payrollExpenseAccount) {
-        [payrollExpenseAccount] = await db
-          .insert(ledgerAccounts)
-          .values({
-            companyId,
-            code: "PAYROLL_DEPOSIT_EXPENSE",
-            name: "Payroll Deposit Expense",
-            accountType: "Indirect Expense",
-            openingBalance: "0",
-            active: true,
-          })
-          .returning();
-      }
+        // Get or create PAYROLL_DEPOSIT_EXPENSE ledger account
+        let [payrollExpenseAccount] = await db
+          .select()
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, "PAYROLL_DEPOSIT_EXPENSE")));
+        if (!payrollExpenseAccount) {
+          [payrollExpenseAccount] = await db
+            .insert(ledgerAccounts)
+            .values({
+              companyId,
+              code: "PAYROLL_DEPOSIT_EXPENSE",
+              name: "Payroll Deposit Expense",
+              accountType: "Indirect Expense",
+              openingBalance: "0",
+              active: true,
+            })
+            .returning();
+        }
 
-      // Phase 22 (C): the bonus row, its voucher (engine, engine-numbered — was
-      // EMP-BON-{Date.now()} — with the bonus's posting identity) and the
-      // employee's running balance commit together (the balance and the bonus row
-      // used to be written after the voucher's commit).
-      const desc = notes || `Bonus for ${emp.firstName} ${emp.lastName}`;
-      const bonusResult = await db.transaction(async (tx) => {
-        const inserted = await tx.execute(sql`
+        // Phase 22 (C): the bonus row, its voucher (engine, engine-numbered — was
+        // EMP-BON-{Date.now()} — with the bonus's posting identity) and the
+        // employee's running balance commit together (the balance and the bonus row
+        // used to be written after the voucher's commit).
+        const desc = notes || `Bonus for ${emp.firstName} ${emp.lastName}`;
+        const bonusResult = await db.transaction(async (tx) => {
+          const inserted = await tx.execute(sql`
           INSERT INTO employee_bonuses (company_id, employee_id, bonus_date, amount, notes, voucher_id)
           VALUES (${companyId}, ${parseInt(employeeId)}, ${bonusDate}, ${moneyString(amt)}, ${notes || null}, NULL)
           RETURNING id
         `);
-        const bonusId = Number((inserted.rows[0] as { id: number }).id);
-        const { voucher } = await postFactoryVoucherTx(tx, {
-          companyId,
-          voucherDate: bonusDate,
-          description: desc,
-          sourceModule: "ERP",
-          source: { sourceType: "factory-employee-bonus", sourceId: bonusId, phase: "voucher" },
-          actor: factorySessionActor(req),
-          lines: [
-            { ledgerAccountId: payrollExpenseAccount.id, debit: amt, narration: desc },
-            { employeeId: parseInt(employeeId), credit: amt, narration: desc },
-          ],
-        });
-        const [current] = await tx
-          .select({ currentBalance: employees.currentBalance, totalDeposits: employees.totalDeposits })
-          .from(employees)
-          .where(eq(employees.id, parseInt(employeeId)))
-          .for("update");
-        const newBalance = toMoney(current?.currentBalance).plus(moneyString(amt));
-        const newDeposits = toMoney(current?.totalDeposits).plus(moneyString(amt));
-        await tx
-          .update(employees)
-          .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
-          .where(eq(employees.id, parseInt(employeeId)));
-        return tx.execute(sql`
+          const bonusId = Number((inserted.rows[0] as { id: number }).id);
+          const { voucher } = await postFactoryVoucherTx(tx, {
+            companyId,
+            voucherDate: bonusDate,
+            description: desc,
+            sourceModule: "ERP",
+            source: { sourceType: "factory-employee-bonus", sourceId: bonusId, phase: "voucher" },
+            actor: factorySessionActor(req),
+            lines: [
+              { ledgerAccountId: payrollExpenseAccount.id, debit: amt, narration: desc },
+              { employeeId: parseInt(employeeId), credit: amt, narration: desc },
+            ],
+          });
+          const [current] = await tx
+            .select({ currentBalance: employees.currentBalance, totalDeposits: employees.totalDeposits })
+            .from(employees)
+            .where(eq(employees.id, parseInt(employeeId)))
+            .for("update");
+          const newBalance = toMoney(current?.currentBalance).plus(moneyString(amt));
+          const newDeposits = toMoney(current?.totalDeposits).plus(moneyString(amt));
+          await tx
+            .update(employees)
+            .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
+            .where(eq(employees.id, parseInt(employeeId)));
+          return tx.execute(sql`
           UPDATE employee_bonuses SET voucher_id = ${voucher.id}
            WHERE id = ${bonusId} AND company_id = ${companyId}
           RETURNING *
         `);
-      });
-      res.status(201).json(bonusResult.rows[0]);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        });
+        res.status(201).json(bonusResult.rows[0]);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/factory/employee-bonuses/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const bonusResult = await db.execute(
-        sql`SELECT * FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
-      );
-      const bonus = bonusResult.rows[0] as
-        { employee_id: number; amount: string; voucher_id: number | null } | undefined;
-      if (!bonus) return res.status(404).json({ message: "Bonus not found" });
-
-      // Reversing a bonus touches four rows, and all four have to move or none
-      // of them may. This ran unwrapped and in the wrong order:
-      // employee_bonuses.voucher_id references vouchers.id ON DELETE RESTRICT,
-      // so the voucher delete raised 23503 *after* the employee's balance had
-      // already been decremented and the voucher entries removed. The request
-      // answered 500 while leaving the balance reduced, the bonus row present
-      // and its voucher stripped of both legs — and every retry decremented the
-      // balance again.
-      await db.transaction(async (tx) => {
-        const [emp] = await tx.select().from(employees).where(eq(employees.id, bonus.employee_id));
-        if (emp) {
-          const newBalance = toMoney(emp.currentBalance).minus(toMoney(bonus.amount));
-          const newDeposits = toMoney(emp.totalDeposits).minus(toMoney(bonus.amount));
-          await tx
-            .update(employees)
-            .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
-            .where(eq(employees.id, bonus.employee_id));
-        }
-        // The bonus row goes first so the voucher it references is free to drop.
-        await tx.execute(
-          sql`DELETE FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
+  app.delete(
+    "/api/factory/employee-bonuses/:id",
+    requireAuth,
+    validateRequest(deleteEmployeeBonusInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const bonusResult = await db.execute(
+          sql`SELECT * FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
         );
-        if (bonus.voucher_id) {
-          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
-          await retireVouchersTx(tx, {
-            companyId,
-            voucherIds: [Number(bonus.voucher_id)],
-            reason: "employee-bonus-delete",
-            actor: sessionRetirementActor(req),
-          });
-        }
-      });
-      res.json({ message: "Bonus deleted and reversed" });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        const bonus = bonusResult.rows[0] as
+          { employee_id: number; amount: string; voucher_id: number | null } | undefined;
+        if (!bonus) return res.status(404).json({ message: "Bonus not found" });
+
+        // Reversing a bonus touches four rows, and all four have to move or none
+        // of them may. This ran unwrapped and in the wrong order:
+        // employee_bonuses.voucher_id references vouchers.id ON DELETE RESTRICT,
+        // so the voucher delete raised 23503 *after* the employee's balance had
+        // already been decremented and the voucher entries removed. The request
+        // answered 500 while leaving the balance reduced, the bonus row present
+        // and its voucher stripped of both legs — and every retry decremented the
+        // balance again.
+        await db.transaction(async (tx) => {
+          const [emp] = await tx.select().from(employees).where(eq(employees.id, bonus.employee_id));
+          if (emp) {
+            const newBalance = toMoney(emp.currentBalance).minus(toMoney(bonus.amount));
+            const newDeposits = toMoney(emp.totalDeposits).minus(toMoney(bonus.amount));
+            await tx
+              .update(employees)
+              .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
+              .where(eq(employees.id, bonus.employee_id));
+          }
+          // The bonus row goes first so the voucher it references is free to drop.
+          await tx.execute(
+            sql`DELETE FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
+          );
+          if (bonus.voucher_id) {
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: [Number(bonus.voucher_id)],
+              reason: "employee-bonus-delete",
+              actor: sessionRetirementActor(req),
+            });
+          }
+        });
+        res.json({ message: "Bonus deleted and reversed" });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ─── Worker Bonuses ───────────────────────────────────────────────────────────
 

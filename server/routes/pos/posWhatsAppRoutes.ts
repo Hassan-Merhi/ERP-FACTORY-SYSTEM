@@ -8,10 +8,18 @@ import { eq, and, desc, asc, gte } from "drizzle-orm";
 import { format } from "date-fns";
 import { sendWhatsAppTextToChatIdPos } from "../../services/whatsappService";
 import { toMoney } from "../../lib/money";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Admins may name a location; POS users fall back to their assigned one.
+const sendShiftReportInput = {
+  query: emptyQuery,
+  body: z.strictObject({ locationId: z.union([z.number(), z.string()]).nullable().optional() }),
+} satisfies RequestSchemas;
 
 export function registerPosWhatsAppRoutes(app: Express): void {
   // ── POS WhatsApp Shift Report ─────────────────────────────────────────────
-  app.post("/api/pos/send-shift-report", requireAuth, async (req, res) => {
+  app.post("/api/pos/send-shift-report", requireAuth, validateRequest(sendShiftReportInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

@@ -5,6 +5,8 @@ import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { validateRequest } from "../lib/validateRequest";
+import { phase1PostInput, phase1PreviewInput, phase1SetupAccountsInput } from "./goldenCoastAccountingRoutesSchemas";
 import {
   privilegedMutationRateLimit,
   privilegedReadRateLimit,
@@ -465,6 +467,7 @@ export function registerGoldenCoastAccountingRoutes(app: Express): void {
     phase1RequestBudget,
     requireAuth,
     requireRole("Developer"),
+    validateRequest(phase1SetupAccountsInput),
     (req, res) => void handlePhase1SetupAccounts(req, res)
   );
   app.get(
@@ -480,6 +483,7 @@ export function registerGoldenCoastAccountingRoutes(app: Express): void {
     phase1RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(phase1PreviewInput),
     (req, res) => void handlePhase1Preview(req, res)
   );
   app.post(
@@ -488,6 +492,7 @@ export function registerGoldenCoastAccountingRoutes(app: Express): void {
     phase1RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(phase1PostInput),
     (req, res) => void handlePhase1Post(req, res)
   );
 }

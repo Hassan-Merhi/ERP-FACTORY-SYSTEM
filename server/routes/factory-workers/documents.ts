@@ -7,6 +7,8 @@
 import type { Database } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { parseId } from "../../lib/parseId";
+import { validateRequest } from "../../lib/validateRequest";
+import { deleteWorkerDocumentInput, workerDocumentUploadInput } from "./factoryWorkerWriteSchemas";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { eq, and, desc } from "drizzle-orm";
@@ -32,6 +34,7 @@ export function registerFactoryWorkerDocumentRoutes(app: Express, requireAuth: R
     "/api/factory/workers/:id/documents",
     requireAuth,
     docUpload.single("file"),
+    validateRequest(workerDocumentUploadInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
@@ -112,33 +115,38 @@ export function registerFactoryWorkerDocumentRoutes(app: Express, requireAuth: R
   });
 
   // DELETE /api/factory/workers/:id/documents/:docId - Delete document
-  app.delete("/api/factory/workers/:id/documents/:docId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
-      const docId = parseId(req.params.docId);
-      if (docId === null) return res.status(400).json({ message: "Invalid id" });
-      const [doc] = await db
-        .select()
-        .from(factoryWorkerDocuments)
-        .where(
-          and(
-            eq(factoryWorkerDocuments.id, docId),
-            eq(factoryWorkerDocuments.workerId, workerId),
-            eq(factoryWorkerDocuments.companyId, companyId)
-          )
-        );
-      if (!doc) return res.status(404).json({ message: "Document not found" });
-      const filePath = path.join(process.cwd(), "uploads", "workers", "docs", doc.fileName);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      await db.delete(factoryWorkerDocuments).where(eq(factoryWorkerDocuments.id, docId));
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/factory/workers/:id/documents/:docId",
+    requireAuth,
+    validateRequest(deleteWorkerDocumentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const workerId = parseId(req.params.id);
+        if (workerId === null) return res.status(400).json({ message: "Invalid id" });
+        const docId = parseId(req.params.docId);
+        if (docId === null) return res.status(400).json({ message: "Invalid id" });
+        const [doc] = await db
+          .select()
+          .from(factoryWorkerDocuments)
+          .where(
+            and(
+              eq(factoryWorkerDocuments.id, docId),
+              eq(factoryWorkerDocuments.workerId, workerId),
+              eq(factoryWorkerDocuments.companyId, companyId)
+            )
+          );
+        if (!doc) return res.status(404).json({ message: "Document not found" });
+        const filePath = path.join(process.cwd(), "uploads", "workers", "docs", doc.fileName);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        await db.delete(factoryWorkerDocuments).where(eq(factoryWorkerDocuments.id, docId));
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // GET /api/factory/uploads/workers/docs/:filename - Serve worker documents
   // Resolution order:

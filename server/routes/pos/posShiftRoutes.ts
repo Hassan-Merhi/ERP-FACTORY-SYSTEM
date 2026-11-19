@@ -7,6 +7,32 @@ import { companies, userLocations } from "@shared/schema";
 import { getRetailCashDrawerBalance } from "../../services/retail/retailFinancialQueries";
 import { eq, and } from "drizzle-orm";
 import { parseMoneyInput } from "../../lib/money";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+
+// client/src/pages/pos/RetailShiftPanel.tsx sends { locationId, cashAccountId };
+// the handler also stores openingCash and posStation when a caller sends them.
+const openShiftInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    locationId: numberOrString.nullable().optional(),
+    cashAccountId: numberOrString.nullable().optional(),
+    openingCash: numberOrString.nullable().optional(),
+    posStation: numberOrString.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler parses the id with parseInt and keeps its own closingCash checks.
+const closeShiftInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    closingCash: numberOrString.nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerPosShiftRoutes(app: Express): void {
   // POS Shift Management Routes
@@ -91,7 +117,7 @@ export function registerPosShiftRoutes(app: Express): void {
   });
 
   // Open a new shift
-  app.post("/api/pos/shifts/open", requireAuth, async (req, res) => {
+  app.post("/api/pos/shifts/open", requireAuth, validateRequest(openShiftInput), async (req, res) => {
     try {
       const userId = req.user?.id;
       const username = req.user?.username;
@@ -146,9 +172,10 @@ export function registerPosShiftRoutes(app: Express): void {
       // Retail cash belongs to the ledger. Do not trust an openingCash amount
       // from the browser or post a second opening accounting entry.
       const requestedAccountId = cashAccountId == null ? null : Number(cashAccountId);
-      const drawer = company?.companyType === "retail"
-        ? await getRetailCashDrawerBalance(req.session.currentCompanyId, locationId, requestedAccountId)
-        : null;
+      const drawer =
+        company?.companyType === "retail"
+          ? await getRetailCashDrawerBalance(req.session.currentCompanyId, locationId, requestedAccountId)
+          : null;
       const shift = await storage.openShift({
         companyId: req.session.currentCompanyId,
         locationId,
@@ -167,7 +194,7 @@ export function registerPosShiftRoutes(app: Express): void {
   });
 
   // Close a shift
-  app.post("/api/pos/shifts/:id/close", requireAuth, async (req, res) => {
+  app.post("/api/pos/shifts/:id/close", requireAuth, validateRequest(closeShiftInput), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       const userId = req.user?.id;

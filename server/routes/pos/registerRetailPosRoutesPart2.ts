@@ -34,15 +34,16 @@ import {
   refundRetailPaymentsTx,
   validateRetailShiftTx,
 } from "../../services/retail/retailFinancialService";
-import { returnSchema, saleSchema } from "./registerRetailPosRoutesPart1";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import { returnInput, saleInput } from "./registerRetailPosRoutesPart1";
 
 export function registerRetailPosRoutesPart2(app: Express) {
-  app.post("/api/pos/retail/sales", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/sales", requireAuth, validateRequest(saleInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const userId = currentUserId(req);
-      const body = saleSchema.parse(req.body);
+      const body = validatedInput(req, saleInput).body;
       await ensureCompanyLocation(companyId, body.locationId);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
 
@@ -237,13 +238,12 @@ export function registerRetailPosRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/returns", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/returns", requireAuth, validateRequest(returnInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const saleId = Number(req.params.saleId);
-      if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
-      const body = returnSchema.parse(req.body);
+      const { params, body } = validatedInput(req, returnInput);
+      const saleId = params.saleId;
       await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
       const refusal = await retailReturnRefusal({ companyId, saleId, role: req.user?.role, ...body });

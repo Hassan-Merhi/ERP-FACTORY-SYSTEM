@@ -5,11 +5,46 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { InsertDraftPosSale, userLocations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 interface LastSoldPriceRow {
   stock_item_id: number;
   selling_price: string;
 }
+
+// The POS screen, its autosave and the legacy offline queue send drafts in this
+// shape (client/src/pages/pos/hooks/usePosMutations.ts, usePosAutosave.ts).
+const numberOrString = z.union([z.number(), z.string()]);
+const draftItem = z.strictObject({
+  stockItemId: numberOrString,
+  quantity: numberOrString,
+  rate: numberOrString,
+  amount: numberOrString,
+});
+const draftFields = {
+  locationId: numberOrString.nullable().optional(),
+  paymentAccountType: z.string().nullable().optional(),
+  paymentAccountId: numberOrString.nullable().optional(),
+  isCreditSale: z.boolean().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  items: z.array(draftItem).nullable().optional(),
+};
+
+const createDraftInput = { query: emptyQuery, body: z.strictObject(draftFields) } satisfies RequestSchemas;
+const updateDraftInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject(draftFields),
+} satisfies RequestSchemas;
+const deleteDraftInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerPosDraftRoutes(app: Express): void {
   // Last sold price stays company-wide, but the response only includes stock
@@ -97,7 +132,7 @@ export function registerPosDraftRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/drafts", requireAuth, async (req, res) => {
+  app.post("/api/pos/drafts", requireAuth, validateRequest(createDraftInput), async (req, res) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -129,9 +164,9 @@ export function registerPosDraftRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/pos/drafts/:id", requireAuth, async (req, res) => {
+  app.patch("/api/pos/drafts/:id", requireAuth, validateRequest(updateDraftInput), async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(validatedInput(req, updateDraftInput).params.id);
       const userId = req.user?.id;
 
       if (!userId) {
@@ -162,9 +197,9 @@ export function registerPosDraftRoutes(app: Express): void {
     }
   });
 
-  app.delete("/api/pos/drafts/:id", requireAuth, async (req, res) => {
+  app.delete("/api/pos/drafts/:id", requireAuth, validateRequest(deleteDraftInput), async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(validatedInput(req, deleteDraftInput).params.id);
       const userId = req.user?.id;
 
       if (!userId) {

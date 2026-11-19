@@ -13,6 +13,14 @@ import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../lib/validateRequest";
+import {
   createRetailPromotion,
   deactivateRetailPromotion,
   listActiveRetailPromotions,
@@ -47,6 +55,31 @@ const promotionBodySchema = z.object({
   active: z.boolean().optional(),
   priority: z.coerce.number().int().min(-1000).max(1000).optional(),
 });
+
+const updateSettingsInput = {
+  query: emptyQuery,
+  body: z.union([
+    z.undefined(),
+    settingsPatchSchema
+      .extend({
+        // Allowed by the client's Partial<RetailSellingSettings> patch type
+        // (client/src/pages/pos/retailWave2Api.ts); not used.
+        taxRatePercent: z.unknown().optional(),
+        canManageSettings: z.unknown().optional(),
+      })
+      .strict(),
+  ]),
+} satisfies RequestSchemas;
+
+const createPromotionInput = { query: emptyQuery, body: promotionBodySchema.strict() } satisfies RequestSchemas;
+
+const updatePromotionInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.union([z.undefined(), promotionBodySchema.partial().strict()]),
+} satisfies RequestSchemas;
+
+const deactivatePromotionInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 async function assertPromotionScope(companyId: number, input: RetailPromotionInput): Promise<void> {
   if (input.scope === "brand" && input.brandId) {
@@ -111,18 +144,24 @@ export function registerRetailSettingsRoutes(app: Express): void {
   });
 
   /** Company tax + discount policy (non-POS). */
-  app.put("/api/pos/retail/settings", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const patch = settingsPatchSchema.parse(req.body ?? {});
-      validateRetailSettingsPatch(patch);
-      const settings = await saveRetailSettings(companyId, patch, currentUserId(req));
-      res.json({ ...settings, taxRatePercent: Number((settings.taxRate * 100).toFixed(5)) });
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+  app.put(
+    "/api/pos/retail/settings",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateSettingsInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const patch = settingsPatchSchema.parse(req.body ?? {});
+        validateRetailSettingsPatch(patch);
+        const settings = await saveRetailSettings(companyId, patch, currentUserId(req));
+        res.json({ ...settings, taxRatePercent: Number((settings.taxRate * 100).toFixed(5)) });
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   /** Active promotions for POS display (any retail user). */
   app.get("/api/pos/retail/promotions/active", requireAuth, async (req, res) => {
@@ -148,62 +187,74 @@ export function registerRetailSettingsRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/retail/promotions", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const body = promotionBodySchema.parse(req.body ?? {});
-      await assertPromotionScope(companyId, body as RetailPromotionInput);
-      const row = await createRetailPromotion(companyId, body as RetailPromotionInput, currentUserId(req));
-      res.status(201).json(serializePromotion(row));
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.patch("/api/retail/promotions/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const promotionId = Number(req.params.id);
-      if (!Number.isInteger(promotionId) || promotionId <= 0) {
-        return res.status(400).json({ message: "Invalid promotion" });
+  app.post(
+    "/api/retail/promotions",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createPromotionInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const body = promotionBodySchema.parse(req.body ?? {});
+        await assertPromotionScope(companyId, body as RetailPromotionInput);
+        const row = await createRetailPromotion(companyId, body as RetailPromotionInput, currentUserId(req));
+        res.status(201).json(serializePromotion(row));
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      const body = promotionBodySchema.partial().parse(req.body ?? {});
-      const [existing] = await db
-        .select()
-        .from(retailPromotions)
-        .where(and(eq(retailPromotions.companyId, companyId), eq(retailPromotions.id, promotionId)))
-        .limit(1);
-      if (!existing) return res.status(404).json({ message: "Promotion not found" });
-      await assertPromotionScope(companyId, {
-        scope: (body.scope ?? existing.scope) as RetailPromotionInput["scope"],
-        brandId: body.brandId ?? existing.brandId,
-        productId: body.productId ?? existing.productId,
-        variantId: body.variantId ?? existing.variantId,
-      } as RetailPromotionInput);
-      const row = await updateRetailPromotion(companyId, promotionId, body as Partial<RetailPromotionInput>);
-      if (!row) return res.status(404).json({ message: "Promotion not found" });
-      res.json(serializePromotion(row));
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
+
+  app.patch(
+    "/api/retail/promotions/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updatePromotionInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const promotionId = validatedInput(req, updatePromotionInput).params.id;
+        const body = promotionBodySchema.partial().parse(req.body ?? {});
+        const [existing] = await db
+          .select()
+          .from(retailPromotions)
+          .where(and(eq(retailPromotions.companyId, companyId), eq(retailPromotions.id, promotionId)))
+          .limit(1);
+        if (!existing) return res.status(404).json({ message: "Promotion not found" });
+        await assertPromotionScope(companyId, {
+          scope: (body.scope ?? existing.scope) as RetailPromotionInput["scope"],
+          brandId: body.brandId ?? existing.brandId,
+          productId: body.productId ?? existing.productId,
+          variantId: body.variantId ?? existing.variantId,
+        } as RetailPromotionInput);
+        const row = await updateRetailPromotion(companyId, promotionId, body as Partial<RetailPromotionInput>);
+        if (!row) return res.status(404).json({ message: "Promotion not found" });
+        res.json(serializePromotion(row));
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
   /** Deactivates a promotion (history keeps referencing it). */
-  app.delete("/api/retail/promotions/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const promotionId = Number(req.params.id);
-      if (!Number.isInteger(promotionId) || promotionId <= 0) {
-        return res.status(400).json({ message: "Invalid promotion" });
+  app.delete(
+    "/api/retail/promotions/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deactivatePromotionInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const promotionId = validatedInput(req, deactivatePromotionInput).params.id;
+        const deactivated = await deactivateRetailPromotion(companyId, promotionId);
+        if (!deactivated) return res.status(404).json({ message: "Promotion not found" });
+        res.json({ id: promotionId, active: false });
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      const deactivated = await deactivateRetailPromotion(companyId, promotionId);
-      if (!deactivated) return res.status(404).json({ message: "Promotion not found" });
-      res.json({ id: promotionId, active: false });
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

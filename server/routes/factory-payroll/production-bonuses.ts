@@ -3,6 +3,8 @@ import type { DbTransaction } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { sql } from "drizzle-orm";
 import { checkFactoryAdmin } from "../factory/_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { productionBonusDecisionInput } from "./factoryPayrollWriteSchemas";
 import { logAudit } from "../helpers/auditHelpers";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -85,73 +87,77 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
     }
   });
 
-  app.post("/api/factory/payroll/:id/production-bonuses/decision", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!checkFactoryAdmin(req, res)) return;
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid payroll id" });
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/payroll/:id/production-bonuses/decision",
+    requireAuth,
+    validateRequest(productionBonusDecisionInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!checkFactoryAdmin(req, res)) return;
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid payroll id" });
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const decision = String(req.body?.decision ?? "").toUpperCase();
-      if (!["APPROVED", "REJECTED"].includes(decision)) {
-        return res.status(400).json({ message: "decision must be APPROVED or REJECTED" });
-      }
-      const items = parseDecisionItems(req.body?.items);
-      const applyAll = req.body?.all === true;
-      if (!applyAll && items.length === 0) {
-        return res.status(400).json({ message: "Choose at least one production bonus allocation" });
-      }
-      const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) || null : null;
-      const decidedBy = req.session?.userId ? String(req.session.userId) : null;
+        const decision = String(req.body?.decision ?? "").toUpperCase();
+        if (!["APPROVED", "REJECTED"].includes(decision)) {
+          return res.status(400).json({ message: "decision must be APPROVED or REJECTED" });
+        }
+        const items = parseDecisionItems(req.body?.items);
+        const applyAll = req.body?.all === true;
+        if (!applyAll && items.length === 0) {
+          return res.status(400).json({ message: "Choose at least one production bonus allocation" });
+        }
+        const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 1000) || null : null;
+        const decidedBy = req.session?.userId ? String(req.session.userId) : null;
 
-      const result = await db.transaction(async (tx: DbTransaction) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
-        const payrollResult = await tx.execute<RawQueryRow<PayrollLockRow>>(sql`
+        const result = await db.transaction(async (tx: DbTransaction) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
+          const payrollResult = await tx.execute<RawQueryRow<PayrollLockRow>>(sql`
           SELECT id, company_id AS "companyId", worker_id AS "workerId",
                  period_start::text AS "periodStart", period_end::text AS "periodEnd", status
           FROM factory_payrolls
           WHERE id = ${id} AND company_id = ${companyId}
           FOR UPDATE
         `);
-        const payroll = payrollResult.rows[0];
-        if (!payroll) throw new Error("Payroll record not found");
-        if (String(payroll.status) !== "DRAFT") {
-          throw new Error("Production bonus decisions can only be changed while payroll is DRAFT");
-        }
+          const payroll = payrollResult.rows[0];
+          if (!payroll) throw new Error("Payroll record not found");
+          if (String(payroll.status) !== "DRAFT") {
+            throw new Error("Production bonus decisions can only be changed while payroll is DRAFT");
+          }
 
-        // May reattach an already-approved orphan allocation from an earlier
-        // deleted payroll. Re-read financial values after preparation so the
-        // decision delta starts from the current authoritative total/net.
-        await prepareProductionBonusesForPayroll(tx, id);
-        const financialResult = await tx.execute<RawQueryRow<PayrollFinancialRow>>(sql`
+          // May reattach an already-approved orphan allocation from an earlier
+          // deleted payroll. Re-read financial values after preparation so the
+          // decision delta starts from the current authoritative total/net.
+          await prepareProductionBonusesForPayroll(tx, id);
+          const financialResult = await tx.execute<RawQueryRow<PayrollFinancialRow>>(sql`
           SELECT bonuses::text AS bonuses, net_salary::text AS "netSalary"
           FROM factory_payrolls WHERE id = ${id} AND company_id = ${companyId} LIMIT 1
         `);
-        const financial = financialResult.rows[0];
-        if (!financial) throw new Error("Payroll record not found");
+          const financial = financialResult.rows[0];
+          if (!financial) throw new Error("Payroll record not found");
 
-        const oldTotals = (await getProductionBonusTotalsForPayrollIds(tx, [id])).get(id) ?? emptyTotals();
-        const linkedResult = await tx.execute<RawQueryRow<BonusAllocationRow>>(sql`
+          const oldTotals = (await getProductionBonusTotalsForPayrollIds(tx, [id])).get(id) ?? emptyTotals();
+          const linkedResult = await tx.execute<RawQueryRow<BonusAllocationRow>>(sql`
           SELECT run_id AS "runId", worker_id AS "workerId"
           FROM factory_production_bonus_allocations
           WHERE payroll_id = ${id}
         `);
-        const linked = linkedResult.rows.map((row) => ({
-          runId: Number(row.runId),
-          workerId: Number(row.workerId),
-        }));
-        const requested = applyAll
-          ? linked
-          : linked.filter((candidate) =>
-              items.some((item) => item.runId === candidate.runId && item.workerId === candidate.workerId)
-            );
-        if (requested.length === 0)
-          throw new Error("No matching production bonus allocations were found on this payroll");
+          const linked = linkedResult.rows.map((row) => ({
+            runId: Number(row.runId),
+            workerId: Number(row.workerId),
+          }));
+          const requested = applyAll
+            ? linked
+            : linked.filter((candidate) =>
+                items.some((item) => item.runId === candidate.runId && item.workerId === candidate.workerId)
+              );
+          if (requested.length === 0)
+            throw new Error("No matching production bonus allocations were found on this payroll");
 
-        const affectedRunIds: number[] = [];
-        for (const item of requested) {
-          const updateResult = await tx.execute<RawQueryRow<{ run_id: number }>>(sql`
+          const affectedRunIds: number[] = [];
+          for (const item of requested) {
+            const updateResult = await tx.execute<RawQueryRow<{ run_id: number }>>(sql`
             UPDATE factory_production_bonus_allocations
             SET decision_status = ${decision}, decided_by = ${decidedBy}, decided_at = NOW(),
                 decision_note = ${note}, updated_at = NOW()
@@ -170,63 +176,66 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
               )
             RETURNING run_id
           `);
-          if (!updateResult.rows[0] && decision === "APPROVED") {
-            throw new Error("Production Targets bonus already paid for this worker/day; payroll approval blocked");
+            if (!updateResult.rows[0] && decision === "APPROVED") {
+              throw new Error("Production Targets bonus already paid for this worker/day; payroll approval blocked");
+            }
+            if (updateResult.rows[0]) affectedRunIds.push(item.runId);
           }
-          if (updateResult.rows[0]) affectedRunIds.push(item.runId);
-        }
-        await updateProductionBonusRunStatuses(tx, affectedRunIds);
+          await updateProductionBonusRunStatuses(tx, affectedRunIds);
 
-        const newTotals = (await getProductionBonusTotalsForPayrollIds(tx, [id])).get(id) ?? emptyTotals();
-        const totalBonusBefore = Number(financial.bonuses ?? 0);
-        const otherBonus = Math.max(0, totalBonusBefore - oldTotals.approved);
-        const totalBonusAfter = Number((otherBonus + newTotals.approved).toFixed(2));
-        const netSalary = Number((Number(financial.netSalary ?? 0) + (totalBonusAfter - totalBonusBefore)).toFixed(2));
+          const newTotals = (await getProductionBonusTotalsForPayrollIds(tx, [id])).get(id) ?? emptyTotals();
+          const totalBonusBefore = Number(financial.bonuses ?? 0);
+          const otherBonus = Math.max(0, totalBonusBefore - oldTotals.approved);
+          const totalBonusAfter = Number((otherBonus + newTotals.approved).toFixed(2));
+          const netSalary = Number(
+            (Number(financial.netSalary ?? 0) + (totalBonusAfter - totalBonusBefore)).toFixed(2)
+          );
 
-        await tx.execute(sql`
+          await tx.execute(sql`
           UPDATE factory_payrolls
           SET bonuses = ${totalBonusAfter.toFixed(2)}, net_salary = ${netSalary.toFixed(2)}
           WHERE id = ${id} AND company_id = ${companyId}
         `);
-        await rebuildPayrollGenVoucher(tx, Number(companyId), String(payroll.periodStart), String(payroll.periodEnd));
+          await rebuildPayrollGenVoucher(tx, Number(companyId), String(payroll.periodStart), String(payroll.periodEnd));
 
-        const decisionResult = {
-          details: await getProductionBonusDetailsForPayroll(tx, id),
-          otherBonus,
-          totalBonus: totalBonusAfter,
-          netSalary,
-          affected: requested.length,
-        };
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId: Number(companyId),
-            action: "update",
-            tableName: "factory_production_bonus_allocations",
-            recordId: null,
-            recordIdentifier: `Payroll #${id} production bonuses — ${decision}`,
-            changes: {
-              decision: { old: null, new: decision },
-              affectedAllocations: { old: 0, new: decisionResult.affected },
-              totalApprovedProductionBonus: { old: null, new: decisionResult.details.totals.approved },
+          const decisionResult = {
+            details: await getProductionBonusDetailsForPayroll(tx, id),
+            otherBonus,
+            totalBonus: totalBonusAfter,
+            netSalary,
+            affected: requested.length,
+          };
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId: Number(companyId),
+              action: "update",
+              tableName: "factory_production_bonus_allocations",
+              recordId: null,
+              recordIdentifier: `Payroll #${id} production bonuses — ${decision}`,
+              changes: {
+                decision: { old: null, new: decision },
+                affectedAllocations: { old: 0, new: decisionResult.affected },
+                totalApprovedProductionBonus: { old: null, new: decisionResult.details.totals.approved },
+              },
             },
-          },
-          tx
-        );
+            tx
+          );
 
-        return decisionResult;
-      });
+          return decisionResult;
+        });
 
-      res.json(result);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      const status = /not found/i.test(message)
-        ? 404
-        : /only be changed while payroll is DRAFT/i.test(message)
-          ? 409
-          : 400;
-      res.status(status).json({ message });
+        res.json(result);
+      } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        const status = /not found/i.test(message)
+          ? 404
+          : /only be changed while payroll is DRAFT/i.test(message)
+            ? 409
+            : 400;
+        res.status(status).json({ message });
+      }
     }
-  });
+  );
 }
