@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
+import fs from "node:fs";
 import path from "node:path";
-import { readModuleFamily } from "./lib/readModuleFamily.mjs";
+import { moduleFamilyFiles, readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const ROOT = process.cwd();
 const read = async (relativePath) => readModuleFamily(path.join(ROOT, relativePath));
@@ -79,15 +79,19 @@ const exactSourceMarkers = [
   'const filtered = exportRows.filter((r) => {',
   '`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`',
 ];
-const sourceWithModel = `${source}\n${await read("client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx")}`;
+// Markers are checked per module: each must exist somewhere in the page or model
+// family, and must not repeat inside any single module (transforms work per file).
+const markerModules = [
+  ...moduleFamilyFiles(path.join(ROOT, "client/src/pages/factory/FactoryStockAllocationV5.tsx")),
+  ...moduleFamilyFiles(path.join(ROOT, "client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx")),
+].map((file) => fs.readFileSync(file, "utf8"));
 for (const marker of exactSourceMarkers) {
-  const first = sourceWithModel.indexOf(marker);
-  assert.ok(first >= 0, `Missing exact V5 source marker: ${marker}`);
-  assert.equal(
-    sourceWithModel.indexOf(marker, first + marker.length),
-    -1,
-    `Ambiguous V5 source marker: ${marker}`
-  );
+  const holders = markerModules.filter((text) => text.includes(marker));
+  assert.ok(holders.length > 0, `Missing exact V5 source marker: ${marker}`);
+  for (const text of holders) {
+    const first = text.indexOf(marker);
+    assert.equal(text.indexOf(marker, first + marker.length), -1, `Ambiguous V5 source marker: ${marker}`);
+  }
 }
 
 console.log(

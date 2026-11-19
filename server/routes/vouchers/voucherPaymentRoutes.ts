@@ -1,6 +1,6 @@
 import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express } from "express";
-import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
+import { errorBody, getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -174,7 +174,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
       res.json({ ...result, whatsapp: waResult });
     } catch (error: unknown) {
       logger.error("Error creating payment/receipt voucher:", { error: error });
-      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json(errorBody(error));
     }
   });
 

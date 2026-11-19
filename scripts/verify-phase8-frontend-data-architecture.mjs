@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+// Split modules keep their contracts in extracted siblings (see ./lib/readModuleFamily.mjs).
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 
 const architecture = read("client/src/lib/frontendDataArchitecture.ts");

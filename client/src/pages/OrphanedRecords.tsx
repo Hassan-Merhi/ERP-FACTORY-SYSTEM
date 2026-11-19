@@ -1,154 +1,16 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { AlertCircle, RefreshCw, AlertTriangle, Archive, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { OrphanedRecordsResponse, StockGroupArchive } from "./orphanedRecordsTypes";
+import { useOrphanedRecordsPageModel } from "./OrphanedRecordsPageModel";
 
 export default function OrphanedRecordsPage() {
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { formatDisplayDate } = useDateFormat();
-  const { formatAmount } = useCurrencyContext();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [selectedVouchers, setSelectedVouchers] = useState<number[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<string>("");
-
-  const {
-    data: recordsData,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery<OrphanedRecordsResponse>({
-    queryKey: ["/api/orphaned-records"],
-  });
-
-  const orphanedRecords = recordsData?.orphanedVouchers || [];
-  const unbalancedRecords = recordsData?.unbalancedVouchers || [];
-
-  const { data: locations = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/locations"],
-  });
-
-  const {
-    data: stockGroupArchives = [],
-    isLoading: archivesLoading,
-    isError: archivesError,
-    refetch: refetchArchives,
-  } = useQuery<StockGroupArchive[]>({
-    queryKey: ["/api/stock-group-archives"],
-  });
-
-  const restoreArchiveMutation = useMutation({
-    mutationFn: async (archiveId: number) => {
-      return modeApiRequest("POST", `/api/stock-group-archives/${archiveId}/restore`);
-    },
-    onSuccess: () => {
-      toast({ title: "Restored", description: "Stock group inventory restored successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-group-archives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-items/light"] });
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Restore failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteArchiveMutation = useMutation({
-    mutationFn: async ({ archiveId, permanent }: { archiveId: number; permanent: boolean }) => {
-      return modeApiRequest("DELETE", `/api/stock-group-archives/${archiveId}?permanent=${permanent}`);
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "Archive deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-group-archives"] });
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const reassignMutation = useMutation({
-    mutationFn: async (data: { voucherIds: number[]; newLocationId: number }) => {
-      return modeApiRequest("POST", "/api/orphaned-records/reassign", data);
-    },
-    onSuccess: async (res) => {
-      const data = (await res.json()) as { updated: number; newLocationName: string };
-      toast({
-        title: "Updated",
-        description: `${data.updated} records reassigned to ${data.newLocationName}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/orphaned-records"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-report"] });
-      setSelectedVouchers([]);
-      setSelectedLocation("");
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Reassign failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await modeApiRequest("DELETE", "/api/orphaned-records/delete-all");
-      return res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Deleted",
-        description: `${data.deleted} orphaned vouchers permanently deleted`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/orphaned-records"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-report"] });
-      setSelectedVouchers([]);
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const handleSelectAll = () => {
-    if (selectedVouchers.length === orphanedRecords.length) {
-      setSelectedVouchers([]);
-    } else {
-      setSelectedVouchers(orphanedRecords.map((v) => v.id));
-    }
-  };
-
-  const handleToggleVoucher = (id: number) => {
-    setSelectedVouchers((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
-  };
-
-  const handleReassign = () => {
-    if (selectedVouchers.length === 0) {
-      toast({ title: "Missing information", description: "Please select records to reassign", variant: "destructive" });
-      return;
-    }
-    if (!selectedLocation) {
-      toast({ title: "Missing information", description: "Please select a location", variant: "destructive" });
-      return;
-    }
-    reassignMutation.mutate({
-      voucherIds: selectedVouchers,
-      newLocationId: parseInt(selectedLocation),
-    });
-  };
+  const orp = useOrphanedRecordsPageModel();
 
   return (
     <div className="space-y-4 sm:p-4 md:space-y-6 md:p-6">
@@ -170,11 +32,11 @@ export default function OrphanedRecordsPage() {
           </div>
         </div>
 
-        {isLoading ? (
+        {orp.isLoading ? (
           <LoadingState className="py-8" />
-        ) : isError && !recordsData ? (
-          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
-        ) : unbalancedRecords.length === 0 ? (
+        ) : orp.isError && !orp.recordsData ? (
+          <ErrorState onAction={() => void orp.refetch()} actionLabel="Try again" className="py-8" />
+        ) : orp.unbalancedRecords.length === 0 ? (
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <p className="text-lg font-medium text-green-600">All vouchers are balanced</p>
@@ -196,7 +58,7 @@ export default function OrphanedRecordsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unbalancedRecords.map((voucher) => (
+                  {orp.unbalancedRecords.map((voucher) => (
                     <TableRow key={voucher.id} data-testid={`row-unbalanced-${voucher.id}`}>
                       <TableCell className="font-mono" data-testid={`text-unbalanced-number-${voucher.id}`}>
                         {voucher.voucherNumber}
@@ -204,16 +66,16 @@ export default function OrphanedRecordsPage() {
                       <TableCell data-testid={`text-unbalanced-type-${voucher.id}`}>{voucher.voucherType}</TableCell>
                       <TableCell data-testid={`text-unbalanced-date-${voucher.id}`}>{voucher.voucherDate}</TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-debits-${voucher.id}`}>
-                        {formatAmount(voucher.totalDebits)}
+                        {orp.formatAmount(voucher.totalDebits)}
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-credits-${voucher.id}`}>
-                        {formatAmount(voucher.totalCredits)}
+                        {orp.formatAmount(voucher.totalCredits)}
                       </TableCell>
                       <TableCell
                         className="text-right font-mono text-red-600 font-bold"
                         data-testid={`text-imbalance-${voucher.id}`}
                       >
-                        {formatAmount(voucher.imbalance)}
+                        {orp.formatAmount(voucher.imbalance)}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate" data-testid={`text-unbalanced-desc-${voucher.id}`}>
                         {voucher.description || "-"}
@@ -224,7 +86,7 @@ export default function OrphanedRecordsPage() {
               </Table>
             </div>
             <div className="md:hidden phone-land:block space-y-3">
-              {unbalancedRecords.map((voucher) => (
+              {orp.unbalancedRecords.map((voucher) => (
                 <Card key={voucher.id} className="p-3" data-testid={`card-unbalanced-${voucher.id}`}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-mono text-sm font-medium">{voucher.voucherNumber}</span>
@@ -234,15 +96,15 @@ export default function OrphanedRecordsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Debits</p>
-                      <p className="font-mono">{formatAmount(voucher.totalDebits)}</p>
+                      <p className="font-mono">{orp.formatAmount(voucher.totalDebits)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Credits</p>
-                      <p className="font-mono">{formatAmount(voucher.totalCredits)}</p>
+                      <p className="font-mono">{orp.formatAmount(voucher.totalCredits)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Imbalance</p>
-                      <p className="font-mono text-red-600 font-bold">{formatAmount(voucher.imbalance)}</p>
+                      <p className="font-mono text-red-600 font-bold">{orp.formatAmount(voucher.imbalance)}</p>
                     </div>
                   </div>
                   {voucher.description && (
@@ -256,16 +118,16 @@ export default function OrphanedRecordsPage() {
       </Card>
 
       {/* Orphaned Location Vouchers Section */}
-      {orphanedRecords.length > 0 && (
+      {orp.orphanedRecords.length > 0 && (
         <Card className="p-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+              <Select value={orp.selectedLocation} onValueChange={orp.setSelectedLocation}>
                 <SelectTrigger data-testid="select-new-location">
                   <SelectValue placeholder="Select new location" />
                 </SelectTrigger>
                 <SelectContent>
-                  {locations.map((loc) => (
+                  {orp.locations.map((loc) => (
                     <SelectItem key={loc.id} value={loc.id.toString()} data-testid={`option-location-${loc.id}`}>
                       {loc.name}
                     </SelectItem>
@@ -274,12 +136,12 @@ export default function OrphanedRecordsPage() {
               </Select>
             </div>
             <Button
-              onClick={handleReassign}
-              disabled={reassignMutation.isPending || selectedVouchers.length === 0 || !selectedLocation}
+              onClick={orp.handleReassign}
+              disabled={orp.reassignMutation.isPending || orp.selectedVouchers.length === 0 || !orp.selectedLocation}
               data-testid="button-reassign"
             >
-              {reassignMutation.isPending && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
-              Reassign {selectedVouchers.length} Record{selectedVouchers.length !== 1 ? "s" : ""}
+              {orp.reassignMutation.isPending && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+              Reassign {orp.selectedVouchers.length} Record{orp.selectedVouchers.length !== 1 ? "s" : ""}
             </Button>
           </div>
         </Card>
@@ -294,25 +156,25 @@ export default function OrphanedRecordsPage() {
               <p className="text-sm text-muted-foreground">Vouchers referencing locations that have been deleted</p>
             </div>
           </div>
-          {orphanedRecords.length > 0 && (
+          {orp.orphanedRecords.length > 0 && (
             <Button
               variant="destructive"
-              onClick={() => deleteAllMutation.mutate()}
-              disabled={deleteAllMutation.isPending}
+              onClick={() => orp.deleteAllMutation.mutate()}
+              disabled={orp.deleteAllMutation.isPending}
               data-testid="button-delete-all-orphaned"
             >
-              {deleteAllMutation.isPending && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+              {orp.deleteAllMutation.isPending && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
               <Trash2 className="w-4 h-4 mr-2" />
-              Delete All ({orphanedRecords.length})
+              Delete All ({orp.orphanedRecords.length})
             </Button>
           )}
         </div>
 
-        {isLoading ? (
+        {orp.isLoading ? (
           <LoadingState className="py-8" />
-        ) : isError && !recordsData ? (
-          <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
-        ) : orphanedRecords.length === 0 ? (
+        ) : orp.isError && !orp.recordsData ? (
+          <ErrorState onAction={() => void orp.refetch()} actionLabel="Try again" className="py-8" />
+        ) : orp.orphanedRecords.length === 0 ? (
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <p className="text-lg font-medium text-green-600">No orphaned records found</p>
@@ -326,8 +188,10 @@ export default function OrphanedRecordsPage() {
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedVouchers.length === orphanedRecords.length && orphanedRecords.length > 0}
-                        onCheckedChange={handleSelectAll}
+                        checked={
+                          orp.selectedVouchers.length === orp.orphanedRecords.length && orp.orphanedRecords.length > 0
+                        }
+                        onCheckedChange={orp.handleSelectAll}
                         data-testid="checkbox-select-all"
                       />
                     </TableHead>
@@ -340,12 +204,12 @@ export default function OrphanedRecordsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orphanedRecords.map((voucher) => (
+                  {orp.orphanedRecords.map((voucher) => (
                     <TableRow key={voucher.id} data-testid={`row-voucher-${voucher.id}`}>
                       <TableCell>
                         <Checkbox
-                          checked={selectedVouchers.includes(voucher.id)}
-                          onCheckedChange={() => handleToggleVoucher(voucher.id)}
+                          checked={orp.selectedVouchers.includes(voucher.id)}
+                          onCheckedChange={() => orp.handleToggleVoucher(voucher.id)}
                           data-testid={`checkbox-voucher-${voucher.id}`}
                         />
                       </TableCell>
@@ -358,7 +222,7 @@ export default function OrphanedRecordsPage() {
                         {voucher.locationName || <span className="text-muted-foreground">Not saved</span>}
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-amount-${voucher.id}`}>
-                        {formatAmount(voucher.totalAmount)}
+                        {orp.formatAmount(voucher.totalAmount)}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate" data-testid={`text-description-${voucher.id}`}>
                         {voucher.description || "-"}
@@ -371,18 +235,18 @@ export default function OrphanedRecordsPage() {
             <div className="md:hidden phone-land:block space-y-3">
               <div className="flex items-center gap-2 mb-2">
                 <Checkbox
-                  checked={selectedVouchers.length === orphanedRecords.length && orphanedRecords.length > 0}
-                  onCheckedChange={handleSelectAll}
+                  checked={orp.selectedVouchers.length === orp.orphanedRecords.length && orp.orphanedRecords.length > 0}
+                  onCheckedChange={orp.handleSelectAll}
                   data-testid="checkbox-select-all-mobile"
                 />
                 <span className="text-sm text-muted-foreground">Select All</span>
               </div>
-              {orphanedRecords.map((voucher) => (
+              {orp.orphanedRecords.map((voucher) => (
                 <Card key={voucher.id} className="p-3" data-testid={`card-voucher-${voucher.id}`}>
                   <div className="flex items-start gap-3">
                     <Checkbox
-                      checked={selectedVouchers.includes(voucher.id)}
-                      onCheckedChange={() => handleToggleVoucher(voucher.id)}
+                      checked={orp.selectedVouchers.includes(voucher.id)}
+                      onCheckedChange={() => orp.handleToggleVoucher(voucher.id)}
                       className="mt-1"
                     />
                     <div className="flex-1 min-w-0">
@@ -392,7 +256,7 @@ export default function OrphanedRecordsPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">{voucher.voucherDate}</p>
                       {voucher.locationName && <p className="text-sm">{voucher.locationName}</p>}
-                      <p className="text-sm font-mono text-right mt-1">{formatAmount(voucher.totalAmount)}</p>
+                      <p className="text-sm font-mono text-right mt-1">{orp.formatAmount(voucher.totalAmount)}</p>
                     </div>
                   </div>
                 </Card>
@@ -416,11 +280,11 @@ export default function OrphanedRecordsPage() {
           </div>
         </div>
 
-        {archivesLoading ? (
+        {orp.archivesLoading ? (
           <LoadingState className="py-8" />
-        ) : archivesError && stockGroupArchives.length === 0 ? (
-          <ErrorState onAction={() => void refetchArchives()} actionLabel="Try again" className="py-8" />
-        ) : stockGroupArchives.length === 0 ? (
+        ) : orp.archivesError && orp.stockGroupArchives.length === 0 ? (
+          <ErrorState onAction={() => void orp.refetchArchives()} actionLabel="Try again" className="py-8" />
+        ) : orp.stockGroupArchives.length === 0 ? (
           <EmptyState
             icon={Archive}
             title="No archived stock groups"
@@ -443,7 +307,7 @@ export default function OrphanedRecordsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stockGroupArchives.map((archive) => (
+                  {orp.stockGroupArchives.map((archive) => (
                     <TableRow key={archive.id} data-testid={`row-archive-${archive.id}`}>
                       <TableCell className="font-medium" data-testid={`text-archive-group-${archive.id}`}>
                         {archive.stockGroupName}
@@ -456,18 +320,18 @@ export default function OrphanedRecordsPage() {
                         {parseFloat(archive.totalQuantity).toFixed(3)}
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-archive-value-${archive.id}`}>
-                        {formatAmount(archive.totalValue)}
+                        {orp.formatAmount(archive.totalValue)}
                       </TableCell>
                       <TableCell data-testid={`text-archive-date-${archive.id}`}>
-                        {formatDisplayDate(archive.archivedAt)}
+                        {orp.formatDisplayDate(archive.archivedAt)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => restoreArchiveMutation.mutate(archive.id)}
-                            disabled={restoreArchiveMutation.isPending}
+                            onClick={() => orp.restoreArchiveMutation.mutate(archive.id)}
+                            disabled={orp.restoreArchiveMutation.isPending}
                             data-testid={`button-restore-archive-${archive.id}`}
                           >
                             <RotateCcw className="h-4 w-4 mr-1" />
@@ -476,8 +340,8 @@ export default function OrphanedRecordsPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => deleteArchiveMutation.mutate({ archiveId: archive.id, permanent: true })}
-                            disabled={deleteArchiveMutation.isPending}
+                            onClick={() => orp.deleteArchiveMutation.mutate({ archiveId: archive.id, permanent: true })}
+                            disabled={orp.deleteArchiveMutation.isPending}
                             data-testid={`button-delete-archive-${archive.id}`}
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
@@ -491,7 +355,7 @@ export default function OrphanedRecordsPage() {
               </Table>
             </div>
             <div className="md:hidden phone-land:block space-y-3">
-              {stockGroupArchives.map((archive) => (
+              {orp.stockGroupArchives.map((archive) => (
                 <Card key={archive.id} className="p-3" data-testid={`card-archive-${archive.id}`}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-medium text-sm">{archive.stockGroupName}</span>
@@ -508,16 +372,16 @@ export default function OrphanedRecordsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Value</p>
-                      <p className="font-mono">{formatAmount(archive.totalValue)}</p>
+                      <p className="font-mono">{orp.formatAmount(archive.totalValue)}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-2">{formatDisplayDate(archive.archivedAt)}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{orp.formatDisplayDate(archive.archivedAt)}</p>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => restoreArchiveMutation.mutate(archive.id)}
-                      disabled={restoreArchiveMutation.isPending}
+                      onClick={() => orp.restoreArchiveMutation.mutate(archive.id)}
+                      disabled={orp.restoreArchiveMutation.isPending}
                     >
                       <RotateCcw className="h-4 w-4 mr-1" />
                       Restore
@@ -525,8 +389,8 @@ export default function OrphanedRecordsPage() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => deleteArchiveMutation.mutate({ archiveId: archive.id, permanent: true })}
-                      disabled={deleteArchiveMutation.isPending}
+                      onClick={() => orp.deleteArchiveMutation.mutate({ archiveId: archive.id, permanent: true })}
+                      disabled={orp.deleteArchiveMutation.isPending}
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
                       Delete

@@ -1,4 +1,5 @@
 import type { Plugin } from "vite";
+import { readModuleFamilySource } from "./moduleFamilySource.ts";
 
 export const SALES_REPORT_SUFFIX = "/client/src/pages/SalesReportLegacy.tsx";
 export const SALES_DETAIL_SUFFIX = "/client/src/pages/salesreportdetail/useSalesReportDetailModel.ts";
@@ -127,8 +128,22 @@ function transformSalesComparison(source: string): string {
   );
 }
 
+/**
+ * True when the compact transform is already part of the committed source
+ * (read with the module's extracted siblings), so it must not run again.
+ */
+export function compactSalesReportSourceApplied(source: string, id: string): boolean {
+  const normalizedId = id.replaceAll("\\", "/").split("?")[0];
+  const family = readModuleFamilySource(normalizedId, source);
+  if (normalizedId.endsWith(SALES_REPORT_SUFFIX)) return family.includes("fetchSalesReportSummary");
+  if (normalizedId.endsWith(SALES_DETAIL_SUFFIX)) return family.includes('params.get("stockGroupName")');
+  if (normalizedId.endsWith(SALES_COMPARISON_SUFFIX)) return family.includes("/api/dashboard/sales-report-comparison");
+  return false;
+}
+
 export function transformSalesReportBandwidthSource(source: string, id: string): string | null {
   const normalizedId = id.replaceAll("\\", "/").split("?")[0];
+  if (compactSalesReportSourceApplied(source, normalizedId)) return null;
   if (normalizedId.endsWith(SALES_REPORT_SUFFIX)) return transformSalesReport(source);
   if (normalizedId.endsWith(SALES_DETAIL_SUFFIX)) return transformSalesDetail(source);
   if (normalizedId.endsWith(SALES_COMPARISON_SUFFIX)) return transformSalesComparison(source);

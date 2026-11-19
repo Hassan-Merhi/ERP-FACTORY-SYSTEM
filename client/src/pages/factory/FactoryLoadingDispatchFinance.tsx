@@ -1,4 +1,4 @@
-import { DollarSign, FileWarning, Loader2, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
+import { FileWarning, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,17 +46,9 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
       className="border-slate-200 bg-white dark:border-slate-700 dark:bg-card"
       data-testid="dispatch-trip-financial-preview"
     >
-      <CardContent className="space-y-4 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="flex items-start gap-2">
-            <Wallet className="mt-0.5 h-5 w-5 text-emerald-600" />
-            <div>
-              <h3 className="text-sm font-bold">Trip financial preview & charges</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Review actual loaded articles and add account-linked trip charges. No accounting is posted yet.
-              </p>
-            </div>
-          </div>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Trip finances</h3>
           <Badge variant="outline">{data?.status ?? "Not posted"}</Badge>
         </div>
 
@@ -94,43 +86,46 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
               </p>
             )}
             {data.source && data.totals && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-muted/60 p-3">
-                    <p className="text-[11px] text-muted-foreground">Verified bales</p>
-                    <p className="font-mono font-semibold">{data.source.baleCount}</p>
-                    <p className="text-[11px] text-muted-foreground">{data.source.totalWeightKg} kg</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/60 p-3">
-                    <p className="text-[11px] text-muted-foreground">Trip goods</p>
-                    <p className="font-mono font-semibold">$ {money(data.totals.goodsSubtotal)}</p>
-                    <p className="text-[11px] text-muted-foreground">Closure #{data.source.closureRevision}</p>
-                  </div>
+              <div className="space-y-2 rounded-lg border p-3 text-xs">
+                <div className="flex justify-between gap-2 text-muted-foreground">
+                  <span>Loaded</span>
+                  <span>
+                    {data.source.baleCount} {data.source.baleCount === 1 ? "bale" : "bales"} ·{" "}
+                    {data.source.totalWeightKg} kg
+                  </span>
                 </div>
-                <div className="space-y-1 rounded-lg border p-3 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span>Goods</span>
+                  <span className="font-mono">$ {money(data.totals.goodsSubtotal)}</span>
+                </div>
+                {Number(data.totals.billableChargesTotal) !== 0 && (
                   <div className="flex justify-between gap-2">
                     <span>Billable charges</span>
                     <span className="font-mono">+ $ {money(data.totals.billableChargesTotal)}</span>
                   </div>
+                )}
+                {Number(data.totals.discountTotal) !== 0 && (
                   <div className="flex justify-between gap-2">
                     <span>Discounts</span>
                     <span className="font-mono">− $ {money(data.totals.discountTotal)}</span>
                   </div>
+                )}
+                <div className="flex justify-between gap-2 border-t pt-2 font-semibold">
+                  <span>Customer total</span>
+                  <span className="font-mono">$ {money(data.totals.customerTotal)}</span>
+                </div>
+                {Number(data.totals.internalExpenseTotal) !== 0 && (
                   <div className="flex justify-between gap-2 text-muted-foreground">
                     <span>Internal expenses (not billed)</span>
                     <span className="font-mono">$ {money(data.totals.internalExpenseTotal)}</span>
                   </div>
-                  <div className="mt-2 flex justify-between gap-2 border-t pt-2 font-semibold">
-                    <span>Estimated customer charge</span>
-                    <span className="font-mono">$ {money(data.totals.customerTotal)}</span>
-                  </div>
-                </div>
-              </>
+                )}
+              </div>
             )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">Trip charges ({data.charges.length})</span>
+                <span className="text-sm font-semibold">Charges ({data.charges.length})</span>
                 {canEdit && !formOpen && (
                   <Button
                     type="button"
@@ -145,9 +140,7 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
                 )}
               </div>
               {data.charges.length === 0 && (
-                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                  No trip-specific charges saved.
-                </p>
+                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">No charges added yet.</p>
               )}
               {data.charges.map((c) => {
                 const account = data.accounts.find((a) => a.id === c.ledgerAccountId);
@@ -161,12 +154,9 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
                       <div className="min-w-0">
                         <p className="font-semibold">{c.name}</p>
                         <p className="text-muted-foreground">
-                          {c.kind} · {account?.name ?? "Ledger #" + c.ledgerAccountId}
+                          {c.kind === "BILLABLE" ? "Billable" : c.kind === "INTERNAL" ? "Internal expense" : "Discount"}{" "}
+                          · {account?.name ?? "Ledger account"}
                         </p>
-                        {c.erpChargeType && <p className="text-muted-foreground">PO mapping: {c.erpChargeType}</p>}
-                        {c.kind === "INTERNAL" && (
-                          <p className="text-muted-foreground">Offset account #{c.offsetLedgerAccountId}</p>
-                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-mono font-semibold">$ {money(c.amount)}</p>
@@ -221,11 +211,6 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
                 validForm={validForm}
               />
             )}
-            <p className="flex items-start gap-2 border-t pt-3 text-[11px] text-muted-foreground">
-              <DollarSign className="h-3.5 w-3.5 shrink-0" />
-              {data.postingNotice} These figures are provisional until posted. ERP import remains a separate PO Excel
-              upload.
-            </p>
           </>
         )}
       </CardContent>

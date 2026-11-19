@@ -1,31 +1,16 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useParams, useLocation } from "wouter";
-import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import type { Supplier, Customer, ContainerSale } from "@shared/schema";
-import {
-  containerDocuments as containerDocumentsTable,
-  containerDocumentTypes as containerDocumentTypesTable,
-  containerFreight as containerFreightTable,
-  ledgerAccounts as ledgerAccountsTable,
-} from "@shared/schema";
 
-import { utils, writeFile, read as readExcel, ExcelJS } from "@/lib/excelHelper";
-import { downloadBlob } from "@/lib/downloadBlob";
+import { utils, writeFile } from "@/lib/excelHelper";
 import { exportFileName } from "@/lib/exportFile";
-import type { ContainerDetailData, SpContainerDetailResponse } from "../containers/types";
 import { containerExportItemRows } from "./containerExportItemRows";
+import { exportContainerWithoutCost } from "./containerDetailExports";
+import { useContainerDetailDataModel, type PaymentFormValues } from "./useContainerDetailDataModel";
 
 /** Row returned by the container price-import preview endpoint. */
 export interface ContainerPriceImportPreviewRow {
@@ -47,291 +32,7 @@ const saleFormSchema = z.object({
 });
 
 export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string; forceErp?: boolean }) {
-  const { formatDisplayDate } = useDateFormat();
-  const params = useParams();
-  const containerId = idProp ?? params.id;
-  const [showOffloadDialog, setShowOffloadDialog] = useState(false);
-  const [showSellDialog, setShowSellDialog] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
-  const { toast } = useToast();
-  const recordChanges = useExistingRecordChangeAccess();
-  const [, setLocation] = useLocation();
-  useEscapeToParent();
-  const { selectedCompany } = useCompany();
-  const { formatAmount } = useCurrencyContext();
-  const companyId = selectedCompany?.id;
-  // forceErp: when an SP company opens an ERP-sourced container, treat it as a regular ERP container
-  const isSupplierPartner = forceErp ? false : selectedCompany?.companyType === "supplier_partner";
-
-  // Check for auto-print query parameter
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("print") === "true") {
-      // Remove the print param from URL to prevent re-printing on refresh
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, "", newUrl);
-      // Trigger print after a short delay to allow content to load
-      setTimeout(() => {
-        handlePrint();
-      }, 1000);
-    }
-  }, []);
-
-  const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = currentUser?.role === "Developer";
-
-  const {
-    data: containerData,
-    isLoading,
-    error: containerError,
-    refetch: retryContainer,
-  } = useQuery<ContainerDetailData>({
-    queryKey: [`/api/containers/${containerId}`],
-    enabled: !!containerId && !isSupplierPartner,
-  });
-
-  const { data: spContainerData, isLoading: spDetailLoading } = useQuery<SpContainerDetailResponse>({
-    queryKey: [`/api/sp/containers/${containerId}`],
-    queryFn: () => fetch(`/api/sp/containers/${containerId}`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!containerId && isSupplierPartner,
-  });
-
-  const [showSpOffloadDialog, setShowSpOffloadDialog] = useState(false);
-
-  const { data: suppliers = [] } = useQuery<Supplier[]>({
-    queryKey: ["/api/suppliers"],
-  });
-
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/customers", companyId],
-    enabled: !!companyId,
-  });
-
-  const { data: allLedgerAccounts = [] } = useQuery<(typeof ledgerAccountsTable.$inferSelect)[]>({
-    queryKey: ["/api/ledger-accounts", companyId],
-    enabled: !!companyId,
-  });
-
-  // Filter for income accounts only for commission dropdown
-  const incomeAccounts = allLedgerAccounts.filter((account) => account.accountType === "Income");
-
-  const { data: containerSales = [] } = useQuery<ContainerSale[]>({
-    queryKey: ["/api/container-sales", companyId],
-    enabled: !!companyId,
-  });
-
-  const containerSale = containerSales.find((sale: ContainerSale) => sale.containerId === parseInt(containerId!));
-
-  const { data: docsData } = useQuery<{
-    documents: (typeof containerDocumentsTable.$inferSelect & { isGhost: boolean })[];
-    docTypes: (typeof containerDocumentTypesTable.$inferSelect)[];
-    completeness: { total: number; uploaded: number; complete: boolean };
-  }>({
-    queryKey: ["/api/factory/containers", containerId, "documents"],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/containers/${containerId}/documents`);
-      if (!res.ok) throw new Error("Failed to load documents");
-      return res.json();
-    },
-    enabled: !!containerId,
-  });
-
-  useQuery<
-    (typeof containerFreightTable.$inferSelect & {
-      payments?: unknown[];
-      totalPaid?: number;
-      computedStatus?: string;
-    })[]
-  >({
-    queryKey: ["/api/factory/containers", containerId, "freight"],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/containers/${containerId}/freight`);
-      if (!res.ok) throw new Error("Failed to load freight");
-      return res.json();
-    },
-    enabled: !!containerId,
-  });
-
-  const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [showFreightDialog, setShowFreightDialog] = useState(false);
-  const [showPaymentDialog, setShowPaymentDialog] = useState<number | null>(null);
-  const [uploadDocTypeId, setUploadDocTypeId] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [showPriceImportDialog, setShowPriceImportDialog] = useState(false);
-  const [priceImportPreview, setPriceImportPreview] = useState<ContainerPriceImportPreviewRow[] | null>(null);
-  const [priceImportParsing, setPriceImportParsing] = useState(false);
-  const [priceImportError, setPriceImportError] = useState<string | null>(null);
-  const priceImportFileRef = useRef<HTMLInputElement>(null);
-
-  const pricePreviewMutation = useMutation({
-    mutationFn: async (rows: { barcode: string; price: string }[]) => {
-      const res = await apiRequest("POST", `/api/containers/${containerId}/price-import/preview`, { rows });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setPriceImportPreview(data.preview || []);
-    },
-    onError: (e: ClientErrorLike) => {
-      toast({ title: "Preview failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const priceApplyMutation = useMutation({
-    mutationFn: async (rows: { lineItemIds: number[]; newRate: number }[]) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("POST", `/api/containers/${containerId}/price-import/apply`, { rows });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      toast({ title: "Prices updated", description: `${data.updated} line item(s) updated successfully.` });
-      setShowPriceImportDialog(false);
-      setPriceImportPreview(null);
-      setPriceImportError(null);
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-    },
-    onError: (e: ClientErrorLike) => {
-      toast({ title: "Apply failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const handlePriceImportFile = async (file: File) => {
-    setPriceImportError(null);
-    setPriceImportPreview(null);
-    setPriceImportParsing(true);
-    try {
-      const wb = await readExcel(file);
-      const sheetName = wb.SheetNames[0];
-      const sheet = wb.Sheets[sheetName];
-      const rows: { barcode: string; price: string }[] = [];
-      let barcodeCol = -1;
-      let priceCol = -1;
-      let headerRow = -1;
-
-      sheet.eachRow((row, rowNumber: number) => {
-        const vals = row.values as unknown[];
-        if (headerRow === -1) {
-          vals.forEach((cell, colIdx: number) => {
-            const v = String(cell || "")
-              .toLowerCase()
-              .trim();
-            if (v === "barcode" || v === "barcodes" || v === "bar_code" || v === "code") barcodeCol = colIdx;
-            if (v === "price" || v === "new_price" || v === "newprice" || v === "unit_price" || v === "unit price")
-              priceCol = colIdx;
-          });
-          if (barcodeCol !== -1 && priceCol !== -1) {
-            headerRow = rowNumber;
-          }
-          return;
-        }
-        const barcode = String(vals[barcodeCol] ?? "").trim();
-        const price = String(vals[priceCol] ?? "").trim();
-        if (barcode) rows.push({ barcode, price });
-      });
-
-      if (rows.length === 0 && (barcodeCol === -1 || priceCol === -1)) {
-        const headerKeywords = [
-          "barcode",
-          "barcodes",
-          "bar_code",
-          "code",
-          "price",
-          "new_price",
-          "newprice",
-          "unit_price",
-          "unit price",
-        ];
-        sheet.eachRow((row) => {
-          const vals = row.values as unknown[];
-          const firstCell = String(vals[1] ?? "")
-            .toLowerCase()
-            .trim();
-          if (headerKeywords.includes(firstCell)) return;
-          const barcode = String(vals[1] ?? "").trim();
-          const price = String(vals[2] ?? "").trim();
-          if (barcode) rows.push({ barcode, price });
-        });
-        if (rows.length === 0) {
-          setPriceImportError(
-            'Could not detect columns. Use headers "barcode" and "price", or put barcodes in column A and prices in column B.'
-          );
-          setPriceImportParsing(false);
-          return;
-        }
-      }
-
-      if (rows.length === 0) {
-        setPriceImportError("No data rows found in the Excel file.");
-        setPriceImportParsing(false);
-        return;
-      }
-
-      pricePreviewMutation.mutate(rows);
-    } catch (err) {
-      setPriceImportError("Could not read Excel file: " + getErrorDetails(err).message);
-    } finally {
-      setPriceImportParsing(false);
-    }
-  };
-
-  const uploadDocMutation = useMutation({
-    mutationFn: async ({ docTypeId, file }: { docTypeId: number; file: File }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("docTypeId", String(docTypeId));
-      const res = await fetch(`/api/factory/containers/${containerId}/documents`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "documents"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      setShowUploadDialog(false);
-      setUploadDocTypeId("");
-      setUploadFile(null);
-      toast({ title: "Document uploaded" });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Upload failed", description: e.message, variant: "destructive" }),
-  });
-
-  type FreightFormValues = {
-    vendorName: string;
-    freightAmount: string;
-    currency: string;
-    dueDate: string;
-    notes: string;
-  };
-  type PaymentFormValues = { paymentDate: string; amount: string; method: string; reference: string };
-
-  const freightForm = useForm<FreightFormValues>({
-    defaultValues: { vendorName: "", freightAmount: "", currency: "USD", dueDate: "", notes: "" },
-  });
-
-  const addFreightMutation = useMutation({
-    mutationFn: async (data: FreightFormValues) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("POST", `/api/factory/containers/${containerId}/freight`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "freight"] });
-      setShowFreightDialog(false);
-      freightForm.reset();
-      toast({ title: "Freight charge added" });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
-    },
-  });
+  const d = useContainerDetailDataModel({ idProp, forceErp });
 
   const paymentForm = useForm<PaymentFormValues>({
     defaultValues: { paymentDate: new Date().toLocaleDateString("en-CA"), amount: "", method: "", reference: "" },
@@ -339,29 +40,29 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const addPaymentMutation = useMutation({
     mutationFn: async ({ freightId, data }: { freightId: number; data: PaymentFormValues }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!d.recordChanges.allowed) throw new Error(d.recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/freight/${freightId}/payments`, data);
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "freight"] });
-      setShowPaymentDialog(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", d.containerId, "freight"] });
+      d.setShowPaymentDialog(null);
       paymentForm.reset({ paymentDate: new Date().toLocaleDateString("en-CA"), amount: "", method: "", reference: "" });
-      toast({ title: "Payment recorded" });
+      d.toast({ title: "Payment recorded" });
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
+      d.toast({ title: "Failed", description: e.message, variant: "destructive" });
     },
   });
 
   const handleExportContainer = async () => {
     if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Exports require a connection", variant: "destructive" });
+      d.toast({ title: "Not available offline", description: "Exports require a connection", variant: "destructive" });
       return;
     }
     try {
-      const response = await fetch(`/api/containers/${containerId}/export`);
+      const response = await fetch(`/api/containers/${d.containerId}/export`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Export failed");
 
@@ -372,146 +73,21 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       utils.book_append_sheet(workbook, worksheet, "Container Items");
       await writeFile(workbook, exportFileName(`container ${data.container.containerNumber}`, "xlsx"));
 
-      toast({ title: "Export successful", description: "Container data downloaded as Excel" });
+      d.toast({ title: "Export successful", description: "Container data downloaded as Excel" });
     } catch (error) {
-      toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
+      d.toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
     }
   };
 
   const handleExportContainerNoCost = async () => {
-    if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Exports require a connection", variant: "destructive" });
-      return;
-    }
-    try {
-      const response = await fetch(`/api/containers/${containerId}/export`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Export failed");
-
-      const supplierLabel =
-        data.supplier?.code ||
-        data.container?.supplierCode ||
-        data.supplier?.legalName ||
-        data.container?.supplierName ||
-        "";
-      const containerNumber = data.container?.containerNumber || "";
-      const truckNumber = data.container?.numberPlate || data.container?.truckNumber || "";
-
-      // ── build ExcelJS workbook directly for full styling support ──
-      const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet("Container Items");
-
-      // Column definitions: NO | BARCODE (hidden) | DESCRIPTION | Q'TY
-      ws.columns = [
-        { key: "no", width: 6 },
-        { key: "bc", width: 20, hidden: true },
-        { key: "desc", width: 70 },
-        { key: "qty", width: 18 },
-      ];
-
-      // ── Row 1: supplier label (merged A1:D1) ──
-      ws.addRow([supplierLabel, "", "", ""]);
-      ws.mergeCells("A1:D1");
-      const r1 = ws.getRow(1);
-      r1.height = 28;
-      r1.eachCell((cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B2A4A" } };
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 13 };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = {
-          top: { style: "thin" },
-          bottom: { style: "thin" },
-          left: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
-
-      // ── Row 2: container (A2:C2) + truck (D2) ──
-      ws.addRow([`CONTAINER: ${containerNumber}`, "", "", `TRUCK: ${truckNumber}`]);
-      ws.mergeCells("A2:C2");
-      const r2 = ws.getRow(2);
-      r2.height = 22;
-      r2.eachCell({ includeEmpty: true }, (cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBDD7EE" } };
-        cell.font = { bold: true, size: 11 };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = {
-          top: { style: "thin" },
-          bottom: { style: "thin" },
-          left: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
-
-      // ── Row 3: column headers ──
-      ws.addRow(["NO", "BARCODE", "DESCRIPTION", "Q'TY"]);
-      const r3 = ws.getRow(3);
-      r3.eachCell((cell, colNum) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2E3B4E" } };
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
-        cell.alignment = {
-          horizontal: colNum === 3 ? "left" : "center",
-          vertical: "middle",
-        };
-        cell.border = {
-          top: { style: "thin" },
-          bottom: { style: "thin" },
-          left: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
-
-      // ── Rows 4+: line items ──
-      let idx = 1;
-      for (const po of data.purchaseOrders || []) {
-        for (const item of po.lineItems || []) {
-          const isEven = idx % 2 === 0;
-          const row = ws.addRow([
-            idx,
-            item.stockItemCode || "",
-            item.stockItemName || "",
-            parseFloat(item.quantity) || 0,
-          ]);
-          row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-            if (isEven) {
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F6FC" } };
-            }
-            cell.alignment = {
-              horizontal: colNum === 3 ? "left" : "center",
-              vertical: "middle",
-              wrapText: colNum === 3,
-            };
-            cell.border = {
-              top: { style: "thin" },
-              bottom: { style: "thin" },
-              left: { style: "thin" },
-              right: { style: "thin" },
-            };
-            cell.font = { size: 10 };
-          });
-          idx++;
-        }
-      }
-
-      // Freeze top 3 rows
-      ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3 }];
-
-      // ── download ──
-      const buffer = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      downloadBlob(blob, exportFileName(`container ${containerNumber} no cost`, "xlsx"));
-
-      toast({ title: "No-cost export downloaded" });
-    } catch (error) {
-      toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
-    }
+    return await exportContainerWithoutCost({ toast: d.toast, containerId: d.containerId });
   };
 
   // Determine the back URL based on container status
   const backUrl =
-    selectedCompany?.companyType === "properties"
+    d.selectedCompany?.companyType === "properties"
       ? "/properties/containers"
-      : containerData?.container?.status === "SOLD"
+      : d.containerData?.container?.status === "SOLD"
         ? "/sold-containers"
         : "/containers";
 
@@ -528,20 +104,20 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Delete PO mutation
   const deletePOMutation = useMutation({
     mutationFn: async (poId: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!d.recordChanges.allowed) throw new Error(d.recordChanges.reason ?? "");
       await apiRequest("DELETE", `/api/purchase-orders/${poId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", selectedCompany?.id] });
-      toast({
+      queryClient.invalidateQueries({ queryKey: [`/api/containers/${d.containerId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", d.selectedCompany?.id] });
+      d.toast({
         title: "Purchase Order Deleted",
         description: "The purchase order and associated data have been removed",
       });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({
+      d.toast({
         title: "Deletion Failed",
         description: error.message || "Failed to delete purchase order",
         variant: "destructive",
@@ -552,20 +128,20 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Delete Container mutation
   const deleteContainerMutation = useMutation({
     mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!d.recordChanges.allowed) throw new Error(d.recordChanges.reason ?? "");
       await apiRequest("DELETE", `/api/containers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", selectedCompany?.id] });
-      toast({
+      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", d.selectedCompany?.id] });
+      d.toast({
         title: "Container Deleted",
         description: "The container and all associated data have been removed",
       });
-      setLocation(selectedCompany?.companyType === "properties" ? "/properties/containers" : "/containers");
+      d.setLocation(d.selectedCompany?.companyType === "properties" ? "/properties/containers" : "/containers");
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({
+      d.toast({
         title: "Deletion Failed",
         description: error.message || "Failed to delete container",
         variant: "destructive",
@@ -576,20 +152,20 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Sync purchase voucher amounts (fixes $0 balance when items were imported after PO creation)
   const syncVoucherMutation = useMutation({
     mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await apiRequest("POST", `/api/containers/${containerId}/sync-voucher`);
+      if (!d.recordChanges.allowed) throw new Error(d.recordChanges.reason ?? "");
+      const res = await apiRequest("POST", `/api/containers/${d.containerId}/sync-voucher`);
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      toast({
+      queryClient.invalidateQueries({ queryKey: [`/api/containers/${d.containerId}`] });
+      d.toast({
         title: "Voucher Synced",
         description: data.message || "Purchase voucher amounts updated successfully",
       });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({
+      d.toast({
         title: "Sync Failed",
         description: error.message || "Failed to sync voucher amounts",
         variant: "destructive",
@@ -600,20 +176,20 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Reverse Offload mutation
   const reverseOffloadMutation = useMutation({
     mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      if (!d.recordChanges.allowed) throw new Error(d.recordChanges.reason ?? "");
       await apiRequest("POST", `/api/containers/${id}/reverse-offload`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", selectedCompany?.id] });
-      toast({
+      queryClient.invalidateQueries({ queryKey: [`/api/containers/${d.containerId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", d.selectedCompany?.id] });
+      d.toast({
         title: "Offload Reversed",
         description: "Container status restored to IN_TRANSIT",
       });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({
+      d.toast({
         title: "Reverse Failed",
         description: error.message || "Failed to reverse offload",
         variant: "destructive",
@@ -624,12 +200,12 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Sell Container mutation
   const sellContainerMutation = useMutation({
     mutationFn: async (data: z.infer<typeof saleFormSchema>) => {
-      const containerCost = parseFloat(containerData?.container.grandTotal || "0");
+      const containerCost = parseFloat(d.containerData?.container.grandTotal || "0");
       const commission = parseFloat(data.commission);
       const totalAmount = containerCost + commission;
 
       await apiRequest("POST", "/api/container-sales", {
-        containerId: parseInt(containerId!),
+        containerId: parseInt(d.containerId!),
         customerId: parseInt(data.customerId),
         saleDate: data.saleDate,
         containerCost: containerCost.toString(),
@@ -639,20 +215,20 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/container-sales", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/containers/sold", selectedCompany?.id] });
-      toast({
+      queryClient.invalidateQueries({ queryKey: ["/api/container-sales", d.selectedCompany?.id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/containers/${d.containerId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/containers/active", d.selectedCompany?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/containers/sold", d.selectedCompany?.id] });
+      d.toast({
         title: "Container Sold",
         description: "Container sale has been recorded successfully",
       });
-      setShowSellDialog(false);
+      d.setShowSellDialog(false);
       form.reset();
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({
+      d.toast({
         title: "Sale Failed",
         description: error.message || "Failed to record container sale",
         variant: "destructive",
@@ -661,74 +237,70 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   });
 
   const handleDeletePO = async (poId: number, _poNumber: string) => {
-    setPendingDelete(() => () => deletePOMutation.mutate(poId));
+    d.setPendingDelete(() => () => deletePOMutation.mutate(poId));
   };
 
   const handleDeleteContainer = async () => {
-    setPendingDelete(() => () => deleteContainerMutation.mutate(parseInt(containerId!)));
+    d.setPendingDelete(() => () => deleteContainerMutation.mutate(parseInt(d.containerId!)));
   };
 
   const handleSellSubmit = async (data: z.infer<typeof saleFormSchema>) => {
     sellContainerMutation.mutate(data);
   };
 
-  const handlePrint = async () => {
-    window.print();
-  };
-
-  const saleCustomer = customers.find((c) => c.id === containerSale?.customerId);
+  const saleCustomer = d.customers.find((c) => c.id === d.containerSale?.customerId);
 
   return {
-    formatDisplayDate,
-    containerId,
-    showOffloadDialog,
-    setShowOffloadDialog,
-    showSellDialog,
-    setShowSellDialog,
-    pendingDelete,
-    setPendingDelete,
-    setLocation,
-    formatAmount,
-    isSupplierPartner,
-    isDeveloper,
-    containerData,
-    isLoading,
-    containerError,
-    retryContainer,
-    spContainerData,
-    spDetailLoading,
-    showSpOffloadDialog,
-    setShowSpOffloadDialog,
-    suppliers,
-    customers,
-    incomeAccounts,
-    containerSale,
-    docsData,
-    showUploadDialog,
-    setShowUploadDialog,
-    showFreightDialog,
-    setShowFreightDialog,
-    showPaymentDialog,
-    setShowPaymentDialog,
-    uploadDocTypeId,
-    setUploadDocTypeId,
-    uploadFile,
-    setUploadFile,
-    fileInputRef,
-    showPriceImportDialog,
-    setShowPriceImportDialog,
-    priceImportPreview,
-    setPriceImportPreview,
-    priceImportParsing,
-    priceImportError,
-    setPriceImportError,
-    priceImportFileRef,
-    pricePreviewMutation,
-    priceApplyMutation,
-    handlePriceImportFile,
-    uploadDocMutation,
-    freightForm,
-    addFreightMutation,
+    formatDisplayDate: d.formatDisplayDate,
+    containerId: d.containerId,
+    showOffloadDialog: d.showOffloadDialog,
+    setShowOffloadDialog: d.setShowOffloadDialog,
+    showSellDialog: d.showSellDialog,
+    setShowSellDialog: d.setShowSellDialog,
+    pendingDelete: d.pendingDelete,
+    setPendingDelete: d.setPendingDelete,
+    setLocation: d.setLocation,
+    formatAmount: d.formatAmount,
+    isSupplierPartner: d.isSupplierPartner,
+    isDeveloper: d.isDeveloper,
+    containerData: d.containerData,
+    isLoading: d.isLoading,
+    containerError: d.containerError,
+    retryContainer: d.retryContainer,
+    spContainerData: d.spContainerData,
+    spDetailLoading: d.spDetailLoading,
+    showSpOffloadDialog: d.showSpOffloadDialog,
+    setShowSpOffloadDialog: d.setShowSpOffloadDialog,
+    suppliers: d.suppliers,
+    customers: d.customers,
+    incomeAccounts: d.incomeAccounts,
+    containerSale: d.containerSale,
+    docsData: d.docsData,
+    showUploadDialog: d.showUploadDialog,
+    setShowUploadDialog: d.setShowUploadDialog,
+    showFreightDialog: d.showFreightDialog,
+    setShowFreightDialog: d.setShowFreightDialog,
+    showPaymentDialog: d.showPaymentDialog,
+    setShowPaymentDialog: d.setShowPaymentDialog,
+    uploadDocTypeId: d.uploadDocTypeId,
+    setUploadDocTypeId: d.setUploadDocTypeId,
+    uploadFile: d.uploadFile,
+    setUploadFile: d.setUploadFile,
+    fileInputRef: d.fileInputRef,
+    showPriceImportDialog: d.showPriceImportDialog,
+    setShowPriceImportDialog: d.setShowPriceImportDialog,
+    priceImportPreview: d.priceImportPreview,
+    setPriceImportPreview: d.setPriceImportPreview,
+    priceImportParsing: d.priceImportParsing,
+    priceImportError: d.priceImportError,
+    setPriceImportError: d.setPriceImportError,
+    priceImportFileRef: d.priceImportFileRef,
+    pricePreviewMutation: d.pricePreviewMutation,
+    priceApplyMutation: d.priceApplyMutation,
+    handlePriceImportFile: d.handlePriceImportFile,
+    uploadDocMutation: d.uploadDocMutation,
+    freightForm: d.freightForm,
+    addFreightMutation: d.addFreightMutation,
     paymentForm,
     addPaymentMutation,
     handleExportContainer,
@@ -743,9 +315,9 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     handleDeletePO,
     handleDeleteContainer,
     handleSellSubmit,
-    handlePrint,
+    handlePrint: d.handlePrint,
     saleCustomer,
-    canChangeExistingRecords: recordChanges.allowed,
-    canCreate: recordChanges.canCreate,
+    canChangeExistingRecords: d.recordChanges.allowed,
+    canCreate: d.recordChanges.canCreate,
   } as const;
 }
