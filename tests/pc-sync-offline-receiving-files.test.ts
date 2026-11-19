@@ -130,6 +130,29 @@ describe("PC offline receiving and file changes: in the cloud", () => {
   });
 });
 
+describe("PC offline receiving: the live route's roles hold in the cloud", () => {
+  it("holds an offload edit from someone who is not an Admin, whatever the PC sent", async () => {
+    await pool.query("UPDATE user_company_roles SET role = 'Manager' WHERE user_id = $1 AND company_id = $2", [
+      ctx.userId,
+      ctx.companyId,
+    ]);
+    try {
+      const operationId = randomUUID();
+      const envelope = phase9ReceivingEnvelope({ ...receivingEvidence(operationId, 2_000_000_001), mode: "edit" });
+      const res = await agent
+        .post("/api/offline/pc-sync/operations")
+        .send(body("receiving.container-offload.v1", envelope, envelope.localOffloadId, operationId));
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ code: "PHASE9_ACTOR_ROLE_NOT_PERMITTED", overridable: false });
+    } finally {
+      await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2", [
+        ctx.userId,
+        ctx.companyId,
+      ]);
+    }
+  });
+});
+
 describe("PC offline receiving and file changes: on the PC", () => {
   let admin: Client;
   let local: Client;
