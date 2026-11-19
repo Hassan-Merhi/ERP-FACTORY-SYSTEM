@@ -12,10 +12,11 @@ export class OffloadLinkedSupplierReturnError extends Error {
   readonly status = 409;
 
   constructor(batchIds: number[]) {
+    const batchLabels = batchIds.map((id) => `#${id}`).join(", ");
+    const plural = batchIds.length === 1 ? "" : "es";
+    const verb = batchIds.length === 1 ? "references" : "reference";
     super(
-      `Cannot reverse this offload because supplier return batch${batchIds.length === 1 ? "" : "es"} ${batchIds
-        .map((id) => `#${id}`)
-        .join(", ")} reference its stock. Review Supplier Returns history and arrange an accounting-safe correction before reversing; no inventory or vouchers were changed.`
+      `Cannot reverse this offload because supplier return batch${plural} ${batchLabels} ${verb} its stock. Review Supplier Returns history and arrange an accounting-safe correction before reversing; no inventory or vouchers were changed.`
     );
     this.name = "OffloadLinkedSupplierReturnError";
   }
