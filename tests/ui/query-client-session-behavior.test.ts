@@ -6,6 +6,18 @@
  * cases drive the wrapper the way the app does — through window.fetch — over a
  * fake network, and check what reaches it and what the caller gets back.
  */
+// Session expiry starts a fire-and-forget import of the offline read cache to
+// revoke its scope. The real module pulls in a long import chain that can still
+// be loading when this file's environment is torn down, which Vitest reports as
+// an unhandled error. The offline cache is not under test here (offline mode is
+// off), so a stub that resolves at once stands in for it.
+vi.mock("@/lib/offline/offlineReadCache", () => ({
+  revokeOfflineReadScope: vi.fn(),
+  readColdStartIdentityResponse: vi.fn(() => null),
+  readPreparedOfflineResponse: vi.fn(async () => null),
+  isServiceWorkerOfflineResponse: vi.fn(async () => false),
+}));
+
 type Network = ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 type QueryClientModule = typeof import("@/lib/queryClient");
 

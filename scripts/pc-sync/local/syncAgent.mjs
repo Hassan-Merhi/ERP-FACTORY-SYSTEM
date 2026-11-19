@@ -16,6 +16,8 @@ import {
   applyCopiedRow,
   applyFeedChange,
   inApplyTransaction,
+  installLocalWriteCapture,
+  revertLocalWrites,
   localSchemaVersion,
   readLocalState,
   restoreLocalLogins,
@@ -85,6 +87,7 @@ export async function syncOnce(local, cloud, { pageSize, maxPages = 10_000 } = {
         [start.tables]
       );
     });
+    await installLocalWriteCapture(local, start.tables);
     state = await readLocalState(local);
   }
   else {
@@ -195,8 +198,19 @@ export async function bindCloudAccount(local, userId) {
   const state = await readLocalState(local);
   if (state.cloud_user_id === userId) return false;
   const reset = state.cloud_user_id != null && state.cloud_user_id !== userId;
+  if (reset) {
+    // Never strand the previous account's entries: they must be delivered (or
+    // decided) while that account is still connected.
+    const { rows } = await local.query(
+      `SELECT count(*)::int AS n FROM pc_local.outbox
+        WHERE user_id = $1 AND status IN ('capturing', 'unconfirmed', 'pending', 'waiting', 'conflict')`,
+      [state.cloud_user_id]
+    );
+    if (rows[0].n > 0) throw new PcSyncAgentError("PC_LOCAL_ENTRIES_NOT_DELIVERED", { count: rows[0].n });
+  }
   await inApplyTransaction(local, async () => {
     if (reset) {
+      await revertLocalWrites(local);
       for (const table of state.tables) await local.query("SELECT pc_local.clear_table($1)", [table]);
       await local.query("DELETE FROM pc_local.copy_progress");
       await local.query("DELETE FROM pc_local.applied");

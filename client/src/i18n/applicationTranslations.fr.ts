@@ -399,6 +399,20 @@ export const applicationFrenchTranslations = {
   "offlineMode.unavailable.credentials":
     "Tout ce qui demande un mot de passe ou l'approbation d'un responsable sur le moment.",
   "offlineMode.unavailable.not-reviewed": "Tout le reste : pas encore sécurisé pour l'enregistrement hors ligne.",
+  "negativeStockFlags.title": "Stock négatif venant de PC hors ligne",
+  "negativeStockFlags.intro":
+    "Une saisie faite hors ligne sur un PC a fait passer le stock sous zéro ; le cloud l'a appliquée et l'a signalée. Vérifiez le stock, puis fermez le signalement avec une note. Les signalements peuvent rester ouverts en fin de mois.",
+  "negativeStockFlags.open": "Ouvert",
+  "negativeStockFlags.closed": "Fermé",
+  "negativeStockFlags.record": "Enregistrement",
+  "negativeStockFlags.closedNote": "Fermé avec la note :",
+  "negativeStockFlags.notePlaceholder": "Qu'avez-vous vérifié ou corrigé ?",
+  "negativeStockFlags.close": "Fermer le signalement",
+  "negativeStockFlags.closeFailed": "Impossible de fermer le signalement. Réessayez.",
+  "negativeStockFlags.showAll": "Afficher aussi les signalements fermés",
+  "negativeStockFlags.showOpen": "Afficher seulement les signalements ouverts",
+  "negativeStockFlags.loadFailed": "Impossible de charger les signalements. Réessayez.",
+  "negativeStockFlags.none": "Aucun signalement de stock négatif.",
   "offlineDelivery.panelTitle": "Livraison des pièces hors ligne",
   "offlineDelivery.panelDetail":
     "Une demande enregistrée sur l'appareil ou un accusé du réseau local n'est pas une comptabilisation dans le cloud. « Transmis » signifie une preuve dans le cloud uniquement ; « appliqué dans le cloud » exige un reçu vérifié. Le stock, le point de vente, les paiements et les pièces jointes restent bloqués.",

@@ -9662,6 +9662,75 @@
         }
       ],
       "reason": "Runs only inside the PC's own local database; identifiers are quoted with format('%I') and the key values are bound."
+    },
+    {
+      "id": "6216b1693ebbe67b4ad1",
+      "path": "server/offline/pcLocal/localReadOnlyGuard.ts",
+      "kind": "indirect-query-text",
+      "context": "defaultConnect.query",
+      "classification": "trusted-sql-fragment",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings in captureEntry (the entry lock, read pc_local.state, insert/update/delete one pc_local.outbox row, RESET lock_timeout) in the same file",
+          "validation": "no caller passes request data as SQL text; the request body, user, company and operation id are bound parameters ($1..$5)"
+        }
+      ],
+      "reason": "A pass-through wrapper so tests can point the guard at a PC database; every SQL string reaching it is a literal in this file and all values are bound."
+    },
+    {
+      "id": "fce6bad1e56f08df3205",
+      "path": "tests/pc-sync-offline-entries.test.ts",
+      "kind": "indirect-query-text",
+      "context": "localQuery",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
+          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
+        }
+      ],
+      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
+    },
+    {
+      "id": "e394f8a7844d4054cbc2",
+      "path": "tests/db-guards-cost-center-automation.test.ts",
+      "kind": "query-text",
+      "context": "splitsOf",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "column",
+          "source": "splitsOf callers in tests/db-guards-cost-center-automation.test.ts pass \"voucher_entry_id\" or \"factory_daybook_entry_id\" literals",
+          "validation": "Parameter typed as the union \"voucher_entry_id\" | \"factory_daybook_entry_id\"; the name is double-quoted and the source id is bound as $1."
+        }
+      ],
+      "reason": "Reads a source line's cost-centre splits by one of two code-owned column names enforced by the TS union type; the id is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "id": "696b554923eb4e5a2dc5",
+      "path": "tests/db-guards-fiscal-evidence-and-supplier-owner.test.ts",
+      "kind": "assembled-sql-text",
+      "context": "refuseReview",
+      "classification": "test-fixture",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "names.join(\", \")",
+          "source": "Object.keys of the review row built by closeWithSignoffs().review() in tests/db-guards-fiscal-evidence-and-supplier-owner.test.ts:53-61",
+          "validation": "Keys are the literal column names written in that object literal; every value is bound as a $n parameter."
+        },
+        {
+          "expression": "names.map((_, index) => `$${index + 1}`).join(\", \")",
+          "source": "Generated from the length of the same column list",
+          "validation": "Produces only $1..$n placeholder tokens from array indexes; no data value enters the text."
+        }
+      ],
+      "reason": "INSERT into accounting_fiscal_reviewed_closures with column names from a test-written object literal; every value is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     }
   ]
 }

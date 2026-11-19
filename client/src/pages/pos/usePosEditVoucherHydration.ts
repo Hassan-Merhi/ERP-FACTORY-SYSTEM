@@ -11,6 +11,8 @@ import type { Location, PosEditSalesItem } from "./pos-components/posTypes";
 import type { AuthMe } from "@shared/apiTypes";
 import type { usePosQueries } from "./hooks/usePosQueries";
 import type { usePosState } from "./hooks/usePosState";
+import { resolvePostedZmwUnitPrices } from "@shared/posZmwMoney";
+import { resolvePostedCfaUnitPrices } from "@shared/posCfaMoney";
 
 type PosState = ReturnType<typeof usePosState>;
 type PosQueries = ReturnType<typeof usePosQueries>;
@@ -28,9 +30,14 @@ export interface UsePosEditVoucherHydrationArgs
       | "setIsCreditSale"
       | "setSelectedCustomerId"
     >,
-    Pick<PosQueries, "editVoucher" | "editVoucherViewEntries" | "allLocations" | "posAssignedLocations" | "allLedgerAccounts">,
+    Pick<
+      PosQueries,
+      "editVoucher" | "editVoucherViewEntries" | "allLocations" | "posAssignedLocations" | "allLedgerAccounts"
+    >,
     Pick<LocationContextValue, "selectedLocation" | "setSelectedLocation"> {
   editVoucherId?: string;
+  /** Currency the grid shows; a Kwacha sale can be viewed in USD. Defaults to the sale's own. */
+  activeCurrency?: string;
   posUser?: AuthMe | null;
   posSelectedLocation: Location | null;
   setPosSelectedLocation: (location: Location) => void;
@@ -38,6 +45,7 @@ export interface UsePosEditVoucherHydrationArgs
 
 export function usePosEditVoucherHydration({
   editVoucherId,
+  activeCurrency,
   editVoucher,
   editVoucherViewEntries,
   allLocations,
@@ -56,6 +64,9 @@ export function usePosEditVoucherHydration({
   setIsCreditSale,
   setSelectedCustomerId,
 }: UsePosEditVoucherHydrationArgs) {
+  // Read at hydration time only; later USD/ZMW switches convert the rows.
+  const activeCurrencyRef = useRef(activeCurrency);
+  activeCurrencyRef.current = activeCurrency;
   // Select the ORIGINAL sale location. POS users only receive their assigned
   // locations, so allLocations is intentionally empty for those users.
   useEffect(() => {
@@ -114,13 +125,36 @@ export function usePosEditVoucherHydration({
 
     if (!editVoucher || resolvedItems.length === 0) return;
 
+    // The Kwacha or CFA price is the sale's real price; USD follows from it, so
+    // a currency switch never drifts off the price the cashier typed.
+    const localCurrency =
+      editVoucher.currency === "ZMW" || editVoucher.currency === "CFA" ? editVoucher.currency : null;
+    const lockedRate = localCurrency ? Number(editVoucher.exchangeRate) : 0;
+    let localPrices: ReturnType<typeof resolvePostedZmwUnitPrices> | null = null;
+    if (lockedRate > 0) {
+      const postedLocal =
+        editVoucher.nativeZmwTotal ??
+        editVoucher.entries?.find(
+          (e) => e.transactionCurrency === localCurrency && Number(e.transactionDebitAmount) > 0
+        )?.transactionDebitAmount;
+      try {
+        localPrices = (localCurrency === "CFA" ? resolvePostedCfaUnitPrices : resolvePostedZmwUnitPrices)(
+          resolvedItems.map((item: PosEditSalesItem) => ({ quantity: item.quantity, rate: item.sellingPrice })),
+          lockedRate,
+          postedLocal
+        );
+      } catch {
+        localPrices = null; // a stored line that is not a valid sale line: load plain USD prices
+      }
+    }
+
     const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => {
       const quantity = Number(item.quantity ?? 0);
-      const usdRate = Number(item.sellingPrice ?? 0);
+      const storedUsd = Number(item.sellingPrice ?? 0);
+      const local = localPrices?.[index] ?? null;
+      const usdRate = local === null ? storedUsd : local.div(lockedRate).toNumber();
       const rate =
-        editVoucher.currency === "ZMW" && editVoucher.exchangeRate
-          ? Number((usdRate * Number(editVoucher.exchangeRate)).toFixed(2))
-          : usdRate;
+        local === null ? usdRate : activeCurrencyRef.current === "USD" ? Number(usdRate.toFixed(2)) : local.toNumber();
       return {
         id: String(index + 1),
         itemName: item.stockItemName || "",
