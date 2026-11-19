@@ -10,6 +10,8 @@ import type { Express, Request } from "express";
 import { z } from "zod";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { historicalApplyInput, historicalPreviewInput } from "./costCenterRouteSchemas";
 import { toMoney } from "../lib/money";
 import {
   HISTORICAL_BATCH_MAX,
@@ -138,7 +140,7 @@ function registerPrefix(app: Express, prefix: string) {
     }
   });
 
-  app.post(prefix + "/historical/preview", requireAuth, async (req, res) => {
+  app.post(prefix + "/historical/preview", requireAuth, validateRequest(historicalPreviewInput), async (req, res) => {
     try {
       const current = await actor(req, true);
       const plan = parsePlan(req.body);
@@ -203,78 +205,83 @@ function registerPrefix(app: Express, prefix: string) {
     }
   });
 
-  app.post(prefix + "/historical/:batchId/apply", requireAuth, async (req, res) => {
-    try {
-      const current = await actor(req, true);
-      const batchId = parseUuid(req.params.batchId);
-      if (req.body?.confirmation !== "APPLY") throw new HistoryError(400, "Explicit APPLY confirmation is required");
-      const result = await inTransaction(async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock(721031,$1)", [current.companyId]);
-        const found = await client.query(
-          "SELECT * FROM cost_center_historical_batches WHERE company_id=$1 AND id=$2 FOR UPDATE",
-          [current.companyId, batchId]
-        );
-        if (!found.rowCount) throw new HistoryError(404, "Historical preview not found");
-        const batch = found.rows[0];
-        if (batch.created_by !== current.userId)
-          throw new HistoryError(403, "Only the original preview author may apply this batch");
-        if (batch.status !== "PREVIEW") throw new HistoryError(409, "Historical preview was already applied");
-        if (new Date(batch.expires_at).getTime() <= Date.now())
-          throw new HistoryError(409, "Historical preview expired; create a new dry run");
-        const plan = parsePlan(batch.request_snapshot);
-        const previous = batch.source_snapshot as Entry[];
-        if (digest(previous) !== batch.source_hash || previous.length !== batch.candidate_count)
-          throw new HistoryError(409, "Stored dry-run snapshot was altered");
-        await assertActiveCenters(client, current.companyId, plan.splits);
-        // Hold source and parent voucher locks before rechecking live facts.
-        await lockSources(client, current.companyId, plan.sourceKind, previous);
-        const currentRows = await candidates(client, current.companyId, plan);
-        if (currentRows.length !== previous.length || digest(currentRows) !== batch.source_hash)
-          throw new HistoryError(
-            409,
-            "A source, amount, date or allocation changed since preview; start another dry run"
+  app.post(
+    prefix + "/historical/:batchId/apply",
+    requireAuth,
+    validateRequest(historicalApplyInput),
+    async (req, res) => {
+      try {
+        const current = await actor(req, true);
+        const batchId = parseUuid(req.params.batchId);
+        if (req.body?.confirmation !== "APPLY") throw new HistoryError(400, "Explicit APPLY confirmation is required");
+        const result = await inTransaction(async (client) => {
+          await client.query("SELECT pg_advisory_xact_lock(721031,$1)", [current.companyId]);
+          const found = await client.query(
+            "SELECT * FROM cost_center_historical_batches WHERE company_id=$1 AND id=$2 FOR UPDATE",
+            [current.companyId, batchId]
           );
-        const calculated = calculate(currentRows, plan.splits);
-        if (
-          !toMoney(calculated.sourceNativeTotal).eq(batch.candidate_native_total) ||
-          !toMoney(calculated.sourceUsdTotal).eq(batch.candidate_usd_total)
-        )
-          throw new HistoryError(409, "Historical source controls no longer match the preview");
-        if (plan.sourceKind === "FACTORY_DAYBOOK" && prefix !== "/api/factory/cost-centers")
-          throw new HistoryError(403, "Factory Daybook history is available only in Factory Mode");
-        await insertApplied(client, current, batchId, plan, calculated.rows);
-        await client.query(
-          "UPDATE cost_center_historical_batches SET status='APPLIED'," +
-            "applied_by=$3,applied_at=now() WHERE company_id=$1 AND id=$2",
-          [current.companyId, batchId, current.userId]
-        );
-        await audit(
-          client,
-          current,
-          "update",
-          "history-applied:" + batchId,
-          { status: "PREVIEW", sourceHash: batch.source_hash },
-          {
+          if (!found.rowCount) throw new HistoryError(404, "Historical preview not found");
+          const batch = found.rows[0];
+          if (batch.created_by !== current.userId)
+            throw new HistoryError(403, "Only the original preview author may apply this batch");
+          if (batch.status !== "PREVIEW") throw new HistoryError(409, "Historical preview was already applied");
+          if (new Date(batch.expires_at).getTime() <= Date.now())
+            throw new HistoryError(409, "Historical preview expired; create a new dry run");
+          const plan = parsePlan(batch.request_snapshot);
+          const previous = batch.source_snapshot as Entry[];
+          if (digest(previous) !== batch.source_hash || previous.length !== batch.candidate_count)
+            throw new HistoryError(409, "Stored dry-run snapshot was altered");
+          await assertActiveCenters(client, current.companyId, plan.splits);
+          // Hold source and parent voucher locks before rechecking live facts.
+          await lockSources(client, current.companyId, plan.sourceKind, previous);
+          const currentRows = await candidates(client, current.companyId, plan);
+          if (currentRows.length !== previous.length || digest(currentRows) !== batch.source_hash)
+            throw new HistoryError(
+              409,
+              "A source, amount, date or allocation changed since preview; start another dry run"
+            );
+          const calculated = calculate(currentRows, plan.splits);
+          if (
+            !toMoney(calculated.sourceNativeTotal).eq(batch.candidate_native_total) ||
+            !toMoney(calculated.sourceUsdTotal).eq(batch.candidate_usd_total)
+          )
+            throw new HistoryError(409, "Historical source controls no longer match the preview");
+          if (plan.sourceKind === "FACTORY_DAYBOOK" && prefix !== "/api/factory/cost-centers")
+            throw new HistoryError(403, "Factory Daybook history is available only in Factory Mode");
+          await insertApplied(client, current, batchId, plan, calculated.rows);
+          await client.query(
+            "UPDATE cost_center_historical_batches SET status='APPLIED'," +
+              "applied_by=$3,applied_at=now() WHERE company_id=$1 AND id=$2",
+            [current.companyId, batchId, current.userId]
+          );
+          await audit(
+            client,
+            current,
+            "update",
+            "history-applied:" + batchId,
+            { status: "PREVIEW", sourceHash: batch.source_hash },
+            {
+              status: "APPLIED",
+              sources: calculated.rows.length,
+              allocatedNative: calculated.allocatedNativeTotal,
+              allocatedUsd: calculated.allocatedUsdTotal,
+            }
+          );
+          return {
+            batchId,
             status: "APPLIED",
-            sources: calculated.rows.length,
-            allocatedNative: calculated.allocatedNativeTotal,
-            allocatedUsd: calculated.allocatedUsdTotal,
-          }
-        );
-        return {
-          batchId,
-          status: "APPLIED",
-          sourceCount: calculated.rows.length,
-          allocatedNativeTotal: calculated.allocatedNativeTotal,
-          allocatedUsdTotal: calculated.allocatedUsdTotal,
-          message: "Historical analytical allocation committed; original accounting records unchanged",
-        };
-      });
-      res.json(result);
-    } catch (e) {
-      errorResponse(res, e);
+            sourceCount: calculated.rows.length,
+            allocatedNativeTotal: calculated.allocatedNativeTotal,
+            allocatedUsdTotal: calculated.allocatedUsdTotal,
+            message: "Historical analytical allocation committed; original accounting records unchanged",
+          };
+        });
+        res.json(result);
+      } catch (e) {
+        errorResponse(res, e);
+      }
     }
-  });
+  );
 
   app.get(prefix + "/historical/batches", requireAuth, async (req, res) => {
     try {

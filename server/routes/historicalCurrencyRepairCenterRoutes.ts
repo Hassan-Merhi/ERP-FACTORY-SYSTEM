@@ -1,6 +1,8 @@
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 import { requireAuth, requireNonPOS } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { logger } from "../lib/logger";
 import { getHistoricalCurrencyReadiness } from "../services/accounting/historicalCurrencyReadiness";
 import {
@@ -28,6 +30,30 @@ interface RepairCenterTokenPayload {
   itemCount: number;
   expiresAt: number;
 }
+
+// One approved row (HistoricalRepairInput). planHistoricalCurrencyRepairs keeps the rules:
+// at least one row, at most 200, positive ids, no duplicates, a currency and a rate.
+const amount = z.union([z.number(), z.string()]).nullable().optional();
+const repairRow = z.strictObject({
+  kind: z.string(),
+  id: z.union([z.number(), z.string()]),
+  currency: z.string().nullable().optional(),
+  historicalRate: amount,
+  transactionDebitAmount: amount,
+  transactionCreditAmount: amount,
+  nativeAmount: amount,
+  baseAmount: amount,
+  side: z.string().optional(),
+  note: z.string().optional(),
+});
+const planRepairsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ repairs: z.array(repairRow).optional() }),
+} satisfies RequestSchemas;
+const applyRepairsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ repairs: z.array(repairRow).optional(), confirmationToken: z.string().optional() }),
+} satisfies RequestSchemas;
 
 function requireRepairRole(req: Request, res: Response): boolean {
   const role = req.session?.currentRole;
@@ -77,6 +103,7 @@ export function registerHistoricalCurrencyRepairCenterRoutes(app: Express) {
     "/api/accounts/multi-currency/repair-center/plan",
     requireAuth,
     requireNonPOS,
+    validateRequest(planRepairsInput),
     async (req: Request, res: Response) => {
       if (!requireRepairRole(req, res)) return;
       try {
@@ -111,6 +138,7 @@ export function registerHistoricalCurrencyRepairCenterRoutes(app: Express) {
     "/api/accounts/multi-currency/repair-center/apply",
     requireAuth,
     requireNonPOS,
+    validateRequest(applyRepairsInput),
     async (req: Request, res: Response) => {
       if (!requireRepairRole(req, res)) return;
       try {

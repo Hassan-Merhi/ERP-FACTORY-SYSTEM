@@ -27,12 +27,14 @@ async function miscasedAccounts(companyId: number) {
 import type { Express } from "express";
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { z } from "zod";
 
 import { ledgerAccounts } from "@shared/schema";
 
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { logAudit } from "../_helpers";
 import { canonicalAccountType } from "../../services/accounting/accountClassification";
 import {
@@ -57,6 +59,29 @@ import { listUnpostedFactoryInvoices } from "../../services/accounting/perpetual
 import { reconcilePerpetualInventory } from "../../services/accounting/perpetualInventory/reconciliation";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Shapes only: `confirm`, `planHash` and dates keep their handler checks and messages.
+const ensureSystemAccountsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ confirm: z.boolean().optional(), codes: z.array(z.string()).optional() }),
+} satisfies RequestSchemas;
+const confirmInput = {
+  query: emptyQuery,
+  body: z.strictObject({ confirm: z.boolean().optional() }),
+} satisfies RequestSchemas;
+const factoryFxRepairApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    planHash: z.string().optional(),
+    fixedRates: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+const factoryStockJournalInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const perpetualInventoryApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({ confirm: z.boolean().optional(), effectiveFrom: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerAccountingIntegrityRoutes(app: Express) {
   app.get("/api/accounting/integrity", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
@@ -95,42 +120,52 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     }
   });
 
-  app.post("/api/accounting/system-accounts/ensure", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      // Creating accounts is explicit: an empty or malformed request changes nothing.
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const known = new Set(SYSTEM_ACCOUNTS.map((definition) => definition.code));
-      const codes: unknown = req.body?.codes;
-      if (codes !== undefined && (!Array.isArray(codes) || codes.some((code) => !known.has(String(code))))) {
-        return res.status(400).json({ message: "Unknown system account code" });
-      }
-      // Wave 16 (B): the created accounts are audited in the creating transaction.
-      const statuses = await db.transaction(async (tx) => {
-        const result = await ensureSystemAccounts(tx, companyId, codes === undefined ? undefined : (codes as string[]));
-        const created = result.filter((status) => status.state === "created");
-        if (created.length > 0) {
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "create",
-              tableName: "ledger_accounts",
-              recordIdentifier: "system-accounts",
-              changes: { created: { new: created } },
-            },
-            tx
-          );
+  app.post(
+    "/api/accounting/system-accounts/ensure",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(ensureSystemAccountsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        // Creating accounts is explicit: an empty or malformed request changes nothing.
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const known = new Set(SYSTEM_ACCOUNTS.map((definition) => definition.code));
+        const codes: unknown = req.body?.codes;
+        if (codes !== undefined && (!Array.isArray(codes) || codes.some((code) => !known.has(String(code))))) {
+          return res.status(400).json({ message: "Unknown system account code" });
         }
-        return result;
-      });
-      res.json({ statuses });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        // Wave 16 (B): the created accounts are audited in the creating transaction.
+        const statuses = await db.transaction(async (tx) => {
+          const result = await ensureSystemAccounts(
+            tx,
+            companyId,
+            codes === undefined ? undefined : (codes as string[])
+          );
+          const created = result.filter((status) => status.state === "created");
+          if (created.length > 0) {
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "create",
+                tableName: "ledger_accounts",
+                recordIdentifier: "system-accounts",
+                changes: { created: { new: created } },
+              },
+              tx
+            );
+          }
+          return result;
+        });
+        res.json({ statuses });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get(
     "/api/accounting/account-types/normalization",
@@ -153,51 +188,57 @@ export function registerAccountingIntegrityRoutes(app: Express) {
 
   // Rewrites only the spelling of a type ('EXPENSE' -> 'Expense'); a type that
   // is genuinely wrong is reported for review, never guessed.
-  app.post("/api/accounting/account-types/normalize", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const fixable = (await miscasedAccounts(companyId)).filter((account) => account.canonicalType !== null);
-      await db.transaction(async (tx) => {
-        for (const account of fixable) {
-          await tx
-            .update(ledgerAccounts)
-            .set({ accountType: account.canonicalType! })
-            .where(
-              and(
-                eq(ledgerAccounts.companyId, companyId),
-                inArray(ledgerAccounts.id, [account.id]),
-                eq(ledgerAccounts.accountType, account.accountType)
-              )
-            );
-        }
-        // Wave 16 (B): audited in the same transaction.
-        if (fixable.length > 0) {
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "update",
-              tableName: "ledger_accounts",
-              recordIdentifier: "account-type-normalization",
-              changes: {
-                accountType: {
-                  old: fixable.map((account) => ({ id: account.id, type: account.accountType })),
-                  new: fixable.map((account) => ({ id: account.id, type: account.canonicalType })),
+  app.post(
+    "/api/accounting/account-types/normalize",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(confirmInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const fixable = (await miscasedAccounts(companyId)).filter((account) => account.canonicalType !== null);
+        await db.transaction(async (tx) => {
+          for (const account of fixable) {
+            await tx
+              .update(ledgerAccounts)
+              .set({ accountType: account.canonicalType! })
+              .where(
+                and(
+                  eq(ledgerAccounts.companyId, companyId),
+                  inArray(ledgerAccounts.id, [account.id]),
+                  eq(ledgerAccounts.accountType, account.accountType)
+                )
+              );
+          }
+          // Wave 16 (B): audited in the same transaction.
+          if (fixable.length > 0) {
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "update",
+                tableName: "ledger_accounts",
+                recordIdentifier: "account-type-normalization",
+                changes: {
+                  accountType: {
+                    old: fixable.map((account) => ({ id: account.id, type: account.accountType })),
+                    new: fixable.map((account) => ({ id: account.id, type: account.canonicalType })),
+                  },
                 },
               },
-            },
-            tx
-          );
-        }
-      });
-      res.json({ normalized: fixable.length, accounts: fixable });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+              tx
+            );
+          }
+        });
+        res.json({ normalized: fixable.length, accounts: fixable });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Legacy factory foreign-currency lines (wave 6): the plan is read-only; the
   // apply converts only lines classified from their own voucher, at that
@@ -216,35 +257,41 @@ export function registerAccountingIntegrityRoutes(app: Express) {
   // The apply re-derives the plan in its transaction and audits it there (wave 14);
   // it needs the reviewed `planHash` (400 without it, wave 17 C) and refuses a
   // plan that changed since (409).
-  app.post("/api/accounting/factory-fx-repair/apply", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      // The reviewed plan's hash is required (wave 17 C, owner decision 4).
-      const expectedPlanHash = typeof req.body?.planHash === "string" ? req.body.planHash.trim() : "";
-      if (!expectedPlanHash) {
-        return res.status(400).json({
-          message: "The reviewed plan's planHash is required to apply the repair",
-          code: "FACTORY_FX_REPAIR_PLAN_HASH_REQUIRED",
+  app.post(
+    "/api/accounting/factory-fx-repair/apply",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(factoryFxRepairApplyInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        // The reviewed plan's hash is required (wave 17 C, owner decision 4).
+        const expectedPlanHash = typeof req.body?.planHash === "string" ? req.body.planHash.trim() : "";
+        if (!expectedPlanHash) {
+          return res.status(400).json({
+            message: "The reviewed plan's planHash is required to apply the repair",
+            code: "FACTORY_FX_REPAIR_PLAN_HASH_REQUIRED",
+          });
+        }
+        // The fixed rates are an explicit, auditable choice, never a default
+        // applied to unrelated companies or current ordinary accounting.
+        const useFixedHistoricalRates = req.body?.fixedRates === true;
+        const plan = await applyFactoryFxLegacyRepair(companyId, {
+          actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
+          expectedPlanHash,
+          useFixedHistoricalRates,
         });
+        res.json(plan);
+      } catch (error: unknown) {
+        if (error instanceof FactoryFxRepairPlanChangedError) {
+          return res.status(409).json({ message: error.message, code: error.code });
+        }
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      // The fixed rates are an explicit, auditable choice, never a default
-      // applied to unrelated companies or current ordinary accounting.
-      const useFixedHistoricalRates = req.body?.fixedRates === true;
-      const plan = await applyFactoryFxLegacyRepair(companyId, {
-        actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
-        expectedPlanHash,
-        useFixedHistoricalRates,
-      });
-      res.json(plan);
-    } catch (error: unknown) {
-      if (error instanceof FactoryFxRepairPlanChangedError) {
-        return res.status(409).json({ message: error.message, code: error.code });
-      }
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Perpetual-inventory cut-over (wave 8): the opening inventory journal is
   // planned read-only and applied once per company by an Owner, only when every
@@ -274,6 +321,7 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     "/api/accounting/perpetual-inventory/factory-stock-journal",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(factoryStockJournalInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -319,40 +367,48 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     }
   );
 
-  app.post("/api/accounting/perpetual-inventory/apply", requireAuth, requireRole("Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const effectiveFrom = req.body?.effectiveFrom;
-      if (typeof effectiveFrom !== "string" || !ISO_DATE.test(effectiveFrom)) {
-        return res.status(400).json({ message: "Invalid date" });
-      }
-      // Phase 21 (B): the cut-over audit is written on the cut-over's transaction.
-      const result = await applyOpeningInventoryJournal(companyId, effectiveFrom, req.session.username || "unknown", {
-        auditTx: async (tx, applied) => {
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "create",
-              tableName: "gl_inventory_cutovers",
-              recordIdentifier: "perpetual-inventory-cutover",
-              changes: {
-                cutover: { new: { effectiveFrom, voucherId: applied.voucherId, total: applied.plan.total } },
+  app.post(
+    "/api/accounting/perpetual-inventory/apply",
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(perpetualInventoryApplyInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const effectiveFrom = req.body?.effectiveFrom;
+        if (typeof effectiveFrom !== "string" || !ISO_DATE.test(effectiveFrom)) {
+          return res.status(400).json({ message: "Invalid date" });
+        }
+        // Phase 21 (B): the cut-over audit is written on the cut-over's transaction.
+        const result = await applyOpeningInventoryJournal(companyId, effectiveFrom, req.session.username || "unknown", {
+          auditTx: async (tx, applied) => {
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "create",
+                tableName: "gl_inventory_cutovers",
+                recordIdentifier: "perpetual-inventory-cutover",
+                changes: {
+                  cutover: { new: { effectiveFrom, voucherId: applied.voucherId, total: applied.plan.total } },
+                },
               },
-            },
-            tx
-          );
-        },
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      if (error instanceof OpeningJournalRefusal) {
-        return res.status(error.code === "INVALID_DATE" ? 400 : 409).json({ message: error.message, code: error.code });
+              tx
+            );
+          },
+        });
+        res.json(result);
+      } catch (error: unknown) {
+        if (error instanceof OpeningJournalRefusal) {
+          return res
+            .status(error.code === "INVALID_DATE" ? 400 : 409)
+            .json({ message: error.message, code: error.code });
+        }
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

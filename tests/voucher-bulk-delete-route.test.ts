@@ -106,7 +106,8 @@ describe("POST /api/vouchers/bulk-delete request validation", () => {
   it("requires at least one voucher id", async () => {
     const empty = await bulkDelete([]);
     expect(empty.status).toBe(400);
-    expect(empty.body.message).toMatch(/At least one voucher ID required/i);
+    expect(empty.body.code).toBe("REQUEST_VALIDATION_FAILED");
+    expect(empty.body.errors[0].message).toMatch(/At least one voucher ID required/i);
 
     const missing = await agent.post("/api/vouchers/bulk-delete").send({});
     expect(missing.status).toBe(400);

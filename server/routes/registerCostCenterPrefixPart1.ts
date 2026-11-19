@@ -2,6 +2,8 @@
 import type { Express } from "express";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { autoRulesInput, createCenterInput } from "./costCenterRouteSchemas";
 import { sumMoney, toMoney } from "../lib/money";
 import { reversalPairSql } from "./costCenterReportingRoutes";
 import {
@@ -41,7 +43,7 @@ export function registerCostCenterPrefixPart1(app: Express, prefix: string) {
       sendError(res, e);
     }
   });
-  app.post(prefix, requireAuth, async (req, res) => {
+  app.post(prefix, requireAuth, validateRequest(createCenterInput), async (req, res) => {
     try {
       const actor = await identity(req, true);
       const input = parse(centerBody, req.body);
@@ -126,7 +128,7 @@ export function registerCostCenterPrefixPart1(app: Express, prefix: string) {
   // Replace one exact account/source combination atomically. A NULL module is
   // the fallback mapping; source-specific mappings override fallback mappings.
   // Does not re-tag existing transactions, even if the rule is edited.
-  app.put(prefix + "/automation/rules", requireAuth, async (req, res) => {
+  app.put(prefix + "/automation/rules", requireAuth, validateRequest(autoRulesInput), async (req, res) => {
     try {
       const actor = await identity(req, true);
       const value = parse(autoRuleSetBody, req.body);

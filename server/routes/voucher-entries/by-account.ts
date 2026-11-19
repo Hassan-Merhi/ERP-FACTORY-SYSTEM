@@ -14,8 +14,17 @@ import { eq, and, desc, inArray, isNotNull, isNull, or, sql, type SQL } from "dr
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { logAudit } from "../_helpers";
 import { z } from "zod";
+import { emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
 import { parseBoundedPagination, wantsBoundedPagination } from "../../lib/boundedPagination";
 import { operationalHistoricalSupplierExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
+
+const transferAccountInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    entryIds: z.array(z.number().int().positive()).min(1, "Select at least one entry"),
+    toAccountId: z.number().int().positive("Destination account required"),
+  }),
+} satisfies RequestSchemas;
 
 export function registerVoucherEntryByAccountRoutes(app: Express) {
   // ── ACCOUNT TRANSFER: fetch all entries for a ledger account ──
@@ -118,154 +127,154 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
   // accounts, so it is Admin/Owner only (Developer passes), runs in one
   // transaction with the lines locked, checks each line's voucher against the
   // closed period, and writes its audit row in that transaction.
-  app.post("/api/voucher-entries/transfer-account", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/voucher-entries/transfer-account",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(transferAccountInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { entryIds, toAccountId } = z
-        .object({
-          entryIds: z.array(z.number().int().positive()).min(1, "Select at least one entry"),
-          toAccountId: z.number().int().positive("Destination account required"),
-        })
-        .parse(req.body);
+        const { entryIds, toAccountId } = validatedInput(req, transferAccountInput).body;
 
-      const outcome = await db.transaction(async (tx) => {
-        const [toAccount] = await tx
-          .select()
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.id, toAccountId),
-              eq(ledgerAccounts.companyId, companyId),
-              isNull(ledgerAccounts.deletedAt)
-            )
-          );
-        if (!toAccount) return { status: 404, message: "Destination account not found" } as const;
+        const outcome = await db.transaction(async (tx) => {
+          const [toAccount] = await tx
+            .select()
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.id, toAccountId),
+                eq(ledgerAccounts.companyId, companyId),
+                isNull(ledgerAccounts.deletedAt)
+              )
+            );
+          if (!toAccount) return { status: 404, message: "Destination account not found" } as const;
 
-        // Lock the lines, then verify all of them belong to the current company via their vouchers.
-        await tx
-          .select({ id: voucherEntries.id })
-          .from(voucherEntries)
-          .where(inArray(voucherEntries.id, entryIds))
-          .for("update");
-        const entriesWithVouchers = await tx
-          .select({
-            id: voucherEntries.id,
-            voucherId: voucherEntries.voucherId,
-            companyId: vouchers.companyId,
-            deletedAt: vouchers.deletedAt,
-            optional: vouchers.optional,
-            voucherNumber: vouchers.voucherNumber,
-            voucherDate: vouchers.voucherDate,
-            effectiveDate: vouchers.effectiveDate,
-            sourceModule: vouchers.sourceModule,
-            ledgerAccountId: voucherEntries.ledgerAccountId,
-            customerId: voucherEntries.customerId,
-            debitAmount: voucherEntries.debitAmount,
-            creditAmount: voucherEntries.creditAmount,
-            otherTargetCount: sql<number>`(
+          // Lock the lines, then verify all of them belong to the current company via their vouchers.
+          await tx
+            .select({ id: voucherEntries.id })
+            .from(voucherEntries)
+            .where(inArray(voucherEntries.id, entryIds))
+            .for("update");
+          const entriesWithVouchers = await tx
+            .select({
+              id: voucherEntries.id,
+              voucherId: voucherEntries.voucherId,
+              companyId: vouchers.companyId,
+              deletedAt: vouchers.deletedAt,
+              optional: vouchers.optional,
+              voucherNumber: vouchers.voucherNumber,
+              voucherDate: vouchers.voucherDate,
+              effectiveDate: vouchers.effectiveDate,
+              sourceModule: vouchers.sourceModule,
+              ledgerAccountId: voucherEntries.ledgerAccountId,
+              customerId: voucherEntries.customerId,
+              debitAmount: voucherEntries.debitAmount,
+              creditAmount: voucherEntries.creditAmount,
+              otherTargetCount: sql<number>`(
             (${voucherEntries.bankAccountId} IS NOT NULL)::int + (${voucherEntries.fixedAssetId} IS NOT NULL)::int +
             (${voucherEntries.supplierId} IS NOT NULL)::int + (${voucherEntries.employeeId} IS NOT NULL)::int +
             (${voucherEntries.factorySupplierId} IS NOT NULL)::int
           )`.mapWith(Number),
-          })
-          .from(voucherEntries)
-          .innerJoin(vouchers, eq(vouchers.id, voucherEntries.voucherId))
-          .where(inArray(voucherEntries.id, entryIds));
+            })
+            .from(voucherEntries)
+            .innerJoin(vouchers, eq(vouchers.id, voucherEntries.voucherId))
+            .where(inArray(voucherEntries.id, entryIds));
 
-        const unauthorised = entriesWithVouchers.filter((e) => e.companyId !== companyId);
-        if (unauthorised.length > 0) {
-          return { status: 403, message: "Some entries do not belong to the current company" } as const;
-        }
-        if (entriesWithVouchers.length !== entryIds.length) {
-          return { status: 404, message: "Some entries were not found" } as const;
-        }
-        // Recheck inside the write transaction: a stale client selection must
-        // not transfer lines from deleted or optional vouchers into live books.
-        if (entriesWithVouchers.some((entry) => entry.deletedAt !== null || entry.optional)) {
-          return { status: 409, message: "Deleted or optional vouchers cannot be transferred" } as const;
-        }
-        const blocked = entriesWithVouchers
-          .map((e) => voucherMutationBlockReason({ voucherNumber: e.voucherNumber, sourceModule: e.sourceModule }))
-          .find(Boolean);
-        if (blocked) return { status: 403, message: blocked } as const;
-        // Only ledger-account lines move. Moving a supplier/employee/bank line's
-        // ledger id would leave it posting to two accounts.
-        if (entriesWithVouchers.some((e) => e.ledgerAccountId === null || e.otherTargetCount > 0)) {
-          return { status: 400, message: "Only ledger account entries can be moved" } as const;
-        }
+          const unauthorised = entriesWithVouchers.filter((e) => e.companyId !== companyId);
+          if (unauthorised.length > 0) {
+            return { status: 403, message: "Some entries do not belong to the current company" } as const;
+          }
+          if (entriesWithVouchers.length !== entryIds.length) {
+            return { status: 404, message: "Some entries were not found" } as const;
+          }
+          // Recheck inside the write transaction: a stale client selection must
+          // not transfer lines from deleted or optional vouchers into live books.
+          if (entriesWithVouchers.some((entry) => entry.deletedAt !== null || entry.optional)) {
+            return { status: 409, message: "Deleted or optional vouchers cannot be transferred" } as const;
+          }
+          const blocked = entriesWithVouchers
+            .map((e) => voucherMutationBlockReason({ voucherNumber: e.voucherNumber, sourceModule: e.sourceModule }))
+            .find(Boolean);
+          if (blocked) return { status: 403, message: blocked } as const;
+          // Only ledger-account lines move. Moving a supplier/employee/bank line's
+          // ledger id would leave it posting to two accounts.
+          if (entriesWithVouchers.some((e) => e.ledgerAccountId === null || e.otherTargetCount > 0)) {
+            return { status: 400, message: "Only ledger account entries can be moved" } as const;
+          }
 
-        // Closed period: each line's voucher, on both of its dates (the same
-        // check the voucher_entries trigger makes; raised here first so the
-        // whole move is refused before any line changes).
-        // One statement for every distinct voucher, so a large move is not a
-        // round trip per voucher.
-        const voucherIds = [...new Set(entriesWithVouchers.map((e) => e.voucherId))];
-        if (voucherIds.length > 0) {
-          await tx.execute(
-            sql`SELECT erp_assert_voucher_open(v) FROM unnest(ARRAY[${sql.join(
-              voucherIds.map((id) => sql`${id}`),
-              sql`, `
-            )}]::integer[]) AS v`
-          );
-        }
+          // Closed period: each line's voucher, on both of its dates (the same
+          // check the voucher_entries trigger makes; raised here first so the
+          // whole move is refused before any line changes).
+          // One statement for every distinct voucher, so a large move is not a
+          // round trip per voucher.
+          const voucherIds = [...new Set(entriesWithVouchers.map((e) => e.voucherId))];
+          if (voucherIds.length > 0) {
+            await tx.execute(
+              sql`SELECT erp_assert_voucher_open(v) FROM unnest(ARRAY[${sql.join(
+                voucherIds.map((id) => sql`${id}`),
+                sql`, `
+              )}]::integer[]) AS v`
+            );
+          }
 
-        // A customer line keeps its customer link only when the destination is
-        // that same customer's account; otherwise the link is cleared so the line
-        // no longer counts in that customer's statement.
-        const [destinationCustomer] = await tx
-          .select({ id: customers.id })
-          .from(customers)
-          .where(and(eq(customers.companyId, companyId), eq(customers.ledgerAccountId, toAccountId)))
-          .limit(1);
-        const destinationCustomerId = destinationCustomer?.id ?? null;
+          // A customer line keeps its customer link only when the destination is
+          // that same customer's account; otherwise the link is cleared so the line
+          // no longer counts in that customer's statement.
+          const [destinationCustomer] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.companyId, companyId), eq(customers.ledgerAccountId, toAccountId)))
+            .limit(1);
+          const destinationCustomerId = destinationCustomer?.id ?? null;
 
-        await tx
-          .update(voucherEntries)
-          .set({ ledgerAccountId: toAccountId, customerId: destinationCustomerId })
-          .where(and(inArray(voucherEntries.id, entryIds), isNotNull(voucherEntries.customerId)));
-        await tx
-          .update(voucherEntries)
-          .set({ ledgerAccountId: toAccountId })
-          .where(and(inArray(voucherEntries.id, entryIds), isNull(voucherEntries.customerId)));
+          await tx
+            .update(voucherEntries)
+            .set({ ledgerAccountId: toAccountId, customerId: destinationCustomerId })
+            .where(and(inArray(voucherEntries.id, entryIds), isNotNull(voucherEntries.customerId)));
+          await tx
+            .update(voucherEntries)
+            .set({ ledgerAccountId: toAccountId })
+            .where(and(inArray(voucherEntries.id, entryIds), isNull(voucherEntries.customerId)));
 
-        // Re-pointing posted lines changes historical balances; record exactly what moved.
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "voucher_entries",
-            recordId: toAccountId,
-            recordIdentifier: `transfer-account → ${toAccount.code}`,
-            changes: {
-              movedEntries: {
-                old: entriesWithVouchers.map((e) => ({
-                  entryId: e.id,
-                  voucherNumber: e.voucherNumber,
-                  voucherDate: e.voucherDate,
-                  effectiveDate: e.effectiveDate,
-                  ledgerAccountId: e.ledgerAccountId,
-                  customerId: e.customerId,
-                  debitAmount: e.debitAmount,
-                  creditAmount: e.creditAmount,
-                })),
-                new: { ledgerAccountId: toAccountId, customerId: destinationCustomerId },
+          // Re-pointing posted lines changes historical balances; record exactly what moved.
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "voucher_entries",
+              recordId: toAccountId,
+              recordIdentifier: `transfer-account → ${toAccount.code}`,
+              changes: {
+                movedEntries: {
+                  old: entriesWithVouchers.map((e) => ({
+                    entryId: e.id,
+                    voucherNumber: e.voucherNumber,
+                    voucherDate: e.voucherDate,
+                    effectiveDate: e.effectiveDate,
+                    ledgerAccountId: e.ledgerAccountId,
+                    customerId: e.customerId,
+                    debitAmount: e.debitAmount,
+                    creditAmount: e.creditAmount,
+                  })),
+                  new: { ledgerAccountId: toAccountId, customerId: destinationCustomerId },
+                },
               },
             },
-          },
-          tx
-        );
-        return { status: 200, toAccount } as const;
-      });
+            tx
+          );
+          return { status: 200, toAccount } as const;
+        });
 
-      if (outcome.status !== 200) return res.status(outcome.status).json({ message: outcome.message });
-      res.json({ moved: entryIds.length, toAccount: outcome.toAccount.name });
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError) return res.status(400).json({ message: e.issues.map((x) => x.message).join(", ") });
-      res.status(errorStatus(e, 500)).json({ message: getErrorMessage(e) });
+        if (outcome.status !== 200) return res.status(outcome.status).json({ message: outcome.message });
+        res.json({ moved: entryIds.length, toAccount: outcome.toAccount.name });
+      } catch (e: unknown) {
+        res.status(errorStatus(e, 500)).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

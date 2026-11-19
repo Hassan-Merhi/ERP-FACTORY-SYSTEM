@@ -2,6 +2,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { logger } from "../../lib/logger";
 import { IntercompanyEditError, type EditIdentity } from "../../services/intercompany/tradeSync";
 import { confirmMirroredPayment, reverseMirroredPayment } from "../../services/intercompany/paymentSync";
@@ -61,6 +62,13 @@ const reversal = z
     confirmedDestinationReversal: z.literal(true),
   })
   .strict();
+// The same strict schemas the handlers parse with.
+const confirmPaymentInput = { query: emptyQuery, body: confirm } satisfies RequestSchemas;
+const reversePaymentInput = {
+  params: z.strictObject({ paymentId: stringParam }),
+  query: emptyQuery,
+  body: reversal,
+} satisfies RequestSchemas;
 function actor(req: Request): EditIdentity {
   const companyId = Number(req.session.currentCompanyId);
   if (
@@ -124,26 +132,36 @@ export function registerIntercompanyPhase4Routes(app: Express) {
       }
     }
   );
-  app.post("/api/intercompany-container-trading/payments/confirm", requireAuth, async (req, res) => {
-    try {
-      return res.status(201).json(await confirmMirroredPayment(confirm.parse(req.body), actor(req)));
-    } catch (error) {
-      return fail(res, error);
+  app.post(
+    "/api/intercompany-container-trading/payments/confirm",
+    requireAuth,
+    validateRequest(confirmPaymentInput),
+    async (req, res) => {
+      try {
+        return res.status(201).json(await confirmMirroredPayment(confirm.parse(req.body), actor(req)));
+      } catch (error) {
+        return fail(res, error);
+      }
     }
-  });
-  app.post("/api/intercompany-container-trading/payments/:paymentId/reverse", requireAuth, async (req, res) => {
-    try {
-      return res.json(
-        await reverseMirroredPayment(
-          {
-            ...reversal.parse(req.body),
-            paymentId: id.parse(req.params.paymentId),
-          },
-          actor(req)
-        )
-      );
-    } catch (error) {
-      return fail(res, error);
+  );
+  app.post(
+    "/api/intercompany-container-trading/payments/:paymentId/reverse",
+    requireAuth,
+    validateRequest(reversePaymentInput),
+    async (req, res) => {
+      try {
+        return res.json(
+          await reverseMirroredPayment(
+            {
+              ...reversal.parse(req.body),
+              paymentId: id.parse(req.params.paymentId),
+            },
+            actor(req)
+          )
+        );
+      } catch (error) {
+        return fail(res, error);
+      }
     }
-  });
+  );
 }

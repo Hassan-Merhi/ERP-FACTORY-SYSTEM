@@ -9,6 +9,8 @@ import type { Express, Response } from "express";
 import PDFDocument from "pdfkit";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { toMoney } from "../lib/money";
 import {
   ERP_PREFIX,
@@ -31,6 +33,16 @@ export {
   reversalPairSql,
   sourceCte,
 } from "./costCenterReportingRoutesReversalPairSql";
+// The handler checks the decimal format, notes length and reason itself.
+const budgetInput = {
+  params: z.strictObject({ costCenterId: stringParam, month: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    amountUsd: z.union([z.string(), z.number()]).optional(),
+    notes: z.string().nullable().optional(),
+    reason: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 async function exportReport(res: Response, scope: Scope, filters: Filters, format: string, view: string) {
   const data = await summaryData(scope, filters);
   const layouts: Record<string, string[]> = {
@@ -320,7 +332,7 @@ function registerPrefix(app: Express, prefix: string) {
       fail(res, e);
     }
   });
-  app.put(prefix + "/budgets/:costCenterId/:month", requireAuth, async (req, res) => {
+  app.put(prefix + "/budgets/:costCenterId/:month", requireAuth, validateRequest(budgetInput), async (req, res) => {
     try {
       const scope = await resolveScope(req, true);
       const centerId = valueId(req.params.costCenterId);

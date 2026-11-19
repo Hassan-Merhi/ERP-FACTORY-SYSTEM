@@ -4,6 +4,8 @@ import { logger } from "../../lib/logger";
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { clearAllInput, importApplyInput } from "./factoryInsuranceRouteSchemas";
 import { auditLog, insuranceMemberMonthlyAmounts, insuranceMembers, ledgerAccounts, vouchers } from "@shared/schema";
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
 import {
@@ -25,6 +27,7 @@ export function registerFactoryInsuranceRoutesPart2(app: Express) {
     "/api/insurance/import/apply",
     privilegedMutationRateLimit,
     requireAuth,
+    validateRequest(importApplyInput),
     async (req: Request, res: Response) => {
       try {
         const parsed = insuranceImportApplySchema.safeParse(req.body);
@@ -171,6 +174,7 @@ export function registerFactoryInsuranceRoutesPart2(app: Express) {
     privilegedDestructiveRateLimit,
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(clearAllInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = resolveRequestCompanyId(req);

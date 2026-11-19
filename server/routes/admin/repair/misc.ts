@@ -6,6 +6,13 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 import { logger } from "../../../lib/logger";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import { db } from "../../../db";
@@ -24,6 +31,10 @@ import { toMoney } from "../../../lib/money";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
+// The terminal finalize handler (the FX wallet and stock transfer layers run first and pass
+// other vouchers on). It reads only the id, and keeps its own "Invalid voucher ID" check.
+const finalizeVoucherInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerAdminRepairMiscRoutes(app: Express) {
   // Finalizing activates a voucher, so it is an Admin/Owner action that must leave
   // the voucher's stored lines valid for an active voucher, and is audited
@@ -33,6 +44,7 @@ export function registerAdminRepairMiscRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner"),
+    validateRequest(finalizeVoucherInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
@@ -58,13 +70,13 @@ export function registerAdminRepairMiscRoutes(app: Express) {
         // in stock and would overstate assets. The dedicated PATCH route locks
         // the sale and reissues its items, value, and COGS together.
         const [itemizedSaleLine] = ["Sales", "Receipt", "POS"].includes(voucher.voucherType)
-          ? await db.select({ id: salesItems.id }).from(salesItems)
-              .where(eq(salesItems.voucherId, voucherId)).limit(1)
+          ? await db.select({ id: salesItems.id }).from(salesItems).where(eq(salesItems.voucherId, voucherId)).limit(1)
           : [];
         if (itemizedSaleLine) {
           return res.status(409).json({
             code: "POS_SALE_ACTIVATION_REQUIRES_STOCK_TOGGLE",
-            message: "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
+            message:
+              "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
           });
         }
 

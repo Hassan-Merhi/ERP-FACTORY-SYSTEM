@@ -14,6 +14,7 @@ import {
   locations,
 } from "@shared/schema";
 import { requireAuth } from "../../auth";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
@@ -67,6 +68,33 @@ const cancel = z
     confirmNoRealCashReversal: z.literal(true),
   })
   .strict();
+
+const deleteLinked = z
+  .object({
+    expectedVersion: id,
+    confirmDeleteBothCompanies: z.literal(true),
+  })
+  .strict();
+const normalize = z
+  .object({
+    expectedVersion: id,
+    postingDate: day,
+    confirmNoCashOrStockChange: z.literal(true),
+  })
+  .strict();
+
+// The same strict schemas the handlers parse with; the handlers also check
+// the ids (z.coerce) and the session themselves.
+const tradeParams = z.strictObject({ tradeId: stringParam });
+const receiveInput = { params: tradeParams, query: emptyQuery, body: receive } satisfies RequestSchemas;
+const daybookDeleteInput = {
+  params: z.strictObject({ voucherId: stringParam }),
+  query: emptyQuery,
+  body: deleteLinked,
+} satisfies RequestSchemas;
+const normalizeInput = { params: tradeParams, query: emptyQuery, body: normalize } satisfies RequestSchemas;
+const deleteLinkedInput = { params: tradeParams, query: emptyQuery, body: deleteLinked } satisfies RequestSchemas;
+const cancelInput = { params: tradeParams, query: emptyQuery, body: cancel } satisfies RequestSchemas;
 
 function actor(req: Request): EditIdentity {
   const initiatingCompanyId = Number(req.session.currentCompanyId);
@@ -288,22 +316,27 @@ export function registerIntercompanyPhase5Routes(app: Express) {
     }
   });
 
-  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/receive", requireAuth, async (req, res) => {
-    try {
-      const parsed = receive.parse(req.body);
-      return res.status(201).json(
-        await receiveLinkedTrade(
-          {
-            tradeId: routeId.parse(req.params.tradeId),
-            ...parsed,
-          },
-          actor(req)
-        )
-      );
-    } catch (error) {
-      return fail(res, error);
+  app.post(
+    "/api/intercompany-container-trading/lifecycle/:tradeId/receive",
+    requireAuth,
+    validateRequest(receiveInput),
+    async (req, res) => {
+      try {
+        const parsed = receive.parse(req.body);
+        return res.status(201).json(
+          await receiveLinkedTrade(
+            {
+              tradeId: routeId.parse(req.params.tradeId),
+              ...parsed,
+            },
+            actor(req)
+          )
+        );
+      } catch (error) {
+        return fail(res, error);
+      }
     }
-  });
+  );
   // Daybook looks up the actual import-owned vouchers, not description text.
   app.get("/api/intercompany-container-trading/daybook-linked-vouchers", requireAuth, async (req, res) => {
     try {
@@ -317,16 +350,11 @@ export function registerIntercompanyPhase5Routes(app: Express) {
   app.post(
     "/api/intercompany-container-trading/daybook-voucher/:voucherId/delete-linked",
     requireAuth,
+    validateRequest(daybookDeleteInput),
     async (req, res) => {
       try {
         const voucherId = routeId.parse(req.params.voucherId);
-        const parsed = z
-          .object({
-            expectedVersion: id,
-            confirmDeleteBothCompanies: z.literal(true),
-          })
-          .strict()
-          .parse(req.body);
+        const parsed = deleteLinked.parse(req.body);
         const linked = await daybookLinkedVoucherTrades([voucherId], actor(req));
         const trade = linked[voucherId];
         if (!trade || trade.version !== parsed.expectedVersion) {
@@ -343,16 +371,10 @@ export function registerIntercompanyPhase5Routes(app: Express) {
   app.post(
     "/api/intercompany-container-trading/lifecycle/:tradeId/normalize-internal-profit",
     requireAuth,
+    validateRequest(normalizeInput),
     async (req, res) => {
       try {
-        const body = z
-          .object({
-            expectedVersion: id,
-            postingDate: day,
-            confirmNoCashOrStockChange: z.literal(true),
-          })
-          .strict()
-          .parse(req.body);
+        const body = normalize.parse(req.body);
         return res.json(
           await normalizeLegacyIntercompanyProfit(
             {
@@ -368,39 +390,43 @@ export function registerIntercompanyPhase5Routes(app: Express) {
     }
   );
   // Delete the complete untouched company pair: no reversal voucher is posted.
-  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/delete-linked", requireAuth, async (req, res) => {
-    try {
-      const parsed = z
-        .object({
-          expectedVersion: id,
-          confirmDeleteBothCompanies: z.literal(true),
-        })
-        .strict()
-        .parse(req.body);
-      const result = await deletePristineLinkedTrade(
-        routeId.parse(req.params.tradeId),
-        parsed.expectedVersion,
-        actor(req)
-      );
-      return res.json(result);
-    } catch (error) {
-      return fail(res, error, "delete-linked");
-    }
-  });
-  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/cancel", requireAuth, async (req, res) => {
-    try {
-      const parsed = cancel.parse(req.body);
-      return res.status(201).json(
-        await cancelUnreceivedTrade(
-          {
-            tradeId: routeId.parse(req.params.tradeId),
-            ...parsed,
-          },
+  app.post(
+    "/api/intercompany-container-trading/lifecycle/:tradeId/delete-linked",
+    requireAuth,
+    validateRequest(deleteLinkedInput),
+    async (req, res) => {
+      try {
+        const parsed = deleteLinked.parse(req.body);
+        const result = await deletePristineLinkedTrade(
+          routeId.parse(req.params.tradeId),
+          parsed.expectedVersion,
           actor(req)
-        )
-      );
-    } catch (error) {
-      return fail(res, error);
+        );
+        return res.json(result);
+      } catch (error) {
+        return fail(res, error, "delete-linked");
+      }
     }
-  });
+  );
+  app.post(
+    "/api/intercompany-container-trading/lifecycle/:tradeId/cancel",
+    requireAuth,
+    validateRequest(cancelInput),
+    async (req, res) => {
+      try {
+        const parsed = cancel.parse(req.body);
+        return res.status(201).json(
+          await cancelUnreceivedTrade(
+            {
+              tradeId: routeId.parse(req.params.tradeId),
+              ...parsed,
+            },
+            actor(req)
+          )
+        );
+      } catch (error) {
+        return fail(res, error);
+      }
+    }
+  );
 }

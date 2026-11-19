@@ -5,7 +5,9 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole, requireNonPOS } from "../../auth";
@@ -22,6 +24,17 @@ import { ledgerParentErrorResponse } from "./write";
 export const SYSTEM_ACCOUNT_DELETE_REFUSED_CODE = "SYSTEM_ACCOUNT_DELETE_REFUSED" as const;
 export const SYSTEM_ACCOUNT_DELETE_REFUSED_MESSAGE = "This is a system account: it cannot be deleted.";
 
+// The handlers parse ids with parseInt and keep their own "Invalid account ID" / "No accounts provided".
+const deleteLedgerAccountInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+const bulkDeleteLedgerAccountsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ accountIds: z.array(z.union([z.number(), z.string()])).optional() }),
+} satisfies RequestSchemas;
+
 export function registerLedgerAccountDeleteRoutes(app: Express) {
   // Phase 19 (B), C6: Admin or Owner (it was any non-POS user).
   app.delete(
@@ -29,6 +42,7 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner"),
+    validateRequest(deleteLedgerAccountInput),
     async (req, res) => {
       try {
         if (!req.session.currentCompanyId) {
@@ -119,91 +133,98 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
   );
 
   // Bulk-delete empty ledger accounts
-  app.post("/api/ledger-accounts/bulk-delete", requireAuth, requireRole("Admin"), requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/ledger-accounts/bulk-delete",
+    requireAuth,
+    requireRole("Admin"),
+    requireNonPOS,
+    validateRequest(bulkDeleteLedgerAccountsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { accountIds } = req.body;
-      if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
-        return res.status(400).json({ message: "No accounts provided" });
-      }
+        const { accountIds } = req.body;
+        if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+          return res.status(400).json({ message: "No accounts provided" });
+        }
 
-      const allAccounts = await db
-        .select()
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
-      const accountMap = new Map(allAccounts.map((a) => [a.id, a]));
-      const allAccountIds = allAccounts.map((a) => a.id);
+        const allAccounts = await db
+          .select()
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
+        const accountMap = new Map(allAccounts.map((a) => [a.id, a]));
+        const allAccountIds = allAccounts.map((a) => a.id);
 
-      // Get IDs that have entries
-      const usedRows =
-        allAccountIds.length > 0
-          ? await db
-              .selectDistinct({ accountId: voucherEntries.ledgerAccountId })
-              .from(voucherEntries)
-              .where(inArray(voucherEntries.ledgerAccountId, allAccountIds))
-          : [];
-      const usedIds = new Set(usedRows.map((r) => r.accountId));
-      const parentIds = new Set(allAccounts.filter((a) => a.parentId !== null).map((a) => a.parentId as number));
+        // Get IDs that have entries
+        const usedRows =
+          allAccountIds.length > 0
+            ? await db
+                .selectDistinct({ accountId: voucherEntries.ledgerAccountId })
+                .from(voucherEntries)
+                .where(inArray(voucherEntries.ledgerAccountId, allAccountIds))
+            : [];
+        const usedIds = new Set(usedRows.map((r) => r.accountId));
+        const parentIds = new Set(allAccounts.filter((a) => a.parentId !== null).map((a) => a.parentId as number));
 
-      const deleted: number[] = [];
-      const skipped: { id: number; reason: string }[] = [];
+        const deleted: number[] = [];
+        const skipped: { id: number; reason: string }[] = [];
 
-      for (const rawId of accountIds) {
-        const id = parseInt(rawId);
-        const account = accountMap.get(id);
-        if (!account) {
-          skipped.push({ id, reason: "Not found or wrong company" });
-          continue;
-        }
-        if (isSystemResolvedAccountCode(account.code)) {
-          skipped.push({ id, reason: "System account" });
-          continue;
-        }
-        if (usedIds.has(id)) {
-          skipped.push({ id, reason: "Has voucher entries" });
-          continue;
-        }
-        if (parentIds.has(id)) {
-          skipped.push({ id, reason: "Is a parent account" });
-          continue;
-        }
-        if (!toMoney(account.openingBalance).isZero()) {
-          skipped.push({ id, reason: "Has opening balance" });
-          continue;
-        }
-        // Wave 16 (B): each retirement is audited in its own transaction.
-        await db.transaction(async (tx) => {
-          await tx
-            .update(ledgerAccounts)
-            .set({ deletedAt: new Date(), active: false })
-            .where(and(eq(ledgerAccounts.id, id), eq(ledgerAccounts.companyId, companyId)));
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "delete",
-              tableName: "ledger_accounts",
-              recordId: id,
-              recordIdentifier: account.name,
-              changes: {
-                name: { old: account.name },
-                code: { old: account.code },
-                accountType: { old: account.accountType },
-                reason: { new: "bulk-delete of empty accounts" },
+        for (const rawId of accountIds) {
+          const id = parseInt(rawId);
+          const account = accountMap.get(id);
+          if (!account) {
+            skipped.push({ id, reason: "Not found or wrong company" });
+            continue;
+          }
+          if (isSystemResolvedAccountCode(account.code)) {
+            skipped.push({ id, reason: "System account" });
+            continue;
+          }
+          if (usedIds.has(id)) {
+            skipped.push({ id, reason: "Has voucher entries" });
+            continue;
+          }
+          if (parentIds.has(id)) {
+            skipped.push({ id, reason: "Is a parent account" });
+            continue;
+          }
+          if (!toMoney(account.openingBalance).isZero()) {
+            skipped.push({ id, reason: "Has opening balance" });
+            continue;
+          }
+          // Wave 16 (B): each retirement is audited in its own transaction.
+          await db.transaction(async (tx) => {
+            await tx
+              .update(ledgerAccounts)
+              .set({ deletedAt: new Date(), active: false })
+              .where(and(eq(ledgerAccounts.id, id), eq(ledgerAccounts.companyId, companyId)));
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "ledger_accounts",
+                recordId: id,
+                recordIdentifier: account.name,
+                changes: {
+                  name: { old: account.name },
+                  code: { old: account.code },
+                  accountType: { old: account.accountType },
+                  reason: { new: "bulk-delete of empty accounts" },
+                },
               },
-            },
-            tx
-          );
-        });
-        deleted.push(id);
-      }
+              tx
+            );
+          });
+          deleted.push(id);
+        }
 
-      res.json({ deleted: deleted.length, skipped: skipped.length, skippedDetails: skipped });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ deleted: deleted.length, skipped: skipped.length, skippedDetails: skipped });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

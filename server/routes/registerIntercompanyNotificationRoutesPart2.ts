@@ -21,6 +21,28 @@ import {
   vouchers,
 } from "@shared/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const requestParams = z.strictObject({ id: stringParam });
+
+// The handler keeps its "Please select an account" check and message.
+const approveRequestInput = {
+  params: requestParams,
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      destLedgerAccountId: z.union([z.number(), z.string()]).nullable().optional(),
+      description: z.string().nullable().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
+const dismissRequestInput = {
+  params: requestParams,
+  query: emptyQuery,
+  body: z.strictObject({ note: z.string().nullable().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerIntercompanyNotificationRoutesPart2(app: Express) {
   // ── GET /api/intercompany-requests ──────────────────────────────────────────
@@ -153,196 +175,206 @@ export function registerIntercompanyNotificationRoutesPart2(app: Express) {
   });
 
   // ── POST /api/intercompany-requests/:id/approve ─────────────────────────────
-  app.post("/api/intercompany-requests/:id/approve", requireAuth, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
+  app.post(
+    "/api/intercompany-requests/:id/approve",
+    requireAuth,
+    validateRequest(approveRequestInput),
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id);
+        if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
 
-      const userId = req.session.userId!;
-      const { destLedgerAccountId, description: customDescription } = req.body;
-      if (!destLedgerAccountId) return res.status(400).json({ message: "Please select an account" });
+        const userId = req.session.userId!;
+        const { destLedgerAccountId, description: customDescription } = req.body ?? {};
+        if (!destLedgerAccountId) return res.status(400).json({ message: "Please select an account" });
 
-      // Pre-flight: load request, recipient membership, link, and account ownership
-      // (all outside the transaction so we can return clean 403/404 before locking)
-      const [request] = await db
-        .select()
-        .from(intercompanyPaymentRequests)
-        .where(eq(intercompanyPaymentRequests.id, requestId));
-      if (!request) return res.status(404).json({ message: "Request not found" });
-      if (request.status !== "pending")
-        return res.status(400).json({ message: "Request is already " + request.status });
+        // Pre-flight: load request, recipient membership, link, and account ownership
+        // (all outside the transaction so we can return clean 403/404 before locking)
+        const [request] = await db
+          .select()
+          .from(intercompanyPaymentRequests)
+          .where(eq(intercompanyPaymentRequests.id, requestId));
+        if (!request) return res.status(404).json({ message: "Request not found" });
+        if (request.status !== "pending")
+          return res.status(400).json({ message: "Request is already " + request.status });
 
-      // Verify this user is a recipient of the link
-      const [recipient] = await db
-        .select()
-        .from(intercompanyLinkRecipients)
-        .where(
-          and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
-        );
-      if (!recipient) return res.status(403).json({ message: "You are not authorised to approve this request" });
+        // Verify this user is a recipient of the link
+        const [recipient] = await db
+          .select()
+          .from(intercompanyLinkRecipients)
+          .where(
+            and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
+          );
+        if (!recipient) return res.status(403).json({ message: "You are not authorised to approve this request" });
 
-      const [link] = await db
-        .select()
-        .from(intercompanyAccountLinks)
-        .where(eq(intercompanyAccountLinks.id, request.linkId));
-      if (!link) return res.status(404).json({ message: "Link not found" });
+        const [link] = await db
+          .select()
+          .from(intercompanyAccountLinks)
+          .where(eq(intercompanyAccountLinks.id, request.linkId));
+        if (!link) return res.status(404).json({ message: "Link not found" });
 
-      // Verify the approver has a role in the destination company
-      const [destMembership] = await db
-        .select({ id: userCompanyRoles.id })
-        .from(userCompanyRoles)
-        .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, link.destCompanyId)));
-      if (!destMembership) {
-        return res.status(403).json({ message: "You do not have a role in the destination company" });
-      }
-
-      // ── Validate that the chosen debit account belongs to the destination company ──
-      const [chosenAccount] = await db
-        .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, companyId: ledgerAccounts.companyId })
-        .from(ledgerAccounts)
-        .where(eq(ledgerAccounts.id, destLedgerAccountId));
-      if (!chosenAccount) return res.status(400).json({ message: "Selected account not found" });
-      if (chosenAccount.companyId !== link.destCompanyId) {
-        return res.status(400).json({ message: "Selected account does not belong to the destination company" });
-      }
-
-      // Resolve the CR (IC) account name for the auto-description
-      const [crAccount] = await db
-        .select({ name: ledgerAccounts.name })
-        .from(ledgerAccounts)
-        .where(eq(ledgerAccounts.id, link.destLedgerAccountId));
-
-      // Use provided description or fall back to "Received from [CR] into [DR]"
-      const resolvedDescription =
-        customDescription && customDescription.trim()
-          ? customDescription.trim()
-          : `Received from ${crAccount?.name ?? "IC account"} into ${chosenAccount.name}`;
-
-      const destCompanyId = link.destCompanyId;
-      const approvedAt = new Date();
-
-      // ── Atomic transaction: conditional status claim + voucher creation ──────────
-      // The UPDATE WHERE status='pending' is the single concurrency gate.
-      // If zero rows update (already approved by another recipient), we abort.
-      // Phase 22 (B): the receipt posts into the destination company through the
-      // central engine (membership in it was checked above).
-      const result = await withAuthorizedPostingCompany(destCompanyId, () =>
-        db.transaction(async (tx) => {
-          // Claim the request atomically — only succeeds once
-          const claimed = await tx
-            .update(intercompanyPaymentRequests)
-            .set({
-              status: "approved",
-              destLedgerAccountId,
-              approvedByUserId: userId,
-              approvedAt,
-            })
-            .where(
-              and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending"))
-            )
-            .returning({ id: intercompanyPaymentRequests.id });
-
-          if (claimed.length === 0) {
-            throw new Error("ALREADY_PROCESSED");
-          }
-
-          // Create Receipt voucher in dest company
-          // DR: chosen account (cash/bank received)
-          // CR: link.destLedgerAccountId (the intercompany account in dest)
-          const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
-            companyId: destCompanyId,
-            voucherType: "Receipt",
-            voucherDate: request.fromVoucherDate,
-            description: resolvedDescription,
-            lines: pairLines(
-              { ledgerAccountId: destLedgerAccountId },
-              { ledgerAccountId: link.destLedgerAccountId },
-              request.amount,
-              resolvedDescription
-            ),
-            source: { type: "intercompany-payment-request", id: requestId },
-            actor: sessionPostingActor(req, "Intercompany payment request approval"),
-          });
-
-          // Store the mirror voucher ID back on the request
-          await tx
-            .update(intercompanyPaymentRequests)
-            .set({ destVoucherId: createdVoucher.id })
-            .where(eq(intercompanyPaymentRequests.id, requestId));
-
-          return { voucherId: createdVoucher.id, voucherNumber: createdVoucher.voucherNumber };
-        })
-      );
-
-      res.json({ success: true, voucherId: result.voucherId, voucherNumber: result.voucherNumber });
-    } catch (err: unknown) {
-      if (getErrorMessage(err) === "ALREADY_PROCESSED") {
-        return res.status(409).json({ message: "This request has already been processed by another user." });
-      }
-      logger.error("[IC approve]", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) });
-    }
-  });
-
-  // ── POST /api/intercompany-requests/:id/dismiss ─────────────────────────────
-  app.post("/api/intercompany-requests/:id/dismiss", requireAuth, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
-
-      const userId = req.session.userId!;
-      const { note } = req.body;
-
-      const [request] = await db
-        .select()
-        .from(intercompanyPaymentRequests)
-        .where(eq(intercompanyPaymentRequests.id, requestId));
-      if (!request) return res.status(404).json({ message: "Request not found" });
-      if (request.status !== "pending")
-        return res.status(400).json({ message: "Request is already " + request.status });
-
-      const [recipient] = await db
-        .select()
-        .from(intercompanyLinkRecipients)
-        .where(
-          and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
-        );
-      if (!recipient) return res.status(403).json({ message: "You are not authorised to dismiss this request" });
-
-      // Verify the dismisser has a role in the destination company
-      const [dimLink] = await db
-        .select({ destCompanyId: intercompanyAccountLinks.destCompanyId })
-        .from(intercompanyAccountLinks)
-        .where(eq(intercompanyAccountLinks.id, request.linkId));
-      if (dimLink) {
-        const [dimMembership] = await db
+        // Verify the approver has a role in the destination company
+        const [destMembership] = await db
           .select({ id: userCompanyRoles.id })
           .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, dimLink.destCompanyId)));
-        if (!dimMembership) {
+          .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, link.destCompanyId)));
+        if (!destMembership) {
           return res.status(403).json({ message: "You do not have a role in the destination company" });
         }
+
+        // ── Validate that the chosen debit account belongs to the destination company ──
+        const [chosenAccount] = await db
+          .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, companyId: ledgerAccounts.companyId })
+          .from(ledgerAccounts)
+          .where(eq(ledgerAccounts.id, destLedgerAccountId));
+        if (!chosenAccount) return res.status(400).json({ message: "Selected account not found" });
+        if (chosenAccount.companyId !== link.destCompanyId) {
+          return res.status(400).json({ message: "Selected account does not belong to the destination company" });
+        }
+
+        // Resolve the CR (IC) account name for the auto-description
+        const [crAccount] = await db
+          .select({ name: ledgerAccounts.name })
+          .from(ledgerAccounts)
+          .where(eq(ledgerAccounts.id, link.destLedgerAccountId));
+
+        // Use provided description or fall back to "Received from [CR] into [DR]"
+        const resolvedDescription =
+          customDescription && customDescription.trim()
+            ? customDescription.trim()
+            : `Received from ${crAccount?.name ?? "IC account"} into ${chosenAccount.name}`;
+
+        const destCompanyId = link.destCompanyId;
+        const approvedAt = new Date();
+
+        // ── Atomic transaction: conditional status claim + voucher creation ──────────
+        // The UPDATE WHERE status='pending' is the single concurrency gate.
+        // If zero rows update (already approved by another recipient), we abort.
+        // Phase 22 (B): the receipt posts into the destination company through the
+        // central engine (membership in it was checked above).
+        const result = await withAuthorizedPostingCompany(destCompanyId, () =>
+          db.transaction(async (tx) => {
+            // Claim the request atomically — only succeeds once
+            const claimed = await tx
+              .update(intercompanyPaymentRequests)
+              .set({
+                status: "approved",
+                destLedgerAccountId,
+                approvedByUserId: userId,
+                approvedAt,
+              })
+              .where(
+                and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending"))
+              )
+              .returning({ id: intercompanyPaymentRequests.id });
+
+            if (claimed.length === 0) {
+              throw new Error("ALREADY_PROCESSED");
+            }
+
+            // Create Receipt voucher in dest company
+            // DR: chosen account (cash/bank received)
+            // CR: link.destLedgerAccountId (the intercompany account in dest)
+            const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
+              companyId: destCompanyId,
+              voucherType: "Receipt",
+              voucherDate: request.fromVoucherDate,
+              description: resolvedDescription,
+              lines: pairLines(
+                { ledgerAccountId: destLedgerAccountId },
+                { ledgerAccountId: link.destLedgerAccountId },
+                request.amount,
+                resolvedDescription
+              ),
+              source: { type: "intercompany-payment-request", id: requestId },
+              actor: sessionPostingActor(req, "Intercompany payment request approval"),
+            });
+
+            // Store the mirror voucher ID back on the request
+            await tx
+              .update(intercompanyPaymentRequests)
+              .set({ destVoucherId: createdVoucher.id })
+              .where(eq(intercompanyPaymentRequests.id, requestId));
+
+            return { voucherId: createdVoucher.id, voucherNumber: createdVoucher.voucherNumber };
+          })
+        );
+
+        res.json({ success: true, voucherId: result.voucherId, voucherNumber: result.voucherNumber });
+      } catch (err: unknown) {
+        if (getErrorMessage(err) === "ALREADY_PROCESSED") {
+          return res.status(409).json({ message: "This request has already been processed by another user." });
+        }
+        logger.error("[IC approve]", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      // Atomic conditional claim — same pattern as approve to prevent TOCTOU race
-      const claimed = await db
-        .update(intercompanyPaymentRequests)
-        .set({
-          status: "dismissed",
-          approvedByUserId: userId,
-          approvedAt: new Date(),
-          dismissNote: note || null,
-        })
-        .where(and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending")))
-        .returning({ id: intercompanyPaymentRequests.id });
-
-      if (claimed.length === 0) {
-        return res.status(409).json({ message: "This request has already been processed by another user." });
-      }
-
-      res.json({ success: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
+
+  // ── POST /api/intercompany-requests/:id/dismiss ─────────────────────────────
+  app.post(
+    "/api/intercompany-requests/:id/dismiss",
+    requireAuth,
+    validateRequest(dismissRequestInput),
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id);
+        if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
+
+        const userId = req.session.userId!;
+        const { note } = req.body ?? {};
+
+        const [request] = await db
+          .select()
+          .from(intercompanyPaymentRequests)
+          .where(eq(intercompanyPaymentRequests.id, requestId));
+        if (!request) return res.status(404).json({ message: "Request not found" });
+        if (request.status !== "pending")
+          return res.status(400).json({ message: "Request is already " + request.status });
+
+        const [recipient] = await db
+          .select()
+          .from(intercompanyLinkRecipients)
+          .where(
+            and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
+          );
+        if (!recipient) return res.status(403).json({ message: "You are not authorised to dismiss this request" });
+
+        // Verify the dismisser has a role in the destination company
+        const [dimLink] = await db
+          .select({ destCompanyId: intercompanyAccountLinks.destCompanyId })
+          .from(intercompanyAccountLinks)
+          .where(eq(intercompanyAccountLinks.id, request.linkId));
+        if (dimLink) {
+          const [dimMembership] = await db
+            .select({ id: userCompanyRoles.id })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, dimLink.destCompanyId)));
+          if (!dimMembership) {
+            return res.status(403).json({ message: "You do not have a role in the destination company" });
+          }
+        }
+
+        // Atomic conditional claim — same pattern as approve to prevent TOCTOU race
+        const claimed = await db
+          .update(intercompanyPaymentRequests)
+          .set({
+            status: "dismissed",
+            approvedByUserId: userId,
+            approvedAt: new Date(),
+            dismissNote: note || null,
+          })
+          .where(and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending")))
+          .returning({ id: intercompanyPaymentRequests.id });
+
+        if (claimed.length === 0) {
+          return res.status(409).json({ message: "This request has already been processed by another user." });
+        }
+
+        res.json({ success: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
+    }
+  );
 }

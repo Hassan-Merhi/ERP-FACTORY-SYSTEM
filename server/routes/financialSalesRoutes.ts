@@ -17,9 +17,28 @@ import { logAudit } from "./_helpers";
 import { requireAuth, requireNonPOS, checkPOSLocation } from "../auth";
 import { ledgerAccounts, locations, salesItems, stockItems, voucherEntries, vouchers } from "@shared/schema";
 import { sumMoney, toMoney } from "../lib/money";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The handlers keep their own required-field and date checks and messages.
+const closeFiscalPeriodInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    periodStartDate: z.string().optional(),
+    periodEndDate: z.string().optional(),
+    retainedEarningsAccountId: z.union([z.number(), z.string()]).nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const reopenFiscalPeriodInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string().nullable().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerFinancialSalesRoutes(app: Express) {
-  app.post("/api/fiscal-period/close", requireAuth, async (req, res) => {
+  app.post("/api/fiscal-period/close", requireAuth, validateRequest(closeFiscalPeriodInput), async (req, res) => {
     try {
       // Check role authorization - use currentRole from session
       const userRole = req.session.currentRole;
@@ -105,7 +124,7 @@ export function registerFinancialSalesRoutes(app: Express) {
   // Reopen the latest closed fiscal period (Admin). Soft-deletes the closing
   // journal, restores the opening balances the close zeroed and lifts the lock
   // back to the previous close. A reason is required and audited.
-  app.post("/api/fiscal-period/:id/reopen", requireAuth, async (req, res) => {
+  app.post("/api/fiscal-period/:id/reopen", requireAuth, validateRequest(reopenFiscalPeriodInput), async (req, res) => {
     try {
       const userRole = req.session.currentRole;
       if (userRole !== "Admin" && userRole !== "Developer") {
@@ -158,9 +177,8 @@ export function registerFinancialSalesRoutes(app: Express) {
       res.json(closures);
     } catch (error: unknown) {
       const details = getErrorDetails(error);
-      const cause = typeof error === "object" && error !== null && "cause" in error
-        ? getErrorDetails(error.cause)
-        : undefined;
+      const cause =
+        typeof error === "object" && error !== null && "cause" in error ? getErrorDetails(error.cause) : undefined;
       const pgCode = cause?.code ?? details.code;
       logger.error("[GET /api/fiscal-period/closures] Failed to load closures", {
         error,

@@ -16,6 +16,27 @@ import { eq, and } from "drizzle-orm";
 import { generateAccountStatementPdf } from "../lib/accountStatementPdfGenerator";
 import { sendWhatsAppFileByUploadPos } from "../services/whatsappService";
 import { format, startOfMonth, endOfMonth } from "date-fns";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The accounts screen saves the rule it loaded (the full row, or the
+// defaults with id: null) after editing it, so the row's own fields come back.
+const whatsappRuleInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    enabled: z.boolean().nullable().optional(),
+    whatsappChatId: z.string().nullable().optional(),
+    sendOnPayment: z.boolean().nullable().optional(),
+    sendOnReceipt: z.boolean().nullable().optional(),
+    sendOnJournal: z.boolean().nullable().optional(),
+    id: z.unknown().optional(), // sent by client/src/pages/accountslegacy/useAccountsLegacyModel.ts; not used
+    companyId: z.unknown().optional(), // sent by client/src/pages/accountslegacy/useAccountsLegacyModel.ts; not used
+    ledgerAccountId: z.unknown().optional(), // sent by client/src/pages/accountslegacy/useAccountsLegacyModel.ts; not used
+    createdAt: z.unknown().optional(), // sent by client/src/pages/accountslegacy/useAccountsLegacyModel.ts; not used
+    updatedAt: z.unknown().optional(), // sent by client/src/pages/accountslegacy/useAccountsLegacyModel.ts; not used
+  }),
+} satisfies RequestSchemas;
 
 export function registerFactoryWhatsappRoutes(app: Express, requireAuth: RequestHandler) {
   // ── GET rule ──────────────────────────────────────────────────────────────
@@ -57,54 +78,59 @@ export function registerFactoryWhatsappRoutes(app: Express, requireAuth: Request
   });
 
   // ── PUT (upsert) rule ─────────────────────────────────────────────────────
-  app.put("/api/factory/accounts/:accountId/whatsapp-rule", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const accountId = parseId(req.params.accountId);
-      if (accountId === null) return res.status(400).json({ message: "Invalid id" });
-      const companyId = req.session?.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+  app.put(
+    "/api/factory/accounts/:accountId/whatsapp-rule",
+    requireAuth,
+    validateRequest(whatsappRuleInput),
+    async (req: Request, res: Response) => {
+      try {
+        const accountId = parseId(req.params.accountId);
+        if (accountId === null) return res.status(400).json({ message: "Invalid id" });
+        const companyId = req.session?.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
 
-      // Verify account belongs to this company
-      const [acct] = await db
-        .select({ id: ledgerAccounts.id })
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
-      if (!acct) return res.status(404).json({ message: "Account not found" });
+        // Verify account belongs to this company
+        const [acct] = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
 
-      const { enabled, whatsappChatId, sendOnPayment, sendOnReceipt, sendOnJournal } = req.body;
+        const { enabled, whatsappChatId, sendOnPayment, sendOnReceipt, sendOnJournal } = req.body;
 
-      const [upserted] = await db
-        .insert(factoryAccountWhatsappRules)
-        .values({
-          companyId,
-          ledgerAccountId: accountId,
-          enabled: Boolean(enabled),
-          whatsappChatId: whatsappChatId ?? null,
-          sendOnPayment: sendOnPayment ?? true,
-          sendOnReceipt: sendOnReceipt ?? true,
-          sendOnJournal: sendOnJournal ?? true,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [factoryAccountWhatsappRules.companyId, factoryAccountWhatsappRules.ledgerAccountId],
-          set: {
+        const [upserted] = await db
+          .insert(factoryAccountWhatsappRules)
+          .values({
+            companyId,
+            ledgerAccountId: accountId,
             enabled: Boolean(enabled),
             whatsappChatId: whatsappChatId ?? null,
             sendOnPayment: sendOnPayment ?? true,
             sendOnReceipt: sendOnReceipt ?? true,
             sendOnJournal: sendOnJournal ?? true,
             updatedAt: new Date(),
-          },
-        })
-        .returning();
+          })
+          .onConflictDoUpdate({
+            target: [factoryAccountWhatsappRules.companyId, factoryAccountWhatsappRules.ledgerAccountId],
+            set: {
+              enabled: Boolean(enabled),
+              whatsappChatId: whatsappChatId ?? null,
+              sendOnPayment: sendOnPayment ?? true,
+              sendOnReceipt: sendOnReceipt ?? true,
+              sendOnJournal: sendOnJournal ?? true,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
 
-      res.json(upserted);
-    } catch (err: unknown) {
-      logger.error("[factory-wa] PUT rule error", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) });
+        res.json(upserted);
+      } catch (err: unknown) {
+        logger.error("[factory-wa] PUT rule error", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

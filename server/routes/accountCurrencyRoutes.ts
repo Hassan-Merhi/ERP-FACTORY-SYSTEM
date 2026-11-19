@@ -1,5 +1,7 @@
 import type { Express, RequestHandler } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import Decimal from "decimal.js";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
@@ -26,6 +28,23 @@ const EXPLICIT_CURRENCY_FIELDS = [
   "openingBalanceHistoricalRate",
   "openingBalanceBaseAmount",
 ] as const;
+
+// Shape only: postZambiaCashTransfer parses the amount, rate, date and currencies itself.
+const transferAccount = z.strictObject({ kind: z.string(), id: z.number() });
+const zambiaTransferInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    from: transferAccount,
+    to: transferAccount,
+    fromCurrency: z.string(),
+    toCurrency: z.string(),
+    amount: z.string(),
+    rate: z.string(),
+    transferDate: z.string(),
+    clientRequestId: z.string(),
+    description: z.string().nullish(),
+  }),
+} satisfies RequestSchemas;
 
 async function accountExistsInCompany(companyId: number, accountId: number): Promise<boolean> {
   const [ledger] = await db
@@ -289,6 +308,7 @@ export function registerAccountCurrencyRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner"),
+    validateRequest(zambiaTransferInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

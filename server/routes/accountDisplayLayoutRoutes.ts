@@ -7,6 +7,8 @@ import type { Express, Request } from "express";
 import { pool } from "../db";
 import { requireAuth, requireRole } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 
 type LayoutNode = {
   key: string;
@@ -15,6 +17,22 @@ type LayoutNode = {
   parentKey: string | null;
   order: number;
 };
+
+// Shape only: parseNodes() keeps the key, order, group and size rules and their messages.
+const saveLayoutInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    nodes: z.array(
+      z.strictObject({
+        key: z.string(),
+        type: z.string(),
+        name: z.string().nullable().optional(),
+        parentKey: z.string().nullable().optional(),
+        order: z.number(),
+      })
+    ),
+  }),
+} satisfies RequestSchemas;
 
 function parseNodes(raw: unknown): LayoutNode[] {
   if (!Array.isArray(raw) || raw.length > 3000) throw new Error("Invalid layout size");
@@ -109,16 +127,14 @@ export function registerAccountDisplayLayoutRoutes(app: Express) {
         });
         return res.json({ nodes: effective });
       } catch (error) {
-        return res
-          .status(503)
-          .json({
-            message: "Account layout is not available. Apply the account_display_layout migration.",
-            detail: getErrorMessage(error),
-          });
+        return res.status(503).json({
+          message: "Account layout is not available. Apply the account_display_layout migration.",
+          detail: getErrorMessage(error),
+        });
       }
     });
 
-    app.put(path, requireAuth, requireRole("Admin"), async (req, res) => {
+    app.put(path, requireAuth, requireRole("Admin"), validateRequest(saveLayoutInput), async (req, res) => {
       const companyId = resolveLayoutCompany(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       let nodes: LayoutNode[];

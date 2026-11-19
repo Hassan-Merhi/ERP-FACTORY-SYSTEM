@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { spreadsheetUpload } from "./_helpers";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import {
   CashBankError,
   cashBankStatementDetailTx,
@@ -41,6 +42,39 @@ const postMatch = z.object({
   voucherEntryId: positiveId,
   reason: z.string().max(1000).optional().nullable(),
 });
+// Shapes only: the handlers still parse with the schemas above and keep their CASH_BANK_* errors.
+const idValue = z.union([z.number(), z.string()]);
+// Multipart form fields (multer leaves them as strings); the file itself is req.file.
+const statementUploadInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    accountKind: z.string(),
+    accountId: idValue,
+    currency: z.string(),
+    periodStart: z.string(),
+    periodEnd: z.string(),
+    openingBalance: z.string(),
+    closingBalance: z.string(),
+  }),
+} satisfies RequestSchemas;
+const reviewLineInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ category: z.string().nullable(), note: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+const matchLineInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    statementLineId: idValue,
+    voucherEntryId: idValue,
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const voidMatchInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
 function company(req: Request): number {
   const value = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(value) || value <= 0)
@@ -92,90 +126,107 @@ export function registerCashBankReconciliationRoutes(app: Express): void {
     }
   });
   // Preview only parses and checks balances; it stores no documents.
-  app.post("/api/accounting/cash-bank/preview", ...gate, spreadsheetUpload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const companyId = company(req),
-        input = postImport.parse(req.body);
-      if (!req.file) throw new CashBankError("CASH_BANK_FILE_REQUIRED", "Select a CSV or XLSX file", 400);
-      const periodStart = statementDate(input.periodStart),
-        periodEnd = statementDate(input.periodEnd);
-      const parsed = await parseCashBankStatement(req.file, periodStart, periodEnd);
-      // Account ownership is checked even for preview.
-      await db.transaction(async (tx) => {
-        await loadCashBankAccountTx(tx, { companyId, accountKind: input.accountKind, accountId: input.accountId });
-      });
-      const sum = parsed.reduce((total, row) => total.plus(row.signedAmount), new Decimal(0));
-      const starting = new Decimal(input.openingBalance),
-        closing = new Decimal(input.closingBalance);
-      if ([starting, closing].some((v) => !v.isFinite() || v.decimalPlaces() > 6 || v.abs().gte("100000000000000")))
-        throw new CashBankError("CASH_BANK_PRECISION", "Enter a valid balance within six decimals", 400);
-      const calculated = starting.plus(sum);
-      return res.json({
-        rowCount: parsed.length,
-        lines: parsed.slice(0, 50),
-        calculatedClosing: calculated.toFixed(6),
-        suppliedClosing: closing.toFixed(6),
-        balanced: calculated.eq(closing),
-        fileFingerprint: createHash("sha256").update(req.file.buffer).digest("hex"),
-        currency: input.currency.toUpperCase(),
-      });
-    } catch (e) {
-      return fail(res, e);
+  app.post(
+    "/api/accounting/cash-bank/preview",
+    ...gate,
+    spreadsheetUpload.single("file"),
+    validateRequest(statementUploadInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = company(req),
+          input = postImport.parse(req.body);
+        if (!req.file) throw new CashBankError("CASH_BANK_FILE_REQUIRED", "Select a CSV or XLSX file", 400);
+        const periodStart = statementDate(input.periodStart),
+          periodEnd = statementDate(input.periodEnd);
+        const parsed = await parseCashBankStatement(req.file, periodStart, periodEnd);
+        // Account ownership is checked even for preview.
+        await db.transaction(async (tx) => {
+          await loadCashBankAccountTx(tx, { companyId, accountKind: input.accountKind, accountId: input.accountId });
+        });
+        const sum = parsed.reduce((total, row) => total.plus(row.signedAmount), new Decimal(0));
+        const starting = new Decimal(input.openingBalance),
+          closing = new Decimal(input.closingBalance);
+        if ([starting, closing].some((v) => !v.isFinite() || v.decimalPlaces() > 6 || v.abs().gte("100000000000000")))
+          throw new CashBankError("CASH_BANK_PRECISION", "Enter a valid balance within six decimals", 400);
+        const calculated = starting.plus(sum);
+        return res.json({
+          rowCount: parsed.length,
+          lines: parsed.slice(0, 50),
+          calculatedClosing: calculated.toFixed(6),
+          suppliedClosing: closing.toFixed(6),
+          balanced: calculated.eq(closing),
+          fileFingerprint: createHash("sha256").update(req.file.buffer).digest("hex"),
+          currency: input.currency.toUpperCase(),
+        });
+      } catch (e) {
+        return fail(res, e);
+      }
     }
-  });
-  app.post("/api/accounting/cash-bank/import", ...gate, spreadsheetUpload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const companyId = company(req),
-        input = postImport.parse(req.body);
-      if (!req.file) throw new CashBankError("CASH_BANK_FILE_REQUIRED", "Select a CSV or XLSX file", 400);
-      const periodStart = statementDate(input.periodStart),
-        periodEnd = statementDate(input.periodEnd);
-      const lines = await parseCashBankStatement(req.file, periodStart, periodEnd);
-      const data = await db.transaction((tx) =>
-        importCashBankStatementTx(tx, {
-          ...input,
-          companyId,
-          periodStart,
-          periodEnd,
-          fileName: req.file!.originalname,
-          fileBytes: req.file!.buffer,
-          lines,
-          actor: actor(req),
-        })
-      );
-      return res.status(data.replayed ? 200 : 201).json(data);
-    } catch (e) {
-      return fail(res, e);
-    }
-  });
-  app.post("/api/accounting/cash-bank/lines/:id/review", ...gate, async (req, res) => {
-    try {
-      const companyId = company(req),
-        statementLineId = positiveId.parse(req.params.id);
-      const payload = z
-        .object({
-          category: z
-            .enum(["bank_fee", "transfer", "unidentified_receipt", "unidentified_payment", "other"])
-            .nullable(),
-          note: z.string().max(1500).nullable().optional(),
-        })
-        .parse(req.body);
-      return res.json(
-        await db.transaction((tx) =>
-          reviewCashBankLineTx(tx, {
+  );
+  app.post(
+    "/api/accounting/cash-bank/import",
+    ...gate,
+    spreadsheetUpload.single("file"),
+    validateRequest(statementUploadInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = company(req),
+          input = postImport.parse(req.body);
+        if (!req.file) throw new CashBankError("CASH_BANK_FILE_REQUIRED", "Select a CSV or XLSX file", 400);
+        const periodStart = statementDate(input.periodStart),
+          periodEnd = statementDate(input.periodEnd);
+        const lines = await parseCashBankStatement(req.file, periodStart, periodEnd);
+        const data = await db.transaction((tx) =>
+          importCashBankStatementTx(tx, {
+            ...input,
             companyId,
-            statementLineId,
-            category: payload.category,
-            note: payload.note ?? null,
+            periodStart,
+            periodEnd,
+            fileName: req.file!.originalname,
+            fileBytes: req.file!.buffer,
+            lines,
             actor: actor(req),
           })
-        )
-      );
-    } catch (e) {
-      return fail(res, e);
+        );
+        return res.status(data.replayed ? 200 : 201).json(data);
+      } catch (e) {
+        return fail(res, e);
+      }
     }
-  });
-  app.post("/api/accounting/cash-bank/matches", ...gate, async (req, res) => {
+  );
+  app.post(
+    "/api/accounting/cash-bank/lines/:id/review",
+    ...gate,
+    validateRequest(reviewLineInput),
+    async (req, res) => {
+      try {
+        const companyId = company(req),
+          statementLineId = positiveId.parse(req.params.id);
+        const payload = z
+          .object({
+            category: z
+              .enum(["bank_fee", "transfer", "unidentified_receipt", "unidentified_payment", "other"])
+              .nullable(),
+            note: z.string().max(1500).nullable().optional(),
+          })
+          .parse(req.body);
+        return res.json(
+          await db.transaction((tx) =>
+            reviewCashBankLineTx(tx, {
+              companyId,
+              statementLineId,
+              category: payload.category,
+              note: payload.note ?? null,
+              actor: actor(req),
+            })
+          )
+        );
+      } catch (e) {
+        return fail(res, e);
+      }
+    }
+  );
+  app.post("/api/accounting/cash-bank/matches", ...gate, validateRequest(matchLineInput), async (req, res) => {
     try {
       const body = postMatch.parse(req.body),
         companyId = company(req);
@@ -191,7 +242,7 @@ export function registerCashBankReconciliationRoutes(app: Express): void {
       return fail(res, e);
     }
   });
-  app.post("/api/accounting/cash-bank/matches/:id/void", ...gate, async (req, res) => {
+  app.post("/api/accounting/cash-bank/matches/:id/void", ...gate, validateRequest(voidMatchInput), async (req, res) => {
     try {
       const companyId = company(req),
         matchId = positiveId.parse(req.params.id);

@@ -1,6 +1,8 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { createHash } from "crypto";
 import { db, pool } from "../db";
 import { storage } from "../storage";
@@ -23,6 +25,30 @@ export const FIXED_ASSET_HAS_OPENING_MESSAGE =
 export const FIXED_ASSET_HAS_ENTRIES_CODE = "FIXED_ASSET_HAS_ENTRIES" as const;
 export const FIXED_ASSET_HAS_ENTRIES_MESSAGE =
   "This fixed asset has voucher lines, so it cannot be deleted. Deactivate it instead.";
+
+// The fixed_assets columns as JSON types; the handler still parses with insertFixedAssetSchema.
+const nullableString = z.string().nullable().optional();
+const createFixedAssetInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    // Ignored: the asset always belongs to the active company.
+    companyId: z.number().nullable().optional(),
+    code: z.string(),
+    name: z.string(),
+    category: z.string(),
+    purchaseDate: z.string(),
+    purchaseAmount: z.string(),
+    purchaseNativeAmount: nullableString,
+    purchaseCurrency: nullableString,
+    purchaseHistoricalRate: nullableString,
+    purchaseBaseAmount: nullableString,
+    depreciationMethod: z.string(),
+    usefulLife: z.number().nullable().optional(),
+    openingBalance: nullableString,
+    active: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+const deleteFixedAssetInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerBankAssetRoutes(app: Express) {
   // Bank account master routes first (their registration order is unchanged).
@@ -85,7 +111,7 @@ export function registerBankAssetRoutes(app: Express) {
     }
   });
 
-  app.post("/api/fixed-assets", requireAuth, async (req, res) => {
+  app.post("/api/fixed-assets", requireAuth, validateRequest(createFixedAssetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -143,60 +169,66 @@ export function registerBankAssetRoutes(app: Express) {
   // code, for the history), refused while the asset has an opening or any
   // voucher line (live or deleted voucher), audited in the same transaction.
   // It was sign-in only and a hard delete with no audit.
-  app.delete("/api/fixed-assets/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
+  app.delete(
+    "/api/fixed-assets/:id",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(deleteFixedAssetInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
 
-      const outcome = await db.transaction(async (tx) => {
-        const [asset] = await tx
-          .select()
-          .from(fixedAssets)
-          .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
-          .for("update");
-        if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
-        if (!toMoney(asset.openingBalance).isZero()) {
-          return {
-            status: 409 as const,
-            body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
-          };
-        }
-        const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
-          sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
-        );
-        if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
-          return {
-            status: 409 as const,
-            body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
-          };
-        }
-        const [deleted] = await tx
-          .update(fixedAssets)
-          .set({ deletedAt: new Date(), active: false })
-          .where(eq(fixedAssets.id, id))
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "delete",
-            tableName: "fixed_assets",
-            recordId: deleted.id,
-            recordIdentifier: deleted.name,
-            changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
-          },
-          tx
-        );
-        return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
-      });
-      res.status(outcome.status).json(outcome.body);
-    } catch (error: unknown) {
-      res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
+        const outcome = await db.transaction(async (tx) => {
+          const [asset] = await tx
+            .select()
+            .from(fixedAssets)
+            .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
+            .for("update");
+          if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
+          if (!toMoney(asset.openingBalance).isZero()) {
+            return {
+              status: 409 as const,
+              body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
+            };
+          }
+          const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
+            sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
+          );
+          if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
+            return {
+              status: 409 as const,
+              body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
+            };
+          }
+          const [deleted] = await tx
+            .update(fixedAssets)
+            .set({ deletedAt: new Date(), active: false })
+            .where(eq(fixedAssets.id, id))
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "fixed_assets",
+              recordId: deleted.id,
+              recordIdentifier: deleted.name,
+              changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
+            },
+            tx
+          );
+          return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
+        });
+        res.status(outcome.status).json(outcome.body);
+      } catch (error: unknown) {
+        res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // PO Import - Parse and Preview Excel
   app.post("/api/po-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
@@ -254,7 +286,8 @@ export function registerBankAssetRoutes(app: Express) {
       // sidesteps a previously recorded truck import receipt.
       for (const candidate of preview) {
         const origin = parseFactoryTripPoIdentity(
-          candidate.containerNumber, candidate.items.map(i => i.poNumber)
+          candidate.containerNumber,
+          candidate.items.map((i) => i.poNumber)
         );
         if (origin.errors.length) {
           return res.status(400).json({ code: "FD_PO_IDENTITY_INVALID", message: origin.errors.join(" ") });
@@ -266,15 +299,14 @@ export function registerBankAssetRoutes(app: Express) {
               message: "One Factory dispatch truck must be imported in its own ERP PO Excel file.",
             });
           }
-          const existing = await inspectFactoryTripPoReceipt(
-            req.session.currentCompanyId!, origin.identity
-          );
+          const existing = await inspectFactoryTripPoReceipt(req.session.currentCompanyId!, origin.identity);
           if (existing) {
             return res.status(409).json({
               code: "FD_PO_DUPLICATE",
-              message: existing.status === "IMPORTED"
-                ? "This Factory dispatch truck was already imported into ERP; a renamed Excel file is not a new purchase."
-                : "A previous Factory dispatch PO import needs reconciliation before this truck can be retried.",
+              message:
+                existing.status === "IMPORTED"
+                  ? "This Factory dispatch truck was already imported into ERP; a renamed Excel file is not a new purchase."
+                  : "A previous Factory dispatch PO import needs reconciliation before this truck can be retried.",
             });
           }
         }

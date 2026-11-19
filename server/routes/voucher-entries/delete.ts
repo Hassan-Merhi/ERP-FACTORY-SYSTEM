@@ -23,6 +23,8 @@ import { db, type DbTransaction } from "../../db";
 import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
 import { syncEmployeeBalancesFromEntries, buildVoucherChangesForDelete } from "../_helpers";
@@ -224,81 +226,94 @@ export async function deleteVoucherTx(tx: DbTransaction, input: DeleteVoucherInp
   });
 }
 
+// The id is read with parseInt, so the path segment stays a string here.
+const deleteVoucherInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
 export function registerVoucherDeleteRoutes(app: Express) {
   // Delete a voucher (Admin only)
-  app.delete("/api/vouchers/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid voucher ID" });
-      }
-
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      // Get voucher and entries before deleting for balance sync
-      const voucher = await storage.getVoucherById(id);
-      if (!voucher) {
-        return res.status(404).json({ message: "Voucher not found" });
-      }
-
-      const blockedVoucherReason = voucherMutationBlockReason(voucher);
-      if (blockedVoucherReason) {
-        return res.status(403).json({ message: blockedVoucherReason });
-      }
-
-      const companyId = req.session.currentCompanyId;
-      const occurredAt = new Date().toISOString();
-
-      // Wrap balance sync and deletion in a transaction
-      const lanCapture = isPhase9LanPrimary();
-      // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
-      const offlinePayment =
-        (voucher.voucherType === "Payment" || voucher.voucherType === "Receipt") &&
-        phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4);
-      if (lanCapture && voucher.voucherType !== "Sales" && !offlinePayment) {
-        return res.status(409).json({
-          code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
-          message: offlineEdgeText("voucherDeleteSalesOnly", req.headers["accept-language"]),
-        });
-      }
-      await db.transaction(async (tx) => {
-        const paymentBefore =
-          lanCapture && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
-        await deleteVoucherTx(tx, {
-          companyId,
-          voucher,
-          occurredAt,
-          asOfDate: getClientDate(req),
-          actor: { userId: req.session.userId, username: req.session.username },
-          retirementActor: sessionRetirementActor(req),
-        });
-        // Factory LAN server during an outage: record the cancellation for
-        // replay on the sale's stream, in this transaction.
-        if (lanCapture && voucher.voucherType === "Sales") {
-          await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
+  app.delete(
+    "/api/vouchers/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(deleteVoucherInput),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+          return res.status(400).json({ message: "Invalid voucher ID" });
         }
-        if (lanCapture && offlinePayment && paymentBefore) {
-          await capturePhase9PaymentDeleteTx(tx, {
-            ...paymentFollowUpActor(req),
-            localVoucherId: voucher.id,
-            voucherRef: await phase9PaymentVoucherRefTx(tx, voucher.id),
-            beforeSha256: paymentBefore,
+
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        // Get voucher and entries before deleting for balance sync
+        const voucher = await storage.getVoucherById(id);
+        if (!voucher) {
+          return res.status(404).json({ message: "Voucher not found" });
+        }
+
+        const blockedVoucherReason = voucherMutationBlockReason(voucher);
+        if (blockedVoucherReason) {
+          return res.status(403).json({ message: blockedVoucherReason });
+        }
+
+        const companyId = req.session.currentCompanyId;
+        const occurredAt = new Date().toISOString();
+
+        // Wrap balance sync and deletion in a transaction
+        const lanCapture = isPhase9LanPrimary();
+        // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
+        const offlinePayment =
+          (voucher.voucherType === "Payment" || voucher.voucherType === "Receipt") &&
+          phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4);
+        if (lanCapture && voucher.voucherType !== "Sales" && !offlinePayment) {
+          return res.status(409).json({
+            code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
+            message: offlineEdgeText("voucherDeleteSalesOnly", req.headers["accept-language"]),
           });
         }
-      });
+        await db.transaction(async (tx) => {
+          const paymentBefore =
+            lanCapture && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
+          await deleteVoucherTx(tx, {
+            companyId,
+            voucher,
+            occurredAt,
+            asOfDate: getClientDate(req),
+            actor: { userId: req.session.userId, username: req.session.username },
+            retirementActor: sessionRetirementActor(req),
+          });
+          // Factory LAN server during an outage: record the cancellation for
+          // replay on the sale's stream, in this transaction.
+          if (lanCapture && voucher.voucherType === "Sales") {
+            await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
+          }
+          if (lanCapture && offlinePayment && paymentBefore) {
+            await capturePhase9PaymentDeleteTx(tx, {
+              ...paymentFollowUpActor(req),
+              localVoucherId: voucher.id,
+              voucherRef: await phase9PaymentVoucherRefTx(tx, voucher.id),
+              beforeSha256: paymentBefore,
+            });
+          }
+        });
 
-      // A deleted cash sale must leave the intercompany POS mirror for its date.
-      // The rebuild is atomic and never throws; a failure is logged and leaves
-      // the previous mirror in place for a later recalculation.
-      if (voucher.voucherType === "Sales" && !voucher.optional) {
-        await recalculateIntercompanyForDate(companyId, voucher.voucherDate);
+        // A deleted cash sale must leave the intercompany POS mirror for its date.
+        // The rebuild is atomic and never throws; a failure is logged and leaves
+        // the previous mirror in place for a later recalculation.
+        if (voucher.voucherType === "Sales" && !voucher.optional) {
+          await recalculateIntercompanyForDate(companyId, voucher.voucherDate);
+        }
+
+        res.json({ message: "Voucher deleted successfully" });
+      } catch (error: unknown) {
+        res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
-
-      res.json({ message: "Voucher deleted successfully" });
-    } catch (error: unknown) {
-      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

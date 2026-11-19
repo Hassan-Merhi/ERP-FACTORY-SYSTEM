@@ -23,6 +23,15 @@ import {
 } from "@shared/schema";
 import { sendBufferFast, serveFastAttachment } from "./whatsappFastSendRoutesSendBufferFast";
 import { sendPosStockFast } from "./whatsappFastSendRoutesSendPosStockFast";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Callers send { month: "yyyy-MM" }; without it the current month is sent.
+const sendAccountStatementInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ month: z.string().nullable().optional() }).optional(),
+} satisfies RequestSchemas;
 
 async function sendPosInvoiceFast(req: Request, res: Response): Promise<void> {
   const startedAt = Date.now();
@@ -320,6 +329,16 @@ export function registerWhatsAppFastSendRoutes(app: Express): void {
     sendUploadedPdfFast
   );
 
-  app.post("/api/accounts/:accountId/send-statement-whatsapp", requireAuth, sendAccountStatementFast);
-  app.post("/api/factory/accounts/:accountId/send-statement-whatsapp", requireAuth, sendAccountStatementFast);
+  app.post(
+    "/api/accounts/:accountId/send-statement-whatsapp",
+    requireAuth,
+    validateRequest(sendAccountStatementInput),
+    sendAccountStatementFast
+  );
+  app.post(
+    "/api/factory/accounts/:accountId/send-statement-whatsapp",
+    requireAuth,
+    validateRequest(sendAccountStatementInput),
+    sendAccountStatementFast
+  );
 }

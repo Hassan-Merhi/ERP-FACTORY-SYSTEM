@@ -11,10 +11,12 @@
  * services/inventory/inventoryReadinessResolution.ts.
  */
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 
 import { requireAuth, requireRole } from "../../auth";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { logger } from "../../lib/logger";
 import { perpetualReadinessReport } from "../../services/accounting/perpetualInventory/readiness";
 import {
@@ -26,6 +28,17 @@ import {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PLAN_HASH = /^[0-9a-f]{64}$/;
+
+// Shapes only: the handler keeps its confirm, plan hash and action checks and messages.
+const resolutionApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    planHash: z.string().optional(),
+    actions: z.array(z.strictObject({ locationId: z.number(), action: z.string() })).optional(),
+    writeOffAnomalies: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 /** The body's actions, or null when they are not a list of { locationId, action }. */
 function parseActions(value: unknown): ReadinessAction[] | null {
@@ -83,6 +96,7 @@ export function registerPerpetualReadinessRoutes(app: Express) {
     "/api/accounting/perpetual-inventory/readiness-resolution/apply",
     requireAuth,
     requireRole("Owner"),
+    validateRequest(resolutionApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

@@ -89,6 +89,14 @@ describe("validateRequest", () => {
     expect((await request(app).delete("/things/5").send({ cascade: true })).status).toBe(400);
   });
 
+  it("keeps the client's key order in req.body, at every depth", async () => {
+    const res = await request(appWith(updateInput))
+      .patch("/things/9")
+      .send({ lines: [{ sku: "A" }], amount: 2, name: "Bale" });
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body.body)).toBe('{"lines":[{"sku":"A"}],"amount":2,"name":"Bale"}');
+  });
+
   it("is named validateRequest so the route manifest records it", () => {
     expect(validateRequest({ params: idParams }).name).toBe("validateRequest");
   });

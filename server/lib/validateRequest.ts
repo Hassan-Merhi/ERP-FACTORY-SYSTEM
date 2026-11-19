@@ -121,6 +121,33 @@ function formatPath(path: PropertyKey[]): string {
   return path.map((segment) => String(segment)).join(".");
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Zod returns objects with keys in schema order. Some handlers hash or
+ * serialise `req.body` (idempotency fingerprints, audit snapshots), so put the
+ * keys back in the order the client sent them. Keys the schema added
+ * (defaults) follow the client's keys.
+ */
+export function alignKeyOrder(parsed: unknown, raw: unknown): unknown {
+  if (Array.isArray(parsed) && Array.isArray(raw)) {
+    return parsed.map((item, index) => alignKeyOrder(item, raw[index]));
+  }
+  if (!isPlainObject(parsed) || !isPlainObject(raw)) return parsed;
+  const aligned: Record<string, unknown> = {};
+  for (const key of Object.keys(raw)) {
+    if (key in parsed) aligned[key] = alignKeyOrder(parsed[key], raw[key]);
+  }
+  for (const key of Object.keys(parsed)) {
+    if (!(key in aligned)) aligned[key] = parsed[key];
+  }
+  return aligned;
+}
+
 /**
  * Express middleware that parses `req.params`, `req.query` and `req.body`
  * against the given schemas. On failure it answers 400 with
@@ -165,7 +192,7 @@ export function validateRequest<S extends RequestSchemas>(schemas: S): RequestHa
       return;
     }
 
-    if ("body" in parsed) req.body = parsed.body;
+    if ("body" in parsed) req.body = alignKeyOrder(parsed.body, req.body);
     (req as RequestWithValidated)[VALIDATED] = parsed;
     next();
   };

@@ -9,10 +9,29 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { writeDaybookEntry } from "../_helpers";
 import { containerFreight, containerFreightPayments } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getFreightContainerId, verifyContainerOwnership } from "./_helpers";
+
+const addFreightPaymentInput = {
+  params: z.strictObject({ freightId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    paymentDate: z.string(),
+    amount: z.union([z.string(), z.number()]),
+    method: z.string().nullable().optional(),
+    reference: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteFreightPaymentInput = {
+  params: z.strictObject({ freightId: stringParam, paymentId: stringParam }),
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ txDate: z.string().optional() })]),
+} satisfies RequestSchemas;
 
 export function registerFactoryFreightRoutes(app: Express) {
   // ─────── CONTAINER FREIGHT ───────
@@ -110,64 +129,70 @@ export function registerFactoryFreightRoutes(app: Express) {
 
   // ─────── FREIGHT PAYMENTS ───────
 
-  app.post("/api/factory/freight/:freightId/payments", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const freightId = Number(req.params.freightId);
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/freight/:freightId/payments",
+    requireAuth,
+    validateRequest(addFreightPaymentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const freightId = Number(req.params.freightId);
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      // Verify the freight belongs to this company (via its container)
-      const freightContainerId = await getFreightContainerId(freightId, companyId);
-      if (freightContainerId === null) return res.status(403).json({ message: "Access denied" });
+        // Verify the freight belongs to this company (via its container)
+        const freightContainerId = await getFreightContainerId(freightId, companyId);
+        if (freightContainerId === null) return res.status(403).json({ message: "Access denied" });
 
-      const [payment] = await db
-        .insert(containerFreightPayments)
-        .values({
+        const [payment] = await db
+          .insert(containerFreightPayments)
+          .values({
+            companyId,
+            containerFreightId: freightId,
+            paymentDate: req.body.paymentDate,
+            amount: String(req.body.amount),
+            method: req.body.method || null,
+            reference: req.body.reference || null,
+            createdBy: req.session.userId ?? null,
+          })
+          .returning();
+
+        const [fr] = await db.select().from(containerFreight).where(eq(containerFreight.id, freightId));
+        const payments = await db
+          .select()
+          .from(containerFreightPayments)
+          .where(eq(containerFreightPayments.containerFreightId, freightId));
+        const totalPaid = payments.reduce((sum: number, p) => sum + Number(p.amount), 0);
+        const freightAmount = Number(fr.freightAmount);
+        const newStatus = totalPaid >= freightAmount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
+        await db
+          .update(containerFreight)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(eq(containerFreight.id, freightId));
+
+        await writeDaybookEntry(db, {
           companyId,
-          containerFreightId: freightId,
-          paymentDate: req.body.paymentDate,
-          amount: String(req.body.amount),
-          method: req.body.method || null,
-          reference: req.body.reference || null,
-          createdBy: req.session.userId ?? null,
-        })
-        .returning();
+          txDate: req.body.paymentDate || getClientDate(req),
+          txType: "FREIGHT_PAYMENT",
+          referenceId: fr.containerId,
+          referenceTable: "containers",
+          description: `Freight payment ${fr.currency} ${req.body.amount} for container #${fr.containerId}${fr.vendorName ? ` (${fr.vendorName})` : ""}`,
+          currencyCode: fr.currency,
+          amountCurrency: Number(req.body.amount),
+          metaJson: JSON.stringify({ freightId, paymentId: payment.id }),
+          createdBy: req.session.userId || undefined,
+        });
 
-      const [fr] = await db.select().from(containerFreight).where(eq(containerFreight.id, freightId));
-      const payments = await db
-        .select()
-        .from(containerFreightPayments)
-        .where(eq(containerFreightPayments.containerFreightId, freightId));
-      const totalPaid = payments.reduce((sum: number, p) => sum + Number(p.amount), 0);
-      const freightAmount = Number(fr.freightAmount);
-      const newStatus = totalPaid >= freightAmount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
-      await db
-        .update(containerFreight)
-        .set({ status: newStatus, updatedAt: new Date() })
-        .where(eq(containerFreight.id, freightId));
-
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: req.body.paymentDate || getClientDate(req),
-        txType: "FREIGHT_PAYMENT",
-        referenceId: fr.containerId,
-        referenceTable: "containers",
-        description: `Freight payment ${fr.currency} ${req.body.amount} for container #${fr.containerId}${fr.vendorName ? ` (${fr.vendorName})` : ""}`,
-        currencyCode: fr.currency,
-        amountCurrency: Number(req.body.amount),
-        metaJson: JSON.stringify({ freightId, paymentId: payment.id }),
-        createdBy: req.session.userId || undefined,
-      });
-
-      res.json(payment);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(payment);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.delete(
     "/api/factory/freight/:freightId/payments/:paymentId",
     requireAuth,
+    validateRequest(deleteFreightPaymentInput),
     async (req: Request, res: Response) => {
       try {
         const freightId = Number(req.params.freightId);

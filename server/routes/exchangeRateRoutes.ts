@@ -6,7 +6,9 @@
  * No rate save here posts a voucher or revalues historical records.
  */
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
@@ -20,6 +22,19 @@ import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 /** Roles that may save a rate for any date and replace an existing one. */
 const RATE_EDITOR_ROLES = ["Admin", "Owner", "Developer"];
+
+// Shape only: the handler still parses with insertExchangeRateSchema (rate and date rules)
+// and answers its own "Validation error". `daily` marks the daily popup's save.
+const saveExchangeRateInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    fromCurrency: z.string(),
+    toCurrency: z.string(),
+    rate: z.string(),
+    effectiveDate: z.string(),
+    daily: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 type CompanyCurrencyPair = { fromCurrency: string; toCurrency: string };
 
@@ -175,7 +190,7 @@ export function registerExchangeRateRoutes(app: Express) {
   // view-only POS users never save.
   // The server chooses the active company; the caller cannot inject a rate
   // into a different company or an unconfigured pair.
-  app.post("/api/exchange-rates", requireAuth, async (req, res) => {
+  app.post("/api/exchange-rates", requireAuth, validateRequest(saveExchangeRateInput), async (req, res) => {
     try {
       const role = req.user?.role;
       if (!role || isExistingRecordReadOnlyRole(role) || req.session.posViewOnly) {

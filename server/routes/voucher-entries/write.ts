@@ -9,6 +9,9 @@ import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db, type DbTransaction } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { optionalNumeric, replacementEntryFields } from "../vouchers/voucherWriteInputSchemas";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import { voucherEntries } from "@shared/schema";
@@ -55,9 +58,15 @@ function lineAuditSnapshot(line: typeof voucherEntries.$inferSelect | undefined)
   };
 }
 
+// One line: the voucher plus the replacement-line fields the handler reads.
+const createVoucherEntryInput = {
+  query: emptyQuery,
+  body: z.strictObject({ voucherId: optionalNumeric, ...replacementEntryFields }),
+} satisfies RequestSchemas;
+
 export function registerVoucherEntryWriteRoutes(app: Express) {
   // Create a new voucher entry
-  app.post("/api/voucher-entries", requireAuth, async (req, res) => {
+  app.post("/api/voucher-entries", requireAuth, validateRequest(createVoucherEntryInput), async (req, res) => {
     try {
       // Verify the voucher exists and belongs to current company
       if (!req.body.voucherId) {

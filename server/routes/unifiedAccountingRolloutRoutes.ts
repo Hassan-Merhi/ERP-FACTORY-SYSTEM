@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import {
   ReleaseError,
   unifiedReleaseReadinessTx,
@@ -27,6 +28,25 @@ const policy = z.object({
   reason: z.string().trim().min(10).max(1000),
 });
 const positiveId = z.coerce.number().int().positive();
+// Shapes only: the handlers still parse with the schemas above and keep their RELEASE_* errors.
+const reviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    kind: z.string(),
+    releaseSha: z.string(),
+    evidenceReference: z.string(),
+    notes: z.string(),
+  }),
+} satisfies RequestSchemas;
+const revokeReviewInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
+const modeInput = {
+  query: emptyQuery,
+  body: z.strictObject({ mode: z.string(), releaseSha: z.string().nullable(), reason: z.string() }),
+} satisfies RequestSchemas;
 function sessionCompany(req: Request) {
   const id = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(id) || id < 1) throw new ReleaseError("RELEASE_COMPANY_REQUIRED", "Select a company", 400);
@@ -106,7 +126,7 @@ export function registerUnifiedAccountingRolloutRoutes(app: Express) {
       return failure(res, e);
     }
   });
-  app.post("/api/accounting/rollout/reviews", ...gate, async (req, res) => {
+  app.post("/api/accounting/rollout/reviews", ...gate, validateRequest(reviewInput), async (req, res) => {
     try {
       const body = review.parse(req.body),
         companyId = sessionCompany(req);
@@ -127,27 +147,32 @@ export function registerUnifiedAccountingRolloutRoutes(app: Express) {
       return failure(res, e);
     }
   });
-  app.post("/api/accounting/rollout/reviews/:id/revoke", ...gate, async (req, res) => {
-    try {
-      owner(req);
-      const reviewId = positiveId.parse(req.params.id),
-        companyId = sessionCompany(req);
-      const body = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(req.body);
-      const result = await db.transaction((tx) =>
-        revokeUnifiedReleaseReviewTx(tx, {
-          companyId,
-          reviewId,
-          reason: body.reason,
-          actor: actor(req),
-        })
-      );
-      res.setHeader("Cache-Control", "no-store");
-      return res.json(result);
-    } catch (e) {
-      return failure(res, e);
+  app.post(
+    "/api/accounting/rollout/reviews/:id/revoke",
+    ...gate,
+    validateRequest(revokeReviewInput),
+    async (req, res) => {
+      try {
+        owner(req);
+        const reviewId = positiveId.parse(req.params.id),
+          companyId = sessionCompany(req);
+        const body = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(req.body);
+        const result = await db.transaction((tx) =>
+          revokeUnifiedReleaseReviewTx(tx, {
+            companyId,
+            reviewId,
+            reason: body.reason,
+            actor: actor(req),
+          })
+        );
+        res.setHeader("Cache-Control", "no-store");
+        return res.json(result);
+      } catch (e) {
+        return failure(res, e);
+      }
     }
-  });
-  app.post("/api/accounting/rollout/mode", ...gate, async (req, res) => {
+  );
+  app.post("/api/accounting/rollout/mode", ...gate, validateRequest(modeInput), async (req, res) => {
     try {
       owner(req);
       const body = policy.parse(req.body),

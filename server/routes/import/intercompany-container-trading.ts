@@ -18,6 +18,37 @@ import {
   setTradingRelationship,
   TradingImportError,
 } from "../../services/intercompany/containerTradingImport";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const relationshipInput = {
+  query: emptyQuery,
+  body: relationshipInputSchema.strict(),
+} satisfies RequestSchemas;
+
+const autoRelationshipInput = {
+  query: emptyQuery,
+  body: z.strictObject({ destinationCompanyId: z.number().int().positive() }),
+} satisfies RequestSchemas;
+
+// Multipart routes: the workbook is the file; these are the text form fields
+// (strings after multer). The handlers parse and check them.
+const workbookPreviewInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const stockPreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({ selections: z.string().optional() }).optional(),
+} satisfies RequestSchemas;
+
+const importInput = {
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      externalSupplierId: z.string().optional(),
+      importDate: z.string().optional(),
+      selections: z.string().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
 
 function sendError(res: import("express").Response, error: unknown) {
   if (error instanceof StockMappingError) {
@@ -70,6 +101,7 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     "/api/intercompany-container-trading/relationships",
     requireAuth,
     requireRole("Owner", "Developer"),
+    validateRequest(relationshipInput),
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
@@ -92,6 +124,7 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     "/api/intercompany-container-trading/relationships/auto",
     requireAuth,
     requireRole("Owner", "Developer"),
+    validateRequest(autoRelationshipInput),
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
@@ -119,6 +152,7 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     requireAuth,
     requireRole("Owner", "Developer"),
     upload.single("file"),
+    validateRequest(workbookPreviewInput),
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
@@ -145,13 +179,14 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     requireAuth,
     requireRole("Owner", "Developer"),
     upload.single("file"),
+    validateRequest(stockPreviewInput),
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
         if (!req.file) throw new TradingImportError(400, "Select the original Excel workbook");
         let raw: unknown;
         try {
-          raw = JSON.parse(String(req.body.selections ?? "null"));
+          raw = JSON.parse(String(req.body?.selections ?? "null"));
         } catch {
           throw new TradingImportError(400, "Invalid stock preview destination selections");
         }
@@ -186,19 +221,20 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     requireAuth,
     requireRole("Owner", "Developer"),
     upload.single("file"),
+    validateRequest(importInput),
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
         if (!req.file) throw new TradingImportError(400, "Select the original Excel workbook");
         let selections: unknown;
         try {
-          selections = JSON.parse(String(req.body.selections ?? "null"));
+          selections = JSON.parse(String(req.body?.selections ?? "null"));
         } catch {
           throw new TradingImportError(400, "Invalid container destination selections");
         }
         const input = importInputSchema.parse({
-          externalSupplierId: Number(req.body.externalSupplierId),
-          importDate: req.body.importDate,
+          externalSupplierId: Number(req.body?.externalSupplierId),
+          importDate: req.body?.importDate,
           selections,
         });
         const parsed = await parseIntercompanyWorkbook(req.file.buffer, req.file.originalname, companyId);

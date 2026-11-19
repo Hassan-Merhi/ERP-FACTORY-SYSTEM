@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { reverseConversionInput } from "./fxAgentWalletRouteSchemas";
 import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { toMoney } from "../../lib/money";
@@ -69,6 +71,7 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
     "/api/factory/fx-agent-wallets/:id/reverse-conversion",
     requireAuth,
     requireRole(...ROLES),
+    validateRequest(reverseConversionInput),
     async (req: Request, res: Response) => {
       try {
         const cid = company(req);

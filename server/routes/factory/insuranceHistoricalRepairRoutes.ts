@@ -33,6 +33,8 @@ import { sql } from "drizzle-orm";
 
 import { db, type DatabaseOrTransaction } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { journalDirectionApplyInput } from "./factoryInsuranceRouteSchemas";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -295,31 +297,37 @@ export function registerInsuranceHistoricalRepairRoutes(app: Express): void {
     }
   });
 
-  app.post(APPLY_ROUTE, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = resolveRequestCompanyId(req);
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const planHash = req.body?.planHash;
-      if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
-        return res.status(400).json({ message: "The reviewed plan hash is required" });
+  app.post(
+    APPLY_ROUTE,
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(journalDirectionApplyInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = resolveRequestCompanyId(req);
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const planHash = req.body?.planHash;
+        if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
+          return res.status(400).json({ message: "The reviewed plan hash is required" });
+        }
+        const result = await applyInsuranceJournalDirectionRepair(companyId, {
+          planHash,
+          actor: {
+            userId: String(req.session.userId ?? ""),
+            username: req.session.username || String(req.session.userId ?? "unknown"),
+          },
+        });
+        res.json(result);
+      } catch (error: unknown) {
+        if (error instanceof InsuranceRepairRefusal) {
+          const status = error.code === "NOTHING_TO_APPLY" ? 400 : 409;
+          return res.status(status).json({ code: error.code, message: error.message });
+        }
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        logger.error(`POST ${APPLY_ROUTE} error`, { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const result = await applyInsuranceJournalDirectionRepair(companyId, {
-        planHash,
-        actor: {
-          userId: String(req.session.userId ?? ""),
-          username: req.session.username || String(req.session.userId ?? "unknown"),
-        },
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      if (error instanceof InsuranceRepairRefusal) {
-        const status = error.code === "NOTHING_TO_APPLY" ? 400 : 409;
-        return res.status(status).json({ code: error.code, message: error.message });
-      }
-      const closed = closedPeriodErrorResponse(error);
-      if (closed) return res.status(closed.status).json(closed.body);
-      logger.error(`POST ${APPLY_ROUTE} error`, { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

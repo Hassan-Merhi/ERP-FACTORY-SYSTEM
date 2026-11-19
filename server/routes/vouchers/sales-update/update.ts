@@ -9,6 +9,9 @@ import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import { optionalText, replacementEntryFields } from "../voucherWriteInputSchemas";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import {
   assertNotIntercompanyTransferLeg,
@@ -42,8 +45,32 @@ import { rebalanceVoucherRoundingTx } from "../../../services/accounting/engineR
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
+/**
+ * The header edit and optional line replacement. The Stock Transfer reopen
+ * layer (stockTransferLifecycleRoutes.ts) on this path passes the same body on.
+ */
+const updateVoucherInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    voucherDate: z.string().optional(),
+    description: optionalText,
+    optional: z.boolean().optional(),
+    entries: z
+      .array(
+        z.strictObject({
+          ...replacementEntryFields,
+          accountName: z.unknown().optional(), // sent by client/src/pages/Daybook.tsx edit form; not used
+        })
+      )
+      .optional(),
+    voucherType: z.unknown().optional(), // sent by client/src/pages/Daybook.tsx edit form; not used
+    totalAmount: z.unknown().optional(), // sent by the stock transfer/adjustment forms; not used
+  }),
+} satisfies RequestSchemas;
+
 export function registerVoucherUpdateRoutes(app: Express) {
-  app.patch("/api/vouchers/:id", requireAuth, async (req, res) => {
+  app.patch("/api/vouchers/:id", requireAuth, validateRequest(updateVoucherInput), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid voucher ID" });

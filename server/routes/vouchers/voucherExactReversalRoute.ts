@@ -1,6 +1,8 @@
 import type { Express, Request, Response } from "express";
 
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db } from "../../db";
 import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
@@ -35,11 +37,25 @@ function postingStatus(error: PostingValidationError): number {
  * so a double submission returns the first reversal rather than posting a
  * second one. Reversal-of-reversal chains fail closed.
  */
+// The handler answers its own VOUCHER_ID_INVALID for the id, read with Number().
+const exactReversalInput = {
+  params: z.strictObject({ voucherId: stringParam }),
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      reversalDate: z.string().nullable().optional(),
+      reversalVoucherNumber: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
 export function registerVoucherExactReversalRoute(app: Express): void {
   app.post(
     "/api/vouchers/:voucherId/exact-reversal",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(exactReversalInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

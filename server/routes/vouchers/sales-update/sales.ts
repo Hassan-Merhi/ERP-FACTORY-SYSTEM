@@ -7,10 +7,17 @@
 import type { Express } from "express";
 import { requireAuth } from "../../../auth";
 import { requirePosSaleEditWindow } from "../../../middleware/posSaleEditWindow";
-import { handlePosSaleEdit } from "../../../routes/pos/posEditSaleRoutes";
+import { validateRequest } from "../../../lib/validateRequest";
+import { handlePosSaleEdit, posSaleEditInput } from "../../../routes/pos/posEditSaleRoutes";
 
 export function registerVoucherSalesLineUpdateRoutes(app: Express) {
-  app.patch("/api/vouchers/:id/sales", requireAuth, requirePosSaleEditWindow, async (req, res) => {
-    return handlePosSaleEdit(req, res, { includeLegacyTopLevelVoucher: true });
-  });
+  app.patch(
+    "/api/vouchers/:id/sales",
+    requireAuth,
+    requirePosSaleEditWindow,
+    validateRequest(posSaleEditInput),
+    async (req, res) => {
+      return handlePosSaleEdit(req, res, { includeLegacyTopLevelVoucher: true });
+    }
+  );
 }

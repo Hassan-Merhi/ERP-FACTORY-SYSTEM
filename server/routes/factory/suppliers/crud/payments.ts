@@ -12,6 +12,14 @@ import { getClientDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
 import { removeDaybookEntriesForSource } from "../../../../services/factory/daybookSourceIntegrity";
 import { requireAuth } from "../../../../auth";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
 import { writeDaybookEntry, getOrCreateLedgerAccount } from "../../_helpers";
 import {
   factorySuppliers,
@@ -34,6 +42,32 @@ import {
 import { postFactoryVoucherTx } from "../../../../services/factory/factoryVoucherPosting";
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../../services/factory/factoryDocumentFxRate";
 import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
+
+// Field types follow insertFactorySupplierPaymentSchema, which the handler
+// still parses; keys are in the order the client sends them, because the
+// parsed body feeds the idempotency fingerprint. clientRequestId is the
+// idempotency key (resolveFinancialOperationKey).
+const createSupplierPaymentInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    supplierId: z.number(),
+    date: z.string(),
+    amount: z.string(),
+    currencyCode: z.string().optional(),
+    fxRateToUsd: z.string().optional(),
+    amountUsd: z.string(),
+    paidFromAccountId: z.number().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    effectiveDate: z.string().nullable().optional(),
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteSupplierPaymentInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerFactorySupplierPaymentRoutes(app: Express) {
   app.get("/api/factory/supplier-payments", requireAuth, async (req: Request, res: Response) => {
@@ -69,189 +103,199 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/supplier-payments", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/supplier-payments",
+    requireAuth,
+    validateRequest(createSupplierPaymentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const parsed = insertFactorySupplierPaymentSchema.parse({ ...req.body, companyId });
+        const parsed = insertFactorySupplierPaymentSchema.parse({ ...req.body, companyId });
 
-      // Reject writes with an unresolved non-USD rate rather than silently posting the
-      // payment voucher at an assumed rate of 1 — factory_supplier_payments has no
-      // fxRateConfirmed flag yet, so any explicitly-supplied rate is trusted as-is.
-      const payCurrency = parsed.currencyCode || "USD";
-      if (payCurrency !== "USD") {
-        if (!toMoney(parsed.fxRateToUsd).greaterThan(0)) {
-          return res.status(400).json({
-            message: `Cannot record a ${payCurrency} payment without an explicit exchange rate to USD.`,
-          });
+        // Reject writes with an unresolved non-USD rate rather than silently posting the
+        // payment voucher at an assumed rate of 1 — factory_supplier_payments has no
+        // fxRateConfirmed flag yet, so any explicitly-supplied rate is trusted as-is.
+        const payCurrency = parsed.currencyCode || "USD";
+        if (payCurrency !== "USD") {
+          if (!toMoney(parsed.fxRateToUsd).greaterThan(0)) {
+            return res.status(400).json({
+              message: `Cannot record a ${payCurrency} payment without an explicit exchange rate to USD.`,
+            });
+          }
         }
-      }
 
-      // The supplier and the paid-from account must belong to the active
-      // company; otherwise the voucher would debit another tenant's supplier
-      // or credit another tenant's bank/cash account.
-      const [ownSupplier] = await db
-        .select({ id: factorySuppliers.id })
-        .from(factorySuppliers)
-        .where(and(eq(factorySuppliers.id, parsed.supplierId), eq(factorySuppliers.companyId, companyId)));
-      if (!ownSupplier) return res.status(404).json({ message: "Supplier not found" });
-      if (parsed.paidFromAccountId) {
-        const [ownAccount] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, parsed.paidFromAccountId), eq(ledgerAccounts.companyId, companyId)));
-        if (!ownAccount) return res.status(404).json({ message: "Payment account not found" });
-      }
+        // The supplier and the paid-from account must belong to the active
+        // company; otherwise the voucher would debit another tenant's supplier
+        // or credit another tenant's bank/cash account.
+        const [ownSupplier] = await db
+          .select({ id: factorySuppliers.id })
+          .from(factorySuppliers)
+          .where(and(eq(factorySuppliers.id, parsed.supplierId), eq(factorySuppliers.companyId, companyId)));
+        if (!ownSupplier) return res.status(404).json({ message: "Supplier not found" });
+        if (parsed.paidFromAccountId) {
+          const [ownAccount] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.id, parsed.paidFromAccountId), eq(ledgerAccounts.companyId, companyId)));
+          if (!ownAccount) return res.status(404).json({ message: "Payment account not found" });
+        }
 
-      // Wave 17 (D): a non-USD payment needs a confirmed factory rate on or
-      // before its date (409 otherwise); it is posted normalized at its own
-      // entered rate. It used to post the legacy shape when the rate was 1.
-      const postingRate = await factoryDocumentRate(db, companyId, payCurrency, String(parsed.date).slice(0, 10), {
-        rate: parsed.fxRateToUsd,
-      });
+        // Wave 17 (D): a non-USD payment needs a confirmed factory rate on or
+        // before its date (409 otherwise); it is posted normalized at its own
+        // entered rate. It used to post the legacy shape when the rate was 1.
+        const postingRate = await factoryDocumentRate(db, companyId, payCurrency, String(parsed.date).slice(0, 10), {
+          rate: parsed.fxRateToUsd,
+        });
 
-      const operationKey = resolveFinancialOperationKey(req);
-      const operation = await withDurableFinancialOperation(
-        {
-          companyId: Number(companyId),
-          operationName: "factory.supplier-payment.create",
-          idempotencyKey: operationKey,
-          requestFingerprint: financialOperationFingerprint({
-            method: req.method,
-            path: req.path,
+        const operationKey = resolveFinancialOperationKey(req);
+        const operation = await withDurableFinancialOperation(
+          {
             companyId: Number(companyId),
-            body: financialOperationRequestPayload(req.body),
-          }),
-        },
-        async (tx) => {
-          const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
+            operationName: "factory.supplier-payment.create",
+            idempotencyKey: operationKey,
+            requestFingerprint: financialOperationFingerprint({
+              method: req.method,
+              path: req.path,
+              companyId: Number(companyId),
+              body: financialOperationRequestPayload(req.body),
+            }),
+          },
+          async (tx) => {
+            const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
 
-          // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
-          // amount is stored at four places; the voucher takes it at cents, half up.
-          const payAmtStr = toMoney(payment.amount).toFixed(2);
-          // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
-          const crAccountId = payment.paidFromAccountId
-            ? payment.paidFromAccountId
-            : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
-          // Phase 22 (C): through the engine with the payment's posting identity;
-          // the FACTORY-PAY-{payment}- number is read as identity (supplier
-          // statements and balances, the delete below), so it keeps the prefix with
-          // the posting generation (was Date.now()). Both legs normalized at the
-          // payment's rate (wave 6, wave 17 D).
-          await postFactoryVoucherTx(tx, {
+            // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
+            // amount is stored at four places; the voucher takes it at cents, half up.
+            const payAmtStr = toMoney(payment.amount).toFixed(2);
+            // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
+            const crAccountId = payment.paidFromAccountId
+              ? payment.paidFromAccountId
+              : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
+            // Phase 22 (C): through the engine with the payment's posting identity;
+            // the FACTORY-PAY-{payment}- number is read as identity (supplier
+            // statements and balances, the delete below), so it keeps the prefix with
+            // the posting generation (was Date.now()). Both legs normalized at the
+            // payment's rate (wave 6, wave 17 D).
+            await postFactoryVoucherTx(tx, {
+              companyId,
+              voucherType: "Payment",
+              voucherNumber: (generation) => `FACTORY-PAY-${payment.id}-${generation}`,
+              voucherDate: payment.date,
+              effectiveDate: (req.body.effectiveDate as string) || null,
+              description: `Supplier payment – see factory payment #${payment.id}`,
+              currency: payment.currencyCode || "USD",
+              fxRateToUsd: toMoney(postingRate.rate).toString(),
+              source: { sourceType: "factory-supplier-payment", sourceId: payment.id, phase: "voucher" },
+              lines: [
+                // DR: Factory Supplier (debit reduces the liability we owe them)
+                {
+                  factorySupplierId: payment.supplierId,
+                  debit: payAmtStr,
+                  narration: `Payment to supplier – factory payment #${payment.id}`,
+                },
+                {
+                  ledgerAccountId: crAccountId,
+                  credit: payAmtStr,
+                  narration: `Bank/cash outflow – factory payment #${payment.id}`,
+                },
+              ],
+            });
+
+            const [spSupplier] = await tx
+              .select({ name: factorySuppliers.name })
+              .from(factorySuppliers)
+              .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
+            await writeDaybookEntry(tx, {
+              companyId,
+              txDate: payment.date,
+              txType: "SUPPLIER_PAYMENT",
+              referenceId: payment.id,
+              referenceTable: "factory_supplier_payments",
+              description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${payAmtStr} ${payment.currencyCode}`,
+              amountCurrency: toMoney(payment.amount).toNumber(),
+              amountUsd: toMoney(payment.amountUsd).toNumber(),
+              currencyCode: payment.currencyCode,
+              effectiveDate: (req.body.effectiveDate as string) || null,
+            });
+            return { value: payment, resultReference: payment.id };
+          }
+        );
+        res.json(operation.value);
+      } catch (error: unknown) {
+        if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
+        logger.error("Error creating supplier payment:", { error: error });
+        res.status(financialOperationErrorStatus(error) === 500 ? 400 : financialOperationErrorStatus(error)).json({
+          message: getErrorMessage(error),
+        });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/factory/supplier-payments/:id",
+    requireAuth,
+    validateRequest(deleteSupplierPaymentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
+        const [payment] = await db
+          .select()
+          .from(factorySupplierPayments)
+          .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
+        if (!payment) return res.status(404).json({ message: "Supplier payment not found" });
+        const [spDelSupplier] = payment
+          ? await db
+              .select({ name: factorySuppliers.name })
+              .from(factorySuppliers)
+              .where(eq(factorySuppliers.id, payment.supplierId))
+          : [null];
+
+        await db.transaction(async (tx) => {
+          // Hard-delete the auto-generated Payment voucher and its entries for this payment
+          const payVoucherPattern = `FACTORY-PAY-${id}-%`;
+          const payVouchers = await tx
+            .select({ id: vouchers.id })
+            .from(vouchers)
+            .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE ${payVoucherPattern}`));
+          if (payVouchers.length > 0) {
+            const vIds = payVouchers.map((v) => v.id);
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: vIds,
+              reason: "factory-supplier-payment-delete",
+              actor: sessionRetirementActor(req),
+            });
+          }
+          // Remove the original SUPPLIER_PAYMENT daybook entry (including legacy rows
+          // written before referenceTable was populated).
+          await removeDaybookEntriesForSource(tx, {
             companyId,
-            voucherType: "Payment",
-            voucherNumber: (generation) => `FACTORY-PAY-${payment.id}-${generation}`,
-            voucherDate: payment.date,
-            effectiveDate: (req.body.effectiveDate as string) || null,
-            description: `Supplier payment – see factory payment #${payment.id}`,
-            currency: payment.currencyCode || "USD",
-            fxRateToUsd: toMoney(postingRate.rate).toString(),
-            source: { sourceType: "factory-supplier-payment", sourceId: payment.id, phase: "voucher" },
-            lines: [
-              // DR: Factory Supplier (debit reduces the liability we owe them)
-              {
-                factorySupplierId: payment.supplierId,
-                debit: payAmtStr,
-                narration: `Payment to supplier – factory payment #${payment.id}`,
-              },
-              {
-                ledgerAccountId: crAccountId,
-                credit: payAmtStr,
-                narration: `Bank/cash outflow – factory payment #${payment.id}`,
-              },
-            ],
+            referenceTable: "factory_supplier_payments",
+            referenceId: id,
+            txTypes: ["SUPPLIER_PAYMENT"],
           });
-
-          const [spSupplier] = await tx
-            .select({ name: factorySuppliers.name })
-            .from(factorySuppliers)
-            .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
+          await tx
+            .delete(factorySupplierPayments)
+            .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
           await writeDaybookEntry(tx, {
             companyId,
-            txDate: payment.date,
-            txType: "SUPPLIER_PAYMENT",
-            referenceId: payment.id,
-            referenceTable: "factory_supplier_payments",
-            description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${payAmtStr} ${payment.currencyCode}`,
-            amountCurrency: toMoney(payment.amount).toNumber(),
-            amountUsd: toMoney(payment.amountUsd).toNumber(),
-            currencyCode: payment.currencyCode,
-            effectiveDate: (req.body.effectiveDate as string) || null,
+            txDate: getClientDate(req),
+            txType: "SUPPLIER_PAYMENT_DELETE",
+            description: `Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${toMoney(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})`,
           });
-          return { value: payment, resultReference: payment.id };
-        }
-      );
-      res.json(operation.value);
-    } catch (error: unknown) {
-      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
-      logger.error("Error creating supplier payment:", { error: error });
-      res.status(financialOperationErrorStatus(error) === 500 ? 400 : financialOperationErrorStatus(error)).json({
-        message: getErrorMessage(error),
-      });
-    }
-  });
-
-  app.delete("/api/factory/supplier-payments/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const [payment] = await db
-        .select()
-        .from(factorySupplierPayments)
-        .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
-      if (!payment) return res.status(404).json({ message: "Supplier payment not found" });
-      const [spDelSupplier] = payment
-        ? await db
-            .select({ name: factorySuppliers.name })
-            .from(factorySuppliers)
-            .where(eq(factorySuppliers.id, payment.supplierId))
-        : [null];
-
-      await db.transaction(async (tx) => {
-        // Hard-delete the auto-generated Payment voucher and its entries for this payment
-        const payVoucherPattern = `FACTORY-PAY-${id}-%`;
-        const payVouchers = await tx
-          .select({ id: vouchers.id })
-          .from(vouchers)
-          .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE ${payVoucherPattern}`));
-        if (payVouchers.length > 0) {
-          const vIds = payVouchers.map((v) => v.id);
-          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
-          await retireVouchersTx(tx, {
-            companyId,
-            voucherIds: vIds,
-            reason: "factory-supplier-payment-delete",
-            actor: sessionRetirementActor(req),
-          });
-        }
-        // Remove the original SUPPLIER_PAYMENT daybook entry (including legacy rows
-        // written before referenceTable was populated).
-        await removeDaybookEntriesForSource(tx, {
-          companyId,
-          referenceTable: "factory_supplier_payments",
-          referenceId: id,
-          txTypes: ["SUPPLIER_PAYMENT"],
         });
-        await tx
-          .delete(factorySupplierPayments)
-          .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
-        await writeDaybookEntry(tx, {
-          companyId,
-          txDate: getClientDate(req),
-          txType: "SUPPLIER_PAYMENT_DELETE",
-          description: `Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${toMoney(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})`,
-        });
-      });
-      res.json({ message: "Payment deleted" });
-    } catch (error: unknown) {
-      logger.error("Error deleting supplier payment:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ message: "Payment deleted" });
+      } catch (error: unknown) {
+        logger.error("Error deleting supplier payment:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ───────────────────────────────────────────────
   // 1a-ii. Factory Supplier FX Transfers

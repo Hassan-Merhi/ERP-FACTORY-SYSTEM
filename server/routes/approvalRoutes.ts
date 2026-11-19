@@ -1,10 +1,35 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { approvalRequests } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { logAudit } from "./_helpers";
+
+// The handler keeps its "actionType is required" check; ids are parsed with parseInt as before.
+const numberish = z.union([z.number(), z.string()]);
+const createApprovalInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    actionType: z.string().optional(),
+    targetTable: z.string().nullable().optional(),
+    targetRecordId: numberish.nullable().optional(),
+    targetIdentifier: z.string().nullable().optional(),
+    // jsonb columns: any JSON value.
+    payload: z.unknown().optional(),
+    oldValue: z.unknown().optional(),
+    newValue: z.unknown().optional(),
+    amountValue: numberish.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const reviewApprovalInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ reviewerNote: z.string().nullable().optional() })]),
+} satisfies RequestSchemas;
+const approvalActionInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerApprovalRoutes(app: Express) {
   // ── List all requests for company (Admin / Developer / Owner only) ──────────
@@ -51,7 +76,7 @@ export function registerApprovalRoutes(app: Express) {
   });
 
   // ── Create a new approval request ──────────────────────────────────────────
-  app.post("/api/approvals", requireAuth, async (req, res) => {
+  app.post("/api/approvals", requireAuth, validateRequest(createApprovalInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -101,7 +126,7 @@ export function registerApprovalRoutes(app: Express) {
   });
 
   // ── Approve a pending request (Admin / Developer, not own request) ──────────
-  app.post("/api/approvals/:id/approve", requireAuth, async (req, res) => {
+  app.post("/api/approvals/:id/approve", requireAuth, validateRequest(reviewApprovalInput), async (req, res) => {
     try {
       const role = req.session.currentRole ?? "";
       if (!["Admin", "Developer"].includes(role)) {
@@ -157,7 +182,7 @@ export function registerApprovalRoutes(app: Express) {
   });
 
   // ── Reject a pending request (Admin / Developer, not own request) ───────────
-  app.post("/api/approvals/:id/reject", requireAuth, async (req, res) => {
+  app.post("/api/approvals/:id/reject", requireAuth, validateRequest(reviewApprovalInput), async (req, res) => {
     try {
       const role = req.session.currentRole ?? "";
       if (!["Admin", "Developer"].includes(role)) {
@@ -213,7 +238,7 @@ export function registerApprovalRoutes(app: Express) {
   });
 
   // ── Mark an approved request as executed ────────────────────────────────────
-  app.post("/api/approvals/:id/execute", requireAuth, async (req, res) => {
+  app.post("/api/approvals/:id/execute", requireAuth, validateRequest(approvalActionInput), async (req, res) => {
     try {
       const role = req.session.currentRole ?? "";
       if (!["Admin", "Developer"].includes(role)) {
@@ -261,7 +286,7 @@ export function registerApprovalRoutes(app: Express) {
   });
 
   // ── Cancel own pending request ──────────────────────────────────────────────
-  app.delete("/api/approvals/:id", requireAuth, async (req, res) => {
+  app.delete("/api/approvals/:id", requireAuth, validateRequest(approvalActionInput), async (req, res) => {
     try {
       const userId = req.session.userId!;
       const companyId = req.session.currentCompanyId;

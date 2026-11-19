@@ -2,11 +2,44 @@ import { type Express, type Request, type Response } from "express";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth } from "../../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { optionalNumeric, optionalText } from "../vouchers/voucherWriteInputSchemas";
 import { requirePosSaleEditWindow } from "../../middleware/posSaleEditWindow";
 import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { updatePosSale } from "../../services/pos/edit/updateSaleService";
 import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
+
+/**
+ * Body of a sale edit (PUT and the PATCH alias in vouchers/sales-update/sales.ts),
+ * as updatePosSale and services/pos/edit read it. The id is parsed with parseInt.
+ */
+export const posSaleEditInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    description: optionalText,
+    items: z
+      .array(
+        z.strictObject({
+          id: optionalNumeric,
+          stockItemId: optionalNumeric,
+          quantity: optionalNumeric,
+          sellingPrice: optionalNumeric,
+          originalCurrencyRate: optionalNumeric,
+        })
+      )
+      .optional(),
+    paymentAccountType: optionalText,
+    paymentAccountId: optionalNumeric,
+    isCreditSale: z.boolean().nullable().optional(),
+    voucherDate: optionalText,
+    locationId: optionalNumeric,
+    currency: optionalText,
+    targetCompanyId: z.unknown().optional(), // sent by client/src/pages/pos/hooks/usePosMutations.ts; not used
+  }),
+} satisfies RequestSchemas;
 
 export function registerPosEditSaleRoutes(app: Express): void {
   app.get("/api/pos/daybook-edit-status", requireAuth, async (req, res) => {
@@ -25,9 +58,15 @@ export function registerPosEditSaleRoutes(app: Express): void {
     }
   });
   // Update existing sales voucher
-  app.put("/api/vouchers/:id/sales", requireAuth, requirePosSaleEditWindow, async (req, res) => {
-    return handlePosSaleEdit(req, res);
-  });
+  app.put(
+    "/api/vouchers/:id/sales",
+    requireAuth,
+    requirePosSaleEditWindow,
+    validateRequest(posSaleEditInput),
+    async (req, res) => {
+      return handlePosSaleEdit(req, res);
+    }
+  );
 }
 
 /**

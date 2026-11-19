@@ -16,12 +16,14 @@
  */
 import type { Express } from "express";
 import { and, eq, isNull, ne } from "drizzle-orm";
+import { z } from "zod";
 import { bankAccounts, insertBankAccountSchema, ledgerAccounts } from "@shared/schema";
 
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { toMoney } from "../lib/money";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { storage } from "../storage";
 import { buildAuditChanges } from "../services/audit";
 import {
@@ -73,6 +75,45 @@ const BANK_ACCOUNT_AUDIT_FIELDS = [
   "active",
 ] as const;
 
+// The bank_accounts columns a client may send, as JSON types. The handlers still parse with
+// insertBankAccountSchema for the field rules and keep their own messages.
+const nullableString = z.string().nullable().optional();
+const bankAccountFields = {
+  routingCode: nullableString,
+  linkedLedgerId: z.number().nullable().optional(),
+  openingBalance: nullableString,
+  openingBalanceSide: nullableString,
+  openingBalanceNativeAmount: nullableString,
+  openingBalanceCurrency: nullableString,
+  openingBalanceHistoricalRate: nullableString,
+  openingBalanceBaseAmount: nullableString,
+  active: z.boolean().optional(),
+  // POST ignores it (the active company is used); PUT refuses a company move.
+  companyId: z.number().nullable().optional(),
+};
+const createBankAccountInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    code: z.string(),
+    name: z.string(),
+    bankName: z.string(),
+    accountNumber: z.string(),
+    ...bankAccountFields,
+  }),
+} satisfies RequestSchemas;
+const updateBankAccountInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    code: z.string().optional(),
+    name: z.string().optional(),
+    bankName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    ...bankAccountFields,
+  }),
+} satisfies RequestSchemas;
+const deleteBankAccountInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerBankAccountRoutes(app: Express) {
   app.get("/api/bank-accounts", requireAuth, async (req, res) => {
     try {
@@ -86,7 +127,7 @@ export function registerBankAccountRoutes(app: Express) {
     }
   });
 
-  app.post("/api/bank-accounts", requireAuth, async (req, res) => {
+  app.post("/api/bank-accounts", requireAuth, validateRequest(createBankAccountInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -157,189 +198,201 @@ export function registerBankAccountRoutes(app: Express) {
   // Admin or Owner, never moves company, and every change is audited in the
   // transaction that makes it (the opening-balance lock refuses an opening
   // change after a close).
-  app.put("/api/bank-accounts/:id", requireAuth, requireRole(...BANK_ACCOUNT_ADMIN_ROLES), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.put(
+    "/api/bank-accounts/:id",
+    requireAuth,
+    requireRole(...BANK_ACCOUNT_ADMIN_ROLES),
+    validateRequest(updateBankAccountInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid bank account ID" });
-      const parsed = insertBankAccountSchema.partial().parse(req.body);
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid bank account ID" });
+        const parsed = insertBankAccountSchema.partial().parse(req.body);
 
-      // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
-      const hasSide = !!parsed.openingBalanceSide;
+        // Validate opening balance amount and side must both be present or both absent
+        const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
+        const hasSide = !!parsed.openingBalanceSide;
 
-      if (hasBalance && !hasSide) {
-        return res.status(400).json({ message: "Opening balance requires Dr/Cr side" });
-      }
+        if (hasBalance && !hasSide) {
+          return res.status(400).json({ message: "Opening balance requires Dr/Cr side" });
+        }
 
-      if (!hasBalance && hasSide) {
-        return res.status(400).json({ message: "Dr/Cr side requires opening balance amount" });
-      }
+        if (!hasBalance && hasSide) {
+          return res.status(400).json({ message: "Dr/Cr side requires opening balance amount" });
+        }
 
-      const account = await db.transaction(async (tx) => {
-        await lockAccountRow(tx, "bank_accounts", id);
-        const [existing] = await tx
-          .select()
-          .from(bankAccounts)
-          .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
-        if (!existing) throw new BankAccountRouteError(404, "Bank account not found");
+        const account = await db.transaction(async (tx) => {
+          await lockAccountRow(tx, "bank_accounts", id);
+          const [existing] = await tx
+            .select()
+            .from(bankAccounts)
+            .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
+          if (!existing) throw new BankAccountRouteError(404, "Bank account not found");
 
-        const updates = { ...parsed };
-        if (updates.companyId === existing.companyId) delete updates.companyId;
-        const after = { ...existing, ...updates };
-        const lines = await countAccountLines(tx, [
-          ["bank_account_id", id],
-          ["ledger_account_id", existing.linkedLedgerId],
-        ]);
-        assertAccountChangeAllowed({
-          role: requestRole(req),
-          lines,
-          opening: {
-            before: { amount: existing.openingBalance, side: existing.openingBalanceSide },
-            after: { amount: after.openingBalance, side: after.openingBalanceSide },
-            defaultSide: "Dr",
-          },
-          company: { before: existing.companyId, after: updates.companyId },
+          const updates = { ...parsed };
+          if (updates.companyId === existing.companyId) delete updates.companyId;
+          const after = { ...existing, ...updates };
+          const lines = await countAccountLines(tx, [
+            ["bank_account_id", id],
+            ["ledger_account_id", existing.linkedLedgerId],
+          ]);
+          assertAccountChangeAllowed({
+            role: requestRole(req),
+            lines,
+            opening: {
+              before: { amount: existing.openingBalance, side: existing.openingBalanceSide },
+              after: { amount: after.openingBalance, side: after.openingBalanceSide },
+              defaultSide: "Dr",
+            },
+            company: { before: existing.companyId, after: updates.companyId },
+          });
+
+          const linkedLedgerChanges =
+            updates.linkedLedgerId !== undefined &&
+            (updates.linkedLedgerId ?? null) !== (existing.linkedLedgerId ?? null);
+          if (linkedLedgerChanges) {
+            if (lines.any > 0) {
+              throw new BankAccountRouteError(
+                409,
+                BANK_LINKED_LEDGER_CHANGE_REFUSED_MESSAGE,
+                BANK_LINKED_LEDGER_CHANGE_REFUSED_CODE
+              );
+            }
+            if (updates.linkedLedgerId != null) {
+              const [linkedLedger] = await tx
+                .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
+                .from(ledgerAccounts)
+                .where(
+                  and(
+                    eq(ledgerAccounts.id, updates.linkedLedgerId),
+                    eq(ledgerAccounts.companyId, companyId),
+                    isNull(ledgerAccounts.deletedAt)
+                  )
+                );
+              if (!linkedLedger) throw new BankAccountRouteError(400, "Linked ledger account not found");
+              if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
+                throw new BankAccountRouteError(
+                  400,
+                  `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`
+                );
+              }
+            }
+          }
+
+          if (updates.code && updates.code !== existing.code) {
+            const [duplicate] = await tx
+              .select({ id: bankAccounts.id })
+              .from(bankAccounts)
+              .where(
+                and(eq(bankAccounts.code, updates.code), eq(bankAccounts.companyId, companyId), ne(bankAccounts.id, id))
+              );
+            if (duplicate) throw new BankAccountRouteError(400, "Bank account code already exists in this company");
+          }
+
+          const [updated] = await tx
+            .update(bankAccounts)
+            .set(updates)
+            .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)))
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "bank_accounts",
+              recordId: updated.id,
+              recordIdentifier: updated.name,
+              changes: buildAuditChanges(existing, updated, [...BANK_ACCOUNT_AUDIT_FIELDS]),
+            },
+            tx
+          );
+          return updated;
         });
+        res.json(account);
+      } catch (error: unknown) {
+        const refused = accountHistoryErrorResponse(error);
+        if (refused) return res.status(refused.status).json(refused.body);
+        if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
+        res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
-        const linkedLedgerChanges =
-          updates.linkedLedgerId !== undefined &&
-          (updates.linkedLedgerId ?? null) !== (existing.linkedLedgerId ?? null);
-        if (linkedLedgerChanges) {
+  app.delete(
+    "/api/bank-accounts/:id",
+    requireAuth,
+    requireRole(...BANK_ACCOUNT_ADMIN_ROLES),
+    validateRequest(deleteBankAccountInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid bank account ID" });
+        const companyId = req.session.currentCompanyId;
+        // Wave 16 (B): checked, retired and audited in one transaction.
+        await db.transaction(async (tx) => {
+          await lockAccountRow(tx, "bank_accounts", id);
+          const [existing] = await tx
+            .select()
+            .from(bankAccounts)
+            .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
+          if (!existing) throw new BankAccountRouteError(404, "Bank account not found");
+          // Wave 18 (B): the opening and the linked ledger's lines count too.
+          if (!toMoney(existing.openingBalance).isZero()) {
+            throw new BankAccountRouteError(
+              409,
+              BANK_ACCOUNT_DELETE_HAS_OPENING_MESSAGE,
+              BANK_ACCOUNT_DELETE_HAS_OPENING_CODE
+            );
+          }
+          const lines = await countAccountLines(tx, [
+            ["bank_account_id", id],
+            ["ledger_account_id", existing.linkedLedgerId],
+          ]);
           if (lines.any > 0) {
             throw new BankAccountRouteError(
               409,
-              BANK_LINKED_LEDGER_CHANGE_REFUSED_MESSAGE,
-              BANK_LINKED_LEDGER_CHANGE_REFUSED_CODE
+              `Cannot delete bank account: ${lines.any} voucher entries exist`,
+              BANK_ACCOUNT_DELETE_HAS_LINES_CODE
             );
           }
-          if (updates.linkedLedgerId != null) {
-            const [linkedLedger] = await tx
-              .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
-              .from(ledgerAccounts)
-              .where(
-                and(
-                  eq(ledgerAccounts.id, updates.linkedLedgerId),
-                  eq(ledgerAccounts.companyId, companyId),
-                  isNull(ledgerAccounts.deletedAt)
-                )
-              );
-            if (!linkedLedger) throw new BankAccountRouteError(400, "Linked ledger account not found");
-            if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
-              throw new BankAccountRouteError(
-                400,
-                `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`
-              );
-            }
-          }
-        }
-
-        if (updates.code && updates.code !== existing.code) {
-          const [duplicate] = await tx
-            .select({ id: bankAccounts.id })
-            .from(bankAccounts)
-            .where(
-              and(eq(bankAccounts.code, updates.code), eq(bankAccounts.companyId, companyId), ne(bankAccounts.id, id))
-            );
-          if (duplicate) throw new BankAccountRouteError(400, "Bank account code already exists in this company");
-        }
-
-        const [updated] = await tx
-          .update(bankAccounts)
-          .set(updates)
-          .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)))
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "bank_accounts",
-            recordId: updated.id,
-            recordIdentifier: updated.name,
-            changes: buildAuditChanges(existing, updated, [...BANK_ACCOUNT_AUDIT_FIELDS]),
-          },
-          tx
-        );
-        return updated;
-      });
-      res.json(account);
-    } catch (error: unknown) {
-      const refused = accountHistoryErrorResponse(error);
-      if (refused) return res.status(refused.status).json(refused.body);
-      if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
-      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.delete("/api/bank-accounts/:id", requireAuth, requireRole(...BANK_ACCOUNT_ADMIN_ROLES), async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid bank account ID" });
-      const companyId = req.session.currentCompanyId;
-      // Wave 16 (B): checked, retired and audited in one transaction.
-      await db.transaction(async (tx) => {
-        await lockAccountRow(tx, "bank_accounts", id);
-        const [existing] = await tx
-          .select()
-          .from(bankAccounts)
-          .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
-        if (!existing) throw new BankAccountRouteError(404, "Bank account not found");
-        // Wave 18 (B): the opening and the linked ledger's lines count too.
-        if (!toMoney(existing.openingBalance).isZero()) {
-          throw new BankAccountRouteError(
-            409,
-            BANK_ACCOUNT_DELETE_HAS_OPENING_MESSAGE,
-            BANK_ACCOUNT_DELETE_HAS_OPENING_CODE
-          );
-        }
-        const lines = await countAccountLines(tx, [
-          ["bank_account_id", id],
-          ["ledger_account_id", existing.linkedLedgerId],
-        ]);
-        if (lines.any > 0) {
-          throw new BankAccountRouteError(
-            409,
-            `Cannot delete bank account: ${lines.any} voucher entries exist`,
-            BANK_ACCOUNT_DELETE_HAS_LINES_CODE
-          );
-        }
-        await tx
-          .update(bankAccounts)
-          .set({ deletedAt: new Date(), active: false })
-          .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "delete",
-            tableName: "bank_accounts",
-            recordId: existing.id,
-            recordIdentifier: existing.name,
-            changes: {
-              name: { old: existing.name, new: null },
-              code: { old: existing.code, new: null },
-              openingBalance: { old: existing.openingBalance || "0", new: null },
-              openingBalanceSide: { old: existing.openingBalanceSide || null, new: null },
+          await tx
+            .update(bankAccounts)
+            .set({ deletedAt: new Date(), active: false })
+            .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "bank_accounts",
+              recordId: existing.id,
+              recordIdentifier: existing.name,
+              changes: {
+                name: { old: existing.name, new: null },
+                code: { old: existing.code, new: null },
+                openingBalance: { old: existing.openingBalance || "0", new: null },
+                openingBalanceSide: { old: existing.openingBalanceSide || null, new: null },
+              },
             },
-          },
-          tx
-        );
-      });
-      res.status(204).send();
-    } catch (error: unknown) {
-      if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
-      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
+            tx
+          );
+        });
+        res.status(204).send();
+      } catch (error: unknown) {
+        if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
+        res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import {
   RentalAccountingError,
@@ -21,6 +22,25 @@ const asOf = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .optional();
 const category = z.enum(["maintenance", "repairs", "utilities", "insurance", "property_tax", "other_property_cost"]);
+// Shapes only: the handlers still parse the fields and keep their RENTAL_ACCOUNTING_* errors.
+const idValue = z.union([z.number(), z.string()]);
+const expenseLinkInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    module: z.string(),
+    contractId: idValue,
+    voucherId: idValue,
+    category: z.string(),
+    amountUsd: z.string(),
+    clientRequestKey: z.string(),
+    note: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const voidExpenseLinkInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
 function company(req: Request) {
   const n = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(n) || n < 1)
@@ -81,7 +101,7 @@ export function registerUnifiedRentalAccountingRoutes(app: Express): void {
       return fail(res, e);
     }
   });
-  app.post("/api/accounting/rentals/expense-links", ...gate, async (req, res) => {
+  app.post("/api/accounting/rentals/expense-links", ...gate, validateRequest(expenseLinkInput), async (req, res) => {
     try {
       const c = company(req);
       const b = z
@@ -107,23 +127,28 @@ export function registerUnifiedRentalAccountingRoutes(app: Express): void {
       return fail(res, e);
     }
   });
-  app.post("/api/accounting/rentals/expense-links/:id/void", ...gate, async (req, res) => {
-    try {
-      const c = company(req),
-        linkId = positive.parse(req.params.id);
-      const body = z.object({ reason: z.string().trim().min(1).max(1000) }).parse(req.body);
-      return res.json(
-        await db.transaction((tx) =>
-          voidRentalExpenseLinkTx(tx, {
-            companyId: c,
-            linkId,
-            reason: body.reason,
-            actor: actor(req),
-          })
-        )
-      );
-    } catch (e) {
-      return fail(res, e);
+  app.post(
+    "/api/accounting/rentals/expense-links/:id/void",
+    ...gate,
+    validateRequest(voidExpenseLinkInput),
+    async (req, res) => {
+      try {
+        const c = company(req),
+          linkId = positive.parse(req.params.id);
+        const body = z.object({ reason: z.string().trim().min(1).max(1000) }).parse(req.body);
+        return res.json(
+          await db.transaction((tx) =>
+            voidRentalExpenseLinkTx(tx, {
+              companyId: c,
+              linkId,
+              reason: body.reason,
+              actor: actor(req),
+            })
+          )
+        );
+      } catch (e) {
+        return fail(res, e);
+      }
     }
-  });
+  );
 }

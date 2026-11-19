@@ -52,8 +52,10 @@ describe("supplier FX transfer allocation", () => {
   it("allocates the exact container value", async () => {
     const handlers = new Map<string, (req: unknown, res: unknown) => Promise<void>>();
     const register =
-      (method: string) => (path: string, _auth: unknown, handler: (req: unknown, res: unknown) => Promise<void>) =>
-        handlers.set(`${method} ${path}`, handler);
+      (method: string) =>
+      (path: string, ...chain: unknown[]) =>
+        // The terminal handler; guards and validateRequest come before it.
+        handlers.set(`${method} ${path}`, chain[chain.length - 1] as (req: unknown, res: unknown) => Promise<void>);
     registerSupplierFxTransferRoutes({
       get: register("GET"),
       post: register("POST"),

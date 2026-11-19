@@ -1,5 +1,7 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { pool } from "../db";
 import { requireAuth, requireNonPOS } from "../auth";
 import { normalizeOpeningBalanceCurrency } from "../services/accounting/openingBalanceCurrency";
@@ -7,6 +9,21 @@ import { storage } from "../storage";
 import { ownKey } from "../lib/sqlTextGuards";
 
 const ALLOWED_ROLES = new Set(["Admin", "Owner", "Developer"]);
+
+// Shape only: the handler checks the entity type and id, and
+// normalizeOpeningBalanceCurrency keeps the amount, currency and rate rules.
+const amountValue = z.union([z.number(), z.string()]).nullable().optional();
+const resolveOpeningInput = {
+  params: z.strictObject({ entityType: stringParam, id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    nativeAmount: amountValue,
+    currency: z.string().nullable().optional(),
+    historicalRate: amountValue,
+    baseAmount: amountValue,
+    side: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 type EntityType = "ledger" | "bank" | "customer" | "supplier" | "employee" | "fixedAsset";
 
@@ -185,6 +202,7 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
     "/api/accounts/multi-currency/opening-balance/:entityType/:id",
     requireAuth,
     requireNonPOS,
+    validateRequest(resolveOpeningInput),
     async (req, res) => {
       const role = req.session.currentRole;
       if (!role || !ALLOWED_ROLES.has(role)) {
