@@ -407,7 +407,21 @@ force-applied: it is re-entered online. A cancellation still needs Admin or
 Developer (`PHASE9_ACTOR_ROLE_NOT_PERMITTED`). Supplier-partner sales stay
 online-only. Covered by `tests/pc-sync-offline-pos-edits.test.ts`.
 
-Still to come: the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
+**Journal vouchers on a PC.** In entry mode the PC also accepts Journal
+vouchers (`POST /api/vouchers/journal`), recorded as entered. The cloud posts
+each one once through the same service as the live route
+(`server/services/accounting/journalVoucherPosting.ts`): the same balance
+check, the rate the cloud approves for that date, the central posting engine,
+order-charge sync, employee balances, audit and factory daybook row. A journal
+that is unbalanced, falls in a closed period, names an account the cloud does
+not have or has no approved rate is held as `PHASE9_JOURNAL_REFUSED` (it cannot
+be force-applied); one by a cashier is held as `PHASE9_ACTOR_ROLE_NOT_PERMITTED`
+(the live route is not open to POS). Journals are PC-only: the browser offline
+route refuses them (`OFFLINE_BROWSER_KIND_NOT_SUPPORTED`). Editing or deleting a
+journal on a PC is still refused. Covered by
+`tests/pc-sync-offline-journals.test.ts`.
+
+Still to come: the other voucher types (invoices, purchases), masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

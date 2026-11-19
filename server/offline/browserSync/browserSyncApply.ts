@@ -205,7 +205,8 @@ export function prepareBrowserOperation(
     return prepareEnvelopeOperation(actor, request);
   }
   const kind = browserOperationKind(request.kind);
-  if (!kind) throw new BrowserOperationRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED");
+  // A PC-only kind (it needs the PC's full local copy) is refused on the browser route.
+  if (!kind || (kind.pcOnly && !allowEnvelope)) throw new BrowserOperationRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED");
   const capturedAt = new Date(captured).toISOString();
   let payload: Record<string, unknown>;
   try {

@@ -62,6 +62,8 @@ import { phase9AttachmentApplyHandler } from "./phase9AttachmentApply";
 import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "./phase9AttachmentEnvelope.mjs";
 import { phase9AttachmentUpdateApplyHandler } from "./phase9AttachmentUpdateApply";
 import { phase9PaymentApplyHandler } from "./phase9PaymentApply";
+import { phase9JournalApplyHandler } from "./phase9JournalApply";
+import { PHASE9_JOURNAL_KIND } from "./phase9JournalEnvelope.mjs";
 import { phase9PaymentDeleteApplyHandler, phase9PaymentEditApplyHandler } from "./phase9PaymentFollowUpApply";
 import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND, PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
 import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_TRANSFER_KIND } from "./phase9StockEnvelope.mjs";
@@ -95,6 +97,7 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_PAYMENT_KIND]: phase9PaymentApplyHandler,
   [PHASE9_PAYMENT_EDIT_KIND]: phase9PaymentEditApplyHandler,
   [PHASE9_PAYMENT_DELETE_KIND]: phase9PaymentDeleteApplyHandler,
+  [PHASE9_JOURNAL_KIND]: phase9JournalApplyHandler,
 });
 
 const REVIEWER_ROLES = ["Admin", "Developer"];
