@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { customers, factoryDaybookEntries, factorySettings, ledgerAccounts } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db, type DbTransaction } from "../../db";
-import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
+import { errorBody, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
@@ -282,7 +282,7 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
       res.status(postingStatus(error)).json({ message: error.message, code: error.code });
       return;
     }
-    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json(errorBody(error));
   }
 }
 

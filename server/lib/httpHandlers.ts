@@ -45,6 +45,19 @@ export function errorStatus(error: unknown, fallback = 500): number {
   return closedPeriodErrorResponse(error) ? 409 : fallback;
 }
 
+/**
+ * JSON body for an error caught by a route: the message, plus the closed-period
+ * code when the guard refused the write. Clients that keep a request identity
+ * until they see a definite outcome need the code: a 409 without one reads as
+ * "outcome uncertain", so the identity would be kept and the stored refusal
+ * replayed after the period is reopened.
+ */
+export function errorBody(error: unknown): { message: string; code?: string } {
+  const closedPeriod = closedPeriodErrorResponse(error);
+  if (closedPeriod) return closedPeriod.body;
+  return { message: getErrorMessage(error) };
+}
+
 export function getErrorStack(error: unknown): string | undefined {
   return error instanceof Error ? error.stack : undefined;
 }
