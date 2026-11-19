@@ -1,0 +1,133 @@
+name: Business Journeys
+
+# Whole accounting cycles, end to end, in a real browser against the built
+# server and a database built from migrations: closing and reopening a month,
+# order to cash with repeated requests, and the books balancing afterwards.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/e2e/business-journeys/**"
+      - ".github/workflows/business-journeys.yml"
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/e2e/business-journeys/**"
+      - ".github/workflows/business-journeys.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: business-journeys-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  business-journeys:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
+      ERP_JOURNEYS_USERNAME: journeys_ci_${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Generate ephemeral credentials
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const entries = [
+            ["SESSION_SECRET", crypto.randomBytes(48).toString("hex")],
+            ["ERP_JOURNEYS_PASSWORD", crypto.randomBytes(32).toString("hex")],
+          ];
+          fs.appendFileSync(process.env.GITHUB_ENV, entries.map(([key, value]) => `${key}=${value}\n`).join(""));
+          NODE
+      - run: npm ci --ignore-scripts
+      - name: Install Chrome
+        run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+      - name: Production build
+        run: |
+          npm run prebuild
+          node --max-old-space-size=4096 node_modules/vite/bin/vite.js build
+          node scripts/build-server.mjs
+          node scripts/verify-server-bundle.mjs
+      - name: Build the database and seed the journeys company
+        run: |
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
+          node tests/e2e/business-journeys/prepare.mjs
+      - name: Run the business journeys
+        run: |
+          mkdir -p artifacts/business-journeys
+          npm start > artifacts/business-journeys/server.log 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > /dev/null; then
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null || [ "$attempt" = "180" ]; then
+              cat artifacts/business-journeys/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          node tests/e2e/business-journeys/run.mjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat artifacts/business-journeys/server.log || true
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: business-journeys
+          path: artifacts/business-journeys
+          if-no-files-found: warn
+          retention-days: 14
