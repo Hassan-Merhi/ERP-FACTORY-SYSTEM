@@ -75,7 +75,6 @@ interface ChargeForm {
   amount: string;
   ledgerAccountId: string;
   offsetLedgerAccountId: string;
-  erpChargeType: ErpType;
   notes: string;
 }
 
@@ -85,7 +84,6 @@ const emptyForm = (): ChargeForm => ({
   amount: "",
   ledgerAccountId: "",
   offsetLedgerAccountId: "",
-  erpChargeType: "",
   notes: "",
 });
 
@@ -154,7 +152,6 @@ export function useFactoryLoadingDispatchFinanceState({ orderId, dispatchId, com
       amount: c.amount,
       ledgerAccountId: String(c.ledgerAccountId),
       offsetLedgerAccountId: c.offsetLedgerAccountId ? String(c.offsetLedgerAccountId) : "",
-      erpChargeType: (c.erpChargeType ?? "") as ErpType,
       notes: c.notes ?? "",
     });
     setFormOpen(true);
@@ -172,8 +169,7 @@ export function useFactoryLoadingDispatchFinanceState({ orderId, dispatchId, com
           amount: payload.amount,
           ledgerAccountId: Number(payload.ledgerAccountId),
           offsetLedgerAccountId: payload.kind === "INTERNAL" ? Number(payload.offsetLedgerAccountId) : null,
-          erpChargeType:
-            payload.kind === "INTERNAL" || payload.kind === "DISCOUNT" ? null : payload.erpChargeType || null,
+          erpChargeType: null,
           notes: payload.notes.trim() || null,
         },
       });
