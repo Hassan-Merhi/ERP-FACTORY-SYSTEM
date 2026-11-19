@@ -269,16 +269,21 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
           )}
           {existingPostings.length > 0 && (
             <details className="border-t pt-3">
-              <summary className="cursor-pointer text-xs font-semibold">Posting history ({existingPostings.length})</summary>
+              <summary className="cursor-pointer text-xs font-semibold">
+                Posting history ({existingPostings.length})
+              </summary>
               <div className="mt-2 space-y-2">
                 {existingPostings.slice(0, 8).map((p, i) => (
                   <div key={i} className="rounded-lg bg-muted/40 p-2 text-xs">
                     <div className="flex justify-between gap-2">
-                      <span>{p.kind} · Revision {p.revision}</span>
+                      <span>
+                        {p.kind} · Revision {p.revision}
+                      </span>
                       <span>$ {dollars(p.amount)}</span>
                     </div>
                     <p className="break-words text-[11px] text-muted-foreground">
-                      Vouchers: {Array.isArray(p.voucherIds) && p.voucherIds.length
+                      Vouchers:{" "}
+                      {Array.isArray(p.voucherIds) && p.voucherIds.length
                         ? p.voucherIds.join(", ")
                         : "No monetary voucher"}
                     </p>

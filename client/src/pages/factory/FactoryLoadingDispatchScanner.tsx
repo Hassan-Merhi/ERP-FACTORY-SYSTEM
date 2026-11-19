@@ -67,7 +67,13 @@ export default function FactoryLoadingDispatchScanner(props: Props & { embedded?
 
   return (
     <div className={embedded ? "space-y-3" : "space-y-4"} data-testid="dispatch-verification-scanner">
-      <Card className={embedded ? "border-0 bg-transparent shadow-none" : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}>
+      <Card
+        className={
+          embedded
+            ? "border-0 bg-transparent shadow-none"
+            : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+        }
+      >
         <CardContent className={embedded ? "space-y-3 p-0" : "space-y-4 p-4 sm:p-5"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>

@@ -43,7 +43,11 @@ export function FactoryLoadingDispatchPageHeaderSection({
     <PageHeader
       title="Dispatch Management"
       icon={<Truck className="h-5 w-5" />}
-      subtitle={dispatchId === null ? "Scan trips, review charges, and finalize the loading." : "Scan bales, review this trip, then compare against loading."}
+      subtitle={
+        dispatchId === null
+          ? "Scan trips, review charges, and finalize the loading."
+          : "Scan bales, review this trip, then compare against loading."
+      }
       onBack={dispatchId === null ? backToLoading : () => navigate(tripPath(orderId))}
       backButtonTestId={dispatchId === null ? "button-return-to-loading" : "button-dispatch-back"}
       meta={
@@ -55,49 +59,49 @@ export function FactoryLoadingDispatchPageHeaderSection({
     >
       {dispatchId === null && (
         <>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() =>
-          navigate(
-            "/factory/sales/loading/dispatch/" + orderId + (dispatchId !== null ? "/" + dispatchId : "") + "/report"
-          )
-        }
-        data-testid="button-dispatch-reports"
-      >
-        <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Report
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
-        data-testid="button-compare-all-dispatches"
-      >
-        <FileSearch className="mr-1.5 h-4 w-4" /> Compare
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => void refresh()}
-        disabled={tripsQuery.isFetching || orderQuery.isFetching}
-        data-testid="button-refresh-dispatch"
-        aria-label="Refresh dispatches"
-        title="Refresh dispatches"
-      >
-        <RefreshCw className="h-4 w-4" /> <span className="sr-only">Refresh</span>
-      </Button>
-      {canCreate && (
-        <Button
-          size="sm"
-          onClick={() => {
-            setNewTrip(blankForm);
-            setCreateOpen(true);
-          }}
-          data-testid="button-new-dispatch"
-        >
-          <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
-        </Button>
-      )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate(
+                "/factory/sales/loading/dispatch/" + orderId + (dispatchId !== null ? "/" + dispatchId : "") + "/report"
+              )
+            }
+            data-testid="button-dispatch-reports"
+          >
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Report
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+            data-testid="button-compare-all-dispatches"
+          >
+            <FileSearch className="mr-1.5 h-4 w-4" /> Compare
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void refresh()}
+            disabled={tripsQuery.isFetching || orderQuery.isFetching}
+            data-testid="button-refresh-dispatch"
+            aria-label="Refresh dispatches"
+            title="Refresh dispatches"
+          >
+            <RefreshCw className="h-4 w-4" /> <span className="sr-only">Refresh</span>
+          </Button>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setNewTrip(blankForm);
+                setCreateOpen(true);
+              }}
+              data-testid="button-new-dispatch"
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
+            </Button>
+          )}
         </>
       )}
     </PageHeader>
@@ -127,8 +131,8 @@ export function FactoryLoadingDispatchDialogSection({
           <DialogTitle>Delete Dispatch #{selectedTrip?.dispatchNumber}?</DialogTitle>
           <DialogDescription>
             Remove this open dispatch from the active list and release its scans and reservations. Previously ended
-            trips can also be removed after reopening, as long as they have no financial records or signed
-            all-truck reconciliation. Signed closure history remains saved; loading, stock and accounting are unchanged.
+            trips can also be removed after reopening, as long as they have no financial records or signed all-truck
+            reconciliation. Signed closure history remains saved; loading, stock and accounting are unchanged.
           </DialogDescription>
         </DialogHeader>
         <Textarea

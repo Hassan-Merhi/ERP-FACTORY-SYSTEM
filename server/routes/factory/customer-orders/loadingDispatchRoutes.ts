@@ -5,71 +5,19 @@
  * Option A: create/list/read trips only; no mutations to loaded bales, stock,
  * invoices, proformas or accounting. Scanner/compare/close are later phases.
  */
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { requireFactoryTabAccess, getFactoryAccessState } from "../../../lib/factoryAccessControl";
+import { requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 
+import { isUniqueViolation, parseOptionalText, parseTripNumber, resolveOrder } from "./loadingDispatchRouteHelpers";
+
 const loadingAccess = requireFactoryTabAccess("factory/invoicing", "hide_invoicing_loadings_tab");
-
-function parseOptionalText(raw: unknown, field: string, maxLength: number): string | null {
-  if (raw === undefined || raw === null || raw === "") return null;
-  if (typeof raw !== "string") throw new Error(`${field} must be text`);
-  const value = raw.trim();
-  if (value.length > maxLength) throw new Error(`${field} must be at most ${maxLength} characters`);
-  return value || null;
-}
-
-function parseTripNumber(raw: unknown): number {
-  const textValue = typeof raw === "number" ? String(raw) : raw;
-  if (typeof textValue !== "string" || !/^[1-9][0-9]*$/.test(textValue.trim())) {
-    throw new Error("Trip number must be a positive whole number");
-  }
-  const number = Number(textValue.trim());
-  if (!Number.isSafeInteger(number) || number > 2147483647) {
-    throw new Error("Trip number must be between 1 and 2147483647");
-  }
-  return number;
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  const candidate = error as { code?: string; cause?: { code?: string } } | null;
-  return candidate?.code === "23505" || candidate?.cause?.code === "23505";
-}
-
-async function resolveOrder(req: Request, res: Response) {
-  const state = await getFactoryAccessState(req);
-  if (!state) {
-    res.status(403).json({ message: "Factory company access is unavailable" });
-    return null;
-  }
-
-  const orderId = parseId(req.params.id);
-  if (orderId === null) {
-    res.status(400).json({ message: "Invalid loading order ID" });
-    return null;
-  }
-
-  const result = await db.execute(sql`
-    SELECT id, status, container_number AS "containerNumber",
-           customer_id AS "customerId", proforma_id_used AS "proformaIdUsed",
-           deleted_at AS "deletedAt"
-      FROM customer_orders
-     WHERE id = ${orderId} AND company_id = ${state.companyId}
-     LIMIT 1
-  `);
-  const order = resultRows(result)[0];
-  if (!order) {
-    res.status(404).json({ message: "Loading order not found in this company" });
-    return null;
-  }
-  return { state, orderId, order };
-}
 
 export function registerFactoryLoadingDispatchRoutes(app: Express): void {
   // List every independent truck trip linked to this exact loading/order.
@@ -114,14 +62,18 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
   });
 
   // Read one trip without exposing trips linked to other companies/orders.
-  app.get("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId", requireAuth, loadingAccess, async (req, res) => {
-    try {
-      const scope = await resolveOrder(req, res);
-      if (!scope) return;
-      const dispatchId = parseId(req.params.dispatchId);
-      if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
+  app.get(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId",
+    requireAuth,
+    loadingAccess,
+    async (req, res) => {
+      try {
+        const scope = await resolveOrder(req, res);
+        if (!scope) return;
+        const dispatchId = parseId(req.params.dispatchId);
+        if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
 
-      const rows = await db.execute(sql`
+        const rows = await db.execute(sql`
         SELECT d.id, d.company_id AS "companyId", d.order_id AS "orderId",
                d.dispatch_number AS "dispatchNumber", d.status,
                d.truck_plate AS "truckPlate", d.driver_name AS "driverName",
@@ -136,89 +88,93 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
            AND d.status <> 'CANCELLED'
          LIMIT 1
       `);
-      const dispatch = resultRows(rows)[0];
-      if (!dispatch) return res.status(404).json({ message: "Dispatch not found for this loading" });
-      return res.json({ ...dispatch, containerNumber: scope.order.containerNumber });
-    } catch (error) {
-      logger.error("Error reading Factory loading dispatch", { error });
-      return res.status(500).json({ message: "Could not load dispatch trip" });
+        const dispatch = resultRows(rows)[0];
+        if (!dispatch) return res.status(404).json({ message: "Dispatch not found for this loading" });
+        return res.json({ ...dispatch, containerNumber: scope.order.containerNumber });
+      } catch (error) {
+        logger.error("Error reading Factory loading dispatch", { error });
+        return res.status(500).json({ message: "Could not load dispatch trip" });
+      }
     }
-  });
-
+  );
 
   // Phase 2: update trip metadata only. Never touch main loading, bale
   // inventory, accounting, status/finalization or another company's trips.
-  app.patch("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId", requireAuth, loadingAccess, async (req, res) => {
-    try {
-      const scope = await resolveOrder(req, res);
-      if (!scope) return;
-      if (["View Only", "Create Only"].includes(scope.state.role)) {
-        return res.status(403).json({ message: "This Factory role cannot modify dispatch trips" });
-      }
-      const dispatchId = parseId(req.params.dispatchId);
-      if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
-
-      const editable = ["tripNumber", "notes"] as const;
-      const body: Record<string, unknown> =
-        req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
-      const provided = Object.keys(body);
-      if (provided.length === 0 || provided.some((key) => !editable.includes(key as (typeof editable)[number]))) {
-        return res.status(400).json({ message: "Only tripNumber and notes may be updated" });
-      }
-      let tripNumber: number | undefined;
-      let notes: string | null | undefined;
+  app.patch(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId",
+    requireAuth,
+    loadingAccess,
+    async (req, res) => {
       try {
-        if (Object.prototype.hasOwnProperty.call(body, "tripNumber")) {
-          tripNumber = parseTripNumber(body.tripNumber);
+        const scope = await resolveOrder(req, res);
+        if (!scope) return;
+        if (["View Only", "Create Only"].includes(scope.state.role)) {
+          return res.status(403).json({ message: "This Factory role cannot modify dispatch trips" });
         }
-        if (Object.prototype.hasOwnProperty.call(body, "notes")) {
-          notes = parseOptionalText(body.notes, "notes", 3000);
-        }
-      } catch (error) {
-        return res.status(400).json({ message: getErrorMessage(error) });
-      }
+        const dispatchId = parseId(req.params.dispatchId);
+        if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
 
-      const actorUserId = String(scope.state.userId);
-      const actorUsername = String(req.session.username || actorUserId);
-      const result = await db.transaction(async (tx) => {
-        // Serialize number edits with creates for this loading.
-        await tx.execute(sql`
+        const editable = ["tripNumber", "notes"] as const;
+        const body: Record<string, unknown> =
+          req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+        const provided = Object.keys(body);
+        if (provided.length === 0 || provided.some((key) => !editable.includes(key as (typeof editable)[number]))) {
+          return res.status(400).json({ message: "Only tripNumber and notes may be updated" });
+        }
+        let tripNumber: number | undefined;
+        let notes: string | null | undefined;
+        try {
+          if (Object.prototype.hasOwnProperty.call(body, "tripNumber")) {
+            tripNumber = parseTripNumber(body.tripNumber);
+          }
+          if (Object.prototype.hasOwnProperty.call(body, "notes")) {
+            notes = parseOptionalText(body.notes, "notes", 3000);
+          }
+        } catch (error) {
+          return res.status(400).json({ message: getErrorMessage(error) });
+        }
+
+        const actorUserId = String(scope.state.userId);
+        const actorUsername = String(req.session.username || actorUserId);
+        const result = await db.transaction(async (tx) => {
+          // Serialize number edits with creates for this loading.
+          await tx.execute(sql`
           SELECT id FROM customer_orders
            WHERE id = ${scope.orderId} AND company_id = ${scope.state.companyId}
            FOR UPDATE
         `);
-        const locked = await tx.execute(sql`
+          const locked = await tx.execute(sql`
           SELECT id, status, dispatch_number AS "dispatchNumber", notes
             FROM factory_loading_dispatches
            WHERE id = ${dispatchId} AND company_id = ${scope.state.companyId}
              AND order_id = ${scope.orderId}
            FOR UPDATE
         `);
-        const previous = resultRows(locked)[0];
-        if (!previous) return { httpStatus: 404, message: "Dispatch not found for this loading" };
-        if (previous.status !== "OPEN") return { httpStatus: 409, message: "Only open dispatches may be edited" };
+          const previous = resultRows(locked)[0];
+          if (!previous) return { httpStatus: 404, message: "Dispatch not found for this loading" };
+          if (previous.status !== "OPEN") return { httpStatus: 409, message: "Only open dispatches may be edited" };
 
-        const nextNumber = tripNumber ?? Number(previous.dispatchNumber);
-        const nextNotes = notes !== undefined ? notes : previous.notes;
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
-        if (tripNumber !== undefined && nextNumber !== Number(previous.dispatchNumber)) {
-          const collision = await tx.execute(sql`
+          const nextNumber = tripNumber ?? Number(previous.dispatchNumber);
+          const nextNotes = notes !== undefined ? notes : previous.notes;
+          const changes: Record<string, { old: unknown; new: unknown }> = {};
+          if (tripNumber !== undefined && nextNumber !== Number(previous.dispatchNumber)) {
+            const collision = await tx.execute(sql`
             SELECT id FROM factory_loading_dispatches
              WHERE company_id = ${scope.state.companyId} AND order_id = ${scope.orderId}
                AND dispatch_number = ${nextNumber} AND id <> ${dispatchId}
              LIMIT 1
           `);
-          if (resultRows(collision).length > 0) {
-            return { httpStatus: 409, message: "Trip number already exists for this loading" };
+            if (resultRows(collision).length > 0) {
+              return { httpStatus: 409, message: "Trip number already exists for this loading" };
+            }
+            changes.tripNumber = { old: Number(previous.dispatchNumber), new: nextNumber };
           }
-          changes.tripNumber = { old: Number(previous.dispatchNumber), new: nextNumber };
-        }
-        if (notes !== undefined && nextNotes !== previous.notes) {
-          changes.notes = { old: previous.notes ?? null, new: nextNotes ?? null };
-        }
-        if (Object.keys(changes).length === 0) return { trip: previous };
+          if (notes !== undefined && nextNotes !== previous.notes) {
+            changes.notes = { old: previous.notes ?? null, new: nextNotes ?? null };
+          }
+          if (Object.keys(changes).length === 0) return { trip: previous };
 
-        const updated = await tx.execute(sql`
+          const updated = await tx.execute(sql`
           UPDATE factory_loading_dispatches
              SET dispatch_number = ${nextNumber}, notes = ${nextNotes}, updated_at = NOW()
            WHERE id = ${dispatchId} AND company_id = ${scope.state.companyId}
@@ -226,9 +182,9 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           RETURNING id, order_id AS "orderId", dispatch_number AS "dispatchNumber",
                     status, notes, updated_at AS "updatedAt"
         `);
-        const trip = resultRows(updated)[0];
-        if (!trip) throw new Error("Dispatch metadata update lost concurrent status lock");
-        await tx.execute(sql`
+          const trip = resultRows(updated)[0];
+          if (!trip) throw new Error("Dispatch metadata update lost concurrent status lock");
+          await tx.execute(sql`
           INSERT INTO factory_loading_dispatch_events
             (company_id, order_id, dispatch_id, event_type,
              actor_user_id, actor_username, event_data)
@@ -236,26 +192,30 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
                   'DETAILS_UPDATED', ${actorUserId}, ${actorUsername},
                   ${JSON.stringify(changes)}::jsonb)
         `);
-        return { trip };
-      });
-      if ("httpStatus" in result && typeof result.httpStatus === "number") {
-        return res.status(result.httpStatus).json({ message: result.message });
+          return { trip };
+        });
+        if ("httpStatus" in result && typeof result.httpStatus === "number") {
+          return res.status(result.httpStatus).json({ message: result.message });
+        }
+        return res.json(result.trip);
+      } catch (error) {
+        logger.error("Error updating Factory loading dispatch metadata", { error });
+        if (isUniqueViolation(error))
+          return res.status(409).json({ message: "Trip number already exists for this loading" });
+        return res.status(500).json({ message: "Could not update dispatch details" });
       }
-      return res.json(result.trip);
-    } catch (error) {
-      logger.error("Error updating Factory loading dispatch metadata", { error });
-      if (isUniqueViolation(error)) return res.status(409).json({ message: "Trip number already exists for this loading" });
-      return res.status(500).json({ message: "Could not update dispatch details" });
     }
-  });
-
+  );
 
   // "Delete Dispatch" archives an open trip, including a previously closed
   // trip that a supervisor has explicitly reopened. Preserve all signed closure
   // revisions and audit evidence; release only active scans and reservations
   // without changing the parent loading or accounting.
-  app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel",
-    requireAuth, loadingAccess, async (req, res) => {
+  app.post(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel",
+    requireAuth,
+    loadingAccess,
+    async (req, res) => {
       try {
         const scope = await resolveOrder(req, res);
         if (!scope) return;
@@ -273,22 +233,29 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
         const companyId = scope.state.companyId;
         const orderId = scope.orderId;
         const outcome = await db.transaction(async (tx) => {
-          const order = resultRows(await tx.execute(sql`
+          const order = resultRows(
+            await tx.execute(sql`
             SELECT id, status, deleted_at AS "deletedAt", invoice_number AS "invoiceNumber"
               FROM customer_orders WHERE company_id = ${companyId}
               AND id = ${orderId} FOR UPDATE
-          `))[0];
+          `)
+          )[0];
           if (!order) return { status: 404, message: "Loading not found" };
-          if (order.deletedAt || order.invoiceNumber ||
-              !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(String(order.status))) {
+          if (
+            order.deletedAt ||
+            order.invoiceNumber ||
+            !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(String(order.status))
+          ) {
             return { status: 409, message: "This loading is already finalized or inactive" };
           }
-          const trip = resultRows(await tx.execute(sql`
+          const trip = resultRows(
+            await tx.execute(sql`
             SELECT id, status, dispatch_number AS "dispatchNumber"
               FROM factory_loading_dispatches
              WHERE id = ${dispatchId} AND company_id = ${companyId}
                AND order_id = ${orderId} FOR UPDATE
-          `))[0];
+          `)
+          )[0];
           if (!trip) return { status: 404, message: "Dispatch not found" };
           if (trip.status !== "OPEN") {
             return { status: 409, message: "Only open, unfinalized dispatches can be deleted" };
@@ -297,17 +264,20 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           // without altering its frozen snapshot. An OPEN trip with only
           // reopened closures may be archived; an unreopened closure must not
           // be bypassed by a stale/inconsistent dispatch status.
-          const activeClosures = resultRows(await tx.execute(sql`
+          const activeClosures = resultRows(
+            await tx.execute(sql`
             SELECT id FROM factory_loading_dispatch_closure_history
              WHERE company_id = ${companyId} AND order_id = ${orderId}
                AND dispatch_id = ${dispatchId} AND reopened_at IS NULL LIMIT 1
-          `));
+          `)
+          );
           if (activeClosures.length) {
             return { status: 409, message: "Reopen this completed dispatch before deleting it" };
           }
           // A signed all-truck reconciliation locks the physical evidence,
           // even if the loading status was subsequently changed.
-          const reconciliationSchema = resultRows(await tx.execute(sql`
+          const reconciliationSchema = resultRows(
+            await tx.execute(sql`
             SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL
                    AND EXISTS (
                      SELECT 1 FROM information_schema.columns
@@ -315,62 +285,80 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
                         AND table_name = 'factory_dispatch_order_consolidations'
                         AND column_name = 'reconciled_at'
                    ) AS installed
-          `))[0];
+          `)
+          )[0];
           if (reconciliationSchema?.installed === true) {
-            const signed = resultRows(await tx.execute(sql`
+            const signed = resultRows(
+              await tx.execute(sql`
               SELECT id FROM factory_dispatch_order_consolidations
                WHERE company_id = ${companyId} AND order_id = ${orderId}
                  AND reconciled_at IS NOT NULL AND status IN ('DRAFT', 'FINALIZED')
                LIMIT 1
-            `));
+            `)
+            );
             if (signed.length) {
-              return { status: 409, message: "This loading has a signed all-truck reconciliation and its dispatches cannot be deleted" };
+              return {
+                status: 409,
+                message: "This loading has a signed all-truck reconciliation and its dispatches cannot be deleted",
+              };
             }
           }
           // Any financial draft, posted or reversed record must be resolved
           // through the financial workflow; never orphan its accounting links.
-          const schema = resultRows(await tx.execute(sql`
+          const schema = resultRows(
+            await tx.execute(sql`
             SELECT to_regclass('public.factory_dispatch_trip_financials') IS NOT NULL AS installed
-          `))[0];
+          `)
+          )[0];
           if (schema?.installed === true) {
-            const finances = resultRows(await tx.execute(sql`
+            const finances = resultRows(
+              await tx.execute(sql`
               SELECT id FROM factory_dispatch_trip_financials
                WHERE company_id = ${companyId} AND order_id = ${orderId}
                  AND dispatch_id = ${dispatchId} LIMIT 1
-            `));
+            `)
+            );
             if (finances.length) {
               return { status: 409, message: "This dispatch has financial records and cannot be deleted" };
             }
           }
 
-          const removedScans = resultRows(await tx.execute(sql`
+          const removedScans = resultRows(
+            await tx.execute(sql`
             UPDATE factory_loading_dispatch_scans
                SET removed_at = NOW(), removed_by_user_id = ${actorUserId},
                    removal_reason = ${"Dispatch deleted: " + reason}
              WHERE company_id = ${companyId} AND order_id = ${orderId}
                AND dispatch_id = ${dispatchId} AND removed_at IS NULL
              RETURNING id::text AS id
-          `));
-          const releasedBales = resultRows(await tx.execute(sql`
+          `)
+          );
+          const releasedBales = resultRows(
+            await tx.execute(sql`
             UPDATE factory_loading_dispatch_expected_bales
                SET removed_at = NOW(), removed_by_user_id = ${actorUserId},
                    removal_reason = ${"Dispatch deleted: " + reason}
              WHERE company_id = ${companyId} AND order_id = ${orderId}
                AND dispatch_id = ${dispatchId} AND removed_at IS NULL
              RETURNING id::text AS id
-          `));
-          const removedTargets = resultRows(await tx.execute(sql`
+          `)
+          );
+          const removedTargets = resultRows(
+            await tx.execute(sql`
             DELETE FROM factory_loading_dispatch_expected_articles
              WHERE company_id = ${companyId} AND order_id = ${orderId}
                AND dispatch_id = ${dispatchId} RETURNING id
-          `));
-          const updated = resultRows(await tx.execute(sql`
+          `)
+          );
+          const updated = resultRows(
+            await tx.execute(sql`
             UPDATE factory_loading_dispatches
                SET status = 'CANCELLED', updated_at = NOW()
              WHERE id = ${dispatchId} AND company_id = ${companyId}
                AND order_id = ${orderId} AND status = 'OPEN'
              RETURNING id
-          `));
+          `)
+          );
           if (!updated.length) throw new Error("Dispatch changed during cancellation");
           await tx.execute(sql`
             INSERT INTO factory_loading_dispatch_events
@@ -378,11 +366,14 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
                actor_user_id, actor_username, event_data)
             VALUES (${companyId}, ${orderId}, ${dispatchId},
               'DISPATCH_CANCELLED', ${actorUserId}, ${actorUsername},
-              ${JSON.stringify({ reason, dispatchNumber: Number(trip.dispatchNumber),
+              ${JSON.stringify({
+                reason,
+                dispatchNumber: Number(trip.dispatchNumber),
                 removedScanIds: removedScans.map((s) => String(s.id)),
                 previouslyClosed: false,
                 releasedExpectedBales: releasedBales.length,
-                removedArticleTargets: removedTargets.length })}::jsonb)
+                removedArticleTargets: removedTargets.length,
+              })}::jsonb)
           `);
           return { success: true, removedScans: removedScans.length };
         });
@@ -410,9 +401,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
       let notes: string | null;
       try {
         // Legacy clients can omit tripNumber and retain automatic numbering.
-        requestedTripNumber = req.body?.tripNumber === undefined
-          ? null
-          : parseTripNumber(req.body.tripNumber);
+        requestedTripNumber = req.body?.tripNumber === undefined ? null : parseTripNumber(req.body.tripNumber);
         notes = parseOptionalText(req.body?.notes, "notes", 3000);
       } catch (error) {
         return res.status(400).json({ message: getErrorMessage(error) });
@@ -481,7 +470,8 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
       return res.status(201).json(created.dispatch);
     } catch (error) {
       logger.error("Error creating Factory loading dispatch", { error });
-      if (isUniqueViolation(error)) return res.status(409).json({ message: "Trip number already exists for this loading" });
+      if (isUniqueViolation(error))
+        return res.status(409).json({ message: "Trip number already exists for this loading" });
       return res.status(500).json({ message: "Could not create dispatch trip" });
     }
   });

@@ -85,7 +85,10 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
     <div className="space-y-4" data-testid="dispatch-simplified-trip-detail">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {metrics.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+          <div
+            key={label}
+            className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4"
+          >
             <span className="rounded-lg bg-blue-500/10 p-2 text-blue-600 dark:text-blue-300">
               <Icon className="h-5 w-5" />
             </span>
@@ -112,15 +115,23 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
             <p className="text-sm font-semibold">Overall scan progress</p>
             <span className="font-mono text-sm font-semibold">{completion}%</span>
           </div>
-          <div role="progressbar" aria-label="Overall loading scan progress"
-            aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100}
-            className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-blue-500 transition-all"
-              style={{ width: completion + "%" }} />
+          <div
+            role="progressbar"
+            aria-label="Overall loading scan progress"
+            aria-valuenow={completion}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-2 overflow-hidden rounded-full bg-muted"
+          >
+            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: completion + "%" }} />
           </div>
           <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-            <span>{printNumber(verifiedQty)} / {printNumber(loadedQty)} loading bales scanned across trips</span>
-            <span>{printNumber(verifiedWeight, 2)} / {printNumber(loadedWeight, 2)} kg</span>
+            <span>
+              {printNumber(verifiedQty)} / {printNumber(loadedQty)} loading bales scanned across trips
+            </span>
+            <span>
+              {printNumber(verifiedWeight, 2)} / {printNumber(loadedWeight, 2)} kg
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -137,7 +148,8 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
                   <TripStatusBadge status={selectedTrip.status} />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Created {formatDisplayDateTime(selectedTrip.createdAt)} by {selectedTrip.createdByUsername || "Unknown"}
+                  Created {formatDisplayDateTime(selectedTrip.createdAt)} by{" "}
+                  {selectedTrip.createdByUsername || "Unknown"}
                 </p>
               </div>
             </div>
@@ -158,9 +170,7 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
               </div>
             </div>
             {selectedTrip.notes && (
-              <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-                {selectedTrip.notes}
-              </p>
+              <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">{selectedTrip.notes}</p>
             )}
             <FactoryLoadingDispatchScanner
               key={dispatchId}
@@ -179,8 +189,7 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="space-y-3 p-4">
               <h3 className="font-semibold">Quick actions</h3>
-              <Button className="w-full justify-between" onClick={compare}
-                data-testid="button-compare-dispatch">
+              <Button className="w-full justify-between" onClick={compare} data-testid="button-compare-dispatch">
                 Final comparison <ArrowRight className="h-4 w-4" />
               </Button>
               <ErrorBoundary resetKey={"dispatch-lifecycle-" + dispatchId}>
@@ -195,8 +204,13 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
                   compact
                 />
               </ErrorBoundary>
-              <Button type="button" variant="outline" className="w-full justify-start"
-                onClick={onRefresh} data-testid="button-refresh-trip-detail">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                onClick={onRefresh}
+                data-testid="button-refresh-trip-detail"
+              >
                 <RefreshCw className="mr-2 h-4 w-4" /> Refresh
               </Button>
             </CardContent>
@@ -206,11 +220,15 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
             <CardContent className="space-y-3 p-4">
               <h3 className="font-semibold">Trip summary</h3>
               <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3 text-sm">
-                <span className="flex items-center gap-2"><Package className="h-4 w-4" /> Scanned bales</span>
+                <span className="flex items-center gap-2">
+                  <Package className="h-4 w-4" /> Scanned bales
+                </span>
                 <strong className="font-mono">{printNumber(scanned)}</strong>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3 text-sm">
-                <span className="flex items-center gap-2"><Weight className="h-4 w-4" /> Scanned weight</span>
+                <span className="flex items-center gap-2">
+                  <Weight className="h-4 w-4" /> Scanned weight
+                </span>
                 <strong className="font-mono">{printNumber(weight, 2)} kg</strong>
               </div>
             </CardContent>
@@ -219,10 +237,17 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
       </div>
 
       {(canEdit || canViewFinancialDashboard || canDeleteDispatch) && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card" data-testid="dispatch-advanced-trip-controls">
-          <button type="button" onClick={() => setAdvancedOpen(!advancedOpen)}
+        <div
+          className="overflow-hidden rounded-xl border border-border bg-card"
+          data-testid="dispatch-advanced-trip-controls"
+        >
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(!advancedOpen)}
             className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium hover:bg-muted/30"
-            aria-expanded={advancedOpen} data-testid="dispatch-toggle-trip-options">
+            aria-expanded={advancedOpen}
+            data-testid="dispatch-toggle-trip-options"
+          >
             <span>Trip finances & more options</span>
             <ChevronDown className={"h-4 w-4 transition-transform " + (advancedOpen ? "rotate-180" : "")} />
           </button>
@@ -231,18 +256,28 @@ export default function FactoryLoadingDispatchDetail({ state }: { state: State }
               {(canEdit || canDeleteDispatch) && selectedTrip.status === "OPEN" && (
                 <div className="flex flex-wrap gap-2">
                   {canEdit && (
-                    <Button size="sm" variant="outline" onClick={() => {
-                      setEditTrip(fromTrip(selectedTrip));
-                      setEditOpen(true);
-                    }} data-testid="button-edit-dispatch">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditTrip(fromTrip(selectedTrip));
+                        setEditOpen(true);
+                      }}
+                      data-testid="button-edit-dispatch"
+                    >
                       <Edit3 className="mr-1.5 h-4 w-4" /> Edit details
                     </Button>
                   )}
                   {canDeleteDispatch && (
-                    <Button size="sm" variant="destructive" onClick={() => {
-                      setDeleteReason("");
-                      setDeleteOpen(true);
-                    }} data-testid="button-delete-dispatch">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        setDeleteReason("");
+                        setDeleteOpen(true);
+                      }}
+                      data-testid="button-delete-dispatch"
+                    >
                       <Trash2 className="mr-1.5 h-4 w-4" /> Delete dispatch
                     </Button>
                   )}

@@ -78,7 +78,13 @@ export function FactoryLoadingDispatchScannerCardSection({
   | "visibleScans"
 > & { embedded?: boolean }) {
   return (
-    <Card className={embedded ? "border-0 bg-transparent shadow-none" : "border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}>
+    <Card
+      className={
+        embedded
+          ? "border-0 bg-transparent shadow-none"
+          : "border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      }
+    >
       <CardContent className={embedded ? "space-y-3 p-0" : "space-y-3 p-4 sm:p-5"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -97,17 +103,19 @@ export function FactoryLoadingDispatchScannerCardSection({
             </Button>
           </div>
         </div>
-        {(active.length > 0 || Boolean(filterText)) && <SearchField
-          wrapperClassName="max-w-sm"
-          className="h-9"
-          placeholder="Search reference, article, operator"
-          value={filterText}
-          onValueChange={(v) => {
-            setFilterText(v);
-            setVisibleCount(PAGE_CHUNK);
-          }}
-          data-testid="input-search-dispatch-scans"
-        />}
+        {(active.length > 0 || Boolean(filterText)) && (
+          <SearchField
+            wrapperClassName="max-w-sm"
+            className="h-9"
+            placeholder="Search reference, article, operator"
+            value={filterText}
+            onValueChange={(v) => {
+              setFilterText(v);
+              setVisibleCount(PAGE_CHUNK);
+            }}
+            data-testid="input-search-dispatch-scans"
+          />
+        )}
         {canCorrect && active.length > 0 && (
           <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
             <Button
@@ -172,7 +180,13 @@ export function FactoryLoadingDispatchScannerCardSection({
         )}
         {visibleScans.length > 0 && (
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className={embedded ? "w-full min-w-[350px] border-collapse text-left text-xs" : "w-full min-w-[600px] border-collapse text-left text-xs"}>
+            <table
+              className={
+                embedded
+                  ? "w-full min-w-[350px] border-collapse text-left text-xs"
+                  : "w-full min-w-[600px] border-collapse text-left text-xs"
+              }
+            >
               <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                 <tr>
                   {canCorrect && (
@@ -213,26 +227,40 @@ export function FactoryLoadingDispatchScannerCardSection({
                     <td className="px-3 py-2">
                       <p
                         className="font-mono font-semibold"
-                        title={embedded ? [scan.productName, scan.scannedByUsername, formatDisplayDateTime(scan.scannedAt)].filter(Boolean).join(" · ") : undefined}
-                      >{scan.baleReference}</p>
+                        title={
+                          embedded
+                            ? [scan.productName, scan.scannedByUsername, formatDisplayDateTime(scan.scannedAt)]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : undefined
+                        }
+                      >
+                        {scan.baleReference}
+                      </p>
                       <p className="text-[11px] text-muted-foreground">{scan.articleCode || "—"}</p>
                       {embedded && !scan.stillInLoading && (
-                        <span className="text-[11px] font-semibold text-amber-600">Removed from loading since scan</span>
-                      )}
-                    </td>
-                    {!embedded && <td className="px-3 py-2">
-                      <p className="max-w-[280px] truncate">{scan.productName || "—"}</p>
-                      {!scan.stillInLoading && (
                         <span className="text-[11px] font-semibold text-amber-600">
-                          Removed from main loading since scan
+                          Removed from loading since scan
                         </span>
                       )}
-                    </td>}
+                    </td>
+                    {!embedded && (
+                      <td className="px-3 py-2">
+                        <p className="max-w-[280px] truncate">{scan.productName || "—"}</p>
+                        {!scan.stillInLoading && (
+                          <span className="text-[11px] font-semibold text-amber-600">
+                            Removed from main loading since scan
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right font-mono">{fmtKg(Number(scan.weightKg))}</td>
-                    {!embedded && <td className="px-3 py-2">
-                      <p className="font-medium">{scan.scannedByUsername}</p>
-                      <p className="text-muted-foreground">{formatDisplayDateTime(scan.scannedAt)}</p>
-                    </td>}
+                    {!embedded && (
+                      <td className="px-3 py-2">
+                        <p className="font-medium">{scan.scannedByUsername}</p>
+                        <p className="text-muted-foreground">{formatDisplayDateTime(scan.scannedAt)}</p>
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right">
                       {canCorrect ? (
                         <Button

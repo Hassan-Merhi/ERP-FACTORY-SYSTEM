@@ -64,28 +64,33 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
 > & { compact?: boolean }) {
   return (
     <Card
-      className={compact ? "border-0 bg-transparent shadow-none" : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"}
+      className={
+        compact
+          ? "border-0 bg-transparent shadow-none"
+          : "border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+      }
       data-testid="dispatch-lifecycle"
     >
       <CardContent className={compact ? "space-y-2 p-0" : "space-y-3 p-4"}>
         {!compact && (
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="flex items-start gap-2">
-            {status === "CLOSED" ? (
-              <LockKeyhole className="mt-0.5 h-5 w-5 text-emerald-600" />
-            ) : (
-              <ClipboardCheck className="mt-0.5 h-5 w-5 text-blue-600" />
-            )}
-            <div>
-              <h3 className="text-sm font-semibold">{status === "CLOSED" ? "Dispatch completed" : "Dispatch finalization"}</h3>
-              {status !== "CLOSED" && (
-                <p className="mt-1 text-xs text-muted-foreground">Scan bales, then End Dispatch.</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              {status === "CLOSED" ? (
+                <LockKeyhole className="mt-0.5 h-5 w-5 text-emerald-600" />
+              ) : (
+                <ClipboardCheck className="mt-0.5 h-5 w-5 text-blue-600" />
               )}
+              <div>
+                <h3 className="text-sm font-semibold">
+                  {status === "CLOSED" ? "Dispatch completed" : "Dispatch finalization"}
+                </h3>
+                {status !== "CLOSED" && (
+                  <p className="mt-1 text-xs text-muted-foreground">Scan bales, then End Dispatch.</p>
+                )}
+              </div>
             </div>
+            {status !== "CLOSED" && <Badge variant="outline">{factoryStatusLabel("dispatch", status)}</Badge>}
           </div>
-          {status !== "CLOSED" && <Badge variant="outline">{factoryStatusLabel("dispatch", status)}</Badge>}
-        </div>
-
         )}
 
         {!compact && status === "CLOSED" && latest && (
@@ -143,7 +148,8 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
             onClick={() => setShowHistory((v) => !v)}
             data-testid="button-dispatch-audit-history"
           >
-            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide history" : compact ? "Trip history" : "Closure & audit history"}
+            <History className="mr-1.5 h-4 w-4" />{" "}
+            {showHistory ? "Hide history" : compact ? "Trip history" : "Closure & audit history"}
           </Button>
         </div>
         {showHistory && (

@@ -68,7 +68,9 @@ export default function FactoryLoadingDispatch() {
         {(tripsQuery.isError || orderQuery.isError) && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30">
             <span>{getError(tripsQuery.error ?? orderQuery.error)}</span>
-            <Button size="sm" variant="outline" onClick={() => void refresh()}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={() => void refresh()}>
+              Retry
+            </Button>
           </div>
         )}
 
@@ -82,14 +84,16 @@ export default function FactoryLoadingDispatch() {
               </p>
             )}
             {selectedQuery.isError && (
-              <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/30">
+              <p
+                role="alert"
+                className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/30"
+              >
                 {getError(selectedQuery.error)}
               </p>
             )}
             {selectedTrip && <FactoryLoadingDispatchDetail state={state} />}
           </div>
         )}
-
       </div>
 
       <FactoryLoadingDispatchDialogSection

@@ -89,7 +89,10 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
               <div className="space-y-2 rounded-lg border p-3 text-xs">
                 <div className="flex justify-between gap-2 text-muted-foreground">
                   <span>Loaded</span>
-                  <span>{data.source.baleCount} {data.source.baleCount === 1 ? "bale" : "bales"} · {data.source.totalWeightKg} kg</span>
+                  <span>
+                    {data.source.baleCount} {data.source.baleCount === 1 ? "bale" : "bales"} ·{" "}
+                    {data.source.totalWeightKg} kg
+                  </span>
                 </div>
                 <div className="flex justify-between gap-2">
                   <span>Goods</span>
@@ -137,9 +140,7 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
                 )}
               </div>
               {data.charges.length === 0 && (
-                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                  No charges added yet.
-                </p>
+                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">No charges added yet.</p>
               )}
               {data.charges.map((c) => {
                 const account = data.accounts.find((a) => a.id === c.ledgerAccountId);
@@ -153,7 +154,8 @@ export default function FactoryLoadingDispatchFinance(props: Props) {
                       <div className="min-w-0">
                         <p className="font-semibold">{c.name}</p>
                         <p className="text-muted-foreground">
-                          {c.kind === "BILLABLE" ? "Billable" : c.kind === "INTERNAL" ? "Internal expense" : "Discount"} · {account?.name ?? "Ledger account"}
+                          {c.kind === "BILLABLE" ? "Billable" : c.kind === "INTERNAL" ? "Internal expense" : "Discount"}{" "}
+                          · {account?.name ?? "Ledger account"}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">

@@ -290,11 +290,21 @@ export function FactoryLoadingDispatchSection({
           <table className="w-full min-w-[620px] text-left text-sm" data-testid="dispatch-trips-table">
             <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium">Trip</th>
-                <th scope="col" className="px-4 py-3 font-medium">Created</th>
-                <th scope="col" className="px-4 py-3 font-medium">Scanned bales</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">Action</th>
+                <th scope="col" className="px-4 py-3 font-medium">
+                  Trip
+                </th>
+                <th scope="col" className="px-4 py-3 font-medium">
+                  Created
+                </th>
+                <th scope="col" className="px-4 py-3 font-medium">
+                  Scanned bales
+                </th>
+                <th scope="col" className="px-4 py-3 font-medium">
+                  Status
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -316,7 +326,9 @@ export function FactoryLoadingDispatchSection({
                       ({printNumber(numberValue(trip.scannedWeightKg), 2)} kg)
                     </span>
                   </td>
-                  <td className="px-4 py-3"><TripStatusBadge status={trip.status} /></td>
+                  <td className="px-4 py-3">
+                    <TripStatusBadge status={trip.status} />
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <Button
                       type="button"

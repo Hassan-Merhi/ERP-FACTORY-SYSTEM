@@ -5,10 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  useFactoryLoadingDispatchFinanceState,
-  type Kind,
-} from "./useFactoryLoadingDispatchFinanceState";
+import { useFactoryLoadingDispatchFinanceState, type Kind } from "./useFactoryLoadingDispatchFinanceState";
 import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 import { FactoryLoadingDispatchLedgerAccountPicker } from "./FactoryLoadingDispatchLedgerAccountPicker";
 

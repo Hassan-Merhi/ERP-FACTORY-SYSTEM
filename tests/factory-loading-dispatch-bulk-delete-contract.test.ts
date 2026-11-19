@@ -7,7 +7,10 @@ function source(file: string): string {
 }
 
 const scanRoutes = source("server/routes/factory/customer-orders/loadingDispatchScanRoutes.ts");
-const dispatchRoutes = source("server/routes/factory/customer-orders/loadingDispatchRoutes.ts");
+const dispatchRoutes = source("server/routes/factory/customer-orders/loadingDispatchRoutes.ts").replace(
+  /app\.post\(\s+/g,
+  "app.post("
+);
 const scanner = source("client/src/pages/factory/FactoryLoadingDispatchScanner.tsx");
 // The simplified trip screen lives in a dedicated child component while
 // the cancel mutation remains in the extracted state module.
