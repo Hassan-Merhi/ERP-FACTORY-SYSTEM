@@ -188,10 +188,11 @@ export async function guardFxWalletDraftMutation(req: Request, res: Response, ne
             { currency: "EUR", exchangeRate: reverted!.exchangeRate, voucherDate: req.body.voucherDate },
             req.body
           );
+      const reason = problem || "Invalid amount";
       if (!plan) {
         return res.status(400).json({
           code: "FX_WALLET_DRAFT_INVALID",
-          message: `The payment is now Optional and its EUR was restored, but the other changes were not saved: ${problem || "Invalid amount"}`,
+          message: `The payment is now Optional and its EUR was restored, but the other changes were not saved: ${reason}`,
           voucherId: draftId,
         });
       }

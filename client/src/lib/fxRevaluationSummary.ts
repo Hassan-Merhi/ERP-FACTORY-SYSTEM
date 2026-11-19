@@ -38,8 +38,9 @@ export function fxRevaluationSummary(outcome: FxRevaluationOutcome | null): {
     const amount = Math.abs(net).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const result = net > 0 ? `FX gain $${amount}` : net < 0 ? `FX loss $${amount}` : "no net gain or loss";
     const count = outcome.lines?.length ?? 0;
+    const voucher = outcome.voucherNumber ?? "";
     return {
-      description: `FX revaluation ${outcome.voucherNumber ?? ""} posted for ${count} account(s): ${result}.${unresolvedNote}`,
+      description: `FX revaluation ${voucher} posted for ${count} account(s): ${result}.${unresolvedNote}`,
       problem: unresolved.length > 0,
     };
   }
@@ -49,8 +50,9 @@ export function fxRevaluationSummary(outcome: FxRevaluationOutcome | null): {
       problem: unresolved.length > 0,
     };
   }
+  const reason = outcome.reason || "unknown reason";
   return {
-    description: `The rate was saved, but the FX revaluation was not posted: ${outcome.reason || "unknown reason"}.${unresolvedNote}`,
+    description: `The rate was saved, but the FX revaluation was not posted: ${reason}.${unresolvedNote}`,
     problem: true,
   };
 }
