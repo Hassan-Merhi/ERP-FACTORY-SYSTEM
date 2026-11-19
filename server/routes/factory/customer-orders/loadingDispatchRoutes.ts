@@ -308,7 +308,13 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           // A signed all-truck reconciliation locks the physical evidence,
           // even if the loading status was subsequently changed.
           const reconciliationSchema = resultRows(await tx.execute(sql`
-            SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL AS installed
+            SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL
+                   AND EXISTS (
+                     SELECT 1 FROM information_schema.columns
+                      WHERE table_schema = 'public'
+                        AND table_name = 'factory_dispatch_order_consolidations'
+                        AND column_name = 'reconciled_at'
+                   ) AS installed
           `))[0];
           if (reconciliationSchema?.installed === true) {
             const signed = resultRows(await tx.execute(sql`
