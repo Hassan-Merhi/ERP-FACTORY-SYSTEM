@@ -66,7 +66,8 @@ export const applicationFrenchTranslations = {
   "user.menu": "Menu du compte",
   "common.logout": "Se déconnecter",
   "common.refresh": "Actualiser",
-  "access.permissionRefreshFailed": "Impossible d’actualiser les autorisations des pages. Votre espace de travail reste disponible.",
+  "access.permissionRefreshFailed":
+    "Impossible d’actualiser les autorisations des pages. Votre espace de travail reste disponible.",
   "access.noTabsAvailable": "Aucun onglet n’est disponible pour cet utilisateur.",
   "common.updateAvailable": "Mise à jour disponible",
   "common.updateDescription": "Une nouvelle version de l’application est prête.",
