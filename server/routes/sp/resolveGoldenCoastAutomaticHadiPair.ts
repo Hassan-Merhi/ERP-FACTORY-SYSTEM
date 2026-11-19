@@ -1,4 +1,4 @@
-// Extracted from ./goldenCoastPhase6AutoHadiCore.ts to keep that module under the source-size cap.
+// Extracted from ./goldenCoastAutoHadiCore.ts to keep that module under the source-size cap.
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { bankAccounts, companies, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../../db";
@@ -11,7 +11,7 @@ import {
   type GoldenCoastPhase7RoleAccounts,
   type GoldenCoastPhase7TransferInput,
   planGoldenCoastPhase7Transfer,
-} from "../../services/accounting/goldenCoastPhase7HadiTransfer";
+} from "../../services/accounting/goldenCoastHadiTransfer";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 

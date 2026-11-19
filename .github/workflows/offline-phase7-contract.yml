@@ -5,8 +5,8 @@ on:
     branches:
       - feat/offline-mode-integration
     paths:
-      - 'server/edge/phase7WriterGate.mjs'
-      - 'server/edge/phase7WriterGate.d.mts'
+      - 'server/edge/writerGate.mjs'
+      - 'server/edge/writerGate.d.mts'
       - 'server/edge/edgeRuntimePolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
@@ -17,10 +17,10 @@ on:
       - 'scripts/edge/verify-edge-configuration.mjs'
       - 'tests/factory-edge-installation.test.ts'
       - 'deploy/lan/factory-edge.env.sample'
-      - 'tests/offline-phase7-writer-gate.test.mjs'
-      - 'tests/offline-phase7-postgres-fence.sh'
-      - 'scripts/edge/audit-phase7-baseline.mjs'
-      - 'tests/offline-phase7-baseline.test.mjs'
+      - 'tests/offline-writer-gate.test.mjs'
+      - 'tests/offline-postgres-fence.sh'
+      - 'scripts/edge/audit-baseline.mjs'
+      - 'tests/offline-baseline.test.mjs'
       - '.github/workflows/offline-phase7-contract.yml'
   workflow_dispatch:
 
@@ -37,9 +37,9 @@ jobs:
         with:
           node-version: '24.22.2'
       - name: Verify Phase 7 fail-closed contracts
-        run: node --test tests/offline-phase7-writer-gate.test.mjs tests/offline-phase7-baseline.test.mjs
+        run: node --test tests/offline-writer-gate.test.mjs tests/offline-baseline.test.mjs
       - name: Exercise fenced writes against isolated PostgreSQL 17
-        run: bash tests/offline-phase7-postgres-fence.sh
+        run: bash tests/offline-postgres-fence.sh
       - name: Install locked dependencies for TypeScript safety
         run: npm ci --ignore-scripts
       - name: Verify LAN edge operator preflight

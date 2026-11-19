@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase3CutoverRoutes.ts", import.meta.url));
+const routeSource = readModuleFamily(new URL("./spGoldenCoastCutoverRoutes.ts", import.meta.url));
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
 const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
 

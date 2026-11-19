@@ -5,13 +5,13 @@ import { spawnSync } from "node:child_process";
 const checks = [
   ["Export buffer audit", "scripts/audit-large-export-buffers.mjs"],
   ["Heavy API audit", "scripts/audit-heavy-list-endpoints.mjs"],
-  ["Phase 9 export bridge", "scripts/verify-phase9-export-bridge.mjs"],
-  ["Phase 10 scheduled attachments", "scripts/verify-phase10-scheduled-attachments.mjs"],
-  ["Phase 11 API pagination", "scripts/verify-phase11-api-pagination.mjs"],
-  ["Phase 11 native pagination", "scripts/verify-phase11-native-pagination.mjs"],
-  ["Phase 11 stock-entry frontend", "scripts/verify-phase11-frontend-pagination.mjs"],
-  ["Phase 11 V5 frontend", "scripts/verify-phase11-v5-frontend-pagination.mjs"],
-  ["Phase 11 Daybook frontend", "scripts/verify-phase11-daybook-frontend-pagination.mjs"],
+  ["Phase 9 export bridge", "scripts/verify-export-bridge.mjs"],
+  ["Phase 10 scheduled attachments", "scripts/verify-scheduled-attachments.mjs"],
+  ["Phase 11 API pagination", "scripts/verify-api-pagination.mjs"],
+  ["Phase 11 native pagination", "scripts/verify-native-pagination.mjs"],
+  ["Phase 11 stock-entry frontend", "scripts/verify-frontend-pagination.mjs"],
+  ["Phase 11 V5 frontend", "scripts/verify-v5-frontend-pagination.mjs"],
+  ["Phase 11 Daybook frontend", "scripts/verify-daybook-frontend-pagination.mjs"],
 ];
 
 const startedAt = Date.now();

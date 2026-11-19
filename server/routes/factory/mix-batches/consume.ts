@@ -19,7 +19,7 @@ import {
   MixLifecycleRefusal,
   requireMixLifecycleUsage,
   validateMixLifecycleUsageRequest,
-} from "../../../services/factory/mixLifecyclePhase6";
+} from "../../../services/factory/mixLifecycle";
 
 export function registerFactoryMixBatchConsumeRoutes(app: Express) {
   app.post("/api/factory/mix-batches/consume", requireAuth, async (req: Request, res: Response) => {

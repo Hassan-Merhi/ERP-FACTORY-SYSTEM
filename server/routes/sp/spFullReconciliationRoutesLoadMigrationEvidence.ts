@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
-import { buildFinalMigrationVerification } from "./spMigrationPhase4Verification";
+import { buildFinalMigrationVerification } from "./spMigrationVerification";
 
 export function num(value: unknown): number {
   const parsed = Number(value ?? 0);

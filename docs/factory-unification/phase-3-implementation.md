@@ -11,7 +11,7 @@
 3. `FactorySettingsAdminTools.tsx` uses the shared legacy prefix for the placeholder instead of embedding another literal.
 4. `shared/factoryStatusPresentation.ts` defines **separate** typed presentation vocabularies for Stock Allocation V5, dispatch trips and containers. Unknown statuses retain their original raw display value rather than being silently reinterpreted.
 5. V5 utils, Factory Dispatch page/lifecycle and Container OTW helpers consume the relevant presentation contract. Existing badges/color schemes and server-side workflow transitions are untouched.
-6. `tests/factory-unification-phase3.test.ts` contains source-level parity cases for defaults, optional overrides, legacy PENDING_VERIFICATION label, distinct workflows and unknown statuses.
+6. `tests/factory-unification-keeps-existing-legacy-code-rename-defaults.test.ts` contains source-level parity cases for defaults, optional overrides, legacy PENDING_VERIFICATION label, distinct workflows and unknown statuses.
 
 ## Important compatibility limitations
 - The V5 `PENDING_VERIFICATION` display remains **"Verified"** because Phase 3 targets rendering parity, not a change in order-state meaning. Do not infer that it is the same backend state as `VERIFIED`.
@@ -26,7 +26,7 @@
 - Phase 3 is complete as a **source-level consolidation work item**, not signed off for runtime parity or production.
 
 ## Required later non-CI checks
-- Type-check in runnable checkout; run `tests/factory-unification-phase3.test.ts`.
+- Type-check in runnable checkout; run `tests/factory-unification-keeps-existing-legacy-code-rename-defaults.test.ts`.
 - Company A → B → A settings reload and no carryover of rename preview; ensure user-entered prefix remains until settings/refetch or company switch.
 - V5, dispatch and container badge snapshots, including `PENDING_VERIFICATION` parity.
 - Verify server rejects unsupported status transitions and that all stock/accounting effects are unchanged.

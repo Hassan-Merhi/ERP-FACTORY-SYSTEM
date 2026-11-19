@@ -36,7 +36,7 @@ Replaced local copies in:
 `daybookPaginationClient.ts`,
 `v5AllocationPaginationClient.ts`,
 `heavyListPaginationClient.ts`,
-and `phase4BandwidthFetch.ts`.
+and `bandwidthFetch.ts`.
 
 **Safety:** Every wrapper retains the exact endpoint guard, registration
 flag, captured `previousFetch`, input/init forwarding, route restrictions,

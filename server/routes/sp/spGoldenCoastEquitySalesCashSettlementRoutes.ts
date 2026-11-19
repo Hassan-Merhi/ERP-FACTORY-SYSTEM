@@ -22,7 +22,7 @@ import {
   type GoldenCoastEquitySalesCashAccounts,
   type GoldenCoastEquitySalesCashInput,
 } from "../../services/accounting/goldenCoastEquitySalesCashSettlement";
-import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 import {
   GoldenCoastEquitySalesCashRouteError,

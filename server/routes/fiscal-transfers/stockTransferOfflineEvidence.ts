@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
-import type { Phase9StockTransferEvidence } from "../../edge/phase9StockEnvelope.mjs";
+import type { Phase9StockTransferEvidence } from "../../edge/stockEnvelope.mjs";
 import { inventoryQuantity } from "../../lib/inventoryMath";
 import { toMoney } from "../../lib/money";
 

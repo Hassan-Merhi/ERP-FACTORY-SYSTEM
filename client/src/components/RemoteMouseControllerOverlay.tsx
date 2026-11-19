@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { Loader2, LockKeyhole, MousePointer2, ShieldCheck, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
+import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportSessionTranslations";
 import { useRemoteMouseControllerOverlayStatePart1 } from "./useRemoteMouseControllerOverlayStatePart1";
 import {
   useRemoteMouseControllerOverlayStatePart2,

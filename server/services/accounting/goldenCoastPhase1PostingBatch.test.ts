@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGoldenCoastPhase1PostingBatch } from "./goldenCoastPhase1PostingBatch";
+import { buildGoldenCoastPhase1PostingBatch } from "./goldenCoastPostingBatch";
 
 const ledger = (id: number) => ({ kind: "ledger" as const, id });
 const bank = (id: number) => ({ kind: "bank" as const, id });

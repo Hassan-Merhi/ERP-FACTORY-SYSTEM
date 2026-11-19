@@ -9,7 +9,7 @@
 - Read-only company-scoped **Permission change audit** viewer in Settings > Users & Permissions. Shows latest 100 saved role/user policy revisions, actor, subject, reason, time and exact changed rules.
 - Admin documentation: `docs/permissions-control-center-admin-guide.md`.
 - Machine-readable readiness registry: `config/permissions-v2-release-readiness.json`, all nine gates explicitly blocked until evidence is attached.
-- Test `tests/access-control-v2-phase8-release-readiness.test.ts` verifies gate completeness, real SHA, evidence and owner authorization prerequisites and that Create Only cannot silently be assigned or activated.
+- Test `tests/access-control-v2-release-readiness.test.ts` verifies gate completeness, real SHA, evidence and owner authorization prerequisites and that Create Only cannot silently be assigned or activated.
 - Existing phase-specific protections retained and no production change performed.
 
 ## Independent release gates (must all pass)

@@ -3,7 +3,7 @@ import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageCo
 import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
 import { listOfflineOperations } from "@/lib/offline/durableOutbox";
-import { PHASE9_STATE_LABELS, visiblePhase9Status, type Phase9VisibleState } from "@/lib/offline/phase9Status";
+import { PHASE9_STATE_LABELS, visiblePhase9Status, type Phase9VisibleState } from "@/lib/offline/status";
 
 interface StatusRow {
   id: string;

@@ -33,7 +33,7 @@
 3. **`server/routes/rental/rentalAccrualConfigRoutes.ts`:** the **re-accrue** action fails with 409 before posting any phantom/orphan correction journal when deleted/missing accrual links exist. It uses the company's reconciliation results.
 4. **`scripts/repair-rental-payment-accounting.ts`:** generic Type E orphan cleanup is **report-only**, including with `--apply`; no more indiscriminate clearing of deleted accrued links.
 5. **`server/services/rental/rentalReconciliationService.ts`:** validates old voucher references inside the owning company and flags optional/deleted/missing vouchers.
-6. **`tests/hmd-kinshasa-rent-phase3.test.ts`:** regression tests for held Jan–May months and permitted future due-month recognition.
+6. **`tests/hmd-kinshasa-rent-recognizes-the-persisted-historical-hold-as.test.ts`:** regression tests for held Jan–May months and permitted future due-month recognition.
 
 ## Guarded production SQL deliverables and mandatory order
 

@@ -11,8 +11,8 @@
  * conflict is still held for Admin/Developer approval.
  */
 import type { PoolClient } from "pg";
-import { PHASE9_POS_NEGATIVE_CONFLICT } from "../../edge/phase9PosSaleEnvelope.mjs";
-import { PHASE9_STOCK_NEGATIVE_CONFLICT } from "../../edge/phase9StockEnvelope.mjs";
+import { PHASE9_POS_NEGATIVE_CONFLICT } from "../../edge/posSaleEnvelope.mjs";
+import { PHASE9_STOCK_NEGATIVE_CONFLICT } from "../../edge/stockEnvelope.mjs";
 import {
   applyBrowserOperation,
   type BrowserApplyResult,

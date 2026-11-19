@@ -44,14 +44,14 @@ describe("Historical Replay V7 final safety wiring", () => {
   });
 
   it("forbids force-apply and finalized-bale writes", () => {
-    const guard = read("server/routes/factory/raw-stock/historicalReplayPhase6GuardRoutes.ts");
+    const guard = read("server/routes/factory/raw-stock/historicalReplayGuardRoutes.ts");
     expect(guard).toContain("HISTORICAL_REPLAY_FORCE_APPLY_FORBIDDEN");
     expect(guard).toContain("HISTORICAL_REPLAY_FINALIZED_BALES_FORBIDDEN");
     expect(guard).toContain("includeFinalizedBales = false");
   });
 
   it("projects raw material and Balance on Table before Net Position", () => {
-    const guard = read("server/routes/factory/raw-stock/historicalReplayPhase6GuardRoutes.ts");
+    const guard = read("server/routes/factory/raw-stock/historicalReplayGuardRoutes.ts");
     expect(guard).toContain("loadBalanceProjectionBase");
     expect(guard).toContain("projectBalanceOnTable");
     expect(guard).toContain("balanceOnTableDifference");
@@ -60,7 +60,7 @@ describe("Historical Replay V7 final safety wiring", () => {
   });
 
   it("provides explicit adjustment classification with an audit entry", () => {
-    const guard = read("server/routes/factory/raw-stock/historicalReplayPhase6GuardRoutes.ts");
+    const guard = read("server/routes/factory/raw-stock/historicalReplayGuardRoutes.ts");
     expect(guard).toContain("adjustments/:id/valuation-basis");
     expect(guard).toContain("historical_replay_adjustment_classified");
     expect(guard).toContain("QUANTITY_ONLY");

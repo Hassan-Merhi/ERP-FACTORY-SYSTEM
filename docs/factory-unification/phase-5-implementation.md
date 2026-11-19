@@ -11,7 +11,7 @@
 3. `FactoryAttendance.tsx` uses `attendanceToday` for both selected date and range-export initial dates rather than mixing Beirut today and the user's device-local today. Date range traversal, payroll/attendance calculations and exports were not modified.
 4. `client/src/factory/scanner/cameraUiErrors.ts`: camera permission/device-in-use/error messages as a pure presentation utility. `ContinuousPressingScanner.tsx` now uses this utility and `factoryLocalDateFromInstant`; decoding, streaming camera cleanup, USB/manual handler, wake lock, scan gate and audio feedback remain intact.
 5. `client/src/factory/scanner/scannerFeedback.ts`: typed confirmation/duplicate/rejected/queued/syncing display labels with explicit `factoryScanIsConfirmed`. `PressingOfflineQueueStatus.tsx` consumes the existing display labels from this helper without changing receipt or queue semantics.
-6. `tests/factory-unification-phase5.test.ts`: authored (not executed) characterization for DST date rollovers, past-date deduplication, camera UI errors, server-confirmed versus pending feedback and existing continuous scan gate behavior.
+6. `tests/factory-unification-handles-calendar-midnight-independent-of-utc.test.ts`: authored (not executed) characterization for DST date rollovers, past-date deduplication, camera UI errors, server-confirmed versus pending feedback and existing continuous scan gate behavior.
 
 ## Existing canonical scanner foundations (retained)
 - `MobileBarcodeScanner.tsx` already routes camera reads through each page-specific onScan handler and provides a common native/ZXing decoder with cleanup and duplicate-frame gate. The Factory loading dispatch scanner and Stock Entry scanner already use it.

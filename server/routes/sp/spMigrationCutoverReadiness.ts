@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
-import { getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
+import { getSuspenseReview, loadStockItemMap, pn } from "./spMigrationCommon";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
 const REQUIRED_SP_SUBTYPES = [

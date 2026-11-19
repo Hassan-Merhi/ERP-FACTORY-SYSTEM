@@ -9,7 +9,7 @@
 - Legacy permissions loading, errors or missing company fail closed for feature-key checks, and the data refreshes on focus and periodically to avoid indefinitely stale UI restrictions.
 - `client/src/components/Can.tsx` provides reusable hide-or-explain UI gating.
 - Supplier page delete and Excel export are integrated, including guarded click handlers, disabled controls and user-readable reasons.
-- `tests/access-control-v2-phase6-use-can.test.ts` tests parity, default-deny, loading and special roles.
+- `tests/access-control-v2-use-can.test.ts` tests parity, default-deny, loading and special roles.
 
 ## Blocking work before Phase 6 sign-off
 

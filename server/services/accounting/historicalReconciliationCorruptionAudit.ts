@@ -6,7 +6,7 @@ import {
   type Phase3AccountingAuditInput,
   type Phase3AccountingAuditReport,
   type Phase3AuditIssue,
-} from "./phase3AccountingAudit";
+} from "./accountingAudit";
 
 export interface DuplicateVoucherEvidence {
   signature: string;
@@ -44,8 +44,10 @@ export interface HistoricalReconciliationAuditIssue {
   actual: string;
 }
 
-export interface HistoricalReconciliationCorruptionReport
-  extends Omit<Phase3AccountingAuditReport, "issues" | "checked"> {
+export interface HistoricalReconciliationCorruptionReport extends Omit<
+  Phase3AccountingAuditReport,
+  "issues" | "checked"
+> {
   issues: HistoricalReconciliationAuditIssue[];
   checked: Phase3AccountingAuditReport["checked"] & {
     duplicateVoucherGroups: number;
@@ -191,14 +193,7 @@ export function auditHistoricalReconciliationCorruption(
       transferAmount,
       toVoucherAmount
     );
-    compareMoney(
-      issues,
-      "intercompany",
-      identity,
-      "INTERCOMPANY_MIRROR_MISMATCH",
-      fromVoucherAmount,
-      toVoucherAmount
-    );
+    compareMoney(issues, "intercompany", identity, "INTERCOMPANY_MIRROR_MISMATCH", fromVoucherAmount, toVoucherAmount);
   }
 
   return {

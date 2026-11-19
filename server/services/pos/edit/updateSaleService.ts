@@ -55,7 +55,7 @@ import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
 import { editedZmwSaleAmounts, posZmwEditUsdRows } from "./posZmwEditedAmounts";
 import { validateLockedPosDaybookEdit } from "./posDaybookEditGuard";
-import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../../edge/posOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {

@@ -44,7 +44,7 @@ jobs:
 
       - name: Materialize reviewed Phase 10 evidence
         run: |
-          node scripts/materialize-program6d-phase10-review.mjs \
+          node scripts/materialize-program6d-review.mjs \
             --manifest=docs/program-6d-phase10-current-review.json \
             --output=tmp/phase10-current-query-classifications.json
 
@@ -73,19 +73,19 @@ jobs:
         id: scheduler_residency
         if: always()
         continue-on-error: true
-        run: node scripts/verify-render-phase2-lazy-schedulers.mjs
+        run: node scripts/verify-render-lazy-schedulers.mjs
 
       - name: Phase 3 route-residency invariants
         id: route_residency
         if: always()
         continue-on-error: true
-        run: node scripts/verify-render-phase3-lazy-routes.mjs
+        run: node scripts/verify-render-lazy-routes.mjs
 
       - name: Phase 4 operational-route residency invariants
         id: operational_route_residency
         if: always()
         continue-on-error: true
-        run: node scripts/verify-render-phase4-operational-routes.mjs
+        run: node scripts/verify-render-operational-routes.mjs
 
       - name: Upload query-audit evidence
         if: always()

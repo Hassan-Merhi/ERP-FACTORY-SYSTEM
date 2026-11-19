@@ -5,7 +5,7 @@ import {
   markPhase5VoucherRequestOutcomeUncertain,
   releasePhase5VoucherRequestIdentity,
   shouldReleasePhase5VoucherRequestIdentity,
-} from "../client/src/lib/phase5VoucherRequestIdentity";
+} from "../client/src/lib/voucherRequestIdentity";
 import voucherReview from "../config/voucher-write-evidence-review.json";
 import {
   auditWriteEvidence,
@@ -21,7 +21,7 @@ import {
 import {
   deterministicPhase6RequestIdentity,
   resolveVoucherPathCompanyId,
-} from "../server/services/accounting/voucherPathPhase5to6Boundary";
+} from "../server/services/accounting/voucherPathTransitionBoundary";
 
 const PHASE5_WRITERS = [
   "server/routes/containers/offload/create.ts",

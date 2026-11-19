@@ -6,7 +6,7 @@ import {
   planGoldenCoastPhase13IntercompanyAccount,
   summarizeGoldenCoastPhase13IntercompanyAccount,
   type GoldenCoastPhase13LedgerRow,
-} from "./goldenCoastPhase13Intercompany";
+} from "./goldenCoastIntercompany";
 
 const defs = goldenCoastPhase13IntercompanyDefinitions({
   goldenCoastCompanyName: "Golden Coast",

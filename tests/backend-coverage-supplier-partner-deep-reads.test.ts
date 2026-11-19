@@ -17,7 +17,7 @@ import {
   setupGoldenCoastPhase5Fixture,
   teardownGoldenCoastPhase5Fixture,
   type GoldenCoastPhase5Fixture,
-} from "./helpers/goldenCoastPhase5Fixture";
+} from "./helpers/goldenCoastFixture";
 
 type Manifest = { routes: string[] };
 type Fingerprint = {

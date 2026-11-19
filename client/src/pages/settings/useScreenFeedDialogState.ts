@@ -3,7 +3,7 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import {
   sendScreenFeedControlMessage,

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { DbTransaction } from "../../db";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
-import { capturePhase9ReceivingTx, phase9ReceivingLineDigestTx } from "../../edge/phase9ReceivingOutbox";
-import type { Phase9ReceivingOffloadInputs } from "../../edge/phase9ReceivingEnvelope.mjs";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
+import { capturePhase9ReceivingTx, phase9ReceivingLineDigestTx } from "../../edge/receivingOutbox";
+import type { Phase9ReceivingOffloadInputs } from "../../edge/receivingEnvelope.mjs";
 import { toMoney } from "../../lib/money";
 import type {
   ContainerOffloadLifecycleInput,

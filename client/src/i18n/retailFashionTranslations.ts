@@ -1,6 +1,6 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import { createPhase3TemplateTranslator } from "./phase3TemplateTranslationRuntime";
-import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
+import { createPhase3TemplateTranslator } from "./templateTranslationRuntime";
+import type { Phase3SharedUiEntry } from "./sharedUiTranslationTypes";
 
 /**
  * EN / AR / FR copy for the retail fashion waves (quick add, barcode labels,

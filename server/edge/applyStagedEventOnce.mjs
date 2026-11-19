@@ -1,12 +1,12 @@
-// Extracted from ./phase9CloudEventStore.mjs to keep that module under the source-size cap.
-import { translatePhase9LanStockItems } from "./phase9StockItemMap.mjs";
-import { hasVerifiedCloudWriterAuthority, validatePhase8OperatorApproval } from "./phase8ApplyStore.mjs";
+// Extracted from ./cloudEventStore.mjs to keep that module under the source-size cap.
+import { translatePhase9LanStockItems } from "./stockItemMap.mjs";
+import { hasVerifiedCloudWriterAuthority, validatePhase8OperatorApproval } from "./applyStore.mjs";
 import {
   EVENT_APPLY_OUTCOMES,
   isPhase9EventStream,
   phase9OverridableConflicts,
   validatePhase9Event,
-} from "./phase9EventProtocol.mjs";
+} from "./eventProtocol.mjs";
 import {
   DAY,
   MAX_SEQUENCE,
@@ -15,8 +15,8 @@ import {
   SEQUENCE,
   rowEvent,
   sameEvidence,
-} from "./ensurePhase9CloudEventSchema.mjs";
-import { RECEIPT_COLUMNS, receiptFromRow, recordConflict } from "./stagePhase9Events.mjs";
+} from "./ensureCloudEventSchema.mjs";
+import { RECEIPT_COLUMNS, receiptFromRow, recordConflict } from "./stageEvents.mjs";
 
 /**
  * Apply exactly one staged event. `handlers[kind]` provides

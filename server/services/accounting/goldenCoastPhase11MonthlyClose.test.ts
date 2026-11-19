@@ -5,7 +5,7 @@ import {
   goldenCoastPhase11CloseDigest,
   parseGoldenCoastPhase11CloseInput,
   planGoldenCoastPhase11MonthlyClose,
-} from "./goldenCoastPhase11MonthlyClose";
+} from "./goldenCoastMonthlyClose";
 
 const accounts = {
   salesAccountId: 11,
@@ -112,7 +112,6 @@ describe("Golden Coast Phase 11 monthly close", () => {
     ).toEqual([11, 12, 14, 14, 14, 15, 16]);
   });
 
-
   it("keeps developer correction balanced in the same closing Journal", () => {
     for (const manualAdjustmentUsd of ["200.00", "-200.00"]) {
       const plan = planGoldenCoastPhase11MonthlyClose({
@@ -126,16 +125,20 @@ describe("Golden Coast Phase 11 monthly close", () => {
         plan,
         accounts: { ...accounts, correctionSuspenseAccountId: 17 },
         digest: goldenCoastPhase11CloseDigest({
-          plan, accounts: { ...accounts, correctionSuspenseAccountId: 17 },
+          plan,
+          accounts: { ...accounts, correctionSuspenseAccountId: 17 },
         }),
       });
       const lines = entries(post);
-      expect(lines.filter(line => line.ledgerAccountId === 17)).toHaveLength(1);
+      expect(lines.filter((line) => line.ledgerAccountId === 17)).toHaveLength(1);
       const totalDr = lines.reduce((s, line) => s + line.debitAmount, 0);
       const totalCr = lines.reduce((s, line) => s + line.creditAmount, 0);
       expect(totalDr).toBe(totalCr);
-      expect(lines.filter(line => line.ledgerAccountId === 14)
-        .reduce((s, line) => s + line.debitAmount - line.creditAmount, 0)).toBe(0);
+      expect(
+        lines
+          .filter((line) => line.ledgerAccountId === 14)
+          .reduce((s, line) => s + line.debitAmount - line.creditAmount, 0)
+      ).toBe(0);
       expect(plan.netProfitLossUsd).toBe(manualAdjustmentUsd === "200.00" ? "600.00" : "200.00");
       expect(plan.freshStartShareUsd).toBe(manualAdjustmentUsd === "200.00" ? "300.00" : "100.00");
       expect(plan.hassanShareUsd).toBe(plan.freshStartShareUsd);
@@ -145,12 +148,18 @@ describe("Golden Coast Phase 11 monthly close", () => {
   it("refuses a correction without its reconciliable suspense account", () => {
     const plan = planGoldenCoastPhase11MonthlyClose({
       close: close(),
-      totalRevenueUsd: "1000", totalCogsUsd: "500", totalSharedChargesUsd: "100",
+      totalRevenueUsd: "1000",
+      totalCogsUsd: "500",
+      totalSharedChargesUsd: "100",
       manualAdjustmentUsd: "25.00",
     });
-    expect(() => buildGoldenCoastPhase11MonthlyClosePosting({
-      plan, accounts, digest: goldenCoastPhase11CloseDigest({ plan, accounts }),
-    })).toThrow(/suspense ledger/i);
+    expect(() =>
+      buildGoldenCoastPhase11MonthlyClosePosting({
+        plan,
+        accounts,
+        digest: goldenCoastPhase11CloseDigest({ plan, accounts }),
+      })
+    ).toThrow(/suspense ledger/i);
   });
 
   it("allows pre-cutover reporting months and still rejects months without activity", () => {

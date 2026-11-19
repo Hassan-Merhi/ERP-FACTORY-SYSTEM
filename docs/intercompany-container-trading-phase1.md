@@ -17,7 +17,7 @@ Status: Phases 1–4 are implemented in **branch-only code**; Phase 4 includes t
 
 1. Drizzle declarations in shared/schema/intercompanyTrading.ts, exported from shared/schema/index.ts.
 2. Registered migration migrations/20261105_001_intercompany_phase1_foundation.sql with new tables, foreign keys, indexes, default-disabled activation flags, validation triggers and immutable audits.
-3. Focused PostgreSQL regression test tests/intercompany-phase1-foundation.test.ts. It runs the real SQL in an isolated temporary schema in a transaction and rolls back all fixtures.
+3. Focused PostgreSQL regression test tests/intercompany-foundation.test.ts. It runs the real SQL in an isolated temporary schema in a transaction and rolls back all fixtures.
 
 ## Restrictions during subsequent phases
 
@@ -53,8 +53,8 @@ Phase 2 adds the dedicated Properties **Container Trading** workflow, without re
 
 ### Phase 2 verification
 
-- tests/intercompany-phase2-container-pricing.test.ts: source PO grouping, charge confirmation, precise cent allocations, no-markup equalities and invalid-input rejection.
-- tests/intercompany-phase2-database-guards.test.ts: isolated PostgreSQL proof of wrong-company configuration prevention, source PO provenance, blocked legacy edits/offloads and isolation of unrelated records.
+- tests/intercompany-container-pricing.test.ts: source PO grouping, charge confirmation, precise cent allocations, no-markup equalities and invalid-input rejection.
+- tests/intercompany-container-database-guards.test.ts: isolated PostgreSQL proof of wrong-company configuration prevention, source PO provenance, blocked legacy edits/offloads and isolation of unrelated records.
 - CI gates: TypeScript type-check, backend/frontend tests, migration registry/startup, formatting, security and build.
 
 **Rollout remains explicit:** this is a development branch with a draft, unmerged PR. No production migration, merge or deployment has been authorized or performed. Historical automatic repairs remain disabled.
@@ -74,8 +74,8 @@ Status: implemented as feature-branch code; **CI and isolated PostgreSQL certifi
 
 ### Phase 3 release gates
 
-1. Exact money arithmetic and signed reversal checks: `tests/intercompany-phase3-pricing.test.ts`.
-2. Fresh-schema SQL triggers and immutable invoice totals: `tests/intercompany-phase3-database-guards.test.ts`, with rolled-back test data.
+1. Exact money arithmetic and signed reversal checks: `tests/intercompany-pricing.test.ts`.
+2. Fresh-schema SQL triggers and immutable invoice totals: `tests/intercompany-pricing-database-guards.test.ts`, with rolled-back test data.
 3. Disposable database end-to-end scenario: import, edit from each involved company, confirm invoice, redistribute, reject stale versions and refuse closed periods.
 4. Green TypeScript, formatting, backend, security, route-manifest, i18n and mobile checks, without regressions to existing ERP.
 5. No merge, production database migration, deployment, or feature activation without the user's approval.
@@ -97,8 +97,8 @@ Phase 4 is implemented on the independent feature branch only. It has **no migra
 
 ### Phase 4 verification
 
-1. `tests/intercompany-phase4-payment-money.test.ts`: historical exchange rate conversion, exact cent-level manual allocations, overpayments, and oldest-first credit use.
-2. `tests/intercompany-phase4-database-guards.test.ts`: disposable PostgreSQL schema with all four migrations, wrong-pair refusal, immutable actual voucher evidence, overpayment refusal and paired reversal.
+1. `tests/intercompany-payment-money.test.ts`: historical exchange rate conversion, exact cent-level manual allocations, overpayments, and oldest-first credit use.
+2. `tests/intercompany-stock-database-guards.test.ts`: disposable PostgreSQL schema with all four migrations, wrong-pair refusal, immutable actual voucher evidence, overpayment refusal and paired reversal.
 3. Manual staging checks must cover two-side bank/cash postings, partial allocations, credit before new import, independent ERP destinations, stale edits, closed-period reversal, FX retention, simultaneous payment attempts, and no unintended cash entry.
 4. Phase 4 is not certified until TypeScript, backend/DB, route security, formatting, translation, mobile and account balance tests pass. `main` remains untouched until explicit user permission.
 
@@ -109,7 +109,7 @@ Phase 4 is implemented on the independent feature branch only. It has **no migra
 ### Automated checks required on the exact candidate commit
 
 1. Run `npm ci`, `npm run check`, `npm run format:check:changed`, `npm run lint`, `npm run verify:migrations`, `npm run verify:startup-migrations`, `npm run check:security`, `npm run audit:write-routes`, `npm run audit:company-scope`, and `npm run build` as appropriate to the repository's CI matrix. Do not waive ratchet or security gates to get green.
-2. Run `node node_modules/vitest/vitest.mjs run tests/intercompany-phase4-payment-money.test.ts tests/intercompany-phase4-database-guards.test.ts` against a **disposable PostgreSQL instance** with `DATABASE_URL` defined. The database-guard suite skips its SQL case if `DATABASE_URL` is not set: a green skipped run **does not count** as certification.
+2. Run `node node_modules/vitest/vitest.mjs run tests/intercompany-payment-money.test.ts tests/intercompany-stock-database-guards.test.ts` against a **disposable PostgreSQL instance** with `DATABASE_URL` defined. The database-guard suite skips its SQL case if `DATABASE_URL` is not set: a green skipped run **does not count** as certification.
 3. Also rerun Phases 1–3 tests and the existing backend/frontend accounting and authorization tests. Record commit SHA, run URLs, summary and any failures. CI queued or cancelled is **not** a pass.
 
 ### Manual staging acceptance matrix

@@ -1,0 +1,172 @@
+import { describe, expect, it } from "vitest";
+import {
+  backendMessagesPhase7Translations,
+  isPhase7BackendMessageText,
+  translatePhase7BackendMessageText,
+} from "../client/src/i18n/backendMessagesTranslations";
+
+describe("Phase 7 backend-message translations", () => {
+  it("covers every reviewed backend phrase exactly once", () => {
+    // 658 reviewed entries, plus the 20 Phase 3 accounting/payroll/loading/inventory
+    // compatibility entries added during the accounting closeout, plus the 12 carried
+    // in by the Phase 3 latest-main sync (b86cb44), plus 6 more reviewed entries
+    // added since, plus the 3 remote-support watch phrases reviewed in Phase 33E
+    // (27bd1a8), plus the pool-timeout and CSRF rejection phrases the Phase 9
+    // release ratchet required (702), plus the 25 Priority Scan configuration,
+    // queue and routing messages (#2032), plus the fixed-palette color and
+    // legacy move guards that replaced the free-text color length message
+    // (#2141), plus the 15 fail-closed post-offload, duty and reversal guards
+    // (#2241) and the 2 dedicated freight-payee guards (#2245), plus the 5
+    // intercompany parent-journal guards for purchase-order edits (#2261) (750),
+    // plus 8 reviewed entries (with Arabic/French) merged on main by
+    // 2026-10-30 (758), plus the 5 entries merged on main by 2026-11-03 (763),
+    // plus the 25 reviewed Factory mix cost-integrity refusals (source-edit
+    // review, lifecycle, finalize/delete/restore and replay guards) (788),
+    // plus the 4 refusals of the manifest access boundary (operational role,
+    // export center, unknown API route, account migration), for a total of 792.
+    expect(backendMessagesPhase7Translations).toHaveLength(792);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(792);
+
+    for (const entry of backendMessagesPhase7Translations) {
+      expect(entry.en.trim()).not.toBe("");
+      expect(entry.ar.trim()).not.toBe("");
+      expect(entry.fr.trim()).not.toBe("");
+    }
+  });
+
+  it("translates the Priority Scan fixed-palette guards", () => {
+    expect(translatePhase7BackendMessageText("Priority color must be one of the 11 approved HEX colors.", "fr")).toBe(
+      "La couleur de priorité doit être l’une des 11 couleurs HEX approuvées."
+    );
+    expect(
+      translatePhase7BackendMessageText(
+        "Only an existing active priority can be moved without choosing a new color.",
+        "ar"
+      )
+    ).toBe("لا يمكن نقل سوى أولوية نشطة موجودة دون اختيار لون جديد.");
+    expect(isPhase7BackendMessageText("Color is required and must be 64 characters or fewer.")).toBe(false);
+  });
+
+  it("translates the PO-import preview rejection", () => {
+    expect(translatePhase7BackendMessageText("Container data not found in preview", "ar")).toBe(
+      "لم يتم العثور على بيانات الحاوية في المعاينة"
+    );
+    expect(translatePhase7BackendMessageText("Container data not found in preview", "fr")).toBe(
+      "Données du conteneur introuvables dans l\u2019aperçu"
+    );
+    expect(isPhase7BackendMessageText("Container data not found in preview")).toBe(true);
+  });
+
+  it("translates authentication, import, approval and operations messages", () => {
+    expect(translatePhase7BackendMessageText("Search Stock Items", "ar")).toBe("البحث في عناصر المخزون");
+    expect(translatePhase7BackendMessageText("Too many login attempts. Please try again later.", "fr")).toBe(
+      "Trop de tentatives de connexion. Veuillez réessayer plus tard."
+    );
+    expect(translatePhase7BackendMessageText("No active WhatsApp recipients configured", "ar")).toBe(
+      "لا يوجد مستلمون نشطون مهيؤون في واتساب"
+    );
+    expect(translatePhase7BackendMessageText("Security audit unavailable", "fr")).toBe(
+      "Audit de sécurité indisponible"
+    );
+    expect(
+      translatePhase7BackendMessageText("Golden Coast owner-withdrawal clearing account is duplicated", "fr")
+    ).toBe("Le compte de compensation des retraits du propriétaire de Golden Coast est dupliqué");
+    expect(
+      translatePhase7BackendMessageText(
+        "GC-OWNER-WITHDRAWAL is already used by another ledger role; repair the chart of accounts first",
+        "ar"
+      )
+    ).toBe("GC-OWNER-WITHDRAWAL مستخدم بالفعل لدور آخر في دفتر الأستاذ؛ أصلح دليل الحسابات أولاً");
+  });
+
+  it("translates factory production bonus labels and templates", () => {
+    expect(translatePhase7BackendMessageText("Production Bonus", "ar")).toBe("مكافأة الإنتاج");
+    expect(translatePhase7BackendMessageText("Other Bonus", "fr")).toBe("Autre prime");
+    expect(translatePhase7BackendMessageText("Copied settings from 2026-08-06", "fr")).toBe(
+      "Paramètres copiés depuis le 2026-08-06"
+    );
+    expect(
+      translatePhase7BackendMessageText(
+        "Nadia belongs to multiple production positions on 2026-08-07. Select a Production Position before saving Stock Entry.",
+        "ar"
+      )
+    ).toBe("العامل Nadia ينتمي إلى عدة مناصب إنتاج بتاريخ 2026-08-07. اختر منصب الإنتاج قبل حفظ إدخال المخزون.");
+  });
+
+  it("translates factory FX validation messages", () => {
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD is required.", "fr")).toBe(
+      "Le taux Factory fxRateToUsd pour AUD est requis."
+    );
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.", "ar")).toBe(
+      "يجب أن يكون معدل Factory fxRateToUsd للعملة AUD رقميًا."
+    );
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be a positive finite rate.", "ar")).toBe(
+      "يجب أن يكون معدل Factory fxRateToUsd للعملة AUD موجبًا ومحدودًا."
+    );
+    expect(isPhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.")).toBe(true);
+  });
+
+  it("translates Phase 3 accounting, payroll, loading and inventory messages", () => {
+    expect(translatePhase7BackendMessageText("Proforma capacity returned for the wrong loading order", "fr")).toBe(
+      "La capacité de la proforma a été renvoyée pour le mauvais ordre de chargement"
+    );
+    expect(translatePhase7BackendMessageText("Only months with movement are shown", "ar")).toBe(
+      "يتم عرض الأشهر التي تحتوي على حركة فقط"
+    );
+    expect(translatePhase7BackendMessageText("Unable to create Inventory control account for company 7", "fr")).toBe(
+      "Impossible de créer le compte de contrôle des stocks pour la société 7"
+    );
+    expect(
+      translatePhase7BackendMessageText("Phase 3 could not create ledger Payroll Expense for company 7", "ar")
+    ).toBe("تعذر على المرحلة 3 إنشاء دفتر الأستاذ Payroll Expense للشركة 7");
+    expect(translatePhase7BackendMessageText("cashAccountId is required for non-zero payroll payment", "fr")).toBe(
+      "cashAccountId est requis pour un paiement de paie non nul"
+    );
+  });
+
+  it("preserves business values while translating nested operational fragments", () => {
+    expect(translatePhase7BackendMessageText("Import job JOB-42 not found", "ar")).toBe(
+      "لم يتم العثور على مهمة الاستيراد JOB-42"
+    );
+    expect(translatePhase7BackendMessageText("Quantity 12 for stock item 44 exceeds available stock (8)", "fr")).toBe(
+      "La quantité 12 de l’article de stock 44 dépasse le stock disponible (8)"
+    );
+    expect(translatePhase7BackendMessageText('Voucher JV-88: "Office rent" — 1,500 from Main Bank', "ar")).toBe(
+      "السند JV-88: «Office rent» — 1,500 من Main Bank"
+    );
+    expect(
+      translatePhase7BackendMessageText("Daily ZIP sent to WhatsApp — 3 companies (start → today) (1 skipped).", "fr")
+    ).toBe("ZIP quotidien envoyé sur WhatsApp — 3 entreprise(s) (début → aujourd’hui) (1 ignorée(s)).");
+    expect(translatePhase7BackendMessageText("Daily ZIP sent to WhatsApp — 3 companies (full history).", "ar")).toBe(
+      "تم إرسال ملف ZIP اليومي إلى واتساب — 3 شركة (السجل الكامل)."
+    );
+  });
+
+  it("switches directly between Arabic and French", () => {
+    expect(translatePhase7BackendMessageText("تم رفض الوصول", "fr")).toBe("Accès refusé");
+    expect(translatePhase7BackendMessageText("Compte introuvable", "ar")).toBe("لم يتم العثور على الحساب");
+  });
+
+  it("translates the route-sweep validation messages", () => {
+    expect(translatePhase7BackendMessageText("enabled must be a boolean", "ar")).toBe(
+      "يجب أن تكون enabled قيمة منطقية (true أو false)"
+    );
+    expect(translatePhase7BackendMessageText("date is required and must be a valid date", "fr")).toBe(
+      "La date est requise et doit être une date valide"
+    );
+    expect(translatePhase7BackendMessageText("Metric not found", "ar")).toBe("لم يتم العثور على المقياس");
+    expect(translatePhase7BackendMessageText("Invalid archive ID", "fr")).toBe("Identifiant d’archive non valide");
+    expect(translatePhase7BackendMessageText("voucherType is required", "ar")).toBe("الحقل voucherType مطلوب");
+    expect(translatePhase7BackendMessageText("totalAmount is required", "fr")).toBe("Le champ totalAmount est requis");
+    expect(isPhase7BackendMessageText("each entry requires an integer metricId")).toBe(true);
+  });
+
+  it("recognizes reviewed messages without translating stored business values", () => {
+    expect(isPhase7BackendMessageText("Request must be approved before it can be executed")).toBe(true);
+    expect(isPhase7BackendMessageText("Production Bonus")).toBe(true);
+    expect(isPhase7BackendMessageText("HMD INTERNATIONAL GROUP")).toBe(false);
+    expect(translatePhase7BackendMessageText("HMD INTERNATIONAL GROUP", "ar")).toBeNull();
+    expect(translatePhase7BackendMessageText("MSKU1786517", "fr")).toBeNull();
+    expect(translatePhase7BackendMessageText("JV-2026-0042", "ar")).toBeNull();
+  });
+});

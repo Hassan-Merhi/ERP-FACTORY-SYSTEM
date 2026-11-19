@@ -59,7 +59,7 @@ Admin/Owner/Developer only. Runs a tenant-scoped PostgreSQL `REPEATABLE READ REA
 
 ## 5. Regression coverage added
 
-- `tests/factory-mix-phase4-provenance.test.ts`: ADD-backed vs unbacked quantity classification, exact balances, raw/ownership/FX classifications, CSV safety, manual ADD pool use and precise refusal.
+- `tests/factory-mix-provenance.test.ts`: ADD-backed vs unbacked quantity classification, exact balances, raw/ownership/FX classifications, CSV safety, manual ADD pool use and precise refusal.
 - `tests/factory-historical-replay-v7-final-safety.test.ts`: documentary evidence required for valued adjustment classification.
 - Phase 1–3 tests remain on the branch. Tests/CI were intentionally not run during this phase.
 

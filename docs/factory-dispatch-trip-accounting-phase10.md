@@ -27,7 +27,7 @@ No CI checks, no test runner, no SQL execution by assistant, no merge into main 
 7. **Immutable final commercial source.** The Phase 8 manual SQL now also protects finalized original invoice identity, business date and monetary totals, its commercial invoice lines and the exact signed SOLD bale status/article/reference/weight/cost from generic historical edits. Only unrelated metadata may change, preserving the existing workflow where appropriate.
 8. **Immutable final vouchers.** The staged Phase 8 TablePlus script now installs additional triggers protecting the combined invoice's new clearing, COGS and original charge vouchers, voucher entries and accounting posting identities from generic edits/retirement after finalization. Phase 4 protection already guards the original individual truck FDTR/FDTE vouchers.
 9. **SQL script syntax correction.** The Phase 4 manual SQL previously had an invalid lone `$` delimiter around its voucher-protection function. This was fixed to balanced PostgreSQL `$$` delimiters and will be included in the refreshed combined TablePlus script.
-10. **Regression source staged.** `tests/factory-dispatch-financial-phase10-release.test.ts` documents no-double-posting, SQL quoting, guard presence, amount math, one invoice, original voucher identity, company scope, manual ERP PO workflow, source fingerprint and idempotent finalization. **Not executed**.
+10. **Regression source staged.** `tests/factory-dispatch-financial-release.test.ts` documents no-double-posting, SQL quoting, guard presence, amount math, one invoice, original voucher identity, company scope, manual ERP PO workflow, source fingerprint and idempotent finalization. **Not executed**.
 
 ## Release gates: all must be explicitly verified before production
 

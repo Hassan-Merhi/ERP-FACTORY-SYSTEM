@@ -71,9 +71,9 @@ No Excel delivery is queued.
 
 ### Test coverage added
 
-- tests/stock-transfer-order-wa-phase4-policy.test.ts — pure selection and
+- tests/stock-transfer-order-wa-policy-selects-one-leader-for-every-not.test.ts — pure selection and
   conflict handling unit tests.
-- tests/stock-transfer-order-wa-phase4-contract.test.ts — full transaction,
+- tests/stock-transfer-order-wa-contract-uses-existing-immutable-lifecycle-once-per.test.ts — full transaction,
   replay, permissions, audit and no-file-sending source contracts.
 
 Verification is source-level only. Full TypeScript build, PostgreSQL migration

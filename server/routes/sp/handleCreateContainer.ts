@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase8ContainerOffloadRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastContainerOffloadRoutes.ts to keep that module under the source-size cap.
 import type { Request, Response } from "express";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { spContainerLines, spContainers } from "@shared/schema";
@@ -10,7 +10,7 @@ import {
   buildGoldenCoastPhase8FundingPosting,
   parseGoldenCoastPhase8ContainerInput,
   planGoldenCoastPhase8Funding,
-} from "../../services/accounting/goldenCoastPhase8ContainerOffload";
+} from "../../services/accounting/goldenCoastContainerOffload";
 import { requireSpCompany } from "./spHelpers";
 import {
   actorFromRequest,
@@ -19,14 +19,14 @@ import {
   PHASE8_MAX_LINES,
   postingDependencies,
   respondKnownError,
-} from "./spGoldenCoastPhase8RouteSupport";
+} from "./spGoldenCoastRouteSupport";
 import {
   assertPhase8Ready,
   resolveRoleAccounts,
   validateFundingAccount,
   validateStockItems,
   validateSupplier,
-} from "./spGoldenCoastPhase8ContainerOffloadRoutesValidateFundingAccount";
+} from "./spGoldenCoastContainerOffloadRoutesValidateFundingAccount";
 
 export async function handleCreateContainer(req: Request, res: Response): Promise<void> {
   let companyId: number | null = null;

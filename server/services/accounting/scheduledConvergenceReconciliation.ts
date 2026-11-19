@@ -7,9 +7,9 @@ import {
   type ConvergenceReconciliationResult,
 } from "./convergenceReconciliation";
 import { createDatabaseConvergenceAdapter } from "./databaseConvergenceAdapter";
-import { loadDatabasePhase3AccountingAudit } from "./databasePhase3AccountingAudit";
-import { auditPhase3Accounting } from "./phase3AccountingAudit";
-import { loadPhase3InventoryValuationSnapshot } from "./phase3InventoryValuation";
+import { loadDatabasePhase3AccountingAudit } from "./databaseAccountingAudit";
+import { auditPhase3Accounting } from "./accountingAudit";
+import { loadPhase3InventoryValuationSnapshot } from "./inventoryValuation";
 
 const convergenceAdapter = createDatabaseConvergenceAdapter(loadDatabaseStockConvergenceSnapshots);
 

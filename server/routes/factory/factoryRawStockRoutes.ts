@@ -14,7 +14,7 @@ import { postOffloadHistoricalReplayMiddleware } from "./raw-stock/postOffloadHi
 import { requirePostOffloadImpactPreview } from "./raw-stock/postOffloadImpactPreviewMiddleware";
 import { registerPostOffloadImpactPreviewRoutes } from "./raw-stock/postOffloadImpactPreviewRoutes";
 import { postOffloadReconciliationMiddleware } from "./raw-stock/postOffloadReconciliationMiddleware";
-import { registerPostOffloadPhase6SafetyRoutes } from "./raw-stock/postOffloadPhase6SafetyRoutes";
+import { registerPostOffloadPhase6SafetyRoutes } from "./raw-stock/postOffloadSafetyRoutes";
 import { requireValidBatchSourceDeleteInput } from "./raw-stock/batchSourceDeleteInputGuard";
 
 const RAW_STOCK_REPAIR_PERMISSION = "factory.raw-stock.repair";

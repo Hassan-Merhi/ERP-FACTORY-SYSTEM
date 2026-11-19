@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url));
+const routeSource = readModuleFamily(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url));
 const indexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
 const accessSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
 const serviceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase11MonthlyClose.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastMonthlyClose.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 11 monthly close route surface", () => {

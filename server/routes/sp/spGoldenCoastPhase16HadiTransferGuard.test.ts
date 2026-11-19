@@ -3,7 +3,7 @@ import {
   GOLDEN_COAST_PHASE16_LEGACY_HADI_PATH,
   GOLDEN_COAST_PHASE16_LEGACY_HADI_RETIRED_CODE,
   goldenCoastPhase16LegacyHadiRetiredPayload,
-} from "./spGoldenCoastPhase16HadiTransferGuard";
+} from "./spGoldenCoastHadiTransferGuard";
 
 describe("Golden Coast Phase 16 legacy manual HADI guard", () => {
   it("keeps the compatibility path stable while explicitly retiring its mutation semantics", () => {

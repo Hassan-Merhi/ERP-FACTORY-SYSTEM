@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import type { Request, RequestHandler, Response } from "express";
 import { BROWSER_OPERATION_KINDS } from "../browserSync/browserOperationKinds";
 import { logger } from "../../lib/logger";
-import { PHASE9_STOCK_ITEM_CREATE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
+import { PHASE9_STOCK_ITEM_CREATE_KIND } from "../../edge/stockItemLifecycleEnvelope.mjs";
 
 const READS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Same rule as scripts/pc-sync/local/syncAgent.mjs (PC_SYNC_BLOCK_AFTER_HOURS). */

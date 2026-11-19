@@ -16,9 +16,9 @@ import type { Request } from "express";
 import Decimal from "decimal.js";
 import { stockItemCodeAliases, stockItemLocationPrices, stockItems, type InsertStockItem } from "@shared/schema";
 import type { DbTransaction } from "../../db";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
-import { capturePhase9StockItemEditTx } from "../../edge/phase9StockOutbox";
-import { PHASE9_STOCK_ITEM_EDIT_FIELDS, type Phase9StockItemChange } from "../../edge/phase9StockItemEditEnvelope.mjs";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
+import { capturePhase9StockItemEditTx } from "../../edge/stockOutbox";
+import { PHASE9_STOCK_ITEM_EDIT_FIELDS, type Phase9StockItemChange } from "../../edge/stockItemEditEnvelope.mjs";
 import { getClientDate } from "../../lib/dateUtils";
 
 const ITEM_FIELDS = PHASE9_STOCK_ITEM_EDIT_FIELDS.item;

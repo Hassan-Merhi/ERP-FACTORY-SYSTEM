@@ -49,7 +49,7 @@
  * migrations (migrations/); nothing is installed at runtime. Rows written
  * before the triggers existed have no hash (counted as `unhashed`). The
  * functions read the request settings named by auditActorContext's
- * AUDIT_ACTOR_SETTINGS (pinned by tests/phase21a-audit-trigger.test.ts).
+ * AUDIT_ACTOR_SETTINGS (pinned by tests/audit-trigger.test.ts).
  */
 /** Expected version: the comment on erp_ledger_row_audit(), read by the integrity diagnostic. */
 export const VOUCHER_AUDIT_TRIGGER_VERSION = "2026-10-audit-trail-v1";

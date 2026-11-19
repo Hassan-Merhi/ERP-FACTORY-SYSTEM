@@ -8,7 +8,7 @@ import {
   buildGoldenCoastPhase3CutoverPlan,
   goldenCoastPhase3VoucherNumber,
   type GoldenCoastPhase3CutoverInput,
-} from "./goldenCoastPhase3Cutover";
+} from "./goldenCoastCutover";
 
 const accounts = {
   freshStartEquityAccountId: 101,

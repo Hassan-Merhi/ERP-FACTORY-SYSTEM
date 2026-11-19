@@ -20,8 +20,8 @@ import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { DuplicateStockTransferError, StockTransferPolicyError } from "../../storage/stock-ops/transfers-create";
 import { createStockTransferTx } from "../../services/inventory/createStockTransfer";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
-import { capturePhase9StockTransferTx } from "../../edge/phase9StockOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
+import { capturePhase9StockTransferTx } from "../../edge/stockOutbox";
 import { stockTransferEvidence } from "./stockTransferOfflineEvidence";
 import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
@@ -78,8 +78,11 @@ export function registerStockTransferCreateRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (workflowOrigin === "stock_transfer_order") {
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const [company] = await db.select({ companyType: companies.companyType })
-          .from(companies).where(eq(companies.id, companyId)).limit(1);
+        const [company] = await db
+          .select({ companyType: companies.companyType })
+          .from(companies)
+          .where(eq(companies.id, companyId))
+          .limit(1);
         if (company?.companyType === "retail") {
           return res.status(403).json({
             code: "RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED",

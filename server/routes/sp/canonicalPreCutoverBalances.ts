@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase3CutoverRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastCutoverRoutes.ts to keep that module under the source-size cap.
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { bankAccounts, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../../db";
@@ -9,13 +9,13 @@ import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
   type GoldenCoastLedgerRow,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   GOLDEN_COAST_PHASE3_CUTOVER_DATE,
   type GoldenCoastPhase3CashAccount,
   type GoldenCoastPhase3RoleAccounts,
   goldenCoastPhase3VoucherNumber,
-} from "../../services/accounting/goldenCoastPhase3Cutover";
+} from "../../services/accounting/goldenCoastCutover";
 import { goldenCoastExistingPositionCarryForwardVoucherNumber } from "../../services/accounting/goldenCoastCutoverMarkers";
 
 export const postingDependencies = createDatabasePostingDependencies();

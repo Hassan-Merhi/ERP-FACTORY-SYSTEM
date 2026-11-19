@@ -3,7 +3,7 @@ import {
   buildGoldenCoastPhase15SalesPayablePosting,
   goldenCoastPhase15SalesPayableDigest,
   type GoldenCoastPhase15SalesPayableInput,
-} from "./goldenCoastPhase15SalesPayable";
+} from "./goldenCoastSalesPayable";
 import {
   buildGoldenCoastFreshStartHadiPaymentPostings,
   goldenCoastFreshStartHadiPaymentDigest,

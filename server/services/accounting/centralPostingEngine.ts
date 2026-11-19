@@ -21,7 +21,7 @@ import {
   predictedLedgerTotals,
   resolveRoundingAccountIdTx,
 } from "./engineRounding";
-import { GOLDEN_COAST_PHASE11_SOURCE_TYPE as GOLDEN_COAST_MONTHLY_CLOSE_SOURCE_TYPE } from "./goldenCoastPhase11CloseIdentity";
+import { GOLDEN_COAST_PHASE11_SOURCE_TYPE as GOLDEN_COAST_MONTHLY_CLOSE_SOURCE_TYPE } from "./goldenCoastCloseIdentity";
 
 export { PostingValidationError };
 

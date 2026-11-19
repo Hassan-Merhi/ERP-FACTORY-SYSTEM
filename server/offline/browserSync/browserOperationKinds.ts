@@ -12,19 +12,19 @@
 import { randomUUID } from "node:crypto";
 import { inventoryMoney, inventoryQuantity } from "../../lib/inventoryMath";
 import { toMoney } from "../../lib/money";
-import { paymentReceiptEvidence } from "../../edge/phase9PaymentOutbox";
-import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "../../edge/phase9PaymentEnvelope.mjs";
+import { paymentReceiptEvidence } from "../../edge/paymentOutbox";
+import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "../../edge/paymentEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
   PHASE9_STOCK_TRANSFER_KIND,
   phase9StockAdjustEnvelope,
   phase9StockTransferEnvelope,
-} from "../../edge/phase9StockEnvelope.mjs";
+} from "../../edge/stockEnvelope.mjs";
 import {
   PHASE9_STOCK_ITEM_CREATE_KIND,
   phase9StockItemCreateEnvelope,
-} from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
-import { PHASE9_POS_SALE_KIND, phase9PosSaleEnvelope } from "../../edge/phase9PosSaleEnvelope.mjs";
+} from "../../edge/stockItemLifecycleEnvelope.mjs";
+import { PHASE9_POS_SALE_KIND, phase9PosSaleEnvelope } from "../../edge/posSaleEnvelope.mjs";
 import { stockTransferEvidence } from "../../routes/fiscal-transfers/stockTransferOfflineEvidence";
 
 /** Browser-created records name themselves by a local id in this range, never a cloud id. */

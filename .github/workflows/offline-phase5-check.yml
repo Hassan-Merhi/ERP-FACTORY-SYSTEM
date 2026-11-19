@@ -31,8 +31,8 @@ jobs:
           --config vitest.config.frontend.ts
           tests/ui/offline-read-cache.test.ts
           tests/ui/offline-scoped-preparation.test.ts
-          tests/ui/offline-phase5-snapshot-vault.test.ts
-          tests/ui/offline-phase5-encrypted-cache.test.ts
+          tests/ui/offline-snapshot-vault.test.ts
+          tests/ui/offline-encrypted-cache.test.ts
       - name: Phase 5 changed source formatting
         run: >-
           node node_modules/prettier/bin/prettier.cjs --check
@@ -41,8 +41,8 @@ jobs:
           client/src/lib/offline/scopedOfflinePrep.ts
           client/src/lib/db.ts
           client/src/components/OfflinePrepPanel.tsx
-          tests/ui/offline-phase5-snapshot-vault.test.ts
-          tests/ui/offline-phase5-encrypted-cache.test.ts
+          tests/ui/offline-snapshot-vault.test.ts
+          tests/ui/offline-encrypted-cache.test.ts
 
   repository-typecheck:
     runs-on: ubuntu-26.04

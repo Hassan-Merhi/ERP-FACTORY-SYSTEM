@@ -30,7 +30,7 @@
 
 ## Regression coverage added
 
-- `tests/mix-batch-recorded-valuation-phase1.test.ts`: batch and source historical totals, blended-rate separation, zero-cost preservation, weighted aggregates.
+- `tests/mix-batch-recorded-valuation.test.ts`: batch and source historical totals, blended-rate separation, zero-cost preservation, weighted aggregates.
 - `tests/mix-batch-sources-exact.test.ts`: source GET preserves recorded zero cost and marks historical unvalued rows.
 - `tests/mix-batch-edit-exact.test.ts`: completed-batch source repricing blocked; metadata-only updates allowed.
 - Existing historical read and export tests stay in place and should be executed with the final controlled verification.

@@ -54,7 +54,7 @@ import { registerRemoteControlSessionRoutes } from "./remoteControlSessionRoutes
 import { registerRemoteKeyboardControlRoutes } from "./remoteKeyboardControlRoutes";
 import { registerRemoteSupportAuditRoutes } from "./remoteSupportAuditRoutes";
 import { registerRemoteSupportRolloutRoutes } from "./remoteSupportRolloutRoutes";
-import { phase4LazyRoutes } from "./renderPhase4LazyRoutes";
+import { phase4LazyRoutes } from "./renderLazyRoutes";
 import { installRemoteSupportSessionStopAudit } from "../services/remoteSupportAuditService";
 import { registerReportsRoutes } from "./reportsRoutes";
 import { registerScreenFeedRoutes } from "./screenFeedRoutes";
@@ -79,7 +79,7 @@ import { registerDispatchBatchRoutes } from "./factory/dispatch-batches";
 import { registerFactoryInvoiceLoadingRoutes } from "./factory/invoice-loading";
 import { registerFactoryInsuranceRoutes } from "./factory/factoryInsuranceRoutes";
 import { registerInsuranceHistoricalRepairRoutes } from "./factory/insuranceHistoricalRepairRoutes";
-import { registerPhase3HistoricalRepairRoutes } from "./accounting-integrity/phase3HistoricalRepairRoutes";
+import { registerPhase3HistoricalRepairRoutes } from "./accounting-integrity/historicalRepairRoutes";
 import { registerStockAdjustmentInventorySideRoutes } from "./accounting-integrity/stockAdjustmentInventorySideRoutes";
 import { registerLegacyPlugAndBackfillRoutes } from "./accounting-integrity/legacyPlugAndBackfillRoutes";
 import { registerAttributionHistoricalRepairRoutes } from "./factory/attributionHistoricalRepairRoutes";
@@ -94,7 +94,7 @@ import { registerSalaryAdvanceRoutes } from "./employees/salaryAdvanceRoutes";
 import { registerLegacyHealthRoutes } from "./core/healthRoutes";
 import { registerVoucherMutationBoundaries } from "./core/voucherMutationBoundaryRoutes";
 import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfigRoutes";
-import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
+import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthFactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();

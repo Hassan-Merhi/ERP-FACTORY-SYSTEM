@@ -2,7 +2,7 @@
  * Plan batch 3 (owner-approved 2026-11-05): evidence for changes to existing
  * stock transfers made on the factory LAN server. Each change is recorded on
  * the "stock" stream in the same transaction as the change itself
- * (server/edge/phase9StockOutbox.ts).
+ * (server/edge/stockOutbox.ts).
  *
  * Off the LAN primary every helper here is a no-op (or runs the plain
  * service), so the cloud routes behave exactly as before.
@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Request } from "express";
 import { db, type DbTransaction } from "../../db";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import {
   capturePhase9StockTransferEditTx,
   capturePhase9StockTransferFinalizeTx,
@@ -20,11 +20,11 @@ import {
   phase9RevisionRefTx,
   phase9TransferRefTx,
   phase9TransferSnapshotTx,
-} from "../../edge/phase9StockOutbox";
+} from "../../edge/stockOutbox";
 import type {
   Phase9TransferEditTarget,
   Phase9TransferRevisionBody,
-} from "../../edge/phase9StockTransferWorkflowEnvelope.mjs";
+} from "../../edge/stockTransferWorkflowEnvelope.mjs";
 import { getClientDate } from "../../lib/dateUtils";
 import {
   finalizeOptionalStockTransfer,

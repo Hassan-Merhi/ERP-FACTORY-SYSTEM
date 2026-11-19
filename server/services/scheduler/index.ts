@@ -98,7 +98,7 @@ export function startScheduler(): void {
   // ENABLE_SCHEDULERS=false and the optional feature flag disable this.
   if (process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false") {
     const mixIntegrityTick = createSchedulerTick("factoryMixIntegrityMonitor", async () => {
-      const { runScheduledFactoryMixIntegrityMonitoring } = await import("../factory/mixPhase7IntegrityMonitor");
+      const { runScheduledFactoryMixIntegrityMonitoring } = await import("../factory/mixIntegrityMonitor");
       const result = await runScheduledFactoryMixIntegrityMonitoring();
       if (result.failed > 0) {
         throw new Error("Factory mix integrity scan failed for " + result.failed + " company(s)");

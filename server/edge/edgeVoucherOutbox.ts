@@ -10,7 +10,7 @@ import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 import { resultRows } from "../lib/queryResult";
 import { PostingValidationError } from "../services/accounting/postingValidationError";
-import { PHASE8_CASH_BOX_VOUCHER_TYPES, phase8CashBoxRefusal } from "./phase8CashBoxPolicy.mjs";
+import { PHASE8_CASH_BOX_VOUCHER_TYPES, phase8CashBoxRefusal } from "./cashBoxPolicy.mjs";
 
 /** Stable object-key order for comparing a JSONB record after remote transport. */
 export function canonicalEdgeVoucherPayload(voucher: unknown, entries: readonly unknown[]): string {

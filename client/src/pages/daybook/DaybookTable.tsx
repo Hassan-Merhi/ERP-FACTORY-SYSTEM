@@ -108,7 +108,7 @@ export function DaybookTable({
       });
 
     return (
-      // build/vitePhase1PaginationPlugin.ts matches this opening tag on one line.
+      // build/vitePaginationPlugin.ts matches this opening tag on one line.
       // prettier-ignore
       <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
@@ -835,7 +835,7 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        {/* build/vitePhase1PaginationPlugin.ts matches this opening tag on one line. */}
+        {/* build/vitePaginationPlugin.ts matches this opening tag on one line. */}
         {/* prettier-ignore */}
         <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">

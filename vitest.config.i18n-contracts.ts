@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["tests/phase14-i18n-release-gate.test.ts", "tests/phase8-rtl-responsive-accessibility.test.ts"],
+    include: ["tests/i18n-release-gate.test.ts", "tests/rtl-responsive-accessibility.test.ts"],
     fileParallelism: false,
   },
   resolve: {

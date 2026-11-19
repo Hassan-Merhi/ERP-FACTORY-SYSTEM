@@ -29,14 +29,14 @@ node scripts/offline-phase5/acceptance.mjs --stage baseline \
 
 4. After controlled WAN disconnection and approved cutover, run the same command with \`--stage outage\`. Do not disable LAN Wi-Fi or unplug factory Ethernet when simulating loss of external internet. Observe actual laptop sign-in, offline data preparation, authorized entry/replay, multi-laptop behavior and backup restore as **separate manual checks**.
 5. Restore WAN access and run \`--stage restored\`. Keep the same edge, cloud health URL, expected site and report path for all stages. Failed stages may be retried after correcting conditions. Never delete a failed report to misrepresent readiness.
-6. Inspect the saved report and run \`node --test tests/offline-phase5-acceptance.test.mjs\`. A three-stage pass is only **connectivity evidence**. Require separate Phase 4 replication/audit reconciliation, cloud/edge write fences, idempotent replay, stock/accounting totals, restore-from-backup, role-permission and security tests before production activation.
+6. Inspect the saved report and run \`node --test tests/offline-acceptance.test.mjs\`. A three-stage pass is only **connectivity evidence**. Require separate Phase 4 replication/audit reconciliation, cloud/edge write fences, idempotent replay, stock/accounting totals, restore-from-backup, role-permission and security tests before production activation.
 
 If the server returns a different edge-status JSON schema than \`{ mode: "lan", siteId: "UUID", writeMode: "read-only" | "lan-primary" }\`, coordinate the contract with Phase 3 instead of loosening the checks in production. Operator environment values are illustrative only; provide the actual LAN certificate, URLs and UUID at deployment.
 
 ## Verification and known blockers
 
 \`\`\`sh
-node --test tests/offline-phase5-acceptance.test.mjs
+node --test tests/offline-acceptance.test.mjs
 \`\`\`
 
 Unit tests use mocked HTTP responses; they do not replace hardware, real WAN failure, PostgreSQL restore, browser service-worker or cross-database integration tests. The production offline feature flag must remain disabled until these gates are independently demonstrated. Do not merge the Phase 4 branch as part of Phase 5.

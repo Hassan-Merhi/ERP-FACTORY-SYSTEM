@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase8ContainerOffloadRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastContainerOffloadRoutes.ts to keep that module under the source-size cap.
 import type { Request, Response } from "express";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { ledgerAccounts, spContainerLines, spContainers, voucherEntries } from "@shared/schema";
@@ -14,16 +14,16 @@ import {
   type GoldenCoastPhase8FundedContainerState,
   type GoldenCoastPhase8PostingAccount,
   type GoldenCoastPhase8RoleAccounts,
-} from "../../services/accounting/goldenCoastPhase8ContainerOffload";
+} from "../../services/accounting/goldenCoastContainerOffload";
 import { requireSpCompany } from "./spHelpers";
 import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
-import { GoldenCoastPhase8RouteError } from "./spGoldenCoastPhase8RouteSupport";
+import { GoldenCoastPhase8RouteError } from "./spGoldenCoastRouteSupport";
 import {
   assertPhase8Ready,
   validateFundingAccount,
   validateStockItems,
   type DatabaseTransaction,
-} from "./spGoldenCoastPhase8ContainerOffloadRoutesValidateFundingAccount";
+} from "./spGoldenCoastContainerOffloadRoutesValidateFundingAccount";
 
 export async function loadFundedContainer(
   tx: DatabaseTransaction,

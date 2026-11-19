@@ -124,7 +124,7 @@ jobs:
       - name: Production release preflight stays fail-closed without evidence
         run: |
           set -euo pipefail
-          if node scripts/verify-database-phase9-release.mjs --commit="$GITHUB_SHA" > "$RUNNER_TEMP/release-preflight.json"; then
+          if node scripts/verify-database-release.mjs --commit="$GITHUB_SHA" > "$RUNNER_TEMP/release-preflight.json"; then
             echo "::error::Missing production evidence must block the release."
             exit 1
           fi

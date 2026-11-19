@@ -149,6 +149,6 @@ The iPhone-specific browser fixes are independent of ERP accounting and role rul
 - **Keyboard and dialogs:** Existing phone bottom-sheet and `visualViewport` behavior is retained without changing business forms; no new global keyboard handlers are introduced.
 - **Printing/PDF:** Existing direct user-gesture print actions remain in place. Before deployment, verify system print/Save to PDF using Safari's print/share interface and that large PDFs have correct orientation and headers.
 
-Automated coverage: `tests/ui/iphone-duo-phase3-downloads.test.ts`, `MobileBarcodeScanner.test.tsx`, `ContinuousPressingScanner.test.tsx`, and `continuousScanGate.test.ts`. UI Quality runs them together with existing phone/tablet regression tests.
+Automated coverage: `tests/ui/iphone-duo-downloads.test.ts`, `MobileBarcodeScanner.test.tsx`, `ContinuousPressingScanner.test.tsx`, and `continuousScanGate.test.ts`. UI Quality runs them together with existing phone/tablet regression tests.
 
 **Physical iOS Safari sign-off remains mandatory.** On the actual device, verify rear-camera permission on first use; camera stop when switching tabs, locking, or opening/closing the device; Retry after a revoked track; barcode duplicate feedback; return from the browser back-forward cache; Excel/CSV opening in Files; repeating the same Excel import; printing and saving PDF; and portrait/landscape keyboard reachability. Automated Chromium and mock-track tests cannot certify real WebKit camera hardware, native Files/Share sheets, or a physical hinge.

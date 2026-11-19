@@ -52,7 +52,7 @@
     {
       "id": "ai-validation-unimplemented-types-message-i18n",
       "classification": "structured-server-stub",
-      "path": "client/src/i18n/backendMessagesPhase7Translations.part4.ts",
+      "path": "client/src/i18n/backendMessagesTranslations.part4.ts",
       "marker": "not yet implemented",
       "userImpact": "French and Arabic translations of the structured stub message, not a workflow of their own.",
       "nextOwnerPhase": "8B"
@@ -60,7 +60,7 @@
     {
       "id": "ai-validation-unimplemented-types-warning-i18n",
       "classification": "structured-server-stub",
-      "path": "client/src/i18n/backendMessagesPhase7Translations.part4.ts",
+      "path": "client/src/i18n/backendMessagesTranslations.part4.ts",
       "marker": "coming soon",
       "userImpact": "French and Arabic translations of the structured stub warning.",
       "nextOwnerPhase": "8B"

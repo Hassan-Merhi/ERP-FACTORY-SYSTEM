@@ -39,7 +39,7 @@ Neither setting is in `render.yaml` and neither is enabled by default.
 - `server/criticalSecuritySchemaBridge.mjs`: permissions table/indexes, duplicate deletion and default grants.
 - `server/startup/runServerStartupMigrations.ts`: legacy SQL runner plus rental allocation and historical data repairs.
 - Additional `ensure*` service functions imported during app startup; must be inventoried and assigned owners.
-- `server/wave3SalesHotpathIndexBridge.mjs`: already env-gated; `CREATE INDEX CONCURRENTLY` requires a specially designed nontransactional migration step and must not be placed in the transaction-per-file runner.
+- `server/salesHotpathIndexRepair.mjs`: already env-gated; `CREATE INDEX CONCURRENTLY` requires a specially designed nontransactional migration step and must not be placed in the transaction-per-file runner.
 
 ## Hard requirements before calling Phase 3 complete
 

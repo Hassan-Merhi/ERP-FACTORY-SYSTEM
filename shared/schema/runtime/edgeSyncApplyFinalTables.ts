@@ -37,7 +37,7 @@ export const factoryEdgeAppliedEvents = pgTable(
   (t) => [primaryKey({ columns: [t.siteId, t.stream, t.sequence] }), unique().on(t.siteId, t.operationId)]
 );
 
-// ── Phase 10 LAN operator pause/resume log (server/edge/phase10SyncControl.mjs)
+// ── Phase 10 LAN operator pause/resume log (server/edge/syncControl.mjs)
 export const factoryEdgeSyncControlLog = pgTable("factory_edge_sync_control_log", {
   id: bigserial("id", { mode: "bigint" }).primaryKey(),
   siteId: uuid("site_id").notNull(),

@@ -20,7 +20,7 @@ import process from "node:process";
 import pg from "pg";
 
 import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
-import { runInventoryValuationWave6RepairOnce } from "./inventoryValuationWave6Repair.mjs";
+import { runInventoryValuationWave6RepairOnce } from "./inventoryValuationGuardedRepair.mjs";
 
 const RUN_KEY = Symbol.for("erp.startup-data-operations.ran");
 

@@ -22,7 +22,7 @@ type CentralPaymentReceiptBody = Omit<
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import type { FactoryDaybookVoucherLike } from "../../services/accounting/daybookConvergence";
 
 const postingDependencies = createDatabasePostingDependencies();

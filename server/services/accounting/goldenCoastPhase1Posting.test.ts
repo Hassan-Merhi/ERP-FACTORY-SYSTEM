@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildGoldenCoastPhase1PostingRequest,
-  getGoldenCoastPhase1CashRoleRequirements,
-} from "./goldenCoastPhase1Posting";
+import { buildGoldenCoastPhase1PostingRequest, getGoldenCoastPhase1CashRoleRequirements } from "./goldenCoastPosting";
 
 const ledger = (id: number) => ({ kind: "ledger" as const, id });
 const bank = (id: number) => ({ kind: "bank" as const, id });

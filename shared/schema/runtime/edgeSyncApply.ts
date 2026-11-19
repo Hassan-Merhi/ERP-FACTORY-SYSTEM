@@ -32,7 +32,7 @@ import { factoryPressingConfirmations } from "../factory/pressing-machine-tracki
 import { containerOffloads } from "../containers";
 import { storedFiles } from "../erp/documents";
 
-// ── Phase 8 cloud voucher apply (server/edge/phase8ApplyStore.mjs) ─────────
+// ── Phase 8 cloud voucher apply (server/edge/applyStore.mjs) ─────────
 export const factoryEdgeApplyCursor = pgTable("factory_edge_apply_cursor", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" })
@@ -99,7 +99,7 @@ export const factoryEdgeAppliedReceipts = pgTable(
   (t) => [primaryKey({ columns: [t.siteId, t.sequence] }), unique().on(t.siteId, t.operationId)]
 );
 
-// ── Phase 9 LAN pressing capture (server/edge/phase9PressingOutbox.ts) ─────
+// ── Phase 9 LAN pressing capture (server/edge/pressingOutbox.ts) ─────
 export const factoryEdgePressingCounter = pgTable("factory_edge_pressing_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -133,7 +133,7 @@ export const factoryEdgePressingOutbox = pgTable(
   ]
 );
 
-// ── Phase 9 LAN stock capture (server/edge/phase9StockOutbox.ts) ────────
+// ── Phase 9 LAN stock capture (server/edge/stockOutbox.ts) ────────
 export const factoryEdgeStockCounter = pgTable("factory_edge_stock_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -162,7 +162,7 @@ export const factoryEdgeStockOutbox = pgTable(
   ]
 );
 
-// ── Phase 9 LAN POS sale capture (server/edge/phase9PosOutbox.ts) ───────
+// ── Phase 9 LAN POS sale capture (server/edge/posOutbox.ts) ───────
 export const factoryEdgePosCounter = pgTable("factory_edge_pos_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -197,7 +197,7 @@ export const factoryEdgePosOutbox = pgTable(
   ]
 );
 
-// ── Phase 9 LAN receiving capture (server/edge/phase9ReceivingOutbox.ts) ─
+// ── Phase 9 LAN receiving capture (server/edge/receivingOutbox.ts) ─
 export const factoryEdgeReceivingCounter = pgTable("factory_edge_receiving_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -231,7 +231,7 @@ export const factoryEdgeReceivingOutbox = pgTable(
   ]
 );
 
-// ── Phase 9 LAN attachment capture (server/edge/phase9AttachmentOutbox.ts) ─
+// ── Phase 9 LAN attachment capture (server/edge/attachmentOutbox.ts) ─
 export const factoryEdgeAttachmentCounter = pgTable("factory_edge_attachment_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -284,7 +284,7 @@ export const factoryEdgeAttachmentFileReceipts = pgTable(
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 // Cloud: which cloud stock item each LAN-created item became (plan batch 2,
-// server/edge/phase9StockItemMap.mjs). The id CHECK, uniques and the
+// server/edge/stockItemMap.mjs). The id CHECK, uniques and the
 // immutability trigger are installed by the runtime DDL.
 export const factoryEdgeStockItemMap = pgTable(
   "factory_edge_stock_item_map",
@@ -306,7 +306,7 @@ export const factoryEdgeStockItemMap = pgTable(
   ]
 );
 
-// Cloud: verified attachment bytes (server/edge/phase9CloudEventStore.mjs).
+// Cloud: verified attachment bytes (server/edge/cloudEventStore.mjs).
 export const factoryEdgeStagedFiles = pgTable(
   "factory_edge_staged_files",
   {
@@ -321,7 +321,7 @@ export const factoryEdgeStagedFiles = pgTable(
   (t) => [primaryKey({ columns: [t.siteId, t.fileSha256] })]
 );
 
-// ── Phase 9 LAN payment capture (server/edge/phase9PaymentOutbox.ts) ────
+// ── Phase 9 LAN payment capture (server/edge/paymentOutbox.ts) ────
 export const factoryEdgePaymentCounter = pgTable("factory_edge_payment_counter", {
   siteId: uuid("site_id").primaryKey().notNull(),
   lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
@@ -395,7 +395,7 @@ export const factoryEdgeEventAppliedReceipts = pgTable(
   (t) => [primaryKey({ columns: [t.siteId, t.stream, t.sequence] }), unique().on(t.siteId, t.operationId)]
 );
 
-// ── Phase 9 cloud event streams (server/edge/phase9CloudEventStore.mjs) ────
+// ── Phase 9 cloud event streams (server/edge/cloudEventStore.mjs) ────
 export const factoryEdgeEventStageCursor = pgTable(
   "factory_edge_event_stage_cursor",
   {

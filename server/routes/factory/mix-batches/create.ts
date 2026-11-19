@@ -38,7 +38,7 @@ import {
   availableSupplierAddAllowance,
   splitSupplierShortfall,
 } from "../../../services/factory/mixRawStockQuantityGuard";
-import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
+import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecycle";
 
 /** A source's rate as stored on its row (0 when it has no USD rate: the mix is then unvalued). */
 const storedRate = (rate: Decimal | null) => (rate ?? new MoneyDecimal(0)).toFixed();

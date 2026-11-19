@@ -78,8 +78,8 @@ No GREEN API instance settings or Render credentials have been changed here.
 - `server/services/stockTransferOrderWhatsAppInbound.ts`
 - `server/startup-schema/040-stock-transfer-order-wa-webhook.ts`
 - `migrations/20261111_002_stock_transfer_order_whatsapp_webhook_phase3.sql`
-- `tests/stock-transfer-order-wa-phase3-incoming.test.ts`
-- `tests/stock-transfer-order-wa-phase3-contract.test.ts`
+- `tests/stock-transfer-order-wa-incoming.test.ts`
+- `tests/stock-transfer-order-wa-contract-registers-a-named-bearer-guarded-route.test.ts`
 
 The stage 040 decision index is registered in the normal startup migration
 list and the production-compatible schema ensure, both idempotently.

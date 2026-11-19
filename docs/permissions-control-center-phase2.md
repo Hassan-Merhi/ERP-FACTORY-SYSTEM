@@ -19,7 +19,7 @@
    preview and versioned transactional writes with a permanent per-company audit.
 4. `server/routes/admin/permissionControlCenterRoutes.ts` adds seven guarded
    endpoints through `server/routes/adminRoutes.ts`.
-5. `tests/access-control-v2-phase2-store.test.ts` pins revision conflicts,
+5. `tests/access-control-v2-store.test.ts` pins revision conflicts,
    protected role behavior, transaction/audit consistency, and company membership.
 6. `config/ci-ratchet-allowances.json` describes seven exact intentional
    new API route registrations; the original route manifest remains the

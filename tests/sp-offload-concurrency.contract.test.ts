@@ -10,7 +10,7 @@ describe("SP offload concurrency and idempotency contracts", () => {
   const offload = source("server/routes/sp/spOffloadRoutes.ts");
   const containers = source("server/routes/sp/spContainerRoutes.ts");
   const lifecycle = source("server/routes/sp/spOffloadLifecycleRoutes.ts");
-  const phase8 = source("server/routes/sp/spGoldenCoastPhase8ContainerOffloadRoutes.ts");
+  const phase8 = source("server/routes/sp/spGoldenCoastContainerOffloadRoutes.ts");
 
   it("locks and re-checks the legacy container before any offload posting", () => {
     const transactionStart = offload.indexOf("db.transaction");

@@ -69,9 +69,9 @@ describe("cent-exact technical profit normalization", () => {
     const files = [
       "server/services/intercompany/containerTradingImport.ts",
       "server/services/intercompany/tradeSync.ts",
-      "server/services/intercompany/phase5Cancel.ts",
+      "server/services/intercompany/cancel.ts",
       "server/services/intercompany/legacyProfitNetting.ts",
-      "server/routes/import/intercompany-phase5.ts",
+      "server/routes/import/intercompany-receiving.ts",
     ].map((path) => readModuleFamily(path));
     expect(files[0]).toContain("technicalProfitNetting: true");
     expect(files[0]).toContain("technicalProfitNettingLines(");

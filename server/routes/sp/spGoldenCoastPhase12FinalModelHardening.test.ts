@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const phase6RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url));
-const phase6AutoHadiSource = readModuleFamily(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url));
-const phase7RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase7HadiTransferRoutes.ts", import.meta.url));
+const phase6RouteSource = readModuleFamily(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url));
+const phase6AutoHadiSource = readModuleFamily(new URL("./goldenCoastAutoHadi.ts", import.meta.url));
+const phase7RouteSource = readModuleFamily(new URL("./spGoldenCoastHadiTransferRoutes.ts", import.meta.url));
 const phase7ServiceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase7HadiTransfer.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastHadiTransfer.ts", import.meta.url)
 );
-const phase10RouteSource = readModuleFamily(
-  new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url)
-);
-const phase11RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url));
+const phase10RouteSource = readModuleFamily(new URL("./spGoldenCoastSalesCashSettlementRoutes.ts", import.meta.url));
+const phase11RouteSource = readModuleFamily(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url));
 const legacySalesGuardSource = readModuleFamily(new URL("./spGoldenCoastLegacySalesGuard.ts", import.meta.url));
 const posMutationsSource = readModuleFamily(
   new URL("../../../client/src/pages/pos/hooks/usePosMutations.ts", import.meta.url)

@@ -9,7 +9,7 @@ import { registerSeasonalAppearanceRoutes } from "./routes/seasonalAppearanceRou
 import { registerTenantIsolationBoundary } from "./routes/tenantBoundaryRegistrar";
 import { registerStockTransferOrderWaApprovalWebhookRoutes } from "./routes/stockTransferOrderWaApprovalWebhookRoutes";
 import { registerOperationalVoucherRequestBoundary } from "./services/accounting/operationalVoucherRequestBoundary";
-import { registerVoucherPathPhase5to6Boundary } from "./services/accounting/voucherPathPhase5to6Boundary";
+import { registerVoucherPathPhase5to6Boundary } from "./services/accounting/voucherPathTransitionBoundary";
 
 export function registerRoutes(app: Express): Promise<Server> {
   // This machine-to-machine endpoint must be authenticated by the webhook

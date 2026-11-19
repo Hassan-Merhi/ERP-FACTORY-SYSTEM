@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase8ContainerOffloadRoutes.ts", import.meta.url));
+const routeSource = readModuleFamily(new URL("./spGoldenCoastContainerOffloadRoutes.ts", import.meta.url));
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
 const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
-const phase4RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase4CutoverFifoRoutes.ts", import.meta.url));
+const phase4RouteSource = readModuleFamily(new URL("./spGoldenCoastCutoverFifoRoutes.ts", import.meta.url));
 const phase4ServiceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase4CutoverFifo.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastCutoverFifo.ts", import.meta.url)
 );
-const migrationReconcileSource = readModuleFamily(new URL("./spMigrationPhase4Reconcile.ts", import.meta.url));
+const migrationReconcileSource = readModuleFamily(new URL("./spMigrationReconcile.ts", import.meta.url));
 const phase8ServiceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase8ContainerOffload.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastContainerOffload.ts", import.meta.url)
 );
 const phase5ServiceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase5PosSale.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 8 container/offload route", () => {

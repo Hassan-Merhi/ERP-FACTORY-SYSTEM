@@ -19,7 +19,7 @@
 
 ## Automated coverage added (not run; owner requested no CI)
 
-- `tests/hmd-kinshasa-rent-phase4.test.ts` — original voucher evidence, hold selection, strict dates and per-month positive-only outstanding.
+- `tests/hmd-kinshasa-rent-settles-a-live-credited-payable-not.test.ts` — original voucher evidence, hold selection, strict dates and per-month positive-only outstanding.
 - `tests/rental-payment-accounting-reconciliation.test.ts` — first $200 due payment against a $500 month, second $300 payable settlement, partial prepaid then due settlement, two competing scheduled payment groups, missing-voucher alerts, refusal to create cashless payments or invalid dates, and guarantee exclusion.
 
 ### Live source baseline confirmed by independent read-only Render queries

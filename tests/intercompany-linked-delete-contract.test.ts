@@ -3,7 +3,7 @@ import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const service = readModuleFamily("server/services/intercompany/linkedTradePhysicalDelete.ts");
 const daybook = readModuleFamily("client/src/pages/Daybook.tsx");
-const routes = readModuleFamily("server/routes/import/intercompany-phase5.ts");
+const routes = readModuleFamily("server/routes/import/intercompany-receiving.ts");
 const importService = readModuleFamily("server/services/intercompany/containerTradingImport.ts");
 const storage = readModuleFamily("server/storage/containers-store/containers.ts");
 const pagination = readModuleFamily("server/routes/containers/containerListPaginationRoutes.ts");

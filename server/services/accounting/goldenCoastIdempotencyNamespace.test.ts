@@ -15,12 +15,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { goldenCoastEquitySalesCashIdempotencyKey } from "./goldenCoastEquitySalesCashSettlement";
-import { goldenCoastPhase5IdempotencyKey } from "./goldenCoastPhase5PosSale";
-import { goldenCoastPhase6IdempotencyKey } from "./goldenCoastPhase6SpecialLocationDeduction";
-import { goldenCoastPhase7IdempotencyKey } from "./goldenCoastPhase7HadiTransfer";
-import { goldenCoastPhase9IdempotencyKey } from "./goldenCoastPhase9HassanSavingsWithdrawal";
-import { goldenCoastPhase10IdempotencyKey } from "./goldenCoastPhase10SalesCashSettlement";
-import { goldenCoastPhase11IdempotencyKey } from "./goldenCoastPhase11MonthlyClose";
+import { goldenCoastPhase5IdempotencyKey } from "./goldenCoastPosSale";
+import { goldenCoastPhase6IdempotencyKey } from "./goldenCoastSpecialLocationDeduction";
+import { goldenCoastPhase7IdempotencyKey } from "./goldenCoastHadiTransfer";
+import { goldenCoastPhase9IdempotencyKey } from "./goldenCoastHassanSavingsWithdrawal";
+import { goldenCoastPhase10IdempotencyKey } from "./goldenCoastSalesCashSettlement";
+import { goldenCoastPhase11IdempotencyKey } from "./goldenCoastMonthlyClose";
 
 const COMPANY = 7;
 const OTHER_COMPANY = 8;

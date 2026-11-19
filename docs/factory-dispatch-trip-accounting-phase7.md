@@ -97,7 +97,7 @@ The approval fingerprint intentionally ignores independent *manual ERP PO file-d
 - `docs/sql/manual/2026-11-10-factory-dispatch-phase7-order-reconciliation.sql` — Phase 7 PostgreSQL signoff and evidence locks. **NOT EXECUTED**.
 
 **Regression source**
-- `tests/factory-dispatch-financial-phase7.test.ts` — staged tests for multi-truck totals, exact shortages, duplicate/unexpected scans, missing financial vouchers, charge separation, export-independent fingerprint and atomic correction. **NOT RUN**.
+- `tests/factory-dispatch-financial-reports-exact-missing-pending-loading-references.test.ts` — staged tests for multi-truck totals, exact shortages, duplicate/unexpected scans, missing financial vouchers, charge separation, export-independent fingerprint and atomic correction. **NOT RUN**.
 
 ## Manual TablePlus scripts held for the FINAL handoff
 

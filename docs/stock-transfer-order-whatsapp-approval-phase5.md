@@ -97,9 +97,9 @@ paused. Environment kill switch: STO_WA_DELIVERY_ENABLED=false. Production is al
 
 ## Tests
 
-- tests/stock-transfer-order-wa-phase5-workbook.test.ts validates the real
+- tests/stock-transfer-order-wa-workbook.test.ts validates the real
   XLSX structure, subtotals, grand total, references and formula protection.
-- tests/stock-transfer-order-wa-phase5-contract.test.ts checks frozen
+- tests/stock-transfer-order-wa-contract-mirrors-seven-idempotent-migration-statements-protects.test.ts checks frozen
   transaction reads, JSONB/bytea immutability, delivery claims, retries,
   same-chat de-duplication, auth-instance confinement, and status integration.
 - tests/startup-schema-integrity.test.ts pins the new Stage 041 statements

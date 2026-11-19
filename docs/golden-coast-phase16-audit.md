@@ -20,11 +20,11 @@ Six Golden Coast branches carry Phase 15–18 work. **None is an ancestor of
 The Phase 16 branch is the substantive one. It introduces, none of which exists
 in `main`:
 
-- `server/services/accounting/goldenCoastPhase15SalesPayable.ts` — the
+- `server/services/accounting/goldenCoastSalesPayable.ts` — the
   **capital-to-payable bridge** (see §2);
-- `server/routes/sp/spGoldenCoastPhase16HadiTransferGuard.ts` (573 lines);
-- `server/routes/sp/goldenCoastPhase6AutoHadiCore.ts`, a split of the auto-HADI
-  route, which **rewrites 491 lines of `goldenCoastPhase6AutoHadi.ts`**;
+- `server/routes/sp/spGoldenCoastHadiTransferGuard.ts` (573 lines);
+- `server/routes/sp/goldenCoastAutoHadiCore.ts`, a split of the auto-HADI
+  route, which **rewrites 491 lines of `goldenCoastAutoHadi.ts`**;
 - `client/src/pages/sp/golden-coast/HadiProceedsRemittancePanel.tsx`.
 
 Nothing was merged from these branches as part of this audit. The auto-HADI

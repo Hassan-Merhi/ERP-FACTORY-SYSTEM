@@ -33,9 +33,9 @@ Phase 3 makes every successful saved rate refresh the shared **read-only monetar
 
 ## Regression coverage committed
 
-- `tests/fx-rate-phase3-refresh.test.ts`: bounded matching for FX-dependent queries, different-company rate exclusion, realtime FX topic classification, shared cache predicate eviction.
-- `tests/fx-phase3-save-refresh-contract.test.ts`: both UI save paths, post-commit backend cache invalidation, company-scoped read microcache, live group bypass, browser response invalidation, realtime override for FX-dependent heavy reports, Phase 2 parameter shadow regression.
-- Existing `tests/exchange-rate-daily-popup.test.ts`, `tests/money-exact-batch-18.test.ts`, `tests/wave9-ledger-safety-routes.test.ts`, `tests/realtime-invalidation-contract.test.ts` should continue to pass.
+- `tests/fx-rate-refresh.test.ts`: bounded matching for FX-dependent queries, different-company rate exclusion, realtime FX topic classification, shared cache predicate eviction.
+- `tests/fx-save-refresh-contract.test.ts`: both UI save paths, post-commit backend cache invalidation, company-scoped read microcache, live group bypass, browser response invalidation, realtime override for FX-dependent heavy reports, Phase 2 parameter shadow regression.
+- Existing `tests/exchange-rate-daily-popup.test.ts`, `tests/money-exact-batch-18.test.ts`, `tests/ledger-safety-routes.test.ts`, `tests/realtime-invalidation-contract.test.ts` should continue to pass.
 
 **Verification performed:** GitHub reads of changed files and source-level inspection. **Not performed:** Vitest run, tsc/build/lint, live SQL reconciliation, end-to-end frontend interaction, deployment. Before a main merge, execute tests and reconcile the Phase 2 service for Mali/Zambia and any other configured currencies. No PR merge or Render deployment was performed during Phase 3.
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import type { DbTransaction } from "../../db";
-import { capturePhase9PosSaleCancelTx } from "../../edge/phase9PosOutbox";
+import { capturePhase9PosSaleCancelTx } from "../../edge/posOutbox";
 
 /**
  * Records a POS sale cancelled (voucher deleted) on the factory LAN server,

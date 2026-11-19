@@ -42,7 +42,7 @@ Largest positive recorded remainders:
 
 ## 1. Read-only lifecycle and lineage report
 
-- `server/services/factory/mixPhase6LifecycleAudit.ts`: tenant-scoped, `REPEATABLE READ READ ONLY` database snapshot covering every saved mix, including deleted rows.
+- `server/services/factory/mixLifecycleAudit.ts`: tenant-scoped, `REPEATABLE READ READ ONLY` database snapshot covering every saved mix, including deleted rows.
 - Compares saved status, weight and used kg, negative overdraw, completed/closed remainder, active zero stock, daily usages, carry-forward parent company/date/status, carry-source kg/USD and cost rate, plus child counts.
 - Full per-batch history and issues are available in a formula-safe CSV. It never computes an automatic quantity correction.
 - Existing authenticated endpoint, privileged to Admin/Owner/Developer:
@@ -52,7 +52,7 @@ Largest positive recorded remainders:
 
 ## 2. Future-state safeguards
 
-`server/services/factory/mixLifecyclePhase6.ts` and the existing create/top-up/consume/finalize/delete routes implement:
+`server/services/factory/mixLifecycle.ts` and the existing create/top-up/consume/finalize/delete routes implement:
 
 - Reject invalid/fractionally rounded kg, non-positive source or consumption amounts, invalid business date, duplicate batch IDs, already deleted/completed/closed batches, and usage exceeding the exact remaining kg. Three decimal places are enforced.
 - Consume multiple batches **atomically**, row-locking each batch and serializing carry-forward code assignment with mix creation. An invalid entry rolls back the full transaction, including earlier daily usage rows.
@@ -69,7 +69,7 @@ For normal factory mix creation, the existing legacy behavior of making a comple
 
 ## 3. Regression tests added
 
-`tests/factory-mix-phase6-lifecycle.test.ts`:
+`tests/factory-mix-lifecycle.test.ts`:
 - Positive exact 3dp kg, invalid negatives/overprecision and date validation.
 - Duplicate and invalid usage requests fail rather than being silently skipped.
 - Completed, overused, deleted, closed and overdrawn batches are refused for future consumption.

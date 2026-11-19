@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase7HadiTransferRoutes.ts", import.meta.url));
+const routeSource = readModuleFamily(new URL("./spGoldenCoastHadiTransferRoutes.ts", import.meta.url));
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
 const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
 const serviceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase7HadiTransfer.ts", import.meta.url)
+  new URL("../../services/accounting/goldenCoastHadiTransfer.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 7 HADI transfer route surface", () => {

@@ -1,0 +1,33 @@
+name: Phase/wave filename inventory
+on:
+  push:
+    branches:
+      - refactor/phase-wave-semantic-names
+  workflow_dispatch:
+concurrency:
+  group: phase-wave-inventory-latest
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.2'
+      - name: Create full-tree JSON inventory
+        run: |
+          node scripts/audit-phase-wave-filenames.mjs --json > phase-wave-inventory.json
+          node scripts/audit-phase-wave-filenames.mjs | tee phase-wave-inventory.txt
+          node -e "const r=require('./phase-wave-inventory.json');if(!r.matchingFilenames)process.exit(1);console.log('Candidate filenames:',r.matchingFilenames)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: phase-wave-filename-inventory
+          path: |
+            phase-wave-inventory.json
+            phase-wave-inventory.txt
+          retention-days: 30

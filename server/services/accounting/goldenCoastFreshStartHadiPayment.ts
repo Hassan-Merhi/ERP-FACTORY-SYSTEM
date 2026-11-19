@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import type { CentralPostingRequest, PostingActor } from "./centralPostingEngine";
 import { buildGenericVoucherPostingRequest } from "./genericVoucherPosting";
-import { GOLDEN_COAST_CUTOVER_DATE } from "./goldenCoastPhase4CutoverFifo";
+import { GOLDEN_COAST_CUTOVER_DATE } from "./goldenCoastCutoverFifo";
 
 export const GOLDEN_COAST_FRESH_START_HADI_PAYMENT_SOURCE_TYPE = "golden-coast-fresh-start-hadi-payment";
 const MONEY_SCALE = 2;

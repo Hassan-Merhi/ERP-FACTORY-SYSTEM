@@ -21,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { db } from "../../db";
-import { capturePhase9StockAdjustTx } from "../../edge/phase9StockOutbox";
+import { capturePhase9StockAdjustTx } from "../../edge/stockOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { toMoney } from "../../lib/money";

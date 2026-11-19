@@ -65,7 +65,7 @@ Run on a checked-out branch:
 
 ```sh
 npm run check
-npx vitest run tests/pressing-machine-phase5-contract.test.ts tests/pressing-machine-phase4-contract.test.ts
+npx vitest run tests/pressing-machine-contract-persists-a-request-id-and-payload.test.ts tests/pressing-machine-contract-wires-server-confirmation-after-the-shared.test.ts
 npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts client/src/pages/factory/pressing-scanner/pressingOfflineQueue.test.ts
 ```
 

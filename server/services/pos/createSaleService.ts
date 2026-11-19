@@ -28,7 +28,7 @@ import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./golde
 import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
-import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx } from "../../edge/phase9PosOutbox";
+import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx } from "../../edge/posOutbox";
 import { preparePosSale } from "./createSaleServicePrepare";
 
 export async function createPosSale(

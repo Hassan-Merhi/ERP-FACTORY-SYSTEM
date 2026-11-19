@@ -1,0 +1,248 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const accessMocks = vi.hoisted(() => ({
+  authorizeFactoryPageAccess: vi.fn(),
+}));
+
+vi.mock("../server/lib/factoryAccessControl", () => ({
+  authorizeFactoryPageAccess: accessMocks.authorizeFactoryPageAccess,
+  sendFactoryAccessDenied: (res: any, decision: any) =>
+    res.status(403).json({ message: decision.message, code: decision.code }),
+}));
+
+import {
+  enforceFactoryBackendAccess,
+  resolveFactoryBackendAccessRequirement,
+} from "../server/middleware/factoryBackendAccessBoundary";
+
+function request(path: string, options: Record<string, unknown> = {}) {
+  return {
+    session: { userId: "wave5-user" },
+    method: "GET",
+    originalUrl: `/api/factory${path}`,
+    path,
+    query: {},
+    body: {},
+    ...options,
+  } as any;
+}
+
+function response() {
+  const state = { status: 200, body: undefined as unknown };
+  const res: any = {
+    status: vi.fn((status: number) => {
+      state.status = status;
+      return res;
+    }),
+    json: vi.fn((body: unknown) => {
+      state.body = body;
+      return res;
+    }),
+  };
+  return { res, state };
+}
+
+const normalState = {
+  userId: "wave5-user",
+  companyId: 1,
+  role: "User",
+  privileged: false,
+  fullAccess: false,
+  hasErpAccess: true,
+  hasFactoryAccess: true,
+  pageKeys: ["factory/daybook"],
+  hiddenTabs: [] as string[],
+};
+
+describe("Wave 5 Factory backend access certification", () => {
+  beforeEach(() => {
+    accessMocks.authorizeFactoryPageAccess.mockReset();
+  });
+
+  it("maps sensitive page and tab APIs to canonical owners", () => {
+    expect(resolveFactoryBackendAccessRequirement(request("/accounts/12"))).toEqual({
+      pageKey: "factory/accounts",
+    });
+    expect(resolveFactoryBackendAccessRequirement(request("/daybook"))).toEqual({
+      pageKey: "factory/daybook",
+      tabs: ["hide_tab_daybook_transactions"],
+    });
+    expect(resolveFactoryBackendAccessRequirement(request("/import/raw-stock"))).toEqual({
+      pageKey: "factory/import",
+      tabs: ["hide_tab_import_raw_stock"],
+    });
+    expect(resolveFactoryBackendAccessRequirement(request("/v5/stock-allocation/summary"))).toEqual({
+      pageKey: "factory/stock-allocation-v5",
+    });
+    expect(resolveFactoryBackendAccessRequirement(request("/production-planner/targets"))).toEqual({
+      pageKey: "factory/stock-entry",
+      tabs: ["hide_tab_stockentry_production_targets"],
+    });
+  });
+
+  it("maps Monthly Production Matrix reads and shared ordering to the Inventory page", () => {
+    expect(resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix"))).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+    expect(
+      resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix/order", { method: "PUT" }))
+    ).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+    for (const endpoint of [
+      "/monthly-production-matrix/workers",
+      "/monthly-production-matrix/bales",
+      "/monthly-production-matrix/export-bales",
+    ]) {
+      expect(resolveFactoryBackendAccessRequirement(request(endpoint))).toEqual({
+        pageKey: "factory/monthly-production-matrix",
+      });
+    }
+  });
+
+  it("requires Monthly Production Matrix permission for reads and shared reordering", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) =>
+      page === "factory/monthly-production-matrix"
+        ? { allowed: true, state: { ...normalState, pageKeys: [page] } }
+        : { allowed: false, code: "FACTORY_PAGE_ACCESS_DENIED", message: "No access" }
+    );
+    for (const [path, method] of [
+      ["/monthly-production-matrix", "GET"],
+      ["/monthly-production-matrix/order", "PUT"],
+      ["/monthly-production-matrix/workers", "GET"],
+      ["/monthly-production-matrix/bales", "GET"],
+      ["/monthly-production-matrix/export-bales", "GET"],
+    ] as const) {
+      const { res } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects Monthly Production Matrix API requests without the page grant", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: false,
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+      message: "You do not have access to this Factory page.",
+      state: normalState,
+    });
+    for (const [path, method] of [
+      ["/monthly-production-matrix", "GET"],
+      ["/monthly-production-matrix/order", "PUT"],
+      ["/monthly-production-matrix/workers", "GET"],
+      ["/monthly-production-matrix/bales", "GET"],
+      ["/monthly-production-matrix/export-bales", "GET"],
+    ] as const) {
+      const { res, state } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(state.status).toBe(403);
+      expect(state.body).toMatchObject({ code: "FACTORY_PAGE_ACCESS_DENIED" });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+  it("permits scheduled container creation from Invoicing without granting unrelated pages", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => {
+      if (page === "factory/invoicing") {
+        return { allowed: true, state: { ...normalState, pageKeys: [page] } };
+      }
+      return {
+        allowed: false,
+        code: "FACTORY_PAGE_ACCESS_DENIED",
+        message: "No access",
+      };
+    });
+    const { res } = response();
+    const next = vi.fn();
+    await enforceFactoryBackendAccess(request("/scheduled-containers", { method: "POST" }), res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("denies scheduled container edits when both owning tabs are hidden", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => ({
+      allowed: true,
+      state: {
+        ...normalState,
+        pageKeys: [page],
+        hiddenTabs: ["hide_invoicing_invoices_tab", "hide_tab_overview_shipping"],
+      },
+    }));
+    const { res, state } = response();
+    const next = vi.fn();
+    await enforceFactoryBackendAccess(request("/scheduled-containers/2", { method: "PATCH" }), res, next);
+    expect(state.status).toBe(403);
+    expect(state.body).toMatchObject({ code: "FACTORY_TAB_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when an authenticated Factory API has no declared owner", async () => {
+    const { res, state } = response();
+    const next = vi.fn();
+
+    await enforceFactoryBackendAccess(request("/wave5-unmapped-api"), res, next);
+
+    expect(state.status).toBe(403);
+    expect(state.body).toEqual({
+      message: "This Factory API has no declared page permission owner.",
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the parent Factory page is denied", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: false,
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+      message: "You do not have access to this Factory page.",
+      state: normalState,
+    });
+    const { res, state } = response();
+    const next = vi.fn();
+
+    await enforceFactoryBackendAccess(request("/accounts"), res, next);
+
+    expect(state.status).toBe(403);
+    expect(state.body).toMatchObject({ code: "FACTORY_PAGE_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the required Factory tab is hidden", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: true,
+      state: {
+        ...normalState,
+        hiddenTabs: ["hide_tab_daybook_transactions"],
+      },
+    });
+    const { res, state } = response();
+    const next = vi.fn();
+
+    await enforceFactoryBackendAccess(request("/daybook"), res, next);
+
+    expect(state.status).toBe(403);
+    expect(state.body).toMatchObject({ code: "FACTORY_TAB_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows privileged page access without applying per-user hidden tabs", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: true,
+      state: {
+        ...normalState,
+        role: "Developer",
+        privileged: true,
+        fullAccess: true,
+        hiddenTabs: ["hide_tab_daybook_transactions"],
+      },
+    });
+    const { res } = response();
+    const next = vi.fn();
+
+    await enforceFactoryBackendAccess(request("/daybook"), res, next);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});

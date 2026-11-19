@@ -8,7 +8,7 @@ on:
   pull_request:
     paths:
       - 'scripts/offline-phase5/**'
-      - 'tests/offline-phase5-acceptance.test.mjs'
+      - 'tests/offline-acceptance.test.mjs'
       - '.github/workflows/offline-phase5-acceptance.yml'
   workflow_dispatch:
 jobs:
@@ -25,4 +25,4 @@ jobs:
         with:
           node-version: '24.22.2'
       - name: Offline acceptance contract tests (no credentials or live network)
-        run: node --test tests/offline-phase5-acceptance.test.mjs
+        run: node --test tests/offline-acceptance.test.mjs

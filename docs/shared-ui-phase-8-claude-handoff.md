@@ -124,7 +124,7 @@ Test and verifier contracts updated to the new markup (not loosened):
 
 - Hub section selectors are tablists now: `tabs-employees-section` and
   `tabs-workers-section` landmarks replace the removed `select-*-section`
-  ids in `renders.test.tsx` and `wave4-remaining-pages.test.tsx`.
+  ids in `renders.test.tsx` and `remaining-pages.test.tsx`.
 - `ContainerListView` mount tests use the always-rendered
   `select-filter-status` landmark (the search box requires the parent's
   setter, which those harnesses do not pass).
@@ -234,9 +234,9 @@ payment, route or offline code was changed in Phase 8.
 | `npm run audit:doc-index` | **failed** (9 unregistered docs) → passes (237 docs) |
 | `npm run audit:ux-consistency` | passes (210 modules, 10 protected filter modules) |
 | `npm run audit:source-text-assertions`, `audit:type-escapes`, `audit:god-files` | pass |
-| `node scripts/verify-phase11-frontend-pagination.mjs`, `…-daybook-…`, `…-v5-…` | pass (before and after Prettier) |
+| `node scripts/verify-frontend-pagination.mjs`, `…-daybook-…`, `…-v5-…` | pass (before and after Prettier) |
 | `node scripts/verify-program7d-accessibility-responsive.mjs` | passes |
-| `node scripts/verify-mobile-responsive-wave2-factory-floor.mjs`, `…-wave3-erp-operations.mjs` | pass after the token updates |
+| `node scripts/verify-mobile-responsive-factory-floor.mjs`, `…-wave3-erp-operations.mjs` | pass after the token updates |
 
 ### Not run locally (limitations)
 

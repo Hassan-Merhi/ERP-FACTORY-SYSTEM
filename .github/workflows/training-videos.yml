@@ -167,7 +167,7 @@ jobs:
       - name: Prepare isolated sample companies
         run: |
           MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
-          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+          node scripts/prepare-browser-e2e-fixture.mjs
       - name: Capture actual working screens with read-only browser automation
         run: |
           mkdir -p artifacts/training-videos

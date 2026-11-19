@@ -85,7 +85,7 @@ const WORKING_STATE_TABLES = [
 
 /**
  * Cloud apply approvals are protected differently: the application's database
- * role is denied every write on the table (server/edge/phase8ApplyStore.mjs
+ * role is denied every write on the table (server/edge/applyStore.mjs
  * checks that before it trusts an approval), so there is no trigger to attack.
  */
 const PRIVILEGE_PROTECTED_TABLES = ["factory_edge_apply_approvals"];

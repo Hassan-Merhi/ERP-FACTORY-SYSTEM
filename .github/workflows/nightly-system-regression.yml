@@ -260,7 +260,7 @@ jobs:
       - name: Seed fabricated ERP / Factory company with drill-down records
         run: |
           MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
-          node scripts/prepare-phase9-browser-smoke-fixture.mjs
+          node scripts/prepare-browser-smoke-fixture.mjs
       - name: Visit ERP / Factory registered routes and inspect real layouts
         shell: bash
         run: |
@@ -275,7 +275,7 @@ jobs:
             if [ "$attempt" = 180 ]; then cat artifacts/nightly-rendered-pages/server.log; exit 1; fi
             sleep 1
           done
-          node scripts/run-phase9-language-browser-smoke.mjs
+          node scripts/run-language-browser-smoke.mjs
           node scripts/verify-erp-mobile-program.mjs --viewports=phone-393,desktop-1440 --languages=en
           export ERP_FACTORY_MOBILE_CREATE_SEEDS=1
           export ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1

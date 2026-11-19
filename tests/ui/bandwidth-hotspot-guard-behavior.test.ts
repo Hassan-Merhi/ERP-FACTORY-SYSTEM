@@ -23,7 +23,7 @@ function json(body: unknown, init: ResponseInit = {}): Response {
 async function installGuard(underlying: Underlying): Promise<typeof fetch> {
   globalThis.fetch = underlying as unknown as typeof fetch;
   window.fetch = underlying as unknown as typeof fetch;
-  const { installBandwidthPhase1HotspotGuard } = await import("@/lib/bandwidthPhase1HotspotGuard");
+  const { installBandwidthPhase1HotspotGuard } = await import("@/lib/bandwidthHotspotGuard");
   installBandwidthPhase1HotspotGuard();
   return window.fetch;
 }

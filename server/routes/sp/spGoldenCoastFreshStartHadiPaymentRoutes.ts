@@ -20,7 +20,7 @@ import {
 } from "../../services/accounting/goldenCoastFreshStartHadiPayment";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { getCurrentExchangeRate } from "../helpers/exchangeRateHelpers";
-import { isGoldenCoastCompany } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import { isGoldenCoastCompany } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 import {
   FreshStartHadiRouteError,

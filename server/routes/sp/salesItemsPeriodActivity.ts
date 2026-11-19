@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase11MonthlyCloseRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastMonthlyCloseRoutes.ts to keep that module under the source-size cap.
 import type { Request } from "express";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
@@ -12,10 +12,10 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
-import { GOLDEN_COAST_PHASE5_SOURCE_TYPE } from "../../services/accounting/goldenCoastPhase5PosSale";
-import type { GoldenCoastPhase11Accounts } from "../../services/accounting/goldenCoastPhase11MonthlyClose";
-import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+} from "../../services/accounting/goldenCoastAccounts";
+import { GOLDEN_COAST_PHASE5_SOURCE_TYPE } from "../../services/accounting/goldenCoastPosSale";
+import type { GoldenCoastPhase11Accounts } from "../../services/accounting/goldenCoastMonthlyClose";
+import type { DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 
 export const postingDependencies = createDatabasePostingDependencies();
 

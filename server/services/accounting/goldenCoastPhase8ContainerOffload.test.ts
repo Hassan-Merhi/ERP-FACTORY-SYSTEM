@@ -10,7 +10,7 @@ import {
   planGoldenCoastPhase8Funding,
   planGoldenCoastPhase8Offload,
   type GoldenCoastPhase8FundedContainerState,
-} from "./goldenCoastPhase8ContainerOffload";
+} from "./goldenCoastContainerOffload";
 
 const accounts = {
   stockOtwAccountId: 10,
@@ -110,7 +110,6 @@ describe("Golden Coast Phase 8 container/offload accounting", () => {
     expect(debit).toBe(67900);
     expect(credit).toBe(67900);
   });
-
 
   it("funds Fresh Start invoice through OTW clearing without supplier, cash, or Hassan equity", () => {
     const input = parseGoldenCoastPhase8ContainerInput({

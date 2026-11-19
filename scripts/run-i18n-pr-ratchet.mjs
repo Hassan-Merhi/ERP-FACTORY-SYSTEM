@@ -37,7 +37,7 @@ const baseWorktree = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpd
 
 try {
   run(process.execPath, [
-    "scripts/audit-i18n-phase14.mjs",
+    "scripts/audit-i18n.mjs",
     "--no-enforce",
     "--json-out",
     currentJson,
@@ -47,10 +47,17 @@ try {
 
   run("git", ["worktree", "add", "--detach", baseWorktree, baseSha]);
 
+  // Audit the actual base revision with its own entrypoint. Older commits
+  // predate the semantic filename rename. Neither audit may be skipped.
+  const baseAudit = ["scripts/audit-i18n.mjs", "scripts/audit-i18n-phase14.mjs"].find((candidate) =>
+    fs.existsSync(path.join(baseWorktree, candidate))
+  );
+  if (!baseAudit) throw new Error("Base revision has no supported i18n audit entrypoint");
+
   run(
     process.execPath,
     [
-      "scripts/audit-i18n-phase14.mjs",
+      baseAudit,
       "--no-enforce",
       "--json-out",
       baseJson,

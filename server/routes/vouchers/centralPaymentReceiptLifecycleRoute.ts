@@ -16,7 +16,7 @@ import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employee
 import { buildPaymentReceiptPostingRequest } from "../../services/accounting/paymentReceiptPosting";
 import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import {
   assertVoucherEditableTx,

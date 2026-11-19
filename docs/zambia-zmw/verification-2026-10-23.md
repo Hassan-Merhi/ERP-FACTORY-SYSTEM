@@ -23,7 +23,7 @@ was made. Release still requires the items listed under **Remaining before produ
 | Documentation index | The nine phase documents were unclassified (CI documentation audit fails) | Classified as references and linked from `docs/README.md` |
 | Legacy test | `tests/currency-amounts-behavior.test.ts` asserted that an unknown daybook currency bridges to a silent rate of `1` | Updated to expect the rejection (Phase 2 safety decision); ZMW bridges to `0.0400000000` at 25 per USD |
 
-## Accounting verification (local PostgreSQL schema, `tests/zambia-phase8-purchase-lifecycle.database.test.ts`)
+## Accounting verification (local PostgreSQL schema, `tests/zambia-purchase-lifecycle.database.test.ts`)
 
 Illustrative approved rates: 25 ZMW per USD effective 2026-10-20 and 28 effective 2026-10-22 (not production rates).
 
@@ -41,8 +41,8 @@ Illustrative approved rates: 25 ZMW per USD effective 2026-10-20 and 28 effectiv
   the subsidiary and the parent, and a replay of the same file is refused.
 - A plain USD purchase posts exactly as before with all native columns `NULL`.
 
-Unit coverage: `tests/zambia-phase8-purchase-costing.test.ts` (costing and explicit import currency),
-`tests/zambia-phase8-intercompany-boundary.test.ts` (ZMW intercompany legs, stable retry identities, legacy USD shape),
+Unit coverage: `tests/zambia-purchase-costing.test.ts` (costing and explicit import currency),
+`tests/zambia-intercompany-boundary.test.ts` (ZMW intercompany legs, stable retry identities, legacy USD shape),
 `tests/currency-amounts-behavior.test.ts` and `tests/currencyAmounts.test.ts` (engine), `tests/ui/currency-context-behavior.test.tsx`
 (Mali CFA display contract).
 

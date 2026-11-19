@@ -40,7 +40,7 @@ If pressing records are voided by a supervisor during a multi-page export (Phase
 
 ## Manual verification before merge
 
-- `npx vitest run tests/pressing-machine-phase6-contract.test.ts tests/startup-schema-integrity.test.ts tests/pressing-machine-schema-contract.test.ts`
+- `npx vitest run tests/pressing-machine-contract-rejects-invalid-dates-excessive-pagination-and.test.ts tests/startup-schema-integrity.test.ts tests/pressing-machine-schema-contract.test.ts`
 - `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingReportClient.test.ts`
 - `npm run check` and `npm run verify:migrations`
 - Isolated PostgreSQL test: create confirmed pressing rows for two companies, two operators, multiple machines, timezones and days. Worker cannot see another user; supervisor sees all of their company; company A never sees company B. Confirm count/KG aggregates match accepted rows and voids are excluded.

@@ -4,8 +4,8 @@ import {
   GoldenCoastPhase6DeductionError,
   goldenCoastPhase6IdempotencyKey,
   planGoldenCoastPhase6SpecialLocationDeduction,
-} from "./goldenCoastPhase6SpecialLocationDeduction";
-import type { GoldenCoastPhase5SalePlan } from "./goldenCoastPhase5PosSale";
+} from "./goldenCoastSpecialLocationDeduction";
+import type { GoldenCoastPhase5SalePlan } from "./goldenCoastPosSale";
 
 function salePlan(overrides: Partial<GoldenCoastPhase5SalePlan> = {}): GoldenCoastPhase5SalePlan {
   return {

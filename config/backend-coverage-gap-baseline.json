@@ -128,7 +128,7 @@
     {
       "rank": 6,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spMigrationPhase4Reconcile.ts",
+      "path": "server/routes/sp/spMigrationReconcile.ts",
       "uncoveredLines": 178,
       "lineTotal": 178,
       "lineCoveragePct": 0,
@@ -193,7 +193,7 @@
     {
       "rank": 11,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spMigrationPhase4Verification.ts",
+      "path": "server/routes/sp/spMigrationVerification.ts",
       "uncoveredLines": 162,
       "lineTotal": 162,
       "lineCoveragePct": 0,
@@ -219,7 +219,7 @@
     {
       "rank": 13,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spMigrationPhase4Routes.ts",
+      "path": "server/routes/sp/spMigrationFinalCutoverRoutes.ts",
       "uncoveredLines": 156,
       "lineTotal": 257,
       "lineCoveragePct": 39.29,
@@ -271,7 +271,7 @@
     {
       "rank": 17,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spGoldenCoastPhase11MonthlyCloseRoutes.ts",
+      "path": "server/routes/sp/spGoldenCoastMonthlyCloseRoutes.ts",
       "uncoveredLines": 137,
       "lineTotal": 199,
       "lineCoveragePct": 31.15,
@@ -323,7 +323,7 @@
     {
       "rank": 21,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spGoldenCoastPhase5PosSaleRoutes.ts",
+      "path": "server/routes/sp/spGoldenCoastPosSalePostingRoutes.ts",
       "uncoveredLines": 133,
       "lineTotal": 159,
       "lineCoveragePct": 16.35,
@@ -375,7 +375,7 @@
     {
       "rank": 25,
       "category": "Supplier Partner",
-      "path": "server/routes/sp/spMigrationPhase2Containers.ts",
+      "path": "server/routes/sp/spMigrationContainers.ts",
       "uncoveredLines": 126,
       "lineTotal": 128,
       "lineCoveragePct": 1.56,

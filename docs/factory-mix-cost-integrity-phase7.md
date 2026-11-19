@@ -9,7 +9,7 @@
 
 ## What runs automatically
 
-A new, lightweight scheduler registration in `server/services/scheduler/index.ts` fires **daily 01:35 UTC**, with dynamic import only when due, within the existing `createSchedulerTick` process in-flight guard and application writer-fence policy. The source module `server/services/factory/mixPhase7IntegrityMonitor.ts` discovers all Factory company IDs with active mixes; it does **not** hardcode company #12.
+A new, lightweight scheduler registration in `server/services/scheduler/index.ts` fires **daily 01:35 UTC**, with dynamic import only when due, within the existing `createSchedulerTick` process in-flight guard and application writer-fence policy. The source module `server/services/factory/mixIntegrityMonitor.ts` discovers all Factory company IDs with active mixes; it does **not** hardcode company #12.
 
 The four existing read-only Phase 3–6 audits run per company, **sequentially** to avoid concurrent reporting load:
 
@@ -65,7 +65,7 @@ Access: Admin/Owner/Developer only, current company from session, private/no-sto
 
 ## Regression coverage
 
-- `tests/factory-mix-phase7-integrity-monitor.test.ts`: recorded-price drift exclusion; error/warning/evidence classification; strict company isolation; first-run baseline; de-duplication; severity escalation; worsening numeric magnitude; resolution; unrelated-alert isolation; and transactional rollback after write failure.
+- `tests/factory-mix-integrity-monitor.test.ts`: recorded-price drift exclusion; error/warning/evidence classification; strict company isolation; first-run baseline; de-duplication; severity escalation; worsening numeric magnitude; resolution; unrelated-alert isolation; and transactional rollback after write failure.
 - `tests/scheduler-entrypoint.test.ts`: fourth lazy nightly tick at 01:35 UTC and optional disable switch.
 - Existing Phase 3–6 regressions remain on the branch.
 

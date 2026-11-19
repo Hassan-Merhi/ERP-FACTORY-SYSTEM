@@ -1,9 +1,9 @@
-// Extracted from ./mixPhase7IntegrityMonitor.ts to keep that module under the source-size cap.
+// Extracted from ./mixIntegrityMonitor.ts to keep that module under the source-size cap.
 import Decimal from "decimal.js";
 import type { HistoricalMixAuditReport } from "./historicalMixBatchReconciliation";
-import type { Phase4SourceProvenanceReport } from "./mixPhase4ProvenanceAudit";
-import type { Phase5DownstreamReconciliation } from "./mixPhase5DownstreamAudit";
-import type { Phase6MixLifecycleReport } from "./mixPhase6LifecycleAudit";
+import type { Phase4SourceProvenanceReport } from "./mixProvenanceAudit";
+import type { Phase5DownstreamReconciliation } from "./mixDownstreamAudit";
+import type { Phase6MixLifecycleReport } from "./mixLifecycleAudit";
 
 export type MixMonitorSeverity = "critical" | "warning" | "review";
 

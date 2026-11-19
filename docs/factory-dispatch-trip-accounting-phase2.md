@@ -10,7 +10,7 @@
 - `shared/schema/factory/dispatch-financials.ts` — seven typed financial tables, exported by `shared/schema/factory/index.ts`.
 - `docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase2.sql` — **manual-only** PostgreSQL installation, with composite company/order/trip/signed-closure foreign keys and append-only snapshot/history guards. Saved for **the user's final all-phase TablePlus handoff**. DO NOT execute or auto-run.
 - `server/services/factory/dispatchTripFinancialSource.ts` — exact physical-close manifest and Pending Loading source validator plus SHA-256 fingerprint; **read-only**.
-- `tests/factory-dispatch-financial-phase2.test.ts` — staged source test coverage, **not executed**.
+- `tests/factory-dispatch-financial-uses-exact-signed-bale-ids-not.test.ts` — staged source test coverage, **not executed**.
 
 ## Tables defined — no production tables created yet
 

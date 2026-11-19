@@ -10,7 +10,7 @@
 3. Applied the bonus capability map to the Production Targets management UI without changing payroll or bonus calculations.
 4. Scoped Factory Containers and OTW Tracking query keys to the selected company while preserving URL-first base prefixes and the OTW suffix, allowing existing prefix invalidation and grouped cache updates.
 5. Scoped inventory access, settings, inventory location, available-bales, product, category and customer read keys to company. Cost display is hidden until matching selected-company access is present, including the `hideAllCosts` flag.
-6. Added `tests/factory-unification-phase2.test.ts` with role matrix and cache-key characterization cases (authored, not executed).
+6. Added `tests/factory-unification-denies-all-actions-while-access-is.test.ts` with role matrix and cache-key characterization cases (authored, not executed).
 
 ## Known constraints and remaining verification
 - `CompanyContext.tsx` already cancels and removes company-session cache entries during switches. This was retained.
@@ -37,7 +37,7 @@ The following targeted source changes were applied on the **same** unification b
 - `FactoryWorkersHub.tsx`, `FactoryInvoicing.tsx`, `FactoryLoadingsHub.tsx`, `FactoryDaybook.tsx`, `FactoryAdvancesTab.tsx`: nested hub tab visibility now fails closed when the access payload is pending, lacks Factory access or reports a company other than the selected one. Both access and settings reads are company scoped.
 - `factoryworkers/useFactoryWorkersModel.tsx`: full worker list, cash accounts, document counts, nationalities, amount-due and worker categories reads have company-scoped cache keys. Workers and categories tabs are hidden until matching-company access is available.
 - `FactoryWorkerBonusesTab.tsx`: worker picker, cash accounts and bonus record list read keys are company-scoped. Pending/paid totals still use the original backend response and are not recalculated differently.
-- `tests/factory-unification-phase2-continuation.test.ts` records selected-company key invariants, bonus capability fail-closed policy, nested-hub access visibility and worker/bonus sensitive query paths. **Tests authored, not executed.**
+- `tests/factory-unification-continuation.test.ts` records selected-company key invariants, bonus capability fail-closed policy, nested-hub access visibility and worker/bonus sensitive query paths. **Tests authored, not executed.**
 
 ## Source-only review observations and remaining risks
 - Source post-write re-reads confirmed the scoped imports/keys and matching-company access predicates in the modified files.
@@ -66,8 +66,8 @@ A further set of targeted high-impact fixes is committed in the same branch:
 - The worker payroll preview is now keyed by company; its local editable form resets on selected-company change.
 
 **Source audit and tests**
-- New `scripts/audit-factory-phase2.mjs` walks the full `client/src` tree, inventories literal unscoped Factory keys, selected-company keys, potential fail-open access expressions and unscoped location reads. Optional `--strict` returns nonzero if suspect patterns remain. **This scanner has not been run**, and it is heuristic: dynamic query keys, cross-company local state and backend endpoints require additional review.
-- New `tests/factory-unification-phase2-final-audit.test.ts` pins hub/financial/stock read keys, no-company fail-closed checks and URL-prefix invalidations. Tests exist on GitHub; **not executed**.
+- New `scripts/audit-factory.mjs` walks the full `client/src` tree, inventories literal unscoped Factory keys, selected-company keys, potential fail-open access expressions and unscoped location reads. Optional `--strict` returns nonzero if suspect patterns remain. **This scanner has not been run**, and it is heuristic: dynamic query keys, cross-company local state and backend endpoints require additional review.
+- New `tests/factory-unification-final-audit.test.ts` pins hub/financial/stock read keys, no-company fail-closed checks and URL-prefix invalidations. Tests exist on GitHub; **not executed**.
 - Source re-reads verified updated code presence in selected files; this does not establish TypeScript or runtime correctness.
 
 ### Unresolved gates — prevent an unqualified DONE claim
@@ -87,7 +87,7 @@ Additional source-level changes landed on the same branch:
 - `FactoryEmployeeAttendanceTab.tsx`: company-scoped daily attendance, per-employee history, employee picker and their mutation invalidations. No-company reads are disabled. The per-employee view remounts for selected-company transitions, and the daily view clears editable maps and approval state on company change. Server approval/attendance rules are untouched.
 - `FactoryEmployeeAdvancesTab.tsx`, `FactoryEmployeeBonusesTab.tsx`, `FactoryEmployeeWithdrawalsTab.tsx`: company-scoped employee, cash account, advance/repayment and bonus cache keys, with company-aware query enabling and invalidations. Financial mutation functions and amounts were not changed.
 - `FactoryEmployees.tsx` and `FactoryEmployeeDetail.tsx`: list, detail, statement and ledger-picker caches isolated by selected-company key; no-company reads disabled. Endpoint authorization remains server-owned.
-- `tests/factory-unification-phase2-employee-scoping.test.ts` added as a **source characterization test only; not executed**.
+- `tests/factory-unification-employee-scoping.test.ts` added as a **source characterization test only; not executed**.
 
 **Validation actually performed:** GitHub post-write source fetches verified scoped query expressions and imports. Git transport and a runnable checkout were unavailable; TypeScript, Vitest, the repo-wide audit tool, browser, API and real-role checks **were not executed**. This is not an exhaustive audit. Other Factory and shared-domain modules still require review, and the A→B→A delayed-query/active-edit acceptance test remains open. **Phase 2 remains IN PROGRESS / NOT FULLY VERIFIED**. No CI or merge.
 
@@ -103,7 +103,7 @@ After Factory Unification PR #3078 merged, additional targeted Phase 2 source re
 - Factory Settings uses company-scoped location/attendance/weekly-report/WhatsApp chat reads; existing setting mutation endpoints unchanged.
 - Factory Invoice Create and Factory POS read caches for customer orders, customers, stock/location, proformas, ledger accounts and sales are company-scoped; POS clears unsaved local cart/account/location/edit state when company changes.
 - Shared label-design palette reads use company-scoped keys. Waste and Customer Logos cache invalidations were adjusted to match the new keys, preserving URL-first semantics for legacy prefix invalidators.
-- Source characterization test `tests/factory-unification-phase2-main-hardening.test.ts` was authored and expanded; **not run**.
+- Source characterization test `tests/factory-unification-main-hardening.test.ts` was authored and expanded; **not run**.
 
 **Validation performed:** GitHub source-file reads and successful authenticated write commits only. **Not performed:** local checkout, static analyzer execution, TypeScript, Vitest, browser, actual A→B→A transitions, delayed response race, live 200/403 matrix, or backend security test. Additional URL-only Factory keys still appear in GitHub source searches (e.g. Mix Batches, raw-stock dialogs, legacy/location modules). A runtime environment with company-role fixtures is necessary for certification. Prior work should not be represented as formally tested. The requirement to keep CI disabled was respected in this execution; no CI workflow was manually started.
 

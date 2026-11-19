@@ -11,12 +11,12 @@ import {
   type GoldenCoastSettingsKey,
   planGoldenCoastAccountProvisioning,
   summarizeGoldenCoastAccountSetup,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   GoldenCoastPhase13IntercompanyError,
   goldenCoastPhase13IntercompanyDefinitions,
   summarizeGoldenCoastPhase13IntercompanyAccount,
-} from "../../services/accounting/goldenCoastPhase13Intercompany";
+} from "../../services/accounting/goldenCoastIntercompany";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { requireSpCompany } from "./spHelpers";
 import {

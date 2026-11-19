@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase7HadiTransferRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastHadiTransferRoutes.ts to keep that module under the source-size cap.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { accountingPostingRequests, bankAccounts, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
 import { resultRows } from "../../lib/queryResult";
@@ -9,14 +9,14 @@ import {
   type GoldenCoastPhase7PostingRole,
   goldenCoastPhase7SourceId,
   type GoldenCoastPhase7TransferInput,
-} from "../../services/accounting/goldenCoastPhase7HadiTransfer";
+} from "../../services/accounting/goldenCoastHadiTransfer";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import {
   GoldenCoastPhase7RouteError,
   type DatabaseTransaction,
   type DbLike,
   type GoldenCoastPhase7CompanyPair,
-} from "./spGoldenCoastPhase7HadiTransferRoutesResolveCompanyPair";
+} from "./spGoldenCoastHadiTransferRoutesResolveCompanyPair";
 
 export async function validateCashAccount(
   conn: DbLike,

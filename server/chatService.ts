@@ -8,7 +8,7 @@
  *   - server/chat/prompts.ts                system prompts and intent classification
  *   - server/chat/codeAgentContext.ts       code_read / code_edit prompts + patch parsing
  *   - server/chat/verifyContainerDraft.ts   verify-container draft lookup
- *   - server/chat/phase1DataQuery.ts        AI-classified read-only data queries
+ *   - server/chat/readOnlyDataQueryHandler.ts        AI-classified read-only data queries
  *   - server/chat/poTextExtraction.ts       AI PO text → structured PO extraction
  *
  * Public surface is unchanged for backwards compatibility (persistence and
@@ -41,7 +41,7 @@ import {
   type FilePatchDraft,
 } from "./chat/codeAgentContext";
 import { buildVerifyContainerDraft } from "./chat/verifyContainerDraft";
-import { runPhase1DataQuery } from "./chat/phase1DataQuery";
+import { runPhase1DataQuery } from "./chat/readOnlyDataQueryHandler";
 
 export { getERPContext, clearERPContextCache } from "./chat/erpContext";
 export { getConfiguredProviders } from "./chat/aiProviders";

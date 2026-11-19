@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { approvalReasonLabel } from "./retailWave2Types";
+import { approvalReasonLabel } from "./retailTypes";
 
 /**
  * Manager sign-off for a discount above the company limit or a manual price override.

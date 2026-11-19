@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 describe("Historical Replay prepare guard", () => {
   const source = readFileSync(
-    resolve(process.cwd(), "server/routes/factory/raw-stock/historicalReplayPhase6GuardRoutes.ts"),
+    resolve(process.cwd(), "server/routes/factory/raw-stock/historicalReplayGuardRoutes.ts"),
     "utf8"
   );
 

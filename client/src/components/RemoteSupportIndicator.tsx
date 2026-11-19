@@ -10,8 +10,8 @@ import { RemoteMouseControlTarget } from "@/components/RemoteMouseControlTarget"
 import { shouldShowRemoteSupportIndicator } from "@/components/remote-support-indicator-policy";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useRemoteControlSession } from "@/hooks/use-remote-control-session";
-import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
-import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportPhase6Translations";
+import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportSessionTranslations";
+import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportKeyboardTranslations";
 
 function formatRemaining(expiresAt: string, now: number): string {
   const remainingMs = Math.max(0, new Date(expiresAt).getTime() - now);

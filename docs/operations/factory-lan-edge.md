@@ -74,7 +74,7 @@ The proposed DBA-only SQL is `deploy/lan/phase7-install-writer-fence.sql`. It is
 
 Before any DBA changes or LAN-primary operation, all of the following must be independently evidenced:
 
-For a **disposable rehearsal only**, use `scripts/edge/audit-phase7-baseline.mjs` to capture read-only, deterministic table-content, schema, sequence and uploads hashes from separately restored, quiesced copies. The database name must begin `erp_phase7_rehearsal_` or `erp_edge_rehearsal_`, and the auditing role must be able to see all companies (a separate privileged auditor on these isolated clones, never a live business-app credential). Example:
+For a **disposable rehearsal only**, use `scripts/edge/audit-baseline.mjs` to capture read-only, deterministic table-content, schema, sequence and uploads hashes from separately restored, quiesced copies. The database name must begin `erp_phase7_rehearsal_` or `erp_edge_rehearsal_`, and the auditing role must be able to see all companies (a separate privileged auditor on these isolated clones, never a live business-app credential). Example:
 
 ```bash
 # Both commands use separate isolated clone databases and uploads directories.
@@ -82,13 +82,13 @@ For a **disposable rehearsal only**, use `scripts/edge/audit-phase7-baseline.mjs
 # checkpoint manifest SHA-256, independently verified before comparison.
 PHASE7_AUDIT_DATABASE_URL='postgresql://.../erp_phase7_rehearsal_source' \
 PHASE7_AUDIT_SCOPE=source PHASE7_AUDIT_SNAPSHOT_SHA256='<64-char-approved-manifest-sha256>' \
-node scripts/edge/audit-phase7-baseline.mjs capture /isolated/source/uploads /private/phase7-source.json
+node scripts/edge/audit-baseline.mjs capture /isolated/source/uploads /private/phase7-source.json
 
 PHASE7_AUDIT_DATABASE_URL='postgresql://.../erp_phase7_rehearsal_factory' \
 PHASE7_AUDIT_SCOPE=restore PHASE7_AUDIT_SNAPSHOT_SHA256='<same-approved-manifest-sha256>' \
-node scripts/edge/audit-phase7-baseline.mjs capture /isolated/factory/uploads /private/phase7-restore.json
+node scripts/edge/audit-baseline.mjs capture /isolated/factory/uploads /private/phase7-restore.json
 
-node scripts/edge/audit-phase7-baseline.mjs compare /private/phase7-source.json /private/phase7-restore.json
+node scripts/edge/audit-baseline.mjs compare /private/phase7-source.json /private/phase7-restore.json
 ```
 
 The comparator reports **only** matching fingerprints, never approval. It cannot establish that the two source snapshots are authentic or that uploads/database were captured atomically; an independent trusted cloud backup, archive signature/provenance, secure key handling, tenant-permission review and balance/file reconciliation remain mandatory. Keep reports private.
@@ -107,7 +107,7 @@ The unified development branch contains an **operator-only** cloud apply path fo
 
 This initial scope is **only active USD Journal vouchers with two or more balanced, ledger-account-only lines**, no linked party/employee, non-USD, POS, inventory, files, or stock side effects. The LAN write boundary now rejects unsupported with-entries requests rather than promising sync for them. The protected central generic route captures vouchers in the same transaction as the local accounting posting. Other modules remain blocked for Phase 9.
 
-**Default is OFF.** The cloud-apply CLI `server/edge/phase8OperatorApply.ts` has no HTTP apply endpoint, no scheduler and no automatic invocation. It refuses without a separately approved company/baseline/positive cloud epoch, the exact `LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED` acknowledgment, an already-installed `phase7_writer` PostgreSQL fence, restricted (non-owner, non-DDL) runtime database role, signed staging receiver, DBA-controlled time-limited actor approval, currently active Admin/Owner company role and committed immutable staging evidence. A DBA must explicitly install the Phase 8 tables using `ensurePhase8ApplySchema` during a reviewed **fenced cloud maintenance window**; never let the restricted runtime role create or own those objects. It must have SELECT but **no modification privileges** on `factory_edge_apply_approvals` or `phase7_writer.state`, and only the narrow table privileges needed for the posting and cursor.
+**Default is OFF.** The cloud-apply CLI `server/edge/stagedVoucherOperatorApply.ts` has no HTTP apply endpoint, no scheduler and no automatic invocation. It refuses without a separately approved company/baseline/positive cloud epoch, the exact `LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED` acknowledgment, an already-installed `phase7_writer` PostgreSQL fence, restricted (non-owner, non-DDL) runtime database role, signed staging receiver, DBA-controlled time-limited actor approval, currently active Admin/Owner company role and committed immutable staging evidence. A DBA must explicitly install the Phase 8 tables using `ensurePhase8ApplySchema` during a reviewed **fenced cloud maintenance window**; never let the restricted runtime role create or own those objects. It must have SELECT but **no modification privileges** on `factory_edge_apply_approvals` or `phase7_writer.state`, and only the narrow table privileges needed for the posting and cursor.
 
 Only in a **disposable rehearsal with independent cutover oversight**, after freezing LAN writes and verifying no in-flight writers, the authorized operator can set these cloud process variables:
 
@@ -129,7 +129,7 @@ FACTORY_PHASE8_COMPANY_ID=<approved-single-company-id>
 Then, using that environment on an isolated operator host with the exact audited build and its restricted PostgreSQL connection, run one sequence at a time:
 
 ```bash
-node --import tsx server/edge/phase8OperatorApply.ts 1
+node --import tsx server/edge/stagedVoucherOperatorApply.ts 1
 # Verify the returned cloud voucher ID and ledger rows independently.
 # On the factory LAN, after signed staging and successful cloud COMMIT:
 node scripts/edge/fetch-applied-receipts.mjs

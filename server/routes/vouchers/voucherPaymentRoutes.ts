@@ -18,7 +18,7 @@ import {
   postPaymentReceiptVoucherTx,
   writePaymentReceiptDaybookEntry,
 } from "../../services/accounting/paymentReceiptVoucherPosting";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import {
   capturePhase9PaymentEditTx,
   capturePhase9PaymentTx,
@@ -26,7 +26,7 @@ import {
   paymentReceiptEvidence,
   phase9PaymentSnapshotTx,
   phase9PaymentVoucherRefTx,
-} from "../../edge/phase9PaymentOutbox";
+} from "../../edge/paymentOutbox";
 import { applyPaymentReceiptEditTx, paymentReceiptEditPlan } from "../../services/accounting/paymentReceiptVoucherEdit";
 
 /**

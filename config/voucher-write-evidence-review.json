@@ -27,8 +27,8 @@
       "reason": "These pre-existing creation sites are protected by an existing-voucher/source-row check, atomic state claim, conflict handling, or replace-in-transaction semantics. Phase 7 freezes this exact reviewed set: no new raw voucher creator may join it without an explicit review-file exemption, so direct voucher creation can no longer grow silently.",
       "files": [
         "server/routes/sp-migration/spMigrationSalesRoutes.ts",
-        "server/routes/sp/spMigrationPhase2Containers.ts",
-        "server/routes/sp/spMigrationPhase2Sales.ts"
+        "server/routes/sp/spMigrationContainers.ts",
+        "server/routes/sp/spMigrationSales.ts"
       ]
     }
   },

@@ -97,7 +97,7 @@ or reject revisions, post accounting, or send WhatsApp documents.
 
 ## Verification
 
-`tests/stock-transfer-order-wa-phase1-schema.test.ts` checks SQL and runtime
+`tests/stock-transfer-order-wa-schema.test.ts` checks SQL and runtime
 migration parity, RLS, origin stamping and the no-approval/no-send boundary.
 `tests/startup-schema-integrity.test.ts` pins the 44 new statements after
 the reviewed existing 1481-statement baseline.

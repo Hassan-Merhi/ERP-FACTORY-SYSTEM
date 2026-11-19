@@ -4,7 +4,7 @@ import {
   buildGoldenCoastPhase8FundingPosting,
   parseGoldenCoastPhase8ContainerInput,
   planGoldenCoastPhase8Funding,
-} from "./goldenCoastPhase8ContainerOffload";
+} from "./goldenCoastContainerOffload";
 
 const phase8Accounts = {
   stockOtwAccountId: 10,

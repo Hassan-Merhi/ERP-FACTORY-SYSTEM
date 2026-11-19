@@ -11,7 +11,7 @@ import {
   planGoldenCoastPhase5Sale,
   type GoldenCoastFifoLot,
   type GoldenCoastPhase5RoleAccounts,
-} from "./goldenCoastPhase5PosSale";
+} from "./goldenCoastPosSale";
 
 const COMPANY_ID = 7;
 const LOCATION_ID = 3;

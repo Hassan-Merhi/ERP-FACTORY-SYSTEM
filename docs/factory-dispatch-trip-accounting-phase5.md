@@ -98,7 +98,7 @@ All require authenticated Factory Loadings permission, Excel export permission, 
 
 ## Staged tests — NOT executed
 
-`tests/factory-dispatch-financial-phase5.test.ts` covers grouping by article, independent purchase rates, real first-sheet template headers, billable charges only once, round-trip workbook parsing by the existing ERP PO importer, immutable identity, source reconciliation, invalid supplier/rates and duplicate/export protections. It was written but not run.
+`tests/factory-dispatch-financial-groups-signed-physical-bales-by-article.test.ts` covers grouping by article, independent purchase rates, real first-sheet template headers, billable charges only once, round-trip workbook parsing by the existing ERP PO importer, immutable identity, source reconciliation, invalid supplier/rates and duplicate/export protections. It was written but not run.
 
 ## Phase 5 completion boundary
 

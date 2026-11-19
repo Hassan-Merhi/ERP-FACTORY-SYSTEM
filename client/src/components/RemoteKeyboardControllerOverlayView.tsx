@@ -19,8 +19,8 @@ import {
   type RemoteControlRateGate,
   remoteControlSendDelayMs,
 } from "@/hooks/remote-control-command-flow";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
-import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportPhase6Translations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
+import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportKeyboardTranslations";
 import {
   RemoteControlRealtimeError,
   requestRemoteControlRealtime,

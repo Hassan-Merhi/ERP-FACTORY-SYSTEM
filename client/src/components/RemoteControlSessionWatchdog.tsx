@@ -7,7 +7,7 @@ import {
   type RemoteControllerSessionView,
 } from "@/components/RemoteControllerSessionContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
 
 interface SessionPayload {
   session?: RemoteControllerSessionView | null;

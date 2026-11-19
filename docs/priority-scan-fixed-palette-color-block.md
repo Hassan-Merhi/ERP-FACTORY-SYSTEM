@@ -110,7 +110,7 @@ npm run test:frontend -- client/src/lib/labelHtml.test.ts client/src/lib/priorit
 Database-backed run: **10 suites failed during setup/import, 0 tests collected**. This is an environment failure, not 10 failing assertions or skipped tests:
 
 ```bash
-DATABASE_URL=postgresql://postgres:local_test_only@127.0.0.1:55432/priority_scan_pr2141_test PGSSLMODE=disable NODE_ENV=test SESSION_SECRET=local-pr2141-test ENABLE_SCHEDULERS=false npm run test:backend -- tests/priority-scan-wave1.test.ts tests/automatic-priority-*.test.ts
+DATABASE_URL=postgresql://postgres:local_test_only@127.0.0.1:55432/priority_scan_pr2141_test PGSSLMODE=disable NODE_ENV=test SESSION_SECRET=local-pr2141-test ENABLE_SCHEDULERS=false npm run test:backend -- tests/priority-scan.test.ts tests/automatic-priority-*.test.ts
 ```
 
 Every suite aborted in schema preload with `ECONNREFUSED 127.0.0.1:55432`. No PostgreSQL server/client or Docker was installed. Attempted provisioning with `apt-get update && apt-get install -y postgresql` failed before installation: the environment denied `setgroups`/`setegid`/`seteuid`. No production URL or database was used. The same localhost-only invocation was repeated after fixture corrections to confirm the blocker remained.
@@ -136,12 +136,12 @@ Formatting corrections used `node node_modules/prettier/bin/prettier.cjs --write
 - `client/src/pages/factory/PriorityScanLoadingControl.tsx` (formatting)
 - `server/routes/factory/customer-orders/priorityScanConfigRoutes.ts` (formatting)
 - `tests/automatic-priority-end-to-end-scenarios.test.ts`
-- `tests/automatic-priority-physical-deletion-phase6.test.ts`
-- `tests/automatic-priority-print-batch-phase5.test.ts`
+- `tests/automatic-priority-physical-deletion.test.ts`
+- `tests/automatic-priority-print-batch.test.ts`
 - `tests/automatic-priority-print-loading.test.ts`
-- `tests/automatic-priority-queue-recovery-phase7.test.ts`
-- `tests/automatic-priority-stock-entry-phase4.test.ts`
-- `tests/priority-scan-wave1.test.ts`
+- `tests/automatic-priority-queue-recovery.test.ts`
+- `tests/automatic-priority-stock-entry.test.ts`
+- `tests/priority-scan.test.ts`
 - `tests/ui/priority-scan-palette.test.tsx` (new)
 - `tests/ui/priority-specialist-print.test.tsx` (new)
 - `docs/priority-scan-fixed-palette-color-block.md`

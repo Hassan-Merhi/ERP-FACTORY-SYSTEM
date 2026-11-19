@@ -1,5 +1,5 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
+import type { Phase3SharedUiEntry } from "./sharedUiTranslationTypes";
 
 const payrollUiTranslations: readonly Phase3SharedUiEntry[] = [
   { en: "Selected", ar: "المحدد", fr: "Sélectionné" },

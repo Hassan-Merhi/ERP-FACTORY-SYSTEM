@@ -7,7 +7,7 @@ import {
   goldenCoastPhase10SettlementDigest,
   parseGoldenCoastPhase10SettlementInput,
   planGoldenCoastPhase10Settlement,
-} from "./goldenCoastPhase10SalesCashSettlement";
+} from "./goldenCoastSalesCashSettlement";
 
 function settlement(overrides: Record<string, unknown> = {}) {
   return parseGoldenCoastPhase10SettlementInput({

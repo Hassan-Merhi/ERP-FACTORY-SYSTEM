@@ -12,7 +12,7 @@
 - **Daybook:** `daybook/useFactoryDaybookModel.ts` substitutes the existing `useDebounce(searchQuery, 250)` helper for its private timeout/effect. Search filter delay stays at 250ms; date, voucher, transaction expansion, session persistence and exports untouched.
 - **Inventory:** `FactoryLocationInventoryLocationView.tsx` adopts existing `SearchField` for location search without changing the model, inventory totals, frozen product headers, export logic, or cost visibility. Input test ID preserved.
 - **Production:** `FactoryProductionTargets.tsx` adopts existing `SearchField` for a controlled filter input. Status logic, target editor, attendance integration, and report calculations untouched.
-- **Tests authored:** `tests/factory-unification-phase4-navigation.test.ts` captures Others links, worker tab keys, nested visibility tokens, POS/Dispatch independent route resolution and unknown-tab fallback. Tests have not been executed.
+- **Tests authored:** `tests/factory-unification-navigation.test.ts` captures Others links, worker tab keys, nested visibility tokens, POS/Dispatch independent route resolution and unknown-tab fallback. Tests have not been executed.
 
 ## Compatibility boundaries
 1. Do **not** fuse the POS and Waste Dispatch routes; they retain their own access and business workflows.

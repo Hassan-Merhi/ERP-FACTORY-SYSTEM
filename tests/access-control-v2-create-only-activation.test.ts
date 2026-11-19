@@ -43,7 +43,7 @@ import { isPosMutationAllowed } from "../server/services/security/posOperational
 import { effectiveErpPageKeys } from "../server/services/security/erpViewerPagePolicy";
 import { canEmptyFactoryLoadingContainer } from "../shared/factoryPermissionCatalog";
 import { isCreateOnlyFeatureAllowed, isExistingRecordReadOnlyRole } from "../shared/createOnlyRolePolicy";
-import { PHASE9_HANDLERS } from "../server/edge/phase9OperatorApply";
+import { PHASE9_HANDLERS } from "../server/edge/eventStreamOperatorApply";
 
 const LEGACY_ROLES = ["Developer", "Admin", "Owner", "Manager", "POS", "Normal User", "View Only", "ERP Tester"];
 const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "config/route-manifest.json"), "utf8")) as {

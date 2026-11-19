@@ -12,49 +12,49 @@ const requireFile = (file) => {
 };
 
 const translator = requireFile("client/src/components/ApplicationInterfaceTranslator.tsx");
-const audit = requireFile("scripts/audit-i18n-phase14.mjs");
-const backendAggregator = requireFile("client/src/i18n/backendMessagesPhase7Translations.ts");
-const backendPart9 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part9.ts");
-const backendPart10 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part10.ts");
-const backendPart11 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part11.ts");
-const backendPart12 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part12.ts");
-const backendPart13 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part13.ts");
+const audit = requireFile("scripts/audit-i18n.mjs");
+const backendAggregator = requireFile("client/src/i18n/backendMessagesTranslations.ts");
+const backendPart9 = requireFile("client/src/i18n/backendMessagesTranslations.part9.ts");
+const backendPart10 = requireFile("client/src/i18n/backendMessagesTranslations.part10.ts");
+const backendPart11 = requireFile("client/src/i18n/backendMessagesTranslations.part11.ts");
+const backendPart12 = requireFile("client/src/i18n/backendMessagesTranslations.part12.ts");
+const backendPart13 = requireFile("client/src/i18n/backendMessagesTranslations.part13.ts");
 
 const bundles = [
   {
     phase: 4,
     name: "Supplier Partner",
-    aggregator: "client/src/i18n/supplierPartnerPhase4Translations.ts",
+    aggregator: "client/src/i18n/supplierPartnerTranslations.ts",
     parts: 4,
     translatorImport: "translatePhase4SupplierPartnerText",
-    test: "tests/phase4-supplier-partner-translations.test.ts",
+    test: "tests/supplier-partner-translations.test.ts",
     expectedCount: 251,
   },
   {
     phase: 5,
     name: "Properties and Rentals",
-    aggregator: "client/src/i18n/propertiesRentalsPhase5Translations.ts",
+    aggregator: "client/src/i18n/propertiesRentalsTranslations.ts",
     parts: 3,
     translatorImport: "translatePhase5PropertiesRentalsText",
-    test: "tests/phase5-properties-rentals-translations.test.ts",
+    test: "tests/properties-rentals-translations.test.ts",
     expectedCount: 186,
   },
   {
     phase: 6,
     name: "Reports and Exports",
-    aggregator: "client/src/i18n/reportsExportsPhase6Translations.ts",
+    aggregator: "client/src/i18n/reportsExportsTranslations.ts",
     parts: 5,
     translatorImport: "translatePhase6ReportsExportsText",
-    test: "tests/phase6-reports-exports-translations.test.ts",
+    test: "tests/reports-exports-translations.test.ts",
     expectedCount: 262,
   },
   {
     phase: 7,
     name: "Backend Messages",
-    aggregator: "client/src/i18n/backendMessagesPhase7Translations.ts",
+    aggregator: "client/src/i18n/backendMessagesTranslations.ts",
     parts: 13,
     translatorImport: "translatePhase7BackendMessageText",
-    test: "tests/phase7-backend-messages-translations.test.ts",
+    test: "tests/backend-messages-translations.test.ts",
     // 697 + the two Phase 9 release-ratchet messages ("Service temporarily
     // unavailable — please retry." and "CSRF token missing or invalid.").
     expectedCount: 702,
@@ -142,15 +142,15 @@ for (const token of [
 }
 
 for (const auditPart of [
-  '"client/src/i18n/reportsExportsPhase6Translations.part5.ts"',
-  '"client/src/i18n/backendMessagesPhase7Translations.part13.ts"',
+  '"client/src/i18n/reportsExportsTranslations.part5.ts"',
+  '"client/src/i18n/backendMessagesTranslations.part13.ts"',
 ]) {
   if (!audit.includes(auditPart)) {
     failures.push(`Multilingual audit coverage list is missing: ${auditPart}`);
   }
 }
 
-const backendTest = requireFile("tests/phase7-backend-messages-translations.test.ts");
+const backendTest = requireFile("tests/backend-messages-translations.test.ts");
 for (const token of [
   "(début → aujourd’hui)",
   "(1 ignorée(s))",

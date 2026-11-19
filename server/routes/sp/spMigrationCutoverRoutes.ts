@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
-import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
+import { validateMigrationPair, pn } from "./spMigrationCommon";
 import { installCutoverWriteGuard } from "./spMigrationCutoverState";
 import { firstRow } from "../../lib/queryResult";
 

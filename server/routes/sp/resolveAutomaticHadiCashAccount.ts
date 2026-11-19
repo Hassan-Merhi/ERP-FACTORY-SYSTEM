@@ -1,4 +1,4 @@
-// Extracted from ./goldenCoastPhase6AutoHadi.ts to keep that module under the source-size cap.
+// Extracted from ./goldenCoastAutoHadi.ts to keep that module under the source-size cap.
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, bankAccounts, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
@@ -10,10 +10,10 @@ import {
   GOLDEN_COAST_PHASE7_SOURCE_TYPE,
   type GoldenCoastPhase7PostingRole,
   type GoldenCoastPhase7RoleAccounts,
-} from "../../services/accounting/goldenCoastPhase7HadiTransfer";
+} from "../../services/accounting/goldenCoastHadiTransfer";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
-import * as core from "./goldenCoastPhase6AutoHadiCore";
+import * as core from "./goldenCoastAutoHadiCore";
 
 export const postingDependencies = createDatabasePostingDependencies();
 

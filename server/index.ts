@@ -307,12 +307,11 @@ let startupDataReady = false;
       // repairs, kept in their original order. None changes the schema.
       // The payroll daybook pass rewrites the factory daybook mirror only (no
       // voucher, line or account).
-      const { runPhase3PayrollDaybookRepair } = await import("./services/accounting/phase3PayrollDaybookRepair");
+      const { runPhase3PayrollDaybookRepair } = await import("./services/accounting/payrollDaybookRepair");
       await runPhase3PayrollDaybookRepair();
       // Immutable inventory valuation cutover snapshots, captured after the
       // daybook pass while startup still blocks traffic to the new instance.
-      const { ensurePhase3InventoryValuationBaselines } =
-        await import("./services/accounting/phase3InventoryValuation");
+      const { ensurePhase3InventoryValuationBaselines } = await import("./services/accounting/inventoryValuation");
       const baselinesCreated = await ensurePhase3InventoryValuationBaselines(pool);
       logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
       // Disabled by default: an explicitly reviewed one-shot historical-sales repair.

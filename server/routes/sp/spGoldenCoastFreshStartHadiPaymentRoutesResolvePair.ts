@@ -11,7 +11,7 @@ import {
   type GoldenCoastFreshStartHadiCashAccount,
   type GoldenCoastFreshStartHadiPaymentAccounts,
 } from "../../services/accounting/goldenCoastFreshStartHadiPayment";
-import { GOLDEN_COAST_PHASE7_SOURCE_TYPE } from "../../services/accounting/goldenCoastPhase7HadiTransfer";
+import { GOLDEN_COAST_PHASE7_SOURCE_TYPE } from "../../services/accounting/goldenCoastHadiTransfer";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 

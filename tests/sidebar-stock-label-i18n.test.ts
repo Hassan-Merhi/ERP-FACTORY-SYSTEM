@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { loadApplicationTranslationCatalog } from "../client/src/i18n/applicationTranslations";
 import { translateApplicationLiteral } from "../client/src/i18n/applicationLiteralTranslations";
-import { translatePhase3SharedUiText } from "../client/src/i18n/sharedUiPhase3Translations";
+import { translatePhase3SharedUiText } from "../client/src/i18n/sharedUiTranslations";
 import { translateSharedInterfaceText } from "../client/src/i18n/sharedInterfaceTranslations";
 
 // The French word for "Inventory" is "Stock", which collides with the English

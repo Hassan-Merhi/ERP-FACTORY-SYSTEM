@@ -9,7 +9,7 @@
       "server/routes/admin/repair/inventory-values.ts",
       "server/routes/admin/repair/rebuild-inventory.ts",
       "server/routes/sp-migration/spMigrationStockRoutes.ts",
-      "server/routes/sp/spMigrationPhase4Inventory.ts",
+      "server/routes/sp/spMigrationInventory.ts",
       "server/routes/stock/merge/bulk-merge.ts",
       "server/routes/stock/merge/merge-logs.ts",
       "server/routes/stock/merge/merge.ts",
@@ -45,7 +45,7 @@
         "reason": "One-off cutover paths that establish opening balances in a target company from a source company's closing stock. Arguably an opening balance is a movement from nothing and should be journalled; that is a genuine design question, recorded here rather than assumed either way.",
         "files": [
           "server/routes/sp-migration/spMigrationStockRoutes.ts",
-          "server/routes/sp/spMigrationPhase4Inventory.ts"
+          "server/routes/sp/spMigrationInventory.ts"
         ]
       },
       "identity-merge": {
@@ -74,8 +74,8 @@
     "ceiling": 3,
     "files": [
       "server/routes/sp-migration/spMigrationSalesRoutes.ts",
-      "server/routes/sp/spMigrationPhase2Containers.ts",
-      "server/routes/sp/spMigrationPhase2Sales.ts"
+      "server/routes/sp/spMigrationContainers.ts",
+      "server/routes/sp/spMigrationSales.ts"
     ],
     "reviewState": "REVIEWED FILE BY FILE. The active 48 voucher creation paths are classified in config/voucher-write-evidence-review.json with zero unreviewed remainder. The 11 infrastructure writers completed in Phase 3 and the 22 operational writers completed in Phase 4 are retained separately in that review file and are forbidden from re-entering the measured backlog.",
     "reviewFile": "config/voucher-write-evidence-review.json",

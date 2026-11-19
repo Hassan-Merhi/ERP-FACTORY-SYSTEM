@@ -11,7 +11,7 @@
  * currency balance in that currency (and within a cent in the base columns);
  * re-activating an unbalanced voucher is refused; a reviewed repair can bypass
  * the guard for its own transaction. The wave 12 cases are in
- * wave12-ledger-integrity.test.ts.
+ * ledger-integrity.test.ts.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

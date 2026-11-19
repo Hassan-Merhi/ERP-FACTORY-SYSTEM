@@ -93,7 +93,7 @@ mutations and was not run during Phase 5.
 
 ## Regression tests added
 
-- `tests/fx-rate-phase5-history-cache-audit.test.ts`: dated-rate cutoff,
+- `tests/fx-rate-history-cache-audit.test.ts`: dated-rate cutoff,
   future rejection, session company isolation, no historical balance
   projection, current uncached Net Position, no-op save and no-journal
   audit boundary (source contract tests).

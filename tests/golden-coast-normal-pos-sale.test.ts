@@ -14,7 +14,7 @@ import {
   teardownGoldenCoastNormalPosFixture,
   voucherEntriesFor,
   type GoldenCoastNormalPosFixture,
-} from "./helpers/goldenCoastPhase5Fixture";
+} from "./helpers/goldenCoastFixture";
 
 const TEST_PREFIX = "gcnormalpos";
 const SALE_DATE = "2026-09-05";

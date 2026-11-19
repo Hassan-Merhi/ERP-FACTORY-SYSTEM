@@ -12,14 +12,14 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import type { GoldenCoastEquitySalesCashAccounts } from "../../services/accounting/goldenCoastEquitySalesCashSettlement";
 import {
   gcSalesCashConservativePayable,
   gcSalesCashPayableBalance,
   gcSalesCashSettleablePayable,
 } from "../../services/accounting/goldenCoastSalesCashPayable";
-import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import type { DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 
 /**
  * Golden Coast — settle the GC Sales Cash payable out of Hassan's own equity.

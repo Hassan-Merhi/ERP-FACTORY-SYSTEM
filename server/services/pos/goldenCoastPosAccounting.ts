@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { accountingPostingRequests, ledgerAccounts, vouchers } from "@shared/schema";
 import type { DbTransaction } from "../../db";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
-import { getGoldenCoastAccountDefinition } from "../accounting/goldenCoastPhase2Accounts";
+import { getGoldenCoastAccountDefinition } from "../accounting/goldenCoastAccounts";
 import { buildGenericVoucherPostingRequest } from "../accounting/genericVoucherPosting";
 import {
   postBalancedVoucherTx,

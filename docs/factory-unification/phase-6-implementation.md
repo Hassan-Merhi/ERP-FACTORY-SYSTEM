@@ -10,7 +10,7 @@
 2. Both `FactoryStockAllocationV5CreateProforma.tsx` and `FactoryStockAllocationV5EditProforma.tsx` consume that same projection and URL-first selected-company query keys. Create Only and existing-record edit restrictions remain unchanged; full-data fetches still use `fetchAllV5AllocationData`.
 3. `factorystockallocationv5/useFactoryStockAllocationV5Model.tsx` uses the existing `useDebounce` with the same 300ms delay and company-scoped keys for V5 allocation, unlinked-order and recently-cancelled-container reads. Legacy URL-prefix invalidations are retained.
 4. `factoryproformas/useFactoryProformasModel.ts` scopes my-access, customers, summary, expanded proforma and destination-specific customer price-list reads to the selected company. Proforma price UI is hidden until matching-company access arrives, and also honors `hideAllCosts`.
-5. `tests/factory-unification-phase6.test.ts` captures no-recalculation / six-decimal-input-preservation projection parity, original-row immutability, and company-specific V5 cache keys. Tests were authored, **not executed**.
+5. `tests/factory-unification-retains-v5-server-balances-and-does.test.ts` captures no-recalculation / six-decimal-input-preservation projection parity, original-row immutability, and company-specific V5 cache keys. Tests were authored, **not executed**.
 6. Post-write source reads confirmed imports and key use in the above files; no compiler, browser, database or API checks were run.
 
 ## Preservation boundaries

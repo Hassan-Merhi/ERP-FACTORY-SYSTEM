@@ -1,0 +1,374 @@
+import fs from "node:fs";
+import path from "node:path";
+import {
+  buildReport,
+  createSuggestedBaseline,
+  enforceBaseline,
+  renderMarkdown,
+} from "./i18n-audit-lib.mjs";
+
+const DETECTOR_VERSION = 9;
+const compatibilityTranslationFiles = [
+  "client/src/i18n/applicationTranslations.ts",
+  "client/src/i18n/intercompanyContainerTradingTranslations.ts",
+  "client/src/i18n/intercompanyContainerTradingTranslations.backend.ts",
+  "client/src/i18n/sharedInterfaceTranslations.ts",
+  "client/src/i18n/accountingDocumentTranslations.ts",
+  "client/src/i18n/sharedUiTranslations.part1.ts",
+  "client/src/i18n/sharedUiTranslations.part2.ts",
+  "client/src/i18n/sharedUiTranslations.part3.ts",
+  "client/src/i18n/sharedUiTranslations.part4.ts",
+  "client/src/i18n/sharedUiTranslations.part5.ts",
+  "client/src/i18n/sharedUiTranslations.part6.ts",
+  "client/src/i18n/sharedUiTranslations.part7.ts",
+  "client/src/i18n/remainingTranslations.part01.ts",
+  "client/src/i18n/remainingTranslations.part02.ts",
+  "client/src/i18n/remainingTranslations.part03.ts",
+  "client/src/i18n/remainingTranslations.part04.ts",
+  "client/src/i18n/remainingTranslations.part05.ts",
+  "client/src/i18n/remainingTranslations.part06.ts",
+  "client/src/i18n/remainingTranslations.part07.ts",
+  "client/src/i18n/remainingTranslations.part08.ts",
+  "client/src/i18n/remainingTranslations.part09.ts",
+  "client/src/i18n/remainingTranslations.part10.ts",
+  "client/src/i18n/remainingTranslations.part11.ts",
+  "client/src/i18n/remainingTranslations.part12.ts",
+  "client/src/i18n/remainingTranslations.part13.ts",
+  "client/src/i18n/remainingTranslations.part14.ts",
+  "client/src/i18n/remainingTranslations.part15.ts",
+  "client/src/i18n/remainingTranslations.part16.ts",
+  "client/src/i18n/remainingTranslations.part17.ts",
+  "client/src/i18n/remainingTranslations.part18.ts",
+  "client/src/i18n/remainingTranslations.part19.ts",
+  "client/src/i18n/remainingTranslations.part20.ts",
+  "client/src/i18n/remainingTranslations.part21.ts",
+  "client/src/i18n/remainingTranslations.part22.ts",
+  "client/src/i18n/remainingTranslations.part23.ts",
+  "client/src/i18n/remainingTranslations.part24.ts",
+  "client/src/i18n/remainingTranslations.part25.ts",
+  "client/src/i18n/remainingTranslations.part26.ts",
+  "client/src/i18n/remainingTranslations.part27.ts",
+  "client/src/i18n/remainingTranslations.part28.ts",
+  "client/src/i18n/remainingTranslations.part29.ts",
+  "client/src/i18n/remainingTranslations.part30.ts",
+  "client/src/i18n/remainingTranslations.part31.ts",
+  "client/src/i18n/remainingTranslations.part32.ts",
+  "client/src/i18n/remainingTranslations.part33.ts",
+  "client/src/i18n/remainingTranslations.part34.ts",
+  "client/src/i18n/remainingTranslations.part35.ts",
+  "client/src/i18n/remainingTranslations.part36.ts",
+  "client/src/i18n/remainingTranslations.part37.ts",
+  "client/src/i18n/remainingTranslations.part38.ts",
+  "client/src/i18n/remainingTranslations.part39.ts",
+  "client/src/i18n/supplierPartnerTranslations.part1.ts",
+  "client/src/i18n/supplierPartnerTranslations.part2.ts",
+  "client/src/i18n/supplierPartnerTranslations.part3.ts",
+  "client/src/i18n/supplierPartnerTranslations.part4.ts",
+  "client/src/i18n/propertiesRentalsTranslations.part1.ts",
+  "client/src/i18n/propertiesRentalsTranslations.part2.ts",
+  "client/src/i18n/propertiesRentalsTranslations.part3.ts",
+  "client/src/i18n/reportsExportsTranslations.part1.ts",
+  "client/src/i18n/reportsExportsTranslations.part2.ts",
+  "client/src/i18n/reportsExportsTranslations.part3.ts",
+  "client/src/i18n/reportsExportsTranslations.part4.ts",
+  "client/src/i18n/reportsExportsTranslations.part5.ts",
+  "client/src/i18n/reportsExportsTranslations.part6.ts",
+  "client/src/i18n/backendMessagesTranslations.part1.ts",
+  "client/src/i18n/backendMessagesTranslations.part2.ts",
+  "client/src/i18n/backendMessagesTranslations.part3.ts",
+  "client/src/i18n/backendMessagesTranslations.part4.ts",
+  "client/src/i18n/backendMessagesTranslations.part5.ts",
+  "client/src/i18n/backendMessagesTranslations.part6.ts",
+  "client/src/i18n/backendMessagesTranslations.part7.ts",
+  "client/src/i18n/backendMessagesTranslations.part8.ts",
+  "client/src/i18n/backendMessagesTranslations.part9.ts",
+  "client/src/i18n/backendMessagesTranslations.part10.ts",
+  "client/src/i18n/backendMessagesTranslations.part11.ts",
+  "client/src/i18n/backendMessagesTranslations.part12.ts",
+  "client/src/i18n/backendMessagesTranslations.part13.ts",
+  "client/src/i18n/currentMainSupplierPartnerTranslations.ts",
+  "client/src/i18n/remoteSupportSessionTranslations.ts",
+  "client/src/i18n/remoteSupportMouseTranslations.ts",
+  "client/src/i18n/remoteSupportKeyboardTranslations.ts",
+  "client/src/i18n/factoryProductionPlannerTranslations.ts",
+  "client/src/i18n/fixedProductionPlannerTranslations.ts",
+  "client/src/i18n/mixBatchCategoryTargetTranslations.ts",
+  "client/src/i18n/factoryInsuranceTranslations.ts",
+  "client/src/i18n/automaticPriorityPrintingTranslations.ts",
+  "client/src/i18n/posItemReplacement.applicationTranslations.ts",
+  "client/src/i18n/retailCatalogTranslations.ts",
+  "client/src/i18n/retailPosPricingTranslations.ts",
+  "client/src/i18n/retailAnalyticsTranslations.ts",
+  "client/src/i18n/retailFinancialTranslations.ts",
+  "client/src/i18n/retailFashionTranslations.ts",
+  "client/src/i18n/releaseTranslations.part1.ts",
+  "client/src/i18n/releaseTranslations.part2.ts",
+  "client/src/i18n/releaseTranslations.part3.ts",
+  "client/src/i18n/releaseTranslations.part4.ts",
+  "client/src/i18n/payrollUiTranslations.ts",
+  "client/src/i18n/supplierProfitReconciliationTranslations.ts",
+];
+
+const reviewedTechnicalValues = new Set([
+  // Raw SQL audit: internal refusal codes for invalid ids / map keys before SQL is built.
+  // Thrown to callers and logs, never rendered as interface text.
+  "EXPORT_COMPANY_INVALID",
+  "FACTORY_BILINGUAL_ID_INVALID",
+  "HISTORICAL_REPAIR_KIND_INVALID",
+  // Database migration modernization (#3130): operator-only boot diagnostics written to
+  // the deployment log when an opt-in verify-only cutover refuses to start. They are never
+  // rendered in the application interface, so they are not translatable display text.
+  "Scheduled WhatsApp schema verification failed; apply reviewed controlled migration 008 first",
+  "${migrations.length} unversioned startup statements have not been mapped to controlled migrations",
+  "Legacy startup cutover blocked:",
+  "HISTORICAL_FX_WALLET_DATE_MISMATCH",
+  "HISTORICAL_FX_WALLET_COVERAGE_INVALID",
+  "HISTORICAL_FX_WALLET_COVERAGE_EMPTY",
+  // Unified accounting: machine error codes thrown internally and mapped to translated
+  // responses by their routes, the PostgreSQL term FORCE RLS, and the literal phrase an
+  // Owner must type to confirm a policy change. None is translatable display text.
+  "COMPANY_REQUIRED",
+  "DASHBOARD_COMPANY_INVALID",
+  "DASHBOARD_DATE_INVALID",
+  "DASHBOARD_PERIOD_INVALID",
+  "FACTORY_ACCOUNTING_INVALID_COMPANY",
+  "FINANCIAL_BASE_CURRENCY_UNSUPPORTED",
+  "FINANCIAL_COMPANY_INVALID",
+  "FINANCIAL_FUTURE_DATE_INVALID",
+  "FINANCIAL_PERIOD_INVALID",
+  "HISTORICAL_COMPANY_INVALID",
+  "HISTORICAL_DATE_INVALID",
+  "HISTORICAL_FUTURE_DATE_REFUSED",
+  "HISTORICAL_PERIOD_INVALID",
+  "INVENTORY_AUDIT_INVALID_COMPANY",
+  "FORCE RLS",
+  "POLICY CHANGE",
+  // Permissions Control Center API error codes: machine-readable codes returned beside a
+  // readable message so clients can branch on them. Never rendered as display text.
+  "ACCESS_POLICY_CONSTRAINT",
+  "ACCESS_POLICY_SCHEMA_REQUIRED",
+  "ACCESS_POLICY_UNAVAILABLE",
+  "INVALID_POLICY_INPUT",
+  // Scheduled WhatsApp placeholders: an example group chat ID and an IANA timezone
+  // identifier. Both are literal technical formats the user must type as-is.
+  "120363012345678901@g.us",
+  "Asia/Beirut",
+  // Detector false positive: `requestJson<ControllerSessionsResponse>(...)` reads as JSX to the
+  // scanner, so the generic call's function name surfaces as translatable text. It is an
+  // identifier, never rendered.
+  "requestJson",
+  // Factory production code uses fetchJson as a local typed-request helper; it is never rendered.
+  "fetchJson",
+  // Retail workspaces use getJson as the same kind of local typed-request helper; it is never rendered.
+  "getJson",
+  // Cost centers use readCostCenterApi<T>(...) the same way; it is never rendered.
+  "readCostCenterApi",
+  // State-enum value used by ErpAccessBoundary; never rendered as user-facing copy.
+  "error",
+  // Prettier can split adjacent translated JSX expressions so the scanner sees closing/opening
+  // JSX syntax as an object-property value. This sequence is never rendered as user-facing copy.
+  ")}</span>{",
+  "seg.isSkip ? (",
+  "text-success",
+  "text-warning",
+  "v.1.9.HMD",
+  "useSidebar must be used within a SidebarProvider.",
+  "useCarousel must be used within a <Carousel />",
+  "useFormField should be used within <FormField>",
+  "useFormField should be used within <FormItem>",
+  "useTheme must be used within ThemeProvider",
+  "useChart must be used within a <ChartContainer />",
+  "${landlordUnitNames.get(r.unitId) ??",
+  "${unitNameById.get(r.unitId) ??",
+  "new Date().toISOString().slice(0, 10) && (",
+  "unit${row.unitId}${unit.unitNumber ?",
+  // Detector false positive: this is a calculation expression embedded in a
+  // customer table cell, not user-facing copy.
+  "Math.abs(customer.balance ?? 0)",
+  // Detector false positive: the ternary opening of the ErpRoutes route factory, not copy.
+  "allowed ? (",
+  // Interpolated comparison label: the rendered text is the variable, the colon is punctuation.
+  "${labelB}:",
+  // AIS stream fallbacks written only to server logs and metrics, never to an API response.
+  "subscription refresh failed",
+  "AIS update handler failed",
+  // Detector false positive: a tie-tolerance comparison in ItemMarketAnalysis, not copy.
+  "Math.abs(entry.profit - topProfit)",
+  // Scheduler timeout errors: caught by the scheduler and written only to server logs.
+  "${label} import timed out after ${SCHEDULER_IMPORT_TIMEOUT_MS}ms",
+  "${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms",
+  // Green API read-transport socket errors: caught by fetchGreenApiReadOnly, which logs only
+  // their code and throws its own (translated) connection message.
+  "Request aborted",
+  "Connection timed out",
+  // Startup schema error code, not copy.
+  "SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE",
+  // Detector fragment: the scanner cut a voucher-narration template at its ternary.
+  "Continuation receipt — container ${container.containerNumber}${supplierName?.trim() ?",
+  // Retail transfer voucher descriptions stored on the ledger journal, like the continuation receipt above.
+  "Retail transfer #${created.id} dispatched: stock in transit",
+  "Retail transfer #${transferId} received at location ${details.toLocationId}",
+  // Detector false positive: the JSX condition opening the Retail POS low-stock warning, not copy.
+  "line.quantity && (",
+]);
+
+function argumentValue(name) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : null;
+}
+
+function writeOutput(file, content) {
+  if (!file) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+}
+
+function decodeCompatibilityValue(quote, rawValue) {
+  // Generated translation inventories serialize their English source with
+  // JSON.stringify. Decode that one serialization layer before comparing it
+  // with scanner findings so escaped newlines, Unicode escapes, and escaped
+  // template markers match the actual source value rather than file encoding.
+  if (quote === '"') {
+    try {
+      return JSON.parse(`"${rawValue}"`);
+    } catch {
+      // Fall through to the legacy quote decoder for hand-authored entries.
+    }
+  }
+  return rawValue.replace(/\\(["'`\\])/g, "$1");
+}
+
+function loadCompatibilityCoveredValues() {
+  const values = new Set();
+  for (const file of compatibilityTranslationFiles) {
+    if (!fs.existsSync(file)) continue;
+    const source = fs.readFileSync(file, "utf8");
+    for (const match of source.matchAll(/\ben\s*:\s*(["'`])((?:\\.|(?!\1).)*)\1/g)) {
+      values.add(decodeCompatibilityValue(match[1], match[2]).trim());
+    }
+
+    // Wave 2 keeps the English application catalog synchronous while Arabic
+    // and French are lazy chunks. The compact English map no longer has an
+    // `en:` property per row, so include its JSON-style values explicitly.
+    if (file.endsWith("/applicationTranslations.ts")) {
+      const catalogMatch = source.match(
+        /export const applicationEnglishTranslations = (\{[\s\S]*?\}) as const;/
+      );
+      if (catalogMatch) {
+        for (const match of catalogMatch[1].matchAll(/^\s*"[^"]+"\s*:\s*"((?:\\.|[^"\\])*)"\s*,?$/gm)) {
+          values.add(decodeCompatibilityValue('"', match[1]).trim());
+        }
+      }
+    }
+  }
+  return values;
+}
+
+function looksLikeCssClassList(value) {
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return false;
+  const utility = /^(?:!?-?(?:bg|text|border|ring|fill|stroke|font|leading|tracking|p[trblxy]?|m[trblxy]?|w|min-w|max-w|h|min-h|max-h|gap|space-[xy]|rounded|shadow|opacity|z|top|right|bottom|left|inset|grid|col|row|flex|items|justify|content|self|place|overflow|overscroll|whitespace|break|truncate|cursor|select|pointer-events|transition|duration|ease|delay|transform|translate|scale|rotate|skew|origin|animate|object|aspect|columns|divide|outline|decoration|underline|line-clamp|sr-only|hidden|block|inline|absolute|relative|fixed|sticky|grow|shrink|basis|order|visible|invisible)(?:[-:\[\]/.%#\w]+)?|(?:hover|focus|active|disabled|checked|data|aria|dark|sm|md|lg|xl|2xl):.+)$/;
+  return tokens.every((token) => utility.test(token));
+}
+
+function refineFinding(finding, compatibilityCoveredValues) {
+  const value = finding.text.trim();
+  if (finding.kind === "jsx-text") {
+    if (value.includes("\n")) return null;
+    if (!/^[A-Za-z][A-Za-z0-9\s,.'!?&/():%+\-–—…*#@]+$/.test(value)) return null;
+    if (/\b(?:return|const|let|var|useState|useRef|Promise|forwardRef|interface|type|extends)\b/.test(value)) {
+      return null;
+    }
+  }
+  if (reviewedTechnicalValues.has(value)) {
+    return { ...finding, status: "excluded", category: "technical-identifier" };
+  }
+  if (compatibilityCoveredValues.has(value)) {
+    return { ...finding, status: "excluded", category: "compatibility-covered" };
+  }
+  if (looksLikeCssClassList(value)) {
+    return { ...finding, status: "excluded", category: "style-token" };
+  }
+  if (finding.kind === "jsx-expression-text" && /(?:\\t|\\n|\t|\n)/.test(value)) {
+    return { ...finding, status: "excluded", category: "sample-data" };
+  }
+  if (finding.kind === "error-constructor" && /^[a-z][a-z0-9_-]{1,50}$/.test(value)) {
+    return { ...finding, status: "excluded", category: "technical-identifier" };
+  }
+  return finding;
+}
+
+function rebuildReport(report, compatibilityCoveredValues) {
+  const findings = report.findings.map((finding) => refineFinding(finding, compatibilityCoveredValues)).filter(Boolean);
+  const modules = {};
+  const excludedCategories = {};
+  const filesByActionableCount = {};
+  for (const finding of findings) {
+    modules[finding.module] ??= { candidates: 0, actionable: 0, excluded: 0 };
+    modules[finding.module].candidates += 1;
+    modules[finding.module][finding.status] += 1;
+    if (finding.status === "excluded") {
+      excludedCategories[finding.category] = (excludedCategories[finding.category] ?? 0) + 1;
+    } else {
+      filesByActionableCount[finding.file] = (filesByActionableCount[finding.file] ?? 0) + 1;
+    }
+  }
+  const actionable = findings.filter((finding) => finding.status === "actionable").length;
+  return {
+    ...report,
+    detectorVersion: DETECTOR_VERSION,
+    totals: {
+      candidates: findings.length,
+      actionable,
+      excluded: findings.length - actionable,
+      unclassified: 0,
+    },
+    modules: Object.fromEntries(Object.entries(modules).sort(([left], [right]) => left.localeCompare(right))),
+    excludedCategories: Object.fromEntries(
+      Object.entries(excludedCategories).sort(([, left], [, right]) => right - left),
+    ),
+    topActionableFiles: Object.entries(filesByActionableCount)
+      .sort(([, left], [, right]) => right - left)
+      .slice(0, 50)
+      .map(([file, count]) => ({ file, count })),
+    findings,
+  };
+}
+
+const policyPath = argumentValue("--policy") ?? "config/i18n-audit-policy.json";
+const baselinePath = argumentValue("--baseline") ?? "config/i18n-phase14-baseline.json";
+const jsonOutput = argumentValue("--json-out");
+const markdownOutput = argumentValue("--markdown-out");
+const suggestedBaselineOutput = argumentValue("--suggested-baseline-out");
+const noEnforce = process.argv.includes("--no-enforce");
+
+const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+const baseline = fs.existsSync(baselinePath) ? JSON.parse(fs.readFileSync(baselinePath, "utf8")) : null;
+const compatibilityCoveredValues = loadCompatibilityCoveredValues();
+const report = rebuildReport(buildReport(policy), compatibilityCoveredValues);
+
+writeOutput(jsonOutput, `${JSON.stringify(report, null, 2)}\n`);
+writeOutput(markdownOutput, renderMarkdown(report, baseline));
+if (suggestedBaselineOutput) {
+  writeOutput(suggestedBaselineOutput, `${JSON.stringify(createSuggestedBaseline(report), null, 2)}\n`);
+}
+
+console.log(
+  `I18n audit: ${report.totals.actionable} actionable, ${report.totals.excluded} reviewed exclusions, ${report.totals.candidates} total candidates.`,
+);
+for (const [module, counts] of Object.entries(report.modules)) {
+  console.log(`${module}: ${counts.actionable} actionable / ${counts.excluded} excluded`);
+}
+
+if (!noEnforce) {
+  if (!baseline) {
+    console.error(`Missing reviewed baseline: ${baselinePath}`);
+    process.exit(1);
+  }
+  const errors = enforceBaseline(report, baseline);
+  if (errors.length > 0) {
+    for (const error of errors) console.error(`- ${error}`);
+    console.error("Run with --no-enforce and review the generated report before updating the baseline.");
+    process.exit(1);
+  }
+}

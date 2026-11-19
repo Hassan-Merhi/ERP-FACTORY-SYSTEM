@@ -2,8 +2,8 @@
   "description": "Manually reviewed raw SQL construction sites. Each entry is bound to a scanner fingerprint; see docs/security/raw-sql-audit.md. Never bulk-approve.",
   "entries": [
     {
-      "id": "118547f49d1d9895af28",
-      "path": "scripts/apply-phase3-heavy-read-indexes.mjs",
+      "id": "88a75bdbbbe1a1d986f1",
+      "path": "scripts/apply-heavy-read-indexes.mjs",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "developer-script",
@@ -11,7 +11,7 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "Statements split from the repo-committed file migrations/20260717_phase3_heavy_read_indexes.sql read at scripts/apply-phase3-heavy-read-indexes.mjs:26-38",
+          "source": "Statements split from the repo-committed file migrations/20260717_phase3_heavy_read_indexes.sql read at scripts/apply-heavy-read-indexes.mjs:26-38",
           "validation": "Fixed path under the repo (new URL(...import.meta.url)); no CLI/env/request input selects the file; operator runs with own DATABASE_URL"
         }
       ],
@@ -134,8 +134,8 @@
       "reason": "NOT SQL: scanner false positive (key=value text). Printed diagnostic line only."
     },
     {
-      "id": "c372d25537d16e3a1e8d",
-      "path": "scripts/edge/audit-phase7-baseline.mjs",
+      "id": "f21f3f22ce95eb2b9a49",
+      "path": "scripts/edge/audit-baseline.mjs",
       "kind": "query-text",
       "context": "captureClone",
       "classification": "catalog-identifier",
@@ -143,15 +143,15 @@
       "dynamicInputs": [
         {
           "expression": "sqlName",
-          "source": "sqlName = quoteIdent(obj.schema_name)+'.'+quoteIdent(obj.object_name) from pg_class/pg_namespace rows (scripts/edge/audit-phase7-baseline.mjs:155-166)",
+          "source": "sqlName = quoteIdent(obj.schema_name)+'.'+quoteIdent(obj.object_name) from pg_class/pg_namespace rows (scripts/edge/audit-baseline.mjs:155-166)",
           "validation": "quoteIdent doubles embedded quotes and wraps in double quotes (:19); relkind='S' filter (:159,:167)"
         }
       ],
       "reason": "Relation names come from pg_catalog and are emitted as double-quoted identifiers with quote escaping, so no name can break out of identifier context; the script runs against disposable clones."
     },
     {
-      "id": "6552ea4546b68c7c9335",
-      "path": "scripts/edge/audit-phase7-baseline.mjs",
+      "id": "6a24bf3f118cc509fbcb",
+      "path": "scripts/edge/audit-baseline.mjs",
       "kind": "query-text",
       "context": "captureClone",
       "classification": "catalog-identifier",
@@ -159,7 +159,7 @@
       "dynamicInputs": [
         {
           "expression": "sqlName",
-          "source": "sqlName built at scripts/edge/audit-phase7-baseline.mjs:166 from pg_class/pg_namespace catalog rows (:155-160)",
+          "source": "sqlName built at scripts/edge/audit-baseline.mjs:166 from pg_class/pg_namespace catalog rows (:155-160)",
           "validation": "quoteIdent double-quote escaping (:19)"
         }
       ],
@@ -351,8 +351,8 @@
       "reason": "NOT SQL: scanner false positive (key=value text). Report text for the operator; skippedReason is never interpolated into a query."
     },
     {
-      "id": "2a374fe72e0fd3449f9e",
-      "path": "scripts/run-phase7-browser-e2e.mjs",
+      "id": "0dc5f8c41faef91bfa2c",
+      "path": "scripts/run-browser-e2e.mjs",
       "kind": "assembled-sql-text",
       "context": "setLanguage",
       "classification": "not-sql-text",
@@ -360,7 +360,7 @@
       "dynamicInputs": [
         {
           "expression": "nextLanguage",
-          "source": "nextLanguage = language.code from literal list ['en','fr','ar'] (scripts/run-phase7-browser-e2e.mjs:761-768)",
+          "source": "nextLanguage = language.code from literal list ['en','fr','ar'] (scripts/run-browser-e2e.mjs:761-768)",
           "validation": "Fixed literal set"
         }
       ],
@@ -440,8 +440,8 @@
       "reason": "Same construction as the count query, executed only with operator --apply; no external data reaches the text."
     },
     {
-      "id": "84f609bad7fac9cdd963",
-      "path": "server/edge/phase10Handover.mjs",
+      "id": "f54a406b0fe589110b21",
+      "path": "server/edge/handover.mjs",
       "kind": "assembled-sql-text",
       "context": "eventStream",
       "classification": "allowlisted-identifier",
@@ -449,7 +449,7 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table argument of eventStream(); only callers are literals at server/edge/phase10Handover.mjs:44-49",
+          "source": "table argument of eventStream(); only callers are literals at server/edge/handover.mjs:44-49",
           "validation": "Six literal outbox table names in frozen STREAMS"
         },
         {
@@ -461,8 +461,8 @@
       "reason": "eventStream is module-private and called only with literal pairs inside the frozen STREAMS array; the site id is validated by UUID regex and bound as $1 (:54)."
     },
     {
-      "id": "43d16fc93886bdb4d750",
-      "path": "server/edge/phase9StockItemEditApply.ts",
+      "id": "4d716648f0b8e3c6599f",
+      "path": "server/edge/stockItemEditApply.ts",
       "kind": "query-text",
       "context": "assertReference",
       "classification": "allowlisted-identifier",
@@ -470,15 +470,15 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table pushed into checks as literals 'locations'/'stock_categories'/'stock_groups' (server/edge/phase9StockItemEditApply.ts:130-136)",
+          "source": "table pushed into checks as literals 'locations'/'stock_categories'/'stock_groups' (server/edge/stockItemEditApply.ts:130-136)",
           "validation": "Only three literal table names possible; LAN event values are bound as $1 (Number(...)) and $2"
         }
       ],
       "reason": "The table name is chosen by branch from three string literals; event payload ids are bound parameters, never text."
     },
     {
-      "id": "a87298e685e3a4a372cf",
-      "path": "server/edge/phase9StockItemLifecycleApply.ts",
+      "id": "3ae2ec95be384b37f6d1",
+      "path": "server/edge/stockItemLifecycleApply.ts",
       "kind": "query-text",
       "context": "assertReferences",
       "classification": "allowlisted-identifier",
@@ -486,7 +486,7 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table from literal checks array ['stock_groups','stock_categories','stock_grades'] (server/edge/phase9StockItemLifecycleApply.ts:76-80)",
+          "source": "table from literal checks array ['stock_groups','stock_categories','stock_grades'] (server/edge/stockItemLifecycleApply.ts:76-80)",
           "validation": "Fixed three literals"
         }
       ],
@@ -2160,7 +2160,7 @@
       "dynamicInputs": [
         {
           "expression": "column",
-          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) \u2014 server/services/accounting/accountHistoryPolicy.ts:97-103",
+          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) — server/services/accounting/accountHistoryPolicy.ts:97-103",
           "validation": "LINE_COLUMNS.has(column) membership test at accountHistoryPolicy.ts:104 (7 fixed column names), then quoted by sql.identifier"
         }
       ],
@@ -3113,17 +3113,17 @@
       "dynamicInputs": [
         {
           "expression": "item.companyExpression",
-          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-phase6-snapshots.test.ts (read-only) (companyExpression)",
+          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-snapshots.test.ts (read-only) (companyExpression)",
           "validation": "code-owned literal SQL expressions; relations they reference are additionally regex-validated by referencedTables (:172-189) before use"
         },
         {
           "expression": "productId",
-          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-phase6-snapshots.test.ts (read-only) (productIdExpression, default \"NULL\" at :51)",
+          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-snapshots.test.ts (read-only) (productIdExpression, default \"NULL\" at :51)",
           "validation": "code-owned literal; no runtime source"
         },
         {
           "expression": "articleCode",
-          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-phase6-snapshots.test.ts (read-only) (articleCodeExpression, default \"NULL\" at :52)",
+          "source": "server/services/factoryBilingualSnapshotService.ts:56-165 FACTORY_BILINGUAL_SNAPSHOT_TARGETS literal target() entries; applyTargets/buildFactoryBilingualSnapshotPlan iterate only this array (:353,:408); no exported API accepts a caller-supplied target; only other importer is tests/factory-bilingual-snapshots.test.ts (read-only) (articleCodeExpression, default \"NULL\" at :52)",
           "validation": "code-owned literal; no runtime source"
         }
       ],
@@ -3803,8 +3803,8 @@
       "reason": "voidConsistent is a non-exported helper in the drizzle schema definition, and all four call sites pass column-name string literals; the CHECK text is schema DDL with no runtime input."
     },
     {
-      "id": "3cd8fddd480123853e00",
-      "path": "tests/automatic-priority-allocation-history-phase2.test.ts",
+      "id": "b4f00a1588fbc6b6552b",
+      "path": "tests/automatic-priority-allocation-history.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "not-sql-text",
@@ -3812,15 +3812,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "Loop over literal object array at tests/automatic-priority-allocation-history-phase2.test.ts:193-200 ({}, {baleId:'NaN'}, {orderId:-1}, ...)",
+          "source": "Loop over literal object array at tests/automatic-priority-allocation-history.test.ts:193-200 ({}, {baleId:'NaN'}, {orderId:-1}, ...)",
           "validation": "Not SQL at all: supertest .query() serialises these literals into the HTTP query string of a test request to HISTORY_URL (line 16); the server route validates and binds them."
         }
       ],
       "reason": "False positive: `agent.get(...).query(query)` is supertest's URL query-string builder, not a database call; its inputs are hard-coded literals in the test file. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "3d03198fb9db14ab74d6",
-      "path": "tests/automatic-priority-stock-entry-phase4.test.ts",
+      "id": "237a73f2afd21ea1bd5a",
+      "path": "tests/automatic-priority-stock-entry.test.ts",
       "kind": "query-text",
       "context": "countRows",
       "classification": "test-fixture",
@@ -3828,7 +3828,7 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "countRows callers at tests/automatic-priority-stock-entry-phase4.test.ts:150,151,210,211,230,241,298,302 pass string literals",
+          "source": "countRows callers at tests/automatic-priority-stock-entry.test.ts:150,151,210,211,230,241,298,302 pass string literals",
           "validation": "Parameter typed as union \"factory_priority_auto_allocations\" | \"factory_priority_scan_history\" (line 63); every caller passes one of those literals."
         }
       ],
@@ -3851,8 +3851,8 @@
       "reason": "Column/table identifiers come only from literals in this test file; the compared value is a bound parameter. Test-only helper. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "aae9e6e3c5a84d3f1e38",
-      "path": "tests/backend-wave4-deleted-items-permanent.test.ts",
+      "id": "987486c774783c206208",
+      "path": "tests/backend-deleted-items-permanent.test.ts",
       "kind": "query-text",
       "context": "count",
       "classification": "test-fixture",
@@ -3860,15 +3860,15 @@
       "dynamicInputs": [
         {
           "expression": "sql",
-          "source": "count callers at tests/backend-wave4-deleted-items-permanent.test.ts:85-147 pass constant template literals (`inventory WHERE stock_item_id = $1`, `stock_items WHERE id = $1`, `vouchers WHERE id = $1`)",
+          "source": "count callers at tests/backend-deleted-items-permanent.test.ts:85-147 pass constant template literals (`inventory WHERE stock_item_id = $1`, `stock_items WHERE id = $1`, `vouchers WHERE id = $1`)",
           "validation": "All 10 call sites pass interpolation-free literals; ids are bound via params."
         }
       ],
       "reason": "The FROM/WHERE fragment is a hard-coded literal at every caller and all values are $1-bound. Test-only helper. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "df423bb0fbbc49430e37",
-      "path": "tests/backend-wave4-payroll-bulk-generation.test.ts",
+      "id": "2450c5e11c10a5b299e6",
+      "path": "tests/backend-payroll-bulk-generation.test.ts",
       "kind": "query-text",
       "context": "insertWorker",
       "classification": "test-fixture",
@@ -3876,7 +3876,7 @@
       "dynamicInputs": [
         {
           "expression": "columns.join(\", \")",
-          "source": "Object.keys of literal objects passed by insertWorker callers at tests/backend-wave4-payroll-bulk-generation.test.ts:83,90,96,244,302",
+          "source": "Object.keys of literal objects passed by insertWorker callers at tests/backend-payroll-bulk-generation.test.ts:83,90,96,244,302",
           "validation": "Keys are fixed source-code property names (full_name, salary_type, pay_frequency, base_salary, weekly_salary, transport_allowance, active); values bound as $2..$n."
         },
         {
@@ -4158,7 +4158,7 @@
       "dynamicInputs": [
         {
           "expression": "where",
-          "source": "deleteAuditLogRowsForTests callers: 49 test files (e.g. tests/setup.ts:201,485; tests/wave18b-accounts-deletes.test.ts:163; tests/offline-legacy-queue-decisions.test.ts:35) all pass string literals; no callers in server/, shared/, scripts/",
+          "source": "deleteAuditLogRowsForTests callers: 49 test files (e.g. tests/setup.ts:201,485; tests/accounts-deletes.test.ts:163; tests/offline-legacy-queue-decisions.test.ts:35) all pass string literals; no callers in server/, shared/, scripts/",
           "validation": "Every caller passes a literal WHERE condition (e.g. \"company_id = $1\", \"company_id = ANY($1::int[])\") with values in params; documented contract tests/helpers/auditLogCleanup.ts:12."
         }
       ],
@@ -4213,8 +4213,8 @@
       "reason": "SQL text is literal at every caller; only bound values vary. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "67839a74403664b2e7e2",
-      "path": "tests/offline-phase9-pressing-postgres.test.ts",
+      "id": "fe4dcbf4b9c34d25a84c",
+      "path": "tests/offline-pressing-postgres.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -4222,15 +4222,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "for-of over literal array at tests/offline-phase9-pressing-postgres.test.ts:74-77",
+          "source": "for-of over literal array at tests/offline-pressing-postgres.test.ts:74-77",
           "validation": "Two fixed literal UPDATE/DELETE statements expected to be rejected."
         }
       ],
       "reason": "Statements are hard-coded literals in the test. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "97b98c8ae0b10793b512",
-      "path": "tests/offline-phase9-pressing-sync-drill.test.ts",
+      "id": "becdb693176b13fb0fe3",
+      "path": "tests/offline-pressing-sync-drill.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -4238,15 +4238,15 @@
       "dynamicInputs": [
         {
           "expression": "SHA",
-          "source": "tests/offline-phase9-pressing-sync-drill.test.ts:15 `const SHA = \"a\".repeat(64)`",
+          "source": "tests/offline-pressing-sync-drill.test.ts:15 `const SHA = \"a\".repeat(64)`",
           "validation": "Constant 64 x 'a' (hex chars only)."
         }
       ],
       "reason": "SHA is a module constant of hex characters inside a quoted literal. Test-only drill against scratch databases. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "f3bdc04d4bd3c2e076db",
-      "path": "tests/offline-phase9-stock-sync-drill.test.ts",
+      "id": "f7e4dd6df294e8fb2188",
+      "path": "tests/offline-stock-sync-drill.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -4254,7 +4254,7 @@
       "dynamicInputs": [
         {
           "expression": "SHA",
-          "source": "tests/offline-phase9-stock-sync-drill.test.ts:22 `const SHA = \"c\".repeat(64)`",
+          "source": "tests/offline-stock-sync-drill.test.ts:22 `const SHA = \"c\".repeat(64)`",
           "validation": "Constant 64 x 'c' (hex chars only)."
         }
       ],
@@ -4325,8 +4325,8 @@
       "reason": "The SQL text reaching client.query is always a literal written in this test; only bound values vary. Test-only helper. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "60c17e09077ea229a5fc",
-      "path": "tests/phase19c-factory-imports-rates.test.ts",
+      "id": "dd61af87a6a3fb0e2118",
+      "path": "tests/factory-imports-rates.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -4334,15 +4334,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "insertId callers at tests/phase19c-factory-imports-rates.test.ts:82,120,124,128,393,398,403,625,778,824 pass interpolation-free template literals",
+          "source": "insertId callers at tests/factory-imports-rates.test.ts:82,120,124,128,393,398,403,625,778,824 pass interpolation-free template literals",
           "validation": "Literal SQL; values bound via params."
         }
       ],
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "752dc004a3414c175202",
-      "path": "tests/phase21b-audit-in-transaction.test.ts",
+      "id": "23cfa9182d0f9a6e744e",
+      "path": "tests/audit-in-transaction.test.ts",
       "kind": "indirect-query-text",
       "context": "count",
       "classification": "test-fixture",
@@ -4350,15 +4350,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "count callers at tests/phase21b-audit-in-transaction.test.ts:199,208,284,316,353,374,416,480,493,510 pass interpolation-free template literals",
+          "source": "count callers at tests/audit-in-transaction.test.ts:199,208,284,316,353,374,416,480,493,510 pass interpolation-free template literals",
           "validation": "Literal SQL; values bound via params."
         }
       ],
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "c6f5dbdd765d50b5f483",
-      "path": "tests/phase21b-audit-in-transaction.test.ts",
+      "id": "9b25f625bcf34f0f9bda",
+      "path": "tests/audit-in-transaction.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -4366,15 +4366,15 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "for-of over literal array at tests/phase21b-audit-in-transaction.test.ts:166-178",
+          "source": "for-of over literal array at tests/audit-in-transaction.test.ts:166-178",
           "validation": "Fixed literal DELETE statements with $1; companyId bound."
         }
       ],
       "reason": "Statements are hard-coded literals in test teardown. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "b20edb7f60cfeb2d4a1c",
-      "path": "tests/phase22c-factory-writers-engine.test.ts",
+      "id": "0beabfe47da89b064c47",
+      "path": "tests/factory-writers-engine.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -4382,15 +4382,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "insertId callers at tests/phase22c-factory-writers-engine.test.ts:162-188,371,440,445,470 pass interpolation-free template literals",
+          "source": "insertId callers at tests/factory-writers-engine.test.ts:162-188,371,440,445,470 pass interpolation-free template literals",
           "validation": "Literal SQL; values bound via params."
         }
       ],
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "id": "90f8a7338d1dae9145c4",
-      "path": "tests/phase3-inventory-valuation-db.test.ts",
+      "id": "b7159e300d9d11e98356",
+      "path": "tests/inventory-valuation-db.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -4398,7 +4398,7 @@
       "dynamicInputs": [
         {
           "expression": "failing.companyId",
-          "source": "world() at tests/phase3-inventory-valuation-db.test.ts:18-25 returns companies.id from INSERT ... RETURNING id (serial integer column, shared/schema/common.ts:20)",
+          "source": "world() at tests/inventory-valuation-db.test.ts:18-25 returns companies.id from INSERT ... RETURNING id (serial integer column, shared/schema/common.ts:20)",
           "validation": "Integer serial primary key from the DB row the test just inserted; cannot carry SQL syntax."
         }
       ],
@@ -4543,7 +4543,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4559,7 +4559,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4575,7 +4575,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4591,7 +4591,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4607,7 +4607,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4623,7 +4623,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4655,12 +4655,12 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         },
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4676,7 +4676,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4692,7 +4692,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4708,7 +4708,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4724,7 +4724,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4740,7 +4740,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4756,7 +4756,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4846,7 +4846,7 @@
         {
           "expression": "deletedAt ?? \"NULL\"",
           "source": "deletedAt param of w.item() tests/soft-delete-purge-db.test.ts:43; callers :66-69 pass OLD, OLD, RECENT, null (consts :14-15).",
-          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null \u2192 literal \"NULL\"."
+          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null → literal \"NULL\"."
         }
       ],
       "reason": "Only hard-coded SQL timestamp expressions from file constants reach the text; code/name bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
@@ -4948,8 +4948,8 @@
       "reason": "Every statement run through this wrapper is a literal written in this test; values bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "e576d5ec0e237a6ccedb",
-      "path": "tests/wave10-engine-consolidation.test.ts",
+      "id": "e32f63dad0ca92d90fb5",
+      "path": "tests/engine-consolidation.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -4957,15 +4957,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave10-engine-consolidation.test.ts:150; 11 call sites (:155-:622).",
+          "source": "query/text param of insertId() tests/engine-consolidation.test.ts:150; 11 call sites (:155-:622).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "68ada9359efc0a429d38",
-      "path": "tests/wave10-net-position-banks.test.ts",
+      "id": "c8d964ab5281301c00c0",
+      "path": "tests/net-position-banks.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -4973,15 +4973,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave10-net-position-banks.test.ts:129; 3 call sites (:134, :144, :170).",
+          "source": "query/text param of insertId() tests/net-position-banks.test.ts:129; 3 call sites (:134, :144, :170).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "5306ca01cf71feb8b52b",
-      "path": "tests/wave10-net-position-engine.test.ts",
+      "id": "0cb61d5a1af1197b8e57",
+      "path": "tests/net-position-engine.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -4989,15 +4989,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave10-net-position-engine.test.ts:120; 8 call sites (:125-:269).",
+          "source": "query/text param of insertId() tests/net-position-engine.test.ts:120; 8 call sites (:125-:269).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "a9fc7fdb61c90f8a593a",
-      "path": "tests/wave10-party-balance-engine.test.ts",
+      "id": "0d4f7054e2c1d410b2cc",
+      "path": "tests/party-balance-engine.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -5005,15 +5005,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave10-party-balance-engine.test.ts:90; 7 call sites (:100-:130).",
+          "source": "query/text param of insertId() tests/party-balance-engine.test.ts:90; 7 call sites (:100-:130).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "b68ade171c2648e8dc2c",
-      "path": "tests/wave10-party-reader-rules.test.ts",
+      "id": "e41bbc503576e0e74d4a",
+      "path": "tests/party-reader-rules.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -5021,15 +5021,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave10-party-reader-rules.test.ts:142; 10 call sites (:147-:305).",
+          "source": "query/text param of insertId() tests/party-reader-rules.test.ts:142; 10 call sites (:147-:305).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "de39b82b68b53f5d28f9",
-      "path": "tests/wave11-factory-cost-basis.test.ts",
+      "id": "16a3113c87c113eaf112",
+      "path": "tests/factory-cost-basis.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5037,15 +5037,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave11-factory-cost-basis.test.ts:67; ~23 in-file call sites.",
+          "source": "text param of one() tests/factory-cost-basis.test.ts:67; ~23 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "b34ecff1253ab902435d",
-      "path": "tests/wave11-factory-cost-basis.test.ts",
+      "id": "9f029d235a7a0c098a44",
+      "path": "tests/factory-cost-basis.test.ts",
       "kind": "indirect-query-text",
       "context": "all",
       "classification": "test-fixture",
@@ -5053,15 +5053,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of all() tests/wave11-factory-cost-basis.test.ts:68; ~12 in-file call sites.",
+          "source": "text param of all() tests/factory-cost-basis.test.ts:68; ~12 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "fded8fc6fccf108bdce9",
-      "path": "tests/wave11-factory-cost-basis.test.ts",
+      "id": "c759f7e9c2f7c73237fa",
+      "path": "tests/factory-cost-basis.test.ts",
       "kind": "indirect-query-text",
       "context": "cleanup.q",
       "classification": "test-fixture",
@@ -5069,15 +5069,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of cleanup q() closure tests/wave11-factory-cost-basis.test.ts:209; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:225-230).",
+          "source": "text param of cleanup q() closure tests/factory-cost-basis.test.ts:209; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:225-230).",
           "validation": "Interpolated table names come only from an inline literal string array in the same function; companyId bound as $1."
         }
       ],
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "7846b0d9b96381704e08",
-      "path": "tests/wave11-followups-factory.test.ts",
+      "id": "9afbe474e7ed7253676f",
+      "path": "tests/followups-factory.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5085,15 +5085,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave11-followups-factory.test.ts:89; ~8 in-file call sites.",
+          "source": "text param of one() tests/followups-factory.test.ts:89; ~8 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "7468d9101c570e67f25a",
-      "path": "tests/wave11-followups-factory.test.ts",
+      "id": "1107c2b07acda7e584ea",
+      "path": "tests/followups-factory.test.ts",
       "kind": "indirect-query-text",
       "context": "cleanup.q",
       "classification": "test-fixture",
@@ -5101,15 +5101,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of cleanup q() closure tests/wave11-followups-factory.test.ts:147; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:149-155).",
+          "source": "text param of cleanup q() closure tests/followups-factory.test.ts:147; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:149-155).",
           "validation": "Interpolated table names come only from an inline literal string array in the same function; companyId bound as $1."
         }
       ],
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "2b43631c2304c7849e6c",
-      "path": "tests/wave12-audit-trail.test.ts",
+      "id": "52a5b22dd6bb522fc721",
+      "path": "tests/audit-trail.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5117,15 +5117,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave12-audit-trail.test.ts:36; callers in-file and via count() :41 (all ~23 call sites).",
+          "source": "text param of one() tests/audit-trail.test.ts:36; callers in-file and via count() :41 (all ~23 call sites).",
           "validation": "All one()/count() call sites pass literal SQL with $n placeholders; no interpolation."
         }
       ],
       "reason": "Query text is always literal; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "4c4cae6b8f544fcab85c",
-      "path": "tests/wave12-audit-trail.test.ts",
+      "id": "c841b166807ec99d6e5a",
+      "path": "tests/audit-trail.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "validated-numeric",
@@ -5133,15 +5133,15 @@
       "dynamicInputs": [
         {
           "expression": "ctx.companyId",
-          "source": "ctx.companyId from seedTestData(PREFIX) tests/wave12-audit-trail.test.ts:86 \u2192 tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
+          "source": "ctx.companyId from seedTestData(PREFIX) tests/audit-trail.test.ts:86 → tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
           "validation": "Integer serial primary key returned by PostgreSQL; cannot contain SQL syntax."
         }
       ],
       "reason": "The interpolated value is the integer id of the fixture company the test itself inserted; used in a test-only trigger DDL. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "f97c0a6ae2fdbf9fd997",
-      "path": "tests/wave13-payables-group.test.ts",
+      "id": "072b4d1e347304eb91f3",
+      "path": "tests/payables-group.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -5149,15 +5149,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "query/text param of insertId() tests/wave13-payables-group.test.ts:162; 7 call sites (:167-:294).",
+          "source": "query/text param of insertId() tests/payables-group.test.ts:162; 7 call sites (:167-:294).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "326ffbc307c36f66c558",
-      "path": "tests/wave14-factory-supplier-leftovers.test.ts",
+      "id": "2f17bba177c3b1951ca1",
+      "path": "tests/factory-supplier-leftovers.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5165,15 +5165,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave14-factory-supplier-leftovers.test.ts:107; ~15 in-file call sites.",
+          "source": "text param of one() tests/factory-supplier-leftovers.test.ts:107; ~15 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "9a0e63e4cee7dfe80835",
-      "path": "tests/wave14-factory-supplier-leftovers.test.ts",
+      "id": "f3a9310d6adf2bca8728",
+      "path": "tests/factory-supplier-leftovers.test.ts",
       "kind": "indirect-query-text",
       "context": "all",
       "classification": "test-fixture",
@@ -5181,15 +5181,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of all() tests/wave14-factory-supplier-leftovers.test.ts:108; ~4 in-file call sites.",
+          "source": "text param of all() tests/factory-supplier-leftovers.test.ts:108; ~4 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "094db4a48ee0650762e6",
-      "path": "tests/wave14-factory-supplier-leftovers.test.ts",
+      "id": "d09bca7daa08ef577034",
+      "path": "tests/factory-supplier-leftovers.test.ts",
       "kind": "indirect-query-text",
       "context": "cleanup.q",
       "classification": "test-fixture",
@@ -5197,15 +5197,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of cleanup q() closure tests/wave14-factory-supplier-leftovers.test.ts:152; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:160-169).",
+          "source": "text param of cleanup q() closure tests/factory-supplier-leftovers.test.ts:152; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:160-169).",
           "validation": "Interpolated table names come only from an inline literal string array in the same function; companyId bound as $1."
         }
       ],
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "e972350291420220c3bf",
-      "path": "tests/wave15-stock-paths.test.ts",
+      "id": "01030f4218a2055e3649",
+      "path": "tests/stock-paths.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "trusted-sql-fragment",
@@ -5213,15 +5213,15 @@
       "dynamicInputs": [
         {
           "expression": "history",
-          "source": "history = stockItemHistorySqlText(await presentStockItemHistoryTables(db), \"si.id\") tests/wave15-stock-paths.test.ts:445; builder server/services/inventory/stockItemHistory.ts:56-66.",
+          "source": "history = stockItemHistorySqlText(await presentStockItemHistoryTables(db), \"si.id\") tests/stock-paths.test.ts:445; builder server/services/inventory/stockItemHistory.ts:56-66.",
           "validation": "Tables filtered to STOCK_ITEM_HISTORY_TABLES literal list (stockItemHistory.ts:27-33, filter at :41-48 and :58); itemColumn is literal \"si.id\"; remaining text is literals."
         }
       ],
       "reason": "Fragment is built by application code from a constant table allowlist and a literal column reference; ids bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "376cdef3a9b663a63e2c",
-      "path": "tests/wave16-accounts-history.test.ts",
+      "id": "8f0698e9831a36980e18",
+      "path": "tests/accounts-history.test.ts",
       "kind": "query-text",
       "context": "postAgainst",
       "classification": "test-fixture",
@@ -5229,7 +5229,7 @@
       "dynamicInputs": [
         {
           "expression": "columns.join(\", \")",
-          "source": "columns = Object.keys(target) at tests/wave16-accounts-history.test.ts:85; target from postAgainst callers :270, :324, :362, :416, :451, :496, :497, :506, :693, :698, each an object literal like { ledger_account_id: x }.",
+          "source": "columns = Object.keys(target) at tests/accounts-history.test.ts:85; target from postAgainst callers :270, :324, :362, :416, :451, :496, :497, :506, :693, :698, each an object literal like { ledger_account_id: x }.",
           "validation": "Keys constrained by type Target (:63-71) to literal union ledger_account_id|bank_account_id|fixed_asset_id|supplier_id|employee_id|factory_supplier_id|customer_id; every caller uses a literal key."
         },
         {
@@ -5241,8 +5241,8 @@
       "reason": "Column names are literal object keys written at each call site, and the VALUES list is only $n placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "63f06cd89db597f032ee",
-      "path": "tests/wave16-accounts-history.test.ts",
+      "id": "1e7f1740df2438012ed6",
+      "path": "tests/accounts-history.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -5250,15 +5250,15 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table from literal tuple list [[\"factory_suppliers\", supplier], [\"fixed_assets\", asset]] as const at tests/wave16-accounts-history.test.ts:424-427.",
+          "source": "table from literal tuple list [[\"factory_suppliers\", supplier], [\"fixed_assets\", asset]] as const at tests/accounts-history.test.ts:424-427.",
           "validation": "Fixed 2-element literal array."
         }
       ],
       "reason": "Table identifier is one of two literals in the loop header; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "dfd90dccca45e69997b3",
-      "path": "tests/wave16-accounts-history.test.ts",
+      "id": "ee551537d5ad3c811ac6",
+      "path": "tests/accounts-history.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -5266,15 +5266,15 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table from the same literal tuple list tests/wave16-accounts-history.test.ts:424-427.",
+          "source": "table from the same literal tuple list tests/accounts-history.test.ts:424-427.",
           "validation": "Fixed 2-element literal array."
         }
       ],
       "reason": "Table identifier is one of two literals; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "2d024d678f072d6c2a64",
-      "path": "tests/wave16-accounts-history.test.ts",
+      "id": "a46d9dee979c3e1881f0",
+      "path": "tests/accounts-history.test.ts",
       "kind": "query-text",
       "context": "insertLines",
       "classification": "test-fixture",
@@ -5282,7 +5282,7 @@
       "dynamicInputs": [
         {
           "expression": "columns.map((c) => `, ${c}`).join(\"\")",
-          "source": "columns = Object.keys(target) in insertLines tests/wave16-accounts-history.test.ts:576; lines from callers :609, :615, :634, :642, :651 (object literals, incl. spread of literal tags at :640).",
+          "source": "columns = Object.keys(target) in insertLines tests/accounts-history.test.ts:576; lines from callers :609, :615, :634, :642, :651 (object literals, incl. spread of literal tags at :640).",
           "validation": "Keys constrained by Target type (:63-71) and all callers use literal keys (ledger_account_id, bank_account_id, supplier_id, employee_id, customer_id)."
         },
         {
@@ -5294,8 +5294,8 @@
       "reason": "Column names are literal keys at each test call site; VALUES list is placeholder text only. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "c7f8a16445c67b919a03",
-      "path": "tests/wave16-boot-repairs-hard-deletes.test.ts",
+      "id": "3de94a01a86477e70839",
+      "path": "tests/boot-repairs-hard-deletes.test.ts",
       "kind": "query-text",
       "context": "auditRows",
       "classification": "test-fixture",
@@ -5303,15 +5303,15 @@
       "dynamicInputs": [
         {
           "expression": "where",
-          "source": "where param of auditRows() tests/wave16-boot-repairs-hard-deletes.test.ts:90; callers :176, :252, :311, :394, :435.",
+          "source": "where param of auditRows() tests/boot-repairs-hard-deletes.test.ts:90; callers :176, :252, :311, :394, :435.",
           "validation": "Every caller passes a string literal predicate (e.g. \"table_name = 'locations' AND record_id = $2\"); values bound as params."
         }
       ],
       "reason": "Predicate text is a literal at every call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "5e11360880768bcfcf04",
-      "path": "tests/wave17-reporting.test.ts",
+      "id": "27067dedb6514b5d9ab8",
+      "path": "tests/reporting.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -5319,15 +5319,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "query/text param of insertId() tests/wave17-reporting.test.ts:62; 7 call sites (in-file).",
+          "source": "query/text param of insertId() tests/reporting.test.ts:62; 7 call sites (in-file).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "3127ec0106941b6be525",
-      "path": "tests/wave17b-inventory-factory.test.ts",
+      "id": "487a44efd8884de3d39b",
+      "path": "tests/inventory-factory.test.ts",
       "kind": "indirect-query-text",
       "context": "query",
       "classification": "test-fixture",
@@ -5335,15 +5335,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of query() tests/wave17b-inventory-factory.test.ts:74; ~51 call sites, the dynamic ones :181 and :193 interpolate table from inline literal arrays (:180, :186-192).",
+          "source": "text param of query() tests/inventory-factory.test.ts:74; ~51 call sites, the dynamic ones :181 and :193 interpolate table from inline literal arrays (:180, :186-192).",
           "validation": "Literal SQL or table names from inline constant arrays; values bound."
         }
       ],
       "reason": "All query text is literal or uses table names iterated from in-function constant arrays. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "81dca56333b09617dd3d",
-      "path": "tests/wave17d-fx-rate-required.test.ts",
+      "id": "c8285dea3cafe11b565a",
+      "path": "tests/fx-rate-required.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5351,15 +5351,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave17d-fx-rate-required.test.ts:45; ~4 in-file call sites.",
+          "source": "text param of one() tests/fx-rate-required.test.ts:45; ~4 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "ae82a28784328d0c8f89",
-      "path": "tests/wave17d-fx-rate-required.test.ts",
+      "id": "d59e6ccbbb64d5276421",
+      "path": "tests/fx-rate-required.test.ts",
       "kind": "indirect-query-text",
       "context": "purgeFactoryRows.q",
       "classification": "test-fixture",
@@ -5367,15 +5367,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of cleanup q() closure tests/wave17d-fx-rate-required.test.ts:53; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:57-64).",
+          "source": "text param of cleanup q() closure tests/fx-rate-required.test.ts:53; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:57-64).",
           "validation": "Interpolated table names come only from an inline literal string array in the same function; companyId bound as $1."
         }
       ],
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "960471053d41d0092403",
-      "path": "tests/wave18b-accounts-deletes.test.ts",
+      "id": "6769cd4adb82607a794c",
+      "path": "tests/accounts-deletes.test.ts",
       "kind": "query-text",
       "context": "postAgainst",
       "classification": "test-fixture",
@@ -5383,7 +5383,7 @@
       "dynamicInputs": [
         {
           "expression": "columns.join(\", \")",
-          "source": "columns = Object.keys(target) in postAgainst tests/wave18b-accounts-deletes.test.ts:67-76; callers :282, :346, :415 pass { ledger_account_id: <id> }.",
+          "source": "columns = Object.keys(target) in postAgainst tests/accounts-deletes.test.ts:67-76; callers :282, :346, :415 pass { ledger_account_id: <id> }.",
           "validation": "Only caller-supplied key is the literal ledger_account_id (3 call sites)."
         },
         {
@@ -5395,8 +5395,8 @@
       "reason": "Column list comes from literal object keys at three test call sites and the VALUES list is placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "02d1b7aea2b76472bb74",
-      "path": "tests/wave18b-accounts-deletes.test.ts",
+      "id": "a5888ddb4084d80dc07a",
+      "path": "tests/accounts-deletes.test.ts",
       "kind": "query-text",
       "context": "softDelete",
       "classification": "test-fixture",
@@ -5404,15 +5404,15 @@
       "dynamicInputs": [
         {
           "expression": "table",
-          "source": "table param of softDelete() tests/wave18b-accounts-deletes.test.ts:108; callers :338, :347, :351, :355, :416, :418, :420, :468 all pass \"ledger_accounts\".",
+          "source": "table param of softDelete() tests/accounts-deletes.test.ts:108; callers :338, :347, :351, :355, :416, :418, :420, :468 all pass \"ledger_accounts\".",
           "validation": "Single literal table name at every call site."
         }
       ],
       "reason": "Identifier is always the literal \"ledger_accounts\"; id and daysAgo bound as $1/$2. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "cbc9974df26edd189d4c",
-      "path": "tests/wave18c-reports-imports.test.ts",
+      "id": "66c5a6b179ef7e9881e9",
+      "path": "tests/reports-imports.test.ts",
       "kind": "indirect-query-text",
       "context": "insertId",
       "classification": "test-fixture",
@@ -5420,15 +5420,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "query/text param of insertId() tests/wave18c-reports-imports.test.ts:52; 9 call sites (incl. :206, :221).",
+          "source": "query/text param of insertId() tests/reports-imports.test.ts:52; 9 call sites (incl. :206, :221).",
           "validation": "Every call site passes a literal INSERT ... RETURNING id template without ${} interpolation; values in params."
         }
       ],
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "f804b39da31040acb93a",
-      "path": "tests/wave18c-reports-imports.test.ts",
+      "id": "0783e546f33eb965a26b",
+      "path": "tests/reports-imports.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "not-sql-text",
@@ -5436,15 +5436,15 @@
       "dynamicInputs": [
         {
           "expression": "ids.BANK",
-          "source": "ids.BANK = insertId(...) tests/wave18c-reports-imports.test.ts:206 (serial id from INSERT RETURNING).",
+          "source": "ids.BANK = insertId(...) tests/reports-imports.test.ts:206 (serial id from INSERT RETURNING).",
           "validation": "Integer serial id; string is an HTTP query string, not SQL."
         }
       ],
-      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
+      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "id": "1c10d1e8e95dae7ea4be",
-      "path": "tests/wave18c-reports-imports.test.ts",
+      "id": "aa8970dede128ec040d3",
+      "path": "tests/reports-imports.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "not-sql-text",
@@ -5452,20 +5452,20 @@
       "dynamicInputs": [
         {
           "expression": "ids.BANK",
-          "source": "ids.BANK = insertId(...) tests/wave18c-reports-imports.test.ts:206.",
+          "source": "ids.BANK = insertId(...) tests/reports-imports.test.ts:206.",
           "validation": "Integer serial id."
         },
         {
           "expression": "daysAgo(5)",
-          "source": "daysAgo(5) tests/wave18c-reports-imports.test.ts:41-42 = iso(new Date(Date.UTC(...)))",
+          "source": "daysAgo(5) tests/reports-imports.test.ts:41-42 = iso(new Date(Date.UTC(...)))",
           "validation": "ISO date string computed from the clock with a literal 5."
         }
       ],
-      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
+      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "id": "1fa7e5eb29d75d31b34a",
-      "path": "tests/wave18c-reports-imports.test.ts",
+      "id": "f1f7337845b87a6f906e",
+      "path": "tests/reports-imports.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "not-sql-text",
@@ -5473,20 +5473,20 @@
       "dynamicInputs": [
         {
           "expression": "ids.EMP",
-          "source": "ids.EMP = insertId(...) tests/wave18c-reports-imports.test.ts:221.",
+          "source": "ids.EMP = insertId(...) tests/reports-imports.test.ts:221.",
           "validation": "Integer serial id."
         },
         {
           "expression": "daysAgo(5)",
-          "source": "daysAgo(5) tests/wave18c-reports-imports.test.ts:41-42.",
+          "source": "daysAgo(5) tests/reports-imports.test.ts:41-42.",
           "validation": "ISO date string from Date.UTC with a literal offset."
         }
       ],
-      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
+      "reason": "False positive: this string is the URL query string passed to excelRows() (tests/reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "id": "c30657cd4045b72573f4",
-      "path": "tests/wave7-leftovers-atomic-posting.test.ts",
+      "id": "89ea743554f36f63ce47",
+      "path": "tests/leftovers-atomic-posting.test.ts",
       "kind": "query-text",
       "context": "voucherSides",
       "classification": "test-fixture",
@@ -5494,15 +5494,15 @@
       "dynamicInputs": [
         {
           "expression": "where",
-          "source": "where param of voucherSides() tests/wave7-leftovers-atomic-posting.test.ts:80; callers :212, :239, :253, :277, :309, :363, :458, :546-564.",
+          "source": "where param of voucherSides() tests/leftovers-atomic-posting.test.ts:80; callers :212, :239, :253, :277, :309, :363, :458, :546-564.",
           "validation": "Every caller passes a literal predicate (e.g. \"v.id = $2\", `v.voucher_number LIKE 'PAYROLL-GEN-%' AND ...`); values bound as params."
         }
       ],
       "reason": "Predicate text is a literal at each call site; ids/patterns are bound parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "e89be12baf2cdd9cea77",
-      "path": "tests/wave8-4-factory-pos-commission.test.ts",
+      "id": "d8cbfd0bb9a539b18baf",
+      "path": "tests/factory-pos-commission.test.ts",
       "kind": "indirect-query-text",
       "context": "one",
       "classification": "test-fixture",
@@ -5510,15 +5510,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of one() tests/wave8-4-factory-pos-commission.test.ts:112; ~11 in-file call sites.",
+          "source": "text param of one() tests/factory-pos-commission.test.ts:112; ~11 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "6a83cb4cc275e2eeec88",
-      "path": "tests/wave8-4-factory-pos-commission.test.ts",
+      "id": "de089f02d610a18db1b1",
+      "path": "tests/factory-pos-commission.test.ts",
       "kind": "indirect-query-text",
       "context": "all",
       "classification": "test-fixture",
@@ -5526,15 +5526,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of all() tests/wave8-4-factory-pos-commission.test.ts:113; ~4 in-file call sites.",
+          "source": "text param of all() tests/factory-pos-commission.test.ts:113; ~4 in-file call sites.",
           "validation": "Every call site passes literal SQL with $n placeholders and no ${} interpolation (verified per call)."
         }
       ],
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "59ba4cf2309c8c26271d",
-      "path": "tests/wave8-4-factory-pos-commission.test.ts",
+      "id": "28d1933029575cc2cc72",
+      "path": "tests/factory-pos-commission.test.ts",
       "kind": "indirect-query-text",
       "context": "cleanup.q",
       "classification": "test-fixture",
@@ -5542,15 +5542,15 @@
       "dynamicInputs": [
         {
           "expression": "text",
-          "source": "text param of cleanup q() closure tests/wave8-4-factory-pos-commission.test.ts:168; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:176-185).",
+          "source": "text param of cleanup q() closure tests/factory-pos-commission.test.ts:168; call sites are literal DELETEs plus `DELETE FROM ${table} ...` where table iterates a literal array (:176-185).",
           "validation": "Interpolated table names come only from an inline literal string array in the same function; companyId bound as $1."
         }
       ],
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "401ff31ed8f659fda17b",
-      "path": "tests/wave9-admin-history-safety.test.ts",
+      "id": "7ddb3ad10a151261c3cc",
+      "path": "tests/admin-history-safety.test.ts",
       "kind": "query-text",
       "context": "count",
       "classification": "test-fixture",
@@ -5558,15 +5558,15 @@
       "dynamicInputs": [
         {
           "expression": "sqlText",
-          "source": "sqlText param of count() tests/wave9-admin-history-safety.test.ts:64; ~14 callers (:114-:394).",
+          "source": "sqlText param of count() tests/admin-history-safety.test.ts:64; ~14 callers (:114-:394).",
           "validation": "All callers pass literal \"<table> WHERE ... $1\" templates without interpolation."
         }
       ],
       "reason": "FROM-clause text is a literal at each test call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "7af23dddbeb41f05bb73",
-      "path": "tests/wave9-admin-history-safety.test.ts",
+      "id": "009adb08dc2a466e8706",
+      "path": "tests/admin-history-safety.test.ts",
       "kind": "query-text",
       "context": "auditRows",
       "classification": "test-fixture",
@@ -5574,7 +5574,7 @@
       "dynamicInputs": [
         {
           "expression": "extra",
-          "source": "extra param of auditRows() tests/wave9-admin-history-safety.test.ts:69; callers :145, :198, :237, :256, :302, :326, :364, :396.",
+          "source": "extra param of auditRows() tests/admin-history-safety.test.ts:69; callers :145, :198, :237, :256, :302, :326, :364, :396.",
           "validation": "Every caller passes a literal predicate (e.g. `AND record_id = $3 AND action = 'delete'`); values in params."
         }
       ],
@@ -6539,8 +6539,8 @@
       "reason": "The SQL-shaped template is an expected substring passed to expect(check).toContain() over the committed manifest's erp_voucher_balance_check body; it is never sent to a database."
     },
     {
-      "id": "d3628eff7b48a7631bf5",
-      "path": "tests/wave14-currency.test.ts",
+      "id": "6d9f75ae2b3fbc992f76",
+      "path": "tests/currency.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -6548,7 +6548,7 @@
       "dynamicInputs": [
         {
           "expression": "CURRENCY_NORMALIZATION_GUARD_VERSION",
-          "source": "Imported constant CURRENCY_NORMALIZATION_GUARD_VERSION = \"2026-10-09-001-currency-normalization-v2\" (server/services/accounting/currencyNormalizationGuard.ts:14), used at tests/wave14-currency.test.ts:136",
+          "source": "Imported constant CURRENCY_NORMALIZATION_GUARD_VERSION = \"2026-10-09-001-currency-normalization-v2\" (server/services/accounting/currencyNormalizationGuard.ts:14), used at tests/currency.test.ts:136",
           "validation": "Exported string literal containing no quote characters; restores the function comment after the test sets it to 'outdated'"
         }
       ],
@@ -7413,8 +7413,8 @@
       "reason": "Count query at :145 loops over an inline array of literal [table, predicate] pairs (:137-144) to assert the fixture rows were deleted; both parts are string literals in the test source. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "13d2452a2feab1dce46d",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "ba847ff3534b34d31764",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7422,15 +7422,15 @@
       "dynamicInputs": [
         {
           "expression": "name",
-          "source": "Second element of each pair in the `expected` array literal at tests/intercompany-phase1-foundation.test.ts:28-38.",
+          "source": "Second element of each pair in the `expected` array literal at tests/intercompany-foundation.test.ts:28-38.",
           "validation": "One of nine hard-coded intercompany_* table-name string literals (as const)."
         }
       ],
       "reason": "The string built at :41 is never sent to a database: it is only the needle for expect(MIGRATION).toContain(...), checking the migration text declares each of nine literal table names. No HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "732bb87b1761dc8b13de",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "88117192ac059ce6b4e5",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7438,15 +7438,15 @@
       "dynamicInputs": [
         {
           "expression": "probe",
-          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-foundation.test.ts:60.",
           "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :63 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "b9e9fb1df43e85df85e8",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "3fe1d2fdce7882641c6e",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7454,15 +7454,15 @@
       "dynamicInputs": [
         {
           "expression": "probe",
-          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-phase1-foundation.test.ts:60.",
+          "source": "const probe = \"intercompany_phase1_probe_\" + process.pid at tests/intercompany-foundation.test.ts:60.",
           "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase1_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :64 is a code constant concatenated with the process pid (:60), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "93fe56cdfc4f14183bc8",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "cb55d9d3879f49412aeb",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7470,15 +7470,15 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :89 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "61032fce13b2bcc3b34d",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "3789243fa30328af7257",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "indirect-query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7486,15 +7486,15 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "First parameter of the local rejects helper (tests/intercompany-phase1-foundation.test.ts:87); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "source": "First parameter of the local rejects helper (tests/intercompany-foundation.test.ts:87); the helper is a closure inside the test and all 19 call sites are in this file.",
           "validation": "Every one of the 19 call sites passes string literals, one of which (:155-159) concatenates `hash` = \"a\".repeat(64) from :149."
         }
       ],
       "reason": "Statement executed at :92 is whatever the test's own rejects helper (:87) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "f8d3f1d89e37322cab2b",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "e7882fe079a3d8fb02c0",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7502,15 +7502,15 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :97 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "39f706b243bdc5de480f",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "dc632554f225a94f2e24",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7518,15 +7518,15 @@
       "dynamicInputs": [
         {
           "expression": "savepoint",
-          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-phase1-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
+          "source": "const savepoint = \"probe_\" + ++savepointCounter at tests/intercompany-foundation.test.ts:88; savepointCounter is a local number initialised to 0 at :86.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :98 inside the rejects helper is a literal prefix plus a local integer counter (:86, :88); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "9f21029ad4c70ca1d946",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "610a9fb3cbc1dd38efda",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7534,15 +7534,15 @@
       "dynamicInputs": [
         {
           "expression": "hash",
-          "source": "const hash = \"a\".repeat(64) at tests/intercompany-phase1-foundation.test.ts:149.",
+          "source": "const hash = \"a\".repeat(64) at tests/intercompany-foundation.test.ts:149.",
           "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
         }
       ],
       "reason": "Duplicate-batch INSERT text assembled at :155-159 (passed to rejects) embeds only the constant fake SHA-256 `hash` from :149 inside quotes; the rest is string literals. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "b5a62e35eae6f121cf97",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "1545e768b99b8f683d59",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7550,15 +7550,15 @@
       "dynamicInputs": [
         {
           "expression": "\"b\".repeat(64)",
-          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:214 on a string literal.",
+          "source": "Inline expression at tests/intercompany-foundation.test.ts:214 on a string literal.",
           "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
         }
       ],
       "reason": "Fixture INSERT at :212-216 embeds a constant fake fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "1ae215aaf4e7cadc8927",
-      "path": "tests/intercompany-phase1-foundation.test.ts",
+      "id": "6a5ff548e202d90f6dce",
+      "path": "tests/intercompany-foundation.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7566,15 +7566,15 @@
       "dynamicInputs": [
         {
           "expression": "\"c\".repeat(64)",
-          "source": "Inline expression at tests/intercompany-phase1-foundation.test.ts:219 on a string literal.",
+          "source": "Inline expression at tests/intercompany-foundation.test.ts:219 on a string literal.",
           "validation": "Fixed 64-character string of the letter c: always /^c{64}$/, no quote characters."
         }
       ],
       "reason": "Fixture INSERT at :217-221 embeds a constant fake evidence fingerprint produced by repeating a literal letter; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "7c934988134a0d36bbd6",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "3fcf45a01c0579f29663",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7582,15 +7582,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-container-database-guards.test.ts:17.",
           "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :20 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "1c87d68b7f915972fe18",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "3565ad8eef89f962e84c",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7598,15 +7598,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-phase2-database-guards.test.ts:17.",
+          "source": "const schema = \"intercompany_phase2_probe_\" + process.pid at tests/intercompany-container-database-guards.test.ts:17.",
           "validation": "Literal prefix plus numeric OS pid: always /^intercompany_phase2_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :21 is a code constant concatenated with the process pid (:17), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "758cbd7f636b0315af84",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "b5364822c259b59d156a",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7614,15 +7614,15 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-container-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :54 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "e23dafa56e9602dc37c3",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "01650856773b4ab814e0",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7630,15 +7630,15 @@
       "dynamicInputs": [
         {
           "expression": "statement",
-          "source": "First parameter of the local rejects helper (tests/intercompany-phase2-database-guards.test.ts:52); the helper is a closure inside the test and all 20 call sites are in this file.",
+          "source": "First parameter of the local rejects helper (tests/intercompany-container-database-guards.test.ts:52); the helper is a closure inside the test and all 20 call sites are in this file.",
           "validation": "Every one of the 20 call sites passes plain string literals with no interpolation or concatenated variables."
         }
       ],
       "reason": "Statement executed at :57 is whatever the test's own rejects helper (:52) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "337f5b630bb126102a97",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "485e9c3d9b979d361bf8",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7646,15 +7646,15 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-container-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :61 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "16847fb1c0529156be11",
-      "path": "tests/intercompany-phase2-database-guards.test.ts",
+      "id": "f822380f91c9bd02e7cb",
+      "path": "tests/intercompany-container-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7662,15 +7662,15 @@
       "dynamicInputs": [
         {
           "expression": "marker",
-          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-phase2-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
+          "source": "const marker = \"phase2_savepoint_\" + ++serial at tests/intercompany-container-database-guards.test.ts:53; serial is a local number initialised to 0 at :51.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase2_savepoint_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :62 inside the rejects helper is a literal prefix plus a local integer counter (:51, :53); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "ff6f08eeb000acf8f69b",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "8e8c2d199822785d6144",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "assembled-sql-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7678,15 +7678,15 @@
       "dynamicInputs": [
         {
           "expression": "name",
-          "source": "Second element of each pair in the inline array literal at tests/intercompany-phase3-database-guards.test.ts:22-28.",
+          "source": "Second element of each pair in the inline array literal at tests/intercompany-pricing-database-guards.test.ts:22-28.",
           "validation": "One of five hard-coded intercompany_* table-name string literals (as const)."
         }
       ],
       "reason": "The string built at :30 is never sent to a database: it is only the needle for expect(scripts[2]).toContain(...), checking the phase 3 migration text declares each of five literal table names. No HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "24e3a253fabf255210e6",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "8653cb9043dbdc17f26a",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7694,15 +7694,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-pricing-database-guards.test.ts:45.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "97ed3c75a344bb1f2efe",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "ecd70b4fae8ebb07fd54",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7710,15 +7710,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-phase3-database-guards.test.ts:45.",
+          "source": "const schema = \"ic_phase3_probe_\" + process.pid at tests/intercompany-pricing-database-guards.test.ts:45.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase3_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :49 is a code constant concatenated with the process pid (:45), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "b6a9a27a41e4834034ac",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "bdc6ceffd589d1c07ff9",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7726,15 +7726,15 @@
       "dynamicInputs": [
         {
           "expression": "script",
-          "source": "Elements of `scripts` (:14-18): readFileSync of three hard-coded names (\"20261105_\" + literal + \".sql\") under <cwd>/migrations, iterated at :64 in tests/intercompany-phase3-database-guards.test.ts.",
+          "source": "Elements of `scripts` (:14-18): readFileSync of three hard-coded names (\"20261105_\" + literal + \".sql\") under <cwd>/migrations, iterated at :64 in tests/intercompany-pricing-database-guards.test.ts.",
           "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "reason": "Query text at :64 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "d60d758b73b75b085d21",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "e7bc97f728159bf7cb46",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7742,15 +7742,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-pricing-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :99 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "fce9b70a8bab02ac06e7",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "c681b48068321b7be3c8",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7758,15 +7758,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "First parameter of the local rejects helper (tests/intercompany-phase3-database-guards.test.ts:97); the helper is a closure inside the test and all 10 call sites are in this file.",
+          "source": "First parameter of the local rejects helper (tests/intercompany-pricing-database-guards.test.ts:97); the helper is a closure inside the test and all 10 call sites are in this file.",
           "validation": "Every one of the 10 call sites passes plain string literals with no interpolation or concatenated variables."
         }
       ],
       "reason": "Statement executed at :102 is whatever the test's own rejects helper (:97) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "9bb2fb27535ae779fae3",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "4b577d4c3d6780ebd761",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7774,15 +7774,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-pricing-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :107 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "29dc810057bf8c93f4b7",
-      "path": "tests/intercompany-phase3-database-guards.test.ts",
+      "id": "5b4f7f712e020cf71bdf",
+      "path": "tests/intercompany-pricing-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7790,15 +7790,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-phase3-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
+          "source": "const save = \"ic_save_\" + ++index at tests/intercompany-pricing-database-guards.test.ts:98; index is a local number initialised to 0 at :96.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_save_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :108 inside the rejects helper is a literal prefix plus a local integer counter (:96, :98); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "d6717b869f725c7834fb",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "3d69cef7746c9bd2f717",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7806,15 +7806,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-stock-database-guards.test.ts:36.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :39 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "8f9b31877b712e1aab53",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "bd7f4397a8527df99482",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7822,15 +7822,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-phase4-database-guards.test.ts:36.",
+          "source": "const schema = \"ic_phase4_probe_\" + process.pid at tests/intercompany-stock-database-guards.test.ts:36.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase4_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :40 is a code constant concatenated with the process pid (:36), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "6da1f31b793064c95ad5",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "722bd56efae7202327f0",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7838,15 +7838,15 @@
       "dynamicInputs": [
         {
           "expression": "script",
-          "source": "Elements of `scripts` (:8-16): readFileSync of four hard-coded 20261105_00N_intercompany_*.sql names under <cwd>/migrations, iterated at :56 in tests/intercompany-phase4-database-guards.test.ts.",
+          "source": "Elements of `scripts` (:8-16): readFileSync of four hard-coded 20261105_00N_intercompany_*.sql names under <cwd>/migrations, iterated at :56 in tests/intercompany-stock-database-guards.test.ts.",
           "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "reason": "Query text at :56 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "043cf3b671066c9190f1",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "b4356a68a00105780669",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7854,20 +7854,20 @@
       "dynamicInputs": [
         {
           "expression": "\"a\".repeat(64)",
-          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:93 on a string literal.",
+          "source": "Inline expression at tests/intercompany-stock-database-guards.test.ts:93 on a string literal.",
           "validation": "Fixed 64-character string of the letter a: always /^a{64}$/, no quote characters."
         },
         {
           "expression": "\"b\".repeat(64)",
-          "source": "Inline expression at tests/intercompany-phase4-database-guards.test.ts:95 on a string literal.",
+          "source": "Inline expression at tests/intercompany-stock-database-guards.test.ts:95 on a string literal.",
           "validation": "Fixed 64-character string of the letter b: always /^b{64}$/, no quote characters."
         }
       ],
       "reason": "Fixture INSERT at :91-97 embeds two constant fake hashes produced by repeating literal letters; every other part is a string literal. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "2aa2fb161e0c797620f0",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "437f72aab1bb6a274698",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7875,15 +7875,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-stock-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :104 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "a7e5b80cf4f5aa7b89d2",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "1f21613c2e2caba5c3c5",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7891,15 +7891,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "First parameter of the local rejects helper (tests/intercompany-phase4-database-guards.test.ts:102); the helper is a closure inside the test and all 19 call sites are in this file.",
+          "source": "First parameter of the local rejects helper (tests/intercompany-stock-database-guards.test.ts:102); the helper is a closure inside the test and all 19 call sites are in this file.",
           "validation": "Every one of the 19 call sites passes string literals, some concatenated with the string-literal constants paymentColumns (:118-119) and goodValues (:120-121)."
         }
       ],
       "reason": "Statement executed at :107 is whatever the test's own rejects helper (:102) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "7e123d0e02edf9d6dbe0",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "81c9c6687e7d0d270c6d",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7907,15 +7907,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-stock-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :112 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "3da2b963e8c3bb26d9ce",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "57af10ef4b8fc7fbe5b2",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -7923,15 +7923,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-phase4-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
+          "source": "const save = \"ic_payment_probe_\" + ++attempt at tests/intercompany-stock-database-guards.test.ts:103; attempt is a local number initialised to 0 at :101.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^ic_payment_probe_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:101, :103); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "94ca47b3c5e0d83a9971",
-      "path": "tests/intercompany-phase4-database-guards.test.ts",
+      "id": "db821eeb180821dcc831",
+      "path": "tests/intercompany-stock-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7939,20 +7939,20 @@
       "dynamicInputs": [
         {
           "expression": "paymentColumns.slice(1)",
-          "source": "const paymentColumns string literal at tests/intercompany-phase4-database-guards.test.ts:118-119, minus its leading parenthesis.",
+          "source": "const paymentColumns string literal at tests/intercompany-stock-database-guards.test.ts:118-119, minus its leading parenthesis.",
           "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
         },
         {
           "expression": "goodValues.slice(1)",
-          "source": "const goodValues string literal at tests/intercompany-phase4-database-guards.test.ts:120-121, minus its leading parenthesis.",
+          "source": "const goodValues string literal at tests/intercompany-stock-database-guards.test.ts:120-121, minus its leading parenthesis.",
           "validation": "Fixed VALUES tuple of literals written in the test source; a single string literal with no interpolation."
         }
       ],
       "reason": "Fixture INSERT at :170-175 splices an explicit id into two string-literal constants (column list :118-119, values tuple :120-121) via slice(1); nothing but test-source literals forms the text. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "e9ca647bd69b027ad7f8",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "a75815edd32d210fb014",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7960,15 +7960,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-receiving-database-guards.test.ts:44.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :47 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "ecf6a9abd0be525824b8",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "cc94a13e4090a9733be7",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7976,15 +7976,15 @@
       "dynamicInputs": [
         {
           "expression": "schema",
-          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-phase5-database-guards.test.ts:44.",
+          "source": "const schema = \"ic_phase5_probe_\" + process.pid at tests/intercompany-receiving-database-guards.test.ts:44.",
           "validation": "Literal prefix plus numeric OS pid: always /^ic_phase5_probe_\\d+$/."
         }
       ],
       "reason": "Schema identifier at :48 is a code constant concatenated with the process pid (:44), naming the throwaway probe schema. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "4a4cf63194313c345ddc",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "9d9bcf58b14f9ff0436f",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -7992,15 +7992,15 @@
       "dynamicInputs": [
         {
           "expression": "ddl",
-          "source": "Elements of `migrations` (:19): readFileSync of the five hard-coded names in migrationNames (:12-18) under <cwd>/migrations, iterated at :67 in tests/intercompany-phase5-database-guards.test.ts.",
+          "source": "Elements of `migrations` (:19): readFileSync of the five hard-coded names in migrationNames (:12-18) under <cwd>/migrations, iterated at :67 in tests/intercompany-receiving-database-guards.test.ts.",
           "validation": "File names are string literals joined to process.cwd(); the content is the version-controlled migration SQL under test, executed verbatim."
         }
       ],
       "reason": "Query text at :67 is the content of repo-committed migration files whose names are hard-coded in the test; applying those migrations to the probe schema is the purpose of the test. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "52c3e3eefe40a4f129cd",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "2bcbb35ce53a86bbccb1",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -8008,15 +8008,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-receiving-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :113 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "cfe35b8434253b721732",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "8403da4720c508d42ced",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "indirect-query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -8024,15 +8024,15 @@
       "dynamicInputs": [
         {
           "expression": "query",
-          "source": "First parameter of the local rejects helper (tests/intercompany-phase5-database-guards.test.ts:111); the helper is a closure inside the test and all 18 call sites are in this file.",
+          "source": "First parameter of the local rejects helper (tests/intercompany-receiving-database-guards.test.ts:111); the helper is a closure inside the test and all 18 call sites are in this file.",
           "validation": "Every one of the 18 call sites passes string literals, some concatenated with the string-literal constants cancelColumns (:151-152) and receiveColumns (:230-231)."
         }
       ],
       "reason": "Statement executed at :116 is whatever the test's own rejects helper (:111) was called with, and every caller in this file supplies hard-coded SQL written in the test source to assert that a database guard rejects it. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "facbb9e4d2e50ad25b60",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "d4b6d534f307f7a4d913",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -8040,15 +8040,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-receiving-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :121 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "6a054cac7b7f175c0731",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "0739475df1ec470be3da",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "rejects",
       "classification": "test-fixture",
@@ -8056,15 +8056,15 @@
       "dynamicInputs": [
         {
           "expression": "save",
-          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-phase5-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
+          "source": "const save = \"phase5_reject_\" + ++count at tests/intercompany-receiving-database-guards.test.ts:112; count is a local number initialised to 0 at :110.",
           "validation": "Literal prefix plus an incrementing integer counter: always /^phase5_reject_\\d+$/."
         }
       ],
       "reason": "Savepoint name at :122 inside the rejects helper is a literal prefix plus a local integer counter (:110, :112); it does not depend on the helper's arguments. Test file run only by vitest against the disposable test database inside a transaction that is rolled back; no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "id": "67ff7d686f6952cd8b56",
-      "path": "tests/intercompany-phase5-database-guards.test.ts",
+      "id": "f78d101708c034e025cc",
+      "path": "tests/intercompany-receiving-database-guards.test.ts",
       "kind": "query-text",
       "context": "<module>",
       "classification": "test-fixture",
@@ -8072,7 +8072,7 @@
       "dynamicInputs": [
         {
           "expression": "receiveColumns.slice(1)",
-          "source": "const receiveColumns string literal at tests/intercompany-phase5-database-guards.test.ts:230-231, minus its leading parenthesis.",
+          "source": "const receiveColumns string literal at tests/intercompany-receiving-database-guards.test.ts:230-231, minus its leading parenthesis.",
           "validation": "Fixed column list written in the test source; a single string literal with no interpolation."
         }
       ],
@@ -9321,7 +9321,7 @@
       "dynamicInputs": [
         {
           "expression": "RECEIPT_COLUMNS",
-          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stagePhase9Events.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
+          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stageEvents.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
           "validation": "Code-owned constant with no ${} placeholders; no request, import or stored value can reach it. It is the same column list the scanner proved static before the module split moved it"
         }
       ],
@@ -9337,15 +9337,15 @@
       "dynamicInputs": [
         {
           "expression": "RECEIPT_COLUMNS",
-          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stagePhase9Events.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
+          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stageEvents.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
           "validation": "Code-owned constant with no ${} placeholders; no request, import or stored value can reach it. It is the same column list the scanner proved static before the module split moved it"
         }
       ],
       "reason": "The only dynamic part is RECEIPT_COLUMNS, a literal column list owned by the edge event store module and shared between its split modules; every value in the query (site id, stream, sequence, payload) is a bound parameter, so no untrusted SQL syntax can reach the text."
     },
     {
-      "id": "54d7732c9bb92ddd4727",
-      "path": "server/edge/phase9CloudEventStore.mjs",
+      "id": "e4c03eb08a3ac5150ff6",
+      "path": "server/edge/cloudEventStore.mjs",
       "kind": "query-text",
       "context": "getPhase9AppliedReceipts",
       "classification": "trusted-sql-fragment",
@@ -9353,7 +9353,7 @@
       "dynamicInputs": [
         {
           "expression": "RECEIPT_COLUMNS",
-          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stagePhase9Events.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
+          "source": "Module constant RECEIPT_COLUMNS exported from server/edge/stageEvents.mjs: a fixed template literal listing factory_edge_applied_events columns, with no interpolation",
           "validation": "Code-owned constant with no ${} placeholders; no request, import or stored value can reach it. It is the same column list the scanner proved static before the module split moved it"
         }
       ],

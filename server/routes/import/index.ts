@@ -8,9 +8,9 @@
 import type { Express } from "express";
 import { registerPoImportRoutes } from "./po-import";
 import { registerIntercompanyContainerTradingRoutes } from "./intercompany-container-trading";
-import { registerIntercompanyPhase3Routes } from "./intercompany-phase3";
-import { registerIntercompanyPhase4Routes } from "./intercompany-phase4";
-import { registerIntercompanyPhase5Routes } from "./intercompany-phase5";
+import { registerIntercompanyPhase3Routes } from "./intercompany-pricing";
+import { registerIntercompanyPhase4Routes } from "./intercompany-stock";
+import { registerIntercompanyPhase5Routes } from "./intercompany-receiving";
 import { registerImportTemplateRoutes } from "./templates";
 import { registerSilentTransferRoutes } from "./silent-transfer";
 import { registerSilentProductionRoutes } from "./silent-production";

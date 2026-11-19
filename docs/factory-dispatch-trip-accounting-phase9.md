@@ -57,7 +57,7 @@ All require authentication and the existing Factory invoicing tab access; sensit
 - `server/routes/factory/customer-orders/loadingDispatchOrderOverviewWorkbook.ts`
 - `server/routes/factory/customer-orders/loadingDispatchOrderOverviewRoutes.ts`
 - `client/src/pages/factory/FactoryDispatchOrderDashboard.tsx`
-- `tests/factory-dispatch-order-dashboard-phase9.test.ts` — staged only, NOT EXECUTED.
+- `tests/factory-dispatch-order-dashboard.test.ts` — staged only, NOT EXECUTED.
 
 ## Existing files updated
 

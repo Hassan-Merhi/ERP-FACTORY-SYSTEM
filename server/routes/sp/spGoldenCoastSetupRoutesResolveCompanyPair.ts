@@ -8,12 +8,12 @@ import {
   type GoldenCoastLedgerRow,
   type GoldenCoastSettingsKey,
   type GoldenCoastSettingsSnapshot,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   type GoldenCoastPhase13IntercompanyDefinition,
   type GoldenCoastPhase13LedgerRow,
   planGoldenCoastPhase13IntercompanyAccount,
-} from "../../services/accounting/goldenCoastPhase13Intercompany";
+} from "../../services/accounting/goldenCoastIntercompany";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 
 // ── Golden Coast account + readiness provisioning ────────────────────────────

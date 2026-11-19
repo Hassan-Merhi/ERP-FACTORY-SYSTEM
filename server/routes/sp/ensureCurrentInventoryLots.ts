@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase6PosSaleRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastPosSaleDeductionsRoutes.ts to keep that module under the source-size cap.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import {
@@ -20,13 +20,13 @@ import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
   type GoldenCoastLedgerRow,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   GOLDEN_COAST_CURRENT_INVENTORY_FIFO_SOURCE,
   GOLDEN_COAST_POST_CUTOVER_FIFO_SOURCES,
   type GoldenCoastFifoLot,
   type GoldenCoastPhase5RoleAccounts,
-} from "../../services/accounting/goldenCoastPhase5PosSale";
+} from "../../services/accounting/goldenCoastPosSale";
 import { loadGoldenCoastAccounts } from "./spGoldenCoastSetupRoutes";
 
 export const postingDependencies = createDatabasePostingDependencies();

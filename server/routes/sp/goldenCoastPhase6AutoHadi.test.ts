@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GoldenCoastPhase6AutoHadiError, selectGoldenCoastAutomaticHadiCashAccount } from "./goldenCoastPhase6AutoHadi";
+import { GoldenCoastPhase6AutoHadiError, selectGoldenCoastAutomaticHadiCashAccount } from "./goldenCoastAutoHadi";
 
 describe("Golden Coast Phase 6 automatic HADI cash routing", () => {
   it("prefers the single active HADI Cash ledger over bank fallbacks", () => {

@@ -75,8 +75,8 @@ rewritten. Bootstrap registration is idempotent.
 ## Verification and rollout
 
 Unit and contract test files:
-- tests/stock-transfer-order-wa-phase6-policy.test.ts
-- tests/stock-transfer-order-wa-phase6-contract.test.ts
+- tests/stock-transfer-order-wa-policy-accepts-a-verified-file-with-specific.test.ts
+- tests/stock-transfer-order-wa-contract-adds-four-idempotent-statements-without-touching.test.ts
 
 Source-level tests and implementation are committed. No full TypeScript
 build, PostgreSQL integration, live WhatsApp test, production migration,

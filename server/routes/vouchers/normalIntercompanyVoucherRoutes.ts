@@ -21,7 +21,7 @@ import {
 } from "../../services/intercompany/normalVoucherMatching";
 import { confirmMirroredPayment } from "../../services/intercompany/paymentSync";
 import { getPairPaymentSetup } from "../../services/intercompany/paymentQueries";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 
 const cash = z.object({ type: z.enum(["bank", "cash"]), id: z.number().int().positive() }).strict();
 const allocation = z

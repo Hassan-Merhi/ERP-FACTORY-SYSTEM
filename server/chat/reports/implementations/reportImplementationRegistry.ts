@@ -1,21 +1,21 @@
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
-import { phase1ReportShard } from "./phase1ReportShard";
-import { phase2ReportShard } from "./phase2ReportShard";
-import { phase3ReportShard } from "./phase3ReportShard";
-import { phase4ReportShard } from "./phase4ReportShard";
-import { phase5ReportShard } from "./phase5ReportShard";
-import { phase6ReportShard } from "./phase6ReportShard";
-import { phase7ReportShard } from "./phase7ReportShard";
+import { phase1ReportShard as financialAndPartyReportShard } from "./financialAndPartyReportShard";
+import { phase2ReportShard as inventoryOperationsReportShard } from "./inventoryOperationsReportShard";
+import { phase3ReportShard as salesAndAssetsReportShard } from "./salesAndAssetsReportShard";
+import { phase4ReportShard as retailAndFactoryReportShard } from "./retailAndFactoryReportShard";
+import { phase5ReportShard as accountingDetailReportShard } from "./accountingDetailReportShard";
+import { phase6ReportShard as masterDataAndJournalReportShard } from "./masterDataAndJournalReportShard";
+import { phase7ReportShard as auditAndTrackingReportShard } from "./auditAndTrackingReportShard";
 import { schemaCompatibilityReportShard } from "./schemaCompatibilityReportShard";
 
 export const reportImplementationShards: readonly ReportImplementationShard[] = [
-  phase1ReportShard,
-  phase2ReportShard,
-  phase3ReportShard,
-  phase4ReportShard,
-  phase5ReportShard,
-  phase6ReportShard,
-  phase7ReportShard,
+  financialAndPartyReportShard,
+  inventoryOperationsReportShard,
+  salesAndAssetsReportShard,
+  retailAndFactoryReportShard,
+  accountingDetailReportShard,
+  masterDataAndJournalReportShard,
+  auditAndTrackingReportShard,
 ];
 
 const implementationByQueryType = new Map<string, ReportImplementationShard>();

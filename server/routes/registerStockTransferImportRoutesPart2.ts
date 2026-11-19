@@ -20,7 +20,7 @@ import {
   type ProvisionalRateBasis,
   provisionalTransferImportRate,
 } from "./stockTransferImportPosting";
-import { isPhase9LanPrimary } from "../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../edge/posOutbox";
 import { importStockTransferOnLan } from "../services/inventory/stockTransferImportOfflineCapture";
 import { provisionalRatesOf, sendStockTransferImportRefusal } from "./registerStockTransferImportRoutesPart1";
 

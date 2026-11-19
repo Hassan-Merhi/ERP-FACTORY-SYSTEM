@@ -1,7 +1,7 @@
 // Extracted from ./historicalReplayRoutesV4.ts to keep that module under the source-size cap.
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
-import { inspectPhase5ReplayScopeSafety } from "../../../services/factory/historical-replay/downstreamGatePhase5";
+import { inspectPhase5ReplayScopeSafety } from "../../../services/factory/historical-replay/downstreamGate";
 import { logger } from "../../../lib/logger";
 import crypto from "crypto";
 import { requireAuth, requireRole } from "../../../auth";

@@ -45,12 +45,12 @@ describe("supplier partner customer Net Position", () => {
   });
 
   it("keeps the new SP cash-account labels covered by the shared translation registry and audit", () => {
-    const translations = read("client/src/i18n/phase3RemainingTranslations.part25.ts");
-    const registry = read("client/src/i18n/sharedUiPhase3Translations.ts");
-    const audit = read("scripts/audit-i18n-phase14.mjs");
+    const translations = read("client/src/i18n/remainingTranslations.part25.ts");
+    const registry = read("client/src/i18n/sharedUiTranslations.ts");
+    const audit = read("scripts/audit-i18n.mjs");
     expect(translations).toContain('en: "Opening Cash Account"');
     expect(translations).toContain('en: "GC Sales Cash"');
     expect(registry).toContain("phase3RemainingTranslationsPart25");
-    expect(audit).toContain("phase3RemainingTranslations.part25.ts");
+    expect(audit).toContain("remainingTranslations.part25.ts");
   });
 });

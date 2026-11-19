@@ -673,6 +673,11 @@
     "docs/archive/type-env-phase1-inventory.md": "record",
     "docs/archive/type-env-phase2-progress.md": "record",
     "docs/archive/type-env-phase3-cleanup.md": "record",
-    "docs/archive/type-env-phase4-guards.md": "record"
+    "docs/archive/type-env-phase4-guards.md": "record",
+    "docs/archive/phase-wave-full-filename-manifest.md": "record",
+    "docs/archive/phase-wave-backend-phase2-status.md": "record",
+    "docs/archive/phase-wave-semantic-filename-inventory.md": "record",
+    "docs/archive/phase-wave-phase3-completion.md": "record",
+    "docs/archive/phase-wave-phase4-completion.md": "record"
   }
 }

@@ -90,7 +90,7 @@ const harness = vi.hoisted(() => {
 
   // Phase 22 (B): each pass posts through the ERP door to the engine
   // (rental/shared/accrual-posting.ts -> postErpVoucherTx). The door is
-  // covered against a database by tests/phase22b-erp-writers-engine.test.ts;
+  // covered against a database by tests/erp-writers-engine.test.ts;
   // here it records what each pass posts.
   const postedVouchers: Array<Record<string, unknown>> = [];
   const postErpVoucherTx = vi.fn(async (_tx: unknown, input: Record<string, unknown>) => {

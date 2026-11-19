@@ -1,4 +1,4 @@
-// Extracted from ./spGoldenCoastPhase10SalesCashSettlementRoutes.ts to keep that module under the source-size cap.
+// Extracted from ./spGoldenCoastSalesCashSettlementRoutes.ts to keep that module under the source-size cap.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, bankAccounts, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
@@ -7,12 +7,12 @@ import {
   goldenCoastPhase10IdempotencyKey,
   type GoldenCoastPhase10SettlementInput,
   goldenCoastPhase10SourceId,
-} from "../../services/accounting/goldenCoastPhase10SalesCashSettlement";
-import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+} from "../../services/accounting/goldenCoastSalesCashSettlement";
+import type { DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 import {
   GoldenCoastPhase10RouteError,
   type DatabaseTransaction,
-} from "./spGoldenCoastPhase10SalesCashSettlementRoutesValidatePaymentAccount";
+} from "./spGoldenCoastSalesCashSettlementRoutesValidatePaymentAccount";
 
 export async function listPaymentAccounts(conn: DbLike, companyId: number) {
   const [ledgerRows, bankRows] = await Promise.all([

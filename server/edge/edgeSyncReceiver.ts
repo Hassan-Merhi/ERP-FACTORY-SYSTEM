@@ -2,7 +2,7 @@ import express, { type Express, type Request, type Response } from "express";
 import { pool } from "../db";
 import { edgeSyncRateLimit } from "./edgeRateLimit";
 import { EdgeStageConflict, stageVoucherEvents } from "./edgeCloudStaging";
-import { getAppliedCloudReceipts, PHASE8_RECEIPT_QUERY_PATH } from "./phase8AppliedReceipts.mjs";
+import { getAppliedCloudReceipts, PHASE8_RECEIPT_QUERY_PATH } from "./appliedReceipts.mjs";
 import {
   EDGE_SYNC_STAGE_PATH,
   EVENT_STAGE_SIGNATURE_DOMAIN,
@@ -10,13 +10,13 @@ import {
   readCloudSyncStageConfiguration,
   verifyStageSignature,
 } from "./edgeSyncStageProtocol.mjs";
-import { EDGE_EVENT_RECEIPT_QUERY_PATH, EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "./phase9EventProtocol.mjs";
+import { EDGE_EVENT_RECEIPT_QUERY_PATH, EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "./eventProtocol.mjs";
 import {
   getPhase9AppliedReceipts,
   Phase9StageConflict,
   stagePhase9AttachmentFile,
   stagePhase9Events,
-} from "./phase9CloudEventStore.mjs";
+} from "./cloudEventStore.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 
 /** HTTPS + exact event-domain HMAC; false means a response was already sent. */

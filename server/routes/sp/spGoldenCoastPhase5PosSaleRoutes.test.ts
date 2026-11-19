@@ -1,19 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url));
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPosSalePostingRoutes.ts", import.meta.url));
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
-const phase6RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url));
+const phase6RouteSource = readModuleFamily(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url));
 const legacySalesSource = readModuleFamily(new URL("./spSalesRoutes.ts", import.meta.url));
-const saleServiceSource = readModuleFamily(
-  new URL("../../services/accounting/goldenCoastPhase5PosSale.ts", import.meta.url)
-);
+const saleServiceSource = readModuleFamily(new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url));
 
 describe("Golden Coast Phase 5 POS sale retirement", () => {
   it("keeps the Phase 5 implementation in source history but no longer mounts it", () => {
     expect(routeSource).toContain("registerSpGoldenCoastPhase5PosSaleRoutes");
     expect(routeSource).toContain('"/api/sp/golden-coast/phase5/pos-sale"');
-    expect(spIndexSource).not.toContain('from "./spGoldenCoastPhase5PosSaleRoutes"');
+    expect(spIndexSource).not.toContain('from "./spGoldenCoastPosSalePostingRoutes"');
     expect(spIndexSource).not.toContain("registerSpGoldenCoastPhase5PosSaleRoutes(app);");
   });
 
@@ -40,7 +38,7 @@ describe("Golden Coast Phase 5 POS sale retirement", () => {
   });
 
   it("keeps pre-cutover and legacy posting paths out of the canonical Phase 6 sale", () => {
-    expect(phase6RouteSource).not.toContain("goldenCoastPhase1Posting");
+    expect(phase6RouteSource).not.toContain("goldenCoastPosting");
     expect(phase6RouteSource).not.toContain("buildGoldenCoastPhase1PostingBatch");
     expect(phase6RouteSource).toContain("GOLDEN_COAST_CURRENT_INVENTORY_FIFO_SOURCE");
   });

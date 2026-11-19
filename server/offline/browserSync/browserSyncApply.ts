@@ -22,10 +22,10 @@
 import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { hashEvidence } from "../../edge/edgeSyncStageProtocol.mjs";
-import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../../edge/phase9CloudEventStore.mjs";
-import { Phase9StockItemNotYetSynced, translatePhase9LanStockItems } from "../../edge/phase9StockItemMap.mjs";
-import { PHASE9_HANDLERS } from "../../edge/phase9OperatorApply";
+import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../../edge/cloudEventStore.mjs";
+import { Phase9StockItemNotYetSynced, translatePhase9LanStockItems } from "../../edge/stockItemMap.mjs";
+import { PHASE9_HANDLERS } from "../../edge/eventStreamOperatorApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

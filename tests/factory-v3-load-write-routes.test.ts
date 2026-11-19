@@ -28,7 +28,7 @@
  * row) in the same transaction, so the bales here sit on a location and their
  * articles are on the proforma; re-finalizing is idempotent (it used to be
  * refused with 400). The invoice itself is covered by
- * wave17b-inventory-factory.test.ts.
+ * b-inventory-factory.test.ts.
  *
  * The scan endpoint's two 409 warnings are covered from both sides, because
  * `bypass` is what turns a refusal into a write: a bale reserved for another

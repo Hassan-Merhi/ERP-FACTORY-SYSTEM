@@ -8,7 +8,7 @@ import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
-import { fetchRetailCartPreview } from "./retailWave2Api";
+import { fetchRetailCartPreview } from "./retailPosApi";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
 import { paymentFromAccount, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";

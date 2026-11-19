@@ -22,7 +22,7 @@ import {
 } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { applyPostedLocationImport, planLocationImport, type PostedImportRow } from "./locationImportJournal";
 import { parseMoneyInput, toMoney } from "../../lib/money";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import {
   importLocationInventoryOnLan,

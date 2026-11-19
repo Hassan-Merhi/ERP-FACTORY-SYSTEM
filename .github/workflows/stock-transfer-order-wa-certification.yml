@@ -47,20 +47,20 @@ jobs:
       - name: Run all focused phases 1–6 tests
         run: |
           node node_modules/vitest/vitest.mjs run \
-            tests/stock-transfer-order-wa-phase1-schema.test.ts \
-            tests/stock-transfer-order-wa-phase2-contract.test.ts \
-            tests/stock-transfer-order-wa-phase3-contract.test.ts \
-            tests/stock-transfer-order-wa-phase3-incoming.test.ts \
-            tests/stock-transfer-order-wa-phase4-contract.test.ts \
-            tests/stock-transfer-order-wa-phase4-policy.test.ts \
-            tests/stock-transfer-order-wa-phase5-contract.test.ts \
-            tests/stock-transfer-order-wa-phase5-workbook.test.ts \
-            tests/stock-transfer-order-wa-phase6-contract.test.ts \
-            tests/stock-transfer-order-wa-phase6-policy.test.ts \
+            tests/stock-transfer-order-wa-schema.test.ts \
+            tests/stock-transfer-order-wa-contract-appears-only-within-the-existing-whatsapp.test.ts \
+            tests/stock-transfer-order-wa-contract-registers-a-named-bearer-guarded-route.test.ts \
+            tests/stock-transfer-order-wa-incoming.test.ts \
+            tests/stock-transfer-order-wa-contract-uses-existing-immutable-lifecycle-once-per.test.ts \
+            tests/stock-transfer-order-wa-policy-selects-one-leader-for-every-not.test.ts \
+            tests/stock-transfer-order-wa-contract-mirrors-seven-idempotent-migration-statements-protects.test.ts \
+            tests/stock-transfer-order-wa-workbook.test.ts \
+            tests/stock-transfer-order-wa-contract-adds-four-idempotent-statements-without-touching.test.ts \
+            tests/stock-transfer-order-wa-policy-accepts-a-verified-file-with-specific.test.ts \
             tests/stock-transfer-order-wa-request-db-error-regression.test.ts \
             tests/stock-transfer-order-wa-main-connection-contract.test.ts \
             tests/stock-transfer-order-wa-webhook-readiness.test.ts \
-            tests/stock-transfer-order-wa-phase3-incoming.test.ts \
+            tests/stock-transfer-order-wa-incoming.test.ts \
             tests/whatsapp-service-green-api.test.ts
       - name: Verify migration registry (schema built in the PostgreSQL job)
         run: npm run db:migrate:plan
@@ -106,4 +106,4 @@ jobs:
       - name: Prepare only the disposable local ERP schema
         run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
       - name: Test idempotent startup DDL, constraints and tenant policies
-        run: node node_modules/vitest/vitest.mjs run tests/stock-transfer-order-wa-phase7-postgres.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/stock-transfer-order-wa-postgres.test.ts

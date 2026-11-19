@@ -18,13 +18,13 @@ A live, GitHub-backed source-verification pass ran **27/27 checks successfully**
 - Currency-safe payment/contract overviews, company-business-calendar date filter, removal of impossible reconciliation UI, historical export action eligibility, shared delete confirmation wording.
 - Properties cross-module read-only presentation, timezone-neutral date labels, all six pinned links, retained operational dashboard, hidden registry classification, manifest-based old rental redirects, unknown-route replacement, stable sidebar icons.
 
-The equivalent dependency-free repository script is `scripts/verify-properties-unification-phase11.mjs`. It was **authored and committed** for re-execution in a checkout; the GitHub-backed static check was executed separately from this repository script. No Vitest results are claimed.
+The equivalent dependency-free repository script is `scripts/verify-properties-unification.mjs`. It was **authored and committed** for re-execution in a checkout; the GitHub-backed static check was executed separately from this repository script. No Vitest results are claimed.
 
 ### Confirmed correction during this phase
 
 - `client/src/pages/properties/RentalPaymentsLog.tsx`: The `Copy Full History` label/test ID now appears only for a verified Hassan Properties unfiltered historical view; other Properties companies correctly get the ordinary `Copy Results` action. This does not change export data.
-- `tests/properties-unification-phase9-ui.test.ts`: Added the corresponding regression assertion.
-- `tests/properties-unification-phase7-permissions.test.ts`: Corrected the positive company-permission mock to use the same company as the request, avoiding a misleading cross-company test expectation.
+- `tests/properties-unification-ui.test.ts`: Added the corresponding regression assertion.
+- `tests/properties-unification-permissions.test.ts`: Corrected the positive company-permission mock to use the same company as the request, avoiding a misleading cross-company test expectation.
 
 ## Integration comparison against main
 
@@ -40,17 +40,17 @@ No merge into `main`, rebase or main-branch update was made.
 
 ```bash
 npm ci
-node scripts/verify-properties-unification-phase11.mjs
+node scripts/verify-properties-unification.mjs
 npm run check
 node node_modules/vitest/vitest.mjs run \
-  tests/properties-unification-phase7-permissions.test.ts \
-  tests/properties-unification-phase8-presentation.test.ts \
-  tests/properties-unification-phase9-ui.test.ts \
-  tests/properties-unification-phase10-navigation.test.ts \
+  tests/properties-unification-permissions.test.ts \
+  tests/properties-unification-presentation.test.ts \
+  tests/properties-unification-ui.test.ts \
+  tests/properties-unification-navigation.test.ts \
   tests/properties-unification-regression.test.ts \
   tests/properties-payment-history-reconciliation.test.ts \
-  tests/phase33e-auth-role-guards.test.ts \
-  tests/phase33e-active-company-permissions.test.ts
+  tests/auth-role-guards.test.ts \
+  tests/active-company-permissions.test.ts
 ```
 
 Run the frontend Vitest configuration and relevant browser-based smoke scenarios as appropriate. This phase does not trigger CI or create a workflow.

@@ -112,7 +112,7 @@ needs the server PDF).
 | 7 | 16 | Native confirm guarding retail posting | 2 | Done | Phase 2 |
 | 7 | 24 | `RetailNav` points to a non-POS route | 2 | Kept | `/retail/inventory` is matched by `routes/AppRoutes.tsx` before the POS routes and works for retail users |
 | 7 | D | Retail dead pages (~1,800 lines) | 3 | Done | Phase 3 |
-| 7 | D | `goldenCoastPhase6Pos.ts` | 3 | Kept | Pinned by `tests/ui/golden-coast-pos-phase6-contract.test.ts` |
+| 7 | D | `goldenCoastPos.ts` | 3 | Kept | Pinned by `tests/ui/golden-coast-pos-contract.test.ts` |
 | 7 | D | `POSDashboard` orphan, `POSSettings` vs `MySettings` | 3 | Done | Owner decision 13 (2026-11-18): both pages and their lazy imports removed (with the dashboard's state and dialog modules); `/pos-dashboard` redirects to the POS sale screen (`/pos`) and `/pos-settings` to My Settings (`/my-settings`), which the POS sidebar and Command Palette now open. Server routes, data and the `pos.role-workspace` catalog paths kept |
 | 7 | D | `InvoiceTemplate.tsx` | 3 | Kept | Still imported by six files (see 7/9) |
 | 8 | 3 | Payments Log has no export | 4 | Done | Phase 9f |

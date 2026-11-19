@@ -38,17 +38,17 @@ The external invoice face total is never changed by canceling a container. If th
 
 - `migrations/20261105_005_intercompany_phase5_lifecycle.sql`: additive receipt, receipt-line and cancellation evidence, payment allocation kind extension, exact GL/stock ownership checks, and immutable post-cancellation voucher/PO protection.
 - `shared/schema/intercompanyTrading.ts`: matching Drizzle models.
-- `server/services/intercompany/phase5Receipt.ts` and `phase5Cancel.ts`: atomic posting services with idempotency.
-- `server/routes/import/intercompany-phase5.ts`: signed-in company scoped read/receive/cancel endpoints.
+- `server/services/intercompany/receipt.ts` and `cancel.ts`: atomic posting services with idempotency.
+- `server/routes/import/intercompany-receiving.ts`: signed-in company scoped read/receive/cancel endpoints.
 - `client/src/pages/intercompany/IntercompanyLifecycle.tsx`: destination receipt and cancellation review UI in Properties and ERP navigation.
-- `tests/intercompany-phase5-lifecycle-math.test.ts` and `tests/intercompany-phase5-database-guards.test.ts`: exact values/replay and fresh isolated PostgreSQL migration/ownership regression.
+- `tests/intercompany-lifecycle-math.test.ts` and `tests/intercompany-receiving-database-guards.test.ts`: exact values/replay and fresh isolated PostgreSQL migration/ownership regression.
 
 ## Phase 5 certification and isolated rollout checklist
 
 **Release state: NOT CERTIFIED until all the following evidence exists.** Do not treat a passed TypeScript-only test as a successful database test; the DB scenario returns early when `DATABASE_URL` is unset.
 
 1. Record exact branch SHA. Run migration verification and startup compatibility, typecheck, changed-file Prettier, lint, backend/frontend tests, account-scope/write-route/security audits, build and static mobile/i18n checks. Do not waive failures.
-2. Use **disposable PostgreSQL** with `DATABASE_URL` set: run `node node_modules/vitest/vitest.mjs run tests/intercompany-phase5-lifecycle-math.test.ts tests/intercompany-phase5-database-guards.test.ts`, plus Phases 1–4 DB tests. Verify the five migrations apply in order, with the runtime-only canonical movement journal schema installed as required.
+2. Use **disposable PostgreSQL** with `DATABASE_URL` set: run `node node_modules/vitest/vitest.mjs run tests/intercompany-lifecycle-math.test.ts tests/intercompany-receiving-database-guards.test.ts`, plus Phases 1–4 DB tests. Verify the five migrations apply in order, with the runtime-only canonical movement journal schema installed as required.
 3. Staging receipt: confirm one real source container, one destination location and ERP inventory movement, Dr Inventory/Cr GIT equality, per-item quantity/value equality and no changes in Properties inventory, external suppliers or real cash.
 4. Staging cancellation: test unreceived zero payment, partial payment, multiple credited payments, simultaneous retries, wrong pair, invalid currency/history, supplier mapping, shared invoice redistribution, stale version and closed accounting date. Verify all three exact journal pairs, initial external supplier POs and bank/cash untouched, and every payment released to its original pair.
 5. Reject duplicate receipt, incorrect journal, forged stock movement, incorrect destination location/account, cost misallocation, edited receipt proof, unauthorized actor, post-receipt price edits and post-receipt cancellation.

@@ -8,7 +8,7 @@ import {
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { createRemoteControlRateGate, type RemoteControlRateGate } from "@/hooks/remote-control-command-flow";
 import type { RemoteMouseCommandType, RemoteMouseFrameViewport } from "@/hooks/remote-mouse-control-policy";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
 
 export interface CommandResultView {
   commandId: string;

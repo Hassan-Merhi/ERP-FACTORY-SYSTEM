@@ -30,29 +30,29 @@ an open cloud epoch.
 
 | Workflow | LAN-primary | Evidence stream | Cloud apply |
 |---|---|---|---|
-| Journal voucher (USD, ledger-only, balanced, no attachment) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` |
-| Factory cash-box Payment / Receipt (USD; one Cash account against expense or income accounts) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` — account types re-checked in the cloud; banks, payables, receivables, stock and employees refused |
-| Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
-| Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
-| New stock transfer (`POST /api/stock-transfers`, create-from-scratch form; the existing-voucher form is refused) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed through the same transfer code on the LAN request id, with a cloud voucher number; a source the cloud cannot cover is held for Admin/Developer approve/reject |
-| Stock-item master edits: bulk price update, bulk category, bulk rename, bulk unit fix, the update-by-code imports (names, categories, opening balances, barcodes), location prices and single-item edits | yes, existing items only; whitelisted fields (name, unit, selling price, category, group, active, opening balances, location prices, new barcodes) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each field applied only while the cloud value still equals what the LAN saw; a field the cloud changed meanwhile is held for Admin/Developer approve (LAN value wins) or reject; a re-coded or missing item, a missing category/group/location or a barcode another item holds is reject-only |
-| New stock item (`POST /api/stock-items`) and stock item delete (`DELETE /api/stock-items/:id`) | yes; the new item gets an id from the reserved LAN range (1,000,000,000 and up) and keeps the code the user typed; delete only for an item with no stock movements | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — the create makes the cloud item and records the LAN-id → cloud-id mapping (`factory_edge_stock_item_map`); every later record naming the LAN id is translated, and waits (no conflict) until the create has applied; a code the cloud already uses is reject-only, an item with the same name is held for Admin/Developer approve/reject; a delete of an item the cloud still holds stock of, or has movements for, is reject-only |
-| Changes to an existing stock transfer: edit (`PUT /api/stock-transfers/:id`), finalize/approve (`POST /api/vouchers/:id/finalize` for transfer vouchers, `POST /api/stock-transfers/:id/approve`), revisions (`POST /api/stock-transfers/:id/revisions`) and revision approve/reject | yes; other voucher types cannot be finalized offline (HTTP 423) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each change carries the transfer as the factory saw it; a transfer created offline is found through its create's receipt; an edit or finalize of a transfer the cloud changed meanwhile is held for Admin/Developer approve (factory change wins) or reject; a stale revision, a revision no longer pending, or a transfer whose offline create was rejected is reject-only |
+| Journal voucher (USD, ledger-only, balanced, no attachment) | yes | `vouchers` (Phase 4/8) | `server/edge/stagedVoucherOperatorApply.ts` |
+| Factory cash-box Payment / Receipt (USD; one Cash account against expense or income accounts) | yes | `vouchers` (Phase 4/8) | `server/edge/stagedVoucherOperatorApply.ts` — account types re-checked in the cloud; banks, payables, receivables, stock and employees refused |
+| Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply pressing` |
+| Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
+| New stock transfer (`POST /api/stock-transfers`, create-from-scratch form; the existing-voucher form is refused) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply stock` — replayed through the same transfer code on the LAN request id, with a cloud voucher number; a source the cloud cannot cover is held for Admin/Developer approve/reject |
+| Stock-item master edits: bulk price update, bulk category, bulk rename, bulk unit fix, the update-by-code imports (names, categories, opening balances, barcodes), location prices and single-item edits | yes, existing items only; whitelisted fields (name, unit, selling price, category, group, active, opening balances, location prices, new barcodes) | `stock` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply stock` — each field applied only while the cloud value still equals what the LAN saw; a field the cloud changed meanwhile is held for Admin/Developer approve (LAN value wins) or reject; a re-coded or missing item, a missing category/group/location or a barcode another item holds is reject-only |
+| New stock item (`POST /api/stock-items`) and stock item delete (`DELETE /api/stock-items/:id`) | yes; the new item gets an id from the reserved LAN range (1,000,000,000 and up) and keeps the code the user typed; delete only for an item with no stock movements | `stock` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply stock` — the create makes the cloud item and records the LAN-id → cloud-id mapping (`factory_edge_stock_item_map`); every later record naming the LAN id is translated, and waits (no conflict) until the create has applied; a code the cloud already uses is reject-only, an item with the same name is held for Admin/Developer approve/reject; a delete of an item the cloud still holds stock of, or has movements for, is reject-only |
+| Changes to an existing stock transfer: edit (`PUT /api/stock-transfers/:id`), finalize/approve (`POST /api/vouchers/:id/finalize` for transfer vouchers, `POST /api/stock-transfers/:id/approve`), revisions (`POST /api/stock-transfers/:id/revisions`) and revision approve/reject | yes; other voucher types cannot be finalized offline (HTTP 423) | `stock` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply stock` — each change carries the transfer as the factory saw it; a transfer created offline is found through its create's receipt; an edit or finalize of a transfer the cloud changed meanwhile is held for Admin/Developer approve (factory change wins) or reject; a stale revision, a revision no longer pending, or a transfer whose offline create was rejected is reject-only |
 | Excel stock-transfer import, single and multi-source (`/api/stock-transfer-import/*`: parse and validate only read; import writes) | yes; each import is created through the same code as a hand-typed transfer | `stock` (Phase 9), as an ordinary `stock.transfer.v1` | replayed like any offline transfer, on its LAN request id; a cloud shortfall is held for Admin/Developer approve/reject |
 | Excel inventory import for a location (`POST /api/locations/:id/import-inventory`) | yes, existing items only; needs the stock-adjustment permission; a row below zero is refused | `stock` (Phase 9), each row an ordinary `stock.quick-adjust.v1` | each row's quantity change is added to the cloud's own figure (never an overwritten balance); below zero is held for Admin/Developer approve/reject. Offline, an unknown code is reported (not created) and rows are valued at the location's average cost |
 | Payment / Receipt edit (`PATCH /api/vouchers/:id/payment-receipt`) and delete (`DELETE /api/vouchers/:id`, Admin) | yes, once batch 4's drill is approved; intercompany transfer legs stay online-only (409) | `payments` (Phase 9), after the payment itself | each record carries a SHA-256 of the voucher (header and every entry) as the factory saw it. A voucher created offline is found through its create's receipt. The change applies through the same code only while the cloud voucher still has that digest. A changed voucher is held for Admin/Developer approve (factory change wins) or reject. A reconciled voucher, an intercompany leg, a closed period or any other posting refusal is reject-only |
 | File rename / move (`PATCH /api/files/:id`) | yes, once batch 4's drill is approved; file deletes stay online-only | `attachments` (Phase 9), after the upload | applied only while the cloud file still has the name and folder the factory saw. A file renamed or moved in the cloud meanwhile is held (approve = factory change wins). A missing target folder is reject-only |
-| POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
-| Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
-| File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
-| Supplier, customer, employee and bank Payment / Receipt vouchers (Payments page) | yes, at the rate the user posted | `payments` (Phase 9) | `server/edge/phase9OperatorApply.ts apply payments` — same posting code on the receipt's transaction; a posting refusal (closed period, missing party/account) is a reject-only conflict |
+| POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
+| Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
+| File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/eventStreamOperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
+| Supplier, customer, employee and bank Payment / Receipt vouchers (Payments page) | yes, at the rate the user posted | `payments` (Phase 9) | `server/edge/eventStreamOperatorApply.ts apply payments` — same posting code on the receipt's transaction; a posting refusal (closed period, missing party/account) is a reject-only conflict |
 | POS return / sale correction (sale edit, `PUT`/`PATCH /api/vouchers/:id/sales`) | yes | `pos` (same stream as the sale) | replayed through the sale-edit core; the sale is found by its client sale id or (pre-outage) voucher id; below-zero stock held for approve/reject |
 | POS sale cancellation (`DELETE /api/vouchers/:id`, sales vouchers only, Admin) | yes | `pos` (same stream as the sale) | replayed through the same delete code; the operator tool refreshes the intercompany POS mirror for the date afterwards; a missing or already-cancelled sale is reject-only |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
 | Everything else (1,140 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
-`node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
+`node scripts/edge/audit-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
 capture policy.
 
@@ -419,7 +419,7 @@ reconciled safely, which is worse than refusing them.
   void can never race a LAN scan of the same bale.
 
 Adding a workflow means registering a new event kind in
-`server/edge/phase9EventProtocol.mjs`, a capture call inside the route's
+`server/edge/eventProtocol.mjs`, a capture call inside the route's
 transaction, an apply handler, and drill coverage — the framework is shared.
 
 ### Owner-approved offline policies (2026-11-01)
@@ -516,8 +516,8 @@ operator tools.
    `node scripts/edge/relay-event-outbox.mjs`. Both are idempotent; rerun after
    any network error.
 4. **Apply:** on the cloud, with the Phase 8/9 operator variables set,
-   - `node --import tsx server/edge/phase8OperatorApply.ts <sequence>` per voucher;
-   - `node --import tsx server/edge/phase9OperatorApply.ts apply pressing`.
+   - `node --import tsx server/edge/stagedVoucherOperatorApply.ts <sequence>` per voucher;
+   - `node --import tsx server/edge/eventStreamOperatorApply.ts apply pressing`.
    The event apply stops at the first conflict (see §4.4).
 5. **Receipts:** enable `FACTORY_PHASE8_RECEIPTS_ENABLED=1` and
    `FACTORY_PHASE9_RECEIPTS_ENABLED=1`, then rerun the LAN relays and
@@ -548,9 +548,9 @@ transaction rolls back, the conflict is written to
   function `factory_edge_operator_decide_conflict`, which re-checks the user.
   On an ordinary cloud instance the panel does not appear
   (`EDGE_OPERATOR_CONSOLE_DISABLED`). The command-line steps below do the same.
-- Inspect: `node --import tsx server/edge/phase9OperatorApply.ts status` and the
+- Inspect: `node --import tsx server/edge/eventStreamOperatorApply.ts status` and the
   conflict row's `code`/`detail`.
-- Decide: `node --import tsx server/edge/phase9OperatorApply.ts reject
+- Decide: `node --import tsx server/edge/eventStreamOperatorApply.ts reject
   <stream> <sequence> <reviewer-username> "<reason, at least 10 characters>"`.
   The reviewer must be an active **Admin or Developer** user of the company;
   any other username is refused (`PHASE9_REVIEWER_NOT_AUTHORIZED`).
@@ -592,7 +592,7 @@ On the factory server, an Admin or Owner presses **Pause delivery** (or
 password. The DBA-owned function `factory_edge_operator_sync_control` checks the
 user and appends a `pause` or `resume` row, with the user's name and reason, to
 `factory_edge_sync_control_log` (`recordPhase10SyncControl` in
-`server/edge/phase10SyncControl.mjs` remains the DBA path). While paused, both
+`server/edge/syncControl.mjs` remains the DBA path). While paused, both
 relays transmit nothing; evidence is untouched. Use it during cloud incidents,
 restores or audits.
 
@@ -635,13 +635,13 @@ no request ID or active bale appears twice. Voucher reconciliation follows
 | LAN mode and data proof | `GET /api/edge/status` | mode/writeMode not as planned |
 | Per-operation state | `GET /api/edge/status?operationId=<uuid>` (authenticated) | `conflict` |
 | LAN backlog | `factory-handover-preflight.mjs status`, or `GET /api/edge/operator/status` (LAN, Admin/Owner; also shown in the Offline panel as "Factory server sync status") | `pendingTotal` grows during WAN-up time |
-| Cloud streams | `phase9OperatorApply.ts status` | `openConflicts > 0` |
+| Cloud streams | `eventStreamOperatorApply.ts status` | `openConflicts > 0` |
 | Relay paused | `relayPaused: true` in the preflight report | paused longer than planned |
 
 ## 7. Verification evidence
 
-Automated on disposable PostgreSQL (`tests/offline-phase9-pressing-sync-drill.test.ts`,
-`tests/offline-phase8-postgres.test.mjs`, `tests/offline-phase9-pressing-postgres.test.ts`)
+Automated on disposable PostgreSQL (`tests/offline-pressing-sync-drill.test.ts`,
+`tests/offline-postgres.test.mjs`, `tests/offline-pressing-postgres.test.ts`)
 and in unit/contract suites run by the offline Phase 8/9 workflows:
 
 | Scenario | Evidence |

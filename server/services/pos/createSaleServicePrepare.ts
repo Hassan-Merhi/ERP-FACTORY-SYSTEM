@@ -14,7 +14,7 @@ import { getOrCreateSalesRevenueAccount, fetchSupplierPartnerAccountingContext }
 import { POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, checkedPosNativeSaleAmounts } from "./posZmwRatePolicy";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 import { offlineEnteredRate, err } from "./createSaleServiceHelpers";
 import type { CreatePosSaleParams } from "./posSaleTypes";

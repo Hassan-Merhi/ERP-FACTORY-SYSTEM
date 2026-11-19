@@ -135,7 +135,7 @@ deleted files were updated.
 2. **`build.mjs`** is live: the Render service `system` builds with `npm ci && node build.mjs`
    (read from the Render dashboard, not changed). `render.yaml` still says `npm run build`, so
    the blueprint and the dashboard disagree; `build.mjs` also runs
-   `tests/phase3-accounting-audit.test.ts` as a deploy gate.
+   `tests/accounting-audit.test.ts` as a deploy gate.
 3. **`@typescript/native`** (`npm:typescript@7.0.2`) ships a second `tsc` binary; kept by owner
    decision. Which `tsc` `npm run check` resolves is still a toolchain question.
 4. The manifest edits, the lockfile edits and the test-suite case removals are unverified until
@@ -179,12 +179,12 @@ npm run audit:doc-index && npm run audit:scripts && npm run audit:write-routes
 npm run audit:company-scope && npm run audit:source-text-assertions && npm run audit:god-files
 node scripts/audit-write-evidence.mjs
 node scripts/verify-stock-transfer-revision-lifecycle.mjs
-node scripts/verify-group-a-phase-3.mjs
-node scripts/verify-program2-phase4-pos-stock-transfers.mjs
-node scripts/verify-program2-phase8-rentals.mjs
-node scripts/verify-bandwidth-phase-3-sales-report.mjs
-node scripts/verify-wave3-api-payload-bandwidth.mjs
-node scripts/audit-realtime-wave3.mjs && node scripts/audit-i18n-phase14.mjs
+node scripts/verify-group-a.mjs
+node scripts/verify-program2-pos-stock-transfers.mjs
+node scripts/verify-program2-rentals.mjs
+node scripts/verify-bandwidth-sales-report.mjs
+node scripts/verify-api-payload-bandwidth.mjs
+node scripts/audit-realtime-queries.mjs && node scripts/audit-i18n.mjs
 npm run build && npm run verify:server-bundle && npm run verify:runtime-dependencies
 ```
 
@@ -207,10 +207,10 @@ caught errors, which the rule still allows.
 
 | Item | Decision | Outcome |
 |---|---|---|
-| Ledger balance: `accounts/ledger-balance.ts` vs live `accountCurrencyRoutes.ts` | implementer's choice | The live handler stays canonical. The unmounted copy differs on figures (a customer-owned ledger rolls into the customer; a linked bank is not folded in), so switching would change reported balances, which a cleanup must not do. The unmounted copy, `tests/ledger-balance-exact.test.ts` and the one assertion in `tests/wave10-engine-consolidation.test.ts` that called it are deleted. `tests/wave17-reporting.test.ts` tests the live route and is unchanged. |
+| Ledger balance: `accounts/ledger-balance.ts` vs live `accountCurrencyRoutes.ts` | implementer's choice | The live handler stays canonical. The unmounted copy differs on figures (a customer-owned ledger rolls into the customer; a linked bank is not folded in), so switching would change reported balances, which a cleanup must not do. The unmounted copy, `tests/ledger-balance-exact.test.ts` and the one assertion in `tests/engine-consolidation.test.ts` that called it are deleted. `tests/reporting.test.ts` tests the live route and is unchanged. |
 | `linkProformaAtomic.ts` | link it | `PATCH /api/factory/customer-orders/:id/link-proforma` now calls `linkOrderProformaAtomically`: one transaction with the proforma capacity lock and `FOR UPDATE` on the order. **Behaviour change:** as designed in #1411, a link made during loading is reference-only. It no longer backfills `customer_order_expected_lines` from the proforma (`linesBackfilled` is 0), and re-linking the same proforma is a no-op that keeps a customised plan. `tests/customer-order-crud-write-routes.test.ts` is updated to that contract. The response shape and error statuses are unchanged. |
-| Unrouted UIs | give each a route | `/accounts/historical-openings` (Admin, Owner, Developer with Accounts access, the roles the save endpoint accepts) renders `HistoricalOpeningResolver`. `/factory/catalog-translations` (an alias of the Bale Explorer access, hidden with the Bale Products tab) renders `FactoryCatalogTranslationEditor`. `StockTransferRevisionHistory` is a panel, not a page: the stock-transfer form now renders it in place of its inline copy. The inline copy still had the "Reference only" switch, whose endpoint answers 409 since revisions became immutable, and it showed no lifecycle status. `scripts/verify-group-a-phase-3.mjs` already treated the component as the admin history. |
-| Pagination interceptors | delete if not usable | Kept. They are usable and are installed: `build/vitePhase1PaginationPlugin.ts` injects `containerPaginationClient` into `main.tsx` at build time, and that module imports the supplier one. Without the supplier interceptor, a supplier's purchase-order dialog would show only the first 100 rows. The Phase 4 note calling them "never installed" was wrong (see the regression below). |
+| Unrouted UIs | give each a route | `/accounts/historical-openings` (Admin, Owner, Developer with Accounts access, the roles the save endpoint accepts) renders `HistoricalOpeningResolver`. `/factory/catalog-translations` (an alias of the Bale Explorer access, hidden with the Bale Products tab) renders `FactoryCatalogTranslationEditor`. `StockTransferRevisionHistory` is a panel, not a page: the stock-transfer form now renders it in place of its inline copy. The inline copy still had the "Reference only" switch, whose endpoint answers 409 since revisions became immutable, and it showed no lifecycle status. `scripts/verify-group-a.mjs` already treated the component as the admin history. |
+| Pagination interceptors | delete if not usable | Kept. They are usable and are installed: `build/vitePaginationPlugin.ts` injects `containerPaginationClient` into `main.tsx` at build time, and that module imports the supplier one. Without the supplier interceptor, a supplier's purchase-order dialog would show only the first 100 rows. The Phase 4 note calling them "never installed" was wrong (see the regression below). |
 | Audit item diffs | save or remove | Already saved (item 7 above). |
 | `build.mjs` | look it up | Live (item 2 above); kept. |
 | Container planner, remove-from-stock tab | stay | Kept hidden. |
@@ -260,10 +260,10 @@ The rest also failed on `origin/main` and are fixed in `e0366b058`:
   so they reached the real network. They now mock `node:https`.
 - A modal Radix dialog left open at Testing Library cleanup kept `pointer-events: none` on
   `<body>`, breaking clicks in later tests (AdvancesView). The UI test setup clears it.
-- `verify-program2-phase8-rentals.mjs` checks the phase 22 posting-engine call instead of the
+- `verify-program2-rentals.mjs` checks the phase 22 posting-engine call instead of the
   retired inline `normEntry` markers.
-- `audit-i18n-phase14.mjs`: 84 strings get Arabic and French entries in
-  `phase3RemainingTranslations.part28.ts`; six internal codes and errors join the reviewed
+- `audit-i18n.mjs`: 84 strings get Arabic and French entries in
+  `remainingTranslations.part28.ts`; six internal codes and errors join the reviewed
   technical values. The audit now reports 0 actionable literals.
 - The remote-control allowlist drops `view`, `view-invoice` and `view-profitability`, which
   have no annotated control left; the registry test and the remote-support E2E use

@@ -4,9 +4,9 @@
 
 Phase 9 adds a **read-only, fail-closed release evidence gate**, not automatic migration or deployment.
 
-- `scripts/database-phase9-release-core.mjs`: pure validator of evidence freshness, exact SHA and required checks.
-- `scripts/verify-database-phase9-release.mjs`: read-only CLI; exits nonzero when prerequisites are missing.
-- `tests/database-phase9-release.node.test.mjs`: unit tests for missing/stale/wrong-commit evidence and release blockers.
+- `scripts/database-release-core.mjs`: pure validator of evidence freshness, exact SHA and required checks.
+- `scripts/verify-database-release.mjs`: read-only CLI; exits nonzero when prerequisites are missing.
+- `tests/database-release.node.test.mjs`: unit tests for missing/stale/wrong-commit evidence and release blockers.
 - `.github/workflows/database-migration-tests.yml`: proves missing evidence blocks approval in CI.
 - `npm run db:release:preflight -- --commit=<40-char-sha> --evidence=/private/release-evidence.json`: inspect private release evidence; does not deploy.
 

@@ -5,68 +5,44 @@ on:
     branches:
       - feat/offline-mode-integration
     paths:
-      - 'server/edge/phase8*.mjs'
-      - 'server/edge/phase8*.d.mts'
-      - 'server/edge/phase8*.ts'
-      - 'server/edge/phase8VoucherPolicy.mjs'
-      - 'server/edge/phase8CashBoxPolicy.mjs'
-      - 'server/edge/phase8VoucherPolicy.d.mts'
+      - 'server/edge/**'
+      - 'server/edge/voucherPolicy.mjs'
+      - 'server/edge/cashBoxPolicy.mjs'
+      - 'server/edge/voucherPolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
-      - 'server/edge/phase9PressingOutbox.ts'
-      - 'server/edge/phase9PressingApply.ts'
-      - 'server/edge/phase9Stock*'
+      - 'server/edge/pressingOutbox.ts'
+      - 'server/edge/pressingApply.ts'
       - 'server/routes/inventory/inventoryQuickAdjust*.ts'
-      - 'server/edge/phase9OperatorApply.ts'
-      - 'server/edge/phase10*.mjs'
-      - 'server/edge/phase8ApplyStore.mjs'
+      - 'server/edge/eventStreamOperatorApply.ts'
+      - 'server/edge/applyStore.mjs'
       - 'server/edge/edgeSyncStageProtocol.mjs'
       - 'scripts/edge/relay-event-outbox.mjs'
       - 'scripts/edge/send-voucher-outbox.mjs'
       - 'tests/factory-edge-boundary.test.ts'
-      - 'server/edge/phase9PressingEnvelope.mjs'
-      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/edge/pressingEnvelope.mjs'
+      - 'server/edge/pressingEnvelope.d.mts'
       - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
       - 'server/index.ts'
       - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
       - 'scripts/edge/fetch-applied-receipts.mjs'
-      - 'tests/offline-phase8*.mjs'
+      - 'tests/offline*.mjs'
 
-      - 'server/edge/phase9*.mjs'
-      - 'server/edge/phase9*.d.mts'
       - 'client/src/components/OfflineWriteStatusPanel.tsx'
       - 'client/src/components/OfflinePrepPanel.tsx'
-      - 'client/src/lib/offline/phase9Status.ts'
+      - 'client/src/lib/offline/status.ts'
       - 'client/src/lib/offline/operationContract.ts'
       - 'client/src/lib/offline/durableOutbox.ts'
-      - 'server/edge/phase8CapturePolicy.mjs'
+      - 'server/edge/capturePolicy.mjs'
       - 'tests/ui/offline-operation-contract.test.ts'
       - 'tests/ui/offline-durable-outbox.test.ts'
       - 'client/src/lib/offline/voucherCapture.ts'
-      - 'server/edge/edgeVoucherOutbox.ts'
-      - 'server/edge/phase9PressingOutbox.ts'
-      - 'server/edge/phase9PressingApply.ts'
-      - 'server/edge/phase9Stock*'
-      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
-      - 'server/edge/phase9OperatorApply.ts'
-      - 'server/edge/phase10*.mjs'
-      - 'server/edge/phase8ApplyStore.mjs'
-      - 'server/edge/edgeSyncStageProtocol.mjs'
-      - 'server/edge/edgeSyncReceiver.ts'
-      - 'scripts/edge/relay-event-outbox.mjs'
-      - 'scripts/edge/send-voucher-outbox.mjs'
-      - 'tests/factory-edge-boundary.test.ts'
-      - 'server/edge/phase9PressingEnvelope.mjs'
-      - 'server/edge/phase9PressingEnvelope.d.mts'
-      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
-      - 'server/index.ts'
       - 'tests/factory-edge-policy.test.ts'
-      - 'scripts/edge/audit-phase9-write-coverage.mjs'
-      - 'tests/offline-phase9*.mjs'
-      - 'tests/offline-phase9*.ts'
-      - 'tests/ui/offline-phase9*.ts'
-      - 'tests/ui/offline-phase9*.tsx'
+      - 'scripts/edge/audit-write-coverage.mjs'
+      - 'tests/offline*.ts'
+      - 'tests/ui/offline*.ts'
+      - 'tests/ui/offline*.tsx'
       - 'client/src/components/OfflineBanner.tsx'
       - 'client/src/contexts/ConnectivityContext.tsx'
       - 'client/src/lib/offlineQueue.ts'
@@ -78,68 +54,44 @@ on:
     branches:
       - main
     paths:
-      - 'server/edge/phase8*.mjs'
-      - 'server/edge/phase8*.d.mts'
-      - 'server/edge/phase8*.ts'
-      - 'server/edge/phase8VoucherPolicy.mjs'
-      - 'server/edge/phase8CashBoxPolicy.mjs'
-      - 'server/edge/phase8VoucherPolicy.d.mts'
+      - 'server/edge/**'
+      - 'server/edge/voucherPolicy.mjs'
+      - 'server/edge/cashBoxPolicy.mjs'
+      - 'server/edge/voucherPolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
-      - 'server/edge/phase9PressingOutbox.ts'
-      - 'server/edge/phase9PressingApply.ts'
-      - 'server/edge/phase9Stock*'
+      - 'server/edge/pressingOutbox.ts'
+      - 'server/edge/pressingApply.ts'
       - 'server/routes/inventory/inventoryQuickAdjust*.ts'
-      - 'server/edge/phase9OperatorApply.ts'
-      - 'server/edge/phase10*.mjs'
-      - 'server/edge/phase8ApplyStore.mjs'
+      - 'server/edge/eventStreamOperatorApply.ts'
+      - 'server/edge/applyStore.mjs'
       - 'server/edge/edgeSyncStageProtocol.mjs'
       - 'scripts/edge/relay-event-outbox.mjs'
       - 'scripts/edge/send-voucher-outbox.mjs'
       - 'tests/factory-edge-boundary.test.ts'
-      - 'server/edge/phase9PressingEnvelope.mjs'
-      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/edge/pressingEnvelope.mjs'
+      - 'server/edge/pressingEnvelope.d.mts'
       - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
       - 'server/index.ts'
       - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
       - 'scripts/edge/fetch-applied-receipts.mjs'
-      - 'tests/offline-phase8*.mjs'
+      - 'tests/offline*.mjs'
 
-      - 'server/edge/phase9*.mjs'
-      - 'server/edge/phase9*.d.mts'
       - 'client/src/components/OfflineWriteStatusPanel.tsx'
       - 'client/src/components/OfflinePrepPanel.tsx'
-      - 'client/src/lib/offline/phase9Status.ts'
+      - 'client/src/lib/offline/status.ts'
       - 'client/src/lib/offline/operationContract.ts'
       - 'client/src/lib/offline/durableOutbox.ts'
-      - 'server/edge/phase8CapturePolicy.mjs'
+      - 'server/edge/capturePolicy.mjs'
       - 'tests/ui/offline-operation-contract.test.ts'
       - 'tests/ui/offline-durable-outbox.test.ts'
       - 'client/src/lib/offline/voucherCapture.ts'
-      - 'server/edge/edgeVoucherOutbox.ts'
-      - 'server/edge/phase9PressingOutbox.ts'
-      - 'server/edge/phase9PressingApply.ts'
-      - 'server/edge/phase9Stock*'
-      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
-      - 'server/edge/phase9OperatorApply.ts'
-      - 'server/edge/phase10*.mjs'
-      - 'server/edge/phase8ApplyStore.mjs'
-      - 'server/edge/edgeSyncStageProtocol.mjs'
-      - 'server/edge/edgeSyncReceiver.ts'
-      - 'scripts/edge/relay-event-outbox.mjs'
-      - 'scripts/edge/send-voucher-outbox.mjs'
-      - 'tests/factory-edge-boundary.test.ts'
-      - 'server/edge/phase9PressingEnvelope.mjs'
-      - 'server/edge/phase9PressingEnvelope.d.mts'
-      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
-      - 'server/index.ts'
       - 'tests/factory-edge-policy.test.ts'
-      - 'scripts/edge/audit-phase9-write-coverage.mjs'
-      - 'tests/offline-phase9*.mjs'
-      - 'tests/offline-phase9*.ts'
-      - 'tests/ui/offline-phase9*.ts'
-      - 'tests/ui/offline-phase9*.tsx'
+      - 'scripts/edge/audit-write-coverage.mjs'
+      - 'tests/offline*.ts'
+      - 'tests/ui/offline*.ts'
+      - 'tests/ui/offline*.tsx'
       - 'client/src/components/OfflineBanner.tsx'
       - 'client/src/contexts/ConnectivityContext.tsx'
       - 'client/src/lib/offlineQueue.ts'
@@ -177,52 +129,52 @@ jobs:
       - name: Install exact locked dependencies
         run: npm ci --ignore-scripts
       - name: Verify Phase 8 pure rejection and receipt contracts
-        run: node --test tests/offline-phase8-contract.test.mjs
+        run: node --test tests/offline-contract.test.mjs
       - name: Refuse unsafe initial voucher source shapes
-        run: node --test tests/offline-phase8-posting-shape.test.mjs
+        run: node --test tests/offline-posting-shape.test.mjs
       - name: Test factory cash-box payment/receipt policy (no bank, no supplier payments)
-        run: node --test tests/offline-phase8-cash-box.node.test.mjs
+        run: node --test tests/offline-cash-box.node.test.mjs
       - name: Verify Phase 9 scoped status + full write inventory safety
-        run: node --test tests/offline-phase9-status.node.test.mjs tests/offline-phase9-write-coverage.node.test.mjs
+        run: node --test tests/offline-status.node.test.mjs tests/offline-write-coverage.node.test.mjs
       - name: Audit all registered business writes (unapproved paths remain blocked)
-        run: node scripts/edge/audit-phase9-write-coverage.mjs
+        run: node scripts/edge/audit-write-coverage.mjs
       - name: Verify Phase 9 client receipt/status separation
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-status.test.ts
       - name: Exercise exactly-once posting on disposable PostgreSQL 17
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
-        run: node --test tests/offline-phase8-postgres.test.mjs
+        run: node --test tests/offline-postgres.test.mjs
       - name: Prove isolated physical pressing capture and LAN route fence
         run: |
-          node --test tests/offline-phase9-pressing-envelope.test.mjs
-          node node_modules/vitest/vitest.mjs run tests/offline-phase9-pressing-outbox.test.ts
+          node --test tests/offline-pressing-envelope.test.mjs
+          node node_modules/vitest/vitest.mjs run tests/offline-pressing-outbox.test.ts
       - name: Report unverified post evidence as review-required
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-voucher-capture.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-voucher-capture.test.ts
       - name: Do not stamp cloud sync time on LAN-only acceptance
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-sync-event.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-sync-event.test.ts
       - name: Refuse new unverified legacy browser queue entries
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-queue.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-legacy-queue.test.ts
       - name: Test legacy banner cannot replay unverified writes
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-banner.test.tsx
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-legacy-banner.test.tsx
       - name: Prove tenant-scoped immutable pressing outbox on disposable PostgreSQL
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
-        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-pressing-postgres.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/offline-pressing-postgres.test.ts
       - name: Drill pressing LAN capture -> stage -> exactly-once apply -> receipts on PostgreSQL 17
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
-        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-pressing-sync-drill.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/offline-pressing-sync-drill.test.ts
       - name: Drill stock movement capture -> stage -> held/approved/rejected apply -> receipts on PostgreSQL 17
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
-        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-stock-sync-drill.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/offline-stock-sync-drill.test.ts
       - name: Test Phase 9 event-stream protocol, signatures and receipt verification
-        run: node --test tests/offline-phase9-event-protocol.node.test.mjs
+        run: node --test tests/offline-event-protocol.node.test.mjs
       - name: Verify narrow device capture and legacy queue quarantine
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-operation-contract.test.ts tests/ui/offline-durable-outbox.test.ts
       - name: Prove immutable LAN capture cannot substitute operation identity
-        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-outbox-identity.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/offline-outbox-identity.test.ts
       - name: Test Phase 9 status live-session and membership gating
-        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-status-http.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/offline-status-http.test.ts
       - name: Validate TypeScript on unified branch
         run: npm run check

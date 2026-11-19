@@ -9,8 +9,8 @@ import type { RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 import type { RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
 import { useRetailBarcodeScanner } from "./useRetailBarcodeScanner";
-import { type CartRequestLine, fetchRetailCartPreview, requestRetailDiscountApproval } from "./retailWave2Api";
-import type { RetailCartPreview, RetailCustomerSummary } from "./retailWave2Types";
+import { type CartRequestLine, fetchRetailCartPreview, requestRetailDiscountApproval } from "./retailPosApi";
+import type { RetailCartPreview, RetailCustomerSummary } from "./retailTypes";
 import {
   canSellIntoNegative,
   type CartLine,

@@ -41,7 +41,7 @@ is registered and must be applied through the versioned runner at release time.
 
 ### Deferred regression contracts
 
-- Added `tests/zambia-phase8-intercompany-boundary.test.ts` for K250 / illustrative 25 ZMW-per-USD = $10 historical base, native amounts, rate locking, legacy USD request shape and rejection of unsafe native-ZMW purchasing. **Not run.** The illustrative rate is not a production/market rate.
+- Added `tests/zambia-intercompany-boundary.test.ts` for K250 / illustrative 25 ZMW-per-USD = $10 historical base, native amounts, rate locking, legacy USD request shape and rejection of unsafe native-ZMW purchasing. **Not run.** The illustrative rate is not a production/market rate.
 
 ## Remaining Phase 8 work (historical list)
 
@@ -62,7 +62,7 @@ Outcome of each item (2026-10-23 verification):
    USD. Additive `NOT VALID` migration, no retroactive change.
 2. **Done.** Excel import, AI import, PO editor (line and charge-only edits at the locked rate), goods-in-transit
    journal, offload at the USD line value, parent freight allocation and currency/rate locks are implemented and
-   covered by `tests/zambia-phase8-purchase-lifecycle.database.test.ts`. Returns/refunds are Phase 5 credit notes;
+   covered by `tests/zambia-purchase-lifecycle.database.test.ts`. Returns/refunds are Phase 5 credit notes;
    export printing of Kwacha purchase documents is not part of this branch.
 3. **Done.** Parent purchase vouchers (import route and storage path) post the converted historical USD base once.
 4. **Done.** A bare `currency = ZMW` label is refused by storage before any write; the Excel and AI import paths

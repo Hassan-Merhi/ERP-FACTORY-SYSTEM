@@ -1,4 +1,4 @@
-// Extracted from ./goldenCoastPhase2Accounts.ts to keep that module under the source-size cap.
+// Extracted from ./goldenCoastAccounts.ts to keep that module under the source-size cap.
 
 export type GoldenCoastAccountRole =
   | "fresh_start_equity"

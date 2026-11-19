@@ -16,7 +16,7 @@
  * sub-ledger, which the ledger already carries.
  *
  * The message is one fixed English sentence so the client can translate it
- * (client/src/i18n/wave8ReleaseTranslations.part3.ts); the tool's name is in
+ * (client/src/i18n/releaseTranslations.part3.ts); the tool's name is in
  * `action`, not in the message.
  */
 import type { Response } from "express";

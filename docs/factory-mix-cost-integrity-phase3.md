@@ -50,7 +50,7 @@ The 210-count is a reproduction of the **old** preview behavior, including 24 ca
 - `GET /api/factory/mix-batches?profile=historical-audit&format=csv&level=batches`: all-batch CSV including deleted cohorts and issue classifications.
 - `GET /api/factory/mix-batches?profile=historical-audit&format=csv&level=sources`: source-level CSV with recorded historical USD, current-rate **comparison** (not a repair target), current ownership and adjustment evidence.
 - `client/src/pages/factory/production-raw-stock/MixBatchList.tsx`: privileged Factory Mode "Audit All Batches", audit snapshot and full CSV exports.
-- `tests/historical-mix-batch-reconciliation-phase3.test.ts`: regression cases for historical vs current rates, missing modern supplier prices, zero-cost sources, line/header math, ownership, timeline, adjustments, deleted cohorts, CSV injection prevention, read-only transactions and rollback on failure.
+- `tests/historical-mix-batch-reconciliation.test.ts`: regression cases for historical vs current rates, missing modern supplier prices, zero-cost sources, line/header math, ownership, timeline, adjustments, deleted cohorts, CSV injection prevention, read-only transactions and rollback on failure.
 
 No new route path is introduced: the historical audit uses the existing authenticated mix-batches GET profile. No route manifest changes or database migration are required.
 

@@ -17,12 +17,12 @@ import {
   scanRetailStockCount,
   transitionRetailStockCount,
   updateRetailStockCountLine,
-} from "@/pages/pos/retailWave2Api";
+} from "@/pages/pos/retailPosApi";
 import type {
   RetailStockCountLineStatus,
   RetailStockCountSession,
   RetailStockCountSessionLine,
-} from "@/pages/pos/retailWave2Types";
+} from "@/pages/pos/retailTypes";
 
 export const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",

@@ -4,7 +4,7 @@
  *
  * Everything is created through the application's own HTTP endpoints (the same
  * ones the pages call), so stock, vouchers, ledgers and balances stay
- * consistent. Run it after scripts/prepare-phase7-browser-e2e-fixture.mjs
+ * consistent. Run it after scripts/prepare-browser-e2e-fixture.mjs
  * against the local disposable CI server; it refuses any other target.
  *
  *   ERP_E2E_USERNAME / ERP_E2E_PASSWORD  fixture Developer credentials
