@@ -32,7 +32,11 @@ const ANON_MAX = readPositiveInt(process.env.API_RATE_LIMIT_ANON_MAX, 120);
 
 function clientKey(req: Request): string {
   const sessionUserId = req.session?.userId;
-  if (sessionUserId !== undefined && sessionUserId !== null && String(sessionUserId) !== "") {
+  if (
+    sessionUserId !== undefined &&
+    sessionUserId !== null &&
+    String(sessionUserId) !== ""
+  ) {
     return `user:${String(sessionUserId)}`;
   }
   // Same client-IP derivation as the login limiter: left-most X-Forwarded-For
