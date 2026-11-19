@@ -225,7 +225,12 @@ plan are in the plan document and the
   and close flags; other conflicts stay held.
 - Negative-stock flags screen: a card in the Conflict Center for Admin/Developer
   (list, close with a note), in English, Arabic and French.
-- Next: more voucher types; then Phases C to E.
+- Payment / Receipt edits and deletes on a PC: the live route's evidence written
+  as a finished envelope in the change's own transaction, accepted by the cloud
+  only for the signed-in person and company; other deletes refused on a PC.
+- Next: the other kinds the cloud already applies (POS edits/cancellations,
+  stock item edits/deletes, transfer edits/reviews, receiving, attachments),
+  then new voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 

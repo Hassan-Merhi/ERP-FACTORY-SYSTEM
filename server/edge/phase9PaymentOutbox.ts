@@ -8,6 +8,7 @@ import type { DbTransaction } from "../db";
 import { toMoney } from "../lib/money";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
+import { capturePcLocalEnvelopeTx, isPcLocalId, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import {
@@ -95,6 +96,10 @@ export async function phase9PaymentVoucherRefTx(
   tx: DbTransaction,
   voucherId: number
 ): Promise<Phase9PaymentVoucherRef> {
+  // A PC's offline copy: a voucher it created itself still has its local id,
+  // which the cloud resolves through that PC's receipt for the create.
+  if (pcLocalEntryMode())
+    return isPcLocalId(voucherId) ? { origin: "lan", localVoucherId: voucherId } : { origin: "cloud", voucherId };
   const config = readFactoryEdgeConfiguration();
   if (config.mode === "lan" && config.primary && config.siteId) {
     const found = await tx.execute(sql`
@@ -133,18 +138,28 @@ async function appendPaymentFollowUpTx(
   `);
 }
 
-/** Plan batch 4: an offline Payment / Receipt edit, in the edit's own transaction; no-op off the LAN primary. */
+/** Plan batch 4: an offline Payment / Receipt edit, in the edit's own transaction (LAN primary or a PC in entry mode). */
 export async function capturePhase9PaymentEditTx(
   tx: DbTransaction,
   evidence: Phase9PaymentEditEvidence
 ): Promise<void> {
-  await appendPaymentFollowUpTx(tx, phase9PaymentEditEnvelope(evidence));
+  const event = phase9PaymentEditEnvelope(evidence);
+  if (pcLocalEntryMode()) return capturePcLocalEnvelopeTx(tx, event, event.localVoucherId);
+  await appendPaymentFollowUpTx(tx, event);
 }
 
-/** Plan batch 4: an offline Payment / Receipt delete, in the delete's own transaction; no-op off the LAN primary. */
+/** Plan batch 4: an offline Payment / Receipt delete, in the delete's own transaction (LAN primary or a PC in entry mode). */
 export async function capturePhase9PaymentDeleteTx(
   tx: DbTransaction,
   evidence: Phase9PaymentDeleteEvidence
 ): Promise<void> {
-  await appendPaymentFollowUpTx(tx, phase9PaymentDeleteEnvelope(evidence));
+  const event = phase9PaymentDeleteEnvelope(evidence);
+  if (pcLocalEntryMode()) return capturePcLocalEnvelopeTx(tx, event, event.localVoucherId);
+  await appendPaymentFollowUpTx(tx, event);
+}
+
+/** Payment / Receipt edits and deletes are recorded for later replay: on the LAN primary, or on a PC in entry mode. */
+export function phase9PaymentFollowUpCaptureActive(): boolean {
+  const config = readFactoryEdgeConfiguration();
+  return (config.mode === "lan" && config.primary === true) || pcLocalEntryMode();
 }

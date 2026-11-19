@@ -38,6 +38,7 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { assertPcLocalCaptured, pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
 
 type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
 
@@ -253,10 +254,16 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
       // Wrap balance sync and deletion in a transaction
       const lanCapture = isPhase9LanPrimary();
+      // A PC's offline copy records Payment / Receipt deletes for the cloud and
+      // refuses every other delete (it could not be replayed).
+      const pcEntry = pcLocalEntryMode();
+      const isPaymentVoucher = voucher.voucherType === "Payment" || voucher.voucherType === "Receipt";
+      if (pcEntry && !isPaymentVoucher) {
+        return res.status(423).json({ code: "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED" });
+      }
       // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
       const offlinePayment =
-        (voucher.voucherType === "Payment" || voucher.voucherType === "Receipt") &&
-        phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4);
+        isPaymentVoucher && (pcEntry || phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4));
       if (lanCapture && voucher.voucherType !== "Sales" && !offlinePayment) {
         return res.status(409).json({
           code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
@@ -265,7 +272,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
       }
       await db.transaction(async (tx) => {
         const paymentBefore =
-          lanCapture && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
+          (lanCapture || pcEntry) && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
         await deleteVoucherTx(tx, {
           companyId,
           voucher,
@@ -279,7 +286,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
         if (lanCapture && voucher.voucherType === "Sales") {
           await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
         }
-        if (lanCapture && offlinePayment && paymentBefore) {
+        if (pcEntry) assertPcLocalCaptured(Boolean(offlinePayment && paymentBefore));
+        if ((lanCapture || pcEntry) && offlinePayment && paymentBefore) {
           await capturePhase9PaymentDeleteTx(tx, {
             ...paymentFollowUpActor(req),
             localVoucherId: voucher.id,

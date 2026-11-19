@@ -38,6 +38,11 @@ export function deliveryDeviceId(pcDeviceId, userId, companyId) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
+/** What the cloud receives for an entry: the person's input, or the finished envelope of an edit or delete. */
+function entryBody(op) {
+  return op.envelope ? { envelope: op.envelope } : { input: op.input };
+}
+
 /** Saves interrupted mid-request become "unconfirmed" for a person to decide. */
 export async function markInterruptedCaptures(local) {
   const { rowCount } = await local.query(
@@ -74,7 +79,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
   const result = { applied: 0, conflicts: 0, refused: 0, waiting: false };
   if (!state.cloud_user_id) return result;
   const { rows } = await local.query(
-    `SELECT id, operation_id, kind, input, local_ref, captured_at, company_id, user_id
+    `SELECT id, operation_id, kind, input, envelope, local_ref, captured_at, company_id, user_id
        FROM pc_local.outbox
       WHERE status IN ('pending', 'waiting') AND user_id = $1
       ORDER BY id LIMIT $2`,
@@ -98,7 +103,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
       kind: op.kind,
       localRef: op.local_ref,
       capturedAt: new Date(op.captured_at).toISOString(),
-      input: op.input,
+      ...entryBody(op),
     });
     const code = res.body?.code ?? null;
     if (res.status === 200) {
@@ -177,13 +182,19 @@ export async function resolveConflict(local, cloud, operationId, decision) {
   if (decision !== "approve" && decision !== "discard") throw new PcSyncAgentError("PC_SYNC_DECISION_INVALID");
   const state = await readLocalState(local);
   const { rows } = await local.query(
-    `SELECT id, operation_id, kind, input, local_ref, captured_at, company_id, code, overridable, user_id
+    `SELECT id, operation_id, kind, input, envelope, local_ref, captured_at, company_id, code, overridable, user_id
        FROM pc_local.outbox WHERE operation_id = $1::uuid AND status = 'conflict'`,
     [operationId]
   );
   const op = rows[0];
   if (!op) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_FOUND");
   if (decision === "approve" && !op.overridable) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_OVERRIDABLE");
+  if (decision === "discard" && op.envelope) {
+    // An edit or delete the cloud refused: nothing later depends on it, so it
+    // is dropped here; the cloud never applied it.
+    await mark(local, op.id, "refused", { code: "DISCARDED" });
+    return { discarded: true };
+  }
   const switched = await cloud.post("/api/auth/set-company", { companyId: op.company_id });
   if (switched.status !== 200) throw new PcSyncAgentError("PC_SYNC_COMPANY_NOT_ALLOWED", { status: switched.status });
   const body = {
@@ -192,7 +203,7 @@ export async function resolveConflict(local, cloud, operationId, decision) {
     kind: op.kind,
     localRef: op.local_ref,
     capturedAt: new Date(op.captured_at).toISOString(),
-    input: op.input,
+    ...entryBody(op),
     ...(decision === "approve" ? { override: op.code } : {}),
   };
   const path =
