@@ -390,4 +390,90 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "يجب أن يكون سعر صرف الرسوم الأخرى رقمًا موجبًا",
     fr: "Le taux de change des autres frais doit être un nombre positif",
   },
+  // FX wallet Optional on/off and the automatic FX revaluation journal.
+  {
+    en: "${revaluation.description} Native balances are unchanged.",
+    ar: "${revaluation.description} الأرصدة بالعملة الأصلية لم تتغير.",
+    fr: "${revaluation.description} Les soldes en devise d'origine sont inchangés.",
+  },
+  {
+    en: "Rate-dependent USD views are refreshing.",
+    ar: "يجري تحديث العروض بالدولار المعتمدة على سعر الصرف.",
+    fr: "Les vues en USD dépendant du taux sont en cours d'actualisation.",
+  },
+  {
+    en: "FX revaluation ${voucher} posted for ${count} account(s): ${result}.${unresolvedNote}",
+    ar: "تم ترحيل إعادة تقييم العملة ${voucher} لعدد ${count} حساب: ${result}.${unresolvedNote}",
+    fr: "Réévaluation de change ${voucher} comptabilisée pour ${count} compte(s) : ${result}.${unresolvedNote}",
+  },
+  {
+    en: "Balances are already at this rate; no FX revaluation was needed.${unresolvedNote}",
+    ar: "الأرصدة مقيّمة بهذا السعر مسبقاً؛ لا حاجة لإعادة تقييم العملة.${unresolvedNote}",
+    fr: "Les soldes sont déjà à ce taux ; aucune réévaluation de change n'était nécessaire.${unresolvedNote}",
+  },
+  {
+    en: "The rate was saved, but the FX revaluation was not posted: ${reason}.${unresolvedNote}",
+    ar: "تم حفظ السعر، لكن لم يتم ترحيل إعادة تقييم العملة: ${reason}.${unresolvedNote}",
+    fr: "Le taux a été enregistré, mais la réévaluation de change n'a pas été comptabilisée : ${reason}.${unresolvedNote}",
+  },
+  {
+    en: "unknown reason",
+    ar: "سبب غير معروف",
+    fr: "raison inconnue",
+  },
+  {
+    en: "Only Admin and Owner can finalize FX wallet payments",
+    ar: "فقط المدير والمالك يمكنهما اعتماد مدفوعات محفظة الصرف",
+    fr: "Seuls l'administrateur et le propriétaire peuvent finaliser les paiements du portefeuille de change",
+  },
+  {
+    en: "This Optional FX wallet voucher is not a single direct EUR supplier payment, so it cannot be posted. Delete it and enter the payment again.",
+    ar: "هذا السند الاختياري لمحفظة الصرف ليس دفعة يورو مباشرة واحدة لمورد، لذلك لا يمكن ترحيله. احذفه وأدخل الدفعة من جديد.",
+    fr: "Cette pièce optionnelle du portefeuille de change n'est pas un paiement fournisseur direct unique en EUR ; elle ne peut pas être comptabilisée. Supprimez-la et ressaisissez le paiement.",
+  },
+  {
+    en: "Only Admin and Owner can change FX wallet payments",
+    ar: "فقط المدير والمالك يمكنهما تعديل مدفوعات محفظة الصرف",
+    fr: "Seuls l'administrateur et le propriétaire peuvent modifier les paiements du portefeuille de change",
+  },
+  {
+    en: "Only a direct EUR supplier payment from the FX wallet can be made Optional. A USD payout locks its agreed rate; delete it and enter it again instead.",
+    ar: "يمكن جعل دفعة اليورو المباشرة للمورد من محفظة الصرف فقط اختيارية. دفعة الدولار تثبّت سعرها المتفق عليه؛ احذفها وأدخلها من جديد.",
+    fr: "Seul un paiement fournisseur direct en EUR depuis le portefeuille de change peut devenir optionnel. Un paiement en USD verrouille son taux convenu ; supprimez-le et ressaisissez-le.",
+  },
+  {
+    en: "FX payment book value is unavailable",
+    ar: "القيمة الدفترية لدفعة الصرف غير متوفرة",
+    fr: "La valeur comptable du paiement de change est indisponible",
+  },
+  {
+    en: "FX payment link changed. Reload and try again",
+    ar: "تغيّر ارتباط دفعة الصرف. أعد التحميل وحاول مجدداً",
+    fr: "Le lien du paiement de change a changé. Rechargez et réessayez",
+  },
+  {
+    en: "Optional FX voucher changed. Reload and try again.",
+    ar: "تغيّر سند الصرف الاختياري. أعد التحميل وحاول مجدداً.",
+    fr: "La pièce de change optionnelle a changé. Rechargez et réessayez.",
+  },
+  {
+    en: "The payment is now Optional and its EUR was restored, but the other changes were not saved: ${reason}",
+    ar: "أصبحت الدفعة اختيارية وأُعيد اليورو، لكن لم تُحفظ التغييرات الأخرى: ${reason}",
+    fr: "Le paiement est maintenant optionnel et ses EUR ont été restitués, mais les autres modifications n'ont pas été enregistrées : ${reason}",
+  },
+  {
+    en: "Automatic FX revaluation (${rateText})",
+    ar: "إعادة تقييم تلقائية للعملة (${rateText})",
+    fr: "Réévaluation de change automatique (${rateText})",
+  },
+  {
+    en: "The FX Revaluation Gain/Loss account is unavailable",
+    ar: "حساب أرباح/خسائر إعادة تقييم العملة غير متوفر",
+    fr: "Le compte de gains/pertes de réévaluation de change est indisponible",
+  },
+  {
+    en: "FX revaluation is being posted by another request. Try again.",
+    ar: "يجري ترحيل إعادة تقييم العملة بطلب آخر. حاول مجدداً.",
+    fr: "Une autre requête comptabilise la réévaluation de change. Réessayez.",
+  },
 ];

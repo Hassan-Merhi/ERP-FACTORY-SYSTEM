@@ -1,5 +1,7 @@
 # Phase 3 — Settings + daily popup FX refresh and stale-cache prevention
 
+> **Superseded in part (2026-11-19):** a company rate save now also posts an automatic FX revaluation journal. See [automatic-revaluation-journal.md](automatic-revaluation-journal.md).
+
 **Status:** Implemented on `feature/fx-monetary-valuation` (2026-10-27). This is an implementation handoff, not a production deployment or a passed CI claim.
 
 ## Scope

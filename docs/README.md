@@ -146,6 +146,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/phase-3-rate-save-refresh.md](fx-monetary-valuation/phase-3-rate-save-refresh.md) | FX monetary valuation: Settings and daily-popup rate save, cache and realtime refresh |
 | [fx-monetary-valuation/phase-5-historical-cache-audit.md](fx-monetary-valuation/phase-5-historical-cache-audit.md) | FX monetary valuation: dated rate preview, historical lock, rate-save idempotency and audit |
 | [fx-monetary-valuation/phase-6-reconciliation-release-gate.md](fx-monetary-valuation/phase-6-reconciliation-release-gate.md) | FX monetary valuation: reconciliation gates and release checklist |
+| [fx-monetary-valuation/automatic-revaluation-journal.md](fx-monetary-valuation/automatic-revaluation-journal.md) | FX monetary valuation: automatic revaluation journal posted on every company rate save (cash/bank, customers, loans), what it never touches, first-run caution |
 | [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
 
 ## Operating it

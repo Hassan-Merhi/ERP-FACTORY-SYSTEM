@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { toMoney } from "../../lib/money";
+import { removeFactoryDaybookMirrorTx } from "../../services/accounting/factoryDaybookMirrorRemoval";
 import { ensureSystemAccounts } from "../../services/accounting/systemAccounts";
 import {
   postFactoryVoucherTx,
@@ -264,6 +265,8 @@ export function registerFactoryFxAgentSettlementRoutesPart1() {
               RETURNING id
             `);
           if (retired.rows.length !== 1) throw new Error("Optional FX draft was changed during settlement");
+          // The posted Payment replaces the draft in Factory Daybook as well.
+          await removeFactoryDaybookMirrorTx({ tx, companyId: cid, voucherId: draftVoucherId });
         }
         return {
           id: Number(inserted.rows[0].id),
