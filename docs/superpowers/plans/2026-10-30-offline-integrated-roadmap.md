@@ -223,7 +223,9 @@ plan are in the plan document and the
 - Phase B2: a PC's offline entry that takes stock below zero is applied and
   flagged (`offline_negative_stock_flags`, migration 0010); Admin/Developer list
   and close flags; other conflicts stay held.
-- Next: flag screen, more voucher types; then Phases C to E.
+- Negative-stock flags screen: a card in the Conflict Center for Admin/Developer
+  (list, close with a note), in English, Arabic and French.
+- Next: more voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 
