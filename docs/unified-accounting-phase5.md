@@ -1,5 +1,7 @@
 # Unified Accounting — Phase 5: Advanced Multi-Currency Accounting
 
+> **Superseded in part (2026-11-19):** a company rate save now also posts an automatic FX revaluation journal. See [automatic-revaluation-journal.md](fx-monetary-valuation/automatic-revaluation-journal.md).
+
 **Branch:** `feature/unified-accounting-erp-factory-rentals` (continued from Phases 1–4)  
 **Modules:** ERP, Factory, and Rentals/Properties  
 **Status:** Code changes committed; *no CI, tests, build, merge, rebase, deploy, database data repair, or manual production accounting operation performed*. Claude owns verification and certification.
