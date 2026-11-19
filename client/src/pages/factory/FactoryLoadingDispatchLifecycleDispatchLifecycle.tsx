@@ -7,7 +7,6 @@ import {
   History,
   Loader2,
   LockKeyhole,
-  ShieldCheck,
   UnlockKeyhole,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -76,35 +75,26 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
               <ClipboardCheck className="mt-0.5 h-5 w-5 text-blue-600" />
             )}
             <div>
-              <h3 className="text-sm font-bold">Dispatch finalization</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {status === "CLOSED"
-                  ? "This truck record is locked. Scans, expected allocations and details can no longer be changed."
-                  : "Scan physical bales on this trip and End Dispatch. No truck targets are needed. Compare all trips against Pending Loading at the end."}
-              </p>
+              <h3 className="text-sm font-semibold">{status === "CLOSED" ? "Dispatch completed" : "Dispatch finalization"}</h3>
+              {status !== "CLOSED" && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Scan bales, then End Dispatch.
+                </p>
+              )}
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className={status === "CLOSED" ? "border-emerald-500 text-emerald-600" : "border-blue-400 text-blue-600"}
-          >
-            {status === "CLOSED" ? "Completed" : factoryStatusLabel("dispatch", status)}
-          </Badge>
+          {status !== "CLOSED" && <Badge variant="outline">{factoryStatusLabel("dispatch", status)}</Badge>}
         </div>
 
         {status === "CLOSED" && latest && (
-          <div className="space-y-1 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
             <p className="flex items-center gap-1.5 font-semibold">
-              <CheckCircle2 className="h-4 w-4" /> Completed by {latest.closedByUsername}
+              <CheckCircle2 className="h-4 w-4" />
+              {fmt(latest.summary?.verifiedBales)} bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg
             </p>
-            <p>
-              {formatDisplayDateTime(latest.closedAt)} · Closure #{latest.revision}
-            </p>
-            <p>
-              {fmt(latest.summary?.verifiedBales)} verified bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg
-            </p>
+            <p className="mt-1">Completed by {latest.closedByUsername} · {formatDisplayDateTime(latest.closedAt)}</p>
             {latest.approvedWithDiscrepancies && (
-              <p className="font-semibold">Discrepancy approval: {latest.discrepancyReason}</p>
+              <p className="mt-1 font-semibold">Discrepancy: {latest.discrepancyReason}</p>
             )}
           </div>
         )}
@@ -134,7 +124,7 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
               }}
               data-testid="button-reopen-dispatch"
             >
-              <UnlockKeyhole className="mr-1.5 h-4 w-4" /> Reopen Dispatch
+              <UnlockKeyhole className="mr-1.5 h-4 w-4" /> Reopen
             </Button>
           )}
           <Button
@@ -143,14 +133,9 @@ export function FactoryLoadingDispatchLifecycleDispatchLifecycle({
             onClick={() => setShowHistory((v) => !v)}
             data-testid="button-dispatch-audit-history"
           >
-            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide" : "Closure & audit history"}
+            <History className="mr-1.5 h-4 w-4" /> {showHistory ? "Hide history" : "History"}
           </Button>
         </div>
-        {status === "CLOSED" && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="h-4 w-4" /> Reopening never erases or changes the signed closure snapshot.
-          </p>
-        )}
         {showHistory && (
           <div className="space-y-3 border-t pt-3 dark:border-slate-700">
             {history.isLoading && (
