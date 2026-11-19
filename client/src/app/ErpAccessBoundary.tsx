@@ -126,14 +126,14 @@ export function ErpAccessBoundary({ user, children }: ErpAccessBoundaryProps) {
           data-testid="erp-access-refresh-warning"
           className="fixed bottom-4 right-4 z-[100] flex max-w-sm items-center gap-3 rounded-lg border bg-background p-3 text-xs text-foreground shadow-lg"
         >
-          <span>Page permissions could not be refreshed. Your workspace is still available.</span>
+          <span>{t("access.permissionRefreshFailed")}</span>
           <button
             type="button"
             className="shrink-0 rounded-md border px-3 py-2 font-medium hover:bg-muted disabled:opacity-50"
             disabled={accessQuery.isFetching}
             onClick={() => void accessQuery.refetch()}
           >
-            Retry
+            {t("common.refresh")}
           </button>
         </div>
       </>
