@@ -1,14 +1,7 @@
 /**
  * Supplier Partner cutover user moves: moving ERP users, their locations, POS
  * cash mappings and live sessions to the target company, refusing users whose
- * assignments cannot be mapped safely, and restoring them.
- *
- * Known defect (spMigrationPhase4Users.ts:55-79, switchUserSessions): the
- * session update passes untyped parameters to jsonb_build_object, and Postgres
- * refuses them with 42P18 ("could not determine data type of parameter"). Every
- * move or restore of a non-Developer user therefore fails at that step and its
- * transaction rolls back. These tests pin that the rollback is complete: the
- * user, their assignments and sessions stay exactly where they were.
+ * assignments cannot be mapped safely, and restoring everything exactly.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
@@ -27,18 +20,20 @@ import {
 } from "./helpers/spMigrationCoverageFixture";
 
 const PREFIX = "spmigcov_p4users";
-const SESSION_PARAM_DEFECT = { cause: { code: "42P18" } };
 let pair: SpMigrationPair;
 let cutoverId: number;
 let sourceLocation: number;
+let targetLocation: number;
 let orphanLocation: number;
 let sourceCash: number;
+let targetCash: number;
 let orphanCash: number;
 let users: Record<string, string>;
 
 async function rolesFor(userId: string) {
   const result = await pool.query(
-    `SELECT company_id, role, assigned_location_id, cash_account_id FROM user_company_roles WHERE user_id = $1 ORDER BY company_id`,
+    `SELECT company_id, role, assigned_location_id, cash_account_id, pos_station
+       FROM user_company_roles WHERE user_id = $1 ORDER BY company_id`,
     [userId]
   );
   return result.rows;
@@ -48,13 +43,17 @@ async function roleChanges(): Promise<number> {
   return scalar(`SELECT COUNT(*)::int FROM sp_migration_cutover_role_changes WHERE cutover_id = $1`, [cutoverId]);
 }
 
+async function session(sid: string) {
+  return (await pool.query(`SELECT sess FROM session WHERE sid = $1`, [sid])).rows[0].sess;
+}
+
 beforeAll(async () => {
   pair = await createSpMigrationPair(PREFIX);
   sourceLocation = await insertLocation(pair.sourceId, `${pair.code}-SL`, `${PREFIX} Shop`);
-  await insertLocation(pair.targetId, `${pair.code}-TL`, `${PREFIX} Shop`);
+  targetLocation = await insertLocation(pair.targetId, `${pair.code}-TL`, `${PREFIX} Shop`);
   orphanLocation = await insertLocation(pair.sourceId, `${pair.code}-OL`, `${PREFIX} Orphan`);
   sourceCash = await insertAccount(pair.sourceId, "CASH-SRC", "Cash", "pos_cash_till");
-  await insertAccount(pair.targetId, "CASH-TGT", "Cash", "pos_cash_till");
+  targetCash = await insertAccount(pair.targetId, "CASH-TGT", "Cash", "pos_cash_till");
   orphanCash = await insertAccount(pair.sourceId, "CASH-ORPHAN", "Cash", null, `${PREFIX} orphan cash`);
   users = {
     developer: await insertUser(`${PREFIX}_dev`),
@@ -76,23 +75,19 @@ afterAll(async () => {
   await cleanupSpMigrationPair(PREFIX);
 }, 120000);
 
-describe("moveUsersToTargetExact", () => {
-  it("skips Developer roles and has nothing else to move", async () => {
+describe("moveUsersToTargetExact / restoreUsersToSourceExact", () => {
+  it("moves mapped users with their assignments and sessions, then restores them exactly", async () => {
     await insertRole(users.developer, pair.sourceId, "Developer");
-    const moved = await moveUsersToTargetExact(cutoverId, pair.sourceId, pair.targetId, pair.targetName);
-    expect(moved).toMatchObject({ usersMoved: 0, developerRolesSkipped: 1, targetRolesCreated: 0 });
-    expect(await rolesFor(users.developer)).toHaveLength(1);
-  });
-
-  it("maps a POS user's assignments, then rolls the whole move back at the session switch", async () => {
+    await insertRole(users.manager, pair.sourceId, "Manager", { assignedLocationId: sourceLocation });
     await insertRole(users.pos, pair.sourceId, "POS", {
       assignedLocationId: sourceLocation,
       cashAccountId: sourceCash,
       posStation: 2,
     });
-    await insertRole(users.pos, pair.targetId, "View Only");
+    // The POS user already has a target role: the move updates it and the restore puts it back.
+    await insertRole(users.pos, pair.targetId, "View Only", { posStation: 7 });
     await pool.query(`INSERT INTO user_locations (user_id, company_id, location_id) VALUES ($1, $2, $3)`, [
-      users.pos,
+      users.manager,
       pair.sourceId,
       sourceLocation,
     ]);
@@ -101,35 +96,138 @@ describe("moveUsersToTargetExact", () => {
        VALUES ($1, $2, $3, $4, 2)`,
       [users.pos, pair.sourceId, sourceLocation, sourceCash]
     );
+    await insertSession(PREFIX, `${PREFIX}-sid-manager`, users.manager, pair.sourceId);
     await insertSession(PREFIX, `${PREFIX}-sid-pos`, users.pos, pair.sourceId);
+    await insertSession(PREFIX, `${PREFIX}-sid-elsewhere`, users.manager, pair.targetId + 1000000);
 
-    await expect(
-      moveUsersToTargetExact(cutoverId, pair.sourceId, pair.targetId, pair.targetName)
-    ).rejects.toMatchObject(SESSION_PARAM_DEFECT);
-
+    const moved = await moveUsersToTargetExact(cutoverId, pair.sourceId, pair.targetId, pair.targetName);
+    expect(moved).toEqual({
+      usersMoved: 2,
+      targetRolesCreated: 1,
+      targetRolesUpdated: 1,
+      sessionsSwitched: 2,
+      sourceLocationsMoved: 1,
+      sourceCashMappingsMoved: 1,
+      developerRolesSkipped: 1,
+    });
     expect(await rolesFor(users.pos)).toEqual([
-      { company_id: pair.sourceId, role: "POS", assigned_location_id: sourceLocation, cash_account_id: sourceCash },
-      { company_id: pair.targetId, role: "View Only", assigned_location_id: null, cash_account_id: null },
+      {
+        company_id: pair.targetId,
+        role: "POS",
+        assigned_location_id: targetLocation,
+        cash_account_id: targetCash,
+        pos_station: 2,
+      },
     ]);
-    expect(await roleChanges()).toBe(0);
+    expect(await rolesFor(users.developer)).toHaveLength(1);
+    expect(await session(`${PREFIX}-sid-pos`)).toMatchObject({
+      currentCompanyId: pair.targetId,
+      currentRole: "POS",
+      currentLocationId: targetLocation,
+      cashAccountId: targetCash,
+      currentPOSStation: 2,
+      currentCompanyName: pair.targetName,
+    });
+    expect((await session(`${PREFIX}-sid-elsewhere`)).currentCompanyId).toBe(pair.targetId + 1000000);
     expect(
-      await scalar(`SELECT COUNT(*)::int FROM user_locations WHERE user_id = $1 AND company_id = $2`, [
+      await scalar(`SELECT location_id FROM user_locations WHERE user_id = $1 AND company_id = $2`, [
+        users.manager,
+        pair.targetId,
+      ])
+    ).toBe(targetLocation);
+    expect(
+      await scalar(`SELECT cash_account_id FROM user_location_cash_accounts WHERE user_id = $1 AND company_id = $2`, [
         users.pos,
         pair.targetId,
       ])
-    ).toBe(0);
+    ).toBe(targetCash);
+    expect(await roleChanges()).toBe(2);
+
+    const restored = await restoreUsersToSourceExact(cutoverId, pair.sourceId, pair.targetId, pair.sourceName, true);
+    expect(restored).toEqual({
+      usersRestored: 2,
+      sourceRolesRestored: 2,
+      targetRolesRemoved: 1,
+      targetRolesRestored: 1,
+      sessionsSwitched: 2,
+      sourceLocationsRestored: 1,
+      sourceCashMappingsRestored: 1,
+    });
+    expect(await rolesFor(users.pos)).toEqual([
+      {
+        company_id: pair.sourceId,
+        role: "POS",
+        assigned_location_id: sourceLocation,
+        cash_account_id: sourceCash,
+        pos_station: 2,
+      },
+      {
+        company_id: pair.targetId,
+        role: "View Only",
+        assigned_location_id: null,
+        cash_account_id: null,
+        pos_station: 7,
+      },
+    ]);
+    expect(await rolesFor(users.manager)).toEqual([
+      {
+        company_id: pair.sourceId,
+        role: "Manager",
+        assigned_location_id: sourceLocation,
+        cash_account_id: null,
+        pos_station: null,
+      },
+    ]);
+    expect(await session(`${PREFIX}-sid-manager`)).toMatchObject({
+      currentCompanyId: pair.sourceId,
+      currentCompanyName: pair.sourceName,
+    });
     expect(
-      Number(await scalar(`SELECT sess->>'currentCompanyId' FROM session WHERE sid = $1`, [`${PREFIX}-sid-pos`]))
-    ).toBe(pair.sourceId);
+      await scalar(`SELECT COUNT(*)::int FROM user_locations WHERE user_id = $1 AND company_id = $2`, [
+        users.manager,
+        pair.sourceId,
+      ])
+    ).toBe(1);
+    expect(await roleChanges()).toBe(0);
   });
 
-  it("creates no target role for a new user when the move rolls back", async () => {
+  it("keeps role-change snapshots when restoring without clearing them", async () => {
     await insertRole(users.manager, pair.sourceId, "Manager");
-    await expect(
-      moveUsersToTargetExact(cutoverId, pair.sourceId, pair.targetId, pair.targetName)
-    ).rejects.toMatchObject(SESSION_PARAM_DEFECT);
+    await moveUsersToTargetExact(cutoverId, pair.sourceId, pair.targetId, pair.targetName);
+    const restored = await restoreUsersToSourceExact(cutoverId, pair.sourceId, pair.targetId, pair.sourceName);
+    expect(restored).toMatchObject({ usersRestored: 1, sourceRolesRestored: 1, targetRolesRemoved: 1 });
+    expect(await roleChanges()).toBe(1);
+  });
+
+  it("restores a change row with no target snapshot without inventing target state", async () => {
+    await insertRole(users.manager, pair.targetId, "Manager");
+    await pool.query(
+      `INSERT INTO sp_migration_cutover_role_changes (cutover_id, user_id, source_role_id, created_target_role, source_role_snapshot)
+       VALUES ($1, $2, 1, false, $3::jsonb)`,
+      [cutoverId, users.manager, JSON.stringify({ role: "Accountant", assignedLocationId: sourceLocation })]
+    );
+    const restored = await restoreUsersToSourceExact(cutoverId, pair.sourceId, pair.targetId, pair.sourceName, true);
+    expect(restored).toMatchObject({
+      usersRestored: 1,
+      sourceRolesRestored: 1,
+      targetRolesRemoved: 0,
+      targetRolesRestored: 0,
+    });
     expect(await rolesFor(users.manager)).toEqual([
-      { company_id: pair.sourceId, role: "Manager", assigned_location_id: null, cash_account_id: null },
+      {
+        company_id: pair.sourceId,
+        role: "Accountant",
+        assigned_location_id: sourceLocation,
+        cash_account_id: null,
+        pos_station: null,
+      },
+      {
+        company_id: pair.targetId,
+        role: "Manager",
+        assigned_location_id: null,
+        cash_account_id: null,
+        pos_station: null,
+      },
     ]);
   });
 
@@ -142,6 +240,7 @@ describe("moveUsersToTargetExact", () => {
       `POS user ${users.pos} has no safe target location/cash-account mapping.`
     );
     expect(await rolesFor(users.pos)).toHaveLength(1);
+    expect(await roleChanges()).toBe(0);
   });
 
   it("refuses unmapped user locations and cash mappings without moving the user", async () => {
@@ -164,57 +263,14 @@ describe("moveUsersToTargetExact", () => {
       `Cash mapping location ${sourceLocation}, account ${orphanCash} has no safe target mapping.`
     );
     expect(await rolesFor(users.manager)).toEqual([
-      { company_id: pair.sourceId, role: "Manager", assigned_location_id: null, cash_account_id: null },
+      {
+        company_id: pair.sourceId,
+        role: "Manager",
+        assigned_location_id: null,
+        cash_account_id: null,
+        pos_station: null,
+      },
     ]);
     expect(await roleChanges()).toBe(0);
-  });
-});
-
-describe("restoreUsersToSourceExact", () => {
-  async function insertChange(userId: string, createdTargetRole: boolean, targetBefore: unknown, sourceRole: unknown) {
-    await pool.query(
-      `INSERT INTO sp_migration_cutover_role_changes
-         (cutover_id, user_id, source_role_id, target_role_id, created_target_role, source_role_snapshot,
-          target_role_snapshot_before, source_locations_snapshot, source_cash_mappings_snapshot,
-          target_locations_snapshot_before, target_cash_mappings_snapshot_before)
-       VALUES ($1, $2, 1, NULL, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, '[]'::jsonb, '[]'::jsonb)`,
-      [
-        cutoverId,
-        userId,
-        createdTargetRole,
-        JSON.stringify(sourceRole),
-        targetBefore === null ? null : JSON.stringify(targetBefore),
-        JSON.stringify([{ locationId: sourceLocation }]),
-        JSON.stringify([{ locationId: sourceLocation, cashAccountId: sourceCash, posStation: 1 }]),
-      ]
-    );
-  }
-
-  it("clears snapshots when there is nothing to restore", async () => {
-    const restored = await restoreUsersToSourceExact(cutoverId, pair.sourceId, pair.targetId, pair.sourceName, true);
-    expect(restored.usersRestored).toBe(0);
-  });
-
-  it.each([
-    ["a target role it created", true, null],
-    ["a target role that existed before", false, { role: "View Only", assigned_location_id: null, pos_station: 3 }],
-    ["no recorded target state", false, null],
-  ])("rebuilds the source role over %s, then rolls back at the session switch", async (_label, created, before) => {
-    await insertRole(users.manager, pair.targetId, "Manager");
-    await insertChange(users.manager, created as boolean, before, {
-      role: "Accountant",
-      assignedLocationId: sourceLocation,
-      cashAccountId: sourceCash,
-      posStation: 1,
-      canSellNegativeStock: true,
-    });
-    await expect(
-      restoreUsersToSourceExact(cutoverId, pair.sourceId, pair.targetId, pair.sourceName, true)
-    ).rejects.toMatchObject(SESSION_PARAM_DEFECT);
-    // The transaction rolled back: the source role was not recreated and the target role is untouched.
-    expect(await rolesFor(users.manager)).toEqual([
-      { company_id: pair.targetId, role: "Manager", assigned_location_id: null, cash_account_id: null },
-    ]);
-    expect(await roleChanges()).toBe(1);
   });
 });

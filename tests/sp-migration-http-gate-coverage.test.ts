@@ -1,15 +1,10 @@
 /**
  * The HTTP gate in front of the Supplier Partner migration routes, through the
  * real app: the session company must be a Supplier Partner company, the route
- * requires the Developer role, and the SP access layer demands its own exact
- * confirmation for every migration write.
- *
- * Known defect pinned here: the SP access layer (spAccessControl.ts,
- * sensitiveRequirement) requires `confirmation: "RUN SP MIGRATION"` on every
- * /api/sp/migration write, while each cutover handler requires its own phrase
- * in the same field ("CANCEL CUTOVER", "PREPARE CUTOVER", "MIGRATE", ...). No
- * request can satisfy both, so the cutover and Phase 2 writes are unreachable
- * over HTTP.
+ * requires the Developer role, and every migration write needs an exact typed
+ * confirmation, a reason and an idempotency key. For writes whose handler
+ * checks its own action phrase ("CANCEL CUTOVER", "MIGRATE", ...), the gate
+ * asks for that same phrase; other migration writes keep "RUN SP MIGRATION".
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -84,26 +79,70 @@ describe("SP migration HTTP gate", () => {
     expect(response.body.message).toBe("Forbidden");
   });
 
-  it("cannot satisfy both the gate's and the handler's confirmation", async () => {
+  it("accepts a cutover write that carries the handler's phrase, a reason and an idempotency key", async () => {
     await setRole("Developer");
     const cutoverId = await insertCutover(pair, "prepared");
     const body = { cutoverId, companyNameConfirm: pair.sourceName, reason: "coverage of the gate" };
+    const cancel = (key: string | null, extra: Record<string, unknown>) => {
+      const req = agent.post("/api/sp/migration/cutover/cancel");
+      if (key) req.set("Idempotency-Key", key);
+      return req.send({ ...body, ...extra });
+    };
+    const status = async () =>
+      (await pool.query(`SELECT status FROM sp_migration_cutovers WHERE id = $1`, [cutoverId])).rows[0].status;
 
-    const handlerPhrase = await agent
-      .post("/api/sp/migration/cutover/cancel")
-      .set("Idempotency-Key", `${PREFIX}-1`)
-      .send({ ...body, confirmation: "CANCEL CUTOVER" });
-    expect(handlerPhrase.status).toBe(400);
-    expect(handlerPhrase.body.code).toBe("SP_EXACT_CONFIRMATION_REQUIRED");
+    const generic = await cancel(`${PREFIX}-1`, { confirmation: "RUN SP MIGRATION" });
+    expect(generic.status).toBe(400);
+    expect(generic.body).toMatchObject({
+      code: "SP_EXACT_CONFIRMATION_REQUIRED",
+      message: "Type exactly: CANCEL CUTOVER",
+    });
+    const missing = await cancel(`${PREFIX}-2`, {});
+    expect(missing.body.code).toBe("SP_EXACT_CONFIRMATION_REQUIRED");
+    const noReason = await cancel(`${PREFIX}-3`, { confirmation: "CANCEL CUTOVER", reason: "no" });
+    expect(noReason.body.code).toBe("SP_REASON_REQUIRED");
+    const noKey = await cancel(null, { confirmation: "CANCEL CUTOVER" });
+    expect(noKey.body.code).toBe("SP_IDEMPOTENCY_KEY_REQUIRED");
+    expect(await status()).toBe("prepared");
 
-    const gatePhrase = await agent
-      .post("/api/sp/migration/cutover/cancel")
-      .set("Idempotency-Key", `${PREFIX}-2`)
-      .send({ ...body, confirmation: "RUN SP MIGRATION" });
-    expect(gatePhrase.status).toBe(400);
-    expect(gatePhrase.body.message).toBe('Requires confirmation = "CANCEL CUTOVER"');
+    const accepted = await cancel(`${PREFIX}-4`, { confirmation: "CANCEL CUTOVER" });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.success).toBe(true);
+    expect(await status()).toBe("cancelled");
+  });
 
-    const row = await pool.query(`SELECT status FROM sp_migration_cutovers WHERE id = $1`, [cutoverId]);
-    expect(row.rows[0].status).toBe("prepared");
+  it("derives the phrase from the dispatcher action and keeps the generic phrase elsewhere", async () => {
+    await setRole("Developer");
+    const dispatched = await agent
+      .post("/api/sp/migration/cutover")
+      .set("Idempotency-Key", `${PREFIX}-5`)
+      .send({ action: "rollback", cutoverId: 2147480001, confirmation: "ROLLBACK CUTOVER", reason: "coverage run" });
+    expect(dispatched.status).toBe(404);
+    expect(dispatched.body.message).toBe("Cutover not found");
+
+    const wrongAction = await agent
+      .post("/api/sp/migration/cutover")
+      .set("Idempotency-Key", `${PREFIX}-6`)
+      .send({ action: "rollback", cutoverId: 2147480001, confirmation: "CANCEL CUTOVER", reason: "coverage run" });
+    expect(wrongAction.body).toMatchObject({
+      code: "SP_EXACT_CONFIRMATION_REQUIRED",
+      message: "Type exactly: ROLLBACK CUTOVER",
+    });
+
+    const reviewPath = "/api/sp/migration/gc-suspense-review/2147480001/map";
+    const reviewWrong = await agent
+      .post(reviewPath)
+      .set("Idempotency-Key", `${PREFIX}-7`)
+      .send({ confirmation: "MIGRATE", reason: "coverage run" });
+    expect(reviewWrong.body).toMatchObject({
+      code: "SP_EXACT_CONFIRMATION_REQUIRED",
+      message: "Type exactly: RUN SP MIGRATION",
+    });
+    const reviewRight = await agent
+      .post(reviewPath)
+      .set("Idempotency-Key", `${PREFIX}-8`)
+      .send({ confirmation: "RUN SP MIGRATION", reason: "coverage run" });
+    expect(reviewRight.status).toBe(400);
+    expect(reviewRight.body.message).toBe("sourceCompanyId and targetCompanyId are required");
   });
 });

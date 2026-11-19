@@ -143,18 +143,29 @@ describe("stock master and opening stock", () => {
     expect(second.body.summary).toContain("Opening stock movements created: 0, skipped (already existed): 2");
   });
 
-  // Known defect (sp-migration/_helpers.ts ensureTargetLocation): a source
-  // location with no same-named target location is recreated in the target with
-  // the source's own code, but locations.code is globally unique, so the insert
-  // always fails and the whole step returns 500.
-  it("fails the run when a source location has no target counterpart", async () => {
+  it("creates a missing target location under a code no other company holds", async () => {
     const l3 = await insertLocation(pair.sourceId, `${pair.code}-L3`, `${PREFIX} New branch`);
     await insertInventory(pair.sourceId, l3, ids.i1, "1", "2", "2");
+    // The first derived code is already taken elsewhere, so the next free one is used.
+    await insertLocation(pair.targetId, `${pair.code}-L3-SP${pair.targetId}`, `${PREFIX} Code squatter`);
     const result = await run(OPENING);
-    expect(result.status).toBe(500);
-    expect(result.body.message).toMatch(/^Stock opening migration failed:/);
-    expect(await scalar(`SELECT status FROM sp_migration_rehearsal_runs WHERE id = $1`, [result.body.runId])).toBe(
-      "failed"
-    );
+    expect(result.status).toBe(200);
+    const created = await pool.query(`SELECT id, code FROM locations WHERE company_id = $1 AND name = $2`, [
+      pair.targetId,
+      `${PREFIX} New branch`,
+    ]);
+    expect(created.rows).toHaveLength(1);
+    expect(created.rows[0].code).toBe(`${pair.code}-L3-SP${pair.targetId}-2`);
+    expect(
+      await scalar(`SELECT COUNT(*)::int FROM sp_stock_movements WHERE company_id = $1 AND location_id = $2`, [
+        pair.targetId,
+        created.rows[0].id,
+      ])
+    ).toBe(1);
+    expect(
+      await scalar(`SELECT COUNT(*)::int FROM sp_migration_run_rows WHERE run_id = $1 AND table_name = 'locations'`, [
+        result.body.runId,
+      ])
+    ).toBe(1);
   });
 });

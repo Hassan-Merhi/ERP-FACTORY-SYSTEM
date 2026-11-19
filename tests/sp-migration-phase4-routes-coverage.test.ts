@@ -24,8 +24,6 @@ import {
 } from "./helpers/spMigrationCoverageFixture";
 
 const PREFIX = "spmigcov_p4routes";
-/** Postgres 42846: cannot cast type record to text[] (see the readiness defect note below). */
-const READINESS_DEFECT = { cause: { code: "42846" } };
 let pair: SpMigrationPair;
 const { call } = captureRouteHandlers((app) => registerSpMigrationPhase4Routes(app));
 
@@ -106,18 +104,42 @@ describe("company pair validation (status endpoint)", () => {
     });
   });
 
-  // Known defect (spMigrationCutoverReadiness.ts:218-220): the required-account
-  // query interpolates a JS array, which drizzle expands to a parameter tuple,
-  // and Postgres refuses `($1, ..., $16)::text[]`. Every readiness build
-  // therefore throws, so status and final verification never answer (Express
-  // turns the rejection into a 500). These tests pin that current behaviour.
-  it("status and final verification currently fail inside the readiness build", async () => {
-    await expect(call("GET /api/sp/migration/cutover", { query: pairBody(pair) })).rejects.toMatchObject(
-      READINESS_DEFECT
+  it("reports status and a failing final verification for an unprepared pair", async () => {
+    const status = await call("GET /api/sp/migration/cutover", { query: pairBody(pair) });
+    expect(status.status).toBe(200);
+    expect(status.body.liveCutover).toBeNull();
+    expect(status.body.latestCutover).toBeNull();
+    expect(status.body.verification).toMatchObject({ overall: "FAIL", canPrepare: false, canFinalize: false });
+
+    const verification = await call("GET /api/sp/migration/final-verification", { query: pairBody(pair) });
+    expect(verification.status).toBe(200);
+    const codes = verification.body.blockers.map((issue: { code: string }) => issue.code);
+    expect(codes).toEqual(
+      expect.arrayContaining(["MISSING_GC_STOCK_MASTER", "MISSING_TARGET_ACCOUNTS", "PROFIT_OPENING_MISSING"])
     );
-    await expect(call("GET /api/sp/migration/final-verification", { query: pairBody(pair) })).rejects.toMatchObject(
-      READINESS_DEFECT
-    );
+    expect(verification.body.areas.map((area: { area: string }) => area.area)).toEqual([
+      "Inventory by location",
+      "Historical sales copy",
+      "Containers and Goods-OTW",
+      "User and POS assignments",
+      "Accounting readiness",
+    ]);
+  });
+
+  it("reports the live cutover and verifies it without requiring an unused target", async () => {
+    const id = await insertCutover(pair, "active");
+    await insertVoucher({
+      companyId: pair.targetId,
+      number: `${pair.code}-LIVE-S`,
+      type: "Journal",
+      sourceModule: "ERP",
+    });
+    const status = await call("GET /api/sp/migration/cutover/status", { query: pairBody(pair) });
+    expect(Number(status.body.liveCutover.id)).toBe(id);
+    expect(Number(status.body.latestCutover.id)).toBe(id);
+    expect(status.body.verification.counts.targetLiveActivity).toBe(1);
+    const codes = status.body.verification.blockers.map((issue: { code: string }) => issue.code);
+    expect(codes).not.toContain("TARGET_ALREADY_LIVE");
   });
 });
 
@@ -135,7 +157,7 @@ describe("prepare and finalize refusals", () => {
     expect(wrongName.body.message).toContain("Company name confirmation must match exactly");
   });
 
-  it("prepare refuses while a live cutover exists, and otherwise never writes a cutover", async () => {
+  it("prepare refuses while a live cutover exists and while verification has FAIL items", async () => {
     const liveId = await insertCutover(pair, "prepared");
     const duplicate = await call("POST /api/sp/migration/cutover/prepare", {
       body: pairBody(pair, { confirmation: "PREPARE CUTOVER" }),
@@ -143,11 +165,13 @@ describe("prepare and finalize refusals", () => {
     expect(duplicate.status).toBe(409);
     expect(duplicate.body.message).toBe(`Cutover ${liveId} is already prepared.`);
 
-    // The readiness defect above fails the verification step, so no cutover row is written.
     await pool.query(`DELETE FROM sp_migration_cutovers WHERE id = $1`, [liveId]);
-    await expect(
-      call("POST /api/sp/migration/cutover/prepare", { body: pairBody(pair, { confirmation: "PREPARE CUTOVER" }) })
-    ).rejects.toMatchObject(READINESS_DEFECT);
+    const blocked = await call("POST /api/sp/migration/cutover/prepare", {
+      body: pairBody(pair, { confirmation: "PREPARE CUTOVER" }),
+    });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.message).toBe("Cutover preparation is blocked. Resolve all FAIL items first.");
+    expect(blocked.body.verification.canPrepare).toBe(false);
     expect(
       await scalar(`SELECT COUNT(*)::int FROM sp_migration_cutovers WHERE target_company_id = $1`, [pair.targetId])
     ).toBe(0);

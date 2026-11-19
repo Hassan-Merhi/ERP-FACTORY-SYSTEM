@@ -398,3 +398,20 @@ export async function scalar<T = unknown>(query: string, params: unknown[] = [])
   const row = result.rows[0] ?? {};
   return Object.values(row)[0] as T;
 }
+
+/**
+ * Gives the target every required Supplier Partner account, records all four
+ * migration steps as completed and posts the profit-share opening voucher: the
+ * readiness prerequisites a cutover checks before it may be prepared.
+ */
+export async function makePairReady(pair: SpMigrationPair): Promise<Record<string, number>> {
+  const accounts = await insertRequiredTargetAccounts(pair.targetId);
+  await completeAllActions(pair);
+  await insertVoucher({
+    companyId: pair.targetId,
+    number: `GC-PROFIT-OPN-${pair.code}`,
+    type: "Journal",
+    sourceModule: "SP_MIGRATION",
+  });
+  return accounts;
+}

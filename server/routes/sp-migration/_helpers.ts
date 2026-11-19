@@ -214,6 +214,18 @@ export async function buildGcMigrationPreview(sourceId: number, targetId: number
 // into a single "Main Warehouse". Idempotent per (target stock item, target
 // location): a prior sp_stock_movements 'opening_stock' row for that pair
 // blocks a duplicate re-add.
+/** A location code for the target company derived from the source code, free across all companies. */
+export async function uniqueTargetLocationCode(sourceCode: string, targetId: number): Promise<string> {
+  const base = sourceCode.trim() || "LOC";
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const suffix = attempt === 0 ? `-SP${targetId}` : `-SP${targetId}-${attempt + 1}`;
+    const candidate = `${base.slice(0, 50 - suffix.length)}${suffix}`;
+    const taken = await db.execute(sql`SELECT 1 FROM locations WHERE code = ${candidate} LIMIT 1`);
+    if (taken.rows.length === 0) return candidate;
+  }
+  throw new Error(`No free target location code could be derived from "${base}".`);
+}
+
 export async function ensureTargetLocation(
   sourceLoc: { id: number; code: string; name: string },
   targetId: number,
@@ -241,10 +253,13 @@ export async function ensureTargetLocation(
   }
 
   if (!targetLocId) {
+    // locations.code is unique across every company, so the source's own code is
+    // always taken; derive a target code and step past any collision.
+    const targetCode = await uniqueTargetLocationCode(String(sourceLoc.code ?? ""), targetId);
     const [row] = (
       await db.execute(sql`
       INSERT INTO locations (company_id, code, name, active)
-      VALUES (${targetId}, ${sourceLoc.code}, ${sourceLoc.name}, true)
+      VALUES (${targetId}, ${targetCode}, ${sourceLoc.name}, true)
       RETURNING id
     `)
     ).rows;

@@ -1,11 +1,10 @@
 /**
- * Supplier Partner cutover finalization end to end against a real database:
- * the historical-sales and container delta imports, their Phase 4 repairs, the
- * exact stock synchronization and the recovery that runs when finalization
- * fails. Finalization currently always ends in that recovery path, because the
- * readiness build it verifies with fails (see the defect note in
- * sp-migration-phase4-routes-coverage); these tests prove the recovery puts
- * target stock back and leaves the cutover prepared and claimable.
+ * Supplier Partner cutover finalization against a real database: the
+ * historical-sales and container delta imports, their Phase 4 repairs, the
+ * exact stock synchronization, the 409 that keeps both companies locked when
+ * verification is not PASS, and the recovery that runs when finalization
+ * fails. The successful prepare/finalize/rollback flow is in
+ * sp-migration-phase4-cutover-flow-coverage.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
@@ -113,8 +112,8 @@ describe("cutover finalization", () => {
   });
 
   it("reports a user-restore failure in the recovery summary instead of hiding it", async () => {
-    // A recorded role change cannot be restored (the session-switch defect in
-    // spMigrationPhase4Users.ts), so the recovery records the error and continues.
+    // A recorded role change for a user that no longer exists cannot be restored
+    // (its role row would violate the users foreign key), so the recovery records the error.
     await pool.query(`UPDATE sp_migration_rehearsal_runs SET status = 'failed' WHERE id = $1`, [openingRunId]);
     const id = await insertCutover(pair, "prepared");
     await pool.query(
@@ -134,20 +133,29 @@ describe("cutover finalization", () => {
     }
   });
 
-  it("imports and repairs the deltas, then restores target stock when verification fails", async () => {
+  it("imports and repairs the deltas, stays locked when verification fails, and restores stock on a failed rerun", async () => {
     const id = await insertCutover(pair, "prepared");
 
+    // The cash line maps to Migration Suspense and no profit opening exists, so
+    // verification after synchronization is not PASS: both companies stay locked.
     const first = await finalize();
-    expect(first.status).toBe(500);
+    expect(first.status).toBe(409);
     expect(first.body.cutoverId).toBe(id);
-    expect(first.body.message).toMatch(/^Cutover finalization failed: Failed query/);
-    // Stock was synchronized to the source (2 -> 7) and the recovery put it back.
-    expect(first.body.recovery.stock).toEqual({ restored: 1, deleted: 0 });
-    expect(Number(await scalar(`SELECT quantity FROM inventory WHERE id = $1`, [targetInventoryId]))).toBe(2);
+    expect(first.body.message).toBe(
+      "Final synchronization completed, but verification is not PASS. Both companies remain locked."
+    );
+    expect(first.body.repairBlockers).toEqual([]);
+    expect(first.body.verification.blockers.map((issue: { code: string }) => issue.code)).toEqual(
+      expect.arrayContaining(["SUSPENSE_REVIEW_REQUIRED", "PROFIT_OPENING_MISSING"])
+    );
+    // Stock was synchronized to the source (2 -> 7) and stays so while the cutover is prepared.
+    expect(Number(await scalar(`SELECT quantity FROM inventory WHERE id = $1`, [targetInventoryId]))).toBe(7);
 
     const row = await cutover(id);
     expect(row.status).toBe("prepared");
     expect(row.finalize_started_at).toBeNull();
+    expect(row.failure_message).toBe("Final verification did not pass after delta synchronization");
+    expect(row.final_readiness_snapshot.canFinalize).toBe(false);
     expect(row.delta_summary.salesDelta.reconciliation.vouchersCreated).toBe(1);
     expect(row.delta_summary.salesRepair.blockers).toEqual([]);
     expect(row.delta_summary.containerDelta.reconciliation).toMatchObject({
@@ -192,6 +200,8 @@ describe("cutover finalization", () => {
       otwVouchersReused: 1,
     });
     expect(rerun.delta_summary.stockDelta).toBeUndefined();
+    // The recovery restored the first run's stock snapshot (7 -> 2).
+    expect(second.body.recovery.stock).toEqual({ restored: 1, deleted: 0 });
     expect(Number(await scalar(`SELECT quantity FROM inventory WHERE id = $1`, [targetInventoryId]))).toBe(2);
   });
 });

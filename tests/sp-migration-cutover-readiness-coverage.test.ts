@@ -1,22 +1,17 @@
 /**
  * Supplier Partner cutover readiness: the location and ledger-account mapping
- * rules the cutover relies on, the readiness build, and the historical-sales
+ * rules the cutover relies on, and the historical-sales
  * and container verification that decides whether a cutover may finalize.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
-import {
-  buildCutoverReadiness,
-  resolveTargetLedgerAccount,
-  resolveTargetLocation,
-} from "../server/routes/sp/spMigrationCutoverReadiness";
+import { resolveTargetLedgerAccount, resolveTargetLocation } from "../server/routes/sp/spMigrationCutoverReadiness";
 import {
   verifyContainers,
   verifyHistoricalSales,
 } from "../server/routes/sp/spMigrationPhase4VerificationVerifyContainers";
 import {
   cleanupSpMigrationPair,
-  completeAllActions,
   createSpMigrationPair,
   insertAccount,
   insertLocation,
@@ -97,21 +92,6 @@ describe("resolveTargetLedgerAccount", () => {
     expect(await resolveTargetLedgerAccount(sNone, pair.targetId)).toBeNull();
     expect(await resolveTargetLedgerAccount(null, pair.targetId)).toBeNull();
     expect(await resolveTargetLedgerAccount(2147480001, pair.targetId)).toBeNull();
-  });
-});
-
-describe("buildCutoverReadiness", () => {
-  // Known defect (spMigrationCutoverReadiness.ts:218-220): the required-account
-  // query passes a JS array that drizzle expands to a parameter tuple, which
-  // Postgres refuses to cast to text[] (42846), so readiness never completes.
-  it("fails at the required-account check whether or not the migration steps ran", async () => {
-    await expect(buildCutoverReadiness(clean.sourceId, clean.targetId)).rejects.toMatchObject({
-      cause: { code: "42846" },
-    });
-    await completeAllActions(clean);
-    await expect(buildCutoverReadiness(clean.sourceId, clean.targetId)).rejects.toMatchObject({
-      cause: { code: "42846" },
-    });
   });
 });
 

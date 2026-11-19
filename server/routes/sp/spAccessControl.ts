@@ -82,8 +82,38 @@ export function classifyPermission(req: Pick<Request, "path" | "method">): SpPer
   return "sp_view";
 }
 
+/**
+ * Migration writes whose handler already demands its own exact, action-specific
+ * phrase in `confirmation`. The gate asks for that same phrase (plus the reason
+ * and idempotency key) instead of "RUN SP MIGRATION": the body has only one
+ * confirmation field, so two different phrases could never both be satisfied.
+ */
+const MIGRATION_HANDLER_CONFIRMATIONS: Record<string, string> = {
+  "/migration/cutover/prepare": "PREPARE CUTOVER",
+  "/migration/cutover/finalize": "FINALIZE CUTOVER",
+  "/migration/cutover/rollback": "ROLLBACK CUTOVER",
+  "/migration/cutover/cancel": "CANCEL CUTOVER",
+  "/migration/cutover/release-target-hold": "RELEASE TARGET HOLD",
+  "/migration/gc-sales-readonly": "MIGRATE",
+  "/migration/gc-containers": "MIGRATE",
+  "/migration/gc-stock-master": "MIGRATE",
+  "/migration/gc-stock-opening": "MIGRATE",
+  "/migration/rollback": "ROLLBACK",
+};
+
+export function migrationHandlerConfirmation(req: Pick<Request, "path" | "method" | "body">): string | null {
+  if (req.method.toUpperCase() !== "POST") return null;
+  if (req.path === "/migration/cutover") {
+    const action = String(req.body?.action ?? "");
+    return MIGRATION_HANDLER_CONFIRMATIONS[`/migration/cutover/${action}`] ?? null;
+  }
+  return MIGRATION_HANDLER_CONFIRMATIONS[req.path] ?? null;
+}
+
 function sensitiveRequirement(req: Request): { confirmation: string; requireReason: boolean } | null {
   const path = req.path;
+  const handlerConfirmation = migrationHandlerConfirmation(req);
+  if (handlerConfirmation) return { confirmation: handlerConfirmation, requireReason: true };
   if (path === "/production/evidence" && req.method === "POST")
     return { confirmation: "RECORD SP PRODUCTION EVIDENCE", requireReason: true };
   if (path === "/production/close-rollback-window" && req.method === "POST")

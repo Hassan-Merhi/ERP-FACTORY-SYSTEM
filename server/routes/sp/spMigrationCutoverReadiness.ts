@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
+import { sqlArray } from "../../lib/sqlArray";
 import { getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
@@ -217,7 +218,7 @@ export async function buildCutoverReadiness(sourceId: number, targetId: number):
 
   const missingAccountsResult = await db.execute(sql`
     SELECT required.sub_type
-    FROM unnest(${REQUIRED_SP_SUBTYPES}::text[]) AS required(sub_type)
+    FROM unnest(${sqlArray(REQUIRED_SP_SUBTYPES)}) AS required(sub_type)
     WHERE NOT EXISTS (
       SELECT 1 FROM ledger_accounts a
       WHERE a.company_id = ${targetId}

@@ -56,25 +56,25 @@ async function switchUserSessions(
     UPDATE session
     SET sess = (
       sess::jsonb || jsonb_build_object(
-        'currentCompanyId', ${params.toCompanyId},
-        'currentRole', ${params.role.role},
-        'currentLocationId', ${params.role.assignedLocationId ?? null},
-        'currentPOSStation', ${params.role.posStation ?? null},
-        'cashAccountId', ${params.role.cashAccountId ?? null},
-        'canSellNegativeStock', ${Boolean(params.role.canSellNegativeStock)},
-        'posViewOnly', ${Boolean(params.role.posViewOnly)},
-        'daybookEditDays', ${pn(params.role.daybookEditDays)},
-        'canAccessCustomers', ${Boolean(params.role.canAccessCustomers)},
-        'canDeleteRecords', ${Boolean(params.role.canDeleteRecords)},
-        'currentCompanyName', ${params.companyName}
+        'currentCompanyId', ${params.toCompanyId}::int,
+        'currentRole', ${params.role.role}::text,
+        'currentLocationId', ${params.role.assignedLocationId ?? null}::int,
+        'currentPOSStation', ${params.role.posStation ?? null}::int,
+        'cashAccountId', ${params.role.cashAccountId ?? null}::int,
+        'canSellNegativeStock', ${Boolean(params.role.canSellNegativeStock)}::boolean,
+        'posViewOnly', ${Boolean(params.role.posViewOnly)}::boolean,
+        'daybookEditDays', ${pn(params.role.daybookEditDays)}::int,
+        'canAccessCustomers', ${Boolean(params.role.canAccessCustomers)}::boolean,
+        'canDeleteRecords', ${Boolean(params.role.canDeleteRecords)}::boolean,
+        'currentCompanyName', ${params.companyName}::text
       )
     )::json
-    WHERE sess->>'userId' = ${params.userId}
+    WHERE sess->>'userId' = ${params.userId}::text
       AND CASE
             WHEN (sess->>'currentCompanyId') ~ '^[0-9]+$'
             THEN (sess->>'currentCompanyId')::int
             ELSE NULL
-          END = ${params.fromCompanyId}
+          END = ${params.fromCompanyId}::int
     RETURNING sid
   `);
   return resultRows(result).length;
