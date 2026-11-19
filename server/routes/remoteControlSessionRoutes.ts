@@ -1,9 +1,7 @@
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
 import { requireAuth, requireLogin } from "../auth";
-import { requireActionAccess } from "../lib/permissionMiddleware";
-import { getSessionCompanyId, getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
+import { getSessionCompanyId } from "../lib/requestContext";
 import {
-  RemoteMouseControlError,
   assertRemoteMouseCommandAdmission,
   authorizeRemoteMouseControl,
   getRemoteMouseAuthorization,
@@ -12,12 +10,8 @@ import {
   revokeRemoteMouseControl,
   subscribeRemoteMouseCommands,
   subscribeRemoteMouseResults,
-  type RemoteMouseAuthorization,
-  type RemoteMouseCommand,
-  type RemoteMouseCommandResult,
 } from "../services/remoteControlCommandService";
 import {
-  RemoteControlSessionError,
   getActiveRemoteControlSession,
   getRemoteControlSession,
   heartbeatRemoteControlController,
@@ -28,12 +22,8 @@ import {
   startRemoteControlSession,
   stopRemoteControlSession,
   subscribeRemoteControlTarget,
-  type RemoteControlSession,
 } from "../services/remoteControlSessionService";
-import {
-  getRemoteKeyboardAuthorization,
-  type RemoteKeyboardAuthorization,
-} from "../services/remoteKeyboardCommandService";
+import { getRemoteKeyboardAuthorization } from "../services/remoteKeyboardCommandService";
 import { remoteSupportCommandAuditDetails, writeRemoteSupportAudit } from "../services/remoteSupportAuditService";
 import {
   enqueueRemoteSupportCommandAudit,
@@ -41,138 +31,28 @@ import {
 } from "../services/remoteSupportCommandAuditQueue";
 import { isRemoteMouseCommandAllowedOnRoute } from "../services/remoteSupportSensitiveActionPolicy";
 import { isRemoteSupportEnabled } from "../services/remoteSupportRuntime";
-
-const STATUS_REFRESH_MS = 5000;
-const COMMAND_HEARTBEAT_MS = 5000;
-const viewPermission = requireActionAccess("remote_support_view");
-const mousePermission = requireActionAccess("remote_support_mouse");
-
-type FlushableResponse = Response & { flush?: () => void };
-
-function sessionUserId(req: Request): string {
-  const value = getSessionUserId(req);
-  return value === null || value === undefined ? "" : String(value);
-}
-
-function sessionUsername(req: Request): string {
-  return getSessionUsername(req) || sessionUserId(req);
-}
-
-function sessionRole(req: Request): string {
-  return getSessionRole(req) || "";
-}
-
-function passwordConfirmedAt(req: Request): number | null {
-  const value = (req.session as { passwordConfirmedAt?: unknown }).passwordConfirmedAt;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function requireController(req: Request, res: Response): boolean {
-  if (!isRemoteControlControllerRole(sessionRole(req))) {
-    res.status(403).json({ message: "Access denied." });
-    return false;
-  }
-  return true;
-}
-
-function serializeSession(session: RemoteControlSession | null) {
-  if (!session) return null;
-  return {
-    ...session,
-    startedAt: new Date(session.startedAt).toISOString(),
-    expiresAt: new Date(session.expiresAt).toISOString(),
-    lastControllerHeartbeatAt: new Date(session.lastControllerHeartbeatAt).toISOString(),
-    lastTargetHeartbeatAt: new Date(session.lastTargetHeartbeatAt).toISOString(),
-    stoppedAt: session.stoppedAt ? new Date(session.stoppedAt).toISOString() : null,
-  };
-}
-
-function serializeMouseAuthorization(authorization: RemoteMouseAuthorization | null) {
-  if (!authorization) return null;
-  return {
-    ...authorization,
-    authorizedAt: new Date(authorization.authorizedAt).toISOString(),
-    expiresAt: new Date(authorization.expiresAt).toISOString(),
-  };
-}
-
-function serializeKeyboardAuthorization(authorization: RemoteKeyboardAuthorization | null) {
-  if (!authorization) return null;
-  return {
-    ...authorization,
-    authorizedAt: new Date(authorization.authorizedAt).toISOString(),
-    expiresAt: new Date(authorization.expiresAt).toISOString(),
-  };
-}
-
-function serializeMouseCommand(command: RemoteMouseCommand) {
-  return {
-    ...command,
-    createdAt: new Date(command.createdAt).toISOString(),
-  };
-}
-
-function serializeMouseCommandResult(result: RemoteMouseCommandResult) {
-  return {
-    ...result,
-    completedAt: new Date(result.completedAt).toISOString(),
-  };
-}
-
-function openEventStream(res: Response): void {
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
-  res.write("retry: 3000\n\n");
-}
-
-function writeEvent(res: Response, event: string, payload: unknown): void {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
-  (res as FlushableResponse).flush?.();
-}
-
-function writeHeartbeat(res: Response): void {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`: heartbeat ${Date.now()}\n\n`);
-  (res as FlushableResponse).flush?.();
-}
-
-function handleSessionError(error: unknown, res: Response): void {
-  if (error instanceof RemoteControlSessionError || error instanceof RemoteMouseControlError) {
-    const retryAfterMs = error instanceof RemoteMouseControlError ? error.retryAfterMs : undefined;
-    if (typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)) {
-      // Controllers coalesce input locally; telling them exactly how long the
-      // window has left stops a refused burst from becoming a retry storm.
-      res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
-      res.status(error.statusCode).json({ code: error.code, message: error.message, retryAfterMs });
-      return;
-    }
-    res.status(error.statusCode).json({ code: error.code, message: error.message });
-    return;
-  }
-  res.status(500).json({ message: "Unable to manage the support session." });
-}
-
-function respondAuditUnavailable(res: Response): void {
-  res.status(503).json({
-    code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
-    message: "Remote support auditing is temporarily unavailable. Control remains blocked.",
-  });
-}
-
-async function writeAuditOrUnavailable(input: Parameters<typeof writeRemoteSupportAudit>[0], res: Response) {
-  try {
-    await writeRemoteSupportAudit(input);
-    return true;
-  } catch {
-    respondAuditUnavailable(res);
-    return false;
-  }
-}
+import {
+  STATUS_REFRESH_MS,
+  COMMAND_HEARTBEAT_MS,
+  viewPermission,
+  mousePermission,
+  sessionUserId,
+  sessionUsername,
+  sessionRole,
+  passwordConfirmedAt,
+  requireController,
+  serializeSession,
+  serializeMouseAuthorization,
+  serializeKeyboardAuthorization,
+  serializeMouseCommand,
+  serializeMouseCommandResult,
+  openEventStream,
+  writeEvent,
+  writeHeartbeat,
+  handleSessionError,
+  respondAuditUnavailable,
+  writeAuditOrUnavailable,
+} from "./remoteControlSessionHelpers";
 
 export function registerRemoteControlSessionRoutes(app: Express): void {
   app.get("/api/screen-feed/control/tabs/:userId", requireAuth, viewPermission, (req, res) => {

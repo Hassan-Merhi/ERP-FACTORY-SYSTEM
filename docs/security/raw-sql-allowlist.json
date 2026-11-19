@@ -3226,10 +3226,10 @@
       "reason": "Table and Arabic-column names come only from the frozen, code-owned target table, are validated against a strict lower-case identifier pattern and emitted as quoted identifiers; company, product and scope ids are bound parameters (requirePositiveId / positiveScopeId)."
     },
     {
-      "id": "692450529f96ccaf5441",
+      "id": "0df6ab8bedc4e70be110",
       "path": "server/services/inventory/historicalSalesCostRepairRewind.ts",
       "kind": "assembled-sql-text",
-      "context": "rewindCheckpointToLegacySales",
+      "context": "rewindCheckpointToLegacySales.rewindMovement",
       "classification": "not-sql-text",
       "userControlled": "no",
       "dynamicInputs": [

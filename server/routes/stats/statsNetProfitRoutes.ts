@@ -1,226 +1,54 @@
-import { isExcludedFromCompany12ManagementReports } from "../../lib/payrollOverpaymentReporting";
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { containers, exchangeRates } from "@shared/schema";
-import { eq, and, or, desc, sql, lte } from "drizzle-orm";
-import {
-  classifyEquityAccounts,
-  classifyNetPositionAccounts,
-  getAccountNetBalance,
-  type NetPositionAccount,
-} from "../../netPositionHelper";
+import { containers } from "@shared/schema";
+import { eq, and, or, sql, lte } from "drizzle-orm";
+import { getAccountNetBalance, type NetPositionAccount } from "../../netPositionHelper";
 
-import { _getCached, _setCached } from "../../services/shared/ttlCache";
+import { _setCached } from "../../services/shared/ttlCache";
 import { computeRentalOutstanding } from "./netProfitRentalSection";
 import { computeStockInHand } from "./netProfitStockSection";
-import { loadNetProfitData } from "./netProfitDataLoad";
-import { getNetPositionCurrencySummary } from "../../services/accounting/netPositionCurrency";
-import {
-  loadNetPositionParties,
-  type NetPositionPartyLine,
-} from "../../services/accounting/balances/netPositionParties";
-import { storage } from "../../storage";
+import { type NetPositionPartyLine } from "../../services/accounting/balances/netPositionParties";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
-import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
-import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 import {
   classifyAccountType,
   expenseCategory,
   isIndirectIncome,
 } from "../../services/accounting/accountClassification";
-import { minusMoney, plusMoney, roundCents, sumMoney, toMoney } from "../../lib/money";
+import { minusMoney, plusMoney, sumMoney, toMoney } from "../../lib/money";
+import { statsNetProfitRoutesStep } from "./statsNetProfitRoutesStep";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
     try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      // Balance-sheet "as of" date — cumulative approach (everything up to toDate)
-      // fromDate is accepted but intentionally ignored for balance-sheet accounts;
-      // the balance sheet is always a point-in-time snapshot (as of toDate), not a period.
-      const toDate = req.query.toDate ? String(req.query.toDate) : null;
-
-      // Rounding helper — defined early so it is available throughout the handler
-      const round2 = roundCents;
-
-      // Fetch company to know its base currency (CFA vs USD)
-      // Check the 30-second TTL cache before touching the DB
-      // Monthly SP display uses the business day rather than the Render server's
-      // UTC midnight. GC operates in Lebanon unless a company timezone is set.
-      const localDateParts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Beirut",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(new Date());
-      const localPart = (key: string) => localDateParts.find((part) => part.type === key)?.value || "";
-      const businessToday = `${localPart("year")}-${localPart("month")}-${localPart("day")}`;
-      const _cacheKey = `net-profit:${companyId}:${toDate || ""}:${toDate ? "historical" : businessToday.slice(0, 7)}`;
-      // Live financial USD presentation depends on a company-specific dated
-      // rate that may have been saved on another Render worker. A process-
-      // local TTL is not a reliable rate revision fence; rebuild live reads.
-      // Dated historical snapshots use locked posted USD and may remain cached.
-      const _cached = toDate ? _getCached(_cacheKey) : null;
-      if (_cached) return res.json(_cached);
-      if (!toDate) res.setHeader?.("Cache-Control", "private, no-store");
-
-      // All the report's raw inputs - company row, ledger accounts and the three
-      // grouped balance maps - are loaded in ./netProfitDataLoad.
-      const [netPositionCurrency, reportData, companySettings] = await Promise.all([
-        getNetPositionCurrencySummary(companyId, toDate),
-        // Live P&L is as-of the Beirut business day. All-time supplier/creditor
-        // and balance-sheet maps remain unchanged in the data loader.
-        loadNetProfitData(companyId, toDate, businessToday),
-        storage.getCompanySettings(companyId),
-      ]);
-      const { companyRecord, companyAccounts, companyBaseCurrency, accountBalances, profitAndLossBalances } =
-        reportData;
-
-      // ============ NET POSITION CALCULATION ============
-      // Uses shared helper (netPositionHelper.ts) – single source of truth for
-      // the asset vs liability classification formula used by both ERP and Factory.
-
-      // One supplier-inclusion rule (wave 13, owner decision 2): supplier payables
-      // count in the posting company, parent link or not.
-      const shouldIncludeSuppliers = true; // ERP_NET_POSITION_INCLUDES_SUPPLIERS (netPositionParties.ts)
-      // Build excluded-from-expenses set (needed for the P&L expense pass below)
-      const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
-      const excludedFromExpenses = new Set<number>();
-      if (importChargesParent) {
-        excludedFromExpenses.add(importChargesParent.id);
-        for (const acc of companyAccounts) {
-          if (acc.parentId === importChargesParent.id) excludedFromExpenses.add(acc.id);
-        }
-      }
-      for (const acc of companyAccounts) {
-        if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES_") || isInventoryValuationOnlyAccount(acc)) {
-          excludedFromExpenses.add(acc.id);
-        }
-      }
-
-      // 1. Classify balance-sheet accounts (assets vs liabilities) via shared helper.
-      // SP formula: What We Have = Cash + Customer A/R + Stock (from inventory table); What We Owe includes supplier cash payable and Loan/Loans balances.
-      // Other SP ledger accounts (OTW, prepaid, intercompany, clearing accounts, etc.) remain excluded unless explicitly part of the formula.
-      // For non-SP: exclude sp_stock (inventory table is authoritative) and sp_cost_clearing (double-counts).
-      const isSupplierPartner = companyRecord?.companyType === "supplier_partner";
-      const equityIncludedInNetPosition = isSupplierPartner;
-      // Customers, suppliers and employees come from the one balance engine
-      // (services/accounting/balances/netPositionParties.ts): effective-date
-      // basis, master openings with their side, each line counted once.
-      // Supplier-partner companies exclude customers by design. Amounts not in
-      // the ledger are reported in `notInLedger`, never in the totals.
-      const parties = await loadNetPositionParties(companyId, {
-        asOf: toDate,
-        customers: !isSupplierPartner,
-        suppliers: shouldIncludeSuppliers,
-        factorySuppliers: false,
-        employees: "erp",
-        codes: "erp",
-        payrollCurrentBalanceMemo: true,
-        banks: true,
-        missingAccounts: false,
-      });
-      // Ledger accounts a customer owns are left out: the engine rolls them
-      // into the customer line added below.
-      const accountsForClassify = (
-        isSupplierPartner
-          ? companyAccounts.filter(
-              (a) =>
-                a.accountType === "Cash" ||
-                a.accountType === "Loan" ||
-                a.accountType === "Loans" ||
-                a.subType === "sp_payable"
-            )
-          : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing")
-      ).filter((a) => !parties.customerLedgerIds.has(a.id) && !isExcludedFromCompany12ManagementReports(companyId, a));
-      // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
-      const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
-      const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
-        includeSupplierTypeAccounts: shouldIncludeSuppliers,
-        ledgerStockAccounts: ledgerStock,
-      });
-      const equity = classifyEquityAccounts(companyAccounts, accountBalances);
-      let forUsTotal = classified.forUsTotal;
-      let onUsTotal = classified.onUsTotal;
-      const forUsAccounts = classified.forUsAccounts;
-      const onUsAccounts = classified.onUsAccounts;
-      const categoryTotals = classified.categoryTotals;
-
-      // Exclude ledger-based "Accrued Rent Payable" — the computed rentPayable
-      // (expected − paid up to asOf) is always more accurate than the accrual-
-      // scheduler-dependent ledger account. Strip it here before any totals are used.
-      for (let i = onUsAccounts.length - 1; i >= 0; i--) {
-        const a = onUsAccounts[i];
-        const nameLower = (a.name || "").toLowerCase();
-        const code = (a.code || "").toUpperCase();
-        if (nameLower.includes("accrued rent") || code === "ACCR-RENT-PAY" || code === "ACCRUED_RENT_PAYABLE") {
-          onUsTotal = round2(minusMoney(onUsTotal, a.value));
-          const catKey = `liability_${a.category || a.name}`;
-          if (categoryTotals[catKey] !== undefined) {
-            categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], a.value));
-            if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
-          }
-          onUsAccounts.splice(i, 1);
-        }
-      }
-
-      // Exclude ledger-based "Prepaid Rent" accounts — the rental-shops calculation
-      // below (propertyContracts: paid − expected) is always the authoritative source
-      // for prepaid rent. Keeping both would double-count it.
-      for (let i = forUsAccounts.length - 1; i >= 0; i--) {
-        const a = forUsAccounts[i];
-        const nameLower = (a.name || "").toLowerCase();
-        if (nameLower.includes("prepaid rent")) {
-          forUsTotal = round2(minusMoney(forUsTotal, a.value));
-          // Subtract from whichever category bucket it landed in (typically "asset_Asset")
-          const catKey = `asset_${a.category}`;
-          if (categoryTotals[catKey] !== undefined) {
-            categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], a.value));
-            if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
-          }
-          forUsAccounts.splice(i, 1);
-        }
-      }
-
-      // CFA revaluation: Cash accounts hold physical CFA units whose USD worth changes with the rate.
-      // Expenses, loans, receivables are locked at their historical CFA values — do NOT revalue them.
-      // Only revalue if this company's base currency IS CFA (not a USD company that happens to have
-      // a CFA exchange rate stored for reference/inter-company purposes).
-      const cfaRateRows =
-        companyBaseCurrency === "CFA"
-          ? await db
-              .select({ rate: exchangeRates.rate })
-              .from(exchangeRates)
-              .where(
-                and(
-                  eq(exchangeRates.companyId, companyId),
-                  eq(exchangeRates.fromCurrency, "USD"),
-                  eq(exchangeRates.toCurrency, "CFA")
-                )
-              )
-              .orderBy(desc(exchangeRates.effectiveDate))
-              .limit(1)
-          : [];
-      const currentCfaRate = cfaRateRows.length > 0 ? toMoney(cfaRateRows[0].rate).toNumber() : 0;
-
-      // Legacy non-base balances are intentionally not revalued here. Only the
-      // dedicated cash/bank middleware may apply the current rate, and it
-      // exposes null/provisional values when the native history is unresolved.
-
-      // 2. Process income and expense accounts for the P&L breakdown (ERP-specific)
-      //    The helper skips expense/income types; we handle them here, classified
-      //    by the shared classifier (Indirect Income in either storage form,
-      //    Revenue and mis-cased types are income; Government Taxes is an expense).
-      let expensesTotal = 0;
-      let incomeTotal = 0;
-      const expensesAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
-      const incomeAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
+      const snp1 = await statsNetProfitRoutesStep({ req, res });
+      if (snp1.done) return snp1.value;
+      const {
+        companyAccounts,
+        profitAndLossBalances,
+        categoryTotals,
+        incomeAccounts,
+        excludedFromExpenses,
+        expensesAccounts,
+        ledgerStock,
+        forUsAccounts,
+        companyId,
+        toDate,
+        round2,
+        onUsAccounts,
+        parties,
+        companyRecord,
+        currentCfaRate,
+        businessToday,
+        equityIncludedInNetPosition,
+        equity,
+        companySettings,
+        accountBalances,
+        netPositionCurrency,
+        _cacheKey,
+      } = snp1;
 
       for (const acc of companyAccounts) {
         // The P&L pass leaves the fiscal closing journals out (wave 17 A), so a
@@ -238,7 +66,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
           const incomeKey = indirect ? "income_Indirect Income" : "income_Sales/Revenue";
           const incomeCategory = indirect ? "Indirect Income" : "Income";
           if (netBalance < 0) {
-            incomeTotal = plusMoney(incomeTotal, Math.abs(netBalance));
+            snp1.incomeTotal = plusMoney(snp1.incomeTotal, Math.abs(netBalance));
             categoryTotals[incomeKey] = plusMoney(categoryTotals[incomeKey] || 0, Math.abs(netBalance));
             incomeAccounts.push({
               id: acc.id,
@@ -248,7 +76,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
               category: incomeCategory,
             });
           } else if (netBalance > 0) {
-            incomeTotal = minusMoney(incomeTotal, netBalance);
+            snp1.incomeTotal = minusMoney(snp1.incomeTotal, netBalance);
             categoryTotals[incomeKey] = minusMoney(categoryTotals[incomeKey] || 0, netBalance);
             incomeAccounts.push({
               id: acc.id,
@@ -261,12 +89,12 @@ export function registerStatsNetProfitRoutes(app: Express) {
         } else if (normalizedExpenseType && !excludedFromExpenses.has(acc.id)) {
           const category = normalizedExpenseType;
           if (netBalance > 0) {
-            expensesTotal = plusMoney(expensesTotal, netBalance);
+            snp1.expensesTotal = plusMoney(snp1.expensesTotal, netBalance);
             categoryTotals[`exp_${category}`] = plusMoney(categoryTotals[`exp_${category}`] || 0, netBalance);
             expensesAccounts.push({ id: acc.id, name: acc.name, code: acc.code || "", value: netBalance, category });
           } else if (netBalance < 0) {
             const credit = Math.abs(netBalance);
-            expensesTotal = minusMoney(expensesTotal, credit);
+            snp1.expensesTotal = minusMoney(snp1.expensesTotal, credit);
             categoryTotals[`exp_${category}`] = minusMoney(categoryTotals[`exp_${category}`] || 0, credit);
             expensesAccounts.push({
               id: acc.id,
@@ -298,7 +126,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
           const code = (acc.code || "").toUpperCase();
           const nameLower = (acc.name || "").toLowerCase();
           if (factoryLedgerCodesToStrip.has(code) || factoryLedgerNamesToStrip.some((p) => nameLower.includes(p))) {
-            forUsTotal = minusMoney(forUsTotal, acc.value);
+            snp1.forUsTotal = minusMoney(snp1.forUsTotal, acc.value);
             const catKey = `asset_${acc.category || acc.name}`;
             if (categoryTotals[catKey] !== undefined) delete categoryTotals[catKey];
             forUsAccounts.splice(i, 1);
@@ -311,7 +139,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // computed in ./netProfitStockSection.
       const stockOnFloor = ledgerStock ? 0 : await computeStockInHand(companyId, toDate);
       if (stockOnFloor > 0) {
-        forUsTotal = plusMoney(forUsTotal, stockOnFloor);
+        snp1.forUsTotal = plusMoney(snp1.forUsTotal, stockOnFloor);
         categoryTotals["asset_Stock In Hand"] = stockOnFloor;
         forUsAccounts.push({
           name: "Stock In Hand (Inventory)",
@@ -340,8 +168,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
           const acc = accounts[i];
           if ((acc.id && payrollLedgerIds.has(acc.id)) || isPayrollPayableAccount(acc)) {
             const value = Number(acc.value || 0);
-            if (side === "asset") forUsTotal = round2(minusMoney(forUsTotal, value));
-            else onUsTotal = round2(minusMoney(onUsTotal, value));
+            if (side === "asset") snp1.forUsTotal = round2(minusMoney(snp1.forUsTotal, value));
+            else snp1.onUsTotal = round2(minusMoney(snp1.onUsTotal, value));
             const catKey = `${side}_${acc.category || acc.name}`;
             if (categoryTotals[catKey] !== undefined) {
               categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], value));
@@ -388,8 +216,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
           });
         }
       }
-      forUsTotal = round2(plusMoney(forUsTotal, parties.forUsTotal));
-      onUsTotal = round2(plusMoney(onUsTotal, parties.onUsTotal));
+      snp1.forUsTotal = round2(plusMoney(snp1.forUsTotal, parties.forUsTotal));
+      snp1.onUsTotal = round2(plusMoney(snp1.onUsTotal, parties.onUsTotal));
 
       // Stock OTW — historical as of toDate (containers that were in transit on that date).
       // SP (supplier_partner) companies track OTW via the sp_goods_otw ledger account instead
@@ -434,7 +262,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         ).toNumber();
 
         if (stockOtwValue > 0) {
-          forUsTotal = plusMoney(forUsTotal, stockOtwValue);
+          snp1.forUsTotal = plusMoney(snp1.forUsTotal, stockOtwValue);
           categoryTotals["asset_Stock OTW"] = stockOtwValue;
           forUsAccounts.push({
             name: "Stock On The Way",
@@ -451,13 +279,13 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate, businessToday);
       if (rental.prepaidRent > 0.005) {
         const val = rental.prepaidRent;
-        forUsTotal = round2(plusMoney(forUsTotal, val));
+        snp1.forUsTotal = round2(plusMoney(snp1.forUsTotal, val));
         categoryTotals["asset_Prepaid Rent"] = plusMoney(categoryTotals["asset_Prepaid Rent"] || 0, val);
         forUsAccounts.push({ name: "Prepaid Rent", code: "PREPAID_RENT", value: val, category: "Prepaid Rent" });
       }
       if (rental.rentPayable > 0.005) {
         const val = rental.rentPayable;
-        onUsTotal = round2(plusMoney(onUsTotal, val));
+        snp1.onUsTotal = round2(plusMoney(snp1.onUsTotal, val));
         categoryTotals["liability_Rent Payable"] = plusMoney(categoryTotals["liability_Rent Payable"] || 0, val);
         onUsAccounts.push({ name: "Rent Payable", code: "RENT_PAYABLE", value: val, category: "Rent Payable" });
       }
@@ -499,10 +327,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // ============ FINAL CALCULATIONS ============
 
       // Round all totals to prevent floating point noise
-      forUsTotal = round2(forUsTotal);
-      onUsTotal = round2(onUsTotal);
-      incomeTotal = round2(incomeTotal);
-      expensesTotal = round2(expensesTotal);
+      snp1.forUsTotal = round2(snp1.forUsTotal);
+      snp1.onUsTotal = round2(snp1.onUsTotal);
+      snp1.incomeTotal = round2(snp1.incomeTotal);
+      snp1.expensesTotal = round2(snp1.expensesTotal);
 
       // ── Merge stock accounts into one combined Inventory line ────────────────
       // "Stock In Hand (Inventory)" (computed from inventory table) and ledger
@@ -537,7 +365,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Supplier-partner companies also include signed partner equity directly:
       // debit equity increases the position, while credit equity reduces it.
       const equityNetPositionContribution = equityIncludedInNetPosition ? equity.total : 0;
-      const netPosition = round2(toMoney(forUsTotal).minus(onUsTotal).plus(equityNetPositionContribution));
+      const netPosition = round2(toMoney(snp1.forUsTotal).minus(snp1.onUsTotal).plus(equityNetPositionContribution));
 
       const netPositionLabel = netPosition >= 0 ? "We have more than we owe" : "We owe more than we have";
 
@@ -574,24 +402,24 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       // Net Worth and Profit for backward compatibility
       const netWorth = netPosition;
-      const netProfit = round2(minusMoney(incomeTotal, expensesTotal));
+      const netProfit = round2(minusMoney(snp1.incomeTotal, snp1.expensesTotal));
 
       // Breakdown for display
       const netPositionBreakdown = {
         assets: {
-          total: forUsTotal,
+          total: snp1.forUsTotal,
           breakdown: forUsBreakdown,
         },
         liabilities: {
-          total: onUsTotal,
+          total: snp1.onUsTotal,
           breakdown: onUsBreakdown,
         },
         income: {
-          total: incomeTotal,
+          total: snp1.incomeTotal,
           breakdown: incomeBreakdown,
         },
         expenses: {
-          total: expensesTotal,
+          total: snp1.expensesTotal,
           breakdown: expensesBreakdown,
         },
         equity: {
@@ -603,29 +431,29 @@ export function registerStatsNetProfitRoutes(app: Express) {
       };
 
       const _result = {
-        totalIncome: incomeTotal,
-        totalExpenses: expensesTotal,
+        totalIncome: snp1.incomeTotal,
+        totalExpenses: snp1.expensesTotal,
         netProfit,
         spPosProfit,
         ...(isSpCompany ? { spPosProfitPeriodStartDate, spPosProfitAsOfDate } : {}),
         ...(spPosProfitBaselineDate ? { spPosProfitBaselineDate } : {}),
         forUs: {
-          total: forUsTotal,
+          total: snp1.forUsTotal,
           breakdown: forUsBreakdown,
           accounts: forUsAccounts,
         },
         onUs: {
-          total: onUsTotal,
+          total: snp1.onUsTotal,
           breakdown: onUsBreakdown,
           accounts: onUsAccounts,
         },
         income: {
-          total: incomeTotal,
+          total: snp1.incomeTotal,
           breakdown: incomeBreakdown,
           accounts: incomeAccounts,
         },
         expenses: {
-          total: expensesTotal,
+          total: snp1.expensesTotal,
           breakdown: expensesBreakdown,
           accounts: expensesAccounts,
         },
@@ -638,10 +466,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
         netPosition,
         netPositionLabel,
         netPositionBreakdown,
-        forUsTotal,
-        onUsTotal,
-        incomeTotal,
-        expensesTotal,
+        forUsTotal: snp1.forUsTotal,
+        onUsTotal: snp1.onUsTotal,
+        incomeTotal: snp1.incomeTotal,
+        expensesTotal: snp1.expensesTotal,
         notInLedger: parties.notInLedger,
         currency: {
           ...netPositionCurrency,
@@ -655,7 +483,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       if (toDate) _setCached(_cacheKey, _result);
       res.json(_result);
     } catch (error: unknown) {
-      logger.error("[/api/stats/net-profit] Unhandled error:", { error: error });
+      logger.error("[/api/stats/net-profit] Unhandled error:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
