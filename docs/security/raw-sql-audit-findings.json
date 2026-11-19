@@ -1,27 +1,27 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 5346,
+    "scannedFiles": 5349,
     "perRoot": {
-      "server": 3037,
+      "server": 3039,
       "shared": 179,
       "scripts": 286,
       "migrations": 108,
-      "tests": 1733
+      "tests": 1734
     },
-    "totalSites": 1225,
+    "totalSites": 1229,
     "byCategory": {
       "plpgsql-execute": 15,
-      "indirect-query-text": 121,
-      "query-text": 567,
+      "indirect-query-text": 122,
+      "query-text": 570,
       "assembled-sql-text": 435,
       "sql.raw": 58,
       "dynamic-identifier": 22,
       "sql-array-join": 7
     },
     "byDisposition": {
-      "auto-verified": 684,
-      "reviewed": 541
+      "auto-verified": 687,
+      "reviewed": 542
     },
     "userControlledValidated": 1,
     "unresolved": 0
@@ -3115,7 +3115,7 @@
       "findingId": "RSQL-0129",
       "id": "b769f8031fcf847fd28f",
       "path": "server/offline/browserSync/browserSyncApply.ts",
-      "line": 220,
+      "line": 278,
       "category": "query-text",
       "sink": "client.query",
       "context": "priorReceipt",
@@ -3133,7 +3133,7 @@
       "findingId": "RSQL-0130",
       "id": "306411816f9e855fbbc9",
       "path": "server/offline/browserSync/browserSyncApply.ts",
-      "line": 249,
+      "line": 307,
       "category": "query-text",
       "sink": "client.query",
       "context": "insertReceipt",
@@ -3151,7 +3151,7 @@
       "findingId": "RSQL-0131",
       "id": "12839514c4b9afc3f53a",
       "path": "server/offline/browserSync/browserSyncApply.ts",
-      "line": 398,
+      "line": 458,
       "category": "query-text",
       "sink": "pool.query",
       "context": "listBrowserReceipts",
@@ -3169,7 +3169,7 @@
       "findingId": "RSQL-0132",
       "id": "6216b1693ebbe67b4ad1",
       "path": "server/offline/pcLocal/localReadOnlyGuard.ts",
-      "line": 75,
+      "line": 84,
       "category": "indirect-query-text",
       "sink": "client.query",
       "context": "defaultConnect.query",
@@ -23594,6 +23594,84 @@
     },
     {
       "findingId": "RSQL-1100",
+      "id": "03773b00775cb65c755d",
+      "path": "tests/pc-sync-offline-edits.test.ts",
+      "line": 129,
+      "category": "query-text",
+      "sink": "pool.query",
+      "context": "<module>",
+      "dynamicInputs": [],
+      "userControlled": "no",
+      "validation": "All dynamic parts proven literal/const by the scanner",
+      "parameterization": "no dynamic value in SQL text",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "auto-verified:static",
+      "reason": null
+    },
+    {
+      "findingId": "RSQL-1101",
+      "id": "1ce033316c0ef2612c2e",
+      "path": "tests/pc-sync-offline-edits.test.ts",
+      "line": 130,
+      "category": "query-text",
+      "sink": "pool.query",
+      "context": "<module>",
+      "dynamicInputs": [],
+      "userControlled": "no",
+      "validation": "All dynamic parts proven literal/const by the scanner",
+      "parameterization": "no dynamic value in SQL text",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "auto-verified:static",
+      "reason": null
+    },
+    {
+      "findingId": "RSQL-1102",
+      "id": "2661f30aa2feb335c459",
+      "path": "tests/pc-sync-offline-edits.test.ts",
+      "line": 131,
+      "category": "query-text",
+      "sink": "pool.query",
+      "context": "<module>",
+      "dynamicInputs": [],
+      "userControlled": "no",
+      "validation": "All dynamic parts proven literal/const by the scanner",
+      "parameterization": "no dynamic value in SQL text",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "auto-verified:static",
+      "reason": null
+    },
+    {
+      "findingId": "RSQL-1103",
+      "id": "b6d89f6c2e7f32823e99",
+      "path": "tests/pc-sync-offline-edits.test.ts",
+      "line": 332,
+      "category": "indirect-query-text",
+      "sink": "local.query",
+      "context": "connect.query",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
+          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "test-only; the SQL text is the guard's literals and the values are bound",
+      "parameterization": "dynamic text reviewed (values bound separately)",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
+    },
+    {
+      "findingId": "RSQL-1104",
       "id": "fce6bad1e56f08df3205",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 59,
@@ -23617,7 +23695,7 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
-      "findingId": "RSQL-1101",
+      "findingId": "RSQL-1105",
       "id": "0b1cc895c024f0cb17d1",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 125,
@@ -23635,7 +23713,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1102",
+      "findingId": "RSQL-1106",
       "id": "e703488fc0d8aaa647ef",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 126,
@@ -23653,7 +23731,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1103",
+      "findingId": "RSQL-1107",
       "id": "0ffdbbf6223e83f271f3",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 129,
@@ -23671,7 +23749,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1104",
+      "findingId": "RSQL-1108",
       "id": "c2f8d26932097a821d92",
       "path": "tests/perpetual-inventory-cutover.test.ts",
       "line": 31,
@@ -23695,7 +23773,7 @@
       "reason": "The SQL text reaching client.query is always a literal written in this test; only bound values vary. Test-only helper. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1105",
+      "findingId": "RSQL-1109",
       "id": "f0e627f7fd7de40ebf1d",
       "path": "tests/perpetual-inventory-cutover.test.ts",
       "line": 115,
@@ -23713,7 +23791,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1106",
+      "findingId": "RSQL-1110",
       "id": "0fa4efd745583501e846",
       "path": "tests/perpetual-inventory-factory.test.ts",
       "line": 47,
@@ -23737,7 +23815,7 @@
       "reason": "The SQL text reaching client.query is always a literal written in this test; only bound values vary. Test-only helper. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1107",
+      "findingId": "RSQL-1111",
       "id": "91da514ca6a98e1d5e1f",
       "path": "tests/perpetual-inventory-factory.test.ts",
       "line": 212,
@@ -23755,7 +23833,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1108",
+      "findingId": "RSQL-1112",
       "id": "60c17e09077ea229a5fc",
       "path": "tests/phase19c-factory-imports-rates.test.ts",
       "line": 46,
@@ -23779,7 +23857,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1109",
+      "findingId": "RSQL-1113",
       "id": "4a26bf93c48efedf1420",
       "path": "tests/phase19c-factory-imports-rates.test.ts",
       "line": 148,
@@ -23797,7 +23875,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1110",
+      "findingId": "RSQL-1114",
       "id": "752dc004a3414c175202",
       "path": "tests/phase21b-audit-in-transaction.test.ts",
       "line": 59,
@@ -23821,7 +23899,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1111",
+      "findingId": "RSQL-1115",
       "id": "c6f5dbdd765d50b5f483",
       "path": "tests/phase21b-audit-in-transaction.test.ts",
       "line": 180,
@@ -23845,7 +23923,7 @@
       "reason": "Statements are hard-coded literals in test teardown. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1112",
+      "findingId": "RSQL-1116",
       "id": "b20edb7f60cfeb2d4a1c",
       "path": "tests/phase22c-factory-writers-engine.test.ts",
       "line": 39,
@@ -23869,7 +23947,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1113",
+      "findingId": "RSQL-1117",
       "id": "498115c4ee58c6105c11",
       "path": "tests/phase22c-factory-writers-engine.test.ts",
       "line": 212,
@@ -23887,7 +23965,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1114",
+      "findingId": "RSQL-1118",
       "id": "90f8a7338d1dae9145c4",
       "path": "tests/phase3-inventory-valuation-db.test.ts",
       "line": 110,
@@ -23911,7 +23989,7 @@
       "reason": "companyId is a serial integer generated by PostgreSQL for a fixture row inside a rolled-back transaction. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1115",
+      "findingId": "RSQL-1119",
       "id": "256738338379cb7872dd",
       "path": "tests/pos-item-replacement-service-db.test.ts",
       "line": 34,
@@ -23935,7 +24013,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1116",
+      "findingId": "RSQL-1120",
       "id": "7cb7e9cc18b2a79ada49",
       "path": "tests/pressing-machine-tracking.database.test.ts",
       "line": 93,
@@ -23959,7 +24037,7 @@
       "reason": "Query objects are built only with drizzle's parameterising sql tag. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1117",
+      "findingId": "RSQL-1121",
       "id": "9e4af4b7c3c836b8280c",
       "path": "tests/pressing-machine-tracking.database.test.ts",
       "line": 221,
@@ -23977,7 +24055,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1118",
+      "findingId": "RSQL-1122",
       "id": "bae0f522c9bce9427c3a",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 48,
@@ -23995,7 +24073,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1119",
+      "findingId": "RSQL-1123",
       "id": "33219915a7d7dc53bf72",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 49,
@@ -24013,7 +24091,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1120",
+      "findingId": "RSQL-1124",
       "id": "d831a15d6e9e88a036e5",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 50,
@@ -24031,7 +24109,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1121",
+      "findingId": "RSQL-1125",
       "id": "7b8b925362cd4dae8a05",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 53,
@@ -24049,7 +24127,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1122",
+      "findingId": "RSQL-1126",
       "id": "2f376ac3af05b3420cdb",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 54,
@@ -24067,7 +24145,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1123",
+      "findingId": "RSQL-1127",
       "id": "1f6328e710c84425874f",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 55,
@@ -24085,7 +24163,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1124",
+      "findingId": "RSQL-1128",
       "id": "da763fadb3eb83f58463",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 146,
@@ -24103,7 +24181,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1125",
+      "findingId": "RSQL-1129",
       "id": "6c447ac16b3a07698158",
       "path": "tests/rental-auto-transfer-company-scope.test.ts",
       "line": 147,
@@ -24121,7 +24199,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1126",
+      "findingId": "RSQL-1130",
       "id": "e2b0f9be69b736af60ff",
       "path": "tests/rental-payment-accounting-reconciliation.test.ts",
       "line": 16,
@@ -24145,7 +24223,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1127",
+      "findingId": "RSQL-1131",
       "id": "083a826c55de71f8d51a",
       "path": "tests/rental-payment-deletion-lifecycle.test.ts",
       "line": 11,
@@ -24169,7 +24247,7 @@
       "reason": "SQL text is literal at every caller. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
-      "findingId": "RSQL-1128",
+      "findingId": "RSQL-1132",
       "id": "a76772d447f56f4faed6",
       "path": "tests/retail-fashion-lifecycle-integration.test.ts",
       "line": 47,
@@ -24187,7 +24265,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1129",
+      "findingId": "RSQL-1133",
       "id": "879375d56d21799c3bbc",
       "path": "tests/retail-pos-inventory-workflow-integration.test.ts",
       "line": 56,
@@ -24205,7 +24283,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1130",
+      "findingId": "RSQL-1134",
       "id": "c18c1e71e80f6c10962b",
       "path": "tests/retail-supplier-purchase-post-db.test.ts",
       "line": 17,
@@ -24229,7 +24307,7 @@
       "reason": "The query text is always one of the literal INSERT strings written in this file; per-call data is bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1131",
+      "findingId": "RSQL-1135",
       "id": "6480bf3f02d142b8d6f0",
       "path": "tests/scheduler-state-and-overdue-db.test.ts",
       "line": 42,
@@ -24253,7 +24331,7 @@
       "reason": "The interpolated fragment is one of two hard-coded SQL interval expressions chosen by the test author; runType/status are bound as $1/$2. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1132",
+      "findingId": "RSQL-1136",
       "id": "bc75cfbf5e5c7ec9160c",
       "path": "tests/security-raw-sql-checker.test.ts",
       "line": 110,
@@ -24277,7 +24355,7 @@
       "reason": "These PL/pgSQL statements are test data inside a JavaScript string literal used to prove the scanner flags %s/concatenated EXECUTE; the text is parsed, never sent to PostgreSQL."
     },
     {
-      "findingId": "RSQL-1133",
+      "findingId": "RSQL-1137",
       "id": "e24d0bc294cba547f6e4",
       "path": "tests/security-raw-sql-checker.test.ts",
       "line": 110,
@@ -24301,7 +24379,7 @@
       "reason": "These PL/pgSQL statements are test data inside a JavaScript string literal used to prove the scanner flags %s/concatenated EXECUTE; the text is parsed, never sent to PostgreSQL."
     },
     {
-      "findingId": "RSQL-1134",
+      "findingId": "RSQL-1138",
       "id": "50abcbafd8713da3c15b",
       "path": "tests/security-raw-sql-checker.test.ts",
       "line": 166,
@@ -24319,7 +24397,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1135",
+      "findingId": "RSQL-1139",
       "id": "bccc7ba94e17cfa1e349",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 198,
@@ -24343,7 +24421,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1136",
+      "findingId": "RSQL-1140",
       "id": "bbbc9599681636702511",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 200,
@@ -24367,7 +24445,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1137",
+      "findingId": "RSQL-1141",
       "id": "7b773b84358a4beffeb1",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 203,
@@ -24391,7 +24469,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1138",
+      "findingId": "RSQL-1142",
       "id": "211f8037d5cf60ae8968",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 210,
@@ -24415,7 +24493,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1139",
+      "findingId": "RSQL-1143",
       "id": "9739cb7a42976045c356",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 214,
@@ -24439,7 +24517,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1140",
+      "findingId": "RSQL-1144",
       "id": "61b943ccba402adff126",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 215,
@@ -24463,7 +24541,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1141",
+      "findingId": "RSQL-1145",
       "id": "0961e19dc20e53cf3322",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 247,
@@ -24487,7 +24565,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1142",
+      "findingId": "RSQL-1146",
       "id": "7d48bb006adc7b427c20",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 280,
@@ -24516,7 +24594,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1143",
+      "findingId": "RSQL-1147",
       "id": "41690dda7a105d35eb1a",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 296,
@@ -24540,7 +24618,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1144",
+      "findingId": "RSQL-1148",
       "id": "9c74fa7abeb78a362af8",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 301,
@@ -24564,7 +24642,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1145",
+      "findingId": "RSQL-1149",
       "id": "17937191c9813603ecda",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 307,
@@ -24588,7 +24666,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1146",
+      "findingId": "RSQL-1150",
       "id": "769f9a0f739ff29cb90c",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 310,
@@ -24612,7 +24690,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1147",
+      "findingId": "RSQL-1151",
       "id": "e87fdb1d89f0c791a693",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 313,
@@ -24636,7 +24714,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1148",
+      "findingId": "RSQL-1152",
       "id": "ae9a176cbcbf44a973dd",
       "path": "tests/security-sql-injection-regression.test.ts",
       "line": 330,
@@ -24660,7 +24738,7 @@
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
     },
     {
-      "findingId": "RSQL-1149",
+      "findingId": "RSQL-1153",
       "id": "d030a42dcef593b6ffba",
       "path": "tests/setup.ts",
       "line": 185,
@@ -24694,7 +24772,7 @@
       "reason": "Identifiers come from pg_catalog of the disposable test database and from literal table names in test teardown; companyId is bound as $1. Test-only teardown code (tests/setup.ts cleanupTestData), never part of the server."
     },
     {
-      "findingId": "RSQL-1150",
+      "findingId": "RSQL-1154",
       "id": "022139a3d7b54509a9c2",
       "path": "tests/setup.ts",
       "line": 530,
@@ -24718,7 +24796,7 @@
       "reason": "Table names are read from pg_catalog of the test database and company.id is bound as $1; runs only in test teardown cleanupTestData (tests/setup.ts:523)."
     },
     {
-      "findingId": "RSQL-1151",
+      "findingId": "RSQL-1155",
       "id": "dd3f0d34515f428fd95c",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 18,
@@ -24742,7 +24820,7 @@
       "reason": "Query text is built only from literals and the code constants OLD = \"NOW() - INTERVAL '40 days'\" / RECENT (tests/soft-delete-purge-db.test.ts:14-15). Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1152",
+      "findingId": "RSQL-1156",
       "id": "89c22345d90a4ae36526",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 22,
@@ -24766,7 +24844,7 @@
       "reason": "Table identifier is always a literal written in this test file; rowId is bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1153",
+      "findingId": "RSQL-1157",
       "id": "190351d9e1eb4ca939a6",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 46,
@@ -24790,7 +24868,7 @@
       "reason": "Only hard-coded SQL timestamp expressions from file constants reach the text; code/name bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1154",
+      "findingId": "RSQL-1158",
       "id": "53c74dc2e8b35813ee6e",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 128,
@@ -24814,7 +24892,7 @@
       "reason": "Only test-authored SQL timestamp expressions are interpolated; company/batch code are bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1155",
+      "findingId": "RSQL-1159",
       "id": "9366960041e3162c959e",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 144,
@@ -24832,7 +24910,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1156",
+      "findingId": "RSQL-1160",
       "id": "24db79a7fb939ffc4e77",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 179,
@@ -24850,7 +24928,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1157",
+      "findingId": "RSQL-1161",
       "id": "9602e0eaaff7244e752e",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 196,
@@ -24868,7 +24946,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1158",
+      "findingId": "RSQL-1162",
       "id": "61df8d9213e9d5e1e995",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 201,
@@ -24886,7 +24964,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1159",
+      "findingId": "RSQL-1163",
       "id": "2289d26d9487505d760a",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 231,
@@ -24904,7 +24982,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1160",
+      "findingId": "RSQL-1164",
       "id": "1c8d8d2450d11ec97008",
       "path": "tests/soft-delete-purge-db.test.ts",
       "line": 240,
@@ -24922,7 +25000,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1161",
+      "findingId": "RSQL-1165",
       "id": "5eb47e60d2ca3ea9d076",
       "path": "tests/sp-full-reconciliation-closeout.test.ts",
       "line": 86,
@@ -24946,7 +25024,7 @@
       "reason": "SQL text is always one of three literal UPDATE statements in this file; ids are bound as values. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1162",
+      "findingId": "RSQL-1166",
       "id": "beb7328ce713718e711d",
       "path": "tests/stock-in-sales-comparison-service-db.test.ts",
       "line": 47,
@@ -24970,7 +25048,7 @@
       "reason": "Query text is always a literal INSERT written in this test file. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1163",
+      "findingId": "RSQL-1167",
       "id": "a316aea4bab205add996",
       "path": "tests/stock-in-sales-detail-db.test.ts",
       "line": 23,
@@ -24994,7 +25072,7 @@
       "reason": "SQL text is literal at every call site; tags and ids are parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1164",
+      "findingId": "RSQL-1168",
       "id": "aa26027785d777504b51",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 25,
@@ -25012,7 +25090,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1165",
+      "findingId": "RSQL-1169",
       "id": "f7eba9caed4a4365129a",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 45,
@@ -25030,7 +25108,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1166",
+      "findingId": "RSQL-1170",
       "id": "2d540bac5ff55b5f0772",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 54,
@@ -25048,7 +25126,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1167",
+      "findingId": "RSQL-1171",
       "id": "d865e0c8295ccc082060",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 60,
@@ -25066,7 +25144,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1168",
+      "findingId": "RSQL-1172",
       "id": "a63cbf253eba6a61af9f",
       "path": "tests/stock-transfer-order-wa-phase7-postgres.test.ts",
       "line": 69,
@@ -25084,7 +25162,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1169",
+      "findingId": "RSQL-1173",
       "id": "c7030604b138a7d7cd87",
       "path": "tests/unified-accounting-certification.test.ts",
       "line": 70,
@@ -25102,7 +25180,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1170",
+      "findingId": "RSQL-1174",
       "id": "9462459675886f74046e",
       "path": "tests/unified-rental-accounting-service-db.test.ts",
       "line": 33,
@@ -25126,7 +25204,7 @@
       "reason": "Executed object is a drizzle parameterised SQL whose text is code literals; interpolated values become bind parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1171",
+      "findingId": "RSQL-1175",
       "id": "72e5ac9ec1643604d3bc",
       "path": "tests/voucher-account-group-picker.database.test.ts",
       "line": 62,
@@ -25150,7 +25228,7 @@
       "reason": "Text is fixed code; codes/suffixes are bound parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1172",
+      "findingId": "RSQL-1176",
       "id": "93890a1f4a29ace85b40",
       "path": "tests/voucher-balance-guard.test.ts",
       "line": 38,
@@ -25174,7 +25252,7 @@
       "reason": "Every statement run through this wrapper is a literal written in this test; values bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1173",
+      "findingId": "RSQL-1177",
       "id": "6e73ae5e64c882434b3d",
       "path": "tests/voucher-balance-guard.test.ts",
       "line": 189,
@@ -25198,7 +25276,7 @@
       "reason": "The SQL-shaped template is an expected substring passed to expect(check).toContain() over the committed manifest's erp_voucher_balance_check body; it is never sent to a database."
     },
     {
-      "findingId": "RSQL-1174",
+      "findingId": "RSQL-1178",
       "id": "7bbfdb494f96c479d786",
       "path": "tests/voucher-balance-guard.test.ts",
       "line": 190,
@@ -25222,7 +25300,7 @@
       "reason": "The SQL-shaped template is an expected substring passed to expect(check).toContain() over the committed manifest's erp_voucher_balance_check body; it is never sent to a database."
     },
     {
-      "findingId": "RSQL-1175",
+      "findingId": "RSQL-1179",
       "id": "e576d5ec0e237a6ccedb",
       "path": "tests/wave10-engine-consolidation.test.ts",
       "line": 151,
@@ -25246,7 +25324,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1176",
+      "findingId": "RSQL-1180",
       "id": "68ada9359efc0a429d38",
       "path": "tests/wave10-net-position-banks.test.ts",
       "line": 130,
@@ -25270,7 +25348,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1177",
+      "findingId": "RSQL-1181",
       "id": "5306ca01cf71feb8b52b",
       "path": "tests/wave10-net-position-engine.test.ts",
       "line": 121,
@@ -25294,7 +25372,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1178",
+      "findingId": "RSQL-1182",
       "id": "f6d497afb57477886d3b",
       "path": "tests/wave10-net-position-engine.test.ts",
       "line": 382,
@@ -25312,7 +25390,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1179",
+      "findingId": "RSQL-1183",
       "id": "a9fc7fdb61c90f8a593a",
       "path": "tests/wave10-party-balance-engine.test.ts",
       "line": 91,
@@ -25336,7 +25414,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1180",
+      "findingId": "RSQL-1184",
       "id": "b68ade171c2648e8dc2c",
       "path": "tests/wave10-party-reader-rules.test.ts",
       "line": 143,
@@ -25360,7 +25438,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1181",
+      "findingId": "RSQL-1185",
       "id": "de39b82b68b53f5d28f9",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 66,
@@ -25384,7 +25462,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1182",
+      "findingId": "RSQL-1186",
       "id": "b34ecff1253ab902435d",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 67,
@@ -25408,7 +25486,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1183",
+      "findingId": "RSQL-1187",
       "id": "fded8fc6fccf108bdce9",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 207,
@@ -25432,7 +25510,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1184",
+      "findingId": "RSQL-1188",
       "id": "310c61f106f47853e5b6",
       "path": "tests/wave11-factory-cost-basis.test.ts",
       "line": 228,
@@ -25450,7 +25528,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1185",
+      "findingId": "RSQL-1189",
       "id": "7846b0d9b96381704e08",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 88,
@@ -25474,7 +25552,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1186",
+      "findingId": "RSQL-1190",
       "id": "7468d9101c570e67f25a",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 146,
@@ -25498,7 +25576,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1187",
+      "findingId": "RSQL-1191",
       "id": "41114c9856f7f3d35236",
       "path": "tests/wave11-followups-factory.test.ts",
       "line": 154,
@@ -25516,7 +25594,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1188",
+      "findingId": "RSQL-1192",
       "id": "2b43631c2304c7849e6c",
       "path": "tests/wave12-audit-trail.test.ts",
       "line": 36,
@@ -25540,7 +25618,7 @@
       "reason": "Query text is always literal; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1189",
+      "findingId": "RSQL-1193",
       "id": "4c4cae6b8f544fcab85c",
       "path": "tests/wave12-audit-trail.test.ts",
       "line": 176,
@@ -25564,7 +25642,7 @@
       "reason": "The interpolated value is the integer id of the fixture company the test itself inserted; used in a test-only trigger DDL. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1190",
+      "findingId": "RSQL-1194",
       "id": "f97c0a6ae2fdbf9fd997",
       "path": "tests/wave13-payables-group.test.ts",
       "line": 163,
@@ -25588,7 +25666,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1191",
+      "findingId": "RSQL-1195",
       "id": "d3628eff7b48a7631bf5",
       "path": "tests/wave14-currency.test.ts",
       "line": 136,
@@ -25612,7 +25690,7 @@
       "reason": "COMMENT ON FUNCTION interpolates a code-constant version marker (no quotes) into a string literal. Test file run only by vitest against the disposable test database (server/db.ts NODE_ENV=test); no request data reaches it."
     },
     {
-      "findingId": "RSQL-1192",
+      "findingId": "RSQL-1196",
       "id": "326ffbc307c36f66c558",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 106,
@@ -25636,7 +25714,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1193",
+      "findingId": "RSQL-1197",
       "id": "9a0e63e4cee7dfe80835",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 107,
@@ -25660,7 +25738,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1194",
+      "findingId": "RSQL-1198",
       "id": "094db4a48ee0650762e6",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 151,
@@ -25684,7 +25762,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1195",
+      "findingId": "RSQL-1199",
       "id": "82926d29f183840397dd",
       "path": "tests/wave14-factory-supplier-leftovers.test.ts",
       "line": 168,
@@ -25702,7 +25780,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1196",
+      "findingId": "RSQL-1200",
       "id": "e972350291420220c3bf",
       "path": "tests/wave15-stock-paths.test.ts",
       "line": 446,
@@ -25726,7 +25804,7 @@
       "reason": "Fragment is built by application code from a constant table allowlist and a literal column reference; ids bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1197",
+      "findingId": "RSQL-1201",
       "id": "376cdef3a9b663a63e2c",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 80,
@@ -25755,7 +25833,7 @@
       "reason": "Column names are literal object keys written at each call site, and the VALUES list is only $n placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1198",
+      "findingId": "RSQL-1202",
       "id": "63f06cd89db597f032ee",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 414,
@@ -25779,7 +25857,7 @@
       "reason": "Table identifier is one of two literals in the loop header; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1199",
+      "findingId": "RSQL-1203",
       "id": "dfd90dccca45e69997b3",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 418,
@@ -25803,7 +25881,7 @@
       "reason": "Table identifier is one of two literals; id bound as $1. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1200",
+      "findingId": "RSQL-1204",
       "id": "2d024d678f072d6c2a64",
       "path": "tests/wave16-accounts-history.test.ts",
       "line": 564,
@@ -25832,7 +25910,7 @@
       "reason": "Column names are literal keys at each test call site; VALUES list is placeholder text only. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1201",
+      "findingId": "RSQL-1205",
       "id": "c7f8a16445c67b919a03",
       "path": "tests/wave16-boot-repairs-hard-deletes.test.ts",
       "line": 90,
@@ -25856,7 +25934,7 @@
       "reason": "Predicate text is a literal at every call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1202",
+      "findingId": "RSQL-1206",
       "id": "5e11360880768bcfcf04",
       "path": "tests/wave17-reporting.test.ts",
       "line": 63,
@@ -25880,7 +25958,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1203",
+      "findingId": "RSQL-1207",
       "id": "3127ec0106941b6be525",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 73,
@@ -25904,7 +25982,7 @@
       "reason": "All query text is literal or uses table names iterated from in-function constant arrays. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1204",
+      "findingId": "RSQL-1208",
       "id": "bd003d249fce1a1ec82e",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 179,
@@ -25922,7 +26000,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1205",
+      "findingId": "RSQL-1209",
       "id": "b199239b0c339637bd37",
       "path": "tests/wave17b-inventory-factory.test.ts",
       "line": 191,
@@ -25940,7 +26018,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1206",
+      "findingId": "RSQL-1210",
       "id": "e671fdf7c79ee4040a4c",
       "path": "tests/wave17c-retail-money.test.ts",
       "line": 47,
@@ -25958,7 +26036,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1207",
+      "findingId": "RSQL-1211",
       "id": "81dca56333b09617dd3d",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 45,
@@ -25982,7 +26060,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1208",
+      "findingId": "RSQL-1212",
       "id": "ae82a28784328d0c8f89",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 52,
@@ -26006,7 +26084,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1209",
+      "findingId": "RSQL-1213",
       "id": "d59ccf9a0a5801037814",
       "path": "tests/wave17d-fx-rate-required.test.ts",
       "line": 63,
@@ -26024,7 +26102,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1210",
+      "findingId": "RSQL-1214",
       "id": "cbfb03f0f0ca9f145464",
       "path": "tests/wave17d-retail-cash-and-stock.test.ts",
       "line": 59,
@@ -26042,7 +26120,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1211",
+      "findingId": "RSQL-1215",
       "id": "960471053d41d0092403",
       "path": "tests/wave18b-accounts-deletes.test.ts",
       "line": 73,
@@ -26071,7 +26149,7 @@
       "reason": "Column list comes from literal object keys at three test call sites and the VALUES list is placeholders. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1212",
+      "findingId": "RSQL-1216",
       "id": "02d1b7aea2b76472bb74",
       "path": "tests/wave18b-accounts-deletes.test.ts",
       "line": 107,
@@ -26095,7 +26173,7 @@
       "reason": "Identifier is always the literal \"ledger_accounts\"; id and daysAgo bound as $1/$2. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1213",
+      "findingId": "RSQL-1217",
       "id": "cbc9974df26edd189d4c",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 52,
@@ -26119,7 +26197,7 @@
       "reason": "SQL text is always a literal INSERT written in this test file; all data bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1214",
+      "findingId": "RSQL-1218",
       "id": "50f5519b0dcef9696a16",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 286,
@@ -26137,7 +26215,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1215",
+      "findingId": "RSQL-1219",
       "id": "dd012a16b1fadaf37eac",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 309,
@@ -26155,7 +26233,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1216",
+      "findingId": "RSQL-1220",
       "id": "f804b39da31040acb93a",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 352,
@@ -26179,7 +26257,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1217",
+      "findingId": "RSQL-1221",
       "id": "1c10d1e8e95dae7ea4be",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 356,
@@ -26208,7 +26286,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1218",
+      "findingId": "RSQL-1222",
       "id": "1fa7e5eb29d75d31b34a",
       "path": "tests/wave18c-reports-imports.test.ts",
       "line": 362,
@@ -26237,7 +26315,7 @@
       "reason": "False positive: this string is the URL query string passed to excelRows() (tests/wave18c-reports-imports.test.ts:149-151, agent.get('/api/accounts/statement/export-excel?...')), not SQL; values are test-generated ids/dates."
     },
     {
-      "findingId": "RSQL-1219",
+      "findingId": "RSQL-1223",
       "id": "c30657cd4045b72573f4",
       "path": "tests/wave7-leftovers-atomic-posting.test.ts",
       "line": 81,
@@ -26261,7 +26339,7 @@
       "reason": "Predicate text is a literal at each call site; ids/patterns are bound parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1220",
+      "findingId": "RSQL-1224",
       "id": "e89be12baf2cdd9cea77",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 111,
@@ -26285,7 +26363,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1221",
+      "findingId": "RSQL-1225",
       "id": "6a83cb4cc275e2eeec88",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 112,
@@ -26309,7 +26387,7 @@
       "reason": "Query text is literal at all call sites; values bound via params. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1222",
+      "findingId": "RSQL-1226",
       "id": "59ba4cf2309c8c26271d",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 167,
@@ -26333,7 +26411,7 @@
       "reason": "Teardown SQL is literal or uses table names from an inline constant array. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1223",
+      "findingId": "RSQL-1227",
       "id": "604a6236079eec62582c",
       "path": "tests/wave8-4-factory-pos-commission.test.ts",
       "line": 184,
@@ -26351,7 +26429,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1224",
+      "findingId": "RSQL-1228",
       "id": "401ff31ed8f659fda17b",
       "path": "tests/wave9-admin-history-safety.test.ts",
       "line": 65,
@@ -26375,7 +26453,7 @@
       "reason": "FROM-clause text is a literal at each test call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
-      "findingId": "RSQL-1225",
+      "findingId": "RSQL-1229",
       "id": "7af23dddbeb41f05bb73",
       "path": "tests/wave9-admin-history-safety.test.ts",
       "line": 70,

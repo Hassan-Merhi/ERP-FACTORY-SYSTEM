@@ -23,6 +23,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { hashEvidence } from "../../edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phase9EventProtocol.mjs";
+import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
 import { Phase9EventConflict } from "../../edge/phase9CloudEventStore.mjs";
 import { Phase9StockItemNotYetSynced, translatePhase9LanStockItems } from "../../edge/phase9StockItemMap.mjs";
 import { PHASE9_HANDLERS } from "../../edge/phase9OperatorApply";
@@ -50,7 +51,13 @@ export interface BrowserOperationRequest {
   kind: string;
   localRef: number;
   capturedAt: string;
-  input: unknown;
+  input?: unknown;
+  /**
+   * A finished envelope built by a PC's live route in the change's own
+   * transaction (edits and deletes of records it already had). Accepted only
+   * when the caller allows it (the PC route), for PC_ENVELOPE_KINDS.
+   */
+  envelope?: Record<string, unknown>;
   /** A conflict code the user (Admin/Developer) approves, the factory's version winning. */
   override?: string | null;
 }
@@ -100,14 +107,61 @@ function refusalFrom(error: unknown): BrowserOperationRefusal {
 }
 
 /** Build and validate the evidence envelope; refusals are the browser's input being wrong. */
-export function prepareBrowserOperation(actor: BrowserActor, request: BrowserOperationRequest): PreparedOperation {
+/** Kinds a PC may deliver as a finished envelope, and their stream. */
+export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze({
+  [PHASE9_PAYMENT_EDIT_KIND]: "payments",
+  [PHASE9_PAYMENT_DELETE_KIND]: "payments",
+});
+
+function prepareEnvelopeOperation(actor: BrowserActor, request: BrowserOperationRequest): PreparedOperation {
+  const stream = Object.prototype.hasOwnProperty.call(PC_ENVELOPE_KINDS, request.kind)
+    ? PC_ENVELOPE_KINDS[request.kind]
+    : null;
+  const payload = request.envelope;
+  if (
+    !stream ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    payload.kind !== request.kind ||
+    payload.actorUsername !== actor.username ||
+    !Number.isSafeInteger(request.localRef) ||
+    request.localRef < 1 ||
+    request.localRef > BROWSER_LOCAL_REF_MAX
+  ) {
+    throw new BrowserOperationRefusal("OFFLINE_BROWSER_REQUEST_INVALID");
+  }
+  const event = {
+    sequence: "1",
+    operationId: request.operationId.toLowerCase(),
+    companyId: actor.companyId,
+    actorUserId: actor.userId,
+    kind: request.kind,
+    localRef: request.localRef,
+    payload,
+    payloadSha256: hashEvidence(payload),
+  };
+  try {
+    // Same company, person, operation id and local reference inside the payload, and a valid shape.
+    validatePhase9Event(stream, event);
+  } catch (error) {
+    throw refusalFrom(error);
+  }
+  return { stream, event };
+}
+
+export function prepareBrowserOperation(
+  actor: BrowserActor,
+  request: BrowserOperationRequest,
+  { allowEnvelope = false }: { allowEnvelope?: boolean } = {}
+): PreparedOperation {
   if (
     typeof request.deviceId !== "string" ||
     !UUID.test(request.deviceId) ||
     typeof request.operationId !== "string" ||
     !UUID.test(request.operationId) ||
     !Number.isSafeInteger(request.localRef) ||
-    request.localRef < BROWSER_LOCAL_REF_BASE ||
+    (request.envelope === undefined && request.localRef < BROWSER_LOCAL_REF_BASE) ||
     request.localRef > BROWSER_LOCAL_REF_MAX ||
     typeof request.capturedAt !== "string" ||
     !INSTANT.test(request.capturedAt)
@@ -117,6 +171,10 @@ export function prepareBrowserOperation(actor: BrowserActor, request: BrowserOpe
   const captured = Date.parse(request.capturedAt);
   if (!Number.isFinite(captured) || captured > Date.now() + MAX_CLOCK_SKEW_MS) {
     throw new BrowserOperationRefusal("OFFLINE_BROWSER_CLOCK_AHEAD");
+  }
+  if (request.envelope !== undefined) {
+    if (!allowEnvelope) throw new BrowserOperationRefusal("OFFLINE_BROWSER_REQUEST_INVALID");
+    return prepareEnvelopeOperation(actor, request);
   }
   const kind = browserOperationKind(request.kind);
   if (!kind) throw new BrowserOperationRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED");
@@ -286,6 +344,8 @@ export interface BrowserApplyOptions {
    * offline mode: owner-approved negative stock from PCs, always flagged).
    */
   preApprovedOverrides?: readonly string[];
+  /** Accept a finished envelope (PC_ENVELOPE_KINDS); only the PC route sets this. */
+  allowEnvelope?: boolean;
   /** Runs inside the apply transaction, after the receipt is written. */
   afterApply?: (client: PoolClient, receipt: BrowserReceipt, override: string | null) => Promise<void>;
 }
@@ -297,7 +357,7 @@ export async function applyBrowserOperation(
 ): Promise<BrowserApplyResult> {
   let prepared: PreparedOperation;
   try {
-    prepared = prepareBrowserOperation(actor, request);
+    prepared = prepareBrowserOperation(actor, request, { allowEnvelope: options.allowEnvelope === true });
   } catch (error) {
     if (error instanceof BrowserOperationRefusal) return { status: "invalid", code: error.message };
     throw error;

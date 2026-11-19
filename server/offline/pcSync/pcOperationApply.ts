@@ -55,13 +55,14 @@ async function insertFlag(
 }
 
 export async function applyPcOperation(actor: BrowserActor, request: BrowserOperationRequest): Promise<PcApplyResult> {
-  const first = await applyBrowserOperation(actor, request);
+  const first = await applyBrowserOperation(actor, request, { allowEnvelope: true });
   if (first.status !== "conflict" || !first.overridable || !PC_NEGATIVE_STOCK_CODES.includes(first.code)) return first;
   const code = first.code;
   const second = await applyBrowserOperation(
     actor,
     { ...request, override: code },
     {
+      allowEnvelope: true,
       preApprovedOverrides: [code],
       afterApply: (client, receipt) => insertFlag(client, actor, request, receipt, code, first.detail),
     }
