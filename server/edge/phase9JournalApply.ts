@@ -76,20 +76,29 @@ async function authorize(client: Queryable, event: Phase9JournalEvent): Promise<
   }
 }
 
-/** The factory daybook row the live route writes; never fails the journal. */
-async function writeFactoryDaybookTx(tx: DbTransaction, companyId: number, voucher: schema.Voucher): Promise<void> {
+/**
+ * The factory daybook row the live route writes; never fails the journal. It
+ * runs under a SAVEPOINT on the receipt's own connection (inside its BEGIN), so
+ * a failure here undoes only this row and nothing is committed early.
+ */
+async function writeFactoryDaybookTx(
+  client: Queryable,
+  tx: DbTransaction,
+  companyId: number,
+  voucher: schema.Voucher
+): Promise<void> {
+  await client.query("SAVEPOINT offline_journal_daybook");
   try {
-    await tx.transaction(async (sp) => {
-      const [settings] = await sp
-        .select({ id: schema.factorySettings.id })
-        .from(schema.factorySettings)
-        .where(eq(schema.factorySettings.companyId, companyId));
-      if (!settings) return;
+    const [settings] = await tx
+      .select({ id: schema.factorySettings.id })
+      .from(schema.factorySettings)
+      .where(eq(schema.factorySettings.companyId, companyId));
+    if (settings) {
       const currency = voucher.currency || "USD";
       const baseTotal = toMoney(voucher.totalAmount);
       const rate = voucher.exchangeRate ? toMoney(voucher.exchangeRate) : new MoneyDecimal(1);
       const amountCurrency = currency !== "USD" && rate.greaterThan(0) ? baseTotal.times(rate) : baseTotal;
-      await sp.insert(schema.factoryDaybookEntries).values({
+      await tx.insert(schema.factoryDaybookEntries).values({
         companyId,
         txDate: voucher.voucherDate,
         txType: "JOURNAL",
@@ -102,8 +111,10 @@ async function writeFactoryDaybookTx(tx: DbTransaction, companyId: number, vouch
         amountUsd: baseTotal.toFixed(),
         createdBy: null,
       });
-    });
+    }
+    await client.query("RELEASE SAVEPOINT offline_journal_daybook");
   } catch (error) {
+    await client.query("ROLLBACK TO SAVEPOINT offline_journal_daybook");
     logger.error("Factory daybook write failed for an offline journal (non-fatal)", { error });
   }
 }
@@ -130,7 +141,7 @@ async function apply(client: Queryable, event: Phase9JournalEvent): Promise<Phas
       },
       auditActor: { userId: event.actorUserId, username: event.payload.actorUsername },
     });
-    if (!posted.replayed) await writeFactoryDaybookTx(tx, event.companyId, posted.voucher);
+    if (!posted.replayed) await writeFactoryDaybookTx(client, tx, event.companyId, posted.voucher);
     return {
       outcome: posted.replayed ? "already-present" : "cloud-applied",
       cloudRef: Number(posted.voucher.id),

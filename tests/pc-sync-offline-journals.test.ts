@@ -89,13 +89,34 @@ describe("PC offline journals: in the cloud", () => {
     expect(posted).toEqual([{ id: Number(first.body.cloudRef), total: 25 }]);
   });
 
-  it("holds an unbalanced journal instead of posting it", async () => {
-    const res = await agent
-      .post("/api/offline/pc-sync/operations")
-      .send(op(journal("30.00", "29.00", "Offline journal unbalanced")));
+  it("holds an unbalanced journal instead of posting it, and lets the PC give it up", async () => {
+    const sent = op(journal("30.00", "29.00", "Offline journal unbalanced"));
+    const res = await agent.post("/api/offline/pc-sync/operations").send(sent);
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ code: "PHASE9_JOURNAL_REFUSED", overridable: false });
     expect(await journalsNamed("Offline journal unbalanced")).toEqual([]);
+    // The PC's "discard" goes through the shared discard path: recorded, nothing posted.
+    const discarded = await agent.post("/api/offline/browser-sync/operations/discard").send(sent);
+    expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
+    expect(await journalsNamed("Offline journal unbalanced")).toEqual([]);
+  });
+
+  it("writes the factory daybook row with the journal, in the same transaction", async () => {
+    await pool.query("INSERT INTO factory_settings (company_id) VALUES ($1)", [ctx.companyId]);
+    try {
+      const res = await agent
+        .post("/api/offline/pc-sync/operations")
+        .send(op(journal("12.00", "12.00", "Offline journal with daybook")));
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const daybook = await pool.query(
+        "SELECT tx_type FROM factory_daybook_entries WHERE company_id = $1 AND reference_id = $2",
+        [ctx.companyId, Number(res.body.cloudRef)]
+      );
+      expect(daybook.rows).toEqual([{ tx_type: "JOURNAL" }]);
+    } finally {
+      await pool.query("DELETE FROM factory_daybook_entries WHERE company_id = $1", [ctx.companyId]);
+      await pool.query("DELETE FROM factory_settings WHERE company_id = $1", [ctx.companyId]);
+    }
   });
 
   it("holds a cashier's journal: the live route is not open to POS", async () => {

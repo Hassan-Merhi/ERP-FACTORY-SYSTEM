@@ -181,7 +181,7 @@ function prepareEnvelopeOperation(actor: BrowserActor, request: BrowserOperation
 export function prepareBrowserOperation(
   actor: BrowserActor,
   request: BrowserOperationRequest,
-  { allowEnvelope = false }: { allowEnvelope?: boolean } = {}
+  { allowEnvelope = false, allowPcOnly = allowEnvelope }: { allowEnvelope?: boolean; allowPcOnly?: boolean } = {}
 ): PreparedOperation {
   if (
     typeof request.deviceId !== "string" ||
@@ -206,7 +206,7 @@ export function prepareBrowserOperation(
   }
   const kind = browserOperationKind(request.kind);
   // A PC-only kind (it needs the PC's full local copy) is refused on the browser route.
-  if (!kind || (kind.pcOnly && !allowEnvelope)) throw new BrowserOperationRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED");
+  if (!kind || (kind.pcOnly && !allowPcOnly)) throw new BrowserOperationRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED");
   const capturedAt = new Date(captured).toISOString();
   let payload: Record<string, unknown>;
   try {
@@ -465,7 +465,9 @@ export async function discardBrowserOperation(
   actor: BrowserActor,
   request: BrowserOperationRequest
 ): Promise<BrowserReceipt> {
-  const prepared = prepareBrowserOperation(actor, request);
+  // Giving up a held entry never posts anything, so a PC-only kind (a held
+  // journal) may be discarded through this path too.
+  const prepared = prepareBrowserOperation(actor, request, { allowPcOnly: true });
   const deviceId = request.deviceId.toLowerCase();
   return inTenantTransaction(actor.companyId, async (client) => {
     await lockDevice(client, actor, deviceId);
