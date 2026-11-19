@@ -361,8 +361,18 @@ the same field since the PC copied it, the change is held
 translated to their cloud items, so they can be edited before the next sync.
 Covered by `tests/pc-sync-offline-stock-item-edits.test.ts`.
 
+**Stock transfer changes on a PC.** In entry mode the PC also accepts the
+transfer changes the factory LAN server records: editing a transfer, finalizing
+or approving it (finalizing any other voucher is refused with
+`423 OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED`), and creating, approving or
+rejecting a revision. Each is recorded with the transfer as it stood, in the
+change's own transaction. A transfer made on the PC keeps its local id as its
+reference, so it can be changed before the next sync; if the cloud's transfer
+changed since the PC copied it, the change is held instead of overwriting.
+Covered by `tests/pc-sync-offline-transfer-edits.test.ts`.
+
 Still to come: the remaining offline kinds the cloud can already apply (POS sale
-edits and cancellations, stock transfer edits and reviews, receiving, attachments), which need the factory LAN server's offline
+edits and cancellations, receiving, attachments), which need the factory LAN server's offline
 behaviour (invoice numbers, local ids, transfer references) made available on a
 PC; then the other voucher types, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files

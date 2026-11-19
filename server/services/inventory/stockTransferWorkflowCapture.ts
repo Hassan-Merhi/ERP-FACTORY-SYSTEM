@@ -4,14 +4,16 @@
  * the "stock" stream in the same transaction as the change itself
  * (server/edge/phase9StockOutbox.ts).
  *
- * Off the LAN primary every helper here is a no-op (or runs the plain
- * service), so the cloud routes behave exactly as before.
+ * A PC in entry mode records exactly as the LAN primary does (into its own
+ * outbox). Elsewhere every helper here is a no-op (or runs the plain service),
+ * so the cloud routes behave exactly as before.
  */
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Request } from "express";
 import { db, type DbTransaction } from "../../db";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
 import {
   capturePhase9StockTransferEditTx,
   capturePhase9StockTransferFinalizeTx,
@@ -35,6 +37,10 @@ import {
   type StockTransferLifecycleResult,
 } from "../stockTransferLifecycle";
 
+function captureActive(): boolean {
+  return isPhase9LanPrimary() || pcLocalEntryMode();
+}
+
 function actor(req: Request) {
   return {
     companyId: Number(req.session.currentCompanyId),
@@ -50,7 +56,7 @@ export async function saveStockTransferWithCapture(
   req: Request,
   input: SaveStockTransferLifecycleInput & { notes: string }
 ): Promise<StockTransferLifecycleResult> {
-  if (!isPhase9LanPrimary()) return saveStockTransferLifecycle(input);
+  if (!captureActive()) return saveStockTransferLifecycle(input);
   return db.transaction(async (tx) => {
     const before = await phase9TransferSnapshotTx(tx, input.companyId, input.transferId);
     const saved = await saveStockTransferLifecycleTx(tx, input);
@@ -82,7 +88,7 @@ export async function finalizeStockTransferWithCapture(
   companyId: number,
   voucherId: number
 ): Promise<StockTransferLifecycleResult> {
-  if (!isPhase9LanPrimary()) return finalizeOptionalStockTransfer(companyId, voucherId);
+  if (!captureActive()) return finalizeOptionalStockTransfer(companyId, voucherId);
   return db.transaction(async (tx) => {
     const found = await tx.execute(sql`SELECT id FROM stock_transfer_vouchers WHERE voucher_id = ${voucherId}`);
     const transferId = Number((found.rows[0] as { id?: number } | undefined)?.id ?? 0);
@@ -107,7 +113,7 @@ export async function captureStockTransferRevisionTx(
   written: { revisionId: number; transferId: number },
   revision: Phase9TransferRevisionBody
 ): Promise<void> {
-  if (!isPhase9LanPrimary()) return;
+  if (!captureActive()) return;
   await capturePhase9StockTransferRevisionTx(tx, {
     ...actor(req),
     localRevisionId: written.revisionId,
@@ -125,7 +131,7 @@ export async function captureStockTransferRevisionReviewTx(
   reason: string | null
 ): Promise<void> {
   // A review that changed nothing (already approved / rejected) is not recorded.
-  if (!isPhase9LanPrimary() || written.transition === "no-op") return;
+  if (!captureActive() || written.transition === "no-op") return;
   await capturePhase9StockTransferRevisionReviewTx(tx, {
     ...actor(req),
     revision: await phase9RevisionRefTx(tx, written.revisionId),

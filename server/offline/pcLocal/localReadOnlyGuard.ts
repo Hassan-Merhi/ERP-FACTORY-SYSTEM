@@ -20,6 +20,7 @@ import { BROWSER_OPERATION_KINDS } from "../browserSync/browserOperationKinds";
 import { logger } from "../../lib/logger";
 import { PHASE9_STOCK_ITEM_CREATE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
 import { PHASE9_PAYMENT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
+import { PHASE9_STOCK_TRANSFER_KIND } from "../../edge/phase9StockEnvelope.mjs";
 import { pcLocalMode } from "./pcLocalMode";
 
 const READS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -34,19 +35,34 @@ export const PC_LOCAL_ALLOWED_WRITES: ReadonlySet<string> = new Set([
   "POST /api/auth/set-company",
 ]);
 
-const OWN_ID_KINDS: ReadonlySet<string> = new Set([PHASE9_STOCK_ITEM_CREATE_KIND, PHASE9_PAYMENT_KIND]);
+/**
+ * Entries that keep the id of the row they created as their reference, so
+ * later changes naming that row resolve in the cloud: where the id is in the
+ * route's answer.
+ */
+const OWN_ID_KINDS: ReadonlyMap<string, (body: Record<string, unknown>) => unknown> = new Map([
+  [PHASE9_STOCK_ITEM_CREATE_KIND, (body) => body.id],
+  [PHASE9_PAYMENT_KIND, (body) => (body.voucher as { id?: unknown } | undefined)?.id ?? body.id],
+  [PHASE9_STOCK_TRANSFER_KIND, (body) => (body.transfer as { id?: unknown } | undefined)?.id],
+]);
 
 /**
  * Changes to records the PC already has. The live route builds the finished
  * envelope in its own transaction: Payment / Receipt edits and deletes (any
- * other voucher is refused here), and stock item master edits and deletes
- * (fields the cloud alone may change are refused by the route).
+ * other voucher is refused here), stock item master edits and deletes
+ * (fields the cloud alone may change are refused by the route), and stock
+ * transfer edits, finalizes and revisions (finalizing any other voucher is
+ * refused here).
  */
 export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^PATCH \/api\/vouchers\/\d+\/payment-receipt$/,
   /^DELETE \/api\/vouchers\/\d+$/,
   /^(PATCH|DELETE) \/api\/stock-items\/\d+$/,
   /^POST \/api\/stock-items\/\d+\/location-prices$/,
+  /^PUT \/api\/stock-transfers\/\d+$/,
+  /^POST \/api\/stock-transfers\/\d+\/(approve|revisions)$/,
+  /^POST \/api\/stock-transfer-revisions\/\d+\/(approve|reject)$/,
+  /^POST \/api\/vouchers\/\d+\/finalize$/,
   /^POST \/api\/stock-items\/(update-names-by-code|bulk-assign-category|bulk-update-prices|import-opening-balances|bulk-update-uom|bulk-rename|import-barcodes|update-categories)$/,
 ]);
 
@@ -78,6 +94,9 @@ export interface PcLocalConnection {
   release: () => void;
 }
 type Connect = () => Promise<PcLocalConnection>;
+
+const PAYMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Payment", "Receipt"]);
+const TRANSFER_VOUCHER_TYPES: ReadonlySet<string> = new Set(["Stock Transfer", "StockTransfer", "Transfer"]);
 
 /** Same as PC_LOCAL_ENTRY_LOCK in scripts/pc-sync/local/localStore.mjs. */
 const PC_LOCAL_ENTRY_LOCK = 7314002;
@@ -138,14 +157,15 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
       return refuse(res, "OFFLINE_PC_LOCAL_SYNC_TOO_OLD");
     }
     if (kind === null) {
-      // Only Payment / Receipt edits and deletes can be replayed in the cloud.
-      // Several handlers serve these paths, so refuse any other voucher here,
-      // before any of them can change it without recording it.
-      const target = /^\/api\/vouchers\/(\d+)(?:\/payment-receipt)?$/.exec(req.originalUrl.split("?")[0]);
+      // Only Payment / Receipt edits and deletes, and transfer finalizes, can be
+      // replayed in the cloud. Several handlers serve these paths, so refuse any
+      // other voucher here, before any of them can change it without recording it.
+      const target = /^\/api\/vouchers\/(\d+)(\/payment-receipt|\/finalize)?$/.exec(req.originalUrl.split("?")[0]);
       if (target) {
         const found = await conn.query("SELECT voucher_type FROM vouchers WHERE id = $1", [Number(target[1])]);
-        const type = found.rows[0]?.voucher_type;
-        if (found.rows.length && type !== "Payment" && type !== "Receipt") {
+        const type = String(found.rows[0]?.voucher_type ?? "");
+        const allowed = target[2] === "/finalize" ? TRANSFER_VOUCHER_TYPES : PAYMENT_VOUCHER_TYPES;
+        if (found.rows.length && !allowed.has(type)) {
           await done();
           return refuse(
             res,
@@ -189,14 +209,11 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
         ? Promise.resolve()
         : res.statusCode >= 200 && res.statusCode < 300
           ? withRetries(() => {
-              // New stock items and payments keep their own local id as the
-              // reference, so later entries naming them resolve in the cloud.
-              const body = responseBody as { id?: unknown; voucher?: { id?: unknown } } | null;
-              const createdId = Number(body?.id ?? body?.voucher?.id);
-              const ownId =
-                OWN_ID_KINDS.has(kind) && Number.isSafeInteger(createdId) && createdId >= PC_LOCAL_ID_BASE
-                  ? createdId
-                  : null;
+              // New stock items, payments and transfers keep their own local id
+              // as the reference, so later entries naming them resolve in the cloud.
+              const body = (responseBody ?? {}) as Record<string, unknown>;
+              const createdId = Number(OWN_ID_KINDS.get(kind)?.(body));
+              const ownId = Number.isSafeInteger(createdId) && createdId >= PC_LOCAL_ID_BASE ? createdId : null;
               return conn.query(
                 `UPDATE pc_local.outbox
                     SET status = 'pending', updated_at = now(),
