@@ -142,6 +142,27 @@ describe("row handling", () => {
     expect((await row(OWN)).status).toBe("OTW");
   });
 
+  it("refuses amounts that are not exactly one number instead of truncating them", async () => {
+    const res = await upload(
+      admin,
+      workbook([
+        ["Container No", "Agent", "Duty Fee", "Transport Fee"],
+        [OWN, "Should not save", "1,25", ""],
+        [OWN, "Should not save", "", "12abc"],
+        [OWN, "Should not save", -5, ""],
+        [OWN, "Should not save", "2000000000", ""],
+      ])
+    );
+    expect(res.body).toMatchObject({ updated: 0, skipped: 4, notFound: 0 });
+    expect(res.body.errors).toEqual([
+      `Row 3 (${OWN}): invalid duty fee "1,25" — use a plain number such as 1250.50`,
+      `Row 4 (${OWN}): invalid transport fee "12abc" — use a plain number such as 1250.50`,
+      `Row 5 (${OWN}): invalid duty fee "-5" — use a plain number such as 1250.50`,
+      `Row 6 (${OWN}): invalid duty fee "2000000000" — use a plain number such as 1250.50`,
+    ]);
+    expect(await row(OWN)).toMatchObject({ agent: null, duty_fee: null, transport_fee: null });
+  });
+
   it("applies every supported column and records an undo snapshot", async () => {
     const res = await upload(
       admin,
@@ -200,9 +221,7 @@ describe("row handling", () => {
       eta: "2026-03-04",
       border_date: "2026-03-05",
       docs_sent_date: "2026-03-06",
-      // Current behaviour (reported bug): parseMoneyInput keeps only the leading number,
-      // so a text cell "1,250.50" is stored as 1.00 instead of being refused or read as 1250.50.
-      duty_fee: "1.00",
+      duty_fee: "1250.50",
       transport_fee: "0.00",
       freight_status: "Yes",
       doc_received: true,

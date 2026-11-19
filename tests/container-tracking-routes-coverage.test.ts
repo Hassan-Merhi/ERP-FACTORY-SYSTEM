@@ -184,6 +184,18 @@ describe("tracking import", () => {
     expect((await row(OWN2)).eta).toBeNull();
   });
 
+  it("reports null, array and scalar rows per row and still imports the valid ones", async () => {
+    const res = await post([null, ["x"], 7, { containerNumber: OWN2, agent: "After bad rows" }]);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, updated: 1, notFound: 0, total: 4 });
+    expect(res.body.errors).toEqual([
+      "Invalid row data for unknown",
+      "Invalid row data for unknown",
+      "Invalid row data for unknown",
+    ]);
+    expect((await row(OWN2)).agent).toBe("After bad rows");
+  });
+
   it("normalises dates, amounts and document flags", async () => {
     const res = await post([
       {

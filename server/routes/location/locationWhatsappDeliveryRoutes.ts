@@ -12,6 +12,8 @@ import {
 } from "../../services/locationStockWhatsAppDelivery";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
+// pg returns DATE columns as local-midnight Dates; this formats them as YYYY-MM-DD without a timezone shift.
+import { statementDateKey } from "../../lib/accountStatementExportSafety";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
 const requireCostPriceAccess = requireSensitiveAccess("fld_cost_price");
@@ -243,7 +245,7 @@ export function registerLocationWhatsappDeliveryRoutes(app: Express) {
           categoryName: row.category_name,
           initiatedByUserId: row.initiated_by_user_id,
           initiatedByUsername: row.initiated_by_username,
-          scheduledFor: row.scheduled_for ? String(row.scheduled_for).slice(0, 10) : null,
+          scheduledFor: statementDateKey(row.scheduled_for),
           destinationGroupName: row.destination_group_name,
           reportGeneratedAt: isoOrNull(row.report_generated_at),
           itemCount: row.item_count,
@@ -307,7 +309,7 @@ export function registerLocationWhatsappDeliveryRoutes(app: Express) {
           : original.stock_group_id == null
             ? undefined
             : original.stock_group_id;
-        const scheduledFor = original.scheduled_for ? String(original.scheduled_for).slice(0, 10) : null;
+        const scheduledFor = statementDateKey(original.scheduled_for);
         const result = await deliverLocationStockWhatsApp({
           companyId: original.company_id,
           locationId: original.location_id,

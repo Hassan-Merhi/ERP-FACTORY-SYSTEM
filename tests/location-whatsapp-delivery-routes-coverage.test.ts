@@ -136,12 +136,10 @@ describe("delivery history", () => {
     expect(res.status).toBe(200);
     const byId = new Map(res.body.deliveries.map((d: { id: number }) => [d.id, d]));
     expect(byId.get(stale)).toMatchObject({ status: "failed", canRetry: true });
-    // Current behaviour (reported bug): scheduled_for is a DATE that node-postgres returns
-    // as a JS Date, and String(date).slice(0, 10) yields "Sun Mar 01", not "2026-03-01".
     expect(byId.get(parent)).toMatchObject({
       canRetry: false,
       stockGroupName: "Unassigned",
-      scheduledFor: "Sun Mar 01",
+      scheduledFor: "2026-03-01",
     });
     expect(res.body.summary).toMatchObject({ lastSentSource: "retry", lastSentIncludeCost: true });
     const limited = await admin.get(historyUrl(ctx.location2Id)).query({ limit: "x" });
@@ -204,8 +202,8 @@ describe("retry outcomes", () => {
         includeZeroStock: true,
         source: "retry",
         retryOfId: id,
-        // Same DATE-to-string bug as the history list: the retry carries "Mon Mar 02".
-        scheduledFor: "Mon Mar 02",
+        // The retry replays the original DATE as YYYY-MM-DD.
+        scheduledFor: "2026-03-02",
         idempotencyKey: `retry:${ctx.companyId}:${ctx.locationId}:${id}:key-1`,
       })
     );

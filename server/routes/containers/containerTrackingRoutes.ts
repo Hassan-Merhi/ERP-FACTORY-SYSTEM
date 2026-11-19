@@ -199,10 +199,16 @@ export function registerContainerTrackingRoutes(app: Express) {
       const errors: string[] = [];
 
       for (const row of rows) {
+        // A null, array or scalar entry is a malformed row: report it rather than
+        // letting a property read on it fail the whole import.
+        const rowLabel =
+          row && typeof row === "object" && !Array.isArray(row) && row.containerNumber
+            ? String(row.containerNumber)
+            : "unknown";
         try {
           const parseResult = containerTrackingImportRowSchema.safeParse(row);
           if (!parseResult.success) {
-            errors.push(`Invalid row data for ${row.containerNumber || "unknown"}`);
+            errors.push(`Invalid row data for ${rowLabel}`);
             continue;
           }
 
@@ -323,7 +329,7 @@ export function registerContainerTrackingRoutes(app: Express) {
             updated++;
           }
         } catch (rowError: unknown) {
-          errors.push(`Error processing ${row.containerNumber || "unknown"}: ${getErrorMessage(rowError)}`);
+          errors.push(`Error processing ${rowLabel}: ${getErrorMessage(rowError)}`);
         }
       }
 

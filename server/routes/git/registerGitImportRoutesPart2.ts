@@ -11,6 +11,23 @@ import { eq, or, sql } from "drizzle-orm";
 import { gitUpload, importUndoStore, pruneImportUndoStore } from "./_helpers";
 import { parseMoneyInput } from "../../lib/money";
 
+// Plain digits, or digits grouped in thousands with commas ("1,250.50"). A comma
+// anywhere else ("1,25") is ambiguous and refused rather than guessed.
+const IMPORT_AMOUNT = /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
+const MAX_IMPORT_AMOUNT = 1_000_000_000;
+
+/** A non-negative amount from an Excel cell, or null when the cell is not exactly one number. */
+function parseImportAmount(value: unknown): string | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 && value <= MAX_IMPORT_AMOUNT ? String(value) : null;
+  }
+  const text = String(value).trim();
+  if (!IMPORT_AMOUNT.test(text)) return null;
+  const amount = parseMoneyInput(text.replace(/,/g, ""));
+  if (!amount || amount.gt(MAX_IMPORT_AMOUNT)) return null;
+  return amount.toString();
+}
+
 export function registerGitImportRoutesPart2(app: Express) {
   // ─── Excel bulk import / update ───────────────────────────────────────────
 
@@ -342,13 +359,26 @@ export function registerGitImportRoutesPart2(app: Express) {
           if (docsSentDate) updateData.docsSentDate = docsSentDate;
 
           // ── Numeric money fields: 0 is a valid value ─────────────────────────
-          if (rawMap.dutyFee !== undefined && rawMap.dutyFee !== "") {
-            const n = parseMoneyInput(String(rawMap.dutyFee))?.toNumber() ?? NaN;
-            if (!isNaN(n)) updateData.dutyFee = n.toString();
+          // Thousands separators are accepted; any cell that is not exactly one
+          // amount is reported for the row, never truncated to its leading digits.
+          let badAmount: string | null = null;
+          for (const [field, label] of [
+            ["dutyFee", "duty fee"],
+            ["transportFee", "transport fee"],
+          ] as const) {
+            const value = rawMap[field];
+            if (value === undefined || value === "") continue;
+            const amount = parseImportAmount(value);
+            if (amount === null) {
+              badAmount = `invalid ${label} "${toStr(value)}"`;
+              break;
+            }
+            updateData[field] = amount;
           }
-          if (rawMap.transportFee !== undefined && rawMap.transportFee !== "") {
-            const n = parseMoneyInput(String(rawMap.transportFee))?.toNumber() ?? NaN;
-            if (!isNaN(n)) updateData.transportFee = n.toString();
+          if (badAmount) {
+            errors.push(`Row ${rowNum} (${ctrNum}): ${badAmount} — use a plain number such as 1250.50`);
+            skipped++;
+            continue;
           }
 
           // ── Freight status (optional) ─────────────────────────────────────────

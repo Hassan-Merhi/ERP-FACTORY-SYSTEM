@@ -41,6 +41,7 @@ vi.mock("../server/db", async (importOriginal) => {
 
 import { pool } from "../server/db";
 import { enqueueTicketOverdueReminders, runTicketNotificationTick } from "../server/services/ticketNotifications";
+import { ticketDestinationUrl } from "../server/services/ticketNotificationPolicy";
 
 const TAG = `tnc${Date.now().toString(36)}`;
 const ENV_KEYS = [
@@ -223,10 +224,18 @@ describe("ticket notification worker", () => {
     const [chatId, text] = providers.sendWhatsAppTextToChatId.mock.calls[0] as unknown as [string, string];
     expect(chatId).toBe("243810000001@c.us");
     expect(text).toContain("assigned to you");
-    // Current behaviour: support_tickets.id is a bigint that node-postgres returns as a
-    // string, so ticketDestinationUrl's Number.isSafeInteger check rejects it and the
-    // TICKET_APP_BASE_URL deep link is never appended (reported as a bug).
-    expect(text).not.toContain("https://erp.example.test");
+    // support_tickets.id comes back from node-postgres as a bigint string; the deep link
+    // must still be appended.
+    expect(text).toContain(`https://erp.example.test/tickets?ticketId=${ticketId}`);
+  });
+
+  it("builds deep links from numeric or bigint-string ids and refuses anything else", () => {
+    const base = "https://erp.example.test";
+    expect(ticketDestinationUrl(base, "erp", "42")).toBe(`${base}/tickets?ticketId=42`);
+    expect(ticketDestinationUrl(base, "factory", 42)).toBe(`${base}/factory/tickets?ticketId=42`);
+    for (const bad of ["-4", "4.5", "1e3", "", "0", "99999999999999999", " 7", 0, -1, 1.5]) {
+      expect(ticketDestinationUrl(base, "erp", bad), String(bad)).toBeNull();
+    }
   });
 
   it("marks provider failures uncertain and never resends them", async () => {
