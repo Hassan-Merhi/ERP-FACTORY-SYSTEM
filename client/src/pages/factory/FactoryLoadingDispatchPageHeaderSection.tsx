@@ -120,9 +120,9 @@ export function FactoryLoadingDispatchDialogSection({
         <DialogHeader>
           <DialogTitle>Delete Dispatch #{selectedTrip?.dispatchNumber}?</DialogTitle>
           <DialogDescription>
-            Delete this open dispatch from the active list, release all its verified scans and reservations, and
-            preserve the audit history. The main loading, stock, customer balance and journal vouchers will not be
-            changed. Previously closed or financially recorded trips cannot be deleted.
+            Remove this open dispatch from the active list and release its scans and reservations. Previously ended
+            trips can also be removed after reopening, as long as they have no financial records or signed
+            all-truck reconciliation. Signed closure history remains saved; loading, stock and accounting are unchanged.
           </DialogDescription>
         </DialogHeader>
         <Textarea
