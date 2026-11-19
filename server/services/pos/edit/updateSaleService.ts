@@ -273,7 +273,8 @@ export async function applyPosSaleUpdateTx(
     canonicalRevision,
   });
 
-  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[]);
+  const keepUsdPosting = isSpCompanyEdit || isPhase9LanPrimary(); // LAN edits replay from cent-rounded prices
+  const zmwAmounts = editedZmwSaleAmounts(lockedVoucher, items as PosEditSaleItemInput[], keepUsdPosting);
   const saleGrandTotal = zmwAmounts?.usdTotal ?? rebuildResult.grandTotal;
 
   await updateVoucherRecord(tx, {

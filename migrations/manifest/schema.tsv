@@ -4168,6 +4168,19 @@ column	public.notifications.read_at	{"type":"timestamp without time zone","notNu
 column	public.notifications.recipient_user_id	{"type":"character varying","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.notifications.title	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.notifications.triggered_by_user_id	{"type":"character varying","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.cloud_ref	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.conflict_code	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.created_at	{"type":"timestamp with time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.created_by	{"type":"character varying","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.detail	{"type":"jsonb","notNull":true,"default":"'{}'::jsonb","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.device_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.id	{"type":"integer","notNull":true,"default":"nextval('offline_negative_stock_flags_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.kind	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.operation_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.resolution_note	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.resolved_at	{"type":"timestamp with time zone","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.offline_negative_stock_flags.resolved_by	{"type":"character varying","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.one_time_migrations.applied_at	{"type":"timestamp with time zone","notNull":false,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.one_time_migrations.name	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.operational_voucher_requests.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -7178,6 +7191,10 @@ constraint	public.mix_batches.mix_batches_pkey	{"type":"p","def":"PRIMARY KEY (i
 constraint	public.net_position_export_settings.net_position_export_settings_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
 constraint	public.notification_rules.notification_rules_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
 constraint	public.notifications.notifications_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
+constraint	public.offline_negative_stock_flags.offline_negative_stock_flags_company_id_fkey	{"type":"f","def":"FOREIGN KEY (company_id) REFERENCES companies(id)","validated":true}
+constraint	public.offline_negative_stock_flags.offline_negative_stock_flags_operation_unique	{"type":"u","def":"UNIQUE (device_id, operation_id)","validated":true}
+constraint	public.offline_negative_stock_flags.offline_negative_stock_flags_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
+constraint	public.offline_negative_stock_flags.offline_negative_stock_flags_resolution_check	{"type":"c","def":"CHECK ((resolved_at IS NULL) = (resolved_by IS NULL))","validated":true}
 constraint	public.one_time_migrations.one_time_migrations_pkey	{"type":"p","def":"PRIMARY KEY (name)","validated":true}
 constraint	public.operational_voucher_requests.operational_voucher_requests_company_key_unique	{"type":"u","def":"UNIQUE (company_id, idempotency_key)","validated":true}
 constraint	public.operational_voucher_requests.operational_voucher_requests_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
@@ -8876,6 +8893,9 @@ index	public.notification_rules_pkey	{"table":"public.notification_rules","def":
 index	public.notifications_entity_idx	{"table":"public.notifications","def":"CREATE INDEX notifications_entity_idx ON public.notifications USING btree (entity_type, entity_id)","valid":true,"constraint":false}
 index	public.notifications_pkey	{"table":"public.notifications","def":"CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)","valid":true,"constraint":true}
 index	public.notifications_recipient_idx	{"table":"public.notifications","def":"CREATE INDEX notifications_recipient_idx ON public.notifications USING btree (recipient_user_id, is_read, created_at DESC)","valid":true,"constraint":false}
+index	public.offline_negative_stock_flags_open_idx	{"table":"public.offline_negative_stock_flags","def":"CREATE INDEX offline_negative_stock_flags_open_idx ON public.offline_negative_stock_flags USING btree (company_id, created_at) WHERE (resolved_at IS NULL)","valid":true,"constraint":false}
+index	public.offline_negative_stock_flags_operation_unique	{"table":"public.offline_negative_stock_flags","def":"CREATE UNIQUE INDEX offline_negative_stock_flags_operation_unique ON public.offline_negative_stock_flags USING btree (device_id, operation_id)","valid":true,"constraint":true}
+index	public.offline_negative_stock_flags_pkey	{"table":"public.offline_negative_stock_flags","def":"CREATE UNIQUE INDEX offline_negative_stock_flags_pkey ON public.offline_negative_stock_flags USING btree (id)","valid":true,"constraint":true}
 index	public.one_time_migrations_pkey	{"table":"public.one_time_migrations","def":"CREATE UNIQUE INDEX one_time_migrations_pkey ON public.one_time_migrations USING btree (name)","valid":true,"constraint":true}
 index	public.operational_voucher_requests_company_key_unique	{"table":"public.operational_voucher_requests","def":"CREATE UNIQUE INDEX operational_voucher_requests_company_key_unique ON public.operational_voucher_requests USING btree (company_id, idempotency_key)","valid":true,"constraint":true}
 index	public.operational_voucher_requests_pkey	{"table":"public.operational_voucher_requests","def":"CREATE UNIQUE INDEX operational_voucher_requests_pkey ON public.operational_voucher_requests USING btree (id)","valid":true,"constraint":true}
@@ -9673,6 +9693,7 @@ sequence	public.mix_batch_sources_id_seq	{"type":"integer","start":"1","incremen
 sequence	public.mix_batches_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.mix_batches.id"}
 sequence	public.notification_rules_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.notification_rules.id"}
 sequence	public.notifications_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.notifications.id"}
+sequence	public.offline_negative_stock_flags_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.offline_negative_stock_flags.id"}
 sequence	public.operational_voucher_requests_id_seq	{"type":"bigint","start":"1","increment":"1","min":"1","max":"9223372036854775807","cache":"1","cycle":false,"ownedBy":"public.operational_voucher_requests.id"}
 sequence	public.passkey_credentials_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.passkey_credentials.id"}
 sequence	public.pending_barcodes_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.pending_barcodes.id"}
@@ -10170,6 +10191,7 @@ table	public.mix_batches	{"kind":"r","unlogged":false,"rls":false,"forceRls":fal
 table	public.net_position_export_settings	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.notification_rules	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.notifications	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
+table	public.offline_negative_stock_flags	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.one_time_migrations	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.operational_voucher_requests	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.passkey_credentials	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}

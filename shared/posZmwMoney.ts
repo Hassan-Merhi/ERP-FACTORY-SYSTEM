@@ -31,6 +31,52 @@ function decimal(value: unknown, label: string): Decimal {
   return parsed;
 }
 
+/**
+ * Older sales stored the USD unit price rounded to cents, so K2,000 at 20.8
+ * was saved as $96.15 and reads back as K1,999.92. Every Kwacha price inside
+ * that cent's rounding window gives the same stored USD price; this is the
+ * whole-Kwacha price in the window, if there is one. It is only a candidate:
+ * a sale really typed at K1,999.92 stores the same $96.15.
+ */
+function legacyWholeKwachaPrice(line: ZmwSaleLine, rate: Decimal): Decimal | null {
+  const supplied = line.originalCurrencyRate;
+  if (supplied !== null && supplied !== undefined && supplied !== "") return null;
+  const usd = decimal(line.rate ?? line.sellingPrice, "USD unit price");
+  if (usd.decimalPlaces() > 2) return null;
+  const whole = usd.times(rate).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  if (!whole.gt(0)) return null;
+  return whole.div(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).eq(usd) ? whole : null;
+}
+
+function nativeLineSum(lines: readonly ZmwSaleLine[], units: readonly Decimal[]): Decimal {
+  return lines.reduce(
+    (sum, line, index) =>
+      sum.plus(decimal(line.quantity, "quantity").times(units[index]).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)),
+    new Decimal(0)
+  );
+}
+
+/**
+ * Kwacha unit prices of a POSTED sale, for display and for loading an edit.
+ * Lines normally read back to the nearest ngwee. The whole-Kwacha reading of
+ * cent-rounded legacy prices is used only when it is what makes the lines add
+ * up to the Kwacha total the sale actually posted, so an exact price such as
+ * K1,999.92 is never turned into K2,000.
+ */
+export function resolvePostedZmwUnitPrices(
+  lines: readonly ZmwSaleLine[],
+  historicalRate: string | number,
+  postedNativeTotal: string | number | null | undefined
+): Decimal[] {
+  const nearest = lines.map((line) => resolveZmwUnitPrice(line, historicalRate, true));
+  if (postedNativeTotal === null || postedNativeTotal === undefined || postedNativeTotal === "") return nearest;
+  const posted = new Decimal(String(postedNativeTotal));
+  if (!posted.isFinite() || nativeLineSum(lines, nearest).eq(posted)) return nearest;
+  const rate = decimal(historicalRate, "USD/ZMW rate");
+  const whole = lines.map((line, index) => legacyWholeKwachaPrice(line, rate) ?? nearest[index]);
+  return nativeLineSum(lines, whole).eq(posted) ? whole : nearest;
+}
+
 export function resolveZmwUnitPrice(
   line: ZmwSaleLine,
   historicalRate: string | number,

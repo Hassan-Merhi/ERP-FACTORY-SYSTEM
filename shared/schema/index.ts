@@ -68,3 +68,4 @@ export * from "./sp";
 export * from "./pos";
 export * from "./runtime";
 export * from "./unifiedAccounting";
+export * from "./offlineNegativeStockFlags";

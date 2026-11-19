@@ -46,6 +46,7 @@ export function createCloudClient(baseUrl, { fetch: doFetch = fetch, cookie = ""
 
   return {
     get: (path, query) => call("GET", path, { query }),
+    post: (path, body) => call("POST", path, { body: body ?? {} }),
     /** Signs in; returns the user id. */
     async login(username, password) {
       const res = await call("POST", "/api/auth/login", { body: { username, password } });

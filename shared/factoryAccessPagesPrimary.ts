@@ -88,7 +88,8 @@ export const FACTORY_PRIMARY_PAGES: readonly FactoryPageDefinition[] = [
     label: "Vouchers",
     group: "Finance",
     route: "/factory/vouchers",
-    aliases: ["/factory/voucher-detail"],
+    // Optional (draft) vouchers are part of Vouchers (#3320).
+    aliases: ["/factory/voucher-detail", "/factory/optional-vouchers"],
     pinned: true,
     landing: true,
   },

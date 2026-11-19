@@ -12,8 +12,8 @@
   },
   "counts": {
     "registryPages": 62,
-    "routerDeclarations": 151,
-    "uniqueRouterPaths": 151,
+    "routerDeclarations": 152,
+    "uniqueRouterPaths": 152,
     "nonFactoryRouterPaths": [
       "/my-settings",
       "/intercompany-requests",
@@ -511,6 +511,7 @@
     "/factory/account-groups",
     "/factory/agents",
     "/factory/vouchers",
+    "/factory/optional-vouchers",
     "/factory/vouchers/:id/edit",
     "/factory/voucher-detail/:voucherId",
     "/factory/create",

@@ -216,7 +216,16 @@ plan are in the plan document and the
   opens the local copy when the cloud cannot be reached; "Connect this PC" and
   "Sync now" in the menu; staging script and Mac target. Not yet tested on real
   Windows/Mac PCs.
-- Next: Phase B (vouchers entered offline on a PC, sent to the cloud once).
+- Phase B1 (off unless enabled per PC): the five offline entry types recorded
+  on the PC's local server, delivered exactly once through the browser-sync
+  apply path, conflicts held for Admin/Developer approval, local writes undone
+  and the feed pulled once nothing is outstanding; 2-day block on new entries.
+- Phase B2: a PC's offline entry that takes stock below zero is applied and
+  flagged (`offline_negative_stock_flags`, migration 0010); Admin/Developer list
+  and close flags; other conflicts stay held.
+- Negative-stock flags screen: a card in the Conflict Center for Admin/Developer
+  (list, close with a note), in English, Arabic and French.
+- Next: more voucher types; then Phases C to E.
 
 ## Resume checklist (next session)
 

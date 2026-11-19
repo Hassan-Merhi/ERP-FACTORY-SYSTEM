@@ -20,7 +20,7 @@ const path = require('path');
 const readline = require('readline');
 const { pathToFileURL } = require('url');
 
-const DEFAULTS = { enabled: false, databasePort: 55439, serverPort: 5179 };
+const DEFAULTS = { enabled: false, entries: false, databasePort: 55439, serverPort: 5179 };
 
 const USER_FILE = /^[a-z0-9][a-z0-9-]{0,40}\.(json|bin)$|^pc-database$/;
 
@@ -35,6 +35,8 @@ function readConfig() {
     const parsed = JSON.parse(fs.readFileSync(userFile('offline-pc.json'), 'utf8'));
     return {
       enabled: parsed.enabled === true,
+      // Phase B: offline entries (needs OFFLINE_BROWSER_SYNC_ENABLED=1 on the cloud).
+      entries: parsed.enabled === true && parsed.entries === true,
       databasePort: Number.isInteger(parsed.databasePort) ? parsed.databasePort : DEFAULTS.databasePort,
       serverPort: Number.isInteger(parsed.serverPort) ? parsed.serverPort : DEFAULTS.serverPort,
     };
@@ -148,7 +150,7 @@ function createLocalMode({ cloudUrl, onStatus = () => {} }) {
         DATABASE_URL: databaseUrl,
         PGSSLMODE: 'disable',
         SESSION_SECRET: secret('session-secret'),
-        OFFLINE_PC_LOCAL_MODE: 'read-only',
+        OFFLINE_PC_LOCAL_MODE: config.entries ? 'entry' : 'read-only',
         ENABLE_SCHEDULERS: 'false',
         OFFLINE_PC_SYNC_ENABLED: '0',
       },
@@ -163,6 +165,7 @@ function createLocalMode({ cloudUrl, onStatus = () => {} }) {
 
   return {
     enabled: config.enabled,
+    entries: config.entries,
     localUrl,
     isLocalUrl(url) {
       try {
@@ -183,6 +186,10 @@ function createLocalMode({ cloudUrl, onStatus = () => {} }) {
       if (!agent) return false;
       agent.stdin.write(`${JSON.stringify({ cmd: 'login', username, password })}\n`);
       return true;
+    },
+    decide(operationId, decision) {
+      if (!agent || (decision !== 'approve' && decision !== 'discard')) return;
+      agent.stdin.write(`${JSON.stringify({ cmd: decision, operationId })}\n`);
     },
     syncNow() {
       if (agent) agent.stdin.write(`${JSON.stringify({ cmd: 'sync' })}\n`);

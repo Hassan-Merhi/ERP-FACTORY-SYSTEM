@@ -288,11 +288,11 @@ export function registerVoucherQueryRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: scope.isDestination ? transferData.sourceLocationId : scope.displayLocationId,
             sourceLocationName: scope.isDestination
-              ? (transferData.sourceLocationName || "Multi-source")
+              ? transferData.sourceLocationName || "Multi-source"
               : scope.displayLocationName,
             destinationLocationId: transferData.destinationLocationId,
             destinationLocationName: transferData.destinationLocationName,
-            inventoryApplied: transferData.inventoryApplied,
+            inventoryApplied: "inventoryApplied" in transferData ? transferData.inventoryApplied : undefined,
             notes: transferData.notes,
             items: visibleItems.map((item) => ({
               id: item.id,

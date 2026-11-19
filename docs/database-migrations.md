@@ -23,6 +23,7 @@ migrations/
   0006_retire_retail_catalog_cost_snapshot_trigger.sql
   0007_intercompany_container_trading.sql
   0008_restore_defaults_the_code_relies_on.sql
+  0009_retire_legacy_roles_and_reconcile_bonus_payment.sql
   NNNN_short_description.sql           every later change
   manifest/0001_baseline_schema.tsv    catalog right after the baseline (adoption target)
   manifest/schema.tsv                  catalog after all migrations (startup + CI contract)
@@ -199,6 +200,25 @@ schema, ignoring cast and spelling differences. 26 disagreed:
 A default changed on only one side fails the test. Narrowing type differences
 (`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are still left as they
 are.
+
+## Owner-approved data corrections (0009)
+
+Both were reported at every HMD startup. Neither touches a voucher or a balance.
+
+- **Retired roles.** `POS1`–`POS6` → `POS` with `pos_station` 1–6, and `User` →
+  `Normal User` (the original mapping). The Factory "Users & Access" create route
+  kept inserting `User`; it now creates `Normal User`. Production had 3 such rows,
+  all factory-only users whose page list governs access, so access is unchanged.
+- **Manual production bonus payment 1** (HMD, worker 58, week 2026-10-26):
+  recorded at 27.00 USD. Its voucher PV-12-2026-000101 was edited to 26.00 from
+  the ordinary voucher screen on 2026-11-02, and the owner confirmed that 26.00
+  was paid. The register is corrected to 26.00, with an audit row. The update is
+  guarded to that exact row and state.
+
+To stop this recurring, `server/middleware/productionBonusVoucherBoundary.ts`
+refuses generic edits, deletes, reversals and line changes of any voucher a
+production bonus (daily, weekly or manual) owns. The Factory Daybook void also
+refuses manual bonus vouchers. Corrections go through the Production Bonus page.
 
 ## Intercompany container trading (0007)
 
