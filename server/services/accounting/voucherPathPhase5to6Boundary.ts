@@ -166,6 +166,16 @@ export function captureResponse(res: Response): { read: () => unknown } {
   return { read: () => body };
 }
 
+/**
+ * A replayed JSON object says so (`replayed: true`); the stored status and
+ * every other field are returned unchanged. Arrays, strings and null bodies
+ * are replayed exactly as stored.
+ */
+function markReplayedBody(body: unknown): unknown {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return body ?? null;
+  return { ...(body as Record<string, unknown>), replayed: true };
+}
+
 async function voucherPathPhase5to6Boundary(req: Request, res: Response, next: NextFunction): Promise<void> {
   const pathname = normalizedPath(req);
   const phase5 = isPhase5OperationalVoucherRequest(req.method, pathname);
@@ -233,7 +243,7 @@ async function voucherPathPhase5to6Boundary(req: Request, res: Response, next: N
     return;
   }
   if (claim.kind === "replay") {
-    res.status(claim.status).json(claim.body ?? null);
+    res.status(claim.status).json(markReplayedBody(claim.body));
     return;
   }
 

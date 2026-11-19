@@ -5,7 +5,8 @@ import { privilegedMutationRateLimit } from "../middleware/privilegedEndpointSec
 
 const requireDeveloper = requireRole("Developer");
 
-function retired(_req: Request, res: Response): void {
+/** The 410 every retired Phase 1 mutation answers (also used by the old routes themselves). */
+export function respondGoldenCoastPhase1Retired(_req: Request, res: Response): void {
   res.status(410).json({
     code: "GC_PHASE1_POSTING_RETIRED",
     message: releaseDebtEnglish(
@@ -38,7 +39,7 @@ function retireLegacyPhase1Mutations(req: Request, res: Response, next: NextFunc
           next(authorizationError);
           return;
         }
-        retired(req, res);
+        respondGoldenCoastPhase1Retired(req, res);
       });
     });
   });

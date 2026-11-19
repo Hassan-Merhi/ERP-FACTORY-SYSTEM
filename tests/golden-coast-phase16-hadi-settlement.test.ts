@@ -178,12 +178,11 @@ describe("Golden Coast Phase 16 — HADI credit-payable settlement", () => {
     // Every state-changing /api/sp/ request is claimed by the Phase 5-to-6
     // voucher-path boundary, a durable HTTP-level idempotency layer: a repeat
     // with the same clientRequestId and fingerprint replays the ORIGINAL
-    // response verbatim and never reaches this route. The guarantee to assert
-    // is therefore that the replay is identical to the first response and that
-    // nothing was posted twice, not a route-level `replayed: true` the boundary
-    // short-circuits before the handler can set.
+    // response (status and body, marked `replayed: true`) and never reaches
+    // this route. The guarantee to assert is therefore that the replay is the
+    // first response flagged as a replay and that nothing was posted twice.
     expect(paymentReplay.status).toBe(payment.status);
-    expect(paymentReplay.body).toEqual(payment.body);
+    expect(paymentReplay.body).toEqual({ ...payment.body, replayed: true });
     expect(await netDebit(fixture.saleSideAccountId)).toBeCloseTo(afterPayment.payable, 2);
     expect(await netDebit(freshStartEquity)).toBeCloseTo(afterPayment.fresh, 2);
     expect(await phase16PaymentMarkerCount()).toBe(markersBefore + 2);
@@ -238,10 +237,10 @@ describe("Golden Coast Phase 16 — HADI credit-payable settlement", () => {
     const remitReplay = await fixture.agent
       .post(`${LEGACY_PHASE7_URL}?targetCompanyId=${fixture.hadiCompanyId}`)
       .send(remitBody);
-    // Same boundary replay as the payment above: identical response, no second
-    // set of journals.
+    // Same boundary replay as the payment above: the first response flagged as a
+    // replay, no second set of journals.
     expect(remitReplay.status).toBe(remittance.status);
-    expect(remitReplay.body).toEqual(remittance.body);
+    expect(remitReplay.body).toEqual({ ...remittance.body, replayed: true });
     expect(await netDebit(fixture.goldenCoastHadiIntercompanyAccountId)).toBeCloseTo(afterRemit.gcHadi, 2);
     expect(await netDebit(fixture.ctx.cashAccountId)).toBeCloseTo(afterRemit.gcCash, 2);
     expect(await netDebit(fixture.hadiCashAccountId)).toBeCloseTo(afterRemit.hadiCash, 2);

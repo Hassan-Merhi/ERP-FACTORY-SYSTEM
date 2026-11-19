@@ -197,12 +197,20 @@ describe("PATCH /api/credit-notes/:id: edits", () => {
     });
   });
 
-  it("pins a 500 when items are omitted (no request validation for a missing items array)", async () => {
+  it("refuses a missing or empty items list with 400 before any change, also for a Kwacha note", async () => {
     await withFactoryWorld(async (w) => {
       const { id, cash } = await note(w, "Credit Note");
-      const res = await edit(w, id, { voucherDate: "2026-06-10", cashAccountId: cash });
-      expect(res.status).toBe(500);
+      for (const items of [undefined, [], "x"]) {
+        const res = await edit(w, id, { voucherDate: "2026-06-10", cashAccountId: cash, items });
+        expect([res.status, res.body.message]).toEqual([400, "At least one item is required"]);
+      }
       expect(await header(w, id)).toEqual({ d: "2026-06-10", t: "40.00" });
+      const zmw = await w.one(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, exchange_rate)
+         VALUES ($1, $2, 'Credit Note', '2026-06-10', 40, 'ZMW', 25) RETURNING id`,
+        [w.companyId, `${w.tag}-ZNI`]
+      );
+      expect((await edit(w, zmw, {})).status).toBe(400);
     });
   });
 });

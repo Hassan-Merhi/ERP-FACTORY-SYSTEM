@@ -143,9 +143,11 @@ describe("Rental payment accounting and reconciliation", () => {
        WHERE ve.voucher_id=$1 ORDER BY ve.id`,
       [firstMonth[0].accrual_voucher_id]
     );
-    const initialExpense = recognized.filter((x: any) => x.name.includes("Rent Expense"))
+    const initialExpense = recognized
+      .filter((x: any) => x.name.includes("Rent Expense"))
       .reduce((sum: number, x: any) => sum + Number(x.debit_amount), 0);
-    const initialPayable = recognized.filter((x: any) => x.name === "Accrued Rent Payable")
+    const initialPayable = recognized
+      .filter((x: any) => x.name === "Accrued Rent Payable")
       .reduce((sum: number, x: any) => sum + Number(x.credit_amount), 0);
     expect(initialExpense).toBe(500);
     expect(initialPayable).toBe(300);
@@ -175,8 +177,7 @@ describe("Rental payment accounting and reconciliation", () => {
        WHERE ve.voucher_id=$1 AND ve.debit_amount::numeric>0`,
       [postedVoucher[0].voucher_id]
     );
-    expect(settlement.some((x: any) => x.name === "Accrued Rent Payable" &&
-      Number(x.debit_amount) === 300)).toBe(true);
+    expect(settlement.some((x: any) => x.name === "Accrued Rent Payable" && Number(x.debit_amount) === 300)).toBe(true);
 
     const result = await runRentalReconciliation(ctx.companyId, "ERP", todayStr());
     expect(result.balances.tenantRentPayable).toBe(0);
@@ -187,10 +188,9 @@ describe("Rental payment accounting and reconciliation", () => {
 
   it("recognizes a partially prepaid month atomically when an additional due payment arrives", async () => {
     const { createRentalPaymentGroup } = await import("../server/services/rental/rentalPaymentPostingService");
-    const [contract] = await q(
-      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
-      [testContractId]
-    );
+    const [contract] = await q("SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1", [
+      testContractId,
+    ]);
     const base = {
       companyId: ctx.companyId,
       contractCompanyId: ctx.companyId,
@@ -213,7 +213,10 @@ describe("Rental payment accounting and reconciliation", () => {
     };
     // Current month $500 due; another $200 goes to next month's prepaid asset.
     const first = await createRentalPaymentGroup({
-      ...base, amount: "700", paymentDate: todayStr(), clientDate: todayStr(),
+      ...base,
+      amount: "700",
+      paymentDate: todayStr(),
+      clientDate: todayStr(),
     });
     expect(first.scheduled).toBe(false);
 
@@ -236,7 +239,10 @@ describe("Rental payment accounting and reconciliation", () => {
     // Simulate the company's next business date in the direct posting service;
     // no scheduler needs to run first, and nothing is posted twice.
     const nextPayment = await createRentalPaymentGroup({
-      ...base, amount: "300", paymentDate: nextDay, clientDate: nextDay,
+      ...base,
+      amount: "300",
+      paymentDate: nextDay,
+      clientDate: nextDay,
     });
     expect(nextPayment.scheduled).toBe(false);
 
@@ -252,12 +258,21 @@ describe("Rental payment accounting and reconciliation", () => {
        WHERE ve.voucher_id=$1`,
       [after[0].accrual_voucher_id]
     );
-    expect(postings.filter((x: any) => x.name.includes("Rent Expense"))
-      .reduce((a: number, x: any) => a + Number(x.debit_amount), 0)).toBe(500);
-    expect(postings.filter((x: any) => x.name === "Prepaid Rent")
-      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(200);
-    expect(postings.filter((x: any) => x.name === "Accrued Rent Payable")
-      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(300);
+    expect(
+      postings
+        .filter((x: any) => x.name.includes("Rent Expense"))
+        .reduce((a: number, x: any) => a + Number(x.debit_amount), 0)
+    ).toBe(500);
+    expect(
+      postings
+        .filter((x: any) => x.name === "Prepaid Rent")
+        .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)
+    ).toBe(200);
+    expect(
+      postings
+        .filter((x: any) => x.name === "Accrued Rent Payable")
+        .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)
+    ).toBe(300);
 
     const report = await runRentalReconciliation(ctx.companyId, "ERP", nextDay);
     expect(report.balances.netOutstanding).toBe(0);
@@ -325,13 +340,11 @@ describe("Rental payment accounting and reconciliation", () => {
   });
 
   it("rejects a second scheduled group that would double-pay the same due month", async () => {
-    const { createRentalPaymentGroup, postScheduledGroup } = await import(
-      "../server/services/rental/rentalPaymentPostingService"
-    );
-    const [contractRow] = await q(
-      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
-      [testContractId]
-    );
+    const { createRentalPaymentGroup, postScheduledGroup } =
+      await import("../server/services/rental/rentalPaymentPostingService");
+    const [contractRow] = await q("SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1", [
+      testContractId,
+    ]);
     const contract = {
       id: testContractId,
       companyId: ctx.companyId,
@@ -344,12 +357,20 @@ describe("Rental payment accounting and reconciliation", () => {
     next.setUTCMonth(next.getUTCMonth() + 1, 2);
     const futureDate = next.toISOString().slice(0, 10);
     const params = {
-      companyId: ctx.companyId, contractCompanyId: ctx.companyId,
-      module: "ERP" as const, contract, unit,
+      companyId: ctx.companyId,
+      contractCompanyId: ctx.companyId,
+      module: "ERP" as const,
+      contract,
+      unit,
       cashAccountId: ctx.cashAccountId,
-      amount: "500", paymentDate: futureDate, clientDate: todayStr(),
-      scheduleFuturePayment: true, currency: "USD", exchangeRate: "1",
-      notes: null, shopExpenseAccountName: "Rent Expense - ERP Shops",
+      amount: "500",
+      paymentDate: futureDate,
+      clientDate: todayStr(),
+      scheduleFuturePayment: true,
+      currency: "USD",
+      exchangeRate: "1",
+      notes: null,
+      shopExpenseAccountName: "Rent Expense - ERP Shops",
       incomeAccountName: "Rental Income - ERP",
     };
     const first = await createRentalPaymentGroup(params);
@@ -358,15 +379,26 @@ describe("Rental payment accounting and reconciliation", () => {
     expect(duplicate.scheduled).toBe(true);
     expect(duplicate.paymentGroupId).not.toBe(first.paymentGroupId);
 
-    const post = (groupId: string) => postScheduledGroup(
-      ctx.companyId, ctx.companyId, "ERP", contract, unit, groupId,
-      futureDate, futureDate, ctx.cashAccountId, "USD", "1", null,
-      "Rent Expense - ERP Shops", "Rental Income - ERP", false
-    );
+    const post = (groupId: string) =>
+      postScheduledGroup(
+        ctx.companyId,
+        ctx.companyId,
+        "ERP",
+        contract,
+        unit,
+        groupId,
+        futureDate,
+        futureDate,
+        ctx.cashAccountId,
+        "USD",
+        "1",
+        null,
+        "Rent Expense - ERP Shops",
+        "Rental Income - ERP",
+        false
+      );
     expect(await post(first.paymentGroupId)).toBe(true);
-    await expect(post(duplicate.paymentGroupId)).rejects.toThrow(
-      "RENTAL_SCHEDULED_PAYMENT_ALLOCATION_STALE"
-    );
+    await expect(post(duplicate.paymentGroupId)).rejects.toThrow("RENTAL_SCHEDULED_PAYMENT_ALLOCATION_STALE");
     const statuses = await q(
       `SELECT posting_status,COUNT(*)::int n
        FROM property_payments WHERE contract_id=$1
@@ -452,7 +484,8 @@ describe("Rental payment accounting and reconciliation", () => {
     ]);
     const replay = await agent.post("/api/erp/rental/payments/bulk").send(body);
     expect(replay.status).toBe(200);
-    expect(replay.body).toEqual(first.body);
+    // The request boundary replays the first response, marked as a replay.
+    expect(replay.body).toEqual({ ...first.body, replayed: true });
 
     const afterRetry = await q("SELECT COUNT(*)::int AS count FROM property_payments WHERE contract_id = $1", [
       testContractId,

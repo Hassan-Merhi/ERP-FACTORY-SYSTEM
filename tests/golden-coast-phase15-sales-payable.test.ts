@@ -134,12 +134,11 @@ describe("Golden Coast Phase 15 — canonical GC Sales Cash payable", () => {
     // Every state-changing /api/sp/ request is claimed by the Phase 5-to-6
     // voucher-path boundary, which is a durable HTTP-level idempotency layer:
     // a repeat with the same clientRequestId and fingerprint replays the
-    // ORIGINAL response verbatim and never reaches the route. So the guarantee
-    // to assert is that the replay is byte-identical to the first response and
-    // that the ledger did not move — not a route-level `replayed: true` flag,
-    // which the boundary short-circuits before the handler can set it.
+    // ORIGINAL response (status and body, marked `replayed: true`) and never
+    // reaches the route. So the guarantee to assert is that the replay is the
+    // first response flagged as a replay and that the ledger did not move.
     expect(replay.status).toBe(second.status);
-    expect(replay.body).toEqual(second.body);
+    expect(replay.body).toEqual({ ...second.body, replayed: true });
     expect(await netDebit(fixture.saleSideAccountId)).toBeCloseTo(beforeReplay.payable, 2);
     expect(await netDebit(freshStartEquity)).toBeCloseTo(beforeReplay.fresh, 2);
     expect(await netDebit(fixture.goldenCoastHadiIntercompanyAccountId)).toBeCloseTo(beforeReplay.gcHadi, 2);

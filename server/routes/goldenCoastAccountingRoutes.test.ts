@@ -29,14 +29,10 @@ describe("Golden Coast Phase 1 route surface", () => {
     expect(routeSource).toContain("phase1RequestBudget");
   });
 
-  it("restores inactive or soft-deleted required ledgers during setup", () => {
-    expect(routeSource).toContain(".set({ active: true, deletedAt: null })");
+  it("answers the retired setup and post routes with the shared 410 and keeps no posting logic", () => {
+    expect(routeSource.match(/respondGoldenCoastPhase1Retired\(req, res\)/g)).toHaveLength(2);
+    expect(routeSource).not.toContain("postBalancedVoucherTx");
+    expect(routeSource).not.toContain(".insert(ledgerAccounts)");
     expect(routeSource).toContain("GOLDEN_COAST_PHASE1_LEDGER_SUBTYPES");
-  });
-
-  it("validates cash-side posting roles before central persistence", () => {
-    expect(routeSource).toContain("getGoldenCoastPhase1CashRoleRequirements");
-    expect(routeSource).toContain("validatePhase1CashRolesTx");
-    expect(routeSource).toContain('["Cash", "Bank"]');
   });
 });

@@ -135,10 +135,9 @@ describe("Phase 9 withdrawal refusals", () => {
       const denied = await manager.post(BASE).send({});
       expect([denied.status, denied.body.code]).toEqual([403, "SP_PERMISSION_DENIED"]);
       await closeBooks(w, "2026-12-31");
-      // Pinned: the closed-period database guard surfaces as a 500, not a 409.
       const closed = await withdraw(w, { kind: "ledger", id: cash });
-      expect(closed.status).toBe(500);
-      expect(closed.body.message).toMatch(/Accounting period closed/);
+      expect([closed.status, closed.body.code]).toEqual([409, "ACCOUNTING_PERIOD_CLOSED"]);
+      expect(closed.body.message).toMatch(/closed through 2026-12-31, so an entry dated 2026-10-15/);
       // Only the closing voucher of closeBooks exists.
       expect(await vouchers(w)).toBe(1);
     });
@@ -174,9 +173,10 @@ describe("Phase 9 withdrawal posting and replay", () => {
         hassanSavingsAccountId: savings,
       });
       expect(first.body.entries).toHaveLength(2);
-      // Pinned: the boundary returns the stored 201 body, still saying replayed: false.
+      // The boundary replays the stored first response, marked as a replay.
       const again = await withdraw(w, { kind: "bank", id: bank }, body);
-      expect([again.status, again.body.replayed, again.body.voucher.id]).toEqual([201, false, first.body.voucher.id]);
+      expect([again.status, again.body.replayed, again.body.voucher.id]).toEqual([201, true, first.body.voucher.id]);
+      expect(again.body.availableSavingsAfterUsd).toBe("200.00");
       const changed = await withdraw(w, { kind: "bank", id: bank }, { ...body, amountUsd: "5" });
       expect([changed.status, changed.body.code]).toEqual([409, "POSTING_IDEMPOTENCY_CONFLICT"]);
       expect(await vouchers(w)).toBe(1);

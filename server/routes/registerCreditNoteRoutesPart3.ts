@@ -88,6 +88,9 @@ export function registerCreditNoteRoutesPart3(app: Express) {
         currency: voucher.currency || "USD",
         exchangeRate: voucher.exchangeRate == null ? null : String(voucher.exchangeRate),
       };
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "At least one item is required" });
+      }
       if (wasZmw) {
         assertZmwImportPrices(
           items.map((item: { refundRate: unknown; originalCurrencyRate?: unknown }) => ({
@@ -103,20 +106,18 @@ export function registerCreditNoteRoutesPart3(app: Express) {
         return res.status(400).json({ message: "Not a credit/debit note" });
       }
 
-      if (items && Array.isArray(items)) {
-        for (const item of items) {
-          if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
-            return res.status(400).json({ message: `Invalid stockItemId: ${item.stockItemId}` });
-          }
-          if (!item.locationId || isNaN(Number(item.locationId))) {
-            return res
-              .status(400)
-              .json({ message: `Invalid locationId for item ${item.stockItemId}: ${item.locationId}` });
-          }
-          const qty = toInventoryDecimal(item.quantity);
-          if (!qty.isFinite() || !qty.isPositive()) {
-            return res.status(400).json({ message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` });
-          }
+      for (const item of items) {
+        if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
+          return res.status(400).json({ message: `Invalid stockItemId: ${item.stockItemId}` });
+        }
+        if (!item.locationId || isNaN(Number(item.locationId))) {
+          return res
+            .status(400)
+            .json({ message: `Invalid locationId for item ${item.stockItemId}: ${item.locationId}` });
+        }
+        const qty = toInventoryDecimal(item.quantity);
+        if (!qty.isFinite() || !qty.isPositive()) {
+          return res.status(400).json({ message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` });
         }
       }
 
