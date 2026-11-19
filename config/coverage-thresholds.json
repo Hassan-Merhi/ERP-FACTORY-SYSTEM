@@ -2,10 +2,10 @@
   "description": "Coverage floors for the backend and frontend suites. Read by vitest.config.ts, vitest.config.frontend.ts, and scripts/audit-coverage-ratchet.mjs. Global floors sit just below measured coverage (10% of the measured value, capped at 2 points globally and 3 per file), so ordinary churn does not fail CI but deleting tests does. Raise a floor when the ratchet audit reports headroom; never lower one without saying why in the commit message.",
   "backend": {
     "global": {
-      "lines": 77,
-      "statements": 76,
-      "functions": 80,
-      "branches": 65
+      "lines": 80,
+      "statements": 79,
+      "functions": 83,
+      "branches": 69
     },
     "perFile": {
       "server/services/accounting/centralPostingEngine.ts": {

@@ -20,7 +20,7 @@ audit fails instead of allowing the reference to drift.
 | Type escapes (AST) | 0 total | `npm run audit:type-escapes` |
 | ESLint warnings | 0 total | `npm run lint` |
 | Runtime DDL statements | 0 in server/ and shared/ | `npm run audit:runtime-ddl` |
-| Backend coverage floor (lines) | 77% | `config/coverage-thresholds.json` |
+| Backend coverage floor (lines) | 80% | `config/coverage-thresholds.json` |
 | Write routes with no test at all | 0 of 331 | `npm run audit:write-routes` |
 | Write routes covered only by the guard sweep | 0 of 331 | `npm run audit:write-routes` |
 | Registered routes | 2,464 | `config/route-manifest.json` |
