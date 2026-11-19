@@ -212,6 +212,9 @@ jobs:
       - name: Write-evidence ratchet
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:write-evidence
+      - name: Write-route input validation ratchet
+        if: always() && steps.install.outcome == 'success'
+        run: npm run audit:write-validation
       - name: Toolchain coherence
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:toolchain

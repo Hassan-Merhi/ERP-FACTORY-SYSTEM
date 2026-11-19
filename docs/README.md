@@ -173,6 +173,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
 | [security/raw-sql-audit.md](security/raw-sql-audit.md) | Raw SQL injection audit results and the `npm run check:raw-sql` review gate (allowlist, register, how to fix findings) |
+| [write-route-validation.md](write-route-validation.md) | Zod input validation on every write route: the `validateRequest` helper, strict schemas, and the `npm run audit:write-validation` ratchet |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
