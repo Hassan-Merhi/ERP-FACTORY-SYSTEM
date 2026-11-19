@@ -1,26 +1,217 @@
+import { confirmAction, promptText } from "@/components/ConfirmHost";
+import type { ClientErrorLike } from "@/lib/clientError";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, AlertCircle, Loader2, Zap, ShieldCheck, Landmark, ArrowLeftRight } from "lucide-react";
-import {
-  requestSetupConfirmation,
-  IntercompanyReadinessRow,
-  type GoldenCoastRoleStatus,
-  type GoldenCoastSetupStatus,
-} from "./SpSetupPanelParts";
-import { useSpSetupPanelState } from "./useSpSetupPanelState";
+
+interface GoldenCoastRoleStatus {
+  role: string;
+  expectedName: string;
+  expectedAccountType: string;
+  status: "ok" | "missing" | "needs_repair";
+  code: string | null;
+  name: string | null;
+  accountType: string | null;
+  openingBalanceTargetUsd: string | null;
+  ownershipSharePct: string | null;
+  issues: string[];
+  warnings: string[];
+}
+
+interface GoldenCoastIntercompanyAccountStatus {
+  role: string;
+  companyId: number;
+  subType: string;
+  expectedName: string;
+  status: "ok" | "missing" | "needs_repair" | "ambiguous";
+  accountId: number | null;
+  name: string | null;
+  accountType: string | null;
+  issues: string[];
+}
+
+interface GoldenCoastPhase13Status {
+  isConfigured: boolean;
+  parentCompanyId: number;
+  parentCompanyName: string;
+  parentAuthorized: boolean;
+  goldenCoastAccount: GoldenCoastIntercompanyAccountStatus;
+  hadiAccount: GoldenCoastIntercompanyAccountStatus | null;
+  blockers: string[];
+}
+
+interface GoldenCoastSetupStatus {
+  isConfigured: boolean;
+  requiredRoleCount: number;
+  configuredRoleCount: number;
+  roles: GoldenCoastRoleStatus[];
+  phase13?: GoldenCoastPhase13Status;
+}
+
+interface SpAccount {
+  id: number;
+  code?: string;
+  name?: string;
+  isHidden?: boolean;
+  accountType?: string;
+}
+
+interface SpSetupStatus {
+  requiredAccountCount?: number;
+  spAccounts?: SpAccount[];
+  supplierVoucherLinkGapCount?: number;
+  isConfigured?: boolean;
+  locations?: { name: string }[];
+  bankAccounts?: unknown[];
+  goldenCoast?: GoldenCoastSetupStatus;
+}
+
+interface SetupConfirmationPayload {
+  confirmation: "CHANGE SP SETUP";
+  reason: string;
+  idempotencyKey: string;
+  clientRequestId: string;
+  targetCompanyId?: number;
+}
+
+function createFreshIdempotencyKey(scope: string): string {
+  const uuid = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+  return uuid ? `${scope}:${uuid}` : `${scope}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
+async function requestSetupConfirmation(
+  actionLabel: string,
+  targetCompanyId?: number
+): Promise<SetupConfirmationPayload | null> {
+  const confirmed = await confirmAction({
+    title: actionLabel,
+    description: "Type exactly: CHANGE SP SETUP",
+    requirePhrase: "CHANGE SP SETUP",
+    tone: "warning",
+  });
+  if (!confirmed) return null;
+
+  const reason = await promptText({
+    title: "Reason for this setup change",
+    label: "Enter a meaningful reason for this setup change (at least 5 characters):",
+    minLength: 5,
+  });
+  if (reason == null || reason.length < 5) return null;
+
+  const idempotencyKey = createFreshIdempotencyKey("sp-setup");
+  return {
+    confirmation: "CHANGE SP SETUP",
+    reason,
+    idempotencyKey,
+    clientRequestId: idempotencyKey,
+    ...(targetCompanyId && targetCompanyId > 0 ? { targetCompanyId } : {}),
+  };
+}
+
+function IntercompanyReadinessRow({ account }: { account: GoldenCoastIntercompanyAccountStatus }) {
+  const ok = account.status === "ok";
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm py-1.5 border-b border-border/40 last:border-0">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          {ok ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+          ) : (
+            <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+          )}
+          <span className="font-medium">{account.name ?? account.expectedName}</span>
+          <span className="font-mono text-xs text-muted-foreground">{account.subType}</span>
+        </div>
+        {account.issues?.length > 0 && <p className="text-xs text-amber-600 mt-0.5">{account.issues.join(" · ")}</p>}
+      </div>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{account.accountType ?? "Intercompany"}</span>
+    </div>
+  );
+}
 
 export default function SpSetupPanel() {
-  const {
-    isSpStatusLoading,
-    status,
-    isGoldenCoastStatusLoading,
-    goldenCoastBase,
-    goldenCoastScoped,
-    setupMutation,
-    goldenCoastMutation,
-  } = useSpSetupPanelState();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: status, isLoading: isSpStatusLoading } = useQuery<SpSetupStatus>({
+    queryKey: ["/api/sp/setup/status"],
+  });
+  const { data: goldenCoastBase, isLoading: isGoldenCoastStatusLoading } = useQuery<GoldenCoastSetupStatus>({
+    queryKey: ["/api/sp/setup/golden-coast/status"],
+  });
+  const parentCompanyId = Number(goldenCoastBase?.phase13?.parentCompanyId ?? 0);
+  const scopedGoldenCoastStatusUrl =
+    parentCompanyId > 0 ? `/api/sp/setup/golden-coast/status?targetCompanyId=${parentCompanyId}` : "";
+  const { data: goldenCoastScoped } = useQuery<GoldenCoastSetupStatus>({
+    queryKey: [scopedGoldenCoastStatusUrl],
+    enabled: parentCompanyId > 0,
+    retry: false,
+  });
+
+  const setupMutation = useMutation({
+    mutationFn: async (payload: SetupConfirmationPayload) => {
+      const response = await apiRequest("POST", "/api/sp/setup", payload);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sp/setup/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+
+      const messages: string[] = [];
+      if (data.created?.length > 0) messages.push(`Created: ${data.created.join(", ")}.`);
+      if (data.repairedSupplierVoucherLinks > 0) {
+        messages.push(
+          `Repaired ${data.repairedSupplierVoucherLinks} Goods-OTW voucher supplier link${
+            data.repairedSupplierVoucherLinks === 1 ? "" : "s"
+          }.`
+        );
+      }
+
+      toast({
+        title: "Supplier Partner setup complete",
+        description: messages.join(" ") || "Accounts, warehouse, and supplier ledger links are already configured.",
+      });
+    },
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const goldenCoastMutation = useMutation({
+    mutationFn: async (payload: SetupConfirmationPayload) => {
+      const response = await apiRequest("POST", "/api/sp/setup/golden-coast", payload);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sp/setup/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sp/setup/golden-coast/status"] });
+      if (scopedGoldenCoastStatusUrl) {
+        queryClient.invalidateQueries({ queryKey: [scopedGoldenCoastStatusUrl] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+
+      const messages: string[] = [];
+      if (data.created?.length > 0) messages.push(`Created ${data.created.length} balance-sheet account(s).`);
+      if (data.repaired?.length > 0) messages.push(`Repaired ${data.repaired.length} balance-sheet account(s).`);
+      if (data.settingsChanged?.length > 0) messages.push(`Bound ${data.settingsChanged.join(", ")}.`);
+      const intercompanyChanges = (data.intercompanyChanges ?? []).filter(
+        (item: { action?: string }) => item.action && item.action !== "none"
+      );
+      if (intercompanyChanges.length > 0) {
+        messages.push(
+          `Provisioned/repaired ${intercompanyChanges.length} Golden Coast ↔ HADI intercompany account(s).`
+        );
+      }
+
+      toast({
+        title: releaseDebtEnglish("Golden Coast accounting setup complete"),
+        description: messages.join(" ") || "Golden Coast and HADI accounting accounts were already configured.",
+      });
+    },
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
 
   if (isSpStatusLoading || isGoldenCoastStatusLoading) {
     return (
