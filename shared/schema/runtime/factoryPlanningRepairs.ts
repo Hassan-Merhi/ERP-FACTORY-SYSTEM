@@ -1,8 +1,7 @@
 /**
  * Fixed Production Planner plans (migrations/20261015_001_factory_fixed_production_planner.sql)
- * and the one-time customer loading-date repair audit trails
- * (server/startup/runApprovedCustomerLoadingDateRepair.ts and
- * runApprovedReturnedLoadingDateRepair.ts).
+ * and the audit trails of the since-removed one-time customer loading-date
+ * repairs.
  *
  * These tables are created by runtime DDL (CREATE TABLE IF NOT EXISTS). They
  * are declared here so drizzle-kit and the type system see the real schema;

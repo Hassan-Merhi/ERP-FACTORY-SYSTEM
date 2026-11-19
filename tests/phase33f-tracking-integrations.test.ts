@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isTrackTraceScraper, scrapeTrackTrace } from "../server/lib/trackTraceScraper";
 import {
   isEnabled as isMaerskPublicEnabled,
   track as trackMaerskPublic,
@@ -42,20 +41,6 @@ afterEach(() => {
 });
 
 describe("Phase 33F tracking integrations", () => {
-  it("keeps Track-Trace optional and returns a typed unavailable result when Chromium support is absent", async () => {
-    const available = isTrackTraceScraper();
-    expect(typeof available).toBe("boolean");
-
-    if (!available) {
-      await expect(scrapeTrackTrace("MSKU1234567")).resolves.toEqual({
-        success: false,
-        shipment: null,
-        blocked: false,
-        error: "Puppeteer not available",
-      });
-    }
-  });
-
   it("keeps Maersk public tracking enabled without credentials and handles provider blocking", async () => {
     expect(isMaerskPublicEnabled()).toBe(true);
     const fetchMock = vi
