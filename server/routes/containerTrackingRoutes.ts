@@ -24,8 +24,14 @@ import { isEnabled as isCmaPublicEnabled } from "../lib/trackingProviders/cmaPub
 import { isConfigured as is17trackConfigured } from "../lib/trackingProviders/seventeenTrackProvider";
 import { isScraperAvailable } from "../lib/parcelsAppScraper";
 import { isHttpScraperAvailable } from "../lib/httpTrackingScraper";
+import { emptyBody, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 
 const ALLOWED_ROLES = ["Admin", "Developer", "Owner"] as const;
+
+// Every write route below answers 410 (tracking automation is disabled) and reads no input.
+// No client calls them any more, so they take no body; the id is never read.
+const disabledActionInput = { body: emptyBody } satisfies RequestSchemas;
+const disabledContainerActionInput = { params: stringIdParams, body: emptyBody } satisfies RequestSchemas;
 
 function requireAllowedRole(req: Request, res: Response): boolean {
   const role = req.user?.role;
@@ -122,22 +128,32 @@ export function registerContainerTrackingRoutes(app: Express) {
   });
 
   // POST /api/container-tracking/test-connection — verify ParcelsApp key works
-  app.post("/api/container-tracking/test-connection", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/container-tracking/test-connection",
+    requireAuth,
+    validateRequest(disabledActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 
   // POST /api/container-tracking/:id/track-now — immediately track a single container
-  app.post("/api/container-tracking/:id/track-now", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/container-tracking/:id/track-now",
+    requireAuth,
+    validateRequest(disabledContainerActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 
   // GET /api/container-tracking/:id/events — list recent tracking events
   app.get("/api/container-tracking/:id/events", requireAuth, async (req: Request, res: Response) => {
@@ -163,13 +179,18 @@ export function registerContainerTrackingRoutes(app: Express) {
   });
 
   // POST /api/container-tracking/bulk-settings
-  app.post("/api/container-tracking/bulk-settings", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/container-tracking/bulk-settings",
+    requireAuth,
+    validateRequest(disabledActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 
   // GET /api/container-tracking/bulk-progress — live progress of the current bulk run
   app.get("/api/container-tracking/bulk-progress", requireAuth, (req: Request, res: Response) => {
@@ -178,32 +199,47 @@ export function registerContainerTrackingRoutes(app: Express) {
   });
 
   // POST /api/container-tracking/bulk-track-now
-  app.post("/api/container-tracking/bulk-track-now", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/container-tracking/bulk-track-now",
+    requireAuth,
+    validateRequest(disabledActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 
   // POST /api/container-tracking/:id/debug-eta
   // Runs maersk_direct and maersk_public against a container and returns
   // safe diagnostic JSON (no API keys, no full payloads) describing what
   // each provider returned and where the ETA was or was not found.
-  app.post("/api/container-tracking/:id/debug-eta", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/container-tracking/:id/debug-eta",
+    requireAuth,
+    validateRequest(disabledContainerActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 
   // PATCH /api/container-tracking/:id/settings
-  app.patch("/api/container-tracking/:id/settings", requireAuth, async (req: Request, res: Response) => {
-    if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({
-      message:
-        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
-    });
-  });
+  app.patch(
+    "/api/container-tracking/:id/settings",
+    requireAuth,
+    validateRequest(disabledContainerActionInput),
+    async (req: Request, res: Response) => {
+      if (!requireAllowedRole(req, res)) return;
+      return res.status(410).json({
+        message:
+          "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+      });
+    }
+  );
 }

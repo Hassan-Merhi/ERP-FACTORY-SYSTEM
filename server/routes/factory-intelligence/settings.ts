@@ -11,10 +11,20 @@ import { logger } from "../../lib/logger";
 import { cache } from "../../lib/simpleCache";
 import { eq, sql } from "drizzle-orm";
 import { factorySettings } from "@shared/schema";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { registerFactorySettingsRoutesPart1, INITIAL_FACTORY_FEATURES } from "./registerFactorySettingsRoutesPart1";
 export { INITIAL_FACTORY_FEATURES } from "./registerFactorySettingsRoutesPart1";
 
 const UNSAFE_SETTINGS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+// A genuinely dynamic key map: the settings page sends its whole settings object
+// (client/src/pages/factory/factorysettings/useFactorySettingsModelPart2.ts), and
+// every key that is not a known column is stored in extraSettings.
+const updateFactorySettingsInput = {
+  query: emptyQuery,
+  body: z.record(z.string(), z.unknown()),
+} satisfies RequestSchemas;
 
 export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   // ───────────────────────────────────────────────
@@ -82,100 +92,107 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
     "hideAvgCost",
   ]);
 
-  app.put("/api/factory/settings", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "automaticPriorityPrintingEnabled")) {
-        return res.status(403).json({ message: "Use the protected Automatic Priority Mode endpoint." });
-      }
-      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "monthlyProductionRowOrder")) {
-        return res.status(403).json({ message: "Use the Monthly Production Matrix order endpoint." });
-      }
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.put(
+    "/api/factory/settings",
+    requireAuth,
+    validateRequest(updateFactorySettingsInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "automaticPriorityPrintingEnabled")) {
+          return res.status(403).json({ message: "Use the protected Automatic Priority Mode endpoint." });
+        }
+        if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "monthlyProductionRowOrder")) {
+          return res.status(403).json({ message: "Use the Monthly Production Matrix order endpoint." });
+        }
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const {
-        dashboardEnabled,
-        kpisEnabled,
-        profitabilityEnabled,
-        alertsEnabled,
-        supplierScoringEnabled,
-        mixOptimizerEnabled,
-        traceabilityEnabled,
-        balePhotosEnabled,
-        wasteTrackingEnabled,
-        cashflowEnabled,
-        rolesEnabled,
-        netProfitEnabled,
-        productionSummaryEnabled,
-        supplierReportEnabled,
-        supplierStatementEnabled,
-        laborCostPerKg,
-        overheadPerKg,
-        hideSellingPrice,
-        hideAvgCost,
-      } = req.body;
+        const {
+          dashboardEnabled,
+          kpisEnabled,
+          profitabilityEnabled,
+          alertsEnabled,
+          supplierScoringEnabled,
+          mixOptimizerEnabled,
+          traceabilityEnabled,
+          balePhotosEnabled,
+          wasteTrackingEnabled,
+          cashflowEnabled,
+          rolesEnabled,
+          netProfitEnabled,
+          productionSummaryEnabled,
+          supplierReportEnabled,
+          supplierStatementEnabled,
+          laborCostPerKg,
+          overheadPerKg,
+          hideSellingPrice,
+          hideAvgCost,
+        } = req.body;
 
-      const updateData: Partial<typeof factorySettings.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
-      if (dashboardEnabled !== undefined) updateData.dashboardEnabled = dashboardEnabled;
-      if (kpisEnabled !== undefined) updateData.kpisEnabled = kpisEnabled;
-      if (profitabilityEnabled !== undefined) updateData.profitabilityEnabled = profitabilityEnabled;
-      if (alertsEnabled !== undefined) updateData.alertsEnabled = alertsEnabled;
-      if (supplierScoringEnabled !== undefined) updateData.supplierScoringEnabled = supplierScoringEnabled;
-      if (mixOptimizerEnabled !== undefined) updateData.mixOptimizerEnabled = mixOptimizerEnabled;
-      if (traceabilityEnabled !== undefined) updateData.traceabilityEnabled = traceabilityEnabled;
-      if (balePhotosEnabled !== undefined) updateData.balePhotosEnabled = balePhotosEnabled;
-      if (wasteTrackingEnabled !== undefined) updateData.wasteTrackingEnabled = wasteTrackingEnabled;
-      if (cashflowEnabled !== undefined) updateData.cashflowEnabled = cashflowEnabled;
-      if (rolesEnabled !== undefined) updateData.rolesEnabled = rolesEnabled;
-      if (netProfitEnabled !== undefined) updateData.netProfitEnabled = netProfitEnabled;
-      if (productionSummaryEnabled !== undefined) updateData.productionSummaryEnabled = productionSummaryEnabled;
-      if (supplierReportEnabled !== undefined) updateData.supplierReportEnabled = supplierReportEnabled;
-      if (supplierStatementEnabled !== undefined) updateData.supplierStatementEnabled = supplierStatementEnabled;
-      if (laborCostPerKg !== undefined) updateData.laborCostPerKg = String(laborCostPerKg);
-      if (overheadPerKg !== undefined) updateData.overheadPerKg = String(overheadPerKg);
-      if (hideSellingPrice !== undefined) updateData.hideSellingPrice = hideSellingPrice;
-      if (hideAvgCost !== undefined) updateData.hideAvgCost = hideAvgCost;
+        const updateData: Partial<typeof factorySettings.$inferInsert> & { updatedAt: Date } = {
+          updatedAt: new Date(),
+        };
+        if (dashboardEnabled !== undefined) updateData.dashboardEnabled = dashboardEnabled;
+        if (kpisEnabled !== undefined) updateData.kpisEnabled = kpisEnabled;
+        if (profitabilityEnabled !== undefined) updateData.profitabilityEnabled = profitabilityEnabled;
+        if (alertsEnabled !== undefined) updateData.alertsEnabled = alertsEnabled;
+        if (supplierScoringEnabled !== undefined) updateData.supplierScoringEnabled = supplierScoringEnabled;
+        if (mixOptimizerEnabled !== undefined) updateData.mixOptimizerEnabled = mixOptimizerEnabled;
+        if (traceabilityEnabled !== undefined) updateData.traceabilityEnabled = traceabilityEnabled;
+        if (balePhotosEnabled !== undefined) updateData.balePhotosEnabled = balePhotosEnabled;
+        if (wasteTrackingEnabled !== undefined) updateData.wasteTrackingEnabled = wasteTrackingEnabled;
+        if (cashflowEnabled !== undefined) updateData.cashflowEnabled = cashflowEnabled;
+        if (rolesEnabled !== undefined) updateData.rolesEnabled = rolesEnabled;
+        if (netProfitEnabled !== undefined) updateData.netProfitEnabled = netProfitEnabled;
+        if (productionSummaryEnabled !== undefined) updateData.productionSummaryEnabled = productionSummaryEnabled;
+        if (supplierReportEnabled !== undefined) updateData.supplierReportEnabled = supplierReportEnabled;
+        if (supplierStatementEnabled !== undefined) updateData.supplierStatementEnabled = supplierStatementEnabled;
+        if (laborCostPerKg !== undefined) updateData.laborCostPerKg = String(laborCostPerKg);
+        if (overheadPerKg !== undefined) updateData.overheadPerKg = String(overheadPerKg);
+        if (hideSellingPrice !== undefined) updateData.hideSellingPrice = hideSellingPrice;
+        if (hideAvgCost !== undefined) updateData.hideAvgCost = hideAvgCost;
 
-      // Collect any extra boolean/string settings into extraSettings JSONB
-      const extraKeys = Object.keys(req.body).filter(
-        (k) => !KNOWN_SETTINGS_COLUMNS.has(k) && k !== "id" && k !== "updatedAt" && k !== "extraSettings"
-      );
-      if (extraKeys.length > 0) {
-        // Build the patch from own entries (never bracket writes keyed by user
-        // input) and drop prototype-shaped keys entirely.
-        const allowedExtraKeys = new Set(extraKeys);
-        updateData.extraSettings = Object.fromEntries(
-          Object.entries(req.body as Record<string, unknown>).filter(
-            ([key, value]) => allowedExtraKeys.has(key) && value !== undefined && !UNSAFE_SETTINGS_KEYS.has(key)
-          )
+        // Collect any extra boolean/string settings into extraSettings JSONB
+        const extraKeys = Object.keys(req.body).filter(
+          (k) => !KNOWN_SETTINGS_COLUMNS.has(k) && k !== "id" && k !== "updatedAt" && k !== "extraSettings"
         );
+        if (extraKeys.length > 0) {
+          // Build the patch from own entries (never bracket writes keyed by user
+          // input) and drop prototype-shaped keys entirely.
+          const allowedExtraKeys = new Set(extraKeys);
+          updateData.extraSettings = Object.fromEntries(
+            Object.entries(req.body as Record<string, unknown>).filter(
+              ([key, value]) => allowedExtraKeys.has(key) && value !== undefined && !UNSAFE_SETTINGS_KEYS.has(key)
+            )
+          );
+        }
+
+        const [result] = await db
+          .insert(factorySettings)
+          .values({ companyId, ...updateData })
+          .onConflictDoUpdate({
+            target: factorySettings.companyId,
+            set:
+              extraKeys.length > 0
+                ? {
+                    ...updateData,
+                    // Merge only supplied keys against the CURRENT DB row, not a
+                    // stale prefetched copy. Keep the protected flag untouched.
+                    extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify(updateData.extraSettings)}::jsonb`,
+                  }
+                : updateData,
+          })
+          .returning();
+
+        const resultExtra = result.extraSettings ?? {};
+        cache.del(`factory_settings:${companyId}`);
+        res.json({ ...result, ...resultExtra });
+      } catch (error: unknown) {
+        logger.error("Error updating factory settings:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [result] = await db
-        .insert(factorySettings)
-        .values({ companyId, ...updateData })
-        .onConflictDoUpdate({
-          target: factorySettings.companyId,
-          set:
-            extraKeys.length > 0
-              ? {
-                  ...updateData,
-                  // Merge only supplied keys against the CURRENT DB row, not a
-                  // stale prefetched copy. Keep the protected flag untouched.
-                  extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify(updateData.extraSettings)}::jsonb`,
-                }
-              : updateData,
-        })
-        .returning();
-
-      const resultExtra = result.extraSettings ?? {};
-      cache.del(`factory_settings:${companyId}`);
-      res.json({ ...result, ...resultExtra });
-    } catch (error: unknown) {
-      logger.error("Error updating factory settings:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ───────────────────────────────────────────────
   // 2. Dashboard

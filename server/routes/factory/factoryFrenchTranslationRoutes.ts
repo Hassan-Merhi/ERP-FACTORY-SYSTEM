@@ -6,6 +6,15 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { contentDisposition } from "../../lib/contentDisposition";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const upload = spreadsheetUpload;
@@ -24,6 +33,36 @@ function clean(value: unknown): string | null {
 function normalizeCode(value: unknown): string {
   return clean(value)?.toUpperCase() ?? "";
 }
+
+// clean() turns anything but a non-blank string into null.
+const frenchText = z.string().nullable().optional();
+const productTranslationInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ nameFr: frenchText, descriptionFr: frenchText }),
+} satisfies RequestSchemas;
+const categoryTranslationInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ nameFr: frenchText }),
+} satisfies RequestSchemas;
+// Multipart: the workbook is the file; there are no form fields.
+const importPreviewInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// The client posts back the preview rows it marked ready.
+const importApplyRow = z.strictObject({
+  articleCode: frenchText,
+  nameFr: frenchText,
+  categoryNameFr: frenchText,
+  descriptionFr: frenchText,
+  rowNumber: z.unknown().optional(), // sent by client/src/components/FactoryFrenchCatalogManager.tsx; not used
+  productId: z.unknown().optional(), // sent by client/src/components/FactoryFrenchCatalogManager.tsx; not used
+  categoryId: z.unknown().optional(), // sent by client/src/components/FactoryFrenchCatalogManager.tsx; not used
+  status: z.unknown().optional(), // sent by client/src/components/FactoryFrenchCatalogManager.tsx; not used
+});
+const importApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({ rows: z.array(importApplyRow).optional() }),
+} satisfies RequestSchemas;
 
 export function registerFactoryFrenchTranslationRoutes(app: Express) {
   app.get("/api/factory/french-catalog", requireAuth, async (req, res) => {
@@ -59,46 +98,54 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/french-catalog/products/:id", requireAuth, async (req, res) => {
-    try {
-      const companyId = factoryCompanyId(req);
-      const id = Number(req.params.id);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid product id" });
-      const nameFr = clean(req.body?.nameFr);
-      const descriptionFr = clean(req.body?.descriptionFr);
-      const result = await db.execute(sql`
+  app.patch(
+    "/api/factory/french-catalog/products/:id",
+    requireAuth,
+    validateRequest(productTranslationInput),
+    async (req, res) => {
+      try {
+        const companyId = factoryCompanyId(req);
+        const { id } = validatedInput(req, productTranslationInput).params;
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        const nameFr = clean(req.body?.nameFr);
+        const descriptionFr = clean(req.body?.descriptionFr);
+        const result = await db.execute(sql`
         UPDATE factory_bale_products
         SET name_fr = ${nameFr}, description_fr = ${descriptionFr}, updated_at = NOW()
         WHERE id = ${id} AND company_id = ${companyId} AND deleted_at IS NULL
         RETURNING id, article_code AS "articleCode", name_fr AS "nameFr", description_fr AS "descriptionFr"
       `);
-      if (!result.rows[0]) return res.status(404).json({ message: "Product not found" });
-      return res.json(result.rows[0]);
-    } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+        if (!result.rows[0]) return res.status(404).json({ message: "Product not found" });
+        return res.json(result.rows[0]);
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.patch("/api/factory/french-catalog/categories/:id", requireAuth, async (req, res) => {
-    try {
-      const companyId = factoryCompanyId(req);
-      const id = Number(req.params.id);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid category id" });
-      const nameFr = clean(req.body?.nameFr);
-      const result = await db.execute(sql`
+  app.patch(
+    "/api/factory/french-catalog/categories/:id",
+    requireAuth,
+    validateRequest(categoryTranslationInput),
+    async (req, res) => {
+      try {
+        const companyId = factoryCompanyId(req);
+        const { id } = validatedInput(req, categoryTranslationInput).params;
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        const nameFr = clean(req.body?.nameFr);
+        const result = await db.execute(sql`
         UPDATE factory_categories
         SET name_fr = ${nameFr}, updated_at = NOW()
         WHERE id = ${id} AND company_id = ${companyId} AND deleted_at IS NULL
         RETURNING id, name_fr AS "nameFr"
       `);
-      if (!result.rows[0]) return res.status(404).json({ message: "Category not found" });
-      return res.json(result.rows[0]);
-    } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+        if (!result.rows[0]) return res.status(404).json({ message: "Category not found" });
+        return res.json(result.rows[0]);
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/factory/french-catalog/template", requireAuth, async (req, res) => {
     try {
@@ -136,45 +183,50 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/french-catalog/import/preview", requireAuth, upload.single("file"), async (req, res) => {
-    try {
-      const companyId = factoryCompanyId(req);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      if (!req.file) return res.status(400).json({ message: "Excel file is required" });
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
-      const sheet = workbook.worksheets[0];
-      if (!sheet) return res.status(400).json({ message: "Workbook has no worksheet" });
-      const headers = new Map<string, number>();
-      sheet.getRow(1).eachCell((cell, col) =>
-        headers.set(
-          String(cell.value ?? "")
-            .trim()
-            .toLowerCase(),
-          col
-        )
-      );
-      const articleCol = headers.get("article code / barcode") ?? headers.get("article code");
-      const productCol = headers.get("french product name");
-      const categoryCol = headers.get("french category");
-      const descriptionCol = headers.get("french description");
-      if (!articleCol || !productCol) return res.status(400).json({ message: "Required columns are missing" });
-      const rows: Array<Record<string, unknown>> = [];
-      for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
-        const row = sheet.getRow(rowNumber);
-        const articleCode = normalizeCode(row.getCell(articleCol).text);
-        if (!articleCode) continue;
-        rows.push({
-          rowNumber,
-          articleCode,
-          nameFr: clean(row.getCell(productCol).text),
-          categoryNameFr: categoryCol ? clean(row.getCell(categoryCol).text) : null,
-          descriptionFr: descriptionCol ? clean(row.getCell(descriptionCol).text) : null,
-        });
-      }
-      const codes = rows.map((row) => String(row.articleCode));
-      const catalog = codes.length
-        ? await db.execute(sql`
+  app.post(
+    "/api/factory/french-catalog/import/preview",
+    requireAuth,
+    upload.single("file"),
+    validateRequest(importPreviewInput),
+    async (req, res) => {
+      try {
+        const companyId = factoryCompanyId(req);
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        if (!req.file) return res.status(400).json({ message: "Excel file is required" });
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) return res.status(400).json({ message: "Workbook has no worksheet" });
+        const headers = new Map<string, number>();
+        sheet.getRow(1).eachCell((cell, col) =>
+          headers.set(
+            String(cell.value ?? "")
+              .trim()
+              .toLowerCase(),
+            col
+          )
+        );
+        const articleCol = headers.get("article code / barcode") ?? headers.get("article code");
+        const productCol = headers.get("french product name");
+        const categoryCol = headers.get("french category");
+        const descriptionCol = headers.get("french description");
+        if (!articleCol || !productCol) return res.status(400).json({ message: "Required columns are missing" });
+        const rows: Array<Record<string, unknown>> = [];
+        for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
+          const row = sheet.getRow(rowNumber);
+          const articleCode = normalizeCode(row.getCell(articleCol).text);
+          if (!articleCode) continue;
+          rows.push({
+            rowNumber,
+            articleCode,
+            nameFr: clean(row.getCell(productCol).text),
+            categoryNameFr: categoryCol ? clean(row.getCell(categoryCol).text) : null,
+            descriptionFr: descriptionCol ? clean(row.getCell(descriptionCol).text) : null,
+          });
+        }
+        const codes = rows.map((row) => String(row.articleCode));
+        const catalog = codes.length
+          ? await db.execute(sql`
             SELECT p.id, UPPER(BTRIM(p.article_code)) AS "articleCode", p.category_id AS "categoryId",
                    p.name_fr AS "currentNameFr", p.description_fr AS "currentDescriptionFr",
                    c.name_fr AS "currentCategoryNameFr"
@@ -182,64 +234,70 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
             LEFT JOIN factory_categories c ON c.id = p.category_id AND c.company_id = p.company_id
             WHERE p.company_id = ${companyId} AND UPPER(BTRIM(p.article_code)) = ANY(${codes})
           `)
-        : { rows: [] };
-      const byCode = new Map(catalog.rows.map((row: Record<string, unknown>) => [row.articleCode, row]));
-      const preview = rows.map((row) => {
-        const match = byCode.get(String(row.articleCode));
-        return {
-          ...row,
-          productId: match?.id ?? null,
-          categoryId: match?.categoryId ?? null,
-          status: match ? "ready" : "unknown",
-        };
-      });
-      return res.json({
-        rows: preview,
-        totalRows: preview.length,
-        readyRows: preview.filter((row) => row.status === "ready").length,
-        blocked: preview.some((row) => row.status !== "ready"),
-      });
-    } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+          : { rows: [] };
+        const byCode = new Map(catalog.rows.map((row: Record<string, unknown>) => [row.articleCode, row]));
+        const preview = rows.map((row) => {
+          const match = byCode.get(String(row.articleCode));
+          return {
+            ...row,
+            productId: match?.id ?? null,
+            categoryId: match?.categoryId ?? null,
+            status: match ? "ready" : "unknown",
+          };
+        });
+        return res.json({
+          rows: preview,
+          totalRows: preview.length,
+          readyRows: preview.filter((row) => row.status === "ready").length,
+          blocked: preview.some((row) => row.status !== "ready"),
+        });
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/factory/french-catalog/import/apply", requireAuth, async (req, res) => {
-    try {
-      const companyId = factoryCompanyId(req);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-      if (rows.length === 0) return res.status(400).json({ message: "No translation rows supplied" });
-      let updatedProducts = 0;
-      let updatedCategories = 0;
-      await db.transaction(async (tx) => {
-        for (const row of rows) {
-          const articleCode = normalizeCode(row.articleCode);
-          if (!articleCode) continue;
-          const product = await tx.execute(sql`
+  app.post(
+    "/api/factory/french-catalog/import/apply",
+    requireAuth,
+    validateRequest(importApplyInput),
+    async (req, res) => {
+      try {
+        const companyId = factoryCompanyId(req);
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+        if (rows.length === 0) return res.status(400).json({ message: "No translation rows supplied" });
+        let updatedProducts = 0;
+        let updatedCategories = 0;
+        await db.transaction(async (tx) => {
+          for (const row of rows) {
+            const articleCode = normalizeCode(row.articleCode);
+            if (!articleCode) continue;
+            const product = await tx.execute(sql`
             UPDATE factory_bale_products
             SET name_fr = ${clean(row.nameFr)}, description_fr = ${clean(row.descriptionFr)}, updated_at = NOW()
             WHERE company_id = ${companyId} AND UPPER(BTRIM(article_code)) = ${articleCode} AND deleted_at IS NULL
             RETURNING category_id AS "categoryId"
           `);
-          const categoryId = Number(product.rows[0]?.categoryId);
-          if (!product.rows[0]) continue;
-          updatedProducts += 1;
-          if (
-            Number.isSafeInteger(categoryId) &&
-            categoryId > 0 &&
-            Object.prototype.hasOwnProperty.call(row, "categoryNameFr")
-          ) {
-            await tx.execute(
-              sql`UPDATE factory_categories SET name_fr = ${clean(row.categoryNameFr)}, updated_at = NOW() WHERE id = ${categoryId} AND company_id = ${companyId}`
-            );
-            updatedCategories += 1;
+            const categoryId = Number(product.rows[0]?.categoryId);
+            if (!product.rows[0]) continue;
+            updatedProducts += 1;
+            if (
+              Number.isSafeInteger(categoryId) &&
+              categoryId > 0 &&
+              Object.prototype.hasOwnProperty.call(row, "categoryNameFr")
+            ) {
+              await tx.execute(
+                sql`UPDATE factory_categories SET name_fr = ${clean(row.categoryNameFr)}, updated_at = NOW() WHERE id = ${categoryId} AND company_id = ${companyId}`
+              );
+              updatedCategories += 1;
+            }
           }
-        }
-      });
-      return res.json({ success: true, updatedProducts, updatedCategories });
-    } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+        });
+        return res.json({ success: true, updatedProducts, updatedCategories });
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

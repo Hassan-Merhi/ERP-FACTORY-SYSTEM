@@ -19,6 +19,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { logger } from "../../lib/logger";
 import {
   BrowserSyncRefusal,
@@ -48,6 +49,11 @@ export const operationSchema = z
 const receiptsSchema = z
   .object({ deviceId: z.string().uuid(), operationIds: z.array(z.string().uuid()).max(500) })
   .strict();
+
+// A body these refuse is answered 400 REQUEST_VALIDATION_FAILED before the
+// feature and company checks; the browser and PC agents treat 400 like 422.
+const operationInput = { query: emptyQuery, body: operationSchema } satisfies RequestSchemas;
+const receiptsInput = { query: emptyQuery, body: receiptsSchema } satisfies RequestSchemas;
 
 export function actorOf(req: Request): BrowserActor | null {
   const companyId = Number(req.session.currentCompanyId);
@@ -82,47 +88,62 @@ export function refusal(res: Response, error: unknown): Response {
 }
 
 export function registerBrowserSyncRoutes(app: Express): void {
-  app.post("/api/offline/browser-sync/operations", requireAuth, async (req: Request, res: Response) => {
-    const actor = await guard(req, res);
-    if (!actor) return;
-    const parsed = operationSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
-    try {
-      const result = await applyBrowserOperation(actor, parsed.data);
-      if (result.status === "applied") return res.status(200).json(result.receipt);
-      if (result.status === "conflict") {
-        return res.status(409).json({ code: result.code, overridable: result.overridable, detail: result.detail });
+  app.post(
+    "/api/offline/browser-sync/operations",
+    requireAuth,
+    validateRequest(operationInput),
+    async (req: Request, res: Response) => {
+      const actor = await guard(req, res);
+      if (!actor) return;
+      const parsed = operationSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
+      try {
+        const result = await applyBrowserOperation(actor, parsed.data);
+        if (result.status === "applied") return res.status(200).json(result.receipt);
+        if (result.status === "conflict") {
+          return res.status(409).json({ code: result.code, overridable: result.overridable, detail: result.detail });
+        }
+        if (result.status === "waiting") return res.status(202).json({ code: result.code });
+        return res.status(422).json({ code: result.code });
+      } catch (error) {
+        return refusal(res, error);
       }
-      if (result.status === "waiting") return res.status(202).json({ code: result.code });
-      return res.status(422).json({ code: result.code });
-    } catch (error) {
-      return refusal(res, error);
     }
-  });
+  );
 
-  app.post("/api/offline/browser-sync/operations/discard", requireAuth, async (req: Request, res: Response) => {
-    const actor = await guard(req, res);
-    if (!actor) return;
-    const parsed = operationSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
-    try {
-      return res.status(200).json(await discardBrowserOperation(actor, parsed.data));
-    } catch (error) {
-      return refusal(res, error);
+  app.post(
+    "/api/offline/browser-sync/operations/discard",
+    requireAuth,
+    validateRequest(operationInput),
+    async (req: Request, res: Response) => {
+      const actor = await guard(req, res);
+      if (!actor) return;
+      const parsed = operationSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
+      try {
+        return res.status(200).json(await discardBrowserOperation(actor, parsed.data));
+      } catch (error) {
+        return refusal(res, error);
+      }
     }
-  });
+  );
 
-  app.post("/api/offline/browser-sync/receipts", requireAuth, async (req: Request, res: Response) => {
-    const actor = await guard(req, res);
-    if (!actor) return;
-    const parsed = receiptsSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
-    try {
-      return res
-        .status(200)
-        .json({ receipts: await listBrowserReceipts(actor, parsed.data.deviceId, parsed.data.operationIds) });
-    } catch (error) {
-      return refusal(res, error);
+  app.post(
+    "/api/offline/browser-sync/receipts",
+    requireAuth,
+    validateRequest(receiptsInput),
+    async (req: Request, res: Response) => {
+      const actor = await guard(req, res);
+      if (!actor) return;
+      const parsed = receiptsSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
+      try {
+        return res
+          .status(200)
+          .json({ receipts: await listBrowserReceipts(actor, parsed.data.deviceId, parsed.data.operationIds) });
+      } catch (error) {
+        return refusal(res, error);
+      }
     }
-  });
+  );
 }

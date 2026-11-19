@@ -124,7 +124,6 @@ beforeAll(async () => {
 
   const supplier = await agent.post("/api/factory/suppliers").send({
     name: `${TEST_PREFIX}_coverage_supplier`,
-    currencyCode: "USD",
   });
   if (supplier.status !== 200 || !supplier.body?.id) {
     throw new Error(`Factory supplier seed failed: ${supplier.status} ${supplier.text}`);

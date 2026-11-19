@@ -9,8 +9,50 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
 import multer from "multer";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 const INVALID_IMAGE_PAYLOAD = "Invalid image payload. Only JPEG and PNG data URLs are accepted.";
+
+const transferWaSettingsInput = {
+  // The handler parses the id itself (parseInt + isNaN).
+  params: z.strictObject({ companyId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ groupChatId: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const agentDutyWaSettingsInput = {
+  query: emptyQuery,
+  // Agent name -> WhatsApp group chat id ("" while unassigned).
+  body: z.strictObject({ groups: z.record(z.string(), z.string()).optional() }),
+} satisfies RequestSchemas;
+
+const sendAgentDutyWhatsappInput = {
+  query: emptyQuery,
+  // Multipart form fields beside the `image` file (agentCardWaSend.ts), or JSON with imageBase64.
+  body: z
+    .strictObject({
+      imageBase64: z.string().optional(),
+      agentName: z.string().optional(),
+      fileName: z.string().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
+const containersWaSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    groupChatId: z.string().optional(),
+    scheduleEnabled: z.boolean().optional(),
+    scheduleHour: z.union([z.number(), z.string()]).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const sendContainersWhatsappInput = {
+  query: emptyQuery,
+  // {} sends the PDF report; TabTruckLocationModel sends a rendered image instead.
+  body: z.strictObject({ imageBase64: z.string().optional(), fileName: z.string().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerGitWhatsappRoutes(app: Express) {
   const agentDutyImageUpload = multer({
@@ -38,6 +80,7 @@ export function registerGitWhatsappRoutes(app: Express) {
     "/api/git/transfer-wa-settings/:companyId",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(transferWaSettingsInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = parseInt(req.params.companyId, 10);
@@ -72,6 +115,7 @@ export function registerGitWhatsappRoutes(app: Express) {
     "/api/git/agent-duty-wa-settings",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(agentDutyWaSettingsInput),
     async (req: Request, res: Response) => {
       try {
         const { groups = {} } = req.body;
@@ -89,6 +133,7 @@ export function registerGitWhatsappRoutes(app: Express) {
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
     agentDutyImageUpload.single("image"),
+    validateRequest(sendAgentDutyWhatsappInput),
     async (req: Request, res: Response) => {
       try {
         const { imageBase64, agentName, fileName } = req.body ?? {};
@@ -176,6 +221,7 @@ export function registerGitWhatsappRoutes(app: Express) {
     "/api/git/containers-wa-settings",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(containersWaSettingsInput),
     async (req: Request, res: Response) => {
       try {
         const { groupChatId = "", scheduleEnabled = false, scheduleHour = 8 } = req.body;
@@ -194,6 +240,7 @@ export function registerGitWhatsappRoutes(app: Express) {
     "/api/git/send-containers-whatsapp",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(sendContainersWhatsappInput),
     async (req: Request, res: Response) => {
       try {
         const { imageBase64, fileName } = req.body ?? {};

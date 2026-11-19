@@ -244,7 +244,7 @@ describe("Phase 33F auth, import, export and integration route guards", () => {
     const route = harness.registrations.find(
       (entry) => entry.method === "POST" && entry.path === "/api/daily-export/trigger-whatsapp"
     );
-    expect(route?.handlers).toHaveLength(3);
+    expect(route?.handlers).toHaveLength(4);
     const roleGuard = route!.handlers[1];
     for (const role of ["Manager", "Accountant", "Viewer", "ERP Tester"]) {
       const res = responseDouble();

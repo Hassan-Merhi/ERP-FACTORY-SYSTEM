@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { sqlArray } from "../../lib/sqlArray";
 import {
   SP_ACCOUNTS,
@@ -15,6 +16,28 @@ import {
   ensureGcProfitAccounts,
   buildGcMigrationPreview,
 } from "./_helpers";
+import { emptyBody, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Disabled (410); reads no input.
+const gcRehearsalInput = { body: emptyBody } satisfies RequestSchemas;
+
+const gcCreateAccountsInput = {
+  body: z.strictObject({
+    // parseInt(String(...)); the handler keeps its "targetCompanyId is required" check.
+    targetCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    // The handler keeps its "accounts array is required" and unknown-subType checks.
+    accounts: z
+      .array(
+        z.strictObject({
+          subType: z.string(),
+          // ensureSpAccounts / ensureGcProfitAccounts: code?.trim() || default.
+          code: z.string().nullable().optional(),
+          name: z.string().nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSpMigrationSetupRoutesPart1(app: Express) {
   // ── GET /api/sp/migration/gc-preview ─────────────────────────────────────
@@ -57,6 +80,7 @@ export function registerSpMigrationSetupRoutesPart1(app: Express) {
     "/api/sp/migration/gc-rehearsal",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(gcRehearsalInput),
     async (_req: unknown, res: import("express").Response) => {
       return res.status(410).json({
         message: "The old all-in-one GC migration flow is disabled. Use the staged migration steps instead.",
@@ -115,6 +139,7 @@ export function registerSpMigrationSetupRoutesPart1(app: Express) {
     "/api/sp/migration/gc-create-accounts",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(gcCreateAccountsInput),
     async (req: Request, res: Response) => {
       try {
         const { targetCompanyId, accounts } = req.body ?? {};

@@ -20,12 +20,45 @@ import {
   type SupplierReturnFinancials,
 } from "./erpSupplierReturnFinancials";
 import { byId, candidates, quantity, ReturnError, type Candidate } from "./erpSupplierReturnCandidates";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Sent by client/src/pages/factory/useFactorySupplierReturns.ts. Shape only: the
+// handler and validateReturnCommitRows keep the request-key, date, quantity,
+// supplier and allocation checks with their RETURN_* codes.
+const commitReturnInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    requestKey: z.string().optional(),
+    supplierId: z.number().nullable().optional(),
+    returnDate: z.string().optional(),
+    reason: z.string().nullable().optional(),
+    fileName: z.string().nullable().optional(),
+    lines: z
+      .array(
+        z.strictObject({
+          offloadItemId: z.union([z.number(), z.string()]).optional(),
+          quantity: z.union([z.string(), z.number()]).optional(),
+        })
+      )
+      .optional(),
+    requestedRows: z
+      .array(
+        z.strictObject({
+          code: z.string(),
+          quantity: z.string(),
+          allocations: z.array(z.strictObject({ offloadItemId: z.number(), quantity: z.string() })),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 
 export function registerErpSupplierReturnCommitRoute(app: Express) {
   const guards = [requireAuth, requireRole("Admin", "Developer")] as const;
-  app.post("/api/erp/supplier-returns/commit", ...guards, async (req, res) => {
+  app.post("/api/erp/supplier-returns/commit", ...guards, validateRequest(commitReturnInput), async (req, res) => {
     try {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
       const body = req.body as {

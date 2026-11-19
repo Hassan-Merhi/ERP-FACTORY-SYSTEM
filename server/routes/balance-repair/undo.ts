@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { propertyMonthlyLedger, propertyContracts, propertyPayments } from "../../../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -16,12 +18,84 @@ import { ApplySnapshot, parseNum } from "./_helpers";
 import { retiredVoucherNumber } from "../../services/accounting/voucherRetirement";
 import { writeAuditEvent } from "../../services/audit";
 
+// The client sends back the `snapshot` that POST /api/admin/repair-balances/apply returned
+// (ApplySnapshot in ./_helpers), so these shapes mirror what apply.ts builds.
+const applySnapshotSchema = z.strictObject({
+  ledgerSnapshots: z.array(z.strictObject({ id: z.number(), oldPaid: z.number(), newPaid: z.number() })).optional(),
+  voucherEntriesAdded: z.array(z.number()).optional(),
+  vouchersUndeleted: z.array(z.strictObject({ id: z.number() })).optional(),
+  orphanedVouchersDeleted: z
+    .array(
+      z.strictObject({
+        id: z.number(),
+        voucherNumber: z.string(),
+        companyId: z.number(),
+        totalAmount: z.string(),
+        voucherType: z.string(),
+        voucherDate: z.string(),
+        description: z.string().nullable(),
+        entries: z.array(
+          z.strictObject({
+            ledgerAccountId: z.number().nullable(),
+            debitAmount: z.string(),
+            creditAmount: z.string(),
+            narration: z.string().nullable(),
+          })
+        ),
+      })
+    )
+    .optional(),
+  transfersDeleted: z
+    .array(
+      z.strictObject({
+        id: z.number(),
+        transferType: z.string(),
+        fromCompanyId: z.number(),
+        toCompanyId: z.number(),
+        transferDate: z.string(),
+        amount: z.string(),
+        fromLedgerAccountId: z.number(),
+        toLedgerAccountId: z.number(),
+        fromVoucherId: z.number().nullable(),
+        toVoucherId: z.number().nullable(),
+        description: z.string().nullable(),
+        sourcePaymentId: z.number().nullable(),
+      })
+    )
+    .optional(),
+  depositSnapshots: z
+    .array(
+      z.strictObject({
+        contractId: z.number(),
+        oldFlag: z.boolean(),
+        newFlag: z.boolean(),
+        oldPostedAmount: z.number(),
+        newPostedAmount: z.number(),
+      })
+    )
+    .optional(),
+});
+
+const undoInput = {
+  query: emptyQuery,
+  // The handler keeps its "No snapshot provided" check.
+  body: z.strictObject({ snapshot: applySnapshotSchema.nullable().optional() }),
+} satisfies RequestSchemas;
+
+// The handler's parseInt check stays, so the contract id is kept as a string.
+// client/src/pages/properties/property-rental/components/useLedgerViewState.tsx posts {}.
+const reallocatePaymentsInput = {
+  params: z.strictObject({ contractId: stringParam }),
+  body: emptyBody,
+} satisfies RequestSchemas;
+
 export function registerBalanceRepairUndoRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/undo ────────────────────────────────
   app.post(
     "/api/admin/repair-balances/undo",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(undoInput),
     async (req: Request, res: Response) => {
       try {
         const { snapshot } = req.body as { snapshot: ApplySnapshot };
@@ -136,6 +210,7 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
     "/api/properties/repair/reallocate-payments/:contractId",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(reallocatePaymentsInput),
     async (req: Request, res: Response) => {
       try {
         const companyId: number | undefined = req.session.currentCompanyId;

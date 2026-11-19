@@ -153,7 +153,7 @@ describe("PATCH /api/factory/containers/:id/confirm-duty — validation and scop
   it("rejects a non-numeric container id", async () => {
     const response = await agent.patch("/api/factory/containers/not-a-number/confirm-duty").send({ dutyAmount: "10" });
     expect(response.status).toBe(400);
-    expect(response.body.message).toMatch(/Invalid id/i);
+    expect(response.body.code).toBe("REQUEST_VALIDATION_FAILED");
   });
 
   it("does not find another company's container", async () => {

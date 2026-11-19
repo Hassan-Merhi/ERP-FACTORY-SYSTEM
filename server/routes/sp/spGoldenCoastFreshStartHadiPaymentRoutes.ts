@@ -34,6 +34,9 @@ import {
   type PersistedPostingResult,
 } from "./spGoldenCoastFreshStartHadiPaymentRoutesResolvePair";
 import { balancesForPayment, handleReadiness } from "./spGoldenCoastFreshStartHadiPaymentRoutesHelpers";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, numberish, spWriteFields } from "./spRequestSchemas";
 
 async function findReplay(
   tx: DatabaseTransaction,
@@ -252,6 +255,17 @@ async function handlePayment(req: Request, res: Response): Promise<void> {
   }
 }
 
+// Read by handlePayment and parseGoldenCoastFreshStartHadiPayment.
+const freshStartHadiPaymentInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    paymentDate: z.string().optional(),
+    amountUsd: amountish.optional(),
+    reference: z.string().nullable().optional(),
+    hadiCashAccount: z.strictObject({ kind: z.string(), id: numberish }).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerSpGoldenCoastFreshStartHadiPaymentRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/phase7/sales-cash-pay-fresh-start/readiness",
@@ -266,6 +280,7 @@ export function registerSpGoldenCoastFreshStartHadiPaymentRoutes(app: Express): 
     requestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(freshStartHadiPaymentInput),
     (req, res) => void handlePayment(req, res)
   );
 }

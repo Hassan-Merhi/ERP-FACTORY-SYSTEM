@@ -16,6 +16,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { getOrCreateLedgerAccount } from "./factory/_helpers";
 import { toMoney } from "../lib/money";
 import { sendCompanyAccessError } from "../security/companyAccessBoundary";
@@ -25,6 +26,8 @@ import { normFactoryEntry } from "../services/factory/factoryVoucherEntryAmounts
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../services/factory/factoryDocumentFxRate";
 import { registerOffloadRoutesPart1 } from "./registerOffloadRoutesPart1";
 import { registerOffloadRoutesPart2 } from "./registerOffloadRoutesPart2";
+
+const backfillPostOffloadVouchersInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerOffloadRoutes(app: Express) {
   registerOffloadRoutesPart1(app);
@@ -42,6 +45,7 @@ function registerOffloadRoutesPart3(app: Express) {
     "/api/admin/backfill-postoffload-vouchers",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(backfillPostOffloadVouchersInput),
     async (req, res) => {
       const selectedCompanyId = req.session.currentCompanyId;
       if (!selectedCompanyId) return res.status(400).json({ message: "No company selected" });

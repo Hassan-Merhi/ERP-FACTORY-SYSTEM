@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { jobActionInput, uploadInput } from "./aiImportSchemas";
 import { spreadsheetUpload } from "../_helpers";
 import { readExcel, sheetToJson } from "../../excelHelper";
 import { aiImportJobs, aiImportRows } from "@shared/schema";
@@ -18,70 +20,76 @@ import { assertJobOwnership, validateRows } from "./_helpers";
 export function registerAiImportJobRoutes(app: Express) {
   // POST /api/ai-import/upload
   // Parse Excel, stage rows — does NOT insert business records
-  app.post("/api/ai-import/upload", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      const userId = req.session.userId;
+  app.post(
+    "/api/ai-import/upload",
+    requireAuth,
+    spreadsheetUpload.single("file"),
+    validateRequest(uploadInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        const userId = req.session.userId;
 
-      if (!companyId || !userId) return res.status(400).json({ message: "No company selected" });
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+        if (!companyId || !userId) return res.status(400).json({ message: "No company selected" });
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      const importType = String(req.body.importType ?? "").trim();
-      if (!importType) return res.status(400).json({ message: "importType is required" });
+        const importType = String(req.body.importType ?? "").trim();
+        if (!importType) return res.status(400).json({ message: "importType is required" });
 
-      const SUPPORTED = ["stock_items", "customers", "suppliers", "vouchers"];
-      if (!SUPPORTED.includes(importType))
-        return res.status(400).json({ message: `importType must be one of: ${SUPPORTED.join(", ")}` });
+        const SUPPORTED = ["stock_items", "customers", "suppliers", "vouchers"];
+        if (!SUPPORTED.includes(importType))
+          return res.status(400).json({ message: `importType must be one of: ${SUPPORTED.join(", ")}` });
 
-      // Parse the Excel file
-      const workbook = await readExcel(req.file.buffer);
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) return res.status(400).json({ message: "Excel file has no sheets" });
+        // Parse the Excel file
+        const workbook = await readExcel(req.file.buffer);
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) return res.status(400).json({ message: "Excel file has no sheets" });
 
-      const rawRows: Record<string, unknown>[] = sheetToJson(workbook.Sheets[sheetName]);
-      if (!rawRows.length) return res.status(400).json({ message: "Excel file has no data rows" });
+        const rawRows: Record<string, unknown>[] = sheetToJson(workbook.Sheets[sheetName]);
+        if (!rawRows.length) return res.status(400).json({ message: "Excel file has no data rows" });
 
-      // Create the job
-      const [job] = await db
-        .insert(aiImportJobs)
-        .values({
-          companyId,
-          userId,
+        // Create the job
+        const [job] = await db
+          .insert(aiImportJobs)
+          .values({
+            companyId,
+            userId,
+            importType,
+            originalFileName: req.file.originalname,
+            status: "uploaded",
+            totalRows: rawRows.length,
+            validRows: 0,
+            warningRows: 0,
+            errorRows: 0,
+          })
+          .returning();
+
+        // Stage all rows as 'pending' — no validation yet
+        const rowValues = rawRows.map((raw, i) => ({
+          jobId: job.id,
+          rowNumber: i + 1,
+          rawData: raw,
+          status: "pending",
+          errors: [],
+          warnings: [],
+        }));
+
+        await db.insert(aiImportRows).values(rowValues);
+
+        res.json({
+          jobId: job.id,
           importType,
-          originalFileName: req.file.originalname,
-          status: "uploaded",
+          originalFileName: job.originalFileName,
           totalRows: rawRows.length,
-          validRows: 0,
-          warningRows: 0,
-          errorRows: 0,
-        })
-        .returning();
-
-      // Stage all rows as 'pending' — no validation yet
-      const rowValues = rawRows.map((raw, i) => ({
-        jobId: job.id,
-        rowNumber: i + 1,
-        rawData: raw,
-        status: "pending",
-        errors: [],
-        warnings: [],
-      }));
-
-      await db.insert(aiImportRows).values(rowValues);
-
-      res.json({
-        jobId: job.id,
-        importType,
-        originalFileName: job.originalFileName,
-        totalRows: rawRows.length,
-        status: "uploaded",
-        message: `${rawRows.length} rows staged. Call /validate to check them.`,
-      });
-    } catch (error: unknown) {
-      logger.error("[AI Import] upload error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: getErrorMessage(error) });
+          status: "uploaded",
+          message: `${rawRows.length} rows staged. Call /validate to check them.`,
+        });
+      } catch (error: unknown) {
+        logger.error("[AI Import] upload error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // GET /api/ai-import/jobs/:id
   app.get("/api/ai-import/jobs/:id", requireAuth, async (req, res) => {
@@ -129,7 +137,7 @@ export function registerAiImportJobRoutes(app: Express) {
 
   // POST /api/ai-import/jobs/:id/validate
   // Checks rows against ERP tables; updates status/errors/warnings; recalculates counts
-  app.post("/api/ai-import/jobs/:id/validate", requireAuth, async (req, res) => {
+  app.post("/api/ai-import/jobs/:id/validate", requireAuth, validateRequest(jobActionInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

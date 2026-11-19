@@ -136,7 +136,8 @@ describe("Priority Scan fixed palette write API", () => {
     const orderId = await createLoading();
     const response = await agent.put(configPath(orderId)).send({ color, priority: 1, enabled: true });
     expect(response.status).toBe(400);
-    expect(String(response.body.message)).toMatch(/11 approved/);
+    // A non-string colour is refused by validateRequest before the palette check.
+    expect(String(response.body.message)).toMatch(typeof color === "string" ? /11 approved/ : /Invalid request data/);
     expect(await storedConfig(orderId)).toBeUndefined();
   });
 

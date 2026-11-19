@@ -8,6 +8,8 @@ import { spreadsheetUpload } from "./_helpers";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { stockItems, stockItemCodeAliases } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -409,13 +411,20 @@ function notImplemented(validationType: string, file1Name: string): ValidationRe
 
 // ─── Route registration ───────────────────────────────────────────────────────
 
+// multipart/form-data from client/src/pages/useAiValidationPageState.tsx: file1/file2
+// are consumed by multer; validationType is the only text field.
+const runValidationInput = {
+  query: emptyQuery,
+  body: z.strictObject({ validationType: z.string().optional() }),
+} satisfies RequestSchemas;
+
 export function registerAiValidationRoutes(app: Express) {
   const fileFields = spreadsheetUpload.fields([
     { name: "file1", maxCount: 1 },
     { name: "file2", maxCount: 1 },
   ]);
 
-  app.post("/api/ai-validation/run", requireAuth, fileFields, async (req, res) => {
+  app.post("/api/ai-validation/run", requireAuth, fileFields, validateRequest(runValidationInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

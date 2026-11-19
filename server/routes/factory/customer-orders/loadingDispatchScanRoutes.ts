@@ -12,6 +12,12 @@ import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/fac
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
+import { validateRequest } from "../../../lib/validateRequest";
+import {
+  addDispatchScanInput,
+  bulkRemoveDispatchScansInput,
+  removeDispatchScanInput,
+} from "./loadingDispatchScanRoutesSchemas";
 
 const loadingAccess = requireFactoryTabAccess("factory/invoicing", "hide_invoicing_loadings_tab");
 
@@ -39,14 +45,17 @@ async function readContext(req: Request, res: Response) {
     res.status(400).json({ message: "Valid order and dispatch IDs are required" });
     return null;
   }
-  return { companyId: state.companyId, orderId, dispatchId, role: state.role,
-    userId: String(state.userId), username: String(req.session.username || state.userId) };
+  return {
+    companyId: state.companyId,
+    orderId,
+    dispatchId,
+    role: state.role,
+    userId: String(state.userId),
+    username: String(req.session.username || state.userId),
+  };
 }
 
-async function readDuplicate(
-  tx: DbTransaction,
-  companyId: number, orderId: number, baleId: number
-) {
+async function readDuplicate(tx: DbTransaction, companyId: number, orderId: number, baleId: number) {
   const rows = await tx.execute(sql`
     SELECT s.id, s.bale_reference AS "baleReference",
            s.scanned_by_username AS "scannedByUsername",
@@ -65,8 +74,11 @@ async function readDuplicate(
 export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
   // All active and corrected scan records are retained; removedAt distinguishes
   // an active verification from an operator-corrected historical scan.
-  app.get("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans",
-    requireAuth, loadingAccess, async (req, res) => {
+  app.get(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans",
+    requireAuth,
+    loadingAccess,
+    async (req, res) => {
       try {
         const context = await readContext(req, res);
         if (!context) return;
@@ -99,7 +111,9 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         const rows = resultRows(scans);
         const active = rows.filter((row) => row.removedAt == null);
         return res.json({
-          dispatchId, orderId, status: trip.status,
+          dispatchId,
+          orderId,
+          status: trip.status,
           activeCount: active.length,
           activeWeightKg: active.reduce((total, row) => total + Number(row.weightKg || 0), 0),
           scans: rows,
@@ -111,8 +125,12 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
     }
   );
 
-  app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans",
-    requireAuth, loadingAccess, async (req, res) => {
+  app.post(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans",
+    requireAuth,
+    loadingAccess,
+    validateRequest(addDispatchScanInput),
+    async (req, res) => {
       try {
         const context = await readContext(req, res);
         if (!context) return;
@@ -120,7 +138,10 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         if (!canWrite(role)) return res.status(403).json({ message: "This role cannot scan dispatch bales" });
 
         const scanCode = validBarcode(req.body?.scanCode);
-        if (!scanCode) return res.status(400).json({ code: "INVALID_BARCODE", message: "Scan one bale reference or barcode (up to 120 characters)" });
+        if (!scanCode)
+          return res
+            .status(400)
+            .json({ code: "INVALID_BARCODE", message: "Scan one bale reference or barcode (up to 120 characters)" });
 
         const result = await db.transaction(async (tx) => {
           // Lock the parent order before the trip, matching trip plan writes.
@@ -137,9 +158,18 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
           `);
           const trip = resultRows(tripRows)[0];
           if (!trip) return { status: 404, code: "DISPATCH_NOT_FOUND", message: "Dispatch not found for this loading" };
-          if (trip.status !== "OPEN") return { status: 409, code: "DISPATCH_NOT_OPEN", message: "This dispatch is closed. Open a different active trip." };
+          if (trip.status !== "OPEN")
+            return {
+              status: 409,
+              code: "DISPATCH_NOT_OPEN",
+              message: "This dispatch is closed. Open a different active trip.",
+            };
           if (trip.loadingDeletedAt || trip.loadingStatus === "CANCELLED") {
-            return { status: 409, code: "LOADING_INACTIVE", message: "This loading is cancelled or deleted and cannot be verified" };
+            return {
+              status: 409,
+              code: "LOADING_INACTIVE",
+              message: "This loading is cancelled or deleted and cannot be verified",
+            };
           }
 
           // Never search by article or name: physical verification requires a
@@ -163,19 +193,25 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
           const candidates = resultRows(candidateRows);
           if (candidates.length === 0) {
             return {
-              status: 422, code: "DISPATCH_NOT_IN_LOADING",
-              message: "Bale " + scanCode + " is not in this loading. Check the truck or scan it into the main loading first.",
+              status: 422,
+              code: "DISPATCH_NOT_IN_LOADING",
+              message:
+                "Bale " + scanCode + " is not in this loading. Check the truck or scan it into the main loading first.",
             };
           }
           if (candidates.length !== 1) {
-            return { status: 422, code: "DISPATCH_AMBIGUOUS_BARCODE",
-              message: "Barcode matches more than one loaded bale. Scan the unique bale reference." };
+            return {
+              status: 422,
+              code: "DISPATCH_AMBIGUOUS_BARCODE",
+              message: "Barcode matches more than one loaded bale. Scan the unique bale reference.",
+            };
           }
           const bale = candidates[0];
           const existing = await readDuplicate(tx, companyId, orderId, Number(bale.baleId));
           if (existing) {
             return {
-              status: 409, code: "DISPATCH_DUPLICATE",
+              status: 409,
+              code: "DISPATCH_DUPLICATE",
               message: "Already verified on Dispatch #" + existing.dispatchNumber + " by " + existing.scannedByUsername,
               previous: existing,
             };
@@ -199,7 +235,8 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
           if (!scan) {
             const winner = await readDuplicate(tx, companyId, orderId, Number(bale.baleId));
             return {
-              status: 409, code: "DISPATCH_DUPLICATE",
+              status: 409,
+              code: "DISPATCH_DUPLICATE",
               message: winner
                 ? "Already verified on Dispatch #" + winner.dispatchNumber + " by " + winner.scannedByUsername
                 : "Bale is already recorded in another dispatch",
@@ -223,7 +260,8 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         });
         if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json({
-            code: result.code, message: result.message,
+            code: result.code,
+            message: result.message,
             previous: "previous" in result ? result.previous : undefined,
           });
         }
@@ -239,11 +277,14 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
     }
   );
 
-
   // Remove many scans in one atomic, audited correction. "all" is resolved on
   // the server under the trip lock, never from a paginated browser snapshot.
-  app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove",
-    requireAuth, loadingAccess, async (req, res) => {
+  app.post(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove",
+    requireAuth,
+    loadingAccess,
+    validateRequest(bulkRemoveDispatchScansInput),
+    async (req, res) => {
       try {
         const context = await readContext(req, res);
         if (!context) return;
@@ -270,38 +311,52 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
 
         const outcome = await db.transaction(async (tx) => {
           // Match scanner and financial posting lock order: order -> dispatch.
-          const order = resultRows(await tx.execute(sql`
+          const order = resultRows(
+            await tx.execute(sql`
             SELECT id FROM customer_orders
              WHERE id = ${orderId} AND company_id = ${companyId} FOR UPDATE
-          `))[0];
+          `)
+          )[0];
           if (!order) return { status: 404, message: "Loading not found" };
-          const trip = resultRows(await tx.execute(sql`
+          const trip = resultRows(
+            await tx.execute(sql`
             SELECT id, status FROM factory_loading_dispatches
              WHERE id = ${dispatchId} AND company_id = ${companyId}
                AND order_id = ${orderId} FOR UPDATE
-          `))[0];
+          `)
+          )[0];
           if (!trip) return { status: 404, message: "Dispatch not found" };
           if (trip.status !== "OPEN") {
             return { status: 409, message: "Only open, non-finalized dispatches can be corrected" };
           }
           const requestedIdsJson = JSON.stringify(ids);
-          const found = resultRows(await tx.execute(sql`
+          const found = resultRows(
+            await tx.execute(sql`
             SELECT id::text AS id, bale_id AS "baleId", bale_reference AS "baleReference"
               FROM factory_loading_dispatch_scans
              WHERE company_id = ${companyId} AND order_id = ${orderId}
                AND dispatch_id = ${dispatchId} AND removed_at IS NULL
-               ${all ? sql`` : sql`AND id IN (
+               ${
+                 all
+                   ? sql``
+                   : sql`AND id IN (
                  SELECT value::bigint FROM jsonb_array_elements_text(${requestedIdsJson}::jsonb)
-               )`}
+               )`
+               }
              ORDER BY id FOR UPDATE
-          `));
+          `)
+          );
           if (!found.length) return { status: 409, message: "There are no matching active scans to remove" };
           if (!all && found.length !== ids.length) {
-            return { status: 409, message: "One or more selected scans changed. Refresh and select again; nothing was removed." };
+            return {
+              status: 409,
+              message: "One or more selected scans changed. Refresh and select again; nothing was removed.",
+            };
           }
           const targetIds = found.map((item) => String(item.id));
           const targetJson = JSON.stringify(targetIds);
-          const updated = resultRows(await tx.execute(sql`
+          const updated = resultRows(
+            await tx.execute(sql`
             UPDATE factory_loading_dispatch_scans
                SET removed_at = NOW(), removed_by_user_id = ${userId},
                    removal_reason = ${reason}
@@ -311,7 +366,8 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                  SELECT value::bigint FROM jsonb_array_elements_text(${targetJson}::jsonb)
                )
              RETURNING id
-          `));
+          `)
+          );
           if (updated.length !== found.length) throw new Error("Concurrent scan correction changed the batch");
           await tx.execute(sql`
             INSERT INTO factory_loading_dispatch_events
@@ -319,8 +375,12 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                actor_user_id, actor_username, event_data)
             VALUES (${companyId}, ${orderId}, ${dispatchId}, 'BALE_SCANS_BULK_REMOVED',
                     ${userId}, ${username},
-                    ${JSON.stringify({ reason, all, scanIds: targetIds,
-                      baleReferences: found.map((item) => String(item.baleReference)) })}::jsonb)
+                    ${JSON.stringify({
+                      reason,
+                      all,
+                      scanIds: targetIds,
+                      baleReferences: found.map((item) => String(item.baleReference)),
+                    })}::jsonb)
           `);
           return { count: found.length, scanIds: targetIds };
         });
@@ -340,8 +400,12 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
 
   // Correction is only available to supervisors on OPEN trips. Never DELETE;
   // the original evidence and actor/reason remain in the permanent history.
-  app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/:scanId/remove",
-    requireAuth, loadingAccess, async (req, res) => {
+  app.post(
+    "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/:scanId/remove",
+    requireAuth,
+    loadingAccess,
+    validateRequest(removeDispatchScanInput),
+    async (req, res) => {
       try {
         const context = await readContext(req, res);
         if (!context) return;

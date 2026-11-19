@@ -23,6 +23,18 @@ import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getClientDate } from "../lib/dateUtils";
 import { registerWhatsAppRoutesPart1 } from "./registerWhatsAppRoutesPart1";
 import { registerWhatsAppRoutesPart2 } from "./registerWhatsAppRoutesPart2";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Sent by client/src/pages/settings/useStockReportSectionState.ts (either may be null
+// before a selection); the handler keeps its parseInt and "is required" checks.
+const sendStockReportInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    companyId: z.union([z.number(), z.string()]).nullable().optional(),
+    recipientId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerWhatsAppRoutes(app: Express) {
   registerWhatsAppRoutesPart1(app);
@@ -33,7 +45,7 @@ export function registerWhatsAppRoutes(app: Express) {
 function registerWhatsAppRoutesPart3(app: Express) {
   // ── Send Stock + Net Position to one specific group ─────────────────────────
 
-  app.post("/api/whatsapp/send-stock-report", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/send-stock-report", requireAuth, validateRequest(sendStockReportInput), async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;

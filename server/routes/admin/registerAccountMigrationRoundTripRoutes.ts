@@ -41,6 +41,8 @@ import {
   positiveInt,
   respondWithError,
 } from "./getOrCreateMigrationClearingAccount";
+import { validateRequest } from "../../lib/validateRequest";
+import { undoAccountMigrationInput } from "./accountMigrationWriteSchemas";
 
 /**
  * Intercepts the normal account-migration undo only when the account received
@@ -63,6 +65,7 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
     "/api/admin/account-migration/undo",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(undoAccountMigrationInput),
     async (req: Request, res: Response, next: NextFunction) => {
       const accountIds = idArray(
         Array.isArray(req.body?.accounts)

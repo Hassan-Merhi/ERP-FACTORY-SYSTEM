@@ -8,10 +8,56 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../lib/queryResult";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import type { GitAgentAdjustmentRow, GitAgentAdjustment } from "./gitAgentRoutesTypes";
+
+// The handlers parse companyId and id themselves (parseInt, unchecked).
+const agentParams = z.strictObject({ companyId: stringParam, agentName: stringParam });
+const idOrText = z.union([z.number(), z.string()]);
+
+const agentNoteInput = {
+  params: agentParams,
+  query: emptyQuery,
+  body: z.strictObject({ note: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+const createAdjustmentInput = {
+  params: agentParams,
+  query: emptyQuery,
+  // The handler keeps its description / amount / type checks and messages.
+  body: z.strictObject({
+    description: z.string().nullable().optional(),
+    amount: idOrText.nullable().optional(),
+    type: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteAdjustmentInput = {
+  params: z.strictObject({ companyId: stringParam, agentName: stringParam, id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const setAllPrepaidInput = {
+  params: agentParams,
+  query: emptyQuery,
+  body: z.strictObject({ containerIds: z.array(idOrText).nullable().optional() }),
+} satisfies RequestSchemas;
+
+const replacePrepaidInput = {
+  params: agentParams,
+  query: emptyQuery,
+  // The handler keeps its "oldContainerId and newContainerId are required." check.
+  body: z.strictObject({
+    oldContainerId: idOrText.nullable().optional(),
+    newContainerId: idOrText.nullable().optional(),
+    confirmDifferentAmount: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerGitAgentRoutes(app: Express) {
   // ── Agent notes (per-company, per-agent, shared across all users) ─────────
@@ -29,21 +75,26 @@ export function registerGitAgentRoutes(app: Express) {
     }
   });
 
-  app.put("/api/git/agent-note/:companyId/:agentName", requireAuth, async (req, res) => {
-    try {
-      const companyId = parseInt(req.params.companyId, 10);
-      const agentName = req.params.agentName;
-      const note: string = (req.body.note ?? "").trim();
-      await db.execute(
-        sql`INSERT INTO git_agent_notes (company_id, agent_name, note, updated_at)
+  app.put(
+    "/api/git/agent-note/:companyId/:agentName",
+    requireAuth,
+    validateRequest(agentNoteInput),
+    async (req, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        const agentName = req.params.agentName;
+        const note: string = (req.body.note ?? "").trim();
+        await db.execute(
+          sql`INSERT INTO git_agent_notes (company_id, agent_name, note, updated_at)
             VALUES (${companyId}, ${agentName}, ${note}, now())
             ON CONFLICT (company_id, agent_name) DO UPDATE SET note = ${note}, updated_at = now()`
-      );
-      res.json({ ok: true, note });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        );
+        res.json({ ok: true, note });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── Bulk fetch: all notes for a company (one round-trip) ─────────────────
   app.get("/api/git/agent-notes-bulk/:companyId", requireAuth, async (req, res) => {
@@ -110,51 +161,61 @@ export function registerGitAgentRoutes(app: Express) {
     }
   });
 
-  app.post("/api/git/agent-adjustments/:companyId/:agentName", requireAuth, async (req, res) => {
-    try {
-      const companyId = parseInt(req.params.companyId, 10);
-      const agentName = req.params.agentName;
-      const description: string = (req.body.description ?? "").trim();
-      const amount = parseMoneyInput(req.body.amount)?.toNumber() ?? NaN;
-      const type: string = req.body.type;
-      if (!description) return res.status(400).json({ message: "Description is required." });
-      if (isNaN(amount) || amount <= 0) return res.status(400).json({ message: "Amount must be a positive number." });
-      if (!["debit", "credit"].includes(type))
-        return res.status(400).json({ message: "Type must be 'debit' or 'credit'." });
-      const result = await db.execute(
-        sql`INSERT INTO git_agent_adjustments (company_id, agent_name, description, amount, type)
+  app.post(
+    "/api/git/agent-adjustments/:companyId/:agentName",
+    requireAuth,
+    validateRequest(createAdjustmentInput),
+    async (req, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        const agentName = req.params.agentName;
+        const description: string = (req.body.description ?? "").trim();
+        const amount = parseMoneyInput(req.body.amount)?.toNumber() ?? NaN;
+        const type: string = req.body.type;
+        if (!description) return res.status(400).json({ message: "Description is required." });
+        if (isNaN(amount) || amount <= 0) return res.status(400).json({ message: "Amount must be a positive number." });
+        if (!["debit", "credit"].includes(type))
+          return res.status(400).json({ message: "Type must be 'debit' or 'credit'." });
+        const result = await db.execute(
+          sql`INSERT INTO git_agent_adjustments (company_id, agent_name, description, amount, type)
             VALUES (${companyId}, ${agentName}, ${description}, ${amount}, ${type})
             RETURNING id, description, amount, type, created_at`
-      );
-      const r = result.rows[0] as unknown as { id: unknown } & { description: unknown } & { amount: string } & {
-        type: unknown;
-      } & { created_at: unknown };
-      res.json({
-        id: r.id,
-        description: r.description,
-        amount: toMoney(r.amount).toNumber(),
-        type: r.type,
-        createdAt: r.created_at,
-      });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        );
+        const r = result.rows[0] as unknown as { id: unknown } & { description: unknown } & { amount: string } & {
+          type: unknown;
+        } & { created_at: unknown };
+        res.json({
+          id: r.id,
+          description: r.description,
+          amount: toMoney(r.amount).toNumber(),
+          type: r.type,
+          createdAt: r.created_at,
+        });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/git/agent-adjustments/:companyId/:agentName/:id", requireAuth, async (req, res) => {
-    try {
-      const companyId = parseInt(req.params.companyId, 10);
-      const agentName = req.params.agentName;
-      const id = parseInt(req.params.id, 10);
-      await db.execute(
-        sql`DELETE FROM git_agent_adjustments
+  app.delete(
+    "/api/git/agent-adjustments/:companyId/:agentName/:id",
+    requireAuth,
+    validateRequest(deleteAdjustmentInput),
+    async (req, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        const agentName = req.params.agentName;
+        const id = parseInt(req.params.id, 10);
+        await db.execute(
+          sql`DELETE FROM git_agent_adjustments
             WHERE id = ${id} AND company_id = ${companyId} AND agent_name = ${agentName}`
-      );
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        );
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── Agent prepaid transit designations ─────────────────────────────────────
   // Containers in transit that have been paid in advance for this agent.
@@ -177,98 +238,107 @@ export function registerGitAgentRoutes(app: Express) {
   });
 
   // Atomically replace the full designation list (used for add/remove operations).
-  app.post("/api/git/agent-prepaid/:companyId/:agentName/set-all", requireAuth, async (req, res) => {
-    try {
-      const companyId = parseInt(req.params.companyId, 10);
-      const agentName = req.params.agentName;
-      const containerIds: number[] = (req.body.containerIds ?? []).map(Number).filter((n: number) => !isNaN(n));
-      const userId = (req as { user: { id: unknown } }).user?.id ?? null;
-      // Enforce uniqueness: no container can be prepaid for two agents at once for same company.
-      // We simply replace the list for this agent atomically.
-      await db.execute(
-        sql`DELETE FROM git_prepaid_designations WHERE company_id = ${companyId} AND agent_name = ${agentName}`
-      );
-      for (const cid of containerIds) {
+  app.post(
+    "/api/git/agent-prepaid/:companyId/:agentName/set-all",
+    requireAuth,
+    validateRequest(setAllPrepaidInput),
+    async (req, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        const agentName = req.params.agentName;
+        const containerIds: number[] = (req.body.containerIds ?? []).map(Number).filter((n: number) => !isNaN(n));
+        const userId = (req as { user: { id: unknown } }).user?.id ?? null;
+        // Enforce uniqueness: no container can be prepaid for two agents at once for same company.
+        // We simply replace the list for this agent atomically.
         await db.execute(
-          sql`INSERT INTO git_prepaid_designations (company_id, agent_name, container_id, designated_by)
+          sql`DELETE FROM git_prepaid_designations WHERE company_id = ${companyId} AND agent_name = ${agentName}`
+        );
+        for (const cid of containerIds) {
+          await db.execute(
+            sql`INSERT INTO git_prepaid_designations (company_id, agent_name, container_id, designated_by)
               VALUES (${companyId}, ${agentName}, ${cid}, ${userId})
               ON CONFLICT (company_id, agent_name, container_id) DO NOTHING`
-        );
+          );
+        }
+        res.json({ ok: true, count: containerIds.length });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-      res.json({ ok: true, count: containerIds.length });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 
   // Replace one PREPAID_IN_TRANSIT container with an IN_TRANSIT_UNPAID one.
   // The payment allocation moves to the new container; no payment is created.
-  app.post("/api/git/agent-prepaid/:companyId/:agentName/replace", requireAuth, async (req, res) => {
-    try {
-      const companyId = parseInt(req.params.companyId, 10);
-      const agentName = req.params.agentName;
-      const { oldContainerId, newContainerId, confirmDifferentAmount } = req.body;
-      const userId = (req as { user: { id: unknown } }).user?.id ?? null;
+  app.post(
+    "/api/git/agent-prepaid/:companyId/:agentName/replace",
+    requireAuth,
+    validateRequest(replacePrepaidInput),
+    async (req, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        const agentName = req.params.agentName;
+        const { oldContainerId, newContainerId, confirmDifferentAmount } = req.body;
+        const userId = (req as { user: { id: unknown } }).user?.id ?? null;
 
-      if (!oldContainerId || !newContainerId) {
-        return res.status(400).json({ message: "oldContainerId and newContainerId are required." });
-      }
-      if (oldContainerId === newContainerId) {
-        return res.status(400).json({ message: "Old and new containers must be different." });
-      }
+        if (!oldContainerId || !newContainerId) {
+          return res.status(400).json({ message: "oldContainerId and newContainerId are required." });
+        }
+        if (oldContainerId === newContainerId) {
+          return res.status(400).json({ message: "Old and new containers must be different." });
+        }
 
-      // Look up container details
-      const cResult = await db.execute(
-        sql`SELECT id, container_number, duty_fee FROM containers
+        // Look up container details
+        const cResult = await db.execute(
+          sql`SELECT id, container_number, duty_fee FROM containers
             WHERE id IN (${oldContainerId}, ${newContainerId})`
-      );
-      const rows = resultRows<{ id: number; container_number: string; duty_fee: string | null }>(cResult);
-      const oldC = rows.find((r) => r.id === oldContainerId || r.id === Number(oldContainerId));
-      const newC = rows.find((r) => r.id === newContainerId || r.id === Number(newContainerId));
+        );
+        const rows = resultRows<{ id: number; container_number: string; duty_fee: string | null }>(cResult);
+        const oldC = rows.find((r) => r.id === oldContainerId || r.id === Number(oldContainerId));
+        const newC = rows.find((r) => r.id === newContainerId || r.id === Number(newContainerId));
 
-      if (!oldC) return res.status(404).json({ message: `Old container (id ${oldContainerId}) not found.` });
-      if (!newC) return res.status(404).json({ message: `New container (id ${newContainerId}) not found.` });
+        if (!oldC) return res.status(404).json({ message: `Old container (id ${oldContainerId}) not found.` });
+        if (!newC) return res.status(404).json({ message: `New container (id ${newContainerId}) not found.` });
 
-      // Verify old is currently designated
-      const existing = await db.execute(
-        sql`SELECT container_id FROM git_prepaid_designations
+        // Verify old is currently designated
+        const existing = await db.execute(
+          sql`SELECT container_id FROM git_prepaid_designations
             WHERE company_id = ${companyId} AND agent_name = ${agentName} AND container_id = ${Number(oldContainerId)}`
-      );
-      if (existing.rows.length === 0) {
-        return res.status(409).json({
-          message: `Container ${oldC.container_number} is not currently designated as prepaid for this agent.`,
-        });
-      }
+        );
+        if (existing.rows.length === 0) {
+          return res.status(409).json({
+            message: `Container ${oldC.container_number} is not currently designated as prepaid for this agent.`,
+          });
+        }
 
-      // Warn on mismatched duty amounts
-      const amountsDiffer =
-        Math.abs(
-          (parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN) -
-            (parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN)
-        ) > 0.01;
-      if (amountsDiffer && !confirmDifferentAmount) {
-        return res.status(409).json({
-          message: "Duty amounts differ between the two containers.",
-          oldAmount: parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN,
-          newAmount: parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN,
-          requiresConfirmation: true,
-        });
-      }
+        // Warn on mismatched duty amounts
+        const amountsDiffer =
+          Math.abs(
+            (parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN) -
+              (parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN)
+          ) > 0.01;
+        if (amountsDiffer && !confirmDifferentAmount) {
+          return res.status(409).json({
+            message: "Duty amounts differ between the two containers.",
+            oldAmount: parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN,
+            newAmount: parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN,
+            requiresConfirmation: true,
+          });
+        }
 
-      // Perform the swap
-      await db.execute(
-        sql`DELETE FROM git_prepaid_designations
+        // Perform the swap
+        await db.execute(
+          sql`DELETE FROM git_prepaid_designations
             WHERE company_id = ${companyId} AND agent_name = ${agentName} AND container_id = ${Number(oldContainerId)}`
-      );
-      await db.execute(
-        sql`INSERT INTO git_prepaid_designations (company_id, agent_name, container_id, designated_by)
+        );
+        await db.execute(
+          sql`INSERT INTO git_prepaid_designations (company_id, agent_name, container_id, designated_by)
             VALUES (${companyId}, ${agentName}, ${Number(newContainerId)}, ${userId})
             ON CONFLICT (company_id, agent_name, container_id) DO NOTHING`
-      );
+        );
 
-      // Log the activity
-      await db.execute(
-        sql`INSERT INTO git_prepaid_activity_log
+        // Log the activity
+        await db.execute(
+          sql`INSERT INTO git_prepaid_activity_log
               (company_id, agent_name, action, old_container_id, new_container_id,
                old_container_number, new_container_number, amount, performed_by)
             VALUES
@@ -276,14 +346,15 @@ export function registerGitAgentRoutes(app: Express) {
                ${Number(oldContainerId)}, ${Number(newContainerId)},
                ${oldC.container_number}, ${newC.container_number},
                ${parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN}, ${userId})`
-      );
+        );
 
-      res.json({
-        ok: true,
-        replaced: { from: oldC.container_number, to: newC.container_number },
-      });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        res.json({
+          ok: true,
+          replaced: { from: oldC.container_number, to: newC.container_number },
+        });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

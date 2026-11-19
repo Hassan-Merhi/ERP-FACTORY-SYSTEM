@@ -6,7 +6,6 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
-import { parseId } from "../../../../lib/parseId";
 import { logger } from "../../../../lib/logger";
 import { requireAuth } from "../../../../auth";
 import {
@@ -14,6 +13,24 @@ import {
   recoverBalesByReferencesAtomically,
   RecoverBalesError,
 } from "./recoverBalesAtomic";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+
+// The handler String()s each reference and keeps its non-empty check.
+const recoverBalesInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ baleReferences: z.array(z.union([z.string(), z.number(), z.null()])).optional() }),
+} satisfies RequestSchemas;
+
+const autoRecoverBalesInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 function requireRecoveryRole(req: Request, res: Response): boolean {
   const role = (req.session.currentRole || req.session.role || "").toLowerCase();
@@ -33,61 +50,69 @@ function recoveryError(res: Response, error: unknown, context: string) {
 }
 
 export function registerOrderRecoverBalesRoutes(app: Express) {
-  app.post("/api/factory/customer-orders/:id/recover-bales", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!requireRecoveryRole(req, res)) return;
+  app.post(
+    "/api/factory/customer-orders/:id/recover-bales",
+    requireAuth,
+    validateRequest(recoverBalesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!requireRecoveryRole(req, res)) return;
 
-      const orderId = parseId(req.params.id);
-      if (orderId === null) return res.status(400).json({ message: "Invalid order id" });
+        const orderId = validatedInput(req, recoverBalesInput).params.id;
 
-      const baleReferences: unknown = req.body.baleReferences;
-      if (!Array.isArray(baleReferences) || baleReferences.length === 0) {
-        return res.status(400).json({ message: "baleReferences array is required and must not be empty" });
+        const baleReferences: unknown = req.body.baleReferences;
+        if (!Array.isArray(baleReferences) || baleReferences.length === 0) {
+          return res.status(400).json({ message: "baleReferences array is required and must not be empty" });
+        }
+
+        const result = await recoverBalesByReferencesAtomically({
+          companyId,
+          orderId,
+          baleReferences: baleReferences.map((value) => String(value ?? "")),
+          scannerName: req.session.username || req.session.name || req.session.email || null,
+        });
+
+        logger.info(`[recover-bales] orderId=${orderId} linked=${result.linked} notFound=${result.notFound.length}`);
+        res.json({
+          message: `${result.linked} bale(s) linked successfully`,
+          linked: result.linked,
+          notFound: result.notFound,
+        });
+      } catch (error: unknown) {
+        return recoveryError(res, error, "Error recovering bales:");
       }
-
-      const result = await recoverBalesByReferencesAtomically({
-        companyId,
-        orderId,
-        baleReferences: baleReferences.map((value) => String(value ?? "")),
-        scannerName: req.session.username || req.session.name || req.session.email || null,
-      });
-
-      logger.info(`[recover-bales] orderId=${orderId} linked=${result.linked} notFound=${result.notFound.length}`);
-      res.json({
-        message: `${result.linked} bale(s) linked successfully`,
-        linked: result.linked,
-        notFound: result.notFound,
-      });
-    } catch (error: unknown) {
-      return recoveryError(res, error, "Error recovering bales:");
     }
-  });
+  );
 
-  app.post("/api/factory/customer-orders/:id/auto-recover-bales", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!requireRecoveryRole(req, res)) return;
+  app.post(
+    "/api/factory/customer-orders/:id/auto-recover-bales",
+    requireAuth,
+    validateRequest(autoRecoverBalesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!requireRecoveryRole(req, res)) return;
 
-      const orderId = parseId(req.params.id);
-      if (orderId === null) return res.status(400).json({ message: "Invalid order id" });
+        const orderId = validatedInput(req, autoRecoverBalesInput).params.id;
 
-      const result = await autoRecoverBalesAtomically({
-        companyId,
-        orderId,
-        scannerName: req.session.username || req.session.name || req.session.email || null,
-      });
+        const result = await autoRecoverBalesAtomically({
+          companyId,
+          orderId,
+          scannerName: req.session.username || req.session.name || req.session.email || null,
+        });
 
-      logger.info(`[auto-recover-bales] orderId=${orderId} totalLinked=${result.linked}`);
-      res.json({
-        message: `${result.linked} bale(s) auto-linked from stock`,
-        linked: result.linked,
-        summary: result.summary,
-      });
-    } catch (error: unknown) {
-      return recoveryError(res, error, "Error auto-recovering bales:");
+        logger.info(`[auto-recover-bales] orderId=${orderId} totalLinked=${result.linked}`);
+        res.json({
+          message: `${result.linked} bale(s) auto-linked from stock`,
+          linked: result.linked,
+          summary: result.summary,
+        });
+      } catch (error: unknown) {
+        return recoveryError(res, error, "Error auto-recovering bales:");
+      }
     }
-  });
+  );
 }

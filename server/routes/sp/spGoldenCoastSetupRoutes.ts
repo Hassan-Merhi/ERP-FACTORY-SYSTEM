@@ -33,6 +33,17 @@ import {
   resolveCompanyPair,
 } from "./spGoldenCoastSetupRoutesResolveCompanyPair";
 import { phase13StatusWithAuthorizedHadi } from "./spGoldenCoastSetupRoutesPhase13StatusWithAuthorizedHadi";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { numberish, spWriteFields } from "./spRequestSchemas";
+
+const goldenCoastSetupInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    // Read by the company scope stage, which verifies HADI membership.
+    targetCompanyId: numberish.optional(),
+  }),
+} satisfies RequestSchemas;
 
 async function phase13Status(req: Request, companyId: number) {
   const pair = await resolveCompanyPair(db, companyId);
@@ -258,6 +269,7 @@ export function registerSpGoldenCoastSetupRoutes(app: Express): void {
     goldenCoastRequestBudget,
     requireAuth,
     requireRole("Admin"),
+    validateRequest(goldenCoastSetupInput),
     (req, res) => {
       void handleGoldenCoastSetup(req, res);
     }

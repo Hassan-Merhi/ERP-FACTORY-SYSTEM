@@ -6,6 +6,20 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows, firstRow } from "../../lib/queryResult";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
+
+const recordEvidenceInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    evidenceType: z.string().optional(),
+    status: z.string().optional(),
+    detail: z.unknown().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const closeRollbackWindowInput = { body: z.strictObject(spWriteFields) } satisfies RequestSchemas;
 
 const REQUIRED_STABILIZATION_CHECKS = [
   "daily_sales_stock",
@@ -70,9 +84,7 @@ export type SpProductionClosureStatus =
       completionRecord: Record<string, unknown> | null;
     };
 
-export async function buildSpProductionClosureStatus(
-  companyId: number
-): Promise<SpProductionClosureStatus> {
+export async function buildSpProductionClosureStatus(companyId: number): Promise<SpProductionClosureStatus> {
   const cutover = await latestActiveCutover(companyId);
   if (!cutover) {
     return {
@@ -176,25 +188,29 @@ export function registerSpProductionClosureRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/sp/production/evidence", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = Number(await requireSpCompany(req, res));
-      if (!companyId) return;
-      const cutover = await latestActiveCutover(companyId);
-      if (!cutover) {
-        return res.status(409).json({ message: releaseDebtEnglish("No active Supplier Partner cutover exists.") });
-      }
+  app.post(
+    "/api/sp/production/evidence",
+    requireAuth,
+    validateRequest(recordEvidenceInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = Number(await requireSpCompany(req, res));
+        if (!companyId) return;
+        const cutover = await latestActiveCutover(companyId);
+        if (!cutover) {
+          return res.status(409).json({ message: releaseDebtEnglish("No active Supplier Partner cutover exists.") });
+        }
 
-      const evidenceType = String(req.body?.evidenceType ?? "").trim();
-      const status = String(req.body?.status ?? "").toUpperCase();
-      if (!ALL_EVIDENCE_TYPES.has(evidenceType)) {
-        return res.status(400).json({ message: releaseDebtEnglish("Unknown production evidence type.") });
-      }
-      if (!["PASS", "FAIL", "RECORDED"].includes(status)) {
-        return res.status(400).json({ message: releaseDebtEnglish("status must be PASS, FAIL, or RECORDED.") });
-      }
+        const evidenceType = String(req.body?.evidenceType ?? "").trim();
+        const status = String(req.body?.status ?? "").toUpperCase();
+        if (!ALL_EVIDENCE_TYPES.has(evidenceType)) {
+          return res.status(400).json({ message: releaseDebtEnglish("Unknown production evidence type.") });
+        }
+        if (!["PASS", "FAIL", "RECORDED"].includes(status)) {
+          return res.status(400).json({ message: releaseDebtEnglish("status must be PASS, FAIL, or RECORDED.") });
+        }
 
-      const result = await db.execute(sql`
+        const result = await db.execute(sql`
         INSERT INTO sp_production_evidence(
           company_id, cutover_id, evidence_type, status, detail, recorded_by
         ) VALUES (
@@ -210,25 +226,32 @@ export function registerSpProductionClosureRoutes(app: Express): void {
           updated_at = now()
         RETURNING *
       `);
-      res.json({ success: true, evidence: firstRow(result) });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.post("/api/sp/production/close-rollback-window", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = Number(await requireSpCompany(req, res));
-      if (!companyId) return;
-      const status = await buildSpProductionClosureStatus(companyId);
-      if (status.status !== "PASS") {
-        return res.status(409).json({ message: releaseDebtEnglish("Stabilization checks are not all PASS."), status });
+        res.json({ success: true, evidence: firstRow(result) });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
+    }
+  );
 
-      const cutoverId = Number(status.cutover.id);
-      const reason = String(req.body.reason).trim();
-      const completion = await db.transaction(async (tx) => {
-        const updated = await tx.execute(sql`
+  app.post(
+    "/api/sp/production/close-rollback-window",
+    requireAuth,
+    validateRequest(closeRollbackWindowInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = Number(await requireSpCompany(req, res));
+        if (!companyId) return;
+        const status = await buildSpProductionClosureStatus(companyId);
+        if (status.status !== "PASS") {
+          return res
+            .status(409)
+            .json({ message: releaseDebtEnglish("Stabilization checks are not all PASS."), status });
+        }
+
+        const cutoverId = Number(status.cutover.id);
+        const reason = String(req.body.reason).trim();
+        const completion = await db.transaction(async (tx) => {
+          const updated = await tx.execute(sql`
           UPDATE sp_migration_cutovers
           SET status = 'completed', rollback_deadline = now(), updated_at = now()
           WHERE id = ${cutoverId}
@@ -236,11 +259,11 @@ export function registerSpProductionClosureRoutes(app: Express): void {
             AND status = 'active'
           RETURNING id
         `);
-        if (resultRows(updated).length !== 1) {
-          throw new Error(releaseDebtEnglish("Cutover is no longer active."));
-        }
+          if (resultRows(updated).length !== 1) {
+            throw new Error(releaseDebtEnglish("Cutover is no longer active."));
+          }
 
-        const inserted = await tx.execute(sql`
+          const inserted = await tx.execute(sql`
           INSERT INTO sp_completion_records(
             company_id, cutover_id, completion_snapshot, reason, approved_by
           ) VALUES (
@@ -250,22 +273,23 @@ export function registerSpProductionClosureRoutes(app: Express): void {
           ON CONFLICT (company_id, cutover_id) DO NOTHING
           RETURNING *
         `);
-        const row = firstRow(inserted);
-        if (!row) {
-          throw new Error(releaseDebtEnglish("Supplier Partner cutover completion was already recorded."));
-        }
-        return row;
-      });
+          const row = firstRow(inserted);
+          if (!row) {
+            throw new Error(releaseDebtEnglish("Supplier Partner cutover completion was already recorded."));
+          }
+          return row;
+        });
 
-      res.json({
-        success: true,
-        message: releaseDebtEnglish(
-          "Supplier Partner stabilization is closed and the rollback window is no longer available."
-        ),
-        completion,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({
+          success: true,
+          message: releaseDebtEnglish(
+            "Supplier Partner stabilization is closed and the rollback window is no longer available."
+          ),
+          completion,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

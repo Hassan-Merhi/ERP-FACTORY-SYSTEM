@@ -1,5 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db, pool } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { persistSecurityEvent } from "../../services/security/securityAuditRuntime";
@@ -29,6 +31,13 @@ async function requirePermissionAdministrator(req: Request, res: Response, next:
   }
 }
 
+// normalizePermissionList keeps deciding which names are known ("Invalid request").
+const replaceSecurityPermissionsInput = {
+  params: z.strictObject({ userId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ permissions: z.array(z.string()).optional() }),
+} satisfies RequestSchemas;
+
 export function registerSecurityPermissionRoutes(app: Express) {
   const guards = [requireAuth, requireRole("Admin", "Developer"), requirePermissionAdministrator] as const;
 
@@ -47,42 +56,48 @@ export function registerSecurityPermissionRoutes(app: Express) {
     }
   });
 
-  app.put("/api/admin/users/:userId/security-permissions", ...guards, async (req, res) => {
-    try {
-      const companyId = activeCompany(req);
-      const actorUserId = req.session.userId;
-      if (!companyId || !actorUserId) return res.status(403).json({ message: "Forbidden" });
-      const permissions = normalizePermissionList(req.body?.permissions);
-      const saved = await db.transaction((tx) =>
-        replaceNamedPermissions(tx, {
-          userId: req.params.userId,
-          companyId,
-          permissions,
-          grantedBy: actorUserId,
-        })
-      );
-      await persistSecurityEvent(
-        db,
-        {
-          kind: "authorization",
-          action: "security.permissions.replace",
-          outcome: "allowed",
-          companyId,
-          actorUserId,
-          targetType: "user",
-          targetId: req.params.userId,
-          ipAddress: req.ip,
-          userAgent: req.get("user-agent"),
-          metadata: { permissionCount: saved.length },
-        },
-        req.session.username || actorUserId
-      );
-      await invalidateUserCompanySessions(pool, req.params.userId, companyId);
-      res.json({ userId: req.params.userId, companyId, permissions: saved });
-    } catch (error: unknown) {
-      if (getErrorMessage(error) === "Invalid permissions") return res.status(400).json({ message: "Invalid request" });
-      if (getErrorMessage(error) === "User not found") return res.status(404).json({ message: "Not found" });
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.put(
+    "/api/admin/users/:userId/security-permissions",
+    ...guards,
+    validateRequest(replaceSecurityPermissionsInput),
+    async (req, res) => {
+      try {
+        const companyId = activeCompany(req);
+        const actorUserId = req.session.userId;
+        if (!companyId || !actorUserId) return res.status(403).json({ message: "Forbidden" });
+        const permissions = normalizePermissionList(req.body?.permissions);
+        const saved = await db.transaction((tx) =>
+          replaceNamedPermissions(tx, {
+            userId: req.params.userId,
+            companyId,
+            permissions,
+            grantedBy: actorUserId,
+          })
+        );
+        await persistSecurityEvent(
+          db,
+          {
+            kind: "authorization",
+            action: "security.permissions.replace",
+            outcome: "allowed",
+            companyId,
+            actorUserId,
+            targetType: "user",
+            targetId: req.params.userId,
+            ipAddress: req.ip,
+            userAgent: req.get("user-agent"),
+            metadata: { permissionCount: saved.length },
+          },
+          req.session.username || actorUserId
+        );
+        await invalidateUserCompanySessions(pool, req.params.userId, companyId);
+        res.json({ userId: req.params.userId, companyId, permissions: saved });
+      } catch (error: unknown) {
+        if (getErrorMessage(error) === "Invalid permissions")
+          return res.status(400).json({ message: "Invalid request" });
+        if (getErrorMessage(error) === "User not found") return res.status(404).json({ message: "Not found" });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

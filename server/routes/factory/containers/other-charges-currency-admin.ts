@@ -10,6 +10,13 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import { validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import { z } from "zod";
+
+// The handler keeps its own checks for an empty list and non-positive ids.
+const fixOtherChargesCurrencyInput = {
+  body: z.strictObject({ containerIds: z.array(z.union([z.number(), z.string()])) }),
+} satisfies RequestSchemas;
 import { getOrCreateLedgerAccount } from "../_helpers";
 import { factoryContainers, factoryDaybookEntries, factoryContainerOtherCharges, vouchers } from "@shared/schema";
 import { eq, and, sql, ilike, ne } from "drizzle-orm";
@@ -119,6 +126,7 @@ export function registerFactoryContainerOtherChargesCurrencyAdminRoutes(app: Exp
     "/api/factory/admin/fix-other-charges-currency",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(fixOtherChargesCurrencyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

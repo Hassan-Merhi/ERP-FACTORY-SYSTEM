@@ -23,6 +23,8 @@ import {
   savedMigration,
 } from "./registerAccountMigrationSafeRoutesPart1";
 import { registerAccountMigrationSafeRoutesPart2 } from "./registerAccountMigrationSafeRoutesPart2";
+import { validateRequest } from "../../lib/validateRequest";
+import { undoAccountMigrationInput } from "./accountMigrationWriteSchemas";
 
 export function registerAccountMigrationSafeRoutes(app: Express) {
   registerAccountMigrationSafeRoutesPart1(app);
@@ -35,6 +37,7 @@ function registerAccountMigrationSafeRoutesPart3(app: Express) {
     "/api/admin/account-migration/undo",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(undoAccountMigrationInput),
     async (req, res, next) => {
       const accountIds = idArray(
         Array.isArray(req.body?.accounts)

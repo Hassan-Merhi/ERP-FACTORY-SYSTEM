@@ -2,12 +2,22 @@ import type { Express, Response } from "express";
 
 import { requireAuth } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { z } from "zod";
 import { SessionRouteError, sessionService } from "./sessionService";
 
 function sendSessionError(res: Response, error: unknown): Response {
   const statusCode = error instanceof SessionRouteError ? error.statusCode : 500;
   return res.status(statusCode).json({ message: getErrorMessage(error) });
 }
+
+const revokeSessionInput = {
+  params: z.strictObject({ sid: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const revokeOtherSessionsInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerSessionRoutes(app: Express) {
   app.get("/api/sessions", requireAuth, async (req, res) => {
@@ -18,14 +28,14 @@ export function registerSessionRoutes(app: Express) {
           role: req.session.currentRole,
           currentSid: req.sessionID,
           companyId: req.session.currentCompanyId,
-        }),
+        })
       );
     } catch (error: unknown) {
       return sendSessionError(res, error);
     }
   });
 
-  app.delete("/api/sessions/:sid", requireAuth, async (req, res) => {
+  app.delete("/api/sessions/:sid", requireAuth, validateRequest(revokeSessionInput), async (req, res) => {
     try {
       return res.json(
         await sessionService.revoke({
@@ -33,14 +43,14 @@ export function registerSessionRoutes(app: Express) {
           userId: req.session.userId,
           role: req.session.currentRole,
           companyId: req.session.currentCompanyId,
-        }),
+        })
       );
     } catch (error: unknown) {
       return sendSessionError(res, error);
     }
   });
 
-  app.delete("/api/sessions", requireAuth, async (req, res) => {
+  app.delete("/api/sessions", requireAuth, validateRequest(revokeOtherSessionsInput), async (req, res) => {
     try {
       return res.json(await sessionService.revokeOthers(req.session.userId, req.sessionID));
     } catch (error: unknown) {
@@ -50,9 +60,7 @@ export function registerSessionRoutes(app: Express) {
 
   app.get("/api/login-history", requireAuth, async (req, res) => {
     try {
-      return res.json(
-        await sessionService.loginHistory(req.session.currentRole, req.session.currentCompanyId),
-      );
+      return res.json(await sessionService.loginHistory(req.session.currentRole, req.session.currentCompanyId));
     } catch (error: unknown) {
       return sendSessionError(res, error);
     }

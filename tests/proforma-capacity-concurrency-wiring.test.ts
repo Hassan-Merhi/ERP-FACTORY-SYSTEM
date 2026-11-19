@@ -42,14 +42,14 @@ describe("Phase 3 proforma capacity mutation lock coverage", () => {
   it("all proforma-linked empty order/container creation paths lock before checking capacity and inserting", () => {
     const directLoading = routeSlice(
       read("server/routes/factory/customer-orders/finalize-loading/loading.ts"),
-      'app.post("/api/factory/customer-orders-loading"'
+      '"/api/factory/customer-orders-loading"'
     );
     expectBefore(directLoading, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
     expectBefore(directLoading, "guardProformaOrderCreation(tx", ".insert(customerOrders)");
 
     const genericOrder = routeSlice(
       read("server/routes/factory/customer-orders/orderCrudRoutes.ts"),
-      'app.post("/api/factory/customer-orders"'
+      '"/api/factory/customer-orders",'
     );
     expectBefore(genericOrder, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
     expectBefore(genericOrder, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");

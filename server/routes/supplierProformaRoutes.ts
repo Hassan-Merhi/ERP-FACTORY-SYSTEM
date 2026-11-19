@@ -7,6 +7,15 @@ import { eq, and, ne, sql } from "drizzle-orm";
 import { supplierProformas } from "@shared/schema";
 import { registerSupplierProformaRoutesPart1 } from "./registerSupplierProformaRoutesPart1";
 import { registerSupplierProformaRoutesPart3 } from "./registerSupplierProformaRoutesPart3";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Ids stay strings: the handler parses them with parseId and answers its own 400.
+const starProformaInput = {
+  params: z.strictObject({ supplierId: stringParam, proformaId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerSupplierProformaRoutes(app: Express, requireAuth: RequestHandler) {
   registerSupplierProformaRoutesPart1(app, requireAuth);
@@ -22,6 +31,7 @@ function registerSupplierProformaRoutesPart2(app: Express, requireAuth: RequestH
   app.patch(
     "/api/suppliers/:supplierId/proformas/:proformaId/star",
     requireAuth,
+    validateRequest(starProformaInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

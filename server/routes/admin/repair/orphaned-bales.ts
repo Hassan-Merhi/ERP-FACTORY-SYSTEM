@@ -9,16 +9,25 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import {} from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
+/** This repair takes no input. */
+const noInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerAdminOrphanedBaleRoutes(app: Express) {
-  app.post("/api/admin/fix-orphaned-bales", requireAuth, requireRole("Admin", "Owner"), async (_req, res) => {
-    try {
-      const companyId = _req.session.factoryCompanyId || _req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const result = await db.execute(sql`
+  app.post(
+    "/api/admin/fix-orphaned-bales",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(noInput),
+    async (_req, res) => {
+      try {
+        const companyId = _req.session.factoryCompanyId || _req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const result = await db.execute(sql`
         UPDATE factory_bales AS fb
            SET status = 'IN_STOCK', updated_at = NOW()
          WHERE fb.company_id = ${companyId}
@@ -36,11 +45,12 @@ export function registerAdminOrphanedBaleRoutes(app: Express) {
            )
         RETURNING id
       `);
-      const fixed = resultRows(result)?.length ?? 0;
-      res.json({ fixed, message: fixed > 0 ? `Restored ${fixed} bale(s) to IN_STOCK` : "No orphaned bales found" });
-    } catch (error: unknown) {
-      logger.error("[BaleOrphanFix] Error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        const fixed = resultRows(result)?.length ?? 0;
+        res.json({ fixed, message: fixed > 0 ? `Restored ${fixed} bale(s) to IN_STOCK` : "No orphaned bales found" });
+      } catch (error: unknown) {
+        logger.error("[BaleOrphanFix] Error:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

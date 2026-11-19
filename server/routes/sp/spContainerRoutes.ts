@@ -12,6 +12,23 @@ import { sendVoucherCorrectionRefusal } from "../../services/factory/factoryVouc
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { registerSpContainerRoutesPart1 } from "./registerSpContainerRoutesPart1";
 import { registerSpContainerRoutesPart2 } from "./registerSpContainerRoutesPart2";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, numberish, spWriteFields } from "./spRequestSchemas";
+
+const createPrepaidInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    containerId: numberish.nullable().optional(),
+    prepaidDate: z.string().nullable().optional(),
+    chargeType: z.string().optional(),
+    agentName: z.string().nullable().optional(),
+    amountPaidUsd: amountish.optional(),
+    bankAccountId: numberish.nullable().optional(),
+    debitAccountId: numberish.nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
 
@@ -49,7 +66,7 @@ function registerSpContainerRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/sp/prepaid", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sp/prepaid", requireAuth, validateRequest(createPrepaidInput), async (req: Request, res: Response) => {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;

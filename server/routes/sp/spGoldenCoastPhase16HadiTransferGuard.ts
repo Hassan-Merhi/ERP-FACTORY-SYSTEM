@@ -35,6 +35,8 @@ import {
   type PersistedPostingResult,
 } from "./goldenCoastPhase16LegacyHadiRetiredPayload";
 import { findReplay, trackedHadiSalesCash } from "./spGoldenCoastPhase16HadiTransferGuardFindReplay";
+import { validateRequest } from "../../lib/validateRequest";
+import { phase7TransferInput } from "./spGoldenCoastPhase7TransferSchemas";
 export {
   GOLDEN_COAST_PHASE16_LEGACY_HADI_PATH,
   GOLDEN_COAST_PHASE16_LEGACY_HADI_RETIRED_CODE,
@@ -189,6 +191,10 @@ async function handleRemittance(req: Request, res: Response): Promise<void> {
  * discovery depends on it. For POSTs, automatic collection is retired, while
  * `remit_from_hadi` remains supported through this Phase 16-safe handler.
  */
+// This guard is the handler that answers every POST on the Phase 7 path, so
+// it runs the route's request validation itself before handleRemittance.
+const validatePhase7Transfer = validateRequest(phase7TransferInput);
+
 export function registerSpGoldenCoastPhase16HadiTransferGuard(app: Express): void {
   app.use(
     GOLDEN_COAST_PHASE16_LEGACY_HADI_PATH,
@@ -213,7 +219,7 @@ export function registerSpGoldenCoastPhase16HadiTransferGuard(app: Express): voi
             res.status(409).json(goldenCoastPhase16LegacyHadiRetiredPayload());
             return;
           }
-          void handleRemittance(req, res);
+          validatePhase7Transfer(req, res, () => void handleRemittance(req, res));
         });
       });
     }

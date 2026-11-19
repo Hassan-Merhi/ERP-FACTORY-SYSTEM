@@ -14,6 +14,8 @@ import {
 import { factoryContainers, factoryDutyAuditLog } from "@shared/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { ADMIN_ROLES, positiveRequestAmount } from "./registerRawStockContainerRoutesPart1";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { legacyRebuildPostOffloadChargeInput, undoPostOffloadChargeInput } from "./containerChargeRouteSchemas";
 
 export function registerRawStockContainerRoutesPart4(app: Express) {
   // ── DELETE /api/factory/containers/:id/post-offload-charges/:chargeId ────────
@@ -22,13 +24,12 @@ export function registerRawStockContainerRoutesPart4(app: Express) {
     "/api/factory/containers/:id/post-offload-charges/:chargeId",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(undoPostOffloadChargeInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const containerId = parseId(req.params.id);
-        const chargeId = parseId(req.params.chargeId);
-        if (containerId === null || chargeId === null) return res.status(400).json({ message: "Invalid id" });
+        const { id: containerId, chargeId } = validatedInput(req, undoPostOffloadChargeInput).params;
 
         const { expectedVersion, undoDate, legacyBaselineRate } = req.body || {};
 
@@ -97,13 +98,12 @@ export function registerRawStockContainerRoutesPart4(app: Express) {
     "/api/factory/containers/:id/post-offload-charges/:chargeId/legacy-rebuild",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(legacyRebuildPostOffloadChargeInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const containerId = parseId(req.params.id);
-        const chargeId = parseId(req.params.chargeId);
-        if (containerId === null || chargeId === null) return res.status(400).json({ message: "Invalid id" });
+        const { id: containerId, chargeId } = validatedInput(req, legacyRebuildPostOffloadChargeInput).params;
 
         const { legacyBaselineRate, expectedVersion } = req.body || {};
         const legacyBaselineRateExact = positiveRequestAmount(legacyBaselineRate);

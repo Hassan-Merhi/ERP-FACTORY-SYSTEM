@@ -3,6 +3,8 @@ import type { Express, Request, Response } from "express";
 import { requireAuth } from "../auth";
 import { pool } from "../db";
 import { logger } from "../lib/logger";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+import { z } from "zod";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { fetchGreenApiChats, getGreenInstanceState, getWaSettings } from "../services/whatsappService";
 
@@ -38,6 +40,13 @@ export function errorResponse(res: Response, error: unknown) {
   return res.status(500).json({ message: "Stock transfer approval could not be completed." });
 }
 
+// Both fields are required: null clears the delegate or the group. The handler
+// keeps its own messages for an empty user id and a non-positive group id.
+const savePosTransferApprovalInput = {
+  query: emptyQuery,
+  body: z.strictObject({ userId: z.string().nullable(), groupId: z.number().nullable() }),
+} satisfies RequestSchemas;
+
 export function registerPosTransferDelegatedApprovalRoutesStep1(app: Express) {
   // Settings: company-specific single POS delegate and ONE administrator-chosen group.
   app.get("/api/settings/pos-transfer-approval", requireAuth, async (req, res) => {
@@ -69,51 +78,56 @@ export function registerPosTransferDelegatedApprovalRoutesStep1(app: Express) {
     }
   });
 
-  app.put("/api/settings/pos-transfer-approval", requireAuth, async (req, res) => {
-    try {
-      const actor = await context(req);
-      if (!["Admin", "Owner", "Developer"].includes(actor.role)) return res.sendStatus(403);
-      const userId: unknown = req.body?.userId;
-      const groupId: unknown = req.body?.groupId;
-      if (userId !== null && (typeof userId !== "string" || !userId.trim() || userId.length > 200)) {
-        return res.status(400).json({ message: "Select one POS user, or None." });
-      }
-      if (groupId !== null && (!Number.isSafeInteger(groupId) || Number(groupId) <= 0)) {
-        return res.status(400).json({ message: "Select a configured WhatsApp group, or None." });
-      }
-      if (userId) {
-        const selected = await pool.query(
-          "SELECT 1 FROM users u JOIN user_company_roles ucr ON ucr.user_id=u.id " +
-            "WHERE u.id=$1 AND u.active=true AND ucr.company_id=$2 AND ucr.role='POS' LIMIT 1",
-          [userId, actor.companyId]
+  app.put(
+    "/api/settings/pos-transfer-approval",
+    requireAuth,
+    validateRequest(savePosTransferApprovalInput),
+    async (req, res) => {
+      try {
+        const actor = await context(req);
+        if (!["Admin", "Owner", "Developer"].includes(actor.role)) return res.sendStatus(403);
+        const userId: unknown = req.body?.userId;
+        const groupId: unknown = req.body?.groupId;
+        if (userId !== null && (typeof userId !== "string" || !userId.trim() || userId.length > 200)) {
+          return res.status(400).json({ message: "Select one POS user, or None." });
+        }
+        if (groupId !== null && (!Number.isSafeInteger(groupId) || Number(groupId) <= 0)) {
+          return res.status(400).json({ message: "Select a configured WhatsApp group, or None." });
+        }
+        if (userId) {
+          const selected = await pool.query(
+            "SELECT 1 FROM users u JOIN user_company_roles ucr ON ucr.user_id=u.id " +
+              "WHERE u.id=$1 AND u.active=true AND ucr.company_id=$2 AND ucr.role='POS' LIMIT 1",
+            [userId, actor.companyId]
+          );
+          if (!selected.rowCount)
+            return res.status(400).json({ message: "Selected user is not an active POS user in this company." });
+        }
+        if (groupId) {
+          const selected = await pool.query(
+            "SELECT 1 FROM stock_transfer_export_wa_groups WHERE company_id=$1 AND id=$2",
+            [actor.companyId, groupId]
+          );
+          if (!selected.rowCount)
+            return res.status(400).json({ message: "WhatsApp group must belong to the selected company." });
+        }
+        await pool.query(
+          "INSERT INTO pos_transfer_approval_settings (company_id,user_id,group_id,updated_at) VALUES ($1,$2,$3,now()) " +
+            "ON CONFLICT(company_id) DO UPDATE SET user_id=EXCLUDED.user_id,group_id=EXCLUDED.group_id,updated_at=now()",
+          [actor.companyId, userId, groupId]
         );
-        if (!selected.rowCount)
-          return res.status(400).json({ message: "Selected user is not an active POS user in this company." });
+        logger.info("[PosTransferApproval] Delegate setting updated", {
+          companyId: actor.companyId,
+          userId: actor.userId,
+          hasDelegate: !!userId,
+          hasGroup: !!groupId,
+        });
+        return res.json({ ok: true });
+      } catch (error) {
+        return errorResponse(res, error);
       }
-      if (groupId) {
-        const selected = await pool.query(
-          "SELECT 1 FROM stock_transfer_export_wa_groups WHERE company_id=$1 AND id=$2",
-          [actor.companyId, groupId]
-        );
-        if (!selected.rowCount)
-          return res.status(400).json({ message: "WhatsApp group must belong to the selected company." });
-      }
-      await pool.query(
-        "INSERT INTO pos_transfer_approval_settings (company_id,user_id,group_id,updated_at) VALUES ($1,$2,$3,now()) " +
-          "ON CONFLICT(company_id) DO UPDATE SET user_id=EXCLUDED.user_id,group_id=EXCLUDED.group_id,updated_at=now()",
-        [actor.companyId, userId, groupId]
-      );
-      logger.info("[PosTransferApproval] Delegate setting updated", {
-        companyId: actor.companyId,
-        userId: actor.userId,
-        hasDelegate: !!userId,
-        hasGroup: !!groupId,
-      });
-      return res.json({ ok: true });
-    } catch (error) {
-      return errorResponse(res, error);
     }
-  });
+  );
 
   // Read-only delivery preflight: never approve revisions or send a message.
   // Admins can use this before assigning a POS approver or before a live order.

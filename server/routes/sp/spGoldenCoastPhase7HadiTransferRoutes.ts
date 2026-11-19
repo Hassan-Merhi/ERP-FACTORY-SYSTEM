@@ -35,6 +35,8 @@ import {
   validateCashAccount,
 } from "./findReplayedTransfer";
 import { handleReadiness } from "./spGoldenCoastPhase7HadiTransferRoutesHandleReadiness";
+import { validateRequest } from "../../lib/validateRequest";
+import { phase7TransferInput } from "./spGoldenCoastPhase7TransferSchemas";
 
 function respondKnownError(res: Response, error: unknown): boolean {
   if (error instanceof GoldenCoastPhase7RouteError) {
@@ -229,6 +231,7 @@ export function registerSpGoldenCoastPhase7HadiTransferRoutes(app: Express): voi
     phase7RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(phase7TransferInput),
     (req, res) => void handlePostTransfer(req, res)
   );
 }

@@ -34,7 +34,7 @@ describe("Golden Coast Phase 5 POS sale retirement", () => {
   });
 
   it("does not alter the legacy sale handler for non-Golden-Coast Supplier Partner companies", () => {
-    expect(legacySalesSource).toContain('app.post("/api/sp/sales"');
+    expect(legacySalesSource.replace(/\s+/g, "")).toContain('app.post("/api/sp/sales"');
     expect(legacySalesSource).toContain("sp_payable");
     expect(phase6RouteSource).not.toContain('app.post("/api/sp/sales"');
   });

@@ -12,6 +12,8 @@
 import type { Express, Request, Response } from "express";
 
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { postDueRentalInput } from "./rentalWriteRouteSchemas";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { postDueRentalForCompany } from "../../services/rental/dueRentalPosting";
@@ -26,22 +28,28 @@ export function registerDueRentalPostingRoutes(
   shopExpenseAccountName: string
 ): void {
   const route = `${urlPrefix}/accruals/post-due`;
-  app.post(route, requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = resolveRequestCompanyId(req);
-      const result = await postDueRentalForCompany(companyId, module, {
-        trigger: "manual",
-        actor: {
-          userId: String(req.session.userId ?? ""),
-          username: req.session.username || String(req.session.userId ?? "unknown"),
-        },
-        incomeAccountName,
-        shopExpenseAccountName,
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      logger.error(`POST ${route} error`, { error });
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    route,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(postDueRentalInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = resolveRequestCompanyId(req);
+        const result = await postDueRentalForCompany(companyId, module, {
+          trigger: "manual",
+          actor: {
+            userId: String(req.session.userId ?? ""),
+            username: req.session.username || String(req.session.userId ?? "unknown"),
+          },
+          incomeAccountName,
+          shopExpenseAccountName,
+        });
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error(`POST ${route} error`, { error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

@@ -12,7 +12,14 @@ import { parseId } from "../../lib/parseId";
 import { buildAliasMap, resolveBarcode } from "../helpers/proformaBarcodeHelpers";
 import { supplierContainerLoadedItems } from "@shared/schema";
 import { z } from "zod";
-import { emptyBody, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import {
+  emptyBody,
+  emptyQuery,
+  positiveIntParam,
+  stringParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 import { verifyContainerOwnership } from "./_helpers";
 
@@ -31,6 +38,19 @@ const updateLoadedItemInput = {
 } satisfies RequestSchemas;
 
 const deleteLoadedItemInput = { params: itemIdParams, body: emptyBody } satisfies RequestSchemas;
+
+/** The handler String()s the barcode, parseInt()s qty (0 when it does not parse) and stores the rest. */
+const createLoadedItemInput = {
+  params: z.strictObject({ containerId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    barcode: z.union([z.string(), z.number()]).nullable().optional(),
+    itemName: z.string().nullable().optional(),
+    qty: numericText.optional(),
+    weightPerBale: numericText.optional(),
+    pricePerBale: numericText.optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerContainerLoadedItemCrudRoutes(app: Express, requireAuth: RequestHandler) {
   app.get("/api/containers/:containerId/loaded-items", requireAuth, async (req: Request, res: Response) => {
@@ -51,35 +71,40 @@ export function registerContainerLoadedItemCrudRoutes(app: Express, requireAuth:
     }
   });
 
-  app.post("/api/containers/:containerId/loaded-items", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const containerId = parseId(req.params.containerId);
-      if (containerId === null) return res.status(400).json({ message: "Invalid id" });
-      if (!(await verifyContainerOwnership(containerId, companyId)))
-        return res.status(403).json({ message: "Access denied" });
-      const { barcode, itemName, qty, weightPerBale, pricePerBale } = req.body;
-      // Resolve alias code → primary stock-item code before saving so that
-      // items entered with supplier/alias codes match the proforma correctly.
-      const { map: aliasMap } = await buildAliasMap(companyId);
-      const resolvedBarcode = resolveBarcode(String(barcode ?? "").trim(), aliasMap);
-      const [item] = await db
-        .insert(supplierContainerLoadedItems)
-        .values({
-          containerId,
-          barcode: resolvedBarcode,
-          itemName: itemName || null,
-          qty: parseInt(qty) || 0,
-          weightPerBale: weightPerBale || null,
-          pricePerBale: pricePerBale || null,
-        })
-        .returning();
-      res.json(item);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/containers/:containerId/loaded-items",
+    requireAuth,
+    validateRequest(createLoadedItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const containerId = parseId(req.params.containerId);
+        if (containerId === null) return res.status(400).json({ message: "Invalid id" });
+        if (!(await verifyContainerOwnership(containerId, companyId)))
+          return res.status(403).json({ message: "Access denied" });
+        const { barcode, itemName, qty, weightPerBale, pricePerBale } = req.body;
+        // Resolve alias code → primary stock-item code before saving so that
+        // items entered with supplier/alias codes match the proforma correctly.
+        const { map: aliasMap } = await buildAliasMap(companyId);
+        const resolvedBarcode = resolveBarcode(String(barcode ?? "").trim(), aliasMap);
+        const [item] = await db
+          .insert(supplierContainerLoadedItems)
+          .values({
+            containerId,
+            barcode: resolvedBarcode,
+            itemName: itemName || null,
+            qty: parseInt(qty) || 0,
+            weightPerBale: weightPerBale || null,
+            pricePerBale: pricePerBale || null,
+          })
+          .returning();
+        res.json(item);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.patch(
     "/api/container-loaded-items/:itemId",

@@ -7,6 +7,8 @@ import { requireExportAccess } from "../../lib/permissionMiddleware";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { logAudit } from "../_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { legacyLocationWhatsappInput } from "./locationWriteSchemas";
 import { fetchGreenApiChats, getPosWaSettings } from "../../services/whatsappService";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
@@ -32,6 +34,7 @@ export function registerLocationWhatsappLegacyCompatibilityRoutes(app: Express) 
     },
     requireAuth,
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
+    validateRequest(legacyLocationWhatsappInput),
     async (req, res) => {
       try {
         const locationId = Number.parseInt(req.params.locationId, 10);

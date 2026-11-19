@@ -19,6 +19,9 @@ import { requireSpCompany } from "./spHelpers";
 import { Phase11RouteError, phase11RequestBudget } from "./salesItemsPeriodActivity";
 import { buildPlan, readiness, respondKnownError } from "./spGoldenCoastPhase11MonthlyCloseRoutesReadiness";
 import { closeMonth, PERIOD_RE, TARGET_RE } from "./spGoldenCoastPhase11MonthlyCloseRoutesCloseMonth";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, spWriteFields } from "./spRequestSchemas";
 
 function requireDeveloperProfitEdit(req: Request, res: Response): boolean {
   if (!isDeveloperForProfitCorrection(req)) {
@@ -204,6 +207,24 @@ async function retireLegacyGoldenCoastProfitSplit(req: Request, res: Response, n
   }
 }
 
+// Read by writeProfitCorrection.
+const profitCorrectionInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    periodMonth: z.string().optional(),
+    targetNetProfit: amountish.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// Read by parseGoldenCoastPhase11CloseInput.
+const monthlyCloseInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    periodMonth: z.string().optional(),
+    reference: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerSpGoldenCoastPhase11MonthlyCloseRoutes(app: Express) {
   app.get(
     "/api/sp/golden-coast/profit-correction",
@@ -218,6 +239,7 @@ export function registerSpGoldenCoastPhase11MonthlyCloseRoutes(app: Express) {
     phase11RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(profitCorrectionInput),
     writeProfitCorrection
   );
   app.get(
@@ -233,6 +255,7 @@ export function registerSpGoldenCoastPhase11MonthlyCloseRoutes(app: Express) {
     phase11RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(monthlyCloseInput),
     closeMonth
   );
   app.post(

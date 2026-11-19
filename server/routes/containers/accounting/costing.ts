@@ -21,6 +21,9 @@ import { moneyString, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { resyncPoVoucherCosting } from "./costingVoucherResync";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const syncAllVouchersInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 const CHARGE_FIELDS = ["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const;
 type ChargeField = (typeof CHARGE_FIELDS)[number];
@@ -31,6 +34,7 @@ export function registerContainerCostingRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(syncAllVouchersInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

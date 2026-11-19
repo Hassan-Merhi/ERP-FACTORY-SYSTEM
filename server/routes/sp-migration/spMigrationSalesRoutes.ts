@@ -9,8 +9,25 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { pn, getCompanyRow, logRun, trackRow } from "./_helpers";
 import { parseMoneyInput } from "../../lib/money";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The handler keeps its own required/range checks and messages, so every field is optional here.
+// Amounts go through parseMoneyInput, which takes a number or a numeric string; "" or null
+// for a percentage or manual share means "not given".
+const gcProfitOpeningInput = {
+  body: z.strictObject({
+    targetCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    cutoffDate: z.string().optional(),
+    accumulatedProfit: z.union([z.number(), z.string()]).nullable().optional(),
+    ourSplitPct: z.union([z.number(), z.string()]).nullable().optional(),
+    ourShareAmount: z.union([z.number(), z.string()]).nullable().optional(),
+    supplierShareAmount: z.union([z.number(), z.string()]).nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSpMigrationSalesRoutes(app: Express) {
   // The Phase 2 migration registrar owns gc-sales-readonly and gc-containers
@@ -23,6 +40,7 @@ export function registerSpMigrationSalesRoutes(app: Express) {
     "/api/sp/migration/gc-profit-opening",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(gcProfitOpeningInput),
     async (req: Request, res: Response) => {
       try {
         const {

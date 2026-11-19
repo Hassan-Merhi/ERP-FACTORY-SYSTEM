@@ -5,6 +5,10 @@ import { requireAuth } from "../../../auth";
 
 import { customerOrders, customers, containers } from "@shared/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// Disabled endpoint (always 410); no client calls it and it takes no input.
+const trackNowInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerOrderTrackingRoutes(app: Express) {
   app.get("/api/factory/invoice-container-tracking", requireAuth, async (req: Request, res: Response) => {
@@ -46,11 +50,16 @@ export function registerOrderTrackingRoutes(app: Express) {
   });
 
   // Live carrier tracking is disabled. Container ETA/status/location are maintained manually or by import.
-  app.post("/api/factory/shipping-containers/track-now", requireAuth, async (_req: Request, res: Response) => {
-    return res.status(410).json({
-      message: "Automatic container tracking is disabled. Update container data manually or by Excel import.",
-    });
-  });
+  app.post(
+    "/api/factory/shipping-containers/track-now",
+    requireAuth,
+    validateRequest(trackNowInput),
+    async (_req: Request, res: Response) => {
+      return res.status(410).json({
+        message: "Automatic container tracking is disabled. Update container data manually or by Excel import.",
+      });
+    }
+  );
 
   // ─────────────────────────────────────────────────────────────────────
   // REPAIR PER-KG LOADING PRICES

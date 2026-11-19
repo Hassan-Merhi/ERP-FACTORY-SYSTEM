@@ -7,7 +7,7 @@ import { storage } from "../../storage";
 import { requireAuth, checkPOSLocation } from "../../auth";
 import { requireExportAccess } from "../../lib/permissionMiddleware";
 import { logAudit } from "../_helpers";
-import { locations, insertLocationSchema } from "@shared/schema";
+import { locations } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   fetchGreenApiChats,
@@ -16,6 +16,8 @@ import {
   type GreenChat,
 } from "../../services/whatsappService";
 import { parseMoneyInput } from "../../lib/money";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import * as schema from "./locationWriteSchemas";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
 
@@ -135,16 +137,14 @@ export function registerLocationCrudRoutes(app: Express) {
     }
   );
 
-  app.post("/api/locations", requireAuth, async (req, res) => {
+  app.post("/api/locations", requireAuth, validateRequest(schema.createLocationInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const parsed = insertLocationSchema.parse({
-        ...req.body,
-        companyId: req.session.currentCompanyId,
-      });
+      const { body } = validatedInput(req, schema.createLocationInput);
+      const parsed = { ...body, companyId: req.session.currentCompanyId };
 
       // `locations.code` is globally unique, but a tenant-scoped connection
       // must not read another company's locations to find a free code.
@@ -205,18 +205,14 @@ export function registerLocationCrudRoutes(app: Express) {
       // Drizzle wraps PostgreSQL errors in `cause`. Keep SQL and parameter
       // values in the server logs, never in the browser toast/HTTP response.
       const details = getErrorDetails(error);
-      const cause = typeof error === "object" && error !== null && "cause" in error
-        ? getErrorDetails(error.cause)
-        : undefined;
+      const cause =
+        typeof error === "object" && error !== null && "cause" in error ? getErrorDetails(error.cause) : undefined;
       const pgCode = cause?.code ?? details.code;
       logger.error("[POST /api/locations] Location creation failed", {
         error,
         companyId: req.session.currentCompanyId,
         pgCode,
       });
-      if (details.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid location information. Please check the name and try again." });
-      }
       if (pgCode === "23505") {
         return res.status(409).json({ message: "That location code is already in use. Try again." });
       }
@@ -263,7 +259,7 @@ export function registerLocationCrudRoutes(app: Express) {
   // Rename (update) location. WhatsApp destination changes intentionally use the
   // dedicated permission-protected endpoint below so this generic route cannot
   // be used to bypass the location WhatsApp management permission.
-  app.patch("/api/locations/:locationId", requireAuth, async (req, res) => {
+  app.patch("/api/locations/:locationId", requireAuth, validateRequest(schema.patchLocationInput), async (req, res) => {
     try {
       const locationId = parseInt(req.params.locationId);
       if (isNaN(locationId)) return res.status(400).json({ message: "Invalid location ID" });
@@ -335,6 +331,7 @@ export function registerLocationCrudRoutes(app: Express) {
     "/api/locations/:locationId/whatsapp-settings",
     requireAuth,
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
+    validateRequest(schema.locationWhatsappSettingsInput),
     async (req, res) => {
       try {
         const locationId = parseInt(req.params.locationId);
@@ -438,6 +435,7 @@ export function registerLocationCrudRoutes(app: Express) {
     "/api/locations/:locationId/whatsapp-test",
     requireAuth,
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
+    validateRequest(schema.locationWhatsappTestInput),
     async (req, res) => {
       try {
         const locationId = parseInt(req.params.locationId);

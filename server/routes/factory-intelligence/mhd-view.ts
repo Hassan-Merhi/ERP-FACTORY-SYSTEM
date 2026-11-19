@@ -7,11 +7,24 @@ import { factorySettings } from "@shared/schema";
 import { INITIAL_FACTORY_FEATURES } from "./settings";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { writeAuditEvent } from "../../services/audit";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 type ViewRow = { articleCode: string; itemName: string; sortOrder: number };
 type ViewSnapshot = { revision: number; rows: ViewRow[]; updatedAt: string };
 type MhdView = ViewSnapshot & { history: ViewSnapshot[] };
 type ProductRow = { id: number; articleCode: string; name: string };
+
+// client/src/pages/factory/factorysettings/MhdViewManager.tsx sends
+// { rows: [{ articleCode, itemName }], expectedRevision }. The handler answers a
+// missing list or revision with its own message, so both stay optional here.
+const mhdViewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z.array(z.strictObject({ articleCode: z.string(), itemName: z.string() })).optional(),
+    expectedRevision: z.number().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const MHD_ERROR = {
   missingCompany: "No Factory company selected",
@@ -99,106 +112,112 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
     }
   });
 
-  app.put("/api/factory/mhd-view", requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
-    const companyId = companyFor(req);
-    if (!Number.isSafeInteger(companyId) || companyId <= 0)
-      return res.status(400).json({ message: MHD_ERROR.missingCompany });
-    const input: unknown = req.body?.rows;
-    const expectedRevision: unknown = req.body?.expectedRevision;
-    if (!Array.isArray(input) || input.length > 10000 || !Number.isSafeInteger(expectedRevision)) {
-      return res.status(400).json({ message: MHD_ERROR.invalidRevision });
-    }
-
-    const seen = new Set<string>();
-    const requested: Array<{ articleCode: string; itemName: string }> = [];
-    for (const item of input) {
-      if (
-        !isObject(item) ||
-        typeof item.articleCode !== "string" ||
-        typeof item.itemName !== "string" ||
-        item.itemName.length > 250 ||
-        !item.articleCode.trim() ||
-        item.articleCode.length > 150
-      ) {
-        return res.status(400).json({ message: MHD_ERROR.invalidItem });
+  app.put(
+    "/api/factory/mhd-view",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(mhdViewInput),
+    async (req: Request, res: Response) => {
+      const companyId = companyFor(req);
+      if (!Number.isSafeInteger(companyId) || companyId <= 0)
+        return res.status(400).json({ message: MHD_ERROR.missingCompany });
+      const input: unknown = req.body?.rows;
+      const expectedRevision: unknown = req.body?.expectedRevision;
+      if (!Array.isArray(input) || input.length > 10000 || !Number.isSafeInteger(expectedRevision)) {
+        return res.status(400).json({ message: MHD_ERROR.invalidRevision });
       }
-      const code = normalizeCode(item.articleCode);
-      if (seen.has(code)) return res.status(400).json({ message: MHD_ERROR.duplicateCode + " " + code });
-      seen.add(code);
-      requested.push({ articleCode: code, itemName: item.itemName.trim() });
-    }
 
-    try {
-      const products = await companyProducts(db, companyId);
-      const known = new Map<string, ProductRow>();
-      const ambiguous = new Set<string>();
-      for (const product of products) {
-        const code = normalizeCode(product.articleCode);
-        if (known.has(code)) ambiguous.add(code);
-        else known.set(code, product);
+      const seen = new Set<string>();
+      const requested: Array<{ articleCode: string; itemName: string }> = [];
+      for (const item of input) {
+        if (
+          !isObject(item) ||
+          typeof item.articleCode !== "string" ||
+          typeof item.itemName !== "string" ||
+          item.itemName.length > 250 ||
+          !item.articleCode.trim() ||
+          item.articleCode.length > 150
+        ) {
+          return res.status(400).json({ message: MHD_ERROR.invalidItem });
+        }
+        const code = normalizeCode(item.articleCode);
+        if (seen.has(code)) return res.status(400).json({ message: MHD_ERROR.duplicateCode + " " + code });
+        seen.add(code);
+        requested.push({ articleCode: code, itemName: item.itemName.trim() });
       }
-      const unknown = requested.filter((row) => !known.has(row.articleCode) || ambiguous.has(row.articleCode));
-      if (unknown.length)
-        return res.status(400).json({
-          message: MHD_ERROR.unknownCode,
-          articleCodes: unknown.slice(0, 50).map((row) => row.articleCode),
-        });
-      const rows: ViewRow[] = requested.map((item, index) => ({
-        articleCode: known.get(item.articleCode)!.articleCode,
-        itemName: item.itemName,
-        sortOrder: index,
-      }));
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(650741, ${companyId})`);
-        await tx
-          .insert(factorySettings)
-          .values({ companyId, ...INITIAL_FACTORY_FEATURES })
-          .onConflictDoNothing();
-        const [current] = await tx
-          .select({ extraSettings: factorySettings.extraSettings })
-          .from(factorySettings)
-          .where(eq(factorySettings.companyId, companyId))
-          .for("update");
-        const prior = readView(current?.extraSettings);
-        if (prior.revision !== expectedRevision) return null;
-        const history =
-          prior.revision > 0
-            ? [...prior.history, { revision: prior.revision, rows: prior.rows, updatedAt: prior.updatedAt }].slice(-5)
-            : [];
-        const next: MhdView = { rows, revision: prior.revision + 1, updatedAt: new Date().toISOString(), history };
-        const [updated] = await tx
-          .update(factorySettings)
-          .set({
-            extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify({ mhdView: next })}::jsonb`,
-            updatedAt: new Date(),
-          })
-          .where(eq(factorySettings.companyId, companyId))
-          .returning({ id: factorySettings.id });
-        await writeAuditEvent(
-          {
-            userId: String(req.session.userId),
-            username: String(req.session.username || req.session.userId),
-            companyId,
-            action: "settings_change",
-            tableName: "factory_settings",
-            recordId: updated.id,
-            recordIdentifier: "mhdView",
-            changes: {
-              mhdView: {
-                old: { revision: prior.revision, rowCount: prior.rows.length },
-                new: { revision: next.revision, rowCount: next.rows.length },
+
+      try {
+        const products = await companyProducts(db, companyId);
+        const known = new Map<string, ProductRow>();
+        const ambiguous = new Set<string>();
+        for (const product of products) {
+          const code = normalizeCode(product.articleCode);
+          if (known.has(code)) ambiguous.add(code);
+          else known.set(code, product);
+        }
+        const unknown = requested.filter((row) => !known.has(row.articleCode) || ambiguous.has(row.articleCode));
+        if (unknown.length)
+          return res.status(400).json({
+            message: MHD_ERROR.unknownCode,
+            articleCodes: unknown.slice(0, 50).map((row) => row.articleCode),
+          });
+        const rows: ViewRow[] = requested.map((item, index) => ({
+          articleCode: known.get(item.articleCode)!.articleCode,
+          itemName: item.itemName,
+          sortOrder: index,
+        }));
+        const result = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(650741, ${companyId})`);
+          await tx
+            .insert(factorySettings)
+            .values({ companyId, ...INITIAL_FACTORY_FEATURES })
+            .onConflictDoNothing();
+          const [current] = await tx
+            .select({ extraSettings: factorySettings.extraSettings })
+            .from(factorySettings)
+            .where(eq(factorySettings.companyId, companyId))
+            .for("update");
+          const prior = readView(current?.extraSettings);
+          if (prior.revision !== expectedRevision) return null;
+          const history =
+            prior.revision > 0
+              ? [...prior.history, { revision: prior.revision, rows: prior.rows, updatedAt: prior.updatedAt }].slice(-5)
+              : [];
+          const next: MhdView = { rows, revision: prior.revision + 1, updatedAt: new Date().toISOString(), history };
+          const [updated] = await tx
+            .update(factorySettings)
+            .set({
+              extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify({ mhdView: next })}::jsonb`,
+              updatedAt: new Date(),
+            })
+            .where(eq(factorySettings.companyId, companyId))
+            .returning({ id: factorySettings.id });
+          await writeAuditEvent(
+            {
+              userId: String(req.session.userId),
+              username: String(req.session.username || req.session.userId),
+              companyId,
+              action: "settings_change",
+              tableName: "factory_settings",
+              recordId: updated.id,
+              recordIdentifier: "mhdView",
+              changes: {
+                mhdView: {
+                  old: { revision: prior.revision, rowCount: prior.rows.length },
+                  new: { revision: next.revision, rowCount: next.rows.length },
+                },
               },
             },
-          },
-          tx
-        );
-        return next;
-      });
-      if (!result) return res.status(409).json({ message: MHD_ERROR.revisionConflict });
-      res.set("Cache-Control", "private, no-store");
-      return res.json(result);
-    } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+            tx
+          );
+          return next;
+        });
+        if (!result) return res.status(409).json({ message: MHD_ERROR.revisionConflict });
+        res.set("Cache-Control", "private, no-store");
+        return res.json(result);
+      } catch (error) {
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

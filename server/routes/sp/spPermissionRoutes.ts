@@ -7,6 +7,14 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { SP_PERMISSIONS } from "./spAccessControl";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { stringParam, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
+
+const setPermissionInput = {
+  params: z.strictObject({ userId: stringParam, permission: stringParam }),
+  body: z.strictObject({ ...spWriteFields, enabled: z.boolean().optional() }),
+} satisfies RequestSchemas;
 
 export function registerSpPermissionRoutes(app: Express): void {
   app.get("/api/sp/permissions", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
@@ -30,11 +38,13 @@ export function registerSpPermissionRoutes(app: Express): void {
     "/api/sp/permissions/:userId/:permission",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(setPermissionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = await requireSpCompany(req, res);
         if (!companyId) return;
-        const permission = String(req.params.permission);
+        const { params } = validatedInput(req, setPermissionInput);
+        const permission = params.permission;
         if (!(SP_PERMISSIONS as readonly string[]).includes(permission)) {
           return res.status(400).json({ message: releaseDebtEnglish("Unknown Supplier Partner permission") });
         }
@@ -50,7 +60,7 @@ export function registerSpPermissionRoutes(app: Express): void {
           return res
             .status(400)
             .json({ code: "SP_REASON_REQUIRED", message: releaseDebtEnglish("A meaningful reason is required.") });
-        const userId = String(req.params.userId).trim();
+        const userId = params.userId.trim();
         const enabled = req.body?.enabled === true;
         await db.execute(sql`
         INSERT INTO sp_permission_grants(company_id, user_id, permission, enabled, granted_by, granted_at)

@@ -15,6 +15,36 @@ import { getCustomerLedgerAndMemo, splitBalanceFields } from "./customerLedgerSp
 import { registerFactoryDaybookRoutes } from "../factoryDaybookRoutes";
 import { getMonetaryFxValuation } from "../../../services/accounting/monetaryFxValuationService";
 import { applyCurrentCustomerFxOverlay } from "../../../services/accounting/monetaryFxReportOverlay";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handlers still re-parse with insertCustomerSchema; these schemas only
+// add unknown-field rejection. companyId comes from the session on create.
+const createCustomerInput = {
+  query: emptyQuery,
+  body: insertCustomerSchema.omit({ companyId: true }).strict(),
+} satisfies RequestSchemas;
+
+// Ids are read with parseInt, so the params stay strings. The update handler
+// reads `code` for its duplicate check (insertCustomerSchema drops it) and
+// applies a body companyId (see the PUT handler).
+const updateCustomerInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: insertCustomerSchema.partial().extend({ code: z.string().nullable().optional() }).strict(),
+} satisfies RequestSchemas;
+
+const customerActionInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerFactoryCustomerCrudRoutes(app: Express) {
   registerFactoryDaybookRoutes(app);
@@ -65,153 +95,173 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/customers", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/customers",
+    requireAuth,
+    validateRequest(createCustomerInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const dataWithCompany = { ...req.body, companyId };
-      const parsed = insertCustomerSchema.parse(dataWithCompany);
-      if (parsed.ledgerAccountId !== undefined) {
-        const [linkedLedger] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
-          .limit(1);
-        if (!linkedLedger) {
-          return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+        const dataWithCompany = { ...req.body, companyId };
+        const parsed = insertCustomerSchema.parse(dataWithCompany);
+        if (parsed.ledgerAccountId !== undefined) {
+          const [linkedLedger] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
+            .limit(1);
+          if (!linkedLedger) {
+            return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+          }
         }
-      }
 
-      let suffix = 1;
-      const allExisting = await db.select().from(customers).where(eq(customers.companyId, companyId));
+        let suffix = 1;
+        const allExisting = await db.select().from(customers).where(eq(customers.companyId, companyId));
 
-      const existingCodes = allExisting
-        .map((c) => c.code)
-        .filter((c) => c.startsWith("CUST"))
-        .map((c) => parseInt(c.replace("CUST", "")))
-        .filter((n) => !isNaN(n));
+        const existingCodes = allExisting
+          .map((c) => c.code)
+          .filter((c) => c.startsWith("CUST"))
+          .map((c) => parseInt(c.replace("CUST", "")))
+          .filter((n) => !isNaN(n));
 
-      if (existingCodes.length > 0) {
-        suffix = Math.max(...existingCodes) + 1;
-      }
-      let code = `CUST${suffix.toString().padStart(3, "0")}`;
-
-      let codeExists = true;
-      while (codeExists) {
-        const [dup] = await db
-          .select()
-          .from(customers)
-          .where(and(eq(customers.code, code), eq(customers.companyId, companyId)));
-        if (dup) {
-          suffix++;
-          code = `CUST${suffix.toString().padStart(3, "0")}`;
-        } else {
-          codeExists = false;
+        if (existingCodes.length > 0) {
+          suffix = Math.max(...existingCodes) + 1;
         }
-      }
+        let code = `CUST${suffix.toString().padStart(3, "0")}`;
 
-      const [customer] = await db
-        .insert(customers)
-        .values({ ...parsed, code })
-        .returning();
-
-      res.status(201).json(customer);
-    } catch (error: unknown) {
-      logger.error("Error creating factory customer:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.put("/api/factory/customers/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const customerId = parseInt(req.params.id);
-      if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
-
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
-      if (!existing) return res.status(404).json({ message: "Customer not found" });
-      if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
-
-      if (req.body.code && req.body.code !== existing.code) {
-        const [dup] = await db
-          .select()
-          .from(customers)
-          .where(and(eq(customers.code, req.body.code), eq(customers.companyId, companyId)));
-        if (dup) return res.status(400).json({ message: "Customer code already exists" });
-      }
-
-      const parsed = insertCustomerSchema.partial().parse(req.body);
-      if (parsed.ledgerAccountId !== undefined) {
-        const [linkedLedger] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
-          .limit(1);
-        if (!linkedLedger) {
-          return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+        let codeExists = true;
+        while (codeExists) {
+          const [dup] = await db
+            .select()
+            .from(customers)
+            .where(and(eq(customers.code, code), eq(customers.companyId, companyId)));
+          if (dup) {
+            suffix++;
+            code = `CUST${suffix.toString().padStart(3, "0")}`;
+          } else {
+            codeExists = false;
+          }
         }
+
+        const [customer] = await db
+          .insert(customers)
+          .values({ ...parsed, code })
+          .returning();
+
+        res.status(201).json(customer);
+      } catch (error: unknown) {
+        logger.error("Error creating factory customer:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      const [updated] = await db.update(customers).set(parsed).where(eq(customers.id, customerId)).returning();
-
-      res.json(updated);
-    } catch (error: unknown) {
-      logger.error("Error updating factory customer:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.delete("/api/factory/customers/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const customerId = parseInt(req.params.id);
-      if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
+  app.put(
+    "/api/factory/customers/:id",
+    requireAuth,
+    validateRequest(updateCustomerInput),
+    async (req: Request, res: Response) => {
+      try {
+        const customerId = parseInt(req.params.id);
+        if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
 
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
-      if (!existing) return res.status(404).json({ message: "Customer not found" });
-      if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+        const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
+        if (!existing) return res.status(404).json({ message: "Customer not found" });
+        if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
 
-      const [deleted] = await db
-        .update(customers)
-        .set({ deletedAt: new Date() })
-        .where(eq(customers.id, customerId))
-        .returning();
+        if (req.body.code && req.body.code !== existing.code) {
+          const [dup] = await db
+            .select()
+            .from(customers)
+            .where(and(eq(customers.code, req.body.code), eq(customers.companyId, companyId)));
+          if (dup) return res.status(400).json({ message: "Customer code already exists" });
+        }
 
-      res.json(deleted);
-    } catch (error: unknown) {
-      logger.error("Error deleting factory customer:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+        const parsed = insertCustomerSchema.partial().parse(req.body);
+        if (parsed.ledgerAccountId !== undefined) {
+          const [linkedLedger] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
+            .limit(1);
+          if (!linkedLedger) {
+            return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+          }
+        }
+        const [updated] = await db.update(customers).set(parsed).where(eq(customers.id, customerId)).returning();
+
+        res.json(updated);
+      } catch (error: unknown) {
+        logger.error("Error updating factory customer:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
+
+  app.delete(
+    "/api/factory/customers/:id",
+    requireAuth,
+    validateRequest(customerActionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const customerId = parseInt(req.params.id);
+        if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
+
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+        const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
+        if (!existing) return res.status(404).json({ message: "Customer not found" });
+        if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+
+        const [deleted] = await db
+          .update(customers)
+          .set({ deletedAt: new Date() })
+          .where(eq(customers.id, customerId))
+          .returning();
+
+        res.json(deleted);
+      } catch (error: unknown) {
+        logger.error("Error deleting factory customer:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
   // RESTORE DELETED CUSTOMER
-  app.post("/api/factory/customers/:id/restore", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const customerId = parseInt(req.params.id);
-      if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/customers/:id/restore",
+    requireAuth,
+    validateRequest(customerActionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const customerId = parseInt(req.params.id);
+        if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
-      if (!existing) return res.status(404).json({ message: "Customer not found" });
-      if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+        const [existing] = await db.select().from(customers).where(eq(customers.id, customerId));
+        if (!existing) return res.status(404).json({ message: "Customer not found" });
+        if (existing.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
 
-      const [restored] = await db
-        .update(customers)
-        .set({ deletedAt: null })
-        .where(eq(customers.id, customerId))
-        .returning();
+        const [restored] = await db
+          .update(customers)
+          .set({ deletedAt: null })
+          .where(eq(customers.id, customerId))
+          .returning();
 
-      res.json(restored);
-    } catch (error: unknown) {
-      logger.error("Error restoring factory customer:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.json(restored);
+      } catch (error: unknown) {
+        logger.error("Error restoring factory customer:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // LIST DELETED CUSTOMERS
   app.get("/api/factory/customers/deleted", requireAuth, async (req: Request, res: Response) => {

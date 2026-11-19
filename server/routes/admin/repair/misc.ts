@@ -34,6 +34,7 @@ const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 // The terminal finalize handler (the FX wallet and stock transfer layers run first and pass
 // other vouchers on). It reads only the id, and keeps its own "Invalid voucher ID" check.
 const finalizeVoucherInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const devSeedInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerAdminRepairMiscRoutes(app: Express) {
   // Finalizing activates a voucher, so it is an Admin/Owner action that must leave
@@ -183,7 +184,7 @@ export function registerAdminRepairMiscRoutes(app: Express) {
     }
   );
 
-  app.post("/api/dev/seed", requireAuth, requireRole("Admin"), async (req, res) => {
+  app.post("/api/dev/seed", requireAuth, requireRole("Admin"), validateRequest(devSeedInput), async (req, res) => {
     if (process.env.NODE_ENV !== "development") {
       return res.status(403).json({ message: "Dev seed only available in development" });
     }

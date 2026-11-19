@@ -4,9 +4,11 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { storage } from "../../storage";
 import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { registerCompanyAccessRoutesPart1 } from "./registerCompanyAccessRoutesPart1";
 
 declare module "express-session" {
@@ -25,13 +27,19 @@ function saveSession(req: Request): Promise<void> {
   });
 }
 
+// requireAuth has already refused a companyId that is not a positive integer
+// (number or numeric string); an empty or null one reaches the handler's message.
+const setCompanyInput = {
+  body: z.strictObject({ companyId: z.union([z.number(), z.string()]).nullable().optional() }),
+} satisfies RequestSchemas;
+
 export function registerCompanyAccessRoutes(app: Express) {
   registerCompanyAccessRoutesPart1(app);
   registerCompanyAccessRoutesPart2(app);
 }
 
 function registerCompanyAccessRoutesPart2(app: Express) {
-  app.post("/api/auth/set-company", requireAuth, async (req, res) => {
+  app.post("/api/auth/set-company", requireAuth, validateRequest(setCompanyInput), async (req, res) => {
     try {
       const { companyId } = req.body;
       if (!companyId) return res.status(400).json({ message: "Company ID is required" });

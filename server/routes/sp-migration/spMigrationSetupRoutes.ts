@@ -9,9 +9,30 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { pn, getCompanyRow } from "./_helpers";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import { registerSpMigrationSetupRoutesPart1 } from "./registerSpMigrationSetupRoutesPart1";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The handlers keep their own "... is required" checks, so every field is optional here.
+const createSpCompanyInput = {
+  body: z.strictObject({ name: z.string().optional(), code: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const openingBalanceInput = {
+  body: z.strictObject({
+    // parseInt(String(...)); also read by the voucher-path boundary as the company id.
+    targetCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    cashAccountId: z.union([z.number(), z.string()]).nullable().optional(),
+    // parseMoneyInput / toMoney take a number or a numeric string.
+    amount: z.union([z.number(), z.string()]).nullable().optional(),
+    date: z.string().optional(),
+    narration: z.string().nullable().optional(),
+    // Request identity read by the voucher-path boundary (phase5RequestIdentity).
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSpMigrationSetupRoutes(app: Express) {
   // ── POST /api/sp/migration/create-sp-company ─────────────────────────────
@@ -20,6 +41,7 @@ export function registerSpMigrationSetupRoutes(app: Express) {
     "/api/sp/migration/create-sp-company",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(createSpCompanyInput),
     async (req: Request, res: Response) => {
       try {
         const { name, code } = req.body ?? {};
@@ -79,6 +101,7 @@ export function registerSpMigrationSetupRoutes(app: Express) {
     "/api/sp/migration/opening-balance",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(openingBalanceInput),
     async (req: Request, res: Response) => {
       try {
         const { targetCompanyId, cashAccountId, amount, date, narration } = req.body ?? {};

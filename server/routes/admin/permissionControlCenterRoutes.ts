@@ -42,6 +42,7 @@ import {
 } from "../../services/security/permissionMonitor";
 import { getOperationalEventSnapshot } from "../../lib/operationalEvents";
 import { computeEffectivePermissions } from "@shared/effectivePermissions";
+import { emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
 
 const changeSchema = z
   .object({
@@ -75,6 +76,9 @@ const modeChange = z
     reason: z.string().trim().min(10).max(500),
   })
   .strict();
+const roleRulesInput = { query: emptyQuery, body: roleSave } satisfies RequestSchemas;
+const userOverridesInput = { query: emptyQuery, body: userSave } satisfies RequestSchemas;
+const activationInput = { query: emptyQuery, body: modeChange } satisfies RequestSchemas;
 const previewParams = z
   .object({
     userId: z.string().min(1).max(128).optional(),
@@ -248,9 +252,10 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
   app.put(
     "/api/permissions-v2/role-rules",
     requireAuth,
+    validateRequest(roleRulesInput),
     handle(async (req, res) => {
       const actor = await requirePolicyAdmin(req);
-      const body = roleSave.parse(req.body);
+      const { body } = validatedInput(req, roleRulesInput);
       const saved = await saveV2Rules({
         actor,
         subject: { kind: "role", roleKey: body.roleKey },
@@ -272,9 +277,10 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
   app.put(
     "/api/permissions-v2/user-overrides",
     requireAuth,
+    validateRequest(userOverridesInput),
     handle(async (req, res) => {
       const actor = await requirePolicyAdmin(req);
-      const body = userSave.parse(req.body);
+      const { body } = validatedInput(req, userOverridesInput);
       const saved = await saveV2Rules({
         actor,
         subject: { kind: "user", userId: body.userId },
@@ -355,9 +361,10 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
   app.put(
     "/api/permissions-v2/activation",
     requireAuth,
+    validateRequest(activationInput),
     handle(async (req, res) => {
       const actor = await requirePolicyAdmin(req);
-      const body = modeChange.parse(req.body);
+      const { body } = validatedInput(req, activationInput);
       const result = await setV2PolicyMode({
         actor,
         mode: body.mode,

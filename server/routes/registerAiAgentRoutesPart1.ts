@@ -6,6 +6,21 @@ import { aiAgentApprovals, aiAgentTasks } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { assertTaskOwner, executeStep, generateTaskPlan, type TaskPlan } from "./aiAgentRoutesGenerateTaskPlan";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// instruction stays optional: the handler answers its own 400 without it.
+const createTaskInput = {
+  query: emptyQuery,
+  body: z.strictObject({ instruction: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+// The handler parses the id itself.
+const runTaskInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerAiAgentRoutesPart1(app: Express) {
   // ── POST /api/ai-agent/tasks — create task + generate plan ────────────────
@@ -14,6 +29,7 @@ export function registerAiAgentRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(createTaskInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -110,6 +126,7 @@ export function registerAiAgentRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(runTaskInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

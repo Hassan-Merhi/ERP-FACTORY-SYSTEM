@@ -10,6 +10,8 @@ import { logger } from "../lib/logger";
 import { eq, and, desc, gt, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../lib/validateRequest";
 import { broadcast } from "../wsServer";
 import { companies, userActivityLog, userPresence, updatePresenceSchema } from "@shared/schema";
 import { installPresenceMaintenance } from "../services/presenceMaintenance";
@@ -57,6 +59,19 @@ async function authorizePresenceDetail(
   return { role, companyId: gate.companyId };
 }
 
+// Heartbeat / route change from client/src/hooks/use-presence.ts; `type` defaults to "heartbeat".
+const updatePresenceInput = { query: emptyQuery, body: updatePresenceSchema.strict() } satisfies RequestSchemas;
+const clearPresenceInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// Public sendBeacon on unload. Tolerates a missing body: the session may already be ending.
+const leavePresenceInput = {
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      action: z.unknown().optional(), // sent by client/src/hooks/use-presence.ts; not used
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
 export function registerUserPresenceRoutes(app: Express) {
   installPresenceMaintenance();
 
@@ -91,13 +106,8 @@ export function registerUserPresenceRoutes(app: Express) {
   // PATCH: Update user presence (heartbeat / route change). The request returns
   // immediately; writes remain best-effort. Route changes publish a tenant-
   // scoped invalidation and activity retention is handled by the scheduler.
-  app.patch("/api/user-presence", requireAuth, async (req, res) => {
-    const parseResult = updatePresenceSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid request body" });
-    }
-
-    const { route, type } = parseResult.data;
+  app.patch("/api/user-presence", requireAuth, validateRequest(updatePresenceInput), async (req, res) => {
+    const { route, type } = validatedInput(req, updatePresenceInput).body;
     const sessionId = req.sessionID;
     const userId = req.user!.id;
     const username = req.user!.username;
@@ -236,7 +246,7 @@ export function registerUserPresenceRoutes(app: Express) {
   });
 
   // DELETE: Clear user presence on logout — fire-and-forget, never 500.
-  app.delete("/api/user-presence", requireAuth, async (req, res) => {
+  app.delete("/api/user-presence", requireAuth, validateRequest(clearPresenceInput), async (req, res) => {
     const sessionId = req.sessionID;
     const companyId = sessionCompanyId(req);
     res.status(204).end();
@@ -249,7 +259,7 @@ export function registerUserPresenceRoutes(app: Express) {
   });
 
   // POST: Handle sendBeacon leave (no auth — session may already be ending).
-  app.post("/api/user-presence/leave", async (req, res) => {
+  app.post("/api/user-presence/leave", validateRequest(leavePresenceInput), async (req, res) => {
     const sessionId = req.sessionID;
     const companyId = sessionCompanyId(req);
     res.status(204).end();

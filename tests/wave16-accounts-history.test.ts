@@ -349,10 +349,13 @@ describe("factory suppliers", () => {
   });
 
   it("writes only the supplier's editable fields, under the history rules, audited", async () => {
-    // A column outside the edit schema is not written (the raw body used to be).
-    const edit = await agent
+    // A column outside the edit schema is refused and not written (the raw
+    // body used to be).
+    const refusedColumn = await agent
       .patch(`/api/factory/suppliers/${supplierId}`)
       .send({ phone: "123", currentRawMaterialCostPerKgUsd: "9.99" });
+    expect(refusedColumn.status).toBe(400);
+    const edit = await agent.patch(`/api/factory/suppliers/${supplierId}`).send({ phone: "123" });
     expect(edit.status).toBe(200);
     const row = (
       await pool.query(`SELECT phone, current_raw_material_cost_per_kg_usd FROM factory_suppliers WHERE id = $1`, [

@@ -20,82 +20,115 @@ import { users, userCompanyRoles, chatMessages } from "@shared/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { requireAIActionPermission, logAIAction } from "../../lib/aiActionPermission";
 import { chatMessageRateLimiter } from "./_helpers";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// message and sessionId stay optional: the handler answers its own 400 without them.
+const sendMessageInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    message: z.string().optional(),
+    sessionId: z.string().optional(),
+    pageContext: z
+      .strictObject({
+        currentRoute: z.string().optional(),
+        entityType: z.string().optional(),
+        entityId: z.number().optional(),
+        entityName: z.string().optional(),
+      })
+      .nullable()
+      .optional(),
+    sessionReadFiles: z.array(z.string()).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteSessionInput = {
+  params: z.strictObject({ sessionId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerChatbotMessageRoutes(app: Express) {
-  app.post("/api/chatbot/message", requireAuth, chatMessageRateLimiter, async (req, res) => {
-    try {
-      const userId = req.session.userId;
-      const companyId = req.session.currentCompanyId;
+  app.post(
+    "/api/chatbot/message",
+    requireAuth,
+    chatMessageRateLimiter,
+    validateRequest(sendMessageInput),
+    async (req, res) => {
+      try {
+        const userId = req.session.userId;
+        const companyId = req.session.currentCompanyId;
 
-      if (!userId || !companyId) {
-        return res.status(400).json({ message: "No company selected" });
+        if (!userId || !companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        const denied = await requireAIActionPermission(req, "read");
+        if (denied) return res.status(denied.code).json({ message: denied.message });
+
+        const { message, sessionId, pageContext, sessionReadFiles } = req.body;
+        if (!message || !sessionId) {
+          return res.status(400).json({ message: "Message and sessionId are required" });
+        }
+
+        // Save user message
+        await saveMessage(companyId, userId, "user", message, sessionId);
+
+        // Get conversation history for AI context (excluding current message)
+        const history = await getConversationHistoryForAI(sessionId, 10);
+
+        // Get AI response (excluding current message from history context)
+        const result = await chat(
+          message,
+          companyId,
+          history.slice(0, -1),
+          undefined,
+          pageContext,
+          sessionReadFiles ?? []
+        );
+
+        // Save assistant response
+        await saveMessage(companyId, userId, "assistant", result.response, sessionId);
+
+        await logAIAction({
+          req,
+          actionType: "read",
+          actionName: "chat_message",
+          inputJson: { message, sessionId },
+          outputJson: {
+            hasDraft: !!(
+              result.voucherDraft ||
+              result.stockTransferDraft ||
+              result.stockItemDraft ||
+              result.stockAdjustmentDraft
+            ),
+          },
+          status: "success",
+        });
+
+        res.json({
+          response: result.response,
+          suggestions: result.suggestions,
+          provider: result.provider ?? null,
+          voucherDraft: result.voucherDraft ?? null,
+          stockAdjustmentDraft: result.stockAdjustmentDraft ?? null,
+          stockTransferDraft: result.stockTransferDraft ?? null,
+          voucherSearchResults: result.voucherSearchResults ?? null,
+          stockItemDraft: result.stockItemDraft ?? null,
+          priceUpdateDraft: result.priceUpdateDraft ?? null,
+          accountQueryResult: result.accountQueryResult ?? null,
+          verifyContainerDraft: result.verifyContainerDraft ?? null,
+          dataQueryResult: result.dataQueryResult ?? null,
+          filePatchDrafts: result.filePatchDrafts ?? null,
+          readFiles: result.readFiles ?? null,
+        });
+      } catch (error: unknown) {
+        logger.error("[Chatbot] ERROR:", { error: getErrorMessage(error) });
+        logger.error("[Chatbot] Stack:", { stack: getErrorStack(error) });
+        res.status(500).json({ message: "Chat error: " + getErrorMessage(error) });
       }
-
-      const denied = await requireAIActionPermission(req, "read");
-      if (denied) return res.status(denied.code).json({ message: denied.message });
-
-      const { message, sessionId, pageContext, sessionReadFiles } = req.body;
-      if (!message || !sessionId) {
-        return res.status(400).json({ message: "Message and sessionId are required" });
-      }
-
-      // Save user message
-      await saveMessage(companyId, userId, "user", message, sessionId);
-
-      // Get conversation history for AI context (excluding current message)
-      const history = await getConversationHistoryForAI(sessionId, 10);
-
-      // Get AI response (excluding current message from history context)
-      const result = await chat(
-        message,
-        companyId,
-        history.slice(0, -1),
-        undefined,
-        pageContext,
-        sessionReadFiles ?? []
-      );
-
-      // Save assistant response
-      await saveMessage(companyId, userId, "assistant", result.response, sessionId);
-
-      await logAIAction({
-        req,
-        actionType: "read",
-        actionName: "chat_message",
-        inputJson: { message, sessionId },
-        outputJson: {
-          hasDraft: !!(
-            result.voucherDraft ||
-            result.stockTransferDraft ||
-            result.stockItemDraft ||
-            result.stockAdjustmentDraft
-          ),
-        },
-        status: "success",
-      });
-
-      res.json({
-        response: result.response,
-        suggestions: result.suggestions,
-        provider: result.provider ?? null,
-        voucherDraft: result.voucherDraft ?? null,
-        stockAdjustmentDraft: result.stockAdjustmentDraft ?? null,
-        stockTransferDraft: result.stockTransferDraft ?? null,
-        voucherSearchResults: result.voucherSearchResults ?? null,
-        stockItemDraft: result.stockItemDraft ?? null,
-        priceUpdateDraft: result.priceUpdateDraft ?? null,
-        accountQueryResult: result.accountQueryResult ?? null,
-        verifyContainerDraft: result.verifyContainerDraft ?? null,
-        dataQueryResult: result.dataQueryResult ?? null,
-        filePatchDrafts: result.filePatchDrafts ?? null,
-        readFiles: result.readFiles ?? null,
-      });
-    } catch (error: unknown) {
-      logger.error("[Chatbot] ERROR:", { error: getErrorMessage(error) });
-      logger.error("[Chatbot] Stack:", { stack: getErrorStack(error) });
-      res.status(500).json({ message: "Chat error: " + getErrorMessage(error) });
     }
-  });
+  );
 
   // Get chat history for current session
   app.get("/api/chatbot/history/:sessionId", requireAuth, async (req, res) => {
@@ -208,60 +241,66 @@ export function registerChatbotMessageRoutes(app: Express) {
   });
 
   // ── Delete a chat session ─────────────────────────────────────────────────
-  app.delete("/api/chatbot/session/:sessionId", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const userId = req.session.userId;
-      const companyId = req.session.currentCompanyId;
-      const userRole = req.session.currentRole;
-      if (!userId || !companyId) return res.status(400).json({ message: "Not authenticated" });
+  app.delete(
+    "/api/chatbot/session/:sessionId",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteSessionInput),
+    async (req, res) => {
+      try {
+        const userId = req.session.userId;
+        const companyId = req.session.currentCompanyId;
+        const userRole = req.session.currentRole;
+        if (!userId || !companyId) return res.status(400).json({ message: "Not authenticated" });
 
-      const { sessionId } = req.params;
+        const { sessionId } = req.params;
 
-      const isDeveloper = userRole === "Developer";
-      const isAdminOrOwner = userRole === "Admin" || userRole === "Owner";
+        const isDeveloper = userRole === "Developer";
+        const isAdminOrOwner = userRole === "Admin" || userRole === "Owner";
 
-      // Determine session owner
-      const sessionOwnerRow = await db
-        .select({ userId: chatMessages.userId })
-        .from(chatMessages)
-        .where(and(eq(chatMessages.sessionId, sessionId), eq(chatMessages.companyId, companyId)))
-        .limit(1);
-
-      if (sessionOwnerRow.length === 0) {
-        return res.status(404).json({ message: "Session not found" });
-      }
-
-      const ownerUserId = sessionOwnerRow[0].userId;
-
-      // Admin/Owner cannot delete Developer users' sessions
-      if (isAdminOrOwner && !isDeveloper) {
-        const ownerRoleRow = await db
-          .select({ role: userCompanyRoles.role })
-          .from(userCompanyRoles)
-          .where(
-            and(
-              eq(userCompanyRoles.companyId, companyId),
-              eq(userCompanyRoles.userId, String(ownerUserId)),
-              eq(userCompanyRoles.role, "Developer")
-            )
-          )
+        // Determine session owner
+        const sessionOwnerRow = await db
+          .select({ userId: chatMessages.userId })
+          .from(chatMessages)
+          .where(and(eq(chatMessages.sessionId, sessionId), eq(chatMessages.companyId, companyId)))
           .limit(1);
-        if (ownerRoleRow.length > 0) {
-          return res.status(403).json({ message: "Cannot delete a Developer's conversation" });
+
+        if (sessionOwnerRow.length === 0) {
+          return res.status(404).json({ message: "Session not found" });
         }
-      }
 
-      // Regular users can only delete their own sessions
-      if (!isDeveloper && !isAdminOrOwner && ownerUserId !== String(userId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+        const ownerUserId = sessionOwnerRow[0].userId;
 
-      await db
-        .delete(chatMessages)
-        .where(and(eq(chatMessages.sessionId, sessionId), eq(chatMessages.companyId, companyId)));
-      res.json({ success: true });
-    } catch (_error: unknown) {
-      res.status(500).json({ message: "Internal server error" });
+        // Admin/Owner cannot delete Developer users' sessions
+        if (isAdminOrOwner && !isDeveloper) {
+          const ownerRoleRow = await db
+            .select({ role: userCompanyRoles.role })
+            .from(userCompanyRoles)
+            .where(
+              and(
+                eq(userCompanyRoles.companyId, companyId),
+                eq(userCompanyRoles.userId, String(ownerUserId)),
+                eq(userCompanyRoles.role, "Developer")
+              )
+            )
+            .limit(1);
+          if (ownerRoleRow.length > 0) {
+            return res.status(403).json({ message: "Cannot delete a Developer's conversation" });
+          }
+        }
+
+        // Regular users can only delete their own sessions
+        if (!isDeveloper && !isAdminOrOwner && ownerUserId !== String(userId)) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        await db
+          .delete(chatMessages)
+          .where(and(eq(chatMessages.sessionId, sessionId), eq(chatMessages.companyId, companyId)));
+        res.json({ success: true });
+      } catch (_error: unknown) {
+        res.status(500).json({ message: "Internal server error" });
+      }
     }
-  });
+  );
 }

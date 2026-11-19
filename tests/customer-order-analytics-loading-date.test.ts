@@ -27,7 +27,7 @@ describe("customer order analytics official loading date", () => {
 
   it("does not clear the confirmed loading date on return to loading", () => {
     const source = read("server/routes/factory/customer-orders/verify-recover/verify.ts");
-    const route = source.split('app.post("/api/factory/customer-orders/:id/return-to-loading"')[1];
+    const route = source.split('"/api/factory/customer-orders/:id/return-to-loading"')[1];
     expect(route).toContain('status: "LOADING"');
     expect(route).not.toContain("loadingFinalizedAt: null");
   });

@@ -12,6 +12,10 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Retired endpoint: it only answers 403 or 410.
+const schemaFixInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 // ── Columns the application expects (defined by the schema migrations) ───────
 const EXPECTED_COLUMNS: {
@@ -171,7 +175,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
   });
 
   // ── POST /api/admin/schema-fix (retired) ────────────────────────────────────
-  app.post("/api/admin/schema-fix", requireAuth, async (req, res) => {
+  app.post("/api/admin/schema-fix", requireAuth, validateRequest(schemaFixInput), async (req, res) => {
     const session = req.session;
     const role = session?.currentRole ?? session?.role;
     if (!["Admin", "Developer"].includes(role ?? "")) {

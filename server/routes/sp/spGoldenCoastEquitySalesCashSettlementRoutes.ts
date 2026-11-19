@@ -34,6 +34,9 @@ import {
   type DatabaseTransaction,
 } from "./spGoldenCoastEquitySalesCashSettlementRoutesCreditBalance";
 import { respondKnownError, handleReadiness } from "./spGoldenCoastEquitySalesCashSettlementRoutesHelpers";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, spWriteFields } from "./spRequestSchemas";
 
 /**
  * Reads both balances the conservative ceiling needs. The rule itself lives in
@@ -252,6 +255,16 @@ async function handleSettlement(req: Request, res: Response): Promise<void> {
   }
 }
 
+// Read by parseGoldenCoastEquitySalesCashInput and actorFromRequest.
+const equitySalesCashSettlementInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    settlementDate: z.string().optional(),
+    amountUsd: amountish.optional(),
+    reference: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerSpGoldenCoastEquitySalesCashSettlementRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/equity-sales-cash-settlement/readiness",
@@ -267,6 +280,7 @@ export function registerSpGoldenCoastEquitySalesCashSettlementRoutes(app: Expres
     equitySalesCashRequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(equitySalesCashSettlementInput),
     (req, res) => void handleSettlement(req, res)
   );
 }

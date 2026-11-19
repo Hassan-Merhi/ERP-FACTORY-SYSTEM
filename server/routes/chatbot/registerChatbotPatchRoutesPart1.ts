@@ -10,89 +10,117 @@ import path from "path";
 import fs from "fs";
 import { logAIAction } from "../../lib/aiActionPermission";
 import { resolveWorkspacePath, readProjectFileRaw } from "../../lib/codeAgentTools";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// filePath and newContent stay optional: the handler answers its own 400 without them.
+const applyPatchInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    filePath: z.string().optional(),
+    originalContent: z.string().nullable().optional(),
+    newContent: z.string().nullable().optional(),
+    description: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler parses the id itself.
+const revertPatchInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerChatbotPatchRoutesPart1(app: Express) {
   // ── Code Agent: apply file patch ───────────────────────────────────────────
-  app.post("/api/chatbot/apply-patch", requireAuth, requireNonPOS, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const { filePath, originalContent, newContent } = req.body;
-      if (!filePath || newContent === undefined || newContent === null) {
-        return res.status(400).json({ message: "filePath and newContent are required" });
-      }
-      const companyId = req.session.currentCompanyId;
-      const userId = req.session.userId;
-
-      // Validate path is inside workspace
-      let absPath: string;
+  app.post(
+    "/api/chatbot/apply-patch",
+    requireAuth,
+    requireNonPOS,
+    requireRole("Admin", "Owner"),
+    validateRequest(applyPatchInput),
+    async (req, res) => {
       try {
-        absPath = resolveWorkspacePath(filePath);
-      } catch (e: unknown) {
-        return res.status(400).json({ message: getErrorMessage(e) });
-      }
-
-      // Stale guard: enforce whenever the file exists on disk.
-      // - If originalContent is non-empty: compare exactly (protects against concurrent edits).
-      // - If originalContent is empty but file already exists: reject — the AI must have read
-      //   the file first; an empty originalContent for an existing file means the patch was
-      //   generated without seeing the current content and cannot be applied safely.
-      // - If file does NOT exist yet: allow creation unconditionally.
-      const fileAlreadyExists = fs.existsSync(absPath) && fs.statSync(absPath).isFile();
-      if (fileAlreadyExists) {
-        const currentContent = await readProjectFileRaw(filePath).catch(() => "");
-        if (!originalContent || originalContent.trim() === "") {
-          return res.status(409).json({
-            message:
-              "Cannot overwrite an existing file without a stale-check reference. Please re-ask the AI to regenerate the patch.",
-            stale: true,
-          });
+        const { filePath, originalContent, newContent } = req.body;
+        if (!filePath || newContent === undefined || newContent === null) {
+          return res.status(400).json({ message: "filePath and newContent are required" });
         }
-        if (currentContent !== originalContent) {
-          return res.status(409).json({
-            message: "The file has changed since the diff was generated. Please re-ask the AI to regenerate the patch.",
-            stale: true,
-          });
+        const companyId = req.session.currentCompanyId;
+        const userId = req.session.userId;
+
+        // Validate path is inside workspace
+        let absPath: string;
+        try {
+          absPath = resolveWorkspacePath(filePath);
+        } catch (e: unknown) {
+          return res.status(400).json({ message: getErrorMessage(e) });
         }
-      }
 
-      // Ensure parent directory exists
-      const dir = path.dirname(absPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+        // Stale guard: enforce whenever the file exists on disk.
+        // - If originalContent is non-empty: compare exactly (protects against concurrent edits).
+        // - If originalContent is empty but file already exists: reject — the AI must have read
+        //   the file first; an empty originalContent for an existing file means the patch was
+        //   generated without seeing the current content and cannot be applied safely.
+        // - If file does NOT exist yet: allow creation unconditionally.
+        const fileAlreadyExists = fs.existsSync(absPath) && fs.statSync(absPath).isFile();
+        if (fileAlreadyExists) {
+          const currentContent = await readProjectFileRaw(filePath).catch(() => "");
+          if (!originalContent || originalContent.trim() === "") {
+            return res.status(409).json({
+              message:
+                "Cannot overwrite an existing file without a stale-check reference. Please re-ask the AI to regenerate the patch.",
+              stale: true,
+            });
+          }
+          if (currentContent !== originalContent) {
+            return res.status(409).json({
+              message:
+                "The file has changed since the diff was generated. Please re-ask the AI to regenerate the patch.",
+              stale: true,
+            });
+          }
+        }
 
-      // Write the new content
-      fs.writeFileSync(absPath, newContent, "utf8");
+        // Ensure parent directory exists
+        const dir = path.dirname(absPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
 
-      // Log to code_patch_history
-      const { description: patchDescription } = req.body;
-      try {
-        await db.insert(codePatchHistory).values({
-          companyId: companyId ?? 0,
-          filePath,
-          description: patchDescription || null,
-          originalContent: originalContent || "",
-          newContent,
-          appliedByUserId: String(userId),
+        // Write the new content
+        fs.writeFileSync(absPath, newContent, "utf8");
+
+        // Log to code_patch_history
+        const { description: patchDescription } = req.body;
+        try {
+          await db.insert(codePatchHistory).values({
+            companyId: companyId ?? 0,
+            filePath,
+            description: patchDescription || null,
+            originalContent: originalContent || "",
+            newContent,
+            appliedByUserId: String(userId),
+          });
+        } catch (_) {
+          /* Non-fatal: don't fail the request if history logging fails */
+        }
+
+        await logAIAction({
+          req,
+          actionType: "write",
+          actionName: "apply_patch",
+          inputJson: { filePath, lineCount: newContent.split("\n").length },
+          outputJson: { success: true },
+          status: "success",
         });
-      } catch (_) {
-        /* Non-fatal: don't fail the request if history logging fails */
+
+        res.json({ success: true, filePath });
+      } catch (error: unknown) {
+        logger.error("[Chatbot] apply-patch error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: "Internal server error" });
       }
-
-      await logAIAction({
-        req,
-        actionType: "write",
-        actionName: "apply_patch",
-        inputJson: { filePath, lineCount: newContent.split("\n").length },
-        outputJson: { success: true },
-        status: "success",
-      });
-
-      res.json({ success: true, filePath });
-    } catch (error: unknown) {
-      logger.error("[Chatbot] apply-patch error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 
   // ── Code Agent: patch history (list) ─────────────────────────────────────
   app.get("/api/chatbot/patch-history", requireAuth, requireNonPOS, async (req, res) => {
@@ -130,6 +158,7 @@ export function registerChatbotPatchRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner"),
+    validateRequest(revertPatchInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

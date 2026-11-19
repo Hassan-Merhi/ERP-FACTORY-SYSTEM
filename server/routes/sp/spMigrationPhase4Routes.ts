@@ -17,6 +17,13 @@ import {
   prepareCutover,
   targetLiveActivity,
 } from "./spMigrationPhase4RoutesFinalizeCutover";
+import { validateRequest } from "../../lib/validateRequest";
+import {
+  cutoverActionInput,
+  cutoverByIdInput,
+  finalizeCutoverInput,
+  prepareCutoverInput,
+} from "./spMigrationRequestSchemas";
 
 async function rollbackCutover(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
@@ -199,19 +206,29 @@ export function registerSpMigrationPhase4Routes(app: Express): void {
   app.get("/api/sp/migration/final-verification", ...developer, finalVerification);
   app.get("/api/sp/migration/cutover", ...developer, statusCutover);
   app.get("/api/sp/migration/cutover/status", ...developer, statusCutover);
-  app.post("/api/sp/migration/cutover/prepare", ...developer, prepareCutover);
-  app.post("/api/sp/migration/cutover/finalize", ...developer, finalizeCutover);
-  app.post("/api/sp/migration/cutover/rollback", ...developer, rollbackCutover);
-  app.post("/api/sp/migration/cutover/cancel", ...developer, cancelPreparedCutover);
-  app.post("/api/sp/migration/cutover/release-target-hold", ...developer, releaseTargetHold);
-  app.post("/api/sp/migration/cutover", ...developer, async (req: Request, res: Response) => {
-    if (req.body?.action === "prepare") return prepareCutover(req, res);
-    if (req.body?.action === "finalize") return finalizeCutover(req, res);
-    if (req.body?.action === "rollback") return rollbackCutover(req, res);
-    if (req.body?.action === "cancel") return cancelPreparedCutover(req, res);
-    if (req.body?.action === "release-target-hold") return releaseTargetHold(req, res);
-    return res
-      .status(400)
-      .json({ message: "action must be prepare, finalize, rollback, cancel, or release-target-hold" });
-  });
+  app.post("/api/sp/migration/cutover/prepare", ...developer, validateRequest(prepareCutoverInput), prepareCutover);
+  app.post("/api/sp/migration/cutover/finalize", ...developer, validateRequest(finalizeCutoverInput), finalizeCutover);
+  app.post("/api/sp/migration/cutover/rollback", ...developer, validateRequest(cutoverByIdInput), rollbackCutover);
+  app.post("/api/sp/migration/cutover/cancel", ...developer, validateRequest(cutoverByIdInput), cancelPreparedCutover);
+  app.post(
+    "/api/sp/migration/cutover/release-target-hold",
+    ...developer,
+    validateRequest(cutoverByIdInput),
+    releaseTargetHold
+  );
+  app.post(
+    "/api/sp/migration/cutover",
+    ...developer,
+    validateRequest(cutoverActionInput),
+    async (req: Request, res: Response) => {
+      if (req.body?.action === "prepare") return prepareCutover(req, res);
+      if (req.body?.action === "finalize") return finalizeCutover(req, res);
+      if (req.body?.action === "rollback") return rollbackCutover(req, res);
+      if (req.body?.action === "cancel") return cancelPreparedCutover(req, res);
+      if (req.body?.action === "release-target-hold") return releaseTargetHold(req, res);
+      return res
+        .status(400)
+        .json({ message: "action must be prepare, finalize, rollback, cancel, or release-target-hold" });
+    }
+  );
 }

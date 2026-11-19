@@ -150,7 +150,7 @@ describe("PATCH /api/factory/containers/:id — scoping and validation", () => {
   it("rejects a non-numeric id", async () => {
     const response = await agent.patch("/api/factory/containers/not-a-number").send({ notes: "x" });
     expect(response.status).toBe(400);
-    expect(response.body.message).toMatch(/Invalid id/i);
+    expect(response.body.code).toBe("REQUEST_VALIDATION_FAILED");
   });
 
   it("does not find, or edit, a container belonging to another company", async () => {

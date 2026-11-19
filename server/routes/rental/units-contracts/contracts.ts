@@ -14,9 +14,10 @@ import { requireAuth } from "../../../auth";
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { propertyUnits, propertyContracts, insertPropertyContractSchema } from "@shared/schema";
-import { parseId } from "../../../lib/parseId";
 import { logAudit } from "../../_helpers";
 import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { createContractInput, editContractInfoInput, modifyRentInput } from "../rentalWriteRouteSchemas";
 
 export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, tag } = ctx;
@@ -25,6 +26,7 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
     `${urlPrefix}/contracts`,
     requireAuth,
     requireCreateOnlyVerifiedCreate("rentalContracts"),
+    validateRequest(createContractInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
@@ -94,132 +96,127 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
   );
 
   // ── MODIFY RENT ──
-  app.patch(`${urlPrefix}/contracts/:id/rent`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const { newAmount, effectiveFrom } = z
-        .object({
-          newAmount: z.union([z.string(), z.number()]).transform((v) => String(v)),
-          effectiveFrom: z.enum(["current", "next"]).default("current"),
-        })
-        .parse(req.body);
+  app.patch(
+    `${urlPrefix}/contracts/:id/rent`,
+    requireAuth,
+    validateRequest(modifyRentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const {
+          params: { id },
+          body: { newAmount, effectiveFrom },
+        } = validatedInput(req, modifyRentInput);
 
-      const [contract] = await db
-        .select()
-        .from(propertyContracts)
-        .where(
-          and(
-            eq(propertyContracts.id, id),
-            eq(propertyContracts.companyId, companyId),
-            eq(propertyContracts.module, module)
-          )
-        );
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
+        const [contract] = await db
+          .select()
+          .from(propertyContracts)
+          .where(
+            and(
+              eq(propertyContracts.id, id),
+              eq(propertyContracts.companyId, companyId),
+              eq(propertyContracts.module, module)
+            )
+          );
+        if (!contract) return res.status(404).json({ message: "Contract not found" });
 
-      // Phase 21 (B): the write and its audit commit together.
-      await db.transaction(async (tx) => {
-        await tx.update(propertyContracts).set({ rentalAmount: newAmount }).where(eq(propertyContracts.id, id));
+        // Phase 21 (B): the write and its audit commit together.
+        await db.transaction(async (tx) => {
+          await tx.update(propertyContracts).set({ rentalAmount: newAmount }).where(eq(propertyContracts.id, id));
 
-        const now = new Date();
-        let y = now.getUTCFullYear(),
-          m = now.getUTCMonth() + 1;
-        if (effectiveFrom === "next") {
-          m++;
-          if (m > 12) {
-            m = 1;
-            y++;
+          const now = new Date();
+          let y = now.getUTCFullYear(),
+            m = now.getUTCMonth() + 1;
+          if (effectiveFrom === "next") {
+            m++;
+            if (m > 12) {
+              m = 1;
+              y++;
+            }
           }
-        }
 
-        await tx.execute(sql`
+          await tx.execute(sql`
           UPDATE property_monthly_ledger
           SET expected_amount = ${newAmount}
           WHERE contract_id = ${id} AND paid_amount = 0
             AND ((year > ${y}) OR (year = ${y} AND month >= ${m}))
         `);
 
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "property_contracts",
-            recordId: id,
-            recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
-            changes: {
-              rentalAmount: { old: contract.rentalAmount ?? null, new: newAmount },
-              rentEffectiveFrom: { old: null, new: effectiveFrom },
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "property_contracts",
+              recordId: id,
+              recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
+              changes: {
+                rentalAmount: { old: contract.rentalAmount ?? null, new: newAmount },
+                rentEffectiveFrom: { old: null, new: effectiveFrom },
+              },
             },
-          },
-          tx
-        );
-      });
+            tx
+          );
+        });
 
-      res.json({ ok: true });
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError)
-        return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json({ ok: true });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── EDIT CONTRACT INFO (tenant name + start date) ──
-  app.patch(`${urlPrefix}/contracts/:id/info`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const { tenantName, startDate, guaranteeAmount, guaranteePeriod, isInternal, linkedCompanyId } = z
-        .object({
-          tenantName: z.string().min(1, "Tenant name required"),
-          startDate: z.string().min(1, "Start date required"),
-          guaranteeAmount: z.string().optional(),
-          guaranteePeriod: z.string().optional(),
-          isInternal: z.boolean().optional(),
-          linkedCompanyId: z.number().nullable().optional(),
-        })
-        .parse(req.body);
-      const [contract] = await db
-        .select()
-        .from(propertyContracts)
-        .where(
-          and(
-            eq(propertyContracts.id, id),
-            eq(propertyContracts.companyId, companyId),
-            eq(propertyContracts.module, module)
-          )
-        );
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
-      const contractUpdates: Partial<typeof propertyContracts.$inferInsert> = { tenantName, startDate };
-      if (guaranteeAmount !== undefined) contractUpdates.guaranteeAmount = guaranteeAmount;
-      if (guaranteePeriod !== undefined) contractUpdates.guaranteePeriod = guaranteePeriod;
-      if (isInternal !== undefined) contractUpdates.isInternal = isInternal;
-      if (linkedCompanyId !== undefined) contractUpdates.linkedCompanyId = linkedCompanyId;
-      // Phase 21 (B): the write and its audit commit together.
-      await db.transaction(async (tx) => {
-        await tx.update(propertyContracts).set(contractUpdates).where(eq(propertyContracts.id, id));
+  app.patch(
+    `${urlPrefix}/contracts/:id/info`,
+    requireAuth,
+    validateRequest(editContractInfoInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const {
+          params: { id },
+          body: { tenantName, startDate, guaranteeAmount, guaranteePeriod, isInternal, linkedCompanyId },
+        } = validatedInput(req, editContractInfoInput);
+        const [contract] = await db
+          .select()
+          .from(propertyContracts)
+          .where(
+            and(
+              eq(propertyContracts.id, id),
+              eq(propertyContracts.companyId, companyId),
+              eq(propertyContracts.module, module)
+            )
+          );
+        if (!contract) return res.status(404).json({ message: "Contract not found" });
+        const contractUpdates: Partial<typeof propertyContracts.$inferInsert> = { tenantName, startDate };
+        if (guaranteeAmount !== undefined) contractUpdates.guaranteeAmount = guaranteeAmount;
+        if (guaranteePeriod !== undefined) contractUpdates.guaranteePeriod = guaranteePeriod;
+        if (isInternal !== undefined) contractUpdates.isInternal = isInternal;
+        if (linkedCompanyId !== undefined) contractUpdates.linkedCompanyId = linkedCompanyId;
+        // Phase 21 (B): the write and its audit commit together.
+        await db.transaction(async (tx) => {
+          await tx.update(propertyContracts).set(contractUpdates).where(eq(propertyContracts.id, id));
 
-        // Clean up ledger rows that are now before the new start date
-        const newStart = new Date(startDate);
-        const newStartYear = newStart.getUTCFullYear();
-        const newStartMonth = newStart.getUTCMonth() + 1;
+          // Clean up ledger rows that are now before the new start date
+          const newStart = new Date(startDate);
+          const newStartYear = newStart.getUTCFullYear();
+          const newStartMonth = newStart.getUTCMonth() + 1;
 
-        // Delete rows before the new start date that have no payments (zero or null paidAmount)
-        await tx.execute(sql`
+          // Delete rows before the new start date that have no payments (zero or null paidAmount)
+          await tx.execute(sql`
           DELETE FROM property_monthly_ledger
           WHERE contract_id = ${id}
             AND (year < ${newStartYear} OR (year = ${newStartYear} AND month < ${newStartMonth}))
             AND (paid_amount IS NULL OR paid_amount::numeric = 0)
         `);
 
-        // Zero out expected amount for rows before the new start date that DO have payments
-        // (they become pure credit entries rather than appearing as unpaid obligations)
-        await tx.execute(sql`
+          // Zero out expected amount for rows before the new start date that DO have payments
+          // (they become pure credit entries rather than appearing as unpaid obligations)
+          await tx.execute(sql`
           UPDATE property_monthly_ledger
           SET expected_amount = 0
           WHERE contract_id = ${id}
@@ -227,11 +224,11 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
             AND paid_amount::numeric > 0
         `);
 
-        // Restore expected_amount for any paid months AT or AFTER the new start date
-        // that were accidentally zeroed by a previous start-date change.
-        // We set expected_amount = paid_amount so the month shows outstanding = $0
-        // (the tenant paid what they owed; the zeroed expected was a data inconsistency).
-        await tx.execute(sql`
+          // Restore expected_amount for any paid months AT or AFTER the new start date
+          // that were accidentally zeroed by a previous start-date change.
+          // We set expected_amount = paid_amount so the month shows outstanding = $0
+          // (the tenant paid what they owed; the zeroed expected was a data inconsistency).
+          await tx.execute(sql`
           UPDATE property_monthly_ledger
           SET expected_amount = paid_amount
           WHERE contract_id = ${id}
@@ -240,36 +237,35 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
             AND paid_amount::numeric > 0
         `);
 
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "property_contracts",
-            recordId: id,
-            recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
-            changes: {
-              ...(tenantName !== contract.tenantName
-                ? { tenantName: { old: contract.tenantName ?? null, new: tenantName } }
-                : {}),
-              ...(startDate !== contract.startDate
-                ? { startDate: { old: contract.startDate ?? null, new: startDate } }
-                : {}),
-              ...(guaranteeAmount !== undefined
-                ? { guaranteeAmount: { old: contract.guaranteeAmount ?? null, new: guaranteeAmount } }
-                : {}),
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "property_contracts",
+              recordId: id,
+              recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
+              changes: {
+                ...(tenantName !== contract.tenantName
+                  ? { tenantName: { old: contract.tenantName ?? null, new: tenantName } }
+                  : {}),
+                ...(startDate !== contract.startDate
+                  ? { startDate: { old: contract.startDate ?? null, new: startDate } }
+                  : {}),
+                ...(guaranteeAmount !== undefined
+                  ? { guaranteeAmount: { old: contract.guaranteeAmount ?? null, new: guaranteeAmount } }
+                  : {}),
+              },
             },
-          },
-          tx
-        );
-      });
+            tx
+          );
+        });
 
-      res.json({ ok: true });
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError)
-        return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json({ ok: true });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

@@ -7,6 +7,39 @@ import { requireAuth } from "../../auth";
 import { sql } from "drizzle-orm";
 import { sqlArray } from "../../lib/sqlArray";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+
+// The date segment goes to SQL as-is, so any non-empty segment is accepted here.
+const planDateParams = z.strictObject({ date: stringParam });
+// Values are bound straight into SQL parameters; Postgres casts numeric strings.
+const planNumber = z.union([z.number(), z.string()]);
+const savePlanInput = {
+  params: planDateParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    notes: z.string().nullable().optional(),
+    categoryIds: z.array(planNumber).nullable().optional(),
+    entries: z
+      .array(
+        z.strictObject({
+          workerId: planNumber,
+          targetBales: planNumber.nullable().optional(),
+          workerCount: planNumber.nullable().optional(),
+        })
+      )
+      .nullable()
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+const deletePlanInput = { params: planDateParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerProductionPlannerRoutes(app: Express) {
   const getCompanyId = (req: import("express").Request): number | null =>
@@ -117,51 +150,53 @@ export function registerProductionPlannerRoutes(app: Express) {
   });
 
   // ── POST — upsert plan for a date ───────────────────────────────────────────
-  app.post("/api/factory/production-planner/:date", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { date } = req.params;
-      const { notes, categoryIds, entries } = req.body as {
-        notes?: string;
-        categoryIds?: number[];
-        entries?: { workerId: number; targetBales: number; workerCount?: number }[];
-      };
+  app.post(
+    "/api/factory/production-planner/:date",
+    requireAuth,
+    validateRequest(savePlanInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { params, body } = validatedInput(req, savePlanInput);
+        const { date } = params;
+        const { notes, categoryIds, entries } = body;
 
-      const catJson = JSON.stringify(categoryIds ?? []);
+        const catJson = JSON.stringify(categoryIds ?? []);
 
-      await db.execute(sql`
+        await db.execute(sql`
         INSERT INTO factory_production_plans (company_id, plan_date, category_ids, notes)
         VALUES (${companyId}, ${date}, ${catJson}, ${notes ?? null})
         ON CONFLICT (company_id, plan_date)
         DO UPDATE SET category_ids = EXCLUDED.category_ids, notes = EXCLUDED.notes
       `);
 
-      const planResult = await db.execute(sql`
+        const planResult = await db.execute(sql`
         SELECT id FROM factory_production_plans
         WHERE company_id = ${companyId} AND plan_date = ${date}
       `);
-      const planRows = Array.isArray(planResult) ? planResult : resultRows(planResult);
-      const planId = Number(planRows[0].id);
+        const planRows = Array.isArray(planResult) ? planResult : resultRows(planResult);
+        const planId = Number(planRows[0].id);
 
-      await db.execute(sql`DELETE FROM factory_production_plan_entries WHERE plan_id = ${planId}`);
+        await db.execute(sql`DELETE FROM factory_production_plan_entries WHERE plan_id = ${planId}`);
 
-      if (entries && entries.length > 0) {
-        for (const entry of entries) {
-          const wc = entry.workerCount ?? 0;
-          await db.execute(sql`
+        if (entries && entries.length > 0) {
+          for (const entry of entries) {
+            const wc = entry.workerCount ?? 0;
+            await db.execute(sql`
             INSERT INTO factory_production_plan_entries (plan_id, worker_id, role, target_bales, worker_count)
             VALUES (${planId}, ${entry.workerId}, 'WORKER', ${entry.targetBales ?? 0}, ${wc})
           `);
+          }
         }
-      }
 
-      res.json({ message: "Plan saved successfully" });
-    } catch (e: unknown) {
-      logger.error("[ProductionPlanner] POST error:", { error: getErrorMessage(e) });
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json({ message: "Plan saved successfully" });
+      } catch (e: unknown) {
+        logger.error("[ProductionPlanner] POST error:", { error: getErrorMessage(e) });
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── GET — copy previous day's plan entries ──────────────────────────────────
   app.get("/api/factory/production-planner/:date/copy-previous", requireAuth, async (req: Request, res: Response) => {
@@ -248,26 +283,31 @@ export function registerProductionPlannerRoutes(app: Express) {
   });
 
   // ── DELETE plan for a date ──────────────────────────────────────────────────
-  app.delete("/api/factory/production-planner/:date", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { date } = req.params;
+  app.delete(
+    "/api/factory/production-planner/:date",
+    requireAuth,
+    validateRequest(deletePlanInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { date } = validatedInput(req, deletePlanInput).params;
 
-      const planResult = await db.execute(sql`
+        const planResult = await db.execute(sql`
         SELECT id FROM factory_production_plans
         WHERE company_id = ${companyId} AND plan_date = ${date}
       `);
-      const planRows = Array.isArray(planResult) ? planResult : resultRows(planResult);
-      if (planRows[0]) {
-        const planId = Number(planRows[0].id);
-        await db.execute(sql`DELETE FROM factory_production_plan_entries WHERE plan_id = ${planId}`);
-        await db.execute(sql`DELETE FROM factory_production_plans WHERE id = ${planId}`);
-      }
+        const planRows = Array.isArray(planResult) ? planResult : resultRows(planResult);
+        if (planRows[0]) {
+          const planId = Number(planRows[0].id);
+          await db.execute(sql`DELETE FROM factory_production_plan_entries WHERE plan_id = ${planId}`);
+          await db.execute(sql`DELETE FROM factory_production_plans WHERE id = ${planId}`);
+        }
 
-      res.json({ message: "Plan deleted" });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json({ message: "Plan deleted" });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

@@ -3,6 +3,8 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { validateRequest } from "../../lib/validateRequest";
+import { permanentDeleteInput } from "./deleted-items/permanent-delete";
 import { logger } from "../../lib/logger";
 import { customerOrders, factoryContainers, factoryMixBatches } from "@shared/schema";
 
@@ -125,6 +127,7 @@ export function registerDependentDeletedItemPermanentRoutes(app: Express): void 
     },
     requireAuth,
     requireNonPOS,
+    validateRequest(permanentDeleteInput),
     async (req: Request, res: Response) => {
       const { type } = req.params;
       const itemId = Number.parseInt(req.params.id, 10);

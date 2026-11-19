@@ -20,12 +20,28 @@ import { eq, and, or, inArray, not, sql, ne } from "drizzle-orm";
 
 import { buildLoadingSummary, getCompanyId } from "./_helpers";
 import { resultRows } from "../../../lib/queryResult";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// parseId() still checks the ids.
+const scanBaleInput = {
+  params: z.strictObject({ sessionId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ barcode: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+const removeLoadingBaleInput = {
+  params: z.strictObject({ sessionId: stringParam, baleId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerInvoiceLoadingScanRoutes(app: Express) {
   // POST /api/factory/invoice-loading-sessions/:sessionId/scan-bale
   app.post(
     "/api/factory/invoice-loading-sessions/:sessionId/scan-bale",
     requireAuth,
+    validateRequest(scanBaleInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
@@ -175,6 +191,7 @@ export function registerInvoiceLoadingScanRoutes(app: Express) {
   app.delete(
     "/api/factory/invoice-loading-sessions/:sessionId/bales/:baleId",
     requireAuth,
+    validateRequest(removeLoadingBaleInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);

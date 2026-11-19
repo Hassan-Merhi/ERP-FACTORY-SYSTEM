@@ -12,6 +12,8 @@ import {
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { requireRentalDeletePermission } from "./rentalRoutePermissions";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import { cancelScheduledPaymentGroupInput, rentalActionInput } from "./rentalWriteRouteSchemas";
 import { eq, and, sql } from "drizzle-orm";
 import { propertyPayments } from "@shared/schema";
 import type Decimal from "decimal.js";
@@ -70,42 +72,48 @@ function registerRentalPaymentsAccrualRoutesStep5(
   // Phase 19 (B), PE2: Admin/Owner; dated by the company's business date (it
   // was the client's), in the company's tenant scope, refused (409) when that
   // date is in a closed period; each voucher audited with the signed-in user.
-  app.post(`${urlPrefix}/accrue`, requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    `${urlPrefix}/accrue`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(rentalActionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const outcome = await runInCompanyPostingScope(companyId, async () => {
-        const asOf = await companyBusinessDate(companyId);
-        const closedThrough = await companyClosedThrough(companyId);
-        if (isDateInClosedPeriod(closedThrough, asOf)) return { closed: true as const, asOf, closedThrough };
-        await ensureMonthlyForCompany(companyId, module, asOf);
-        // Post all due, unaccrued rows as ONE combined journal voucher
-        const result = await postRentAccrualForCompany(
-          companyId,
-          shopExpenseAccountName,
-          module,
-          incomeAccountName,
-          asOf,
-          { actor: requestActor(req), trigger: "route" }
-        );
-        return { closed: false as const, asOf, ...result };
-      });
-      if (outcome.closed) {
-        return res.status(409).json({
-          message: RENTAL_POSTING_PERIOD_CLOSED_MESSAGE,
-          code: "PERIOD_CLOSED",
-          asOf: outcome.asOf,
-          closedThrough: outcome.closedThrough,
+        const outcome = await runInCompanyPostingScope(companyId, async () => {
+          const asOf = await companyBusinessDate(companyId);
+          const closedThrough = await companyClosedThrough(companyId);
+          if (isDateInClosedPeriod(closedThrough, asOf)) return { closed: true as const, asOf, closedThrough };
+          await ensureMonthlyForCompany(companyId, module, asOf);
+          // Post all due, unaccrued rows as ONE combined journal voucher
+          const result = await postRentAccrualForCompany(
+            companyId,
+            shopExpenseAccountName,
+            module,
+            incomeAccountName,
+            asOf,
+            { actor: requestActor(req), trigger: "route" }
+          );
+          return { closed: false as const, asOf, ...result };
         });
+        if (outcome.closed) {
+          return res.status(409).json({
+            message: RENTAL_POSTING_PERIOD_CLOSED_MESSAGE,
+            code: "PERIOD_CLOSED",
+            asOf: outcome.asOf,
+            closedThrough: outcome.closedThrough,
+          });
+        }
+        const { accrued, skipped, asOf } = outcome;
+        res.json({ accrued, skipped, asOf });
+      } catch (e: unknown) {
+        logger.error(`${tag} accrue:`, { error: e });
+        res.status(500).json({ message: getErrorMessage(e) });
       }
-      const { accrued, skipped, asOf } = outcome;
-      res.json({ accrued, skipped, asOf });
-    } catch (e: unknown) {
-      logger.error(`${tag} accrue:`, { error: e });
-      res.status(500).json({ message: getErrorMessage(e) });
     }
-  });
+  );
 
   // ── SCHEDULED PAYMENTS — list ──────────────────────────────────────────────
   // Returns all SCHEDULED payment groups for this company/module.
@@ -193,6 +201,7 @@ function registerRentalPaymentsAccrualRoutesStep5(
     `${urlPrefix}/payments/post-scheduled`,
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(rentalActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
@@ -224,11 +233,12 @@ function registerRentalPaymentsAccrualRoutesStep5(
     `${urlPrefix}/payments/scheduled/:groupId`,
     requireAuth,
     requireRentalDeletePermission,
+    validateRequest(cancelScheduledPaymentGroupInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const { groupId } = req.params;
+        const { groupId } = validatedInput(req, cancelScheduledPaymentGroupInput).params;
 
         // Only cancel rows that are still SCHEDULED
         const deleted = await db

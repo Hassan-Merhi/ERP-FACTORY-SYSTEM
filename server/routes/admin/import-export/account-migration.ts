@@ -19,8 +19,22 @@ import {
 } from "../../../security/companyAccessBoundary";
 import { getPartyBalances } from "../../../services/accounting/balances/ledgerBalanceEngine";
 import { plusMoney } from "../../../lib/money";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import { undoAccountMigrationInput } from "../accountMigrationWriteSchemas";
 
 class AccountMigrationPreviewNotFound extends Error {}
+
+// The picker sends parseInt() of the selected companies, so an unselected one
+// arrives as null and reaches the handler's own "required" message.
+const previewMigrationInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    accountIds: z.array(z.number()),
+    srcCompanyId: z.number().nullable(),
+    destCompanyId: z.number().nullable(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerAccountMigrationRoutes(app: Express) {
   // List all companies (for source/destination pickers)
@@ -81,6 +95,7 @@ export function registerAccountMigrationRoutes(app: Express) {
     "/api/admin/account-migration/preview",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(previewMigrationInput),
     async (req: Request, res: Response) => {
       try {
         const { accountIds, srcCompanyId, destCompanyId } = req.body;
@@ -153,8 +168,7 @@ export function registerAccountMigrationRoutes(app: Express) {
               .where(eq(voucherEntries.ledgerAccountId, accountId));
 
             const postedEntryCount = entryRows.filter(
-              (entry) =>
-                entry.voucherCompanyId === srcCompanyId && entry.deletedAt === null && entry.optional !== true
+              (entry) => entry.voucherCompanyId === srcCompanyId && entry.deletedAt === null && entry.optional !== true
             ).length;
             const totalDebit = Number(canonicalBalance.periodDebit);
             const totalCredit = Number(canonicalBalance.periodCredit);
@@ -211,7 +225,12 @@ export function registerAccountMigrationRoutes(app: Express) {
           }
 
           return {
-            accountPreviews, grandTotalDebit, grandTotalCredit, grandTotalEntries, grandHistoryEntries, grandClosing,
+            accountPreviews,
+            grandTotalDebit,
+            grandTotalCredit,
+            grandTotalEntries,
+            grandHistoryEntries,
+            grandClosing,
           };
         });
 
@@ -245,6 +264,7 @@ export function registerAccountMigrationRoutes(app: Express) {
     "/api/admin/account-migration/undo",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(undoAccountMigrationInput),
     async (req: Request, res: Response) => {
       try {
         const { accounts, movedVoucherIds, srcCompanyId, destCompanyId } = req.body;

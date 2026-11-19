@@ -43,154 +43,176 @@ import {
 } from "../../../../services/factory/factoryVoucherCorrection";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { finalizedChargeVoucherNumber, postOrderChargeVoucherTx, preChargeVoucherNumber } from "../orderChargeLedger";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+
+// The pending-invoice page sends { txDate }; the invoice create page sends no body.
+const finalizeOrderInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ txDate: z.string().optional(), invoiceDate: z.string().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerOrderFinalizeRoutes(app: Express) {
-  app.post("/api/factory/customer-orders/:id/finalize", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/customer-orders/:id/finalize",
+    requireAuth,
+    validateRequest(finalizeOrderInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const orderId = parseId(req.params.id);
+        const orderId = validatedInput(req, finalizeOrderInput).params.id;
 
-      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-
-      const result = await db.transaction(async (tx) => {
-        // The order row is locked before its status is read. Finalizing consumes an
-        // invoice number, writes the customer's SALE receivable, flips every bale to
-        // SOLD and posts the charge vouchers, so two simultaneous finalizations of
-        // one loading would each do all of it: two invoices, the receivable booked
-        // twice, and two voucher sets for the same charges. Blocking here makes the
-        // second transaction re-read the committed row and fail the status guard
-        // below instead of repeating the effects.
-        const [order] = await tx
-          .select()
-          .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
-          .for("update");
-        if (!order) throw new Error("Order not found");
-        // The legacy finalize path writes a full SALE/INVOICE cache row and
-        // the full invoice journal. On dispatch-managed orders it would bypass
-        // trip reconciliation and debit receivables a second time.
-        if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) {
-          throw new Error("DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Finalize all trip financials and use the consolidated invoice workflow.");
-        }
-        if (!["DRAFT", "VERIFIED"].includes(order.status))
-          throw new Error("Only DRAFT or VERIFIED orders can be finalized");
-
-        const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
-        if (bales.length === 0) throw new Error("Order has no bales");
-
-        // Validate every linked bale with one set-based read instead of one query
-        // per bale. Preserve the existing rule: only missing/DELETED bales block
-        // finalization; other statuses are accepted here.
-        const baleIds: number[] = [
-          ...new Set<number>(
-            bales
-              .map((b: { baleId: number | null }) => Number(b.baleId))
-              .filter((id: number) => Number.isSafeInteger(id) && id > 0)
-          ),
-        ];
-        const factoryBaleRows =
-          baleIds.length > 0
-            ? await tx
-                .select({ id: factoryBales.id, status: factoryBales.status })
-                .from(factoryBales)
-                .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)))
-            : [];
-        const factoryBaleById = new Map<number, { id: number; status: string | null }>(
-          factoryBaleRows.map((b: { id: number; status: string | null }) => [
-            Number(b.id),
-            { id: Number(b.id), status: b.status ?? null },
-          ])
-        );
-
-        for (const b of bales) {
-          const factoryBale = factoryBaleById.get(Number(b.baleId));
-          if (!factoryBale || factoryBale.status === "DELETED") {
-            throw new Error(`Bale ${b.baleReference} is no longer available`);
+        const result = await db.transaction(async (tx) => {
+          // The order row is locked before its status is read. Finalizing consumes an
+          // invoice number, writes the customer's SALE receivable, flips every bale to
+          // SOLD and posts the charge vouchers, so two simultaneous finalizations of
+          // one loading would each do all of it: two invoices, the receivable booked
+          // twice, and two voucher sets for the same charges. Blocking here makes the
+          // second transaction re-read the committed row and fail the status guard
+          // below instead of repeating the effects.
+          const [order] = await tx
+            .select()
+            .from(customerOrders)
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+            .for("update");
+          if (!order) throw new Error("Order not found");
+          // The legacy finalize path writes a full SALE/INVOICE cache row and
+          // the full invoice journal. On dispatch-managed orders it would bypass
+          // trip reconciliation and debit receivables a second time.
+          if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) {
+            throw new Error(
+              "DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Finalize all trip financials and use the consolidated invoice workflow."
+            );
           }
-        }
+          if (!["DRAFT", "VERIFIED"].includes(order.status))
+            throw new Error("Only DRAFT or VERIFIED orders can be finalized");
 
-        const seqRows = await tx.execute(
-          sql`SELECT * FROM customer_invoice_sequences WHERE company_id = ${companyId} FOR UPDATE`
-        );
-        // The raw row is snake_case; the insert fallback returns the camelCase column.
-        let seqRow = firstRow<{ next_number: number }>(seqRows) as
-          { next_number: number; nextNumber?: number } | undefined;
-        if (!seqRow) {
-          const [inserted] = await tx.insert(customerInvoiceSequences).values({ companyId, nextNumber: 1 }).returning();
-          seqRow = { next_number: inserted.nextNumber, nextNumber: inserted.nextNumber };
-        }
-        const invoiceNum = seqRow.nextNumber || seqRow.next_number;
-        await tx
-          .update(customerInvoiceSequences)
-          .set({ nextNumber: invoiceNum + 1 })
-          .where(eq(customerInvoiceSequences.companyId, companyId));
-        const invoiceNumber = `INV-${String(invoiceNum).padStart(6, "0")}`;
+          const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
+          if (bales.length === 0) throw new Error("Order has no bales");
 
-        // One set-based status write replaces the previous per-bale UPDATE loop.
-        if (baleIds.length > 0) {
-          await tx
-            .update(factoryBales)
-            .set({ status: "SOLD", updatedAt: new Date() })
-            .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
-        }
-
-        await recalculateOrderTotals(tx, orderId);
-
-        const [recalcOrder] = await tx.select().from(customerOrders).where(eq(customerOrders.id, orderId));
-
-        const finalizedAt = new Date();
-
-        await tx
-          .update(customerOrders)
-          .set({
-            invoiceNumber,
-            status: "FINALIZED",
-            // A loading order reaches this endpoint as VERIFIED, but
-            // finalize-loading has already recorded LOADING as its workflow
-            // origin. Direct draft invoices record DRAFT here.
-            previousStatus: order.previousStatus === "LOADING" ? "LOADING" : "DRAFT",
-            finalizedAt,
-            updatedAt: finalizedAt,
-          })
-          .where(eq(customerOrders.id, orderId));
-
-        const grandTotal = toMoney(recalcOrder.grandTotal).toFixed();
-        // Use the client's current date (finalization date) as the statement date,
-        // not the orderDate (which is the loading/shipment date).
-        const today = getClientDate(req);
-
-        await tx.insert(customerBalances).values({
-          companyId,
-          customerId: order.customerId,
-          transactionDate: today,
-          transactionType: "SALE",
-          debitAmount: grandTotal,
-          creditAmount: "0",
-          balance: grandTotal,
-          referenceType: "INVOICE",
-          referenceId: order.id,
-          description: `Invoice ${invoiceNumber}`,
-          currency: "USD",
-        });
-
-        // Create journal entries for charges that have a ledgerAccountId.
-        // If a PRE-voucher was already created when the charge was added in PENDING/VERIFIED
-        // state, rename it to the invoice-based number and update its description.
-        // Otherwise create a new voucher. This prevents double-counting.
-        const chargesForJournal = await tx
-          .select()
-          .from(customerOrderCharges)
-          .where(
-            and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.ledgerAccountId} IS NOT NULL`)
+          // Validate every linked bale with one set-based read instead of one query
+          // per bale. Preserve the existing rule: only missing/DELETED bales block
+          // finalization; other statuses are accepted here.
+          const baleIds: number[] = [
+            ...new Set<number>(
+              bales
+                .map((b: { baleId: number | null }) => Number(b.baleId))
+                .filter((id: number) => Number.isSafeInteger(id) && id > 0)
+            ),
+          ];
+          const factoryBaleRows =
+            baleIds.length > 0
+              ? await tx
+                  .select({ id: factoryBales.id, status: factoryBales.status })
+                  .from(factoryBales)
+                  .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)))
+              : [];
+          const factoryBaleById = new Map<number, { id: number; status: string | null }>(
+            factoryBaleRows.map((b: { id: number; status: string | null }) => [
+              Number(b.id),
+              { id: Number(b.id), status: b.status ?? null },
+            ])
           );
 
-        if (chargesForJournal.length > 0) {
-          // New charge vouchers no longer post before finalization. Make sure
-          // the customer's ledger exists here even if no pre-voucher prepared it.
-          const customerLedgerId = await customerLedgerAccountTx(tx, companyId, order.customerId);
-          for (const charge of chargesForJournal) {
+          for (const b of bales) {
+            const factoryBale = factoryBaleById.get(Number(b.baleId));
+            if (!factoryBale || factoryBale.status === "DELETED") {
+              throw new Error(`Bale ${b.baleReference} is no longer available`);
+            }
+          }
+
+          const seqRows = await tx.execute(
+            sql`SELECT * FROM customer_invoice_sequences WHERE company_id = ${companyId} FOR UPDATE`
+          );
+          // The raw row is snake_case; the insert fallback returns the camelCase column.
+          let seqRow = firstRow<{ next_number: number }>(seqRows) as
+            { next_number: number; nextNumber?: number } | undefined;
+          if (!seqRow) {
+            const [inserted] = await tx
+              .insert(customerInvoiceSequences)
+              .values({ companyId, nextNumber: 1 })
+              .returning();
+            seqRow = { next_number: inserted.nextNumber, nextNumber: inserted.nextNumber };
+          }
+          const invoiceNum = seqRow.nextNumber || seqRow.next_number;
+          await tx
+            .update(customerInvoiceSequences)
+            .set({ nextNumber: invoiceNum + 1 })
+            .where(eq(customerInvoiceSequences.companyId, companyId));
+          const invoiceNumber = `INV-${String(invoiceNum).padStart(6, "0")}`;
+
+          // One set-based status write replaces the previous per-bale UPDATE loop.
+          if (baleIds.length > 0) {
+            await tx
+              .update(factoryBales)
+              .set({ status: "SOLD", updatedAt: new Date() })
+              .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+          }
+
+          await recalculateOrderTotals(tx, orderId);
+
+          const [recalcOrder] = await tx.select().from(customerOrders).where(eq(customerOrders.id, orderId));
+
+          const finalizedAt = new Date();
+
+          await tx
+            .update(customerOrders)
+            .set({
+              invoiceNumber,
+              status: "FINALIZED",
+              // A loading order reaches this endpoint as VERIFIED, but
+              // finalize-loading has already recorded LOADING as its workflow
+              // origin. Direct draft invoices record DRAFT here.
+              previousStatus: order.previousStatus === "LOADING" ? "LOADING" : "DRAFT",
+              finalizedAt,
+              updatedAt: finalizedAt,
+            })
+            .where(eq(customerOrders.id, orderId));
+
+          const grandTotal = toMoney(recalcOrder.grandTotal).toFixed();
+          // Use the client's current date (finalization date) as the statement date,
+          // not the orderDate (which is the loading/shipment date).
+          const today = getClientDate(req);
+
+          await tx.insert(customerBalances).values({
+            companyId,
+            customerId: order.customerId,
+            transactionDate: today,
+            transactionType: "SALE",
+            debitAmount: grandTotal,
+            creditAmount: "0",
+            balance: grandTotal,
+            referenceType: "INVOICE",
+            referenceId: order.id,
+            description: `Invoice ${invoiceNumber}`,
+            currency: "USD",
+          });
+
+          // Create journal entries for charges that have a ledgerAccountId.
+          // If a PRE-voucher was already created when the charge was added in PENDING/VERIFIED
+          // state, rename it to the invoice-based number and update its description.
+          // Otherwise create a new voucher. This prevents double-counting.
+          const chargesForJournal = await tx
+            .select()
+            .from(customerOrderCharges)
+            .where(
+              and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.ledgerAccountId} IS NOT NULL`)
+            );
+
+          if (chargesForJournal.length > 0) {
+            // New charge vouchers no longer post before finalization. Make sure
+            // the customer's ledger exists here even if no pre-voucher prepared it.
+            const customerLedgerId = await customerLedgerAccountTx(tx, companyId, order.customerId);
+            for (const charge of chargesForJournal) {
               const chargeAmountDecimal = toMoney(charge.amount);
               if (chargeAmountDecimal.lte(0)) continue;
 
@@ -259,105 +281,106 @@ export function registerOrderFinalizeRoutes(app: Express) {
                   amount: chargeAmountDecimal,
                 });
               }
+            }
           }
+
+          // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+          await syncFactoryInvoiceTx(tx, companyId, orderId);
+
+          const [finalOrder] = await tx
+            .select({
+              id: customerOrders.id,
+              companyId: customerOrders.companyId,
+              customerId: customerOrders.customerId,
+              invoiceNumber: customerOrders.invoiceNumber,
+              orderDate: customerOrders.orderDate,
+              proformaIdUsed: customerOrders.proformaIdUsed,
+              status: customerOrders.status,
+              subtotalBales: customerOrders.subtotalBales,
+              freightAmount: customerOrders.freightAmount,
+              otherChargesTotal: customerOrders.otherChargesTotal,
+              grandTotal: customerOrders.grandTotal,
+              totalQtyBales: customerOrders.totalQtyBales,
+              createdAt: customerOrders.createdAt,
+              updatedAt: customerOrders.updatedAt,
+              customerName: customers.legalName,
+            })
+            .from(customerOrders)
+            .leftJoin(customers, eq(customerOrders.customerId, customers.id))
+            .where(eq(customerOrders.id, orderId));
+
+          const finalLines = await tx.select().from(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
+          const finalBales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
+          const finalCharges = await tx
+            .select()
+            .from(customerOrderCharges)
+            .where(eq(customerOrderCharges.orderId, orderId));
+
+          return { ...finalOrder, lines: finalLines, bales: finalBales, charges: finalCharges };
+        });
+
+        // Freeze the exact commercial document immediately after finalization.
+        // Exporters will keep using this snapshot even if catalog names, category
+        // assignments, customer details, weights or company currency change later.
+        try {
+          await freezeCanonicalInvoiceDocument(orderId, companyId, true);
+        } catch (snapshotError) {
+          // Finalization itself is already committed. Do not report it as failed;
+          // the first subsequent export will retry the same immutable snapshot write.
+          logger.error("[InvoiceSnapshot] Could not freeze finalized invoice immediately", {
+            orderId,
+            companyId,
+            error: snapshotError,
+          });
         }
 
-        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
-        await syncFactoryInvoiceTx(tx, companyId, orderId);
-
-        const [finalOrder] = await tx
-          .select({
-            id: customerOrders.id,
-            companyId: customerOrders.companyId,
-            customerId: customerOrders.customerId,
-            invoiceNumber: customerOrders.invoiceNumber,
-            orderDate: customerOrders.orderDate,
-            proformaIdUsed: customerOrders.proformaIdUsed,
-            status: customerOrders.status,
-            subtotalBales: customerOrders.subtotalBales,
-            freightAmount: customerOrders.freightAmount,
-            otherChargesTotal: customerOrders.otherChargesTotal,
-            grandTotal: customerOrders.grandTotal,
-            totalQtyBales: customerOrders.totalQtyBales,
-            createdAt: customerOrders.createdAt,
-            updatedAt: customerOrders.updatedAt,
-            customerName: customers.legalName,
-          })
-          .from(customerOrders)
-          .leftJoin(customers, eq(customerOrders.customerId, customers.id))
-          .where(eq(customerOrders.id, orderId));
-
-        const finalLines = await tx.select().from(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
-        const finalBales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
-        const finalCharges = await tx
-          .select()
-          .from(customerOrderCharges)
-          .where(eq(customerOrderCharges.orderId, orderId));
-
-        return { ...finalOrder, lines: finalLines, bales: finalBales, charges: finalCharges };
-      });
-
-      // Freeze the exact commercial document immediately after finalization.
-      // Exporters will keep using this snapshot even if catalog names, category
-      // assignments, customer details, weights or company currency change later.
-      try {
-        await freezeCanonicalInvoiceDocument(orderId, companyId, true);
-      } catch (snapshotError) {
-        // Finalization itself is already committed. Do not report it as failed;
-        // the first subsequent export will retry the same immutable snapshot write.
-        logger.error("[InvoiceSnapshot] Could not freeze finalized invoice immediately", {
-          orderId,
+        const today = req.body.txDate || req.body.invoiceDate || getClientDate(req);
+        // The transaction result spreads a customer_orders row, which keys the order
+        // by `id`; the old `result.orderId` lookup was always undefined.
+        const invoiceRefId = orderId;
+        // Remove any previous INVOICE and INVOICE_REVERTED rows so only this approval shows
+        await db
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.companyId, companyId),
+              sql`${factoryDaybookEntries.txType} IN ('INVOICE','INVOICE_REVERTED')`,
+              eq(factoryDaybookEntries.referenceId, invoiceRefId)
+            )
+          );
+        await writeDaybookEntry(db, {
           companyId,
-          error: snapshotError,
+          txDate: today,
+          txType: "INVOICE",
+          referenceId: invoiceRefId,
+          referenceTable: "customer_orders",
+          description: `Invoice ${result.invoiceNumber} – ${result.customerName || "Customer"}`,
+          amountCurrency: toMoney(result.grandTotal).toNumber(),
+          amountUsd: toMoney(result.grandTotal).toNumber(),
         });
+
+        dispatchNotification({
+          eventType: "INVOICE_FINALIZED",
+          title: "Invoice Finalized",
+          message: `Invoice ${result.invoiceNumber} finalized for ${result.customerName || "customer"}`,
+          entityType: "customer_order",
+          entityId: result.id,
+          triggeredByUserId: req.session?.userId ?? null,
+          companyId: result.companyId ?? companyId,
+        }).catch(() => {});
+
+        res.json(result);
+      } catch (error: unknown) {
+        // Wave 17 B: a non-USD invoice with no confirmed rate is refused (nothing committed).
+        if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
+        if (sendVoucherCorrectionRefusal(res, error)) return;
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        logger.error("Error finalizing order:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-
-      const today = req.body.txDate || req.body.invoiceDate || getClientDate(req);
-      // The transaction result spreads a customer_orders row, which keys the order
-      // by `id`; the old `result.orderId` lookup was always undefined.
-      const invoiceRefId = orderId;
-      // Remove any previous INVOICE and INVOICE_REVERTED rows so only this approval shows
-      await db
-        .delete(factoryDaybookEntries)
-        .where(
-          and(
-            eq(factoryDaybookEntries.companyId, companyId),
-            sql`${factoryDaybookEntries.txType} IN ('INVOICE','INVOICE_REVERTED')`,
-            eq(factoryDaybookEntries.referenceId, invoiceRefId)
-          )
-        );
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: today,
-        txType: "INVOICE",
-        referenceId: invoiceRefId,
-        referenceTable: "customer_orders",
-        description: `Invoice ${result.invoiceNumber} – ${result.customerName || "Customer"}`,
-        amountCurrency: toMoney(result.grandTotal).toNumber(),
-        amountUsd: toMoney(result.grandTotal).toNumber(),
-      });
-
-      dispatchNotification({
-        eventType: "INVOICE_FINALIZED",
-        title: "Invoice Finalized",
-        message: `Invoice ${result.invoiceNumber} finalized for ${result.customerName || "customer"}`,
-        entityType: "customer_order",
-        entityId: result.id,
-        triggeredByUserId: req.session?.userId ?? null,
-        companyId: result.companyId ?? companyId,
-      }).catch(() => {});
-
-      res.json(result);
-    } catch (error: unknown) {
-      // Wave 17 B: a non-USD invoice with no confirmed rate is refused (nothing committed).
-      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
-      if (sendVoucherCorrectionRefusal(res, error)) return;
-      const closed = closedPeriodErrorResponse(error);
-      if (closed) return res.status(closed.status).json(closed.body);
-      logger.error("Error finalizing order:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/factory/customer-orders/:id/finalize-preview", requireAuth, async (req: Request, res: Response) => {
     try {

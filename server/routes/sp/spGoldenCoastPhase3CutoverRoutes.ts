@@ -28,6 +28,9 @@ import {
   type PersistedPostingResult,
 } from "./canonicalPreCutoverBalances";
 import { readiness } from "./spGoldenCoastPhase3CutoverRoutesReadiness";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, numberish, spWriteFields } from "./spRequestSchemas";
 
 function respondKnownError(res: Response, error: unknown): boolean {
   if (error instanceof GoldenCoastPhase3RouteError) {
@@ -202,6 +205,25 @@ async function handlePost(req: Request, res: Response): Promise<void> {
   }
 }
 
+// Read by handlePreview / handlePost (parseCashAccount, buildGoldenCoastPhase3CutoverPlan).
+const phase3Body = z.strictObject({
+  ...spWriteFields,
+  cashAccount: z
+    .strictObject({ kind: z.string(), id: numberish, name: z.string().nullable().optional() })
+    .nullable()
+    .optional(),
+  stockOtwUsd: amountish.nullable().optional(),
+  stockInHandUsd: amountish.nullable().optional(),
+  containerReserveUsd: amountish.nullable().optional(),
+  freshStartContributedStockOtwUsd: amountish.nullable().optional(),
+  freshStartContributedStockInHandUsd: amountish.nullable().optional(),
+  gcSalesCashUsd: amountish.nullable().optional(),
+  hassanSavingsUsd: amountish.nullable().optional(),
+});
+
+const phase3PreviewInput = { body: phase3Body } satisfies RequestSchemas;
+const phase3CutoverInput = { body: phase3Body } satisfies RequestSchemas;
+
 export function registerSpGoldenCoastPhase3CutoverRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/phase3/status",
@@ -218,6 +240,7 @@ export function registerSpGoldenCoastPhase3CutoverRoutes(app: Express): void {
     phase3RequestBudget,
     requireAuth,
     requireRole("Admin"),
+    validateRequest(phase3PreviewInput),
     (req, res) => {
       void handlePreview(req, res);
     }
@@ -231,6 +254,7 @@ export function registerSpGoldenCoastPhase3CutoverRoutes(app: Express): void {
     phase3RequestBudget,
     requireAuth,
     requireRole("Admin"),
+    validateRequest(phase3CutoverInput),
     (req, res) => {
       void handlePost(req, res);
     }

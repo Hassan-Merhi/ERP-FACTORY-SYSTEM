@@ -39,6 +39,12 @@ import {
 } from "./spGoldenCoastPhase8ContainerOffloadRoutesValidateFundingAccount";
 import { handleReadiness, loadFundedContainer } from "./loadFundedContainer";
 import { handleCreateContainer } from "./handleCreateContainer";
+import { validateRequest } from "../../lib/validateRequest";
+import {
+  phase8CreateContainerInput,
+  phase8FreshStartImportInput,
+  phase8OffloadInput,
+} from "./spGoldenCoastPhase8RequestSchemas";
 
 async function handleOffload(req: Request, res: Response): Promise<void> {
   let companyId: number | null = null;
@@ -227,6 +233,7 @@ export function registerSpGoldenCoastPhase8ContainerOffloadRoutes(app: Express):
     privilegedMutationRateLimit,
     phase8RequestBudget,
     requireAuth,
+    validateRequest(phase8CreateContainerInput),
     (req, res) => void handleCreateContainer(req, res)
   );
   app.post(
@@ -234,6 +241,7 @@ export function registerSpGoldenCoastPhase8ContainerOffloadRoutes(app: Express):
     privilegedMutationRateLimit,
     phase8RequestBudget,
     requireAuth,
+    validateRequest(phase8FreshStartImportInput),
     (req, res) => void handleFreshStartExcelImport(req, res, freshStartGuards)
   );
   app.post(
@@ -241,6 +249,7 @@ export function registerSpGoldenCoastPhase8ContainerOffloadRoutes(app: Express):
     privilegedMutationRateLimit,
     phase8RequestBudget,
     requireAuth,
+    validateRequest(phase8OffloadInput),
     (req, res) => void handleOffload(req, res)
   );
 }

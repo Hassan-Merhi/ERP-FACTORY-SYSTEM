@@ -7,6 +7,15 @@ import { resolveRequestCompanyId } from "../../services/security/requestCompanyS
 import { statusReportTemplates, statusMetrics, statusReportRuns, statusMetricValues } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import {
+  createMetricInput,
+  deleteMetricInput,
+  refreshRunInput,
+  saveRunValuesInput,
+  updateMetricInput,
+  updateTemplateInput,
+} from "./factoryStatusBuilderRoutesSchemas";
 
 // ─── Source data stubs ────────────────────────────────────────────────────────
 // Returns deterministic mock values per (sourceType, date).
@@ -128,24 +137,28 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
   });
 
   // ── PATCH /api/factory/status-builder/templates/:id ───────────────────────
-  app.patch("/api/factory/status-builder/templates/:id", requireAuth, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const companyId = resolveRequestCompanyId(req);
-      if (!companyId) return res.status(400).json({ error: "companyId required" });
-      if (!(await ownTemplate(id, companyId))) return res.status(404).json({ error: "Template not found" });
-      const { name } = req.body;
-      const [updated] = await db
-        .update(statusReportTemplates)
-        .set({ name, updatedAt: new Date() })
-        .where(eq(statusReportTemplates.id, id))
-        .returning();
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ error: getErrorMessage(err) });
+  app.patch(
+    "/api/factory/status-builder/templates/:id",
+    requireAuth,
+    validateRequest(updateTemplateInput),
+    async (req, res) => {
+      try {
+        const { id } = validatedInput(req, updateTemplateInput).params;
+        const companyId = resolveRequestCompanyId(req);
+        if (!companyId) return res.status(400).json({ error: "companyId required" });
+        if (!(await ownTemplate(id, companyId))) return res.status(404).json({ error: "Template not found" });
+        const { name } = validatedInput(req, updateTemplateInput).body;
+        const [updated] = await db
+          .update(statusReportTemplates)
+          .set({ name, updatedAt: new Date() })
+          .where(eq(statusReportTemplates.id, id))
+          .returning();
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── GET /api/factory/status-builder/templates/:id/metrics ─────────────────
   app.get("/api/factory/status-builder/templates/:id/metrics", requireAuth, async (req, res) => {
@@ -167,18 +180,11 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
   });
 
   // ── POST /api/factory/status-builder/metrics ──────────────────────────────
-  app.post("/api/factory/status-builder/metrics", requireAuth, async (req, res) => {
+  app.post("/api/factory/status-builder/metrics", requireAuth, validateRequest(createMetricInput), async (req, res) => {
     try {
+      // The schema requires an integer templateId and a non-blank name (both NOT NULL).
       const { templateId, name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } =
-        req.body;
-      // template_id and name are both NOT NULL and neither was validated, so a
-      // body without them failed the insert as a 500 instead of a 400.
-      if (!Number.isInteger(templateId)) {
-        return res.status(400).json({ error: "Invalid request data", field: "templateId" });
-      }
-      if (typeof name !== "string" || name.trim() === "") {
-        return res.status(400).json({ error: "name is required" });
-      }
+        validatedInput(req, createMetricInput).body;
       const companyId = resolveRequestCompanyId(req);
       if (!companyId) return res.status(400).json({ error: "companyId required" });
       if (!(await ownTemplate(templateId, companyId))) return res.status(404).json({ error: "Template not found" });
@@ -202,52 +208,61 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
   });
 
   // ── PATCH /api/factory/status-builder/metrics/:id ─────────────────────────
-  app.patch("/api/factory/status-builder/metrics/:id", requireAuth, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const { name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } = req.body;
-      // A body carrying none of these fields left every value undefined, so the
-      // update reached drizzle as .set({}) — "No values to set", a 500.
-      const updates = {
-        ...(name !== undefined && { name }),
-        ...(beforeSourceType !== undefined && { beforeSourceType }),
-        ...(sourceType !== undefined && { sourceType }),
-        ...(sourceField !== undefined && { sourceField }),
-        ...(operation !== undefined && { operation }),
-        ...(filtersJson !== undefined && { filtersJson }),
-        ...(sortOrder !== undefined && { sortOrder }),
-      };
-      if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
+  app.patch(
+    "/api/factory/status-builder/metrics/:id",
+    requireAuth,
+    validateRequest(updateMetricInput),
+    async (req, res) => {
+      try {
+        const { params, body } = validatedInput(req, updateMetricInput);
+        const id = params.id;
+        const { name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } = body;
+        // A body carrying none of these fields left every value undefined, so the
+        // update reached drizzle as .set({}) — "No values to set", a 500.
+        const updates = {
+          ...(name !== undefined && { name }),
+          ...(beforeSourceType !== undefined && { beforeSourceType }),
+          ...(sourceType !== undefined && { sourceType }),
+          ...(sourceField !== undefined && { sourceField }),
+          ...(operation !== undefined && { operation }),
+          ...(filtersJson !== undefined && { filtersJson }),
+          ...(sortOrder !== undefined && { sortOrder }),
+        };
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No fields to update" });
+        }
+        const companyId = resolveRequestCompanyId(req);
+        if (!companyId) return res.status(400).json({ error: "companyId required" });
+        if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
+        const [updated] = await db.update(statusMetrics).set(updates).where(eq(statusMetrics.id, id)).returning();
+        if (!updated) return res.status(404).json({ message: "Not found" });
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) });
       }
-      const companyId = resolveRequestCompanyId(req);
-      if (!companyId) return res.status(400).json({ error: "companyId required" });
-      if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
-      const [updated] = await db.update(statusMetrics).set(updates).where(eq(statusMetrics.id, id)).returning();
-      if (!updated) return res.status(404).json({ message: "Not found" });
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ error: getErrorMessage(err) });
     }
-  });
+  );
 
   // ── DELETE /api/factory/status-builder/metrics/:id ────────────────────────
-  app.delete("/api/factory/status-builder/metrics/:id", requireAuth, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const companyId = resolveRequestCompanyId(req);
-      if (!companyId) return res.status(400).json({ error: "companyId required" });
-      if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
-      // Remove any stored values for this metric before deleting
-      await db.delete(statusMetricValues).where(eq(statusMetricValues.metricId, id));
-      await db.delete(statusMetrics).where(eq(statusMetrics.id, id));
-      res.json({ success: true });
-    } catch (err: unknown) {
-      res.status(500).json({ error: getErrorMessage(err) });
+  app.delete(
+    "/api/factory/status-builder/metrics/:id",
+    requireAuth,
+    validateRequest(deleteMetricInput),
+    async (req, res) => {
+      try {
+        const { id } = validatedInput(req, deleteMetricInput).params;
+        const companyId = resolveRequestCompanyId(req);
+        if (!companyId) return res.status(400).json({ error: "companyId required" });
+        if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
+        // Remove any stored values for this metric before deleting
+        await db.delete(statusMetricValues).where(eq(statusMetricValues.metricId, id));
+        await db.delete(statusMetrics).where(eq(statusMetrics.id, id));
+        res.json({ success: true });
+      } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── GET /api/factory/status-builder/run?templateId=X&date=YYYY-MM-DD ──────
   // Returns (or creates) the run for a template+date, plus all metric values.
@@ -311,152 +326,152 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
 
   // ── POST /api/factory/status-builder/runs/:id/refresh ────────────────────
   // Re-fetches all linked source values; manual adjustments are preserved.
-  app.post("/api/factory/status-builder/runs/:id/refresh", requireAuth, async (req, res) => {
-    try {
-      const runId = parseId(req.params.id);
-      if (runId === null) return res.status(400).json({ message: "Invalid id" });
-      const companyId = resolveRequestCompanyId(req);
-      if (!companyId) return res.status(400).json({ error: "companyId required" });
-      const run = await ownRun(runId, companyId);
-      if (!run) return res.status(404).json({ error: "Run not found" });
+  app.post(
+    "/api/factory/status-builder/runs/:id/refresh",
+    requireAuth,
+    validateRequest(refreshRunInput),
+    async (req, res) => {
+      try {
+        const runId = validatedInput(req, refreshRunInput).params.id;
+        const companyId = resolveRequestCompanyId(req);
+        if (!companyId) return res.status(400).json({ error: "companyId required" });
+        const run = await ownRun(runId, companyId);
+        if (!run) return res.status(404).json({ error: "Run not found" });
 
-      const metrics = await db
-        .select()
-        .from(statusMetrics)
-        .where(eq(statusMetrics.templateId, run.templateId))
-        .orderBy(asc(statusMetrics.sortOrder));
+        const metrics = await db
+          .select()
+          .from(statusMetrics)
+          .where(eq(statusMetrics.templateId, run.templateId))
+          .orderBy(asc(statusMetrics.sortOrder));
 
-      const existingValues = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
-      const byMetricId = new Map(existingValues.map((v) => [v.metricId, v]));
-      const now = new Date();
+        const existingValues = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
+        const byMetricId = new Map(existingValues.map((v) => [v.metricId, v]));
+        const now = new Date();
 
-      for (const metric of metrics) {
-        const existing = byMetricId.get(metric.id);
-        const manualAdj = toMoney(existing?.manualAdjustment).toNumber();
-        const beforeVal = toMoney(existing?.beforeValue).toNumber();
+        for (const metric of metrics) {
+          const existing = byMetricId.get(metric.id);
+          const manualAdj = toMoney(existing?.manualAdjustment).toNumber();
+          const beforeVal = toMoney(existing?.beforeValue).toNumber();
 
-        const { value: linked, warnings } = await fetchLinkedValue(
-          run.companyId,
-          metric.sourceType,
-          metric.sourceField,
-          metric.operation,
-          run.runDate
-        );
+          const { value: linked, warnings } = await fetchLinkedValue(
+            run.companyId,
+            metric.sourceType,
+            metric.sourceField,
+            metric.operation,
+            run.runDate
+          );
 
-        const difference = linked + manualAdj;
-        const finalTotal = beforeVal + difference;
+          const difference = linked + manualAdj;
+          const finalTotal = beforeVal + difference;
 
-        if (existing) {
-          await db
-            .update(statusMetricValues)
-            .set({
+          if (existing) {
+            await db
+              .update(statusMetricValues)
+              .set({
+                linkedValue: linked.toString(),
+                difference: difference.toString(),
+                finalTotal: finalTotal.toString(),
+                warningsJson: warnings,
+                lastRefreshed: now,
+                updatedAt: now,
+              })
+              .where(eq(statusMetricValues.id, existing.id));
+          } else {
+            await db.insert(statusMetricValues).values({
+              runId,
+              metricId: metric.id,
+              beforeValue: "0",
               linkedValue: linked.toString(),
+              manualAdjustment: "0",
               difference: difference.toString(),
               finalTotal: finalTotal.toString(),
               warningsJson: warnings,
               lastRefreshed: now,
-              updatedAt: now,
-            })
-            .where(eq(statusMetricValues.id, existing.id));
-        } else {
-          await db.insert(statusMetricValues).values({
-            runId,
-            metricId: metric.id,
-            beforeValue: "0",
-            linkedValue: linked.toString(),
-            manualAdjustment: "0",
-            difference: difference.toString(),
-            finalTotal: finalTotal.toString(),
-            warningsJson: warnings,
-            lastRefreshed: now,
-          });
+            });
+          }
         }
-      }
 
-      await db.update(statusReportRuns).set({ updatedAt: now }).where(eq(statusReportRuns.id, runId));
-      const updated = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
-      res.json({ values: updated });
-    } catch (err: unknown) {
-      res.status(500).json({ error: getErrorMessage(err) });
+        await db.update(statusReportRuns).set({ updatedAt: now }).where(eq(statusReportRuns.id, runId));
+        const updated = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
+        res.json({ values: updated });
+      } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── PATCH /api/factory/status-builder/runs/:runId/values ─────────────────
   // Saves before values and manual adjustments; recalculates difference + finalTotal.
-  app.patch("/api/factory/status-builder/runs/:runId/values", requireAuth, async (req, res) => {
-    try {
-      const runId = parseId(req.params.runId);
-      if (runId === null) return res.status(400).json({ message: "Invalid id" });
-      const { entries } = req.body as {
-        entries: { metricId: number; manualAdjustment: number; beforeValue: number }[];
-      };
-      // A body without an entries array reached the for..of as undefined and
-      // threw "entries is not iterable", which surfaced as a 500.
-      if (!Array.isArray(entries)) {
-        return res.status(400).json({ message: "entries must be an array" });
-      }
-      if (entries.some((entry) => !Number.isInteger(entry?.metricId))) {
-        return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
-      }
-      const companyId = resolveRequestCompanyId(req);
-      if (!companyId) return res.status(400).json({ error: "companyId required" });
-      const run = await ownRun(runId, companyId);
-      if (!run) return res.status(404).json({ error: "Run not found" });
-      const runMetricIds = new Set(
-        (
-          await db
-            .select({ id: statusMetrics.id })
-            .from(statusMetrics)
-            .where(eq(statusMetrics.templateId, run.templateId))
-        ).map((metric) => metric.id)
-      );
-      if (entries.some((entry) => !runMetricIds.has(entry.metricId))) {
-        return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
-      }
-      const now = new Date();
+  app.patch(
+    "/api/factory/status-builder/runs/:runId/values",
+    requireAuth,
+    validateRequest(saveRunValuesInput),
+    async (req, res) => {
+      try {
+        // The schema requires an entries array with an integer metricId on each entry.
+        const { params, body } = validatedInput(req, saveRunValuesInput);
+        const { runId } = params;
+        const { entries } = body;
+        const companyId = resolveRequestCompanyId(req);
+        if (!companyId) return res.status(400).json({ error: "companyId required" });
+        const run = await ownRun(runId, companyId);
+        if (!run) return res.status(404).json({ error: "Run not found" });
+        const runMetricIds = new Set(
+          (
+            await db
+              .select({ id: statusMetrics.id })
+              .from(statusMetrics)
+              .where(eq(statusMetrics.templateId, run.templateId))
+          ).map((metric) => metric.id)
+        );
+        if (entries.some((entry) => !runMetricIds.has(entry.metricId))) {
+          return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
+        }
+        const now = new Date();
 
-      for (const entry of entries) {
-        const [existing] = await db
-          .select()
-          .from(statusMetricValues)
-          .where(and(eq(statusMetricValues.runId, runId), eq(statusMetricValues.metricId, entry.metricId)))
-          .limit(1);
+        for (const entry of entries) {
+          const [existing] = await db
+            .select()
+            .from(statusMetricValues)
+            .where(and(eq(statusMetricValues.runId, runId), eq(statusMetricValues.metricId, entry.metricId)))
+            .limit(1);
 
-        const linkedVal = toMoney(existing?.linkedValue).toNumber();
-        const beforeVal = entry.beforeValue ?? 0;
-        const manualAdj = entry.manualAdjustment ?? 0;
-        const difference = linkedVal + manualAdj;
-        const finalTotal = beforeVal + difference;
+          const linkedVal = toMoney(existing?.linkedValue).toNumber();
+          const beforeVal = entry.beforeValue ?? 0;
+          const manualAdj = entry.manualAdjustment ?? 0;
+          const difference = linkedVal + manualAdj;
+          const finalTotal = beforeVal + difference;
 
-        if (existing) {
-          await db
-            .update(statusMetricValues)
-            .set({
+          if (existing) {
+            await db
+              .update(statusMetricValues)
+              .set({
+                beforeValue: beforeVal.toString(),
+                manualAdjustment: manualAdj.toString(),
+                difference: difference.toString(),
+                finalTotal: finalTotal.toString(),
+                updatedAt: now,
+              })
+              .where(eq(statusMetricValues.id, existing.id));
+          } else {
+            await db.insert(statusMetricValues).values({
+              runId,
+              metricId: entry.metricId,
               beforeValue: beforeVal.toString(),
+              linkedValue: "0",
               manualAdjustment: manualAdj.toString(),
               difference: difference.toString(),
               finalTotal: finalTotal.toString(),
-              updatedAt: now,
-            })
-            .where(eq(statusMetricValues.id, existing.id));
-        } else {
-          await db.insert(statusMetricValues).values({
-            runId,
-            metricId: entry.metricId,
-            beforeValue: beforeVal.toString(),
-            linkedValue: "0",
-            manualAdjustment: manualAdj.toString(),
-            difference: difference.toString(),
-            finalTotal: finalTotal.toString(),
-            warningsJson: [],
-          });
+              warningsJson: [],
+            });
+          }
         }
-      }
 
-      const updated = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
-      res.json({ values: updated });
-    } catch (err: unknown) {
-      res.status(500).json({ error: getErrorMessage(err) });
+        const updated = await db.select().from(statusMetricValues).where(eq(statusMetricValues.runId, runId));
+        res.json({ values: updated });
+      } catch (err: unknown) {
+        res.status(500).json({ error: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

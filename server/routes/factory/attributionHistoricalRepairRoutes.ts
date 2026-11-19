@@ -5,6 +5,8 @@ import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 const APPLY_CONFIRMATION = "REPAIR_TRUNCATED_USER_ATTRIBUTION";
 
@@ -96,11 +98,26 @@ async function inspectCompanyAttribution(companyId: number): Promise<{
   return { candidates, unresolved };
 }
 
+// resolveRequestCompanyId reads an optional companyId from the body or query
+// and refuses one that is not the session company.
+const repairAttributionInput = {
+  query: z.strictObject({ companyId: z.string().optional() }),
+  body: z.union([
+    z.undefined(),
+    z.strictObject({
+      dryRun: z.boolean().optional(),
+      confirmation: z.string().optional(),
+      companyId: z.union([z.number(), z.string()]).nullable().optional(),
+    }),
+  ]),
+} satisfies RequestSchemas;
+
 export function registerAttributionHistoricalRepairRoutes(app: Express): void {
   app.post(
     "/api/factory/admin/repair-truncated-user-attribution",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(repairAttributionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = resolveRequestCompanyId(req);

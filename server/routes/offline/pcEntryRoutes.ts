@@ -17,6 +17,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
 import {
@@ -45,6 +46,16 @@ const pcOperationSchema = z
   .strict()
   .refine((body) => (body.input === undefined) !== (body.envelope === undefined));
 
+// A body these refuse is answered 400 REQUEST_VALIDATION_FAILED before the
+// feature and reviewer checks; the PC agent treats 400 like 422.
+const pcOperationInput = { query: emptyQuery, body: pcOperationSchema } satisfies RequestSchemas;
+// The handler checks the id itself (422 OFFLINE_PC_SYNC_FLAG_REQUEST_INVALID).
+const resolveFlagInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: resolveSchema,
+} satisfies RequestSchemas;
+
 async function reviewer(req: Request, res: Response): Promise<{ companyId: number; userId: string } | null> {
   if (!pcSyncEnabled()) {
     res.status(404).json({ code: "OFFLINE_PC_SYNC_DISABLED" });
@@ -68,26 +79,31 @@ async function reviewer(req: Request, res: Response): Promise<{ companyId: numbe
 }
 
 export function registerPcEntryRoutes(app: Express): void {
-  app.post("/api/offline/pc-sync/operations", requireAuth, async (req: Request, res: Response) => {
-    if (!pcSyncEnabled()) return res.status(404).json({ code: "OFFLINE_PC_SYNC_DISABLED" });
-    const actor = await guard(req, res);
-    if (!actor) return;
-    const parsed = pcOperationSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
-    try {
-      const result = await applyPcOperation(actor, parsed.data);
-      if (result.status === "applied") {
-        return res.status(200).json({ ...result.receipt, flagged: "flagged" in result && result.flagged === true });
+  app.post(
+    "/api/offline/pc-sync/operations",
+    requireAuth,
+    validateRequest(pcOperationInput),
+    async (req: Request, res: Response) => {
+      if (!pcSyncEnabled()) return res.status(404).json({ code: "OFFLINE_PC_SYNC_DISABLED" });
+      const actor = await guard(req, res);
+      if (!actor) return;
+      const parsed = pcOperationSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(422).json({ code: "OFFLINE_BROWSER_REQUEST_INVALID" });
+      try {
+        const result = await applyPcOperation(actor, parsed.data);
+        if (result.status === "applied") {
+          return res.status(200).json({ ...result.receipt, flagged: "flagged" in result && result.flagged === true });
+        }
+        if (result.status === "conflict") {
+          return res.status(409).json({ code: result.code, overridable: result.overridable, detail: result.detail });
+        }
+        if (result.status === "waiting") return res.status(202).json({ code: result.code });
+        return res.status(422).json({ code: result.code });
+      } catch (error) {
+        return refusal(res, error);
       }
-      if (result.status === "conflict") {
-        return res.status(409).json({ code: result.code, overridable: result.overridable, detail: result.detail });
-      }
-      if (result.status === "waiting") return res.status(202).json({ code: result.code });
-      return res.status(422).json({ code: result.code });
-    } catch (error) {
-      return refusal(res, error);
     }
-  });
+  );
 
   app.get("/api/offline/pc-sync/negative-stock-flags", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -105,6 +121,7 @@ export function registerPcEntryRoutes(app: Express): void {
   app.post(
     "/api/offline/pc-sync/negative-stock-flags/:id/resolve",
     requireAuth,
+    validateRequest(resolveFlagInput),
     async (req: Request, res: Response) => {
       try {
         const who = await reviewer(req, res);

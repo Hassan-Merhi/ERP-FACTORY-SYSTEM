@@ -11,6 +11,25 @@ import { runAutomaticPriorityPrintBatch, runAutomaticPriorityReprint } from "./p
 import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 import { PRIORITY_SCAN_LIST_PATH, disableStalePriorityScanConfigs } from "./disableStalePriorityScanConfigs";
 import { registerPriorityScanConfigRoutesPart2 } from "./registerPriorityScanConfigRoutesPart2";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// client/src/lib/priorityPrintPreflight.ts sends { items: [{ baleId } | { referenceNumber }] };
+// the handler keeps its 1–200 valid items check.
+const printPreflightBatchInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    items: z
+      .array(z.strictObject({ baleId: z.number().optional(), referenceNumber: z.string().optional() }))
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler keeps its "referenceNumber required" check.
+const printPreflightInput = {
+  query: emptyQuery,
+  body: z.strictObject({ referenceNumber: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerPriorityScanConfigRoutesPart1(app: Express) {
   registerPriorityAllocationHistoryRoutes(app);
@@ -20,6 +39,7 @@ export function registerPriorityScanConfigRoutesPart1(app: Express) {
   app.post(
     "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch",
     requireAuth,
+    validateRequest(printPreflightBatchInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -64,6 +84,7 @@ export function registerPriorityScanConfigRoutesPart1(app: Express) {
   app.post(
     "/api/factory/customer-orders/loading-list/automatic-print-preflight",
     requireAuth,
+    validateRequest(printPreflightInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

@@ -16,6 +16,27 @@ import { containerFreight, containerFreightPayments } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getFreightContainerId, verifyContainerOwnership } from "./_helpers";
 
+// Every field is optional: the handler falls back to a default for each one.
+const addFreightInput = {
+  params: z.strictObject({ containerId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    vendorName: z.string().nullable().optional(),
+    vendorSupplierId: z.union([z.number(), z.string()]).nullable().optional(),
+    freightAmount: z.union([z.string(), z.number()]).nullable().optional(),
+    currency: z.string().nullable().optional(),
+    dueDate: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    txDate: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteFreightInput = {
+  params: z.strictObject({ containerId: stringParam, freightId: stringParam }),
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ txDate: z.string().optional() })]),
+} satisfies RequestSchemas;
+
 const addFreightPaymentInput = {
   params: z.strictObject({ freightId: stringParam }),
   query: emptyQuery,
@@ -38,53 +59,59 @@ export function registerFactoryFreightRoutes(app: Express) {
 
   // This GET endpoint is owned by an earlier canonical route registrar.
 
-  app.post("/api/factory/containers/:containerId/freight", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const containerId = Number(req.params.containerId);
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/containers/:containerId/freight",
+    requireAuth,
+    validateRequest(addFreightInput),
+    async (req: Request, res: Response) => {
+      try {
+        const containerId = Number(req.params.containerId);
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      if (!(await verifyContainerOwnership(containerId, companyId))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+        if (!(await verifyContainerOwnership(containerId, companyId))) {
+          return res.status(403).json({ message: "Access denied" });
+        }
 
-      const [row] = await db
-        .insert(containerFreight)
-        .values({
+        const [row] = await db
+          .insert(containerFreight)
+          .values({
+            companyId,
+            containerId,
+            vendorName: req.body.vendorName || null,
+            vendorSupplierId: req.body.vendorSupplierId || null,
+            freightAmount: String(req.body.freightAmount || 0),
+            currency: req.body.currency || "USD",
+            dueDate: req.body.dueDate || null,
+            status: "UNPAID",
+            notes: req.body.notes || null,
+          })
+          .returning();
+
+        await writeDaybookEntry(db, {
           companyId,
-          containerId,
-          vendorName: req.body.vendorName || null,
-          vendorSupplierId: req.body.vendorSupplierId || null,
-          freightAmount: String(req.body.freightAmount || 0),
-          currency: req.body.currency || "USD",
-          dueDate: req.body.dueDate || null,
-          status: "UNPAID",
-          notes: req.body.notes || null,
-        })
-        .returning();
+          txDate: req.body.txDate || getClientDate(req),
+          txType: "FREIGHT_ADD",
+          referenceId: containerId,
+          referenceTable: "containers",
+          description: `Added freight charge ${row.currency} ${row.freightAmount} for container #${containerId}${row.vendorName ? ` (${row.vendorName})` : ""}`,
+          currencyCode: row.currency,
+          amountCurrency: Number(row.freightAmount),
+          metaJson: JSON.stringify({ freightId: row.id, vendorName: row.vendorName }),
+          createdBy: req.session.userId || undefined,
+        });
 
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: req.body.txDate || getClientDate(req),
-        txType: "FREIGHT_ADD",
-        referenceId: containerId,
-        referenceTable: "containers",
-        description: `Added freight charge ${row.currency} ${row.freightAmount} for container #${containerId}${row.vendorName ? ` (${row.vendorName})` : ""}`,
-        currencyCode: row.currency,
-        amountCurrency: Number(row.freightAmount),
-        metaJson: JSON.stringify({ freightId: row.id, vendorName: row.vendorName }),
-        createdBy: req.session.userId || undefined,
-      });
-
-      res.json(row);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(row);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.delete(
     "/api/factory/containers/:containerId/freight/:freightId",
     requireAuth,
+    validateRequest(deleteFreightInput),
     async (req: Request, res: Response) => {
       try {
         const freightId = Number(req.params.freightId);

@@ -69,7 +69,7 @@ describe("Factory trip financial finalization accounting contracts", () => {
     expect(posting).toContain("loadDispatchTripFinancialSource");
     expect(posting).toContain("TRIP_CHARGES_CHANGED");
     expect(posting).toContain("TRIP_SOURCE_CHANGED");
-    expect(routes).toContain("await db.transaction(tx => postDispatchTripFinancialTx");
+    expect(routes.replace(/\s+/g, "")).toContain("awaitdb.transaction((tx)=>postDispatchTripFinancialTx");
   });
 
   it("does not allow the legacy full invoice to duplicate trip receivables", () => {

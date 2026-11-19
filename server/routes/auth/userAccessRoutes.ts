@@ -4,6 +4,8 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { z } from "zod";
 import {
   ledgerAccounts,
   locations,
@@ -13,6 +15,45 @@ import {
   userPreferences,
 } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
+
+// requireAuth has already refused a :companyId that is not a positive integer.
+const userCompanyParams = z.strictObject({ userId: stringParam, companyId: stringParam });
+
+const replaceUserLocationsInput = {
+  params: userCompanyParams,
+  query: emptyQuery,
+  body: z.strictObject({ locationIds: z.array(z.number()) }),
+} satisfies RequestSchemas;
+
+// The handler keeps its own message for a mapping without a location or cash account.
+const replaceUserLocationCashAccountsInput = {
+  params: userCompanyParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    mappings: z.array(
+      z.strictObject({
+        locationId: z.number(),
+        cashAccountId: z.number().nullable(),
+        posStation: z.number().nullable().optional(),
+      })
+    ),
+  }),
+} satisfies RequestSchemas;
+
+// Values are still checked against the allowed lists by the handler.
+const updateUserPreferencesInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    dateFormat: z.string().nullable().optional(),
+    preferredCurrency: z.string().nullable().optional(),
+    showProfitComparisonOnPOS: z.boolean().optional(),
+    showChatWidget: z.boolean().optional(),
+    showNotesPanel: z.boolean().optional(),
+    factoryNetPositionValuationMode: z.string().optional(),
+    factoryMhdViewDefault: z.boolean().optional(),
+    hiddenTransactionJournalVoucherIds: z.array(z.number()).optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerUserAccessRoutes(app: Express) {
   app.get("/api/user-locations/:userId/:companyId", requireAuth, async (req, res) => {
@@ -29,35 +70,41 @@ export function registerUserAccessRoutes(app: Express) {
     }
   });
 
-  app.put("/api/user-locations/:userId/:companyId", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { userId, companyId } = req.params;
-      const { locationIds } = req.body;
-      const companyIdNum = parseInt(companyId);
-      if (!Array.isArray(locationIds)) return res.status(400).json({ message: "locationIds must be an array" });
+  app.put(
+    "/api/user-locations/:userId/:companyId",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(replaceUserLocationsInput),
+    async (req, res) => {
+      try {
+        const { userId, companyId } = req.params;
+        const { locationIds } = req.body;
+        const companyIdNum = parseInt(companyId);
+        if (!Array.isArray(locationIds)) return res.status(400).json({ message: "locationIds must be an array" });
 
-      await db
-        .delete(userLocations)
-        .where(and(eq(userLocations.userId, userId), eq(userLocations.companyId, companyIdNum)));
-      if (locationIds.length > 0) {
         await db
-          .insert(userLocations)
-          .values(locationIds.map((locationId: number) => ({ userId, companyId: companyIdNum, locationId })));
-        await db
-          .update(userCompanyRoles)
-          .set({ assignedLocationId: locationIds[0] })
-          .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, companyIdNum)));
+          .delete(userLocations)
+          .where(and(eq(userLocations.userId, userId), eq(userLocations.companyId, companyIdNum)));
+        if (locationIds.length > 0) {
+          await db
+            .insert(userLocations)
+            .values(locationIds.map((locationId: number) => ({ userId, companyId: companyIdNum, locationId })));
+          await db
+            .update(userCompanyRoles)
+            .set({ assignedLocationId: locationIds[0] })
+            .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, companyIdNum)));
+        }
+        res.json(
+          await db
+            .select()
+            .from(userLocations)
+            .where(and(eq(userLocations.userId, userId), eq(userLocations.companyId, companyIdNum)))
+        );
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      res.json(
-        await db
-          .select()
-          .from(userLocations)
-          .where(and(eq(userLocations.userId, userId), eq(userLocations.companyId, companyIdNum)))
-      );
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/user-location-cash-accounts/:userId/:companyId", requireAuth, async (req, res) => {
     try {
@@ -87,6 +134,7 @@ export function registerUserAccessRoutes(app: Express) {
     "/api/user-location-cash-accounts/:userId/:companyId",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(replaceUserLocationCashAccountsInput),
     async (req, res) => {
       try {
         const { userId, companyId: companyIdStr } = req.params;
@@ -236,7 +284,7 @@ export function registerUserAccessRoutes(app: Express) {
   });
 
   const MHD_PREFERENCE_ERROR = "Invalid Factory MHD view preference";
-  app.put("/api/user-preferences", requireAuth, async (req, res) => {
+  app.put("/api/user-preferences", requireAuth, validateRequest(updateUserPreferencesInput), async (req, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const {

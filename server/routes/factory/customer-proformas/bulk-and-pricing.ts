@@ -5,7 +5,6 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
-import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
@@ -14,6 +13,8 @@ import { factoryBaleProducts, customerProformaLines } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
 import { normalizeProformaDestination } from "./destination";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { applyAgreedPricesInput, applyProductionPricesInput } from "./customerProformaRouteSchemas";
 import { registerFactoryCustomerProformaBulkPricingRoutesPart1 } from "./registerFactoryCustomerProformaBulkPricingRoutesPart1";
 
 export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
@@ -24,13 +25,13 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
   app.post(
     "/api/factory/customer-proformas/:id/apply-agreed-prices",
     requireAuth,
+    validateRequest(applyAgreedPricesInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const id = parseId(req.params.id);
-        if (id === null) return res.status(400).json({ message: "Invalid id" });
+        const { id } = validatedInput(req, applyAgreedPricesInput).params;
 
         const proformaResult = await pool.query<{ customer_id: number; destination: string | null }>(
           `SELECT customer_id, destination FROM customer_proformas
@@ -109,13 +110,13 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
   app.post(
     "/api/factory/customer-proformas/:id/apply-production-prices",
     requireAuth,
+    validateRequest(applyProductionPricesInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const id = parseId(req.params.id);
-        if (id === null) return res.status(400).json({ message: "Invalid id" });
+        const { id } = validatedInput(req, applyProductionPricesInput).params;
 
         const lines = await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, id));
         if (!lines.length) return res.json({ updated: 0, skipped: 0 });

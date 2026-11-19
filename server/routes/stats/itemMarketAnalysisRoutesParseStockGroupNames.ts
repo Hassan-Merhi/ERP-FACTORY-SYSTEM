@@ -21,12 +21,12 @@ export const querySchema = z.object({
   companyIds: z.string().trim().max(500).optional(),
 });
 
-export const exportSalePricesSchema = z.object({
+export const exportSalePricesSchema = z.strictObject({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
   companyItems: z
     .array(
-      z.object({
+      z.strictObject({
         companyId: z.number().int().positive(),
         stockItemIds: z.array(z.number().int().positive()).min(1).max(5000),
       })

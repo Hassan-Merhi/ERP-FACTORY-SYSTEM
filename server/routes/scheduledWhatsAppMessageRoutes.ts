@@ -3,6 +3,28 @@ import { requireAuth } from "../auth";
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { parseWeeklyTimes } from "../services/scheduledWhatsAppMessages";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Shape only: parseScheduleBody keeps the required-field, length, timezone,
+// weekday-time, date and recipient checks with their messages.
+const scheduleBody = z.strictObject({
+  title: z.string().optional(),
+  message: z.string().optional(),
+  timezone: z.string().optional(),
+  weeklyTimes: z.record(z.string(), z.string().nullable()).optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  enabled: z.boolean().optional(),
+  recipientIds: z.array(z.union([z.number(), z.string()])).optional(),
+});
+
+const createScheduleInput = { query: emptyQuery, body: scheduleBody } satisfies RequestSchemas;
+
+// The handlers keep their own positive-integer id check and its message.
+const updateScheduleInput = { params: stringIdParams, query: emptyQuery, body: scheduleBody } satisfies RequestSchemas;
+
+const deleteScheduleInput = { params: stringIdParams, query: emptyQuery } satisfies RequestSchemas;
 
 const managerRoles = new Set(["Admin", "Owner", "Developer"]);
 
@@ -185,28 +207,38 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
     }
   }
 
-  app.post("/api/whatsapp/message-schedules", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/message-schedules", requireAuth, validateRequest(createScheduleInput), async (req, res) => {
     await save(req, res);
   });
-  app.put("/api/whatsapp/message-schedules/:id", requireAuth, async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid schedule" });
-    await save(req, res, id);
-  });
-  app.delete("/api/whatsapp/message-schedules/:id", requireAuth, async (req, res) => {
-    const companyId = companyForManager(req, res);
-    if (!companyId) return;
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid schedule" });
-    try {
-      const deleted = await pool.query(
-        "DELETE FROM whatsapp_message_schedules WHERE id=$1 AND company_id=$2 RETURNING id",
-        [id, companyId]
-      );
-      if (!deleted.rowCount) return res.status(404).json({ message: "Schedule not found" });
-      res.json({ message: "Schedule removed" });
-    } catch (err) {
-      res.status(500).json({ message: getErrorMessage(err) });
+  app.put(
+    "/api/whatsapp/message-schedules/:id",
+    requireAuth,
+    validateRequest(updateScheduleInput),
+    async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid schedule" });
+      await save(req, res, id);
     }
-  });
+  );
+  app.delete(
+    "/api/whatsapp/message-schedules/:id",
+    requireAuth,
+    validateRequest(deleteScheduleInput),
+    async (req, res) => {
+      const companyId = companyForManager(req, res);
+      if (!companyId) return;
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid schedule" });
+      try {
+        const deleted = await pool.query(
+          "DELETE FROM whatsapp_message_schedules WHERE id=$1 AND company_id=$2 RETURNING id",
+          [id, companyId]
+        );
+        if (!deleted.rowCount) return res.status(404).json({ message: "Schedule not found" });
+        res.json({ message: "Schedule removed" });
+      } catch (err) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
+    }
+  );
 }

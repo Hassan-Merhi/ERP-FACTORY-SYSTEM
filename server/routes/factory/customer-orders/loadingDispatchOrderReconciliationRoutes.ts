@@ -6,6 +6,8 @@
 import type { Express, Request, Response } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { approveReconciliationInput, removeUnshippedInput } from "./loadingDispatchWriteSchemas";
 import { db } from "../../../db";
 import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { logger } from "../../../lib/logger";
@@ -160,7 +162,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
     }catch(error){return handle(res,error);}
   });
 
-  app.post(path+"/remove-unshipped",requireAuth,access,async(req,res)=>{
+  app.post(path+"/remove-unshipped",requireAuth,access,validateRequest(removeUnshippedInput),async(req,res)=>{
     try{
       const s=await scope(req);supervisor(s.role);
       const fp=expected(req.body);
@@ -271,7 +273,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
     }catch(error){return handle(res,error);}
   });
 
-  app.post(path+"/approve",requireAuth,access,async(req,res)=>{
+  app.post(path+"/approve",requireAuth,access,validateRequest(approveReconciliationInput),async(req,res)=>{
     try{
       const s=await scope(req);supervisor(s.role);
       const fp=expected(req.body);const why=reason(req.body);

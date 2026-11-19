@@ -8,6 +8,34 @@ import { and, eq, sql } from "drizzle-orm";
 import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers";
 import { supplierProformaLines, supplierProformas } from "@shared/schema";
 import { parseMoneyInput } from "../lib/money";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const lineValue = z.union([z.string(), z.number()]).nullable().optional();
+
+// Ids stay strings: the handler parses them with parseId and answers its own 400s.
+// Line values go through String()/parseInt()/sanitizeDecimal().
+const createProformaInput = {
+  params: z.strictObject({ supplierId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    reference: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    destinationCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    lines: z
+      .array(
+        z.strictObject({
+          barcode: lineValue,
+          itemName: lineValue,
+          qty: lineValue,
+          weightPerBale: lineValue,
+          pricePerBale: lineValue,
+        })
+      )
+      .nullable()
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 /**
  * Parse a human-entered decimal value from Excel into a PostgreSQL-safe decimal string.
@@ -104,28 +132,32 @@ export function registerSupplierProformaRoutesPart4(app: Express, requireAuth: R
     }
   });
 
-  app.post("/api/suppliers/:supplierId/proformas", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const supplierId = parseId(req.params.supplierId);
-      if (supplierId === null) return res.status(400).json({ message: "Invalid id" });
-      const { reference, notes, lines, destinationCompanyId } = req.body;
-      const destinationId = destinationCompanyId == null ? companyId : parseId(String(destinationCompanyId));
-      if (destinationId === null) return res.status(400).json({ message: "Invalid destination company" });
-      const destinationAllowed = await db.execute(sql`
+  app.post(
+    "/api/suppliers/:supplierId/proformas",
+    requireAuth,
+    validateRequest(createProformaInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const supplierId = parseId(req.params.supplierId);
+        if (supplierId === null) return res.status(400).json({ message: "Invalid id" });
+        const { reference, notes, lines, destinationCompanyId } = req.body;
+        const destinationId = destinationCompanyId == null ? companyId : parseId(String(destinationCompanyId));
+        if (destinationId === null) return res.status(400).json({ message: "Invalid destination company" });
+        const destinationAllowed = await db.execute(sql`
         SELECT 1 FROM companies destination JOIN companies owner ON owner.id = ${companyId}
         WHERE destination.id = ${destinationId}
           AND (destination.id = owner.id OR destination.parent_company_id = owner.id)
         LIMIT 1
       `);
-      if (!destinationAllowed.rows.length)
-        return res.status(403).json({ message: "Destination must be this company or its linked child company" });
-      // The proforma record belongs to the active company, but a child company
-      // may create one for a supplier master owned by its explicitly linked
-      // parent. Keep the boundary strict: active company + parent_company_id
-      // only, never the legacy/global parent setting or an unrelated company.
-      const supplierCheck = await db.execute(sql`
+        if (!destinationAllowed.rows.length)
+          return res.status(403).json({ message: "Destination must be this company or its linked child company" });
+        // The proforma record belongs to the active company, but a child company
+        // may create one for a supplier master owned by its explicitly linked
+        // parent. Keep the boundary strict: active company + parent_company_id
+        // only, never the legacy/global parent setting or an unrelated company.
+        const supplierCheck = await db.execute(sql`
         SELECT s.id
         FROM suppliers s
         JOIN companies active_company ON active_company.id = ${companyId}
@@ -137,57 +169,59 @@ export function registerSupplierProformaRoutesPart4(app: Express, requireAuth: R
           )
         LIMIT 1
       `);
-      if (supplierCheck.rows.length === 0) return res.status(404).json({ message: "Supplier not found" });
+        if (supplierCheck.rows.length === 0) return res.status(404).json({ message: "Supplier not found" });
 
-      // Resolve alias codes to primary stock-item codes so that proforma lines
-      // are always stored with the canonical code regardless of what code the
-      // supplier's packing-list used.
-      const aliasMap = lines && Array.isArray(lines) && lines.length > 0 ? (await buildAliasMap(companyId)).map : null;
-      // Phase 21 (B): the proforma, its lines and the create audit commit together.
-      const proforma = await db.transaction(async (tx) => {
-        const [created] = await tx
-          .insert(supplierProformas)
-          .values({
-            companyId,
-            supplierId,
-            destinationCompanyId: destinationId,
-            reference: reference || "Untitled",
-            notes: notes || null,
-          })
-          .returning();
-        if (aliasMap && Array.isArray(lines)) {
-          const lineValues = lines.map((l) => ({
-            proformaId: created.id,
-            barcode: resolveBarcode(String(l.barcode || "").trim(), aliasMap),
-            itemName: String(l.itemName || "").trim(),
-            qty: parseInt(l.qty) || 0,
-            weightPerBale: sanitizeDecimal(l.weightPerBale),
-            pricePerBale: sanitizeDecimal(l.pricePerBale),
-          }));
-          await batchInsertProformaLines(lineValues, tx);
-        }
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "supplier_proformas",
-            recordId: created.id,
-            recordIdentifier: created.reference || `Proforma#${created.id}`,
-            changes: { supplierId: { old: null, new: supplierId }, reference: { old: null, new: created.reference } },
-          },
-          tx
-        );
-        return created;
-      });
-      const allLines = await db
-        .select()
-        .from(supplierProformaLines)
-        .where(eq(supplierProformaLines.proformaId, proforma.id));
-      res.json({ ...proforma, lines: allLines });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        // Resolve alias codes to primary stock-item codes so that proforma lines
+        // are always stored with the canonical code regardless of what code the
+        // supplier's packing-list used.
+        const aliasMap =
+          lines && Array.isArray(lines) && lines.length > 0 ? (await buildAliasMap(companyId)).map : null;
+        // Phase 21 (B): the proforma, its lines and the create audit commit together.
+        const proforma = await db.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(supplierProformas)
+            .values({
+              companyId,
+              supplierId,
+              destinationCompanyId: destinationId,
+              reference: reference || "Untitled",
+              notes: notes || null,
+            })
+            .returning();
+          if (aliasMap && Array.isArray(lines)) {
+            const lineValues = lines.map((l) => ({
+              proformaId: created.id,
+              barcode: resolveBarcode(String(l.barcode || "").trim(), aliasMap),
+              itemName: String(l.itemName || "").trim(),
+              qty: parseInt(l.qty) || 0,
+              weightPerBale: sanitizeDecimal(l.weightPerBale),
+              pricePerBale: sanitizeDecimal(l.pricePerBale),
+            }));
+            await batchInsertProformaLines(lineValues, tx);
+          }
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "supplier_proformas",
+              recordId: created.id,
+              recordIdentifier: created.reference || `Proforma#${created.id}`,
+              changes: { supplierId: { old: null, new: supplierId }, reference: { old: null, new: created.reference } },
+            },
+            tx
+          );
+          return created;
+        });
+        const allLines = await db
+          .select()
+          .from(supplierProformaLines)
+          .where(eq(supplierProformaLines.proformaId, proforma.id));
+        res.json({ ...proforma, lines: allLines });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

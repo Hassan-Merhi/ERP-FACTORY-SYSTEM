@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ratchet for scripts/audit-write-validation.mjs. maxUnvalidated is the number of unique write routes (method + path) in config/route-manifest.json whose handler chain has no validateRequest middleware. It may only fall: the audit fails when the live count is above it, and also when it is below it, so each conversion lowers the number in the same change (UPDATE_WRITE_VALIDATION_BASELINE=1). Tiers order the backlog by risk; the first tier whose prefix matches a route's path owns it.",
-  "maxUnvalidated": 615,
+  "maxUnvalidated": 0,
   "tiers": [
     {
       "name": "1-vouchers-posting",

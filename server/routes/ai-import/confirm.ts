@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { jobActionInput, updateRowInput } from "./aiImportSchemas";
 import { aiImportJobs, aiImportRows } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { assertJobOwnership, upsertCorrection, validateRows } from "./_helpers";
@@ -16,7 +18,7 @@ import { assertJobOwnership, upsertCorrection, validateRows } from "./_helpers";
 export function registerAiImportConfirmRoutes(app: Express) {
   // POST /api/ai-import/jobs/:id/confirm
   // Locks the job for posting; only works when errorRows = 0
-  app.post("/api/ai-import/jobs/:id/confirm", requireAuth, async (req, res) => {
+  app.post("/api/ai-import/jobs/:id/confirm", requireAuth, validateRequest(jobActionInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -64,7 +66,7 @@ export function registerAiImportConfirmRoutes(app: Express) {
   //     confidence?:   number           — default 100; only >=100 are auto-applied
   //   }>
   // }
-  app.patch("/api/ai-import/rows/:rowId", requireAuth, async (req, res) => {
+  app.patch("/api/ai-import/rows/:rowId", requireAuth, validateRequest(updateRowInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       const userId = req.session.userId;

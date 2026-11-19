@@ -10,6 +10,7 @@ import { logger } from "../../../lib/logger";
 import { resultRows } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import {
   assertNoInventoryCutoverTx,
   sendInventoryCutoverRefusal,
@@ -28,6 +29,8 @@ type CorruptedInventoryRow = {
   location_name?: string | null;
   stock_item_name?: string | null;
 };
+
+const repairInventoryValuesInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerAdminInventoryValueRepairRoutes(app: Express) {
   app.get("/api/admin/repair-inventory-values/preview", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -106,17 +109,22 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/repair-inventory-values", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-      // Wave 11: refused after the company's perpetual-inventory cut-over.
-      await assertNoInventoryCutoverTx(db, companyId, "repair-inventory-values");
+  app.post(
+    "/api/admin/repair-inventory-values",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(repairInventoryValuesInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+        // Wave 11: refused after the company's perpetual-inventory cut-over.
+        await assertNoInventoryCutoverTx(db, companyId, "repair-inventory-values");
 
-      const detectResult = await db.execute(
-        sql`SELECT id, location_id, stock_item_id, quantity, average_rate, total_value
+        const detectResult = await db.execute(
+          sql`SELECT id, location_id, stock_item_id, quantity, average_rate, total_value
             FROM inventory
             WHERE company_id = ${companyId}
             AND (
@@ -125,68 +133,69 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
               OR (CAST(quantity AS DECIMAL) > 0 AND CAST(total_value AS DECIMAL) < -0.01)
               OR (CAST(quantity AS DECIMAL) <= 0 AND ABS(CAST(average_rate AS DECIMAL)) > 0.001)
             )`
-      );
+        );
 
-      const corruptedRows = resultRows<CorruptedInventoryRow>(detectResult);
+        const corruptedRows = resultRows<CorruptedInventoryRow>(detectResult);
 
-      if (!corruptedRows || corruptedRows.length === 0) {
-        return res.json({ message: "No corrupted inventory rows found", corrected: 0, rows: [] });
-      }
-
-      const correctedRows = [];
-      for (const row of corruptedRows) {
-        const qty = toMoney(row.quantity).toNumber();
-        const oldRate = toMoney(row.average_rate).toNumber();
-        const oldValue = toMoney(row.total_value).toNumber();
-
-        let newValue = oldValue;
-        let newRate = oldRate;
-
-        if (qty <= 0) {
-          newValue = 0;
-          newRate = 0;
-        } else if (qty > 0 && oldValue < 0) {
-          newValue = 0;
-          newRate = 0;
-        } else if (oldRate < 0) {
-          newRate = 0;
+        if (!corruptedRows || corruptedRows.length === 0) {
+          return res.json({ message: "No corrupted inventory rows found", corrected: 0, rows: [] });
         }
 
-        await db.execute(
-          sql`UPDATE inventory
+        const correctedRows = [];
+        for (const row of corruptedRows) {
+          const qty = toMoney(row.quantity).toNumber();
+          const oldRate = toMoney(row.average_rate).toNumber();
+          const oldValue = toMoney(row.total_value).toNumber();
+
+          let newValue = oldValue;
+          let newRate = oldRate;
+
+          if (qty <= 0) {
+            newValue = 0;
+            newRate = 0;
+          } else if (qty > 0 && oldValue < 0) {
+            newValue = 0;
+            newRate = 0;
+          } else if (oldRate < 0) {
+            newRate = 0;
+          }
+
+          await db.execute(
+            sql`UPDATE inventory
               SET total_value = ${newValue.toFixed(2)},
                   average_rate = ${newRate.toFixed(2)},
                   last_updated = NOW()
               WHERE id = ${row.id}`
-        );
+          );
 
-        correctedRows.push({
-          id: row.id,
-          locationId: row.location_id,
-          stockItemId: row.stock_item_id,
-          quantity: qty,
-          oldRate,
-          oldValue,
-          newRate,
-          newValue,
+          correctedRows.push({
+            id: row.id,
+            locationId: row.location_id,
+            stockItemId: row.stock_item_id,
+            quantity: qty,
+            oldRate,
+            oldValue,
+            newRate,
+            newValue,
+          });
+
+          logger.info(
+            `[InventoryRepair] Corrected row id=${row.id} loc=${row.location_id} item=${row.stock_item_id}: qty=${qty} rate=${oldRate}->${newRate} value=${oldValue}->${newValue}`
+          );
+        }
+
+        res.json({
+          message: `Repaired ${correctedRows.length} corrupted inventory rows`,
+          corrected: correctedRows.length,
+          rows: correctedRows,
         });
-
-        logger.info(
-          `[InventoryRepair] Corrected row id=${row.id} loc=${row.location_id} item=${row.stock_item_id}: qty=${qty} rate=${oldRate}->${newRate} value=${oldValue}->${newValue}`
-        );
+      } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
+        logger.error("Inventory repair error:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      res.json({
-        message: `Repaired ${correctedRows.length} corrupted inventory rows`,
-        corrected: correctedRows.length,
-        rows: correctedRows,
-      });
-    } catch (error: unknown) {
-      if (sendInventoryCutoverRefusal(res, error)) return;
-      logger.error("Inventory repair error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ============================================================
   // NET PROFIT EXCEL EXPORT

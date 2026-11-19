@@ -14,12 +14,22 @@ import { factoryInvoiceLoadingSessions, factoryInvoiceLoadingBales } from "@shar
 import { eq, and, sql } from "drizzle-orm";
 
 import { buildLoadingSummary, getCompanyId } from "./_helpers";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// parseId() still checks the id.
+const loadingSessionActionInput = {
+  params: z.strictObject({ sessionId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerInvoiceLoadingLifecycleRoutes(app: Express) {
   // POST /api/factory/invoice-loading-sessions/:sessionId/complete
   app.post(
     "/api/factory/invoice-loading-sessions/:sessionId/complete",
     requireAuth,
+    validateRequest(loadingSessionActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
@@ -69,6 +79,7 @@ export function registerInvoiceLoadingLifecycleRoutes(app: Express) {
   app.post(
     "/api/factory/invoice-loading-sessions/:sessionId/cancel",
     requireAuth,
+    validateRequest(loadingSessionActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);

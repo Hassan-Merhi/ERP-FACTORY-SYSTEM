@@ -29,6 +29,16 @@ const reprintInput = {
   body: z.strictObject({ baleId: z.union([z.number(), z.string()]).nullable().optional() }),
 } satisfies RequestSchemas;
 
+// The handler still runs insertCompanySettingsSchema after resolving companyId
+// (parseInt of the body value, else the session company).
+const upsertCompanySettingsInput = {
+  query: emptyQuery,
+  body: insertCompanySettingsSchema
+    .omit({ companyId: true })
+    .extend({ companyId: z.union([z.number(), z.string()]).nullable().optional() })
+    .strict(),
+} satisfies RequestSchemas;
+
 export function registerBaleRoutesPart2(app: Express) {
   app.post("/api/bale-label-prints/reprint", requireAuth, validateRequest(reprintInput), async (req, res) => {
     try {
@@ -136,7 +146,7 @@ export function registerBaleRoutesPart2(app: Express) {
     }
   });
 
-  app.post("/api/company-settings", requireAuth, async (req, res) => {
+  app.post("/api/company-settings", requireAuth, validateRequest(upsertCompanySettingsInput), async (req, res) => {
     try {
       const { companyId: bodyCompanyId } = req.body;
       const companyId = bodyCompanyId ? parseInt(bodyCompanyId as string) : req.session.currentCompanyId;

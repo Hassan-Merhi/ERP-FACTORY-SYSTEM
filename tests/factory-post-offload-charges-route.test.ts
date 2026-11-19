@@ -155,7 +155,7 @@ describe("POST /api/factory/containers/:id/post-offload-charges — guards", () 
       .post("/api/factory/containers/not-a-number/post-offload-charges")
       .send({ charges: [{ description: "x", amount: "10" }] });
     expect(response.status).toBe(400);
-    expect(response.body.message).toMatch(/Invalid id/i);
+    expect(response.body.code).toBe("REQUEST_VALIDATION_FAILED");
   });
 
   it("does not find another company's container", async () => {
@@ -327,7 +327,7 @@ describe("DELETE /api/factory/containers/:id/post-offload-charges/:chargeId", ()
     const id = await seedContainer();
     const bad = await agent.delete(`/api/factory/containers/${id}/post-offload-charges/not-a-number`).send({});
     expect(bad.status).toBe(400);
-    expect(bad.body.message).toMatch(/Invalid id/i);
+    expect(bad.body.code).toBe("REQUEST_VALIDATION_FAILED");
 
     const missing = await agent.delete(`/api/factory/containers/99999999/post-offload-charges/1`).send({});
     expect(missing.status).toBe(404);

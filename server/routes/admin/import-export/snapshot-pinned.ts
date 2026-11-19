@@ -10,71 +10,104 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { snapshotPinnedAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handlers keep their own check that :cardKey is an allowed card.
+const pinAccountInput = {
+  params: z.strictObject({ cardKey: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ accountId: z.string(), accountType: z.string(), accountName: z.string() }),
+} satisfies RequestSchemas;
+
+const unpinAccountInput = {
+  params: z.strictObject({ cardKey: stringParam, accountId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerSnapshotPinnedAccountRoutes(app: Express) {
   // ── SNAPSHOT PINNED ACCOUNTS (supplier / customer / advance + future cards) ─
   const ALLOWED_CARD_KEYS = new Set(["supplier", "customer", "advance"]);
 
-  app.get("/api/snapshot-pinned-accounts/:cardKey", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
-    try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { cardKey } = req.params;
-      if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
-      const rows = await db
-        .select()
-        .from(snapshotPinnedAccounts)
-        .where(and(eq(snapshotPinnedAccounts.companyId, companyId), eq(snapshotPinnedAccounts.cardKey, cardKey)));
-      res.json(rows);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.get(
+    "/api/snapshot-pinned-accounts/:cardKey",
+    requireAuth,
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { cardKey } = req.params;
+        if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
+        const rows = await db
+          .select()
+          .from(snapshotPinnedAccounts)
+          .where(and(eq(snapshotPinnedAccounts.companyId, companyId), eq(snapshotPinnedAccounts.cardKey, cardKey)));
+        res.json(rows);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/snapshot-pinned-accounts/:cardKey", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
-    try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { cardKey } = req.params;
-      if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
-      const { accountId, accountType, accountName } = req.body;
-      if (!accountId || !accountType || !accountName)
-        return res.status(400).json({ message: "accountId, accountType, and accountName are required" });
-      const [row] = await db
-        .insert(snapshotPinnedAccounts)
-        .values({ companyId, cardKey, accountId, accountType, accountName })
-        .onConflictDoUpdate({
-          target: [snapshotPinnedAccounts.companyId, snapshotPinnedAccounts.cardKey, snapshotPinnedAccounts.accountId],
-          set: { accountName, accountType },
-        })
-        .returning();
-      res.json(row);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/snapshot-pinned-accounts/:cardKey",
+    requireAuth,
+    validateRequest(pinAccountInput),
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { cardKey } = req.params;
+        if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
+        const { accountId, accountType, accountName } = req.body;
+        if (!accountId || !accountType || !accountName)
+          return res.status(400).json({ message: "accountId, accountType, and accountName are required" });
+        const [row] = await db
+          .insert(snapshotPinnedAccounts)
+          .values({ companyId, cardKey, accountId, accountType, accountName })
+          .onConflictDoUpdate({
+            target: [
+              snapshotPinnedAccounts.companyId,
+              snapshotPinnedAccounts.cardKey,
+              snapshotPinnedAccounts.accountId,
+            ],
+            set: { accountName, accountType },
+          })
+          .returning();
+        res.json(row);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/snapshot-pinned-accounts/:cardKey/:accountId", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
-    try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { cardKey } = req.params;
-      if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
-      const accountId = decodeURIComponent(req.params.accountId);
-      await db
-        .delete(snapshotPinnedAccounts)
-        .where(
-          and(
-            eq(snapshotPinnedAccounts.companyId, companyId),
-            eq(snapshotPinnedAccounts.cardKey, cardKey),
-            eq(snapshotPinnedAccounts.accountId, accountId)
-          )
-        );
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/snapshot-pinned-accounts/:cardKey/:accountId",
+    requireAuth,
+    validateRequest(unpinAccountInput),
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { cardKey } = req.params;
+        if (!ALLOWED_CARD_KEYS.has(cardKey)) return res.status(400).json({ message: "Invalid cardKey" });
+        const accountId = decodeURIComponent(req.params.accountId);
+        await db
+          .delete(snapshotPinnedAccounts)
+          .where(
+            and(
+              eq(snapshotPinnedAccounts.companyId, companyId),
+              eq(snapshotPinnedAccounts.cardKey, cardKey),
+              eq(snapshotPinnedAccounts.accountId, accountId)
+            )
+          );
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACCOUNT MIGRATION — move ledger accounts + their statements between companies

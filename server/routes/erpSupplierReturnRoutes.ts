@@ -8,6 +8,20 @@ import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
 import { ReturnError, quantity, candidates, type Row } from "./erpSupplierReturnCandidates";
 import { registerErpSupplierReturnCommitRoute } from "./erpSupplierReturnCommitRoutes";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The handler converts these with String() / Number() and answers its own 400s.
+const textOrNumber = z.union([z.string(), z.number()]).nullable().optional();
+const previewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z
+      .array(z.strictObject({ code: textOrNumber, quantity: textOrNumber, offloadItemId: textOrNumber }))
+      .optional(),
+    supplierId: textOrNumber,
+  }),
+} satisfies RequestSchemas;
 
 // The return tables come from controlled migrations (migrations/controlled/20261113_001
 // and 20261114_001), which are applied explicitly per environment. Reads must not fail
@@ -61,7 +75,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       res.status(err.status || 500).json({ message: err.message || "Supplier lookup failed" });
     }
   });
-  app.post("/api/erp/supplier-returns/preview", ...guards, async (req, res) => {
+  app.post("/api/erp/supplier-returns/preview", ...guards, validateRequest(previewInput), async (req, res) => {
     try {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
       const { rows, supplierId: suppliedSupplierId } =

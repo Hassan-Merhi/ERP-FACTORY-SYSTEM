@@ -37,6 +37,8 @@ import {
 } from "../../services/accounting/goldenCoastPhase9HassanSavingsWithdrawal";
 import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { phase9WithdrawalInput } from "./spGoldenCoastPhase9RequestSchemas";
 
 const postingDependencies = createDatabasePostingDependencies();
 const phase9RequestBudget = privilegedRequestBudget({ maxBodyBytes: 16 * 1024, maxCollectionItems: 10 });
@@ -488,6 +490,7 @@ export function registerSpGoldenCoastPhase9HassanSavingsWithdrawalRoutes(app: Ex
     phase9RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(phase9WithdrawalInput),
     (req, res) => void handleWithdrawal(req, res)
   );
 }

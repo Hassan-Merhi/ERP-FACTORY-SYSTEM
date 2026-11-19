@@ -24,11 +24,11 @@ import {
   loadCompanyMembership,
   requesterIsDeveloper,
 } from "./usersAccessRoutesLoadCompanyMembership";
+import { validateRequest } from "../../../lib/validateRequest";
+import * as schema from "./factoryUsersWriteSchemas";
 
 export function registerFactoryUsersAccessRoutes(app: Express) {
-  // ───────────────────────────────────────────────
-  // Factory User Management
-  // ───────────────────────────────────────────────
+  // ── Factory User Management ──
 
   app.get("/api/factory/users", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -99,6 +99,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
+    validateRequest(schema.createFactoryUserInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -182,6 +183,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
+    validateRequest(schema.updateFactoryUserInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -319,6 +321,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
+    validateRequest(schema.removeFactoryUserInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

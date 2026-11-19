@@ -5,9 +5,11 @@ import { requireAuth } from "../../auth";
 import { storage } from "../../storage";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logAudit } from "../_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { deleteLocationInput } from "./locationWriteSchemas";
 
 export function registerLocationDeleteRoutes(app: Express) {
-  app.delete("/api/locations/:locationId", requireAuth, async (req, res) => {
+  app.delete("/api/locations/:locationId", requireAuth, validateRequest(deleteLocationInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

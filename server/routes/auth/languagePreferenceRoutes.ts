@@ -5,6 +5,14 @@ import { userLanguagePreferences } from "@shared/schema";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { z } from "zod";
+
+// An unsupported language string still reaches the handler's own message.
+const updateLanguagePreferenceInput = {
+  query: emptyQuery,
+  body: z.strictObject({ preferredLanguage: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerLanguagePreferenceRoutes(app: Express) {
   app.get("/api/language-preference", requireAuth, async (req, res) => {
@@ -21,7 +29,7 @@ export function registerLanguagePreferenceRoutes(app: Express) {
     }
   });
 
-  app.put("/api/language-preference", requireAuth, async (req, res) => {
+  app.put("/api/language-preference", requireAuth, validateRequest(updateLanguagePreferenceInput), async (req, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
       const requestedLanguage = req.body?.preferredLanguage;

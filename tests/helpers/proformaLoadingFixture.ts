@@ -22,12 +22,13 @@ export type RouteResponse = { statusCode: number; body: any };
 
 /** Minimal Express stand-in that keeps the final handler of each route. */
 export function createRouteHarness(...registrars: Array<(app: any) => void>) {
-  const handlers = new Map<string, Handler>();
+  // The whole chain runs, so a route's validateRequest middleware parses the input as it does live.
+  const handlers = new Map<string, Handler[]>();
   const record =
     (method: string) =>
     (path: string, ...chain: unknown[]) => {
       const key = `${method} ${path}`;
-      if (!handlers.has(key)) handlers.set(key, chain.at(-1) as Handler);
+      if (!handlers.has(key)) handlers.set(key, chain.filter((step) => typeof step === "function") as Handler[]);
     };
   const app = {
     get: record("GET"),
@@ -44,8 +45,8 @@ export function createRouteHarness(...registrars: Array<(app: any) => void>) {
     companyId: number,
     input: { params?: Record<string, string>; query?: Record<string, string>; body?: unknown } = {}
   ): Promise<RouteResponse> {
-    const handler = handlers.get(`${method} ${path}`);
-    if (!handler) throw new Error(`No handler registered for ${method} ${path}`);
+    const chain = handlers.get(`${method} ${path}`);
+    if (!chain) throw new Error(`No handler registered for ${method} ${path}`);
     const res: any = {
       statusCode: 200,
       body: undefined,
@@ -67,17 +68,21 @@ export function createRouteHarness(...registrars: Array<(app: any) => void>) {
         return res;
       },
     };
-    await handler(
-      {
-        session: { factoryCompanyId: companyId, userId: 1, username: "proforma-fixture" },
-        params: input.params ?? {},
-        query: input.query ?? {},
-        body: input.body ?? {},
-        headers: {},
-        get: () => undefined,
-      },
-      res
-    );
+    const req = {
+      session: { factoryCompanyId: companyId, userId: 1, username: "proforma-fixture" },
+      params: input.params ?? {},
+      query: input.query ?? {},
+      body: input.body ?? {},
+      headers: {},
+      get: () => undefined,
+    };
+    for (const step of chain) {
+      let advanced = false;
+      await (step as (...args: unknown[]) => unknown)(req, res, () => {
+        advanced = true;
+      });
+      if (!advanced) break;
+    }
     return res as RouteResponse;
   };
 }

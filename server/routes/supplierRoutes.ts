@@ -11,6 +11,13 @@ import {
 } from "./suppliers/supplierRequestContext";
 import { supplierService } from "./suppliers/supplierService";
 import { requireCreateOnlyVerifiedCreate } from "../services/security/createOnlyVerifiedCreates";
+import { validateRequest } from "../lib/validateRequest";
+import {
+  assignStockGroupInput,
+  createSupplierInput,
+  deleteSupplierInput,
+  updateSupplierInput,
+} from "./suppliers/supplierRequestSchemas";
 
 export function registerSupplierRoutes(app: Express) {
   app.get("/api/suppliers", requireAuth, async (req, res) => {
@@ -64,6 +71,7 @@ export function registerSupplierRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireCreateOnlyVerifiedCreate("suppliers"),
+    validateRequest(createSupplierInput),
     async (req, res) => {
       try {
         const companyId = getActiveSupplierCompanyId(req);
@@ -77,41 +85,59 @@ export function registerSupplierRoutes(app: Express) {
     }
   );
 
-  app.patch("/api/suppliers/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveSupplierCompanyId(req);
-      const supplierId = parseSupplierId(req.params.id);
-      const supplier = await supplierService.update(supplierId, companyId, req.body, getSupplierAuditActor(req));
-      return res.json(supplier);
-    } catch (error: unknown) {
-      return sendSupplierRouteError(res, error, 400);
+  app.patch(
+    "/api/suppliers/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateSupplierInput),
+    async (req, res) => {
+      try {
+        const companyId = getActiveSupplierCompanyId(req);
+        const supplierId = parseSupplierId(req.params.id);
+        const supplier = await supplierService.update(supplierId, companyId, req.body, getSupplierAuditActor(req));
+        return res.json(supplier);
+      } catch (error: unknown) {
+        return sendSupplierRouteError(res, error, 400);
+      }
     }
-  });
+  );
 
-  app.delete("/api/suppliers/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveSupplierCompanyId(req);
-      const supplierId = parseSupplierId(req.params.id);
-      await supplierService.delete(supplierId, companyId, getSupplierAuditActor(req));
-      return res.status(204).send();
-    } catch (error: unknown) {
-      return sendSupplierRouteError(res, error, 500);
+  app.delete(
+    "/api/suppliers/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteSupplierInput),
+    async (req, res) => {
+      try {
+        const companyId = getActiveSupplierCompanyId(req);
+        const supplierId = parseSupplierId(req.params.id);
+        await supplierService.delete(supplierId, companyId, getSupplierAuditActor(req));
+        return res.status(204).send();
+      } catch (error: unknown) {
+        return sendSupplierRouteError(res, error, 500);
+      }
     }
-  });
+  );
 
-  app.patch("/api/suppliers/:id/stock-group", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveSupplierCompanyId(req);
-      const supplierId = parseSupplierId(req.params.id);
-      const supplier = await supplierService.assignStockGroup(
-        supplierId,
-        companyId,
-        req.body,
-        getSupplierAuditActor(req)
-      );
-      return res.json({ success: true, supplier });
-    } catch (error: unknown) {
-      return sendSupplierRouteError(res, error, 500);
+  app.patch(
+    "/api/suppliers/:id/stock-group",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(assignStockGroupInput),
+    async (req, res) => {
+      try {
+        const companyId = getActiveSupplierCompanyId(req);
+        const supplierId = parseSupplierId(req.params.id);
+        const supplier = await supplierService.assignStockGroup(
+          supplierId,
+          companyId,
+          req.body,
+          getSupplierAuditActor(req)
+        );
+        return res.json({ success: true, supplier });
+      } catch (error: unknown) {
+        return sendSupplierRouteError(res, error, 500);
+      }
     }
-  });
+  );
 }

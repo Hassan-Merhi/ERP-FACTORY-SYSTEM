@@ -20,8 +20,40 @@ import { invalidExportDateRange } from "../services/export-excel/workbook";
 import { createScheduledExportArtifact } from "../helpers/scheduledExportArtifact";
 import { isEmailConfigError, retryAsync } from "../helpers/retryAsync";
 import { createExportRun, finishExportRun, updateExportRun } from "../helpers/exportRunTracker";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 
 const ALLOWED_ROLES = ["Admin", "Owner", "Developer"];
+
+// The handler keeps its own "Valid email required" check.
+const addRecipientInput = {
+  query: emptyQuery,
+  body: z.strictObject({ email: z.string().optional() }),
+} satisfies RequestSchemas;
+
+// The id goes to SQL as-is.
+const deleteRecipientInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const updateSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    gmailUser: z.string().nullable().optional(),
+    gmailAppPassword: z.string().nullable().optional(),
+    scheduleEnabled: z.boolean().nullable().optional(),
+    scheduleHour: z.union([z.number(), z.string()]).nullable().optional(),
+    scheduleTimezone: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler checks the mode and the dates and keeps its messages.
+const startExportInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    mode: z.string().optional(),
+    fromDate: z.string().nullable().optional(),
+    toDate: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerExportRoutesStep1(app: Express) {
   const guard = [requireAuth, requireRole(...ALLOWED_ROLES)];
@@ -37,7 +69,7 @@ export function registerExportRoutesStep1(app: Express) {
     }
   });
 
-  app.post("/api/export/recipients", guard, async (req: Request, res: Response) => {
+  app.post("/api/export/recipients", guard, validateRequest(addRecipientInput), async (req: Request, res: Response) => {
     const { email } = req.body;
     if (!email || typeof email !== "string" || !email.includes("@")) {
       return res.status(400).json({ message: "Valid email required" });
@@ -55,14 +87,19 @@ export function registerExportRoutesStep1(app: Express) {
     }
   });
 
-  app.delete("/api/export/recipients/:id", guard, async (req: Request, res: Response) => {
-    try {
-      await pool.query(`DELETE FROM export_recipients WHERE id = $1`, [req.params.id]);
-      res.json({ success: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+  app.delete(
+    "/api/export/recipients/:id",
+    guard,
+    validateRequest(deleteRecipientInput),
+    async (req: Request, res: Response) => {
+      try {
+        await pool.query(`DELETE FROM export_recipients WHERE id = $1`, [req.params.id]);
+        res.json({ success: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── Settings ───────────────────────────────────────────────────────────────
 
@@ -93,7 +130,7 @@ export function registerExportRoutesStep1(app: Express) {
     }
   });
 
-  app.put("/api/export/settings", guard, async (req: Request, res: Response) => {
+  app.put("/api/export/settings", guard, validateRequest(updateSettingsInput), async (req: Request, res: Response) => {
     const { gmailUser, gmailAppPassword, scheduleEnabled, scheduleHour, scheduleTimezone } = req.body;
     try {
       const existing = await pool.query(`SELECT id FROM export_settings WHERE id = 1`);
@@ -147,7 +184,7 @@ export function registerExportRoutesStep2(
 ) {
   // ── Async export job: start ────────────────────────────────────────────────
 
-  app.post("/api/export/start", guard, async (req: Request, res: Response) => {
+  app.post("/api/export/start", guard, validateRequest(startExportInput), async (req: Request, res: Response) => {
     const { mode, fromDate, toDate } = req.body;
     if (mode !== "download" && mode !== "email") {
       return res.status(400).json({ message: "mode must be 'download' or 'email'" });

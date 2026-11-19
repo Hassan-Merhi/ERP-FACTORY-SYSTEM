@@ -13,6 +13,39 @@ import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getProfitCheckSupplierScope } from "./supplier-scope";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const numberish = z.union([z.number(), z.string()]);
+
+// Sent by useSupplierProfitCheckModelPart3.ts; resolveAndConsolidateItems reads
+// these fields through String()/Number() and keeps its own checks.
+const proformaItem = z.strictObject({
+  barcode: z.string().nullable().optional(),
+  code: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
+  itemName: z.string().nullable().optional(),
+  qty: numberish.nullable().optional(),
+  supplierPrice: numberish.nullable().optional(),
+  weight: numberish.nullable().optional(),
+});
+
+const saveProformaInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    supplierId: numberish.optional(),
+    reference: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    items: z.array(proformaItem).optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler keeps its positive-integer proforma id check.
+const updateProformaItemsInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ items: z.array(proformaItem).optional() }),
+} satisfies RequestSchemas;
 
 class ProfitCheckInputError extends Error {
   constructor(
@@ -215,96 +248,106 @@ async function insertLines(client: PoolClient, proformaId: number, lines: Consol
 }
 
 export function registerSupplierProfitProformaRoutes(app: Express, requireAuth: RequestHandler) {
-  app.post("/api/supplier-profit-check/save-proforma", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/supplier-profit-check/save-proforma",
+    requireAuth,
+    validateRequest(saveProformaInput),
+    async (req: Request, res: Response) => {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-    const { supplierId: rawSupplierId, reference, notes, items } = req.body;
-    const supplierId = Number(rawSupplierId);
-    if (!Number.isInteger(supplierId) || supplierId <= 0 || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "supplierId and items required" });
-    }
-    if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
-      return res.status(404).json({ message: "Supplier not found" });
-    }
+      const { supplierId: rawSupplierId, reference, notes, items } = req.body;
+      const supplierId = Number(rawSupplierId);
+      if (!Number.isInteger(supplierId) || supplierId <= 0 || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "supplierId and items required" });
+      }
+      if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+        return res.status(404).json({ message: "Supplier not found" });
+      }
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
 
-      const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
-      if (lines.length === 0) throw new ProfitCheckInputError("Enter qty for at least one item");
+        const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
+        if (lines.length === 0) throw new ProfitCheckInputError("Enter qty for at least one item");
 
-      const proformaRef =
-        String(reference ?? "").trim() ||
-        `PC-${new Date().toISOString().slice(0, 10)}-${Date.now().toString().slice(-4)}`;
-      const proformaResult = await client.query(
-        `
+        const proformaRef =
+          String(reference ?? "").trim() ||
+          `PC-${new Date().toISOString().slice(0, 10)}-${Date.now().toString().slice(-4)}`;
+        const proformaResult = await client.query(
+          `
         INSERT INTO supplier_proformas (company_id, supplier_id, reference, notes, created_at, updated_at)
         VALUES ($1, $2, $3, $4, now(), now())
         RETURNING id, reference
       `,
-        [companyId, supplierId, proformaRef, String(notes ?? "").trim() || null]
-      );
-      const proforma = proformaResult.rows[0];
-      await insertLines(client, Number(proforma.id), lines);
-      await client.query("COMMIT");
-      res.json({ id: proforma.id, reference: proforma.reference });
-    } catch (err: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      const status = err instanceof ProfitCheckInputError ? err.status : 500;
-      if (status === 500) logger.error("[supplier-profit-check/save-proforma]", { error: getErrorMessage(err) });
-      res.status(status).json({ message: getErrorMessage(err) });
-    } finally {
-      client.release();
+          [companyId, supplierId, proformaRef, String(notes ?? "").trim() || null]
+        );
+        const proforma = proformaResult.rows[0];
+        await insertLines(client, Number(proforma.id), lines);
+        await client.query("COMMIT");
+        res.json({ id: proforma.id, reference: proforma.reference });
+      } catch (err: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        const status = err instanceof ProfitCheckInputError ? err.status : 500;
+        if (status === 500) logger.error("[supplier-profit-check/save-proforma]", { error: getErrorMessage(err) });
+        res.status(status).json({ message: getErrorMessage(err) });
+      } finally {
+        client.release();
+      }
     }
-  });
+  );
 
-  app.put("/api/supplier-profit-check/proforma/:id/update-items", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    const proformaId = Number(req.params.id);
-    if (!Number.isInteger(proformaId) || proformaId <= 0) {
-      return res.status(400).json({ message: "Invalid proforma ID" });
-    }
-    const { items } = req.body;
-    if (!Array.isArray(items)) return res.status(400).json({ message: "items array required" });
+  app.put(
+    "/api/supplier-profit-check/proforma/:id/update-items",
+    requireAuth,
+    validateRequest(updateProformaItemsInput),
+    async (req: Request, res: Response) => {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const proformaId = Number(req.params.id);
+      if (!Number.isInteger(proformaId) || proformaId <= 0) {
+        return res.status(400).json({ message: "Invalid proforma ID" });
+      }
+      const { items } = req.body;
+      if (!Array.isArray(items)) return res.status(400).json({ message: "items array required" });
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const proformaResult = await client.query(
-        `
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const proformaResult = await client.query(
+          `
         SELECT id, supplier_id
         FROM supplier_proformas
         WHERE id = $1 AND company_id = $2
         FOR UPDATE
       `,
-        [proformaId, companyId]
-      );
-      if (proformaResult.rows.length === 0) throw new ProfitCheckInputError("Proforma not found", 404);
+          [proformaId, companyId]
+        );
+        if (proformaResult.rows.length === 0) throw new ProfitCheckInputError("Proforma not found", 404);
 
-      const supplierId = Number(proformaResult.rows[0].supplier_id);
-      if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
-        throw new ProfitCheckInputError("Supplier not found", 404);
+        const supplierId = Number(proformaResult.rows[0].supplier_id);
+        if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+          throw new ProfitCheckInputError("Supplier not found", 404);
+        }
+
+        const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
+        await client.query(`DELETE FROM supplier_proforma_lines WHERE proforma_id = $1`, [proformaId]);
+        await insertLines(client, proformaId, lines);
+        await client.query(`UPDATE supplier_proformas SET updated_at = now() WHERE id = $1 AND company_id = $2`, [
+          proformaId,
+          companyId,
+        ]);
+        await client.query("COMMIT");
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        const status = err instanceof ProfitCheckInputError ? err.status : 500;
+        if (status === 500) logger.error("[supplier-profit-check/update-items]", { error: getErrorMessage(err) });
+        res.status(status).json({ message: getErrorMessage(err) });
+      } finally {
+        client.release();
       }
-
-      const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
-      await client.query(`DELETE FROM supplier_proforma_lines WHERE proforma_id = $1`, [proformaId]);
-      await insertLines(client, proformaId, lines);
-      await client.query(`UPDATE supplier_proformas SET updated_at = now() WHERE id = $1 AND company_id = $2`, [
-        proformaId,
-        companyId,
-      ]);
-      await client.query("COMMIT");
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      const status = err instanceof ProfitCheckInputError ? err.status : 500;
-      if (status === 500) logger.error("[supplier-profit-check/update-items]", { error: getErrorMessage(err) });
-      res.status(status).json({ message: getErrorMessage(err) });
-    } finally {
-      client.release();
     }
-  });
+  );
 }

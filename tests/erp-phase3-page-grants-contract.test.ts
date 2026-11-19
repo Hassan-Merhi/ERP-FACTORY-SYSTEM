@@ -3,9 +3,11 @@ import { FEATURE_KEYS } from "../shared/schema/common";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const source = readModuleFamily(new URL("../server/routes/admin/userManagementRoutes.ts", import.meta.url));
+// Start of a route registration, whether or not the formatter wrapped its arguments.
+const route = (method: string, path: string) => source.search(new RegExp(`app\\.${method}\\(\\s*"${path}"`));
 const putHandler = source.slice(
-  source.indexOf('app.put("/api/erp-user-page-access/:userId"'),
-  source.indexOf('app.get("/api/erp-user-hidden-costs/:userId"')
+  route("put", "/api/erp-user-page-access/:userId"),
+  route("get", "/api/erp-user-hidden-costs/:userId")
 );
 // Whitespace-insensitive view: the formatter may wrap chained query-builder calls.
 const compactPutHandler = putHandler.replace(/\s+/g, "");
@@ -13,8 +15,8 @@ const compactPutHandler = putHandler.replace(/\s+/g, "");
 describe("ERP Phase 3 page-access assignment safety", () => {
   it("validates the target user's membership in the selected company before reading grants", () => {
     const getHandler = source.slice(
-      source.indexOf('app.get("/api/erp-user-page-access/:userId"'),
-      source.indexOf('app.put("/api/erp-user-page-access/:userId"')
+      route("get", "/api/erp-user-page-access/:userId"),
+      route("put", "/api/erp-user-page-access/:userId")
     );
     expect(getHandler).toContain("userCompanyRoles.companyId");
     expect(getHandler).toContain("userCompanyRoles.userId");
@@ -49,12 +51,12 @@ describe("ERP Phase 3 page-access assignment safety", () => {
 
 describe("ERP hidden-cost preference route membership", () => {
   const getHandler = source.slice(
-    source.indexOf('app.get("/api/erp-user-hidden-costs/:userId"'),
-    source.indexOf('app.put("/api/erp-user-hidden-costs/:userId"')
+    route("get", "/api/erp-user-hidden-costs/:userId"),
+    route("put", "/api/erp-user-hidden-costs/:userId")
   );
   const updateHandler = source.slice(
-    source.indexOf('app.put("/api/erp-user-hidden-costs/:userId"'),
-    source.indexOf('app.get("/api/my-erp-pages"')
+    route("put", "/api/erp-user-hidden-costs/:userId"),
+    route("get", "/api/my-erp-pages")
   );
 
   it("does not reveal a nonmember's global ERP restrictions to a company Admin", () => {
