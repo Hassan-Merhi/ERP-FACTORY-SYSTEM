@@ -172,7 +172,7 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
         if (
           !a ||
           !c ||
-          String(a.quantity) !== String(c.quantity) ||
+          !new MoneyDecimal(String(a.quantity)).eq(new MoneyDecimal(String(c.quantity))) ||
           cents(a.rate).toFixed(2) !== cents(c.rate).toFixed(2) ||
           cents(a.lineTotal).toFixed(2) !== cents(c.lineTotal).toFixed(2)
         ) {
@@ -197,7 +197,7 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
         updates.push(row);
         goodsByPo.set(a.poId, (goodsByPo.get(a.poId) ?? new MoneyDecimal(0)).plus(total!));
         if (
-          a.quantity !== row.quantity ||
+          !new MoneyDecimal(String(a.quantity)).eq(new MoneyDecimal(row.quantity)) ||
           cents(a.rate).toFixed(2) !== row.rate ||
           a.itemName !== row.itemName ||
           cents(a.lineTotal).toFixed(2) !== row.lineTotal

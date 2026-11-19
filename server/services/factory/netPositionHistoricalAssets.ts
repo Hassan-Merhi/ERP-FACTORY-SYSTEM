@@ -269,17 +269,20 @@ async function recordedFactoryRentalAsOf(
     loadFactoryRowsKnownAt("property_payments", companyId, scope),
   ]);
   if (!units.ready || !contracts.ready || !monthly.ready || !payments.ready) return null;
-  const activeUnitIds = new Set(
-    [...units.rows.values()]
-      .filter((r) => r.module === "FACTORY" && r.active === true && r.deleted_at == null)
-      .map((r) => Number(r.id))
+  // Same scope as the live report and the pre-baseline fallback: Factory
+  // SHOP units only, contracts only on those units.
+  const shopUnits = [...units.rows.values()].filter(
+    (r) => r.module === "FACTORY" && r.unit_type === "SHOP" && r.deleted_at == null
   );
+  const shopUnitIds = new Set(shopUnits.map((r) => Number(r.id)));
+  const activeUnitIds = new Set(shopUnits.filter((r) => r.active === true).map((r) => Number(r.id)));
   const selected = [...contracts.rows.values()]
     .filter(
       (r) =>
         r.company_id === companyId &&
         r.module === "FACTORY" &&
         r.deleted_at == null &&
+        shopUnitIds.has(Number(r.unit_id)) &&
         String(r.start_date ?? "").slice(0, 10) <= scope.asOf
     )
     .filter((r) =>
@@ -316,6 +319,8 @@ async function recordedFactoryRentalAsOf(
   const warnings = new Set<string>();
   for (const r of payments.rows.values()) {
     if (r.module !== "FACTORY" || r.deleted_at != null) continue;
+    // Guarantee payments (no monthly ledger row) are deposits, not rent.
+    if (r.ledger_row_id == null) continue;
     if (String(r.payment_date ?? "").slice(0, 10) > scope.asOf) continue;
     const row = sums.get(Number(r.contract_id));
     if (!row) continue;

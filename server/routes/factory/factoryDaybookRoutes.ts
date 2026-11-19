@@ -219,125 +219,85 @@ export function registerFactoryDaybookRoutes(app: Express) {
       }
 
       // ── 2b. Enrich BALE_STOCK_ENTRY (always re-derive from productionPrice) ──
-      // and zero-amount LOADING_SUBMITTED / ORDER_VERIFIED entries.
       // BALE_STOCK_ENTRY is always re-derived so old entries stored as selling price
       // are corrected to production price on the fly without a DB migration.
-      const baleStockAndZeroRows = filteredDaybookRows.filter(
-        (r) =>
-          r.txType === "BALE_STOCK_ENTRY" ||
-          (toMoney(r.amountCurrency).isZero() && ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(r.txType))
-      );
-      // Alias kept so the rest of the block compiles unchanged
-      const zeroRows = baleStockAndZeroRows;
-
-      if (zeroRows.length > 0) {
-        // BALE_STOCK_ENTRY: derive from bale IDs stored in metaJson
-        const baleStockRows = zeroRows.filter((r) => r.txType === "BALE_STOCK_ENTRY");
-        if (baleStockRows.length > 0) {
-          // Collect all bale IDs across all zero bale stock entries
-          // Only integer IDs are valid — old entries may have stored UUIDs which Postgres rejects
-          const baleIdToEntry = new Map();
-          for (const row of baleStockRows) {
-            try {
-              const meta = JSON.parse(row.metaJson || "{}");
-              const bales = Array.isArray(meta.bales) ? meta.bales : [];
-              for (const b of bales) {
-                const numId = parseInt(b.id, 10);
-                if (!b.id || isNaN(numId) || String(numId) !== String(b.id)) continue; // skip UUIDs / non-integers
-                if (!baleIdToEntry.has(numId)) baleIdToEntry.set(numId, []);
-                baleIdToEntry.get(numId)!.push({ row, weightKg: toMoney(b.weightKg).toNumber() });
-              }
-            } catch {
-              // Failure here is non-fatal and the surrounding flow continues deliberately.
+      // (LOADING_SUBMITTED / ORDER_VERIFIED never reach here: the step query
+      // excludes them as workflow events, so they need no amount enrichment.)
+      const baleStockRows = filteredDaybookRows.filter((r) => r.txType === "BALE_STOCK_ENTRY");
+      // Derive from bale IDs stored in metaJson
+      if (baleStockRows.length > 0) {
+        // Collect all bale IDs across all zero bale stock entries
+        // Only integer IDs are valid — old entries may have stored UUIDs which Postgres rejects
+        const baleIdToEntry = new Map();
+        for (const row of baleStockRows) {
+          try {
+            const meta = JSON.parse(row.metaJson || "{}");
+            const bales = Array.isArray(meta.bales) ? meta.bales : [];
+            for (const b of bales) {
+              const numId = parseInt(b.id, 10);
+              if (!b.id || isNaN(numId) || String(numId) !== String(b.id)) continue; // skip UUIDs / non-integers
+              if (!baleIdToEntry.has(numId)) baleIdToEntry.set(numId, []);
+              baleIdToEntry.get(numId)!.push({ row, weightKg: toMoney(b.weightKg).toNumber() });
             }
-          }
-          if (baleIdToEntry.size > 0) {
-            const allBaleIds = Array.from(baleIdToEntry.keys());
-            // Fetch costPerKg, productId, and articleCode for multi-level fallback
-            const baleRecords = await db
-              .select({
-                id: factoryBales.id,
-                costPerKg: factoryBales.costPerKg,
-                productId: factoryBales.productId,
-                articleCode: factoryBales.articleCode,
-              })
-              .from(factoryBales)
-              .where(inArray(factoryBales.id, allBaleIds));
-
-            // Build product production price map: by id (primary) and by articleCode (fallback)
-            // Production price is what was spent to produce the bale — used for cost-side daybook entries.
-            const productProductionPriceById = new Map<number, string>();
-            const productProductionPriceByArticleCode = new Map<string, string>();
-            const allProducts = await db
-              .select({
-                id: factoryBaleProducts.id,
-                articleCode: factoryBaleProducts.articleCode,
-                productionPrice: factoryBaleProducts.productionPrice,
-              })
-              .from(factoryBaleProducts)
-              .where(eq(factoryBaleProducts.companyId, companyId));
-            allProducts.forEach((p) => {
-              productProductionPriceById.set(p.id, p.productionPrice || "0");
-              if (p.articleCode) productProductionPriceByArticleCode.set(p.articleCode, p.productionPrice || "0");
-            });
-
-            // Accumulate value per daybook row id using productionPrice (per bale)
-            const rowValues = new Map<number, string[]>();
-            for (const baleRec of baleRecords) {
-              const entries = baleIdToEntry.get(baleRec.id) || [];
-              let val = toMoney(0);
-              // primary: productId → productionPrice
-              if (baleRec.productId) val = toMoney(productProductionPriceById.get(baleRec.productId));
-              // fallback: articleCode → productionPrice
-              if (val.isZero() && baleRec.articleCode)
-                val = toMoney(productProductionPriceByArticleCode.get(baleRec.articleCode));
-              for (const { row } of entries) {
-                rowValues.set(row.id, [...(rowValues.get(row.id) || []), val.toString()]);
-              }
-            }
-
-            // Patch the filteredDaybookRows in-place.
-            // BALE_STOCK_ENTRY is always overwritten so old rows stored with
-            // selling price are corrected to production price on the fly.
-            for (const row of filteredDaybookRows) {
-              if (row.txType === "BALE_STOCK_ENTRY") {
-                const values = rowValues.get(row.id);
-                const derived = values ? sumMoney(values) : null;
-                if (derived && derived.gt(0)) {
-                  row.amountCurrency = String(derived.toFixed(2));
-                  row.amountUsd = String(derived.toFixed(2));
-                }
-              }
-            }
+          } catch {
+            // Failure here is non-fatal and the surrounding flow continues deliberately.
           }
         }
-
-        // LOADING_SUBMITTED / ORDER_VERIFIED: derive from customerOrders.grandTotal
-        // (grandTotal includes bales + all charges/surcharges, not just bale prices)
-        const loadingRows = zeroRows.filter(
-          (r) => ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(r.txType) && r.referenceId
-        );
-        if (loadingRows.length > 0) {
-          const orderIds = [...new Set(loadingRows.map((r) => r.referenceId as number))];
-          const orderGrandTotals = await db
+        if (baleIdToEntry.size > 0) {
+          const allBaleIds = Array.from(baleIdToEntry.keys());
+          // Fetch costPerKg, productId, and articleCode for multi-level fallback
+          const baleRecords = await db
             .select({
-              id: customerOrders.id,
-              grandTotal: customerOrders.grandTotal,
+              id: factoryBales.id,
+              costPerKg: factoryBales.costPerKg,
+              productId: factoryBales.productId,
+              articleCode: factoryBales.articleCode,
             })
-            .from(customerOrders)
-            .where(inArray(customerOrders.id, orderIds));
+            .from(factoryBales)
+            .where(inArray(factoryBales.id, allBaleIds));
 
-          const orderTotals = new Map<number, ReturnType<typeof toMoney>>();
-          for (const o of orderGrandTotals) {
-            orderTotals.set(o.id, toMoney(o.grandTotal));
+          // Build product production price map: by id (primary) and by articleCode (fallback)
+          // Production price is what was spent to produce the bale — used for cost-side daybook entries.
+          const productProductionPriceById = new Map<number, string>();
+          const productProductionPriceByArticleCode = new Map<string, string>();
+          const allProducts = await db
+            .select({
+              id: factoryBaleProducts.id,
+              articleCode: factoryBaleProducts.articleCode,
+              productionPrice: factoryBaleProducts.productionPrice,
+            })
+            .from(factoryBaleProducts)
+            .where(eq(factoryBaleProducts.companyId, companyId));
+          allProducts.forEach((p) => {
+            productProductionPriceById.set(p.id, p.productionPrice || "0");
+            if (p.articleCode) productProductionPriceByArticleCode.set(p.articleCode, p.productionPrice || "0");
+          });
+
+          // Accumulate value per daybook row id using productionPrice (per bale)
+          const rowValues = new Map<number, string[]>();
+          for (const baleRec of baleRecords) {
+            const entries = baleIdToEntry.get(baleRec.id) || [];
+            let val = toMoney(0);
+            // primary: productId → productionPrice
+            if (baleRec.productId) val = toMoney(productProductionPriceById.get(baleRec.productId));
+            // fallback: articleCode → productionPrice
+            if (val.isZero() && baleRec.articleCode)
+              val = toMoney(productProductionPriceByArticleCode.get(baleRec.articleCode));
+            for (const { row } of entries) {
+              rowValues.set(row.id, [...(rowValues.get(row.id) || []), val.toString()]);
+            }
           }
 
+          // Patch the filteredDaybookRows in-place.
+          // BALE_STOCK_ENTRY is always overwritten so old rows stored with
+          // selling price are corrected to production price on the fly.
           for (const row of filteredDaybookRows) {
-            if (["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(row.txType) && toMoney(row.amountCurrency).isZero()) {
-              const total = row.referenceId == null ? undefined : orderTotals.get(row.referenceId);
-              if (total && total.gt(0)) {
-                row.amountCurrency = String(total.toFixed(2));
-                row.amountUsd = String(total.toFixed(2));
+            if (row.txType === "BALE_STOCK_ENTRY") {
+              const values = rowValues.get(row.id);
+              const derived = values ? sumMoney(values) : null;
+              if (derived && derived.gt(0)) {
+                row.amountCurrency = String(derived.toFixed(2));
+                row.amountUsd = String(derived.toFixed(2));
               }
             }
           }

@@ -186,14 +186,11 @@ describe("editLinkedTrade refusals", () => {
 });
 
 describe("editLinkedTrade posting", () => {
-  // Current behaviour (see report): the unchanged-edit check compares the stored
-  // quantity text ("1.000") with the submitted text ("1"), so re-submitting the
-  // same values in a different spelling records a zero-money revision.
-  it("records a zero-delta revision when only the quantity spelling differs", () =>
+  it("refuses an identical edit whose quantity is only spelled differently, without bumping the version", () =>
     world(async (w, t) => {
-      const result = await editLinkedTrade(edit(t, {}, { quantity: "1", rate: "100.00" }), w.identity());
-      expect(result).toMatchObject({ version: 2, landedCost: "100.00", replayed: false });
-      expect((await prices(w, t)).map((r) => Number(r.rate))).toEqual([100, 100]);
+      await refusedEdit(w, t, edit(t, {}, { quantity: "1", rate: "100" }), "IC_EDIT_NO_CHANGE");
+      const [trade] = await w.q(`SELECT version FROM intercompany_trades WHERE id = $1`, [t.tradeId]);
+      expect(trade.version).toBe(1);
     }));
 
   it("mirrors the new price into both POs, posts the adjustment journals and replays the same key", () =>

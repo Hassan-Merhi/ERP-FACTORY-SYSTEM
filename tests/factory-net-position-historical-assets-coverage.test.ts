@@ -122,6 +122,14 @@ async function seedRent(q: Q, companyId: number, one: (t: string, p?: unknown[])
   await payment(ended, shop2, endedJan, "150", "POSTED", null);
   await payment(ended, shop2, endedJan, "40", "VOID", null);
   await payment(active, shop1, null, "500", "POSTED", created); // guarantee deposit, not rent
+  // An active contract on a non-shop unit is outside the Factory rent report.
+  const office = await one(
+    `INSERT INTO property_units (company_id, unit_number, unit_type, location_group, module, active, created_at)
+     VALUES ($1, 'O1', 'OFFICE', 'Main', 'FACTORY', TRUE, $2) RETURNING id`,
+    [companyId, created]
+  );
+  const officeContract = await contract(office, "ACTIVE", null);
+  await ledger(officeContract, office, 1, "70");
   // Active contract prepaid 30; ended contract still owes 50.
 }
 
@@ -215,13 +223,12 @@ describe("historical net position assets from recorded row history", () => {
       const expected = await seedAdvances(q, companyId, one, "2026-01-01");
       await seedRent(q, companyId, one, "2026-01-01");
       const result = await computeHistoricalFactoryAssetLiabilityOperations(companyId, scope(today));
-      // The recorded replay drops the fallback limitation warnings; only the
-      // missing posting timestamp is reported. Current behaviour (see report):
-      // unlike the fallback, it does not skip guarantee deposits (payments
-      // without a ledger row), so the 500 deposit is counted as prepaid rent.
+      // The recorded replay reaches the same positions as the fallback (no
+      // guarantee deposit, no non-shop unit) without its limitation warnings;
+      // only the missing posting timestamp is reported.
       expect(result).toEqual({
         workerAdvancesValue: expected,
-        prepaidRent: 530,
+        prepaidRent: 30,
         rentPayable: 50,
         warnings: ["HISTORICAL_RENT_POSTING_TIMESTAMP_MISSING"],
       });
