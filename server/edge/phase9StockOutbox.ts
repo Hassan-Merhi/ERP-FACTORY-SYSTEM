@@ -10,7 +10,7 @@
  * never created at runtime; without it the LAN write guard refuses the route
  * instead of failing mid-adjustment.
  */
-import { capturePcLocalEnvelopeTx, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
+import { capturePcLocalEnvelopeTx, isPcLocalId, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
 import { EdgeRefusal } from "./edgeRefusal";
@@ -117,10 +117,7 @@ export async function capturePhase9StockItemEditTx(
   // A PC in entry mode: the finished envelope goes to its own outbox, with a
   // local reference from the PC's sequence, in this transaction.
   if (pcLocalEntryMode()) {
-    const next = await tx.execute(sql`SELECT nextval('pc_local.local_ref_seq')::integer AS ref`);
-    const localEditId = Number((next.rows[0] as { ref: number | string }).ref);
-    const event = phase9StockItemEditEnvelope({ ...evidence, localEditId });
-    await capturePcLocalEnvelopeTx(tx, event, localEditId);
+    await pcLocalFollowUpTx(tx, (localEditId) => phase9StockItemEditEnvelope({ ...evidence, localEditId }));
     return;
   }
   const config = readFactoryEdgeConfiguration();
@@ -234,6 +231,20 @@ async function appendStockFollowUpTx<
   `);
 }
 
+/**
+ * A PC in entry mode: a follow-up record goes to the PC's own outbox as a
+ * finished envelope, with a local reference from the PC's sequence, in the
+ * change's transaction.
+ */
+async function pcLocalFollowUpTx<T extends { kind: string; requestId: string; companyId: number; actorUserId: string }>(
+  tx: DbTransaction,
+  build: (localEditId: number) => T
+): Promise<void> {
+  const next = await tx.execute(sql`SELECT nextval('pc_local.local_ref_seq')::integer AS ref`);
+  const localEditId = Number((next.rows[0] as { ref: number | string }).ref);
+  await capturePcLocalEnvelopeTx(tx, build(localEditId), localEditId);
+}
+
 function lanSiteId(): string | null {
   const config = readFactoryEdgeConfiguration();
   return config.mode === "lan" && config.primary && config.siteId ? String(config.siteId) : null;
@@ -252,6 +263,10 @@ async function recordedOnLanTx(tx: DbTransaction, siteId: string, kind: string, 
 /** How an offline record names a transfer: by its LAN record if created offline, else by its shared id. */
 export async function phase9TransferRefTx(tx: DbTransaction, transferId: number): Promise<Phase9TransferRef> {
   const siteId = lanSiteId();
+  // On a PC, a transfer made there carries a local id (the PC keeps it as the create's reference).
+  if (pcLocalEntryMode()) {
+    return isPcLocalId(transferId) ? { origin: "lan", localTransferId: transferId } : { origin: "cloud", transferId };
+  }
   if (siteId && (await recordedOnLanTx(tx, siteId, "stock.transfer.v1", transferId))) {
     return { origin: "lan", localTransferId: transferId };
   }
@@ -261,6 +276,9 @@ export async function phase9TransferRefTx(tx: DbTransaction, transferId: number)
 /** How an offline record names a transfer revision (same rule as transfers). */
 export async function phase9RevisionRefTx(tx: DbTransaction, revisionId: number): Promise<Phase9RevisionRef> {
   const siteId = lanSiteId();
+  if (pcLocalEntryMode()) {
+    return isPcLocalId(revisionId) ? { origin: "lan", localRevisionId: revisionId } : { origin: "cloud", revisionId };
+  }
   if (siteId && (await recordedOnLanTx(tx, siteId, PHASE9_STOCK_TRANSFER_REVISION_KIND, revisionId))) {
     return { origin: "lan", localRevisionId: revisionId };
   }
@@ -300,6 +318,8 @@ export async function capturePhase9StockTransferEditTx(
   tx: DbTransaction,
   evidence: Omit<Phase9StockTransferEditEvidence, "localEditId">
 ): Promise<void> {
+  if (pcLocalEntryMode())
+    return pcLocalFollowUpTx(tx, (localEditId) => phase9StockTransferEditEnvelope({ ...evidence, localEditId }));
   const siteId = lanSiteId();
   if (!siteId) return;
   await appendStockFollowUpTx(tx, siteId, (localEditId) =>
@@ -312,6 +332,8 @@ export async function capturePhase9StockTransferFinalizeTx(
   tx: DbTransaction,
   evidence: Omit<Phase9StockTransferFinalizeEvidence, "localEditId">
 ): Promise<void> {
+  if (pcLocalEntryMode())
+    return pcLocalFollowUpTx(tx, (localEditId) => phase9StockTransferFinalizeEnvelope({ ...evidence, localEditId }));
   const siteId = lanSiteId();
   if (!siteId) return;
   await appendStockFollowUpTx(tx, siteId, (localEditId) =>
@@ -324,9 +346,10 @@ export async function capturePhase9StockTransferRevisionTx(
   tx: DbTransaction,
   evidence: Phase9StockTransferRevisionEvidence
 ): Promise<void> {
+  const event = phase9StockTransferRevisionEnvelope(evidence);
+  if (pcLocalEntryMode()) return capturePcLocalEnvelopeTx(tx, event, event.localRevisionId);
   const siteId = lanSiteId();
   if (!siteId) return;
-  const event = phase9StockTransferRevisionEnvelope(evidence);
   await appendStockEventTx(tx, siteId, event, event.localRevisionId);
 }
 
@@ -335,6 +358,10 @@ export async function capturePhase9StockTransferRevisionReviewTx(
   tx: DbTransaction,
   evidence: Omit<Phase9StockTransferRevisionReviewEvidence, "localEditId">
 ): Promise<void> {
+  if (pcLocalEntryMode())
+    return pcLocalFollowUpTx(tx, (localEditId) =>
+      phase9StockTransferRevisionReviewEnvelope({ ...evidence, localEditId })
+    );
   const siteId = lanSiteId();
   if (!siteId) return;
   await appendStockFollowUpTx(tx, siteId, (localEditId) =>
