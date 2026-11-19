@@ -688,6 +688,22 @@
       "reason": "Remediated: the exported helper now rejects any alias that is not a bare lower-case identifier, and the company reference can only be a `$n` placeholder or an integer literal; company ids travel as bound parameters at the call site."
     },
     {
+      "classification": "test-fixture",
+      "context": "tampered",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "tampered() callers at tests/factory-dispatch-combined-invoice-plan-coverage.test.ts:102-166 pass literal table-name arrays",
+          "validation": "Only the literal table names factory_dispatch_order_consolidations, customer_orders, factory_dispatch_trip_financial_bales and factory_bales are ever passed."
+        }
+      ],
+      "id": "11d784807061de7c9738",
+      "kind": "assembled-sql-text",
+      "path": "tests/factory-dispatch-combined-invoice-plan-coverage.test.ts",
+      "reason": "ALTER TABLE ... ENABLE TRIGGER ALL on literal table names inside a savepoint of a rolled-back test transaction. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "11f66c90647d3a27a350",
       "path": "server/services/accounting/integrity/retailLedgerChecks.ts",
       "kind": "indirect-query-text",
@@ -2493,6 +2509,22 @@
       "reason": "At this call site the alias is a code literal and both ids are runtime-checked safe integers, so the sql.raw text contains no caller-controlled syntax."
     },
     {
+      "classification": "test-fixture",
+      "context": "set",
+      "dynamicInputs": [
+        {
+          "expression": "column",
+          "source": "set() callers at tests/factory-dispatch-combined-invoice-plan-coverage.test.ts:102,105 pass literal column names",
+          "validation": "Only the literal columns reconciliation_fingerprint and included_posting_ids are passed; values are bound as $1."
+        }
+      ],
+      "id": "3c255746d63791c1207f",
+      "kind": "assembled-sql-text",
+      "path": "tests/factory-dispatch-combined-invoice-plan-coverage.test.ts",
+      "reason": "UPDATE column name is a code-owned literal; the value is bound. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "3cb9cfadd1de6c677ca7",
       "path": "tests/db-guards-offline-sync-evidence.test.ts",
       "kind": "assembled-sql-text",
@@ -2703,6 +2735,22 @@
         }
       ],
       "reason": "FROM-clause text is a literal at each test call site; ids bound. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "world.q",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "Callers in the same test file or fixture pass SQL string literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "40443b2f728c0ef055a0",
+      "kind": "indirect-query-text",
+      "path": "tests/factory-net-position-historical-assets-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "40919e7857c2b8832fe5",
@@ -6621,6 +6669,22 @@
       "reason": "SQL text is literal at every call site; tags and ids are parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
     },
     {
+      "classification": "not-sql-text",
+      "context": "summary",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Literal query objects written in this test file",
+          "validation": "Not SQL at all: supertest .query() serialises these literals into the HTTP query string of a test request; the server route validates and binds them."
+        }
+      ],
+      "id": "a489e253589a3a106e90",
+      "kind": "indirect-query-text",
+      "path": "tests/location-summary-bandwidth-coverage.test.ts",
+      "reason": "False positive: supertest's URL query-string builder, not a database call. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "a4efe009962ac243f0a8",
       "path": "tests/pc-sync-offline-transfer-edits.test.ts",
       "kind": "indirect-query-text",
@@ -7001,6 +7065,27 @@
         }
       ],
       "reason": "The fragment is code-built SQL with the literal placeholder $1, which readSql replaces by a bound companyId parameter; no runtime string is inserted."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "line",
+      "dynamicInputs": [
+        {
+          "expression": "cols.join(\", \")",
+          "source": "Object.keys of literal target objects passed by voucher read coverage tests",
+          "validation": "Column names are code-owned literal voucher_entries account-reference keys; every value is bound as a positional parameter."
+        },
+        {
+          "expression": "cols.map((_, i) => `$${i + 2}`).join(\", \")",
+          "source": "Object.keys of literal target objects passed by voucher read coverage tests",
+          "validation": "Column names are code-owned literal voucher_entries account-reference keys; every value is bound as a positional parameter."
+        }
+      ],
+      "id": "afc2e5d7a2f05aed5016",
+      "kind": "assembled-sql-text",
+      "path": "tests/helpers/voucherReadFixture.ts",
+      "reason": "INSERT column list built from literal fixture keys; values are bound as $n parameters. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "b06da03bac46999b7913",
@@ -8369,6 +8454,22 @@
       "reason": "SQL text is literal at every caller; only bound values vary. Test-only. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
     },
     {
+      "classification": "not-sql-text",
+      "context": "workbook",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "Literal query objects written in this test file",
+          "validation": "Not SQL at all: supertest .query() serialises these literals into the HTTP query string of a test request; the server route validates and binds them."
+        }
+      ],
+      "id": "d76afb5b715db86ca6a3",
+      "kind": "indirect-query-text",
+      "path": "tests/factory-location-inventory-export-coverage.test.ts",
+      "reason": "False positive: supertest's URL query-string builder, not a database call. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "d7a90521ba71eec28d5e",
       "path": "tests/db-guards-row-level-security.test.ts",
       "kind": "query-text",
@@ -8818,6 +8919,22 @@
         }
       ],
       "reason": "Reads a source line's cost-centre splits by one of two code-owned column names enforced by the TS union type; the id is a bound parameter. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "tampered",
+      "dynamicInputs": [
+        {
+          "expression": "table",
+          "source": "tampered() callers at tests/factory-dispatch-combined-invoice-plan-coverage.test.ts:102-166 pass literal table-name arrays",
+          "validation": "Only the literal table names factory_dispatch_order_consolidations, customer_orders, factory_dispatch_trip_financial_bales and factory_bales are ever passed."
+        }
+      ],
+      "id": "e4633a7c9917562896a6",
+      "kind": "assembled-sql-text",
+      "path": "tests/factory-dispatch-combined-invoice-plan-coverage.test.ts",
+      "reason": "ALTER TABLE ... DISABLE TRIGGER ALL on literal table names inside a savepoint of a rolled-back test transaction. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "e576d5ec0e237a6ccedb",
@@ -9853,6 +9970,22 @@
         }
       ],
       "reason": "The string built at :30 is never sent to a database: it is only the needle for expect(scripts[2]).toContain(...), checking the phase 3 migration text declares each of five literal table names. No HTTP request, cookie, import file or external data reaches this text."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "createIntercompanyTradeWorld.q",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "Callers in the same test file or fixture pass SQL string literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "ff7543f55008fc897a30",
+      "kind": "indirect-query-text",
+      "path": "tests/helpers/intercompanyTradeFixture.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "ff89656ed9cd6aa7b9f7",
