@@ -236,8 +236,10 @@ plan are in the plan document and the
 - Container offloads (receiving) and file renames / moves on a PC.
 - File uploads on a PC: the bytes first (checked against the declared
   SHA-256), then the record.
-- Next: POS edits and cancellations, then new voucher types; then Phases C to
-  E.
+- POS sale edits and cancellations on a PC, with the live sale-edit rules
+  re-checked in the cloud for a PC's own records.
+- Next: new voucher types (journals, invoices, purchases need cloud handlers);
+  then Phases C to E.
 
 ## Resume checklist (next session)
 

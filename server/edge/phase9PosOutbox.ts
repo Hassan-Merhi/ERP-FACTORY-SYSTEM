@@ -8,6 +8,7 @@
  * replay keeps the LAN number on the cloud voucher for cross-reference.
  * Schema: migrations/ (never created at runtime).
  */
+import { capturePcLocalEnvelopeTx, pcLocalEntryMode } from "../offline/pcLocal/pcCapture";
 import { EdgeRefusal } from "./edgeRefusal";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
@@ -34,6 +35,11 @@ export interface Phase9PosInvoice {
 export function isPhase9LanPrimary(): boolean {
   const config = readFactoryEdgeConfiguration();
   return config.mode === "lan" && config.primary === true;
+}
+
+/** POS sale edits and cancellations are recorded here (LAN primary, or a PC in entry mode). */
+export function phase9PosFollowUpCaptureActive(): boolean {
+  return isPhase9LanPrimary() || pcLocalEntryMode();
 }
 
 /** Reserve the next LAN invoice number inside the sale transaction. */
@@ -94,6 +100,12 @@ async function insertPosFollowUpTx(
   tx: DbTransaction,
   event: { kind: string; requestId: string; companyId: number; actorUserId: string; localVoucherId: number }
 ): Promise<void> {
+  // A PC in entry mode: the finished envelope goes to its own outbox, in the
+  // change's transaction (the sale is named by its till sale id).
+  if (pcLocalEntryMode()) {
+    await capturePcLocalEnvelopeTx(tx, event, event.localVoucherId);
+    return;
+  }
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary || !config.siteId) return;
   const hash = hashEvidence(event);

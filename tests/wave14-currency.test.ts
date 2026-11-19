@@ -90,10 +90,10 @@ afterAll(async () => {
   await closeTestServer();
 }, 120000);
 
-// The definition of record before the schema migrations: v2 (wave 17 D);
-// v1 stays in migrations/archive/legacy/20260720_005.
-const CURRENCY_NORMALIZATION_LEGACY_MIGRATION =
-  "migrations/archive/legacy/20261009_001_voucher_entry_currency_normalization_v2.sql";
+// The definition of record is the latest schema migration that replaces the
+// function: 0011 (unrealized FX revaluation lines). v2 (wave 17 D) is in
+// migrations/archive/legacy/20261009_001 and v1 in .../20260720_005.
+const CURRENCY_NORMALIZATION_LEGACY_MIGRATION = "migrations/0011_fx_revaluation_base_only_voucher_line.sql";
 
 describe("currency normalization trigger (decision 4)", () => {
   it("is defined by the schema migrations with the reviewed v2 definition, versioned", async () => {
