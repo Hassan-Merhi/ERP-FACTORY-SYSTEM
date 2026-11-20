@@ -373,11 +373,16 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setShowResumeVerificationCover(false);
     resumeCompanyCacheScope();
     setExternalSessionState("idle");
-    // A verified switch notification may have rejected requests that were in
-    // flight behind the fence. Once the company is verified, retry only failed
-    // mounted company queries; never repeat mutations or refetch every page.
+    // A switch notification may have rejected requests behind the fence. A
+    // rejected read normally retries by itself, but the query library holds
+    // retries while the tab is in the background, which left a background tab
+    // on the loading screen until it was opened. Restart only the mounted
+    // company queries that failed or are held; never repeat mutations or
+    // refetch every page.
     void queryClient.invalidateQueries({
-      predicate: (query) => query.state.status === "error" && isCompanySessionQueryKey(query.queryKey),
+      predicate: (query) =>
+        (query.state.status === "error" || query.state.fetchStatus === "paused") &&
+        isCompanySessionQueryKey(query.queryKey),
       refetchType: "active",
     });
   }, []);

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { enforceRuntimeSession } from "../server/services/security/sessionEnforcementAdapter";
+import {
+  LAST_SEEN_WRITE_INTERVAL_MS,
+  enforceRuntimeSession,
+} from "../server/services/security/sessionEnforcementAdapter";
 
 function session(overrides: Record<string, unknown> = {}) {
   return {
@@ -7,7 +10,7 @@ function session(overrides: Record<string, unknown> = {}) {
     currentCompanyId: 10,
     createdAt: 1_000,
     lastSeenAt: 1_500,
-    absoluteExpiresAt: 50_000,
+    absoluteExpiresAt: 500_000,
     credentialVersion: 0,
     ...overrides,
   } as any;
@@ -15,14 +18,31 @@ function session(overrides: Record<string, unknown> = {}) {
 
 describe("session enforcement adapter", () => {
   it("accepts and touches a valid company-scoped session", () => {
-    const state = session();
-    const result = enforceRuntimeSession(state, { requireCompanyContext: true, now: 2_000 });
+    const state = session({ absoluteExpiresAt: 500_000 });
+    const result = enforceRuntimeSession(state, { requireCompanyContext: true, now: 70_000 });
     expect(result).toEqual({ valid: true, code: "SESSION_VALID", status: 401, destroySession: false });
-    expect(state.lastSeenAt).toBe(2_000);
+    expect(state.lastSeenAt).toBe(70_000);
+  });
+
+  it("does not rewrite the session for every request inside the stamp interval", () => {
+    const state = session();
+    const result = enforceRuntimeSession(state, {
+      requireCompanyContext: true,
+      now: 1_500 + LAST_SEEN_WRITE_INTERVAL_MS - 1,
+    });
+    expect(result.valid).toBe(true);
+    // An unchanged session is not saved, so it cannot overwrite a company switch.
+    expect(state.lastSeenAt).toBe(1_500);
   });
 
   it("upgrades an existing authenticated legacy session once", () => {
-    const state = session({ createdAt: undefined, lastSeenAt: undefined, absoluteExpiresAt: undefined, credentialVersion: undefined, loginAt: "1970-01-01T00:00:01.000Z" });
+    const state = session({
+      createdAt: undefined,
+      lastSeenAt: undefined,
+      absoluteExpiresAt: undefined,
+      credentialVersion: undefined,
+      loginAt: "1970-01-01T00:00:01.000Z",
+    });
     const result = enforceRuntimeSession(state, { requireCompanyContext: true, now: 2_000 });
     expect(result.valid).toBe(true);
     expect(state.createdAt).toBe(1_000);
@@ -72,10 +92,10 @@ describe("session enforcement adapter", () => {
   });
 
   it("enforces credential revocation when an active version is supplied", () => {
-    const result = enforceRuntimeSession(
-      session({ credentialVersion: 1, activeCredentialVersion: 2 }),
-      { requireCompanyContext: true, now: 2_000 }
-    );
+    const result = enforceRuntimeSession(session({ credentialVersion: 1, activeCredentialVersion: 2 }), {
+      requireCompanyContext: true,
+      now: 2_000,
+    });
     expect(result).toMatchObject({ valid: false, code: "SESSION_CREDENTIALS_REVOKED", destroySession: true });
   });
 
