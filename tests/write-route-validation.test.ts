@@ -13,8 +13,11 @@
  */
 import express from "express";
 import { beforeAll, describe, expect, it } from "vitest";
+import type { z } from "zod";
 
-import { VALIDATED_LOCATIONS } from "../server/lib/validateRequest";
+import { isProtectedAccountingRequest } from "../client/src/lib/accountingRequestIdentity";
+import { VALIDATED_LOCATIONS, VALIDATED_SCHEMAS, type RequestSchemas } from "../server/lib/validateRequest";
+import { isPhase5OperationalVoucherRequest } from "../shared/voucherPathIdentityPolicy";
 import { registerRoutes } from "../server/routes";
 import { auditWriteValidation, parseManifestEntry } from "../scripts/audit-write-validation.mjs";
 
@@ -36,6 +39,7 @@ interface ValidatedRoute {
   method: string;
   chain: string[];
   locations: string[];
+  schemas: RequestSchemas;
 }
 
 function nameOf(handler: Handler): string {
@@ -71,11 +75,21 @@ async function liveValidatedRoutes(): Promise<ValidatedRoute[]> {
           method,
           chain: handlers.map(nameOf),
           locations: validator.handle?.[VALIDATED_LOCATIONS] as string[],
+          schemas: validator.handle?.[VALIDATED_SCHEMAS] as RequestSchemas,
         });
       }
     }
   }
   return out;
+}
+
+/** An unknown-key refusal of clientRequestId at the body root, also inside a union branch. */
+function refusesRetryIdentity(issues: readonly z.core.$ZodIssue[]): boolean {
+  return issues.some((issue) => {
+    if (issue.code === "unrecognized_keys") return issue.path.length === 0 && issue.keys.includes("clientRequestId");
+    if (issue.code === "invalid_union") return issue.errors.some((branch) => refusesRetryIdentity(branch));
+    return false;
+  });
 }
 
 describe("validated write routes on the live stack", () => {
@@ -100,6 +114,42 @@ describe("validated write routes on the live stack", () => {
       return route.chain.slice(at + 1).some((name) => /^require[A-Z]/.test(name));
     });
     expect(misplaced.map((route) => `${route.key} [${route.chain.join(" > ")}]`)).toEqual([]);
+  });
+
+  // client/src/lib/accountingRequestFetchGuard.ts adds a clientRequestId to
+  // every JSON write that these browser policies protect, so the server-side
+  // retry identity survives a retransmit. A strict body schema without that
+  // field would refuse every such request from the app.
+  // These are refused one step earlier by requireRawStockSensitiveInput
+  // (server/services/security/rawStockSensitiveInputGuard.ts), which admits
+  // only its own field list. Their schemas mirror that guard, so accepting the
+  // identity here would change nothing until the guard does.
+  const refusedByRawStockGuard = new Set([
+    "POST /api/factory/raw-stock/recalc/apply",
+    "POST /api/factory/raw-stock/recalc/zero-cost-sources/apply",
+    "POST /api/factory/raw-stock/recalc/apply-all-safe",
+    "POST /api/factory/raw-stock/recalc/auto-apply-fx",
+    "POST /api/factory/raw-stock/supplier-rate/recompute",
+    "POST /api/factory/raw-stock/recalc/fix-source-mismatches",
+    "POST /api/factory/raw-stock/recalc/undo",
+  ]);
+
+  it("accept the clientRequestId the browser adds to protected accounting writes", () => {
+    // Bodies that switch on the data-dependent policies (payment/receipt
+    // vouchers, generic vouchers, payroll run payment).
+    const probes: Record<string, unknown>[] = [{}, { voucherType: "Payment" }, { voucher: {} }, { action: "pay" }];
+    const refused = routes.filter((route) => {
+      const body = route.schemas.body as z.ZodType | undefined;
+      if (!body || refusedByRawStockGuard.has(route.key)) return false;
+      const concretePath = route.path.replace(/:[A-Za-z0-9_]+/g, "1");
+      const stamped =
+        isPhase5OperationalVoucherRequest(route.method, concretePath) ||
+        probes.some((probe) => isProtectedAccountingRequest(route.method, concretePath, probe));
+      if (!stamped) return false;
+      const result = body.safeParse({ clientRequestId: "retry-identity" });
+      return !result.success && refusesRetryIdentity(result.error.issues);
+    });
+    expect(refused.map((route) => route.key)).toEqual([]);
   });
 
   it("never mount validateRequest as the terminal handler", () => {

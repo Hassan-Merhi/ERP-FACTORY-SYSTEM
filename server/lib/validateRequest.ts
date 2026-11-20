@@ -57,6 +57,8 @@ export interface RequestValidationErrorBody {
 const VALIDATED = Symbol.for("erp.validatedRequestInput");
 /** Property on a validateRequest middleware listing the parts it validates. */
 export const VALIDATED_LOCATIONS = Symbol.for("erp.validatedRequestLocations");
+/** Property on a validateRequest middleware holding the schemas it applies. */
+export const VALIDATED_SCHEMAS = Symbol.for("erp.validatedRequestSchemas");
 
 type RequestWithValidated = Request & { [VALIDATED]?: Partial<Record<Location, unknown>> };
 
@@ -222,6 +224,7 @@ export function validateRequest<S extends RequestSchemas>(
   // route with path parameters and a body schema on every POST/PUT/PATCH.
   return Object.assign(middleware, {
     [VALIDATED_LOCATIONS]: LOCATIONS.filter((location) => schemas[location]),
+    [VALIDATED_SCHEMAS]: schemas,
   });
 }
 
@@ -264,3 +267,14 @@ export const emptyBody = z.union([z.undefined(), z.strictObject({})]);
 
 /** For routes that take no query string. */
 export const emptyQuery = z.strictObject({});
+
+/**
+ * The retry identity that client/src/lib/accountingRequestFetchGuard.ts adds
+ * to the JSON body of every protected accounting write (see
+ * shared/voucherPathIdentityPolicy.ts). Body schemas on those routes declare
+ * it; tests/write-route-validation.test.ts fails when one does not.
+ */
+export const clientRequestId = z.string().optional();
+
+/** For protected writes that take no body: none, `{}`, or the fetch guard's `{ clientRequestId }`. */
+export const identityOnlyBody = z.union([z.undefined(), z.strictObject({ clientRequestId })]);

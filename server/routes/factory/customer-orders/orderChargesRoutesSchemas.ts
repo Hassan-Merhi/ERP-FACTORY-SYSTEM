@@ -1,6 +1,14 @@
 // Request schemas for ./orderChargesRoutes.ts (kept apart for the source-size cap).
 import { z } from "zod";
-import { emptyBody, emptyQuery, idParams, positiveIntParam, type RequestSchemas } from "../../../lib/validateRequest";
+import {
+  clientRequestId,
+  emptyBody,
+  emptyQuery,
+  identityOnlyBody,
+  idParams,
+  positiveIntParam,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 
 // Amounts and ledger account ids arrive as numbers (invoice pages) or strings
 // (tests, older forms); the handlers String()/parseInt them and keep their
@@ -12,6 +20,7 @@ export const addChargeInput = {
   params: idParams,
   query: emptyQuery,
   body: z.strictObject({
+    clientRequestId,
     name: z.string().optional(),
     amount: numberOrString.optional(),
     chargeType: z.string().nullable().optional(),
@@ -22,7 +31,7 @@ export const addChargeInput = {
 export const relinkChargeVouchersInput = {
   params: idParams,
   query: emptyQuery,
-  body: emptyBody,
+  body: identityOnlyBody,
 } satisfies RequestSchemas;
 
 export const updateChargeInput = {

@@ -12,7 +12,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { z } from "zod";
-import { emptyBody, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import { identityOnlyBody, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { eq, and, like, or } from "drizzle-orm";
 import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, vouchers } from "@shared/schema";
 import { logAudit } from "../../helpers/auditHelpers";
@@ -25,7 +25,7 @@ import { retireVouchersTx, sessionRetirementActor } from "../../../services/acco
 const deleteRepaymentInput = {
   params: z.strictObject({ id: stringParam }),
   query: z.strictObject({ companyId: z.string().optional() }),
-  body: emptyBody,
+  body: identityOnlyBody,
 } satisfies RequestSchemas;
 
 export function registerWorkerRepaymentDeleteRoutes(app: Express) {

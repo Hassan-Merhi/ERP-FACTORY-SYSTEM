@@ -8,7 +8,14 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import { factorySessionActor, postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
-import { emptyQuery, idParams, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
+import {
+  clientRequestId,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 const updateTransporterInput = {
   params: idParams,
@@ -29,6 +36,7 @@ const chargeInput = {
     txDate: z.string().min(1),
     description: z.string().optional(),
     expenseAccountId: z.number(),
+    clientRequestId,
   }),
 } satisfies RequestSchemas;
 const paymentInput = {
@@ -39,6 +47,7 @@ const paymentInput = {
     txDate: z.string().min(1),
     description: z.string().optional(),
     cashAccountId: z.number(),
+    clientRequestId,
   }),
 } satisfies RequestSchemas;
 

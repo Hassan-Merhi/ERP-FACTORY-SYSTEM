@@ -8,13 +8,13 @@
  * Missing or empty cells stay optional: the handlers report them per row.
  */
 import { z } from "zod";
-import { emptyBody, emptyQuery, type RequestSchemas } from "../../../lib/validateRequest";
+import { emptyQuery, identityOnlyBody, type RequestSchemas } from "../../../lib/validateRequest";
 
 const text = z.string().nullable().optional();
 const amount = z.union([z.number(), z.string()]).nullable().optional();
 
-/** POST /api/factory/raw-stock/recalc-opening: an action with no input. */
-export const recalcOpeningInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+/** POST /api/factory/raw-stock/recalc-opening: an action with no input but the retry identity. */
+export const recalcOpeningInput = { query: emptyQuery, body: identityOnlyBody } satisfies RequestSchemas;
 
 /** POST /api/factory/import/opening-raw-stock (OpeningStockRow). */
 export const openingRawStockImportInput = {

@@ -24,13 +24,14 @@ import {
   CONTAINER_MANUAL_FX_INVALID,
   parseContainerManualFxRate,
 } from "../../../services/factory/containerManualFxRate";
-import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import { clientRequestId, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 
 // The handler re-parses with the session companyId; the body never carries it.
-// Every key the clients send is a factory_containers column in this schema.
+// Every key the clients send is a factory_containers column in this schema,
+// plus the browser fetch guard's retry identity.
 const createContainerInput = {
   query: emptyQuery,
-  body: insertFactoryContainerSchema.omit({ companyId: true }).strict(),
+  body: insertFactoryContainerSchema.omit({ companyId: true }).extend({ clientRequestId }).strict(),
 } satisfies RequestSchemas;
 
 export function registerFactoryContainerCreateRoutes(app: Express) {

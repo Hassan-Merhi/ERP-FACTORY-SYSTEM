@@ -12,7 +12,13 @@ import {
 } from "../../services/containers/offload-lifecycle";
 import { offlineReceivingCapture } from "./containerOffloadOfflinePolicy";
 import { z } from "zod";
-import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import {
+  clientRequestId,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 // offloadRequestSchema with unknown fields rejected at every depth. The id
 // stays a string: runCentralOffload answers its own 400 for a bad one.
@@ -25,6 +31,7 @@ const offloadInput = {
       additionalCharges: z.array(additionalCharges.unwrap().element.strict()).optional(),
       inventoryCostCorrections: z.array(inventoryCostCorrections.unwrap().element.strict()).optional(),
       agentChargeLines: z.array(agentChargeLines.unwrap().element.strict()).optional(),
+      clientRequestId,
     })
     .strict(),
 } satisfies RequestSchemas;

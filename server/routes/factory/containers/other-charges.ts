@@ -21,6 +21,7 @@ import { parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { z } from "zod";
 import {
+  clientRequestId,
   emptyQuery,
   idParams,
   validateRequest,
@@ -33,6 +34,7 @@ const syncOtherChargesInput = {
   params: idParams,
   query: emptyQuery,
   body: z.strictObject({
+    clientRequestId,
     charges: z
       .array(
         z.strictObject({

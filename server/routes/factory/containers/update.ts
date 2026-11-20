@@ -19,7 +19,13 @@ import { prepareFactoryContainerUpdate } from "./updateInput";
 import { planFactoryContainerUpdateSync } from "./updateSyncPlan";
 import { applyFactoryContainerUpdateTx } from "./updateTransaction";
 import { z } from "zod";
-import { emptyQuery, idParams, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+import {
+  clientRequestId,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 
 // prepareFactoryContainerUpdate (./updateInput.ts) whitelists these keys and
 // coerces each with String/parseInt, so values may be strings or numbers.
@@ -28,6 +34,7 @@ const updateContainerInput = {
   params: idParams,
   query: emptyQuery,
   body: z.strictObject({
+    clientRequestId,
     containerNumber: scalar,
     supplierId: scalar,
     origin: scalar,

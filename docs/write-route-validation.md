@@ -31,6 +31,11 @@ Rules:
   `.strict()`). A non-strict object throws when the route is registered.
 - Reuse the insert schemas from `shared/schema` (`.pick`, `.omit`, `.partial`,
   then `.strict()`) rather than writing a new shape.
+- Protected accounting writes (`shared/voucherPathIdentityPolicy.ts` and
+  `client/src/lib/accountingRequestIdentity.ts`) get a `clientRequestId` in
+  their JSON body from the browser fetch guard. Declare it with the shared
+  `clientRequestId` field, or use `identityOnlyBody` when the route takes no
+  other body. `tests/write-route-validation.test.ts` fails when one refuses it.
 - `req.body` is replaced by the parsed body. Read parsed `params` and `query`
   through `validatedInput(req, schemas)`.
 

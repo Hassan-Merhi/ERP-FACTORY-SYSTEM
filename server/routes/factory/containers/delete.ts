@@ -23,8 +23,8 @@ import { retireVouchersTx, sessionRetirementActor } from "../../../services/acco
 import { registerFactoryContainerDeleteRoutesPart1 } from "./registerFactoryContainerDeleteRoutesPart1";
 import { z } from "zod";
 import {
-  emptyBody,
   emptyQuery,
+  identityOnlyBody,
   idParams,
   validateRequest,
   validatedInput,
@@ -37,7 +37,7 @@ const bulkDeleteContainersInput = {
   body: z.strictObject({ ids: z.array(z.number()).optional() }),
 } satisfies RequestSchemas;
 
-const deleteContainerInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const deleteContainerInput = { params: idParams, query: emptyQuery, body: identityOnlyBody } satisfies RequestSchemas;
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
