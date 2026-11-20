@@ -120,27 +120,13 @@ describe("validated write routes on the live stack", () => {
   // every JSON write that these browser policies protect, so the server-side
   // retry identity survives a retransmit. A strict body schema without that
   // field would refuse every such request from the app.
-  // These are refused one step earlier by requireRawStockSensitiveInput
-  // (server/services/security/rawStockSensitiveInputGuard.ts), which admits
-  // only its own field list. Their schemas mirror that guard, so accepting the
-  // identity here would change nothing until the guard does.
-  const refusedByRawStockGuard = new Set([
-    "POST /api/factory/raw-stock/recalc/apply",
-    "POST /api/factory/raw-stock/recalc/zero-cost-sources/apply",
-    "POST /api/factory/raw-stock/recalc/apply-all-safe",
-    "POST /api/factory/raw-stock/recalc/auto-apply-fx",
-    "POST /api/factory/raw-stock/supplier-rate/recompute",
-    "POST /api/factory/raw-stock/recalc/fix-source-mismatches",
-    "POST /api/factory/raw-stock/recalc/undo",
-  ]);
-
   it("accept the clientRequestId the browser adds to protected accounting writes", () => {
     // Bodies that switch on the data-dependent policies (payment/receipt
     // vouchers, generic vouchers, payroll run payment).
     const probes: Record<string, unknown>[] = [{}, { voucherType: "Payment" }, { voucher: {} }, { action: "pay" }];
     const refused = routes.filter((route) => {
       const body = route.schemas.body as z.ZodType | undefined;
-      if (!body || refusedByRawStockGuard.has(route.key)) return false;
+      if (!body) return false;
       const concretePath = route.path.replace(/:[A-Za-z0-9_]+/g, "1");
       const stamped =
         isPhase5OperationalVoucherRequest(route.method, concretePath) ||

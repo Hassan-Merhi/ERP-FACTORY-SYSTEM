@@ -11,6 +11,10 @@ import {
 const provenanceFields = Object.freeze({
   reason: Object.freeze({ kind: "string" as const, minLength: 3, maxLength: 500 }),
   idempotencyKey: Object.freeze({ kind: "string" as const, minLength: 8, maxLength: 200 }),
+  // The retry identity client/src/lib/accountingRequestFetchGuard.ts adds to
+  // every /api/factory/raw-stock/* write (a Phase 5 operational voucher path).
+  // The voucher-path boundary reads it; refusing it refused the app's own calls.
+  clientRequestId: Object.freeze({ kind: "string" as const, minLength: 8, maxLength: 200 }),
 });
 
 function schema(
@@ -34,12 +38,15 @@ const ROUTE_SCHEMAS: Readonly<Record<string, UnsafeOperationSchema>> = Object.fr
     includeCompletedBatches: Object.freeze({ kind: "boolean" as const }),
     includeHistoricalContainers: Object.freeze({ kind: "boolean" as const }),
   }),
-  "/api/factory/raw-stock/recalc/zero-cost-sources/apply": schema({
-    sourceIds: Object.freeze({ kind: "array" as const, required: true }),
-    manualRates: Object.freeze({ kind: "object" as const }),
-    confirm: Object.freeze({ kind: "boolean" as const }),
-    confirmationToken: Object.freeze({ kind: "string" as const, minLength: 3, maxLength: 4_000 }),
-  }, { maxDepth: 4 }),
+  "/api/factory/raw-stock/recalc/zero-cost-sources/apply": schema(
+    {
+      sourceIds: Object.freeze({ kind: "array" as const, required: true }),
+      manualRates: Object.freeze({ kind: "object" as const }),
+      confirm: Object.freeze({ kind: "boolean" as const }),
+      confirmationToken: Object.freeze({ kind: "string" as const, minLength: 3, maxLength: 4_000 }),
+    },
+    { maxDepth: 4 }
+  ),
   "/api/factory/raw-stock/recalc/apply-all-safe": schema({
     confirm: Object.freeze({ kind: "boolean" as const }),
     confirmationToken: Object.freeze({ kind: "string" as const, minLength: 3, maxLength: 4_000 }),

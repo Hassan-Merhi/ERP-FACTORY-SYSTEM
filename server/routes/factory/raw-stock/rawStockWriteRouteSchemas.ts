@@ -10,8 +10,8 @@
  *
  * The seven routes listed in services/security/rawStockSensitiveInputGuard.ts
  * are validated first by that guard, which rejects every field it does not
- * list (clientRequestId included) and only adds the `reason`/`idempotencyKey`
- * provenance fields. Their schemas mirror the guard exactly.
+ * list and adds the `reason`/`idempotencyKey`/`clientRequestId` provenance
+ * fields to each. Their schemas mirror the guard exactly.
  */
 import { z } from "zod";
 import { emptyQuery, idParams, positiveIntParam, type RequestSchemas } from "../../../lib/validateRequest";
@@ -25,7 +25,7 @@ const clientRequestId = z.string().optional();
 /** Bodyless writes: no body (tests, scripts) or the fetch guard's `{ clientRequestId }`. */
 const identityOnlyBody = z.union([z.undefined(), z.strictObject({ clientRequestId })]);
 /** Provenance fields rawStockSensitiveInputGuard allows on every guarded route. */
-const provenance = { reason: z.string().optional(), idempotencyKey: z.string().optional() };
+const provenance = { reason: z.string().optional(), idempotencyKey: z.string().optional(), clientRequestId };
 /** rawStockSensitiveInputGuard's positiveIntegerArray. */
 const positiveIds = z.array(z.number().int().positive());
 

@@ -89,6 +89,15 @@ describe("raw-stock sensitive input guard", () => {
     expect(auditValues.mock.calls[0][0].changes.targetId).toBe("/api/factory/raw-stock/recalc/auto-apply-fx");
   });
 
+  it("admits the browser's retry identity on every guarded route", async () => {
+    const result = await run("/api/factory/raw-stock/recalc/fix-source-mismatches", {
+      clientRequestId: "6f1c2b9e-0d4a-4c1e-9a57-3b8e2f0c7d11",
+    });
+
+    expect(result.next).toHaveBeenCalledOnce();
+    expect(result.req.body).toEqual({ clientRequestId: "6f1c2b9e-0d4a-4c1e-9a57-3b8e2f0c7d11" });
+  });
+
   it("rejects unknown fields before route logic", async () => {
     const result = await run("/api/factory/raw-stock/recalc/auto-apply-fx", {
       containerIds: [1],
