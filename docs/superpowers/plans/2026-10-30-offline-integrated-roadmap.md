@@ -238,8 +238,10 @@ plan are in the plan document and the
   SHA-256), then the record.
 - POS sale edits and cancellations on a PC, with the live sale-edit rules
   re-checked in the cloud for a PC's own records.
-- Next: new voucher types (journals, invoices, purchases need cloud handlers);
-  then Phases C to E.
+- Journal vouchers on a PC: a new cloud handler posts them through the same
+  journal service as the live route (now shared), once.
+- Next: invoices and purchases (each needs its own cloud handler); then Phases
+  C to E.
 
 ## Resume checklist (next session)
 

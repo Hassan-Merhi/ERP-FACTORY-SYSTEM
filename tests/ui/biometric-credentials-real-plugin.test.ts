@@ -1,5 +1,8 @@
 /**
- * biometricCredentials against the real @capacitor/preferences plugin.
+ * biometricCredentials against the real @capacitor/preferences and
+ * @aparajita/capacitor-secure-storage plugins (their web implementations store
+ * into localStorage under different keys, so the tests can see which one holds
+ * the credentials).
  *
  * Every other suite replaces the plugin with a plain object, which hides how
  * the real one behaves: it is a Proxy that answers any property, including
@@ -13,10 +16,13 @@ import {
   clearBiometricCredentials,
   loadBiometricCredentials,
   loadNativePreferences,
+  loadSecureStore,
   saveBiometricCredentials,
 } from "@/lib/biometricCredentials";
 
-const STORAGE_KEY = "CapacitorStorage.biometric_creds";
+/** Where Capacitor Preferences kept them, in plain JSON, before the secure store. */
+const PLAIN_KEY = "CapacitorStorage.biometric_creds";
+const SECURE_KEY = "capacitor-storage_biometric_creds";
 
 function settles<T>(work: Promise<T>): Promise<T> {
   return Promise.race([
@@ -29,7 +35,7 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe("biometric credentials on the real Capacitor Preferences plugin", () => {
+describe("biometric credentials on the real Capacitor plugins", () => {
   it("resolves the preferences handle instead of hanging on the plugin proxy", async () => {
     const preferences = await settles(loadNativePreferences());
 
@@ -37,17 +43,25 @@ describe("biometric credentials on the real Capacitor Preferences plugin", () =>
     expect((preferences as unknown as { then?: unknown }).then).toBeUndefined();
   });
 
-  it("saves, reads back and clears the credentials", async () => {
+  it("resolves the secure store handle instead of hanging on the plugin proxy", async () => {
+    const store = await settles(loadSecureStore());
+
+    expect(Object.keys(store).sort()).toEqual(["get", "remove", "set"]);
+    expect((store as unknown as { then?: unknown }).then).toBeUndefined();
+  });
+
+  it("saves the credentials in the secure store, never in plain preferences, and clears them", async () => {
     await settles(saveBiometricCredentials("operator", "s3cret"));
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) as string)).toEqual({
+    expect(JSON.parse(localStorage.getItem(SECURE_KEY) as string)).toEqual({
       username: "operator",
       password: "s3cret",
     });
+    expect(localStorage.getItem(PLAIN_KEY)).toBeNull();
 
     expect(await settles(loadBiometricCredentials())).toEqual({ username: "operator", password: "s3cret" });
 
     await settles(clearBiometricCredentials());
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(SECURE_KEY)).toBeNull();
     expect(await settles(loadBiometricCredentials())).toBeNull();
   });
 
@@ -55,10 +69,31 @@ describe("biometric credentials on the real Capacitor Preferences plugin", () =>
     expect(await settles(loadBiometricCredentials())).toBeNull();
   });
 
-  it("treats an unreadable stored value as absent", async () => {
-    localStorage.setItem(STORAGE_KEY, "{not json");
+  it("moves a plain copy from an older release into the secure store and deletes it", async () => {
+    localStorage.setItem(PLAIN_KEY, JSON.stringify({ username: "operator", password: "s3cret" }));
+
+    expect(await settles(loadBiometricCredentials())).toEqual({ username: "operator", password: "s3cret" });
+    expect(localStorage.getItem(PLAIN_KEY)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(SECURE_KEY) as string)).toEqual({
+      username: "operator",
+      password: "s3cret",
+    });
+  });
+
+  it("deletes an unreadable plain copy and treats it as absent", async () => {
+    localStorage.setItem(PLAIN_KEY, "{not json");
 
     expect(await settles(loadBiometricCredentials())).toBeNull();
+    expect(localStorage.getItem(PLAIN_KEY)).toBeNull();
+    expect(localStorage.getItem(SECURE_KEY)).toBeNull();
+  });
+
+  it("clears a plain copy too when biometric sign-in is turned off", async () => {
+    localStorage.setItem(PLAIN_KEY, JSON.stringify({ username: "operator", password: "s3cret" }));
+
+    await settles(clearBiometricCredentials());
+
+    expect(localStorage.getItem(PLAIN_KEY)).toBeNull();
   });
 
   it("reads and writes other keys through the handle", async () => {

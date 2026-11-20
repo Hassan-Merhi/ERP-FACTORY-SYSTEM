@@ -5,8 +5,8 @@
  * its sign-in path is ordinary client code: detect the platform, check the
  * device's biometry, remember the opt-in, and replay saved credentials after a
  * successful device prompt. None of that runs in a browser session, so nothing
- * else exercises it. Preferences here is a real key/value fake, not a call
- * recorder, so the tests assert what the device would actually hold.
+ * else exercises it. Preferences and the secure store here are real key/value
+ * fakes, not call recorders, so the tests assert what the device would hold.
  */
 import React from "react";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
@@ -23,6 +23,8 @@ const harness = vi.hoisted(() => ({
   checkBiometry: vi.fn(),
   isNativePlatform: vi.fn(),
   store: new Map<string, string>(),
+  secure: new Map<string, unknown>(),
+  secureAccess: [] as unknown[],
 }));
 
 vi.mock("wouter", () => ({
@@ -56,6 +58,19 @@ vi.mock("@capacitor/preferences", () => ({
     remove: async ({ key }: { key: string }) => {
       harness.store.delete(key);
     },
+  },
+}));
+
+// The device's secure store (Keystore / Keychain), separate from plain Preferences.
+vi.mock("@aparajita/capacitor-secure-storage", () => ({
+  KeychainAccess: { whenUnlockedThisDeviceOnly: 1 },
+  SecureStorage: {
+    get: async (key: string) => harness.secure.get(key) ?? null,
+    set: async (key: string, value: unknown, _convertDate?: boolean, _sync?: boolean, access?: unknown) => {
+      harness.secure.set(key, value);
+      harness.secureAccess.push(access);
+    },
+    remove: async (key: string) => harness.secure.delete(key),
   },
 }));
 
@@ -114,6 +129,8 @@ function loginRequests() {
 beforeEach(() => {
   vi.clearAllMocks();
   harness.store.clear();
+  harness.secure.clear();
+  harness.secureAccess.length = 0;
   localStorage.clear();
   (window as NativeWindow).Capacitor = { platform: "android" };
   harness.isNativePlatform.mockReturnValue(true);
@@ -138,6 +155,7 @@ describe("native login: first sign-in on a device with biometrics", () => {
     expect(await screen.findByTestId("button-enable-biometrics")).toBeInTheDocument();
     expect(screen.getByText("Enable Fingerprint?")).toBeInTheDocument();
     expect(harness.store.size).toBe(0);
+    expect(harness.secure.size).toBe(0);
     expect(harness.navigate).not.toHaveBeenCalled();
     expect(harness.setQueryData).not.toHaveBeenCalled();
   });
@@ -152,7 +170,9 @@ describe("native login: first sign-in on a device with biometrics", () => {
     fireEvent.click(await screen.findByTestId("button-enable-biometrics"));
 
     await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith("/"));
-    expect(JSON.parse(harness.store.get(CREDS_KEY) as string)).toEqual(SAVED);
+    expect(harness.secure.get(CREDS_KEY)).toEqual(SAVED);
+    expect(harness.store.has(CREDS_KEY)).toBe(false);
+    expect(harness.secureAccess).toEqual([1]);
     expect(harness.store.get(OPT_IN_KEY)).toBe("yes");
     expect(harness.setQueryData).toHaveBeenCalledWith(["/api/auth/me"], USER);
     expect(harness.resetCsrfToken).toHaveBeenCalledTimes(1);
@@ -170,6 +190,7 @@ describe("native login: first sign-in on a device with biometrics", () => {
 
     await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith("/"));
     expect(harness.store.get(OPT_IN_KEY)).toBe("no");
+    expect(harness.secure.has(CREDS_KEY)).toBe(false);
     expect(harness.store.has(CREDS_KEY)).toBe(false);
     expect(harness.setQueryData).toHaveBeenCalledWith(["/api/auth/me"], USER);
   });
@@ -187,6 +208,7 @@ describe("native login: returning user", () => {
 
     await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith("/"));
     expect(screen.queryByTestId("button-enable-biometrics")).not.toBeInTheDocument();
+    expect(harness.secure.has(CREDS_KEY)).toBe(false);
     expect(harness.store.has(CREDS_KEY)).toBe(false);
   });
 
@@ -200,16 +222,36 @@ describe("native login: returning user", () => {
     fireEvent.click(screen.getByTestId("button-login"));
 
     await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith("/"));
-    expect(JSON.parse(harness.store.get(CREDS_KEY) as string)).toEqual({
+    expect(harness.secure.get(CREDS_KEY)).toEqual({
       username: "operator",
       password: "changed-password",
     });
     expect(screen.queryByTestId("button-enable-biometrics")).not.toBeInTheDocument();
   });
 
-  it("prompts for biometrics on launch and signs in with the saved credentials", async () => {
+  it("moves credentials an older release saved in plain preferences into the secure store", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.store.set(OPT_IN_KEY, "yes");
+    loginSucceeds();
+    await renderNativeLogin();
+    await screen.findByTestId("button-biometric-login");
+
+    // The plain copy is gone and the secure store holds it, device-only.
+    expect(harness.store.has(CREDS_KEY)).toBe(false);
+    expect(harness.secure.get(CREDS_KEY)).toEqual(SAVED);
+    expect(harness.secureAccess).toEqual([1]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    await waitFor(() => expect(loginRequests()).toHaveLength(1));
+    expect(loginRequests()[0][2]).toEqual(SAVED);
+  });
+
+  it("prompts for biometrics on launch and signs in with the saved credentials", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    harness.secure.set(CREDS_KEY, SAVED);
     harness.store.set(OPT_IN_KEY, "yes");
     loginSucceeds();
     await renderNativeLogin();
@@ -229,7 +271,7 @@ describe("native login: returning user", () => {
 
   it("offers the biometric button without prompting on launch when the opt-in is not recorded", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     await renderNativeLogin();
     await screen.findByTestId("button-biometric-login");
 
@@ -242,7 +284,7 @@ describe("native login: returning user", () => {
   });
 
   it("signs in from the biometric button only after the device prompt succeeds", async () => {
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     loginSucceeds();
     let releasePrompt: () => void = () => {};
     harness.authenticate.mockReturnValue(
@@ -270,7 +312,7 @@ describe("native login: biometric prompt failures", () => {
   it.each(["userCancel", "systemCancel", "appCancel"])(
     "stays quiet and sends nothing when the prompt ends with %s",
     async (code) => {
-      harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+      harness.secure.set(CREDS_KEY, SAVED);
       harness.authenticate.mockRejectedValue(Object.assign(new Error("cancelled"), { code }));
       await renderNativeLogin();
 
@@ -286,7 +328,7 @@ describe("native login: biometric prompt failures", () => {
   );
 
   it("tells the user to use the password and sends nothing when the device rejects the biometric", async () => {
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     harness.authenticate.mockRejectedValue(Object.assign(new Error("no match"), { code: "authenticationFailed" }));
     await renderNativeLogin();
 
@@ -302,7 +344,7 @@ describe("native login: biometric prompt failures", () => {
   });
 
   it("clears the password field and reports the failure when the saved password no longer works", async () => {
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     harness.apiRequest.mockRejectedValue(new Error("Invalid username or password"));
     await renderNativeLogin();
 
@@ -327,7 +369,7 @@ describe("native login: what the device supports", () => {
     ["irisAuthentication", "Biometrics"],
   ])("labels the button for %s as %s", async (type, label) => {
     biometry([type]);
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     await renderNativeLogin();
 
     expect(await screen.findByTestId("button-biometric-login")).toHaveTextContent(`Sign in with ${label}`);
@@ -355,15 +397,18 @@ describe("native login: what the device supports", () => {
     expect(screen.queryByTestId("button-biometric-login")).not.toBeInTheDocument();
     expect(harness.authenticate).not.toHaveBeenCalled();
     expect(screen.getByTestId("button-login")).toBeEnabled();
+    // The unreadable plain copy is deleted, and nothing is moved into the secure store.
+    expect(harness.store.has(CREDS_KEY)).toBe(false);
+    expect(harness.secure.has(CREDS_KEY)).toBe(false);
   });
 
   it("never offers or stores biometrics on a device without them", async () => {
     biometry([], false);
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     loginSucceeds();
     await renderNativeLogin();
     await waitFor(() => expect(harness.checkBiometry).toHaveBeenCalledTimes(1));
-    harness.store.delete(CREDS_KEY);
+    harness.secure.delete(CREDS_KEY);
 
     typeCredentials();
     fireEvent.click(screen.getByTestId("button-login"));
@@ -372,6 +417,7 @@ describe("native login: what the device supports", () => {
     expect(screen.queryByTestId("button-biometric-login")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-enable-biometrics")).not.toBeInTheDocument();
     expect(harness.store.size).toBe(0);
+    expect(harness.secure.size).toBe(0);
   });
 
   it("keeps password sign-in working when the biometry check itself throws", async () => {
@@ -386,6 +432,7 @@ describe("native login: what the device supports", () => {
     await waitFor(() => expect(loginRequests()).toHaveLength(1));
     expect(screen.queryByTestId("button-biometric-login")).not.toBeInTheDocument();
     expect(harness.store.size).toBe(0);
+    expect(harness.secure.size).toBe(0);
   });
 
   it("does not offer browser passkeys inside the native shell", async () => {
@@ -409,7 +456,7 @@ describe("native login: what the device supports", () => {
 describe("browser session with the Capacitor web runtime loaded", () => {
   it("stays on the web sign-in path when the bridge reports a non-native platform", async () => {
     harness.isNativePlatform.mockReturnValue(false);
-    harness.store.set(CREDS_KEY, JSON.stringify(SAVED));
+    harness.secure.set(CREDS_KEY, SAVED);
     harness.store.set(OPT_IN_KEY, "yes");
     await renderNativeLogin();
     await act(async () => {

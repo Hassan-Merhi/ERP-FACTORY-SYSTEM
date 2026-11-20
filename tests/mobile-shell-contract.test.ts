@@ -137,6 +137,18 @@ describe("Android manifest", () => {
   });
 });
 
+describe("saved sign-in credentials", () => {
+  it("keeps app data out of Android backups", () => {
+    expect(manifest).toMatch(/android:allowBackup="false"/);
+  });
+
+  it("registers the secure store plugin in both native projects", () => {
+    expect(read("android/capacitor.settings.gradle")).toContain(":aparajita-capacitor-secure-storage");
+    expect(read("android/app/capacitor.build.gradle")).toContain("project(':aparajita-capacitor-secure-storage')");
+    expect(read("ios/App/Podfile")).toContain("pod 'AparajitaCapacitorSecureStorage'");
+  });
+});
+
 describe("iOS Info.plist", () => {
   it("explains Face ID use, which iOS requires before the biometric prompt", () => {
     expect(plistValue(infoPlist, "NSFaceIDUsageDescription")?.trim().length).toBeGreaterThan(10);
