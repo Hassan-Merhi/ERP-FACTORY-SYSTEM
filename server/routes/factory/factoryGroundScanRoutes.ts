@@ -33,6 +33,9 @@ export function registerFactoryGroundScanRoutes(app: Express) {
                  WHEN fb.status IN ('DELETED', 'REMOVED') THEN fb.status
                  WHEN fb.status = 'IN_STOCK' AND active_order.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
                    THEN 'SOLD'
+                 WHEN fb.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER')
+                   AND planner_container.lifecycle_status IN ('LOADING', 'LOADED', 'SHIPPED', 'ARRIVED', 'DELIVERED')
+                   THEN planner_container.lifecycle_status
                  WHEN fb.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER') AND active_order.status = 'LOADING'
                    THEN 'LOADING'
                  WHEN fb.status = 'IN_STOCK' AND active_order.status IN ('PENDING_VERIFICATION', 'VERIFIED')
@@ -42,7 +45,8 @@ export function registerFactoryGroundScanRoutes(app: Express) {
                (fb.id IS NOT NULL
                  AND fb.deleted_at IS NULL
                  AND fb.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER')
-                 AND active_order.status = 'LOADING') AS is_in_loading_order,
+                 AND (active_order.status = 'LOADING'
+                   OR planner_container.lifecycle_status IN ('LOADING', 'LOADED'))) AS is_in_loading_order,
                g.scanned_at, g.scanned_by_user_id,
                fb.stock_entry_date::text AS date_bale_produced,
                fb.worker_name
@@ -71,6 +75,15 @@ export function registerFactoryGroundScanRoutes(app: Express) {
                ELSE 9 END
              LIMIT 1
           ) active_order ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT cpc.lifecycle_status
+            FROM factory_container_plan_bales cpb
+            JOIN factory_container_plan_containers cpc ON cpc.id = cpb.plan_container_id
+            WHERE cpb.bale_id = fb.id
+              AND cpb.company_id = fb.company_id
+              AND cpc.company_id = fb.company_id
+            LIMIT 1
+          ) planner_container ON TRUE
          WHERE g.scan_rank = 1
          ORDER BY g.scanned_at DESC, g.id DESC
       `;
