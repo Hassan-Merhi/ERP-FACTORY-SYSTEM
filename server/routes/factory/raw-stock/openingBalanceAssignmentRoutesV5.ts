@@ -96,10 +96,9 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
         }
         for (const bale of baleResult.rows) {
           if (bale.mix_batch_id != null || bale.status !== "IN_STOCK") {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} is no longer an unlinked IN_STOCK bale`),
-              { statusCode: 409 }
-            );
+            throw Object.assign(new Error(`Bale ${bale.id} is no longer an unlinked IN_STOCK bale`), {
+              statusCode: 409,
+            });
           }
         }
 
@@ -118,8 +117,8 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           if (storedRate == null || new Decimal(storedRate).lt(0)) {
             throw Object.assign(
               new Error(
-                "Supplier has no valid persisted authoritative USD raw-material rate. "
-                + "Assignment was not applied because consumption must never create or change that rate."
+                "Supplier has no valid persisted authoritative USD raw-material rate. " +
+                  "Assignment was not applied because consumption must never create or change that rate."
               ),
               { statusCode: 409 }
             );
@@ -136,7 +135,9 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           }
           costPerKgUsd = new Decimal(rawStock.cost_per_kg_usd);
           if (costPerKgUsd.lt(0)) {
-            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), { statusCode: 409 });
+            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), {
+              statusCode: 409,
+            });
           }
         }
 
@@ -154,14 +155,18 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           `INSERT INTO factory_mix_batches
              (company_id, batch_code, batch_number, name, total_weight_kg, used_kg,
               cost_per_kg, total_cost, status, updated_at)
-           VALUES ($1, $2, $2, 'OB Stock Assignment', $3, $3, $4, $5, 'COMPLETED', NOW())
+           VALUES ($1, $2, $6, 'OB Stock Assignment', $3, $3, $4, $5, 'COMPLETED', NOW())
            RETURNING id`,
+          // batch_code (varchar) and batch_number (text) get the same value as
+          // separate parameters: one parameter bound to both columns cannot be
+          // given a single type, so PostgreSQL refused every assignment.
           [
             companyId,
             batchCode,
             totalKg.toDecimalPlaces(3).toFixed(3),
             costPerKgUsd.toDecimalPlaces(6).toFixed(6),
             totalCost.toDecimalPlaces(6).toFixed(6),
+            batchCode,
           ]
         );
         const mixBatchId = batchResult.rows[0]?.id;
@@ -205,10 +210,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
             ]
           );
           if (update.rowCount !== 1) {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} changed during assignment`),
-              { statusCode: 409 }
-            );
+            throw Object.assign(new Error(`Bale ${bale.id} changed during assignment`), { statusCode: 409 });
           }
         }
 
@@ -219,12 +221,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
              AND company_id = $3
              AND container_id = $4
              AND deleted_at IS NULL`,
-          [
-            totalKg.toDecimalPlaces(3).toFixed(3),
-            rawStockId,
-            companyId,
-            rawStock.container_id,
-          ]
+          [totalKg.toDecimalPlaces(3).toFixed(3), rawStockId, companyId, rawStock.container_id]
         );
         if (rawStockUpdate.rowCount !== 1) {
           throw Object.assign(new Error("Raw-stock row changed during assignment"), { statusCode: 409 });

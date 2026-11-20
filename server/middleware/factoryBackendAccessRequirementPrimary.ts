@@ -155,6 +155,17 @@ export function resolvePrimaryRequirement(req: Request, path: string): FactoryAp
   if (hasPrefix(path, "/net-position")) {
     return requirement("factory/net-position-details");
   }
+  // The presentation-only account layout is edited on Account Groups (Display
+  // Account Groups). The Accounts list and Net Position Details only read it
+  // to order their rows; saving it needs the Account Groups page.
+  if (path === "/account-display-layout") {
+    if (isWrite(req)) return requirement("factory/account-groups");
+    return anyOf(
+      requirement("factory/account-groups"),
+      requirement("factory/accounts", ["hide_tab_accounts_view"]),
+      requirement("factory/net-position-details")
+    );
+  }
 
   // Admin/configuration mutation surfaces. Operational reads of label assets,
   // customer logos and common Factory settings remain available to the pages

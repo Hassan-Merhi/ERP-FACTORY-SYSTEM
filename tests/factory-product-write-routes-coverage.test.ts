@@ -2,8 +2,10 @@
  * POST/PATCH /api/factory/bale-products (productWriteRoutes) through the real
  * app inside one rolled-back transaction: the admin-authorization refusals
  * for non-admin callers, article-code generation per grade (skipping taken
- * article codes and codes), regeneration of a taken graded code, refusal of a
- * taken custom code or name, optional fields, and company-scoped edits.
+ * article codes and codes) after the highest existing number, regeneration
+ * of a taken graded code, refusal of a taken custom code or name, optional
+ * fields, database failures mapped to plain messages, and company-scoped
+ * edits limited to the editable fields.
  */
 import { describe, expect, it } from "vitest";
 
@@ -85,8 +87,31 @@ describe("factory bale product create", () => {
       await product(w, "Y2", "HMD00002", "Old ungraded 2");
       await w.q(`UPDATE factory_bale_products SET article_code = 'HMD00003' WHERE code = 'Y2'`);
       const ungraded = await w.agent.post(BASE).send({ name: "No grade", grade: "unknown" });
-      // The first free number after the taken HMD00001 (the gap at 002 is reused).
-      expect(ungraded.body.articleCode).toBe("HMD00002");
+      // After the highest number (003); the gap at 002 is not reused.
+      expect(ungraded.body.articleCode).toBe("HMD00004");
+    }));
+
+  it("numbers a new graded code after this company's highest, ignoring gaps and other companies", () =>
+    withFactoryWorld(async (w) => {
+      await product(w, "G1", "HMD14001", "Grade four one");
+      await product(w, "G7", "HMD14007", "Grade four seven");
+      await product(w, "GX", "HMD14ABC", "Not numeric");
+      const other = await w.one(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [
+        `${w.tag}N`,
+      ]);
+      await w.q(
+        `INSERT INTO factory_bale_products (company_id, code, article_code, name) VALUES ($1, 'HMD14050', 'HMD14050', 'Theirs')`,
+        [other]
+      );
+      const first = await w.agent.post(BASE).send({ name: "Grade four new", grade: "#4" });
+      expect(first.status, JSON.stringify(first.body)).toBe(200);
+      expect(first.body).toMatchObject({ articleCode: "HMD14008", code: "HMD14008" });
+      const second = await w.agent.post(BASE).send({ name: "Grade four newer", grade: "#4" });
+      expect(second.body.articleCode).toBe("HMD14009");
+      const codes = await w.q(`SELECT article_code FROM factory_bale_products WHERE company_id = $1 ORDER BY 1`, [
+        w.companyId,
+      ]);
+      expect(new Set(codes.map((r) => r.article_code)).size).toBe(codes.length);
     }));
 
   it("keeps a free custom code, regenerates a taken graded one and refuses a taken custom one", () =>
@@ -129,9 +154,17 @@ describe("factory bale product create", () => {
         .post(BASE)
         .send({ name: "Bad cat", articleCode: "ZZ9", categoryId: 2147483000 });
       expect(badCategory.status).toBe(400);
-      // The refusal echoes the failed SQL text and its parameters to the caller.
-      expect(badCategory.body.message).toMatch(/^Failed query: insert into "factory_bale_products"/);
+      // A plain message: no SQL text or parameters reach the caller.
+      expect(badCategory.body).toEqual({
+        message: "The selected category does not exist",
+        code: "PRODUCT_REFERENCE_MISSING",
+      });
       await w.q(`ROLLBACK TO SAVEPOINT bad_insert`);
+
+      const notText = await w.agent.post(BASE).send({ name: "Numeric code", articleCode: 42 });
+      expect(notText.status).toBe(400);
+      expect(notText.body.code).toBe("PRODUCT_INVALID");
+      expect(await productCount(w)).toBe(before);
     }));
 });
 
@@ -156,11 +189,50 @@ describe("factory bale product edit", () => {
       expect(ok.status).toBe(200);
       expect(ok.body).toMatchObject({ name: "Edited", sellingPrice: "2.50" });
 
-      // The edit spreads the body into the update; the access boundary refuses
-      // a body that names another company, so the product cannot be moved.
+      // The access boundary refuses a body that names another company.
       const moved = await w.agent.patch(`${BASE}/${id}`).send({ companyId: other });
       expect(moved.status).toBe(403);
-      const [owner] = await w.q(`SELECT company_id FROM factory_bale_products WHERE id = $1`, [id]);
-      expect(Number(owner.company_id)).toBe(w.companyId);
+      const state = () =>
+        w.q(`SELECT company_id, name, deleted_at, created_at FROM factory_bale_products WHERE id = $1`, [id]);
+      const before = await state();
+      expect(Number(before[0].company_id)).toBe(w.companyId);
+
+      // Only the editable fields are accepted; ids, ownership and timestamps are refused.
+      const forbidden = await w.agent
+        .patch(`${BASE}/${id}`)
+        .send({ name: "Sneaky", id: 1, deletedAt: "2026-01-01T00:00:00Z", createdAt: "2020-01-01T00:00:00Z" });
+      expect(forbidden.status).toBe(400);
+      expect(forbidden.body).toEqual({
+        message: "These product fields cannot be edited: id, deletedAt, createdAt",
+        code: "PRODUCT_FIELD_NOT_EDITABLE",
+      });
+      expect(await state()).toEqual(before);
+    }));
+
+  it("maps edit failures to plain messages without SQL text", () =>
+    withFactoryWorld(async (w) => {
+      const id = await product(w, `${w.tag}A`, `${w.tag}-A`, "First");
+      await product(w, `${w.tag}B`, `${w.tag}-B`, "Second");
+
+      await w.q(`SAVEPOINT dup_code`);
+      const dup = await w.agent.patch(`${BASE}/${id}`).send({ code: `${w.tag}B` });
+      expect(dup.status).toBe(409);
+      expect(dup.body).toEqual({
+        message: "A product with this code or article code already exists",
+        code: "PRODUCT_CODE_TAKEN",
+      });
+      await w.q(`ROLLBACK TO SAVEPOINT dup_code`);
+
+      await w.q(`SAVEPOINT bad_price`);
+      const bad = await w.agent.patch(`${BASE}/${id}`).send({ sellingPrice: "abc" });
+      expect(bad.status).toBe(400);
+      expect(bad.body).toEqual({ message: "One or more product fields are invalid", code: "PRODUCT_INVALID" });
+      expect(JSON.stringify(bad.body)).not.toMatch(/Failed query|factory_bale_products/);
+      await w.q(`ROLLBACK TO SAVEPOINT bad_price`);
+
+      const [row] = await w.q(`SELECT code, selling_price::text AS price FROM factory_bale_products WHERE id = $1`, [
+        id,
+      ]);
+      expect(row).toEqual({ code: `${w.tag}A`, price: "0.00" });
     }));
 });

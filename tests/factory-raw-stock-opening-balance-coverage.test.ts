@@ -3,13 +3,16 @@
  * recalculation, driven over real HTTP against PostgreSQL inside one
  * rolled-back transaction per test.
  *
- * Pinned: every refusal leaves bales, raw stock and mix batches untouched;
- * supplier-linked assignment uses the persisted supplier rate without
- * changing it; the recalculation is a dry run unless { confirm: true }.
+ * Pinned: a valid supplier-linked assignment links the bales to one
+ * completed batch at the persisted supplier rate without changing it; every
+ * refusal (including a Supplier Partner cutover lock and a source without a
+ * supplier owner) leaves bales, raw stock and mix batches untouched; the
+ * recalculation is a dry run unless { confirm: true }.
  */
 import { describe, expect, it } from "vitest";
 
 import { withFactoryWorld, type FactoryWorld } from "./helpers/rolledBackFactoryApp";
+import { invalidateCutoverLockCache } from "../server/routes/sp/spMigrationCutoverState";
 
 let containerSeq = 0;
 
@@ -139,34 +142,118 @@ describe("POST /api/factory/raw-stock/:id/assign-to-bales refusals", () => {
 });
 
 describe("POST /api/factory/raw-stock/:id/assign-to-bales valid request", () => {
-  // Known bug (pinned): the batch INSERT binds $2 to both batch_code
-  // (varchar) and batch_number (text), which PostgreSQL rejects with
-  // "inconsistent types deduced for parameter $2". Every otherwise valid
-  // assignment therefore rolls back with 500 and writes nothing.
-  it("rolls back with 500 and leaves bales, raw stock and supplier rate unchanged", async () => {
+  async function linked(w: FactoryWorld, baleIds: number[]) {
+    return w.q(
+      `SELECT id, mix_batch_id, cost_per_kg::text AS cost, total_cost::text AS total FROM factory_bales
+        WHERE id = ANY($1::int[]) ORDER BY id`,
+      [baleIds]
+    );
+  }
+
+  it("assigns a supplier-linked source at the persisted rate and records one completed batch", async () => {
     await withFactoryWorld(async (w) => {
-      const direct = await openingBalance(w);
+      const ob = await openingBalance(w, { withSupplier: true, supplierRate: "0.500000", directUsd: "9" });
       const b1 = await bale(w, "10");
       const b2 = await bale(w, "30");
-      const res = await assign(w, direct.rawStockId, [b2, b1]);
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/inconsistent types deduced for parameter \$2/);
-      await untouched(w, direct.rawStockId, [b1, b2]);
+      const res = await assign(w, ob.rawStockId, [b2, b1]);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({ success: true, totalKg: 40, balesUpdated: 2 });
+      const mixBatchId = res.body.mixBatchId;
 
-      const supplied = await openingBalance(w, { withSupplier: true, supplierRate: "0.250000" });
-      const b3 = await bale(w, "8");
-      expect((await assign(w, supplied.rawStockId, [b3])).status).toBe(500);
-      await untouched(w, supplied.rawStockId, [b3]);
-      const [s] = await w.q(
-        `SELECT current_raw_material_cost_per_kg_usd::text AS r FROM factory_suppliers WHERE id = $1`,
-        [supplied.supplierId]
+      const [batch] = await w.q(
+        `SELECT batch_code, batch_number, status, total_weight_kg::text AS kg, used_kg::text AS used,
+                cost_per_kg::text AS cost, total_cost::text AS total
+           FROM factory_mix_batches WHERE id = $1 AND company_id = $2`,
+        [mixBatchId, w.companyId]
       );
-      expect(Number(s.r)).toBe(0.25);
+      expect(batch.batch_code).toMatch(new RegExp(`^OB-ASSIGN-${ob.rawStockId}-\\d+$`));
+      expect(batch.batch_number).toBe(batch.batch_code);
+      expect(batch).toMatchObject({ status: "COMPLETED" });
+      expect([Number(batch.kg), Number(batch.used), Number(batch.cost), Number(batch.total)]).toEqual([
+        40, 40, 0.5, 20,
+      ]);
+
+      const [source] = await w.q(
+        `SELECT container_id, source_type, weight_kg::text AS kg, total_cost::text AS total
+           FROM factory_mix_batch_sources WHERE mix_batch_id = $1`,
+        [mixBatchId]
+      );
+      expect(source).toMatchObject({ container_id: ob.containerId, source_type: "SUPPLIER_LOCKED_RATE" });
+      expect([Number(source.kg), Number(source.total)]).toEqual([40, 20]);
+
+      const bales = await linked(w, [b1, b2]);
+      expect(bales.map((b) => [b.mix_batch_id, Number(b.cost), Number(b.total)])).toEqual([
+        [mixBatchId, 0.5, 5],
+        [mixBatchId, 0.5, 15],
+      ]);
+      const [rs] = await w.q(`SELECT used_kg::text AS used FROM factory_raw_stock WHERE id = $1`, [ob.rawStockId]);
+      expect(Number(rs.used)).toBe(40);
+      const audit = await w.q(
+        `SELECT changes FROM audit_log WHERE company_id = $1 AND action = 'opening_balance_assign_to_bales'
+            AND record_id = $2`,
+        [w.companyId, ob.rawStockId]
+      );
+      expect(audit).toHaveLength(1);
+      expect(audit[0].changes).toMatchObject({
+        mixBatchId,
+        baleIds: [b1, b2],
+        supplierId: ob.supplierId,
+        supplierRateChanged: false,
+      });
+
+      // The bales are linked now: a second assignment is refused and changes nothing.
+      const again = await assign(w, ob.rawStockId, [b1]);
+      expect(again.status).toBe(409);
+      expect(again.body.message).toMatch(`Bale ${b1} is no longer an unlinked IN_STOCK bale`);
+      const [rsAfter] = await w.q(`SELECT used_kg::text AS used FROM factory_raw_stock WHERE id = $1`, [ob.rawStockId]);
+      expect(Number(rsAfter.used)).toBe(40);
+    });
+  });
+
+  // Known limitation (pinned): a container without a supplier passes the
+  // route's direct-USD-cost checks, but the factory_mix_batch_sources trigger
+  // requires every raw-material source to have a supplier owner, so the
+  // assignment rolls back with 500 and writes nothing.
+  it("rolls back a direct source without a supplier owner and writes nothing", async () => {
+    await withFactoryWorld(async (w) => {
+      const direct = await openingBalance(w);
+      const b3 = await bale(w, "8");
+      const res = await assign(w, direct.rawStockId, [b3]);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/^CONTAINER_INVENTORY_SUPPLIER_UNRESOLVED/);
+      await untouched(w, direct.rawStockId, [b3]);
       const audit = await w.q(
         `SELECT id FROM audit_log WHERE company_id = $1 AND action = 'opening_balance_assign_to_bales'`,
         [w.companyId]
       );
       expect(audit).toEqual([]);
+    });
+  });
+
+  it("is refused while the company is the source of a Supplier Partner cutover", async () => {
+    await withFactoryWorld(async (w) => {
+      const direct = await openingBalance(w);
+      const b1 = await bale(w, "10");
+      const target = await w.one(
+        `INSERT INTO companies (code, name, company_type) VALUES ($1::varchar, $1::text, 'factory') RETURNING id`,
+        [`${w.tag}SP`]
+      );
+      await w.q(
+        `INSERT INTO sp_migration_cutovers (source_company_id, target_company_id, status, source_company_name,
+           target_company_name, target_write_hold)
+         VALUES ($1, $2, 'prepared', 'Source', 'Target', false)`,
+        [w.companyId, target]
+      );
+      invalidateCutoverLockCache();
+      try {
+        const res = await assign(w, direct.rawStockId, [b1]);
+        expect(res.status).toBe(423);
+        expect(res.body.code).toBe("SP_SOURCE_READ_ONLY");
+        await untouched(w, direct.rawStockId, [b1]);
+      } finally {
+        await w.q(`DELETE FROM sp_migration_cutovers WHERE source_company_id = $1`, [w.companyId]);
+        invalidateCutoverLockCache();
+      }
     });
   });
 });

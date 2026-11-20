@@ -6,13 +6,13 @@
  */
 import type { Express, Request, Response } from "express";
 import { parseId } from "../../../lib/parseId";
-import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { verifySupervisorPassword } from "../_helpers";
 import { factoryBaleProducts, users, userCompanyRoles } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { highestArticleNumber, pickEditableProductFields, productWriteFailure } from "./productWriteHelpers";
 
 export function registerFactoryProductWriteRoutes(app: Express) {
   app.post("/api/factory/bale-products", requireAuth, async (req: Request, res: Response) => {
@@ -47,6 +47,9 @@ export function registerFactoryProductWriteRoutes(app: Express) {
       let code = req.body.code;
       let articleCode = req.body.articleCode;
       const grade = req.body.grade;
+      if (articleCode != null && typeof articleCode !== "string") {
+        return res.status(400).json({ message: "articleCode must be text", code: "PRODUCT_INVALID" });
+      }
 
       const gradeToPrefix: Record<string, string> = {
         CREAM: "HMD10",
@@ -59,20 +62,7 @@ export function registerFactoryProductWriteRoutes(app: Express) {
 
       if (!articleCode && grade && gradeToPrefix[grade]) {
         const prefix = gradeToPrefix[grade];
-        const prefixLen = prefix.length;
-        const [maxResult] = await db
-          .select({
-            maxNum: sql<number>`COALESCE(MAX(CAST(SUBSTRING(${factoryBaleProducts.articleCode} FROM ${prefixLen + 1}) AS INTEGER)), 0)`,
-          })
-          .from(factoryBaleProducts)
-          .where(
-            and(
-              eq(factoryBaleProducts.companyId, companyId),
-              sql`${factoryBaleProducts.articleCode} LIKE ${prefix + "%"}`,
-              sql`SUBSTRING(${factoryBaleProducts.articleCode} FROM ${prefixLen + 1}) ~ '^[0-9]+$'`
-            )
-          );
-        let nextNum = (maxResult?.maxNum || 0) + 1;
+        let nextNum = (await highestArticleNumber(companyId, prefix)) + 1;
         let candidateCode = `${prefix}${String(nextNum).padStart(3, "0")}`;
         let attempts = 0;
         while (attempts < 100) {
@@ -98,20 +88,7 @@ export function registerFactoryProductWriteRoutes(app: Express) {
         articleCode = candidateCode;
       } else if (!articleCode) {
         const noGradePrefix = "HMD00";
-        const noGradePrefixLen = noGradePrefix.length;
-        const [noGradeMax] = await db
-          .select({
-            maxNum: sql<number>`COALESCE(MAX(CAST(SUBSTRING(${factoryBaleProducts.articleCode} FROM ${noGradePrefixLen + 1}) AS INTEGER)), 0)`,
-          })
-          .from(factoryBaleProducts)
-          .where(
-            and(
-              eq(factoryBaleProducts.companyId, companyId),
-              sql`${factoryBaleProducts.articleCode} LIKE ${noGradePrefix + "%"}`,
-              sql`SUBSTRING(${factoryBaleProducts.articleCode} FROM ${noGradePrefixLen + 1}) ~ '^[0-9]+$'`
-            )
-          );
-        let noGradeNext = (noGradeMax?.maxNum || 0) + 1;
+        let noGradeNext = (await highestArticleNumber(companyId, noGradePrefix)) + 1;
         articleCode = `${noGradePrefix}${String(noGradeNext).padStart(3, "0")}`;
         let noGradeAttempts = 0;
         while (noGradeAttempts < 100) {
@@ -149,20 +126,7 @@ export function registerFactoryProductWriteRoutes(app: Express) {
           );
           if (matchedPrefix) {
             const prefix = matchedPrefix;
-            const prefixLen = prefix.length;
-            const [maxResult] = await db
-              .select({
-                maxNum: sql<number>`COALESCE(MAX(CAST(SUBSTRING(${factoryBaleProducts.articleCode} FROM ${prefixLen + 1}) AS INTEGER)), 0)`,
-              })
-              .from(factoryBaleProducts)
-              .where(
-                and(
-                  eq(factoryBaleProducts.companyId, companyId),
-                  sql`${factoryBaleProducts.articleCode} LIKE ${prefix + "%"}`,
-                  sql`SUBSTRING(${factoryBaleProducts.articleCode} FROM ${prefixLen + 1}) ~ '^[0-9]+$'`
-                )
-              );
-            let nextNum = (maxResult?.maxNum || 0) + 1;
+            let nextNum = (await highestArticleNumber(companyId, prefix)) + 1;
             let candidateCode = `${prefix}${String(nextNum).padStart(3, "0")}`;
             let attempts = 0;
             while (attempts < 200) {
@@ -259,10 +223,7 @@ export function registerFactoryProductWriteRoutes(app: Express) {
           const msg: string = insertErrObj.message || "";
           const combined = causeMsg + msg;
           const isCodeDup = combined.includes("unique") || combined.includes("duplicate");
-          if (!isCodeDup || !retryPrefix || retryAttempts >= 100) {
-            const realMsg = insertErrObj.cause?.message || insertErrObj.message || "Insert failed";
-            throw new Error(realMsg, { cause: insertErr });
-          }
+          if (!isCodeDup || !retryPrefix || retryAttempts >= 100) throw insertErr;
           retryAttempts++;
           const currentNum = parseInt(articleCode.slice(retryPrefix.length)) || 0;
           const nextCandidate = `${retryPrefix}${String(currentNum + 1).padStart(3, "0")}`;
@@ -276,9 +237,8 @@ export function registerFactoryProductWriteRoutes(app: Express) {
       res.json(product);
     } catch (error: unknown) {
       logger.error("Error creating factory bale product:", { error });
-      const errObj = error as { cause?: { message?: string }; message?: string };
-      const realMsg = errObj.cause?.message || errObj.message || "Unknown error";
-      res.status(400).json({ message: realMsg });
+      const failure = productWriteFailure(error);
+      res.status(failure.status).json(failure.body);
     }
   });
 
@@ -290,9 +250,16 @@ export function registerFactoryProductWriteRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const { fields, rejected } = pickEditableProductFields(req.body);
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          message: `These product fields cannot be edited: ${rejected.join(", ")}`,
+          code: "PRODUCT_FIELD_NOT_EDITABLE",
+        });
+      }
       const [updated] = await db
         .update(factoryBaleProducts)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...fields, updatedAt: new Date() })
         .where(and(eq(factoryBaleProducts.id, id), eq(factoryBaleProducts.companyId, companyId)))
         .returning();
 
@@ -300,7 +267,8 @@ export function registerFactoryProductWriteRoutes(app: Express) {
       res.json(updated);
     } catch (error: unknown) {
       logger.error("Error updating factory bale product:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      const failure = productWriteFailure(error);
+      res.status(failure.status).json(failure.body);
     }
   });
 }

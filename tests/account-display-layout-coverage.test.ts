@@ -2,8 +2,8 @@
  * Company-scoped ledger account display layout (GET/PUT) over HTTP, one rolled-back transaction per test.
  * Pinned: legacy account groups are synthesised only when no layout row
  * exists, every malformed layout is refused before any write, Admin only,
- * and accounts from another company are refused without touching the
- * stored layout.
+ * accounts from another company are refused without touching the stored
+ * layout, and the factory alias is owned by the Account Groups page.
  */
 import { describe, expect, it } from "vitest";
 
@@ -102,16 +102,49 @@ describe("account display layout PUT", () => {
     });
   });
 
-  // Known gap (pinned): the factory alias is registered and used by the client
-  // in factory mode, but the factory backend access boundary has no page rule
-  // for it, so it is refused for every signed-in user, Admin included.
-  it("refuses the factory alias at the factory access boundary for an Admin", async () => {
+  // The factory alias belongs to Account Groups (Display Account Groups): the
+  // page owner reads and saves it; Accounts readers may only read it.
+  it("lets the Account Groups owner read and save the factory alias", async () => {
     await withFactoryWorld(async (w) => {
+      const id = await ledger(w, "FA");
+      const write = await w.agent
+        .put(FACTORY_PATH)
+        .send({ nodes: [group, { key: `ledger:${id}`, type: "ledger", parentKey: group.key, order: 1 }] });
+      expect(write.status, JSON.stringify(write.body)).toBe(200);
+      expect((await stored(w)).map((r) => r.node_key)).toEqual(["group:abcdefgh", `ledger:${id}`]);
       const read = await w.agent.get(FACTORY_PATH);
+      expect(read.status).toBe(200);
+      expect(read.body.nodes.find((n: { key: string }) => n.key === group.key)).toMatchObject({ name: "Costs" });
+    });
+  });
+
+  it("refuses the factory alias to users without the Account Groups page", async () => {
+    await withFactoryWorld(async (w) => {
+      const manager = await w.agentFor("Manager");
+      const [user] = await w.q<{ id: string }>(
+        `SELECT u.id FROM users u JOIN user_company_roles r ON r.user_id = u.id
+          WHERE r.company_id = $1 AND r.role = 'Manager'`,
+        [w.companyId]
+      );
+      await w.q(
+        `INSERT INTO factory_user_page_access (user_id, company_id, page_key) VALUES ($1, $2, 'factory/sheets-sacks')`,
+        [user.id, w.companyId]
+      );
+      const read = await manager.get(FACTORY_PATH);
       expect(read.status).toBe(403);
-      expect(read.body.code).toBe("FACTORY_PAGE_ACCESS_DENIED");
-      const write = await w.agent.put(FACTORY_PATH).send({ nodes: [group] });
+      // Account Groups is an Admin page, so the first refusal is the role check.
+      expect(read.body.code).toBe("FACTORY_ROLE_ACCESS_DENIED");
+      const write = await manager.put(FACTORY_PATH).send({ nodes: [group] });
       expect(write.status).toBe(403);
+      expect(write.body.code).toBe("FACTORY_ROLE_ACCESS_DENIED");
+
+      // An Accounts reader gets the order its list follows, but cannot save it.
+      await w.q(
+        `INSERT INTO factory_user_page_access (user_id, company_id, page_key) VALUES ($1, $2, 'factory/accounts')`,
+        [user.id, w.companyId]
+      );
+      expect((await manager.get(FACTORY_PATH)).status).toBe(200);
+      expect((await manager.put(FACTORY_PATH).send({ nodes: [group] })).status).toBe(403);
       expect(await stored(w)).toEqual([]);
     });
   });
