@@ -124,24 +124,10 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     drawDown(ex, col(r.consumed_kg));
   }
 
-  // Subtract kg reserved in open (not yet CLOSED/COMPLETED) mix batches —
-  // mirrors the freeKg = remainingKg − reservedKg logic in rawStockReceiptRoutes.ts.
-  // This aligns the net-position "Factory Raw Material Stock" value with the
-  // "FREE AVAILABLE → Stock Value" figure shown on the Raw Materials page.
-  const openReservedResult = await db.execute(sql`
-  SELECT fms.supplier_id, SUM(fms.weight_kg::numeric) AS reserved_kg
-  FROM   factory_mix_batch_sources fms
-  JOIN   factory_mix_batches fmb ON fmb.id = fms.mix_batch_id
-  WHERE  fmb.company_id = ${ctx.companyId}
-    AND  fms.supplier_id IS NOT NULL
-    AND  fmb.status NOT IN ('CLOSED', 'COMPLETED')
-  GROUP  BY fms.supplier_id
-`);
-  const openReservedRows = resultRows(openReservedResult);
-  const reservedBySupKey = new Map<string, Decimal>();
-  for (const r of openReservedRows) {
-    if (r.supplier_id) reservedBySupKey.set(`s${r.supplier_id}`, col(r.reserved_kg));
-  }
+  // Kg reserved in open (not yet CLOSED/COMPLETED) mix batches is NOT
+  // subtracted: until a batch closes and consumption is recorded, that raw
+  // material is still owned stock and stays in the net-position value.
+  // (Owner-confirmed; an earlier comment here wrongly said it was subtracted.)
 
   // /api/factory/raw-stock serializes each supplier/material row to cents
   // AFTER rounding freeKg to three decimals. The Raw Materials page sums those
