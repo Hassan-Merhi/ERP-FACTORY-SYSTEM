@@ -141,6 +141,10 @@ try {
   const context = await browser.createBrowserContext(); // same cookie and localStorage across tabs
   a = await context.newPage();
   b = await context.newPage();
+  // API responses are network-only in production. Bypass any previously
+  // installed worker so the delayed-response interception is deterministic.
+  await a.setBypassServiceWorker(true);
+  await b.setBypassServiceWorker(true);
   await a.setViewport({ width: 1440, height: 900 });
   await b.setViewport({ width: 1280, height: 800 });
 
