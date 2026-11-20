@@ -28,7 +28,7 @@ export function useGroundScanState() {
   const hasMigrationData = localBales.length > 0;
 
   const { data: stockLocations } = useQuery<StockLocation[]>({
-    queryKey: ["/api/factory/stock-entry/in-stock-locations"],
+    queryKey: ["/api/factory/stock-entry/in-stock-locations?groundScan=1"],
     staleTime: 30_000,
     refetchInterval: visibleTabInterval(60_000),
   });
@@ -61,9 +61,9 @@ export function useGroundScanState() {
 
   useEffect(() => {
     if (!stockLocations) return;
-    if (stockLocations.length === 1) {
-      setSelectedLocationId(String(stockLocations[0].id));
-    } else if (stockLocations.length > 1 && selectedLocationId !== "all") {
+    // Never silently change an "All locations" verification into a single
+    // location; doing so hides historical unassigned scans and inflates missing.
+    if (selectedLocationId !== "all") {
       const valid = stockLocations.some((l) => String(l.id) === selectedLocationId);
       if (!valid) setSelectedLocationId("all");
     }
@@ -142,7 +142,7 @@ export function GroundScanSection({
           <SelectValue placeholder="All locations" />
         </SelectTrigger>
         <SelectContent>
-          {(stockLocations ?? []).length > 1 && <SelectItem value="all">All locations</SelectItem>}
+          <SelectItem value="all">All locations</SelectItem>
           {(stockLocations ?? []).map((loc) => (
             <SelectItem key={loc.id} value={String(loc.id)}>
               {loc.name} ({loc.count} bales)
