@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * RecordAdvanceDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -86,18 +87,13 @@ export function RecordAdvanceDialog({
           </div>
           <div className="space-y-2">
             <Label>Cash Account</Label>
-            <Select value={form.cashAccountId} onValueChange={(v) => setForm({ ...form, cashAccountId: v })}>
-              <SelectTrigger data-testid="select-advance-cash-account">
-                <SelectValue placeholder="Select cash account (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cashAccounts || []).map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+                value={form.cashAccountId}
+                onChange={(v) => setForm({ ...form, cashAccountId: v })}
+                placeholder={"Select cash account (optional)"}
+                testId={"select-advance-cash-account"}
+              />
           </div>
           <div className="space-y-2">
             <Label>Repayment Type</Label>
