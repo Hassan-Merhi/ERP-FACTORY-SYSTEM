@@ -9,7 +9,10 @@ import { postedFxRevaluationAdjustmentUsd } from "../server/services/accounting/
 import { legacyManualFxConflictReason } from "../server/services/accounting/legacyManualFxGuard";
 import { statusForSameNamedSystemAccount } from "../server/services/accounting/systemAccountNameStatus";
 import { applyVerifiedMonetaryFxOverlay } from "../server/services/accounting/monetaryFxReportOverlay";
-import type { MonetaryFxValuationResult, MonetaryFxValuationRow } from "../server/services/accounting/monetaryFxValuationService";
+import type {
+  MonetaryFxValuationResult,
+  MonetaryFxValuationRow,
+} from "../server/services/accounting/monetaryFxValuationService";
 
 const RATE = new Decimal("20.9");
 const KITWE = { id: 4334, native: "68530", priorUsdPosted: "3290.55", correctedUsdPosted: "3278.95" };
@@ -121,9 +124,7 @@ describe("Zambia manual FX Phase 2 accounting correction contract", () => {
   });
 
   it("rejects misleadingly silent revaluation on legacy native-USD vouchers", () => {
-    const reason = legacyManualFxConflictReason([
-      { voucherId: 18113, voucherNumber: "JV-19-2026-000001" },
-    ]);
+    const reason = legacyManualFxConflictReason([{ voucherId: 18113, voucherNumber: "JV-19-2026-000001" }]);
     expect(reason).toContain("JV-19-2026-000001");
     expect(reason).toContain("BASE_ONLY_REVALUATION");
     expect(reason).toContain("No new journal was created");
