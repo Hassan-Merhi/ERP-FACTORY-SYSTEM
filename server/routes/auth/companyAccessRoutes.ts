@@ -98,7 +98,11 @@ function registerCompanyAccessRoutesPart2(app: Express) {
         return res.status(500).json({ message: "Failed to save session" });
       }
 
-      res.json({ message: "Company set successfully", companyId, companyRevision: req.session.companyRevision ?? LEGACY_COMPANY_REVISION });
+      res.json({
+        message: "Company set successfully",
+        companyId,
+        companyRevision: req.session.companyRevision ?? LEGACY_COMPANY_REVISION,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
