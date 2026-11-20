@@ -184,23 +184,24 @@ describe("bale product catalog route behavior", () => {
     expect(duplicate.body).toEqual({ message: 'Category "Tops" already exists' });
   });
 
-  it("updates and deletes only existing category ids", async () => {
-    harness.storage.getBaleProductCategoryById
-      .mockResolvedValueOnce({ id: 10, name: "Tops" })
-      .mockResolvedValueOnce(null);
+  it("updates and deletes only category ids of the active company", async () => {
+    harness.storage.getBaleProductCategoryById.mockResolvedValueOnce({ id: 10, name: "Tops" });
     harness.storage.updateBaleProductCategory.mockResolvedValue({ id: 10, name: "Premium Tops" });
+    harness.storage.deleteBaleProductCategory.mockResolvedValueOnce(false);
 
     const updated = responseHarness();
     await routes.get("PATCH /api/bale-product-categories/:id")!(
-      request({ params: { id: "10" }, body: { name: "Premium Tops" } }),
+      request({ params: { id: "10" }, body: { name: "Premium Tops", companyId: 99 } }),
       updated
     );
+    expect(harness.storage.getBaleProductCategoryById).toHaveBeenCalledWith(10, 4);
+    expect(harness.storage.updateBaleProductCategory).toHaveBeenCalledWith(10, 4, { name: "Premium Tops" });
     expect(updated.body).toMatchObject({ name: "Premium Tops" });
 
     const missing = responseHarness();
     await routes.get("DELETE /api/bale-product-categories/:id")!(request({ params: { id: "11" } }), missing);
     expect(missing.statusCode).toBe(404);
-    expect(harness.storage.deleteBaleProductCategory).not.toHaveBeenCalled();
+    expect(harness.storage.deleteBaleProductCategory).toHaveBeenCalledWith(11, 4);
   });
 
   it("derives an HMD article code from itemNumber and prevents duplicate article codes", async () => {

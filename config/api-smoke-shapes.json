@@ -2399,11 +2399,11 @@
     },
     "/api/whatsapp/settings": {
       "status": 200,
-      "shape": "{apiToken:scalar,dailyAutoSend:scalar,dailyRecipientId:scalar,dailyRecipientName:scalar,enabled:scalar,hasCredentials:scalar,instanceId:scalar,monthlyAutoSend:scalar}"
+      "shape": "{apiToken:scalar,apiTokenSet:scalar,dailyAutoSend:scalar,dailyRecipientId:scalar,dailyRecipientName:scalar,enabled:scalar,hasCredentials:scalar,instanceId:scalar,monthlyAutoSend:scalar}"
     },
     "/api/whatsapp/settings/pos": {
       "status": 200,
-      "shape": "{apiToken:scalar,enabled:scalar,hasCredentials:scalar,instanceId:scalar}"
+      "shape": "{apiToken:scalar,apiTokenSet:scalar,enabled:scalar,hasCredentials:scalar,instanceId:scalar}"
     },
     "/api/whatsapp/stock-settings": {
       "status": 200,

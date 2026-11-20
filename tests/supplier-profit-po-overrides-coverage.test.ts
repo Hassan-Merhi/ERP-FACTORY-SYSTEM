@@ -5,7 +5,7 @@
  * explicitly linked parent only), stock item scope, price validation, partial
  * updates that keep the omitted field, explicit null resets that delete the
  * row, and the bulk upsert in all three column shapes - with nothing written
- * on any refusal.
+ * on any refusal. Writes are limited to Admin, Developer, Owner and Manager.
  */
 import { describe, expect, it } from "vitest";
 
@@ -154,6 +154,46 @@ describe("bulk PO overrides", () => {
         overrides: [{ stockItemId: f.itemC, poPrice: null, avgPrice: null }],
       });
       expect((await rows(w, f.own)).map((r) => r.stock_item_id)).toEqual([f.itemA, f.itemB]);
+    });
+  });
+});
+
+describe("PO override write roles", () => {
+  it("refuses Staff and POS writes, single and bulk, without writing", async () => {
+    await withFactoryWorld(async (w) => {
+      const f = await world(w);
+      await w.q(
+        `INSERT INTO supplier_profit_po_overrides (supplier_id, stock_item_id, po_price, avg_price) VALUES ($1, $2, 5, 6)`,
+        [f.own, f.itemA]
+      );
+      const before = await rows(w, f.own);
+      for (const role of ["Staff", "POS"]) {
+        const agent = await w.agentFor(role);
+        const single = await agent.put(URL).send({ supplierId: f.own, stockItemId: f.itemA, poPrice: 99 });
+        expect(single.status, `${role} single`).toBe(403);
+        const bulk = await agent.put(`${URL}/bulk`).send({
+          supplierId: f.own,
+          overrides: [
+            { stockItemId: f.itemA, poPrice: null, avgPrice: null },
+            { stockItemId: f.itemB, poPrice: 1 },
+          ],
+        });
+        expect(bulk.status, `${role} bulk`).toBe(403);
+      }
+      expect(await rows(w, f.own)).toEqual(before);
+    });
+  });
+
+  it("admits Manager, Owner and Developer writes", async () => {
+    await withFactoryWorld(async (w) => {
+      const f = await world(w);
+      const items = [f.itemA, f.itemB, f.itemC];
+      for (const [index, role] of ["Manager", "Owner", "Developer"].entries()) {
+        const agent = await w.agentFor(role);
+        const res = await agent.put(URL).send({ supplierId: f.own, stockItemId: items[index], poPrice: index + 1 });
+        expect(res.status, role).toBe(200);
+      }
+      expect((await rows(w, f.own)).map((r) => r.po_price)).toEqual(["1.0000", "2.0000", "3.0000"]);
     });
   });
 });

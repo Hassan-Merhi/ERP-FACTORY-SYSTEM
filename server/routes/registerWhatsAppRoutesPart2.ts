@@ -13,10 +13,15 @@ import { invalidExportDateRange } from "../services/export-excel/workbook";
 import { ZipArchive } from "archiver";
 import { getClientDate } from "../lib/dateUtils";
 
+// The settings rows hold the Green API credentials and the schedules that
+// decide what is sent to which group: Admin and Developer only, for reads too
+// (requireRole always admits Developer; it is listed for the route manifest).
+const settingsAdmins = requireRole("Admin", "Developer");
+
 export function registerWhatsAppRoutesPart2(app: Express) {
   // ── Stock + Net Position Report Settings ────────────────────────────────────
 
-  app.get("/api/whatsapp/stock-settings", requireAuth, async (_req, res) => {
+  app.get("/api/whatsapp/stock-settings", requireAuth, settingsAdmins, async (_req, res) => {
     try {
       const r = await pool.query(
         `SELECT id, company_id, recipient_id, auto_send, enabled,
@@ -51,7 +56,7 @@ export function registerWhatsAppRoutesPart2(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/stock-settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/stock-settings", requireAuth, settingsAdmins, async (req, res) => {
     try {
       const { companyId, recipientId, autoSend, enabled, frequency, sendHour, sendDayOfWeek } = req.body as Record<
         string,
@@ -86,7 +91,7 @@ export function registerWhatsAppRoutesPart2(app: Express) {
 
   // ── Net Position Scheduled Export Settings ──────────────────────────────────
 
-  app.get("/api/whatsapp/np-settings", requireAuth, async (_req, res) => {
+  app.get("/api/whatsapp/np-settings", requireAuth, settingsAdmins, async (_req, res) => {
     try {
       const r = await pool.query(
         `SELECT npe.id, npe.recipient_id, npe.frequency, npe.send_hour, npe.send_day_of_week,
@@ -124,7 +129,7 @@ export function registerWhatsAppRoutesPart2(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/np-settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/np-settings", requireAuth, settingsAdmins, async (req, res) => {
     try {
       const { recipientId, frequency, sendHour, sendDayOfWeek, enabled, autoSend } = req.body as Record<
         string,

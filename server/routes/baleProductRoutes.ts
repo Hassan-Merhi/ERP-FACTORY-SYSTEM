@@ -9,6 +9,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { and, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
@@ -21,6 +22,22 @@ import {
   insertPendingBarcodeSchema,
   insertBaleProductCategorySchema,
 } from "@shared/schema";
+
+/** Editable pending-barcode fields; anything else in the body (id, companyId, createdAt) is dropped. */
+const pendingBarcodePatchSchema = z.object({
+  barcode: z.string().min(1).max(100).optional(),
+  category: z.string().nullable().optional(),
+  grade: z.string().nullable().optional(),
+  origin: z.string().nullable().optional(),
+  printed: z.boolean().optional(),
+  used: z.boolean().optional(),
+});
+
+/** Editable category fields; companyId and timestamps are never taken from the body. */
+const baleCategoryPatchSchema = z.object({
+  name: z.string().min(1, "Category name is required").max(100).optional(),
+  isActive: z.boolean().optional(),
+});
 
 export function registerBaleProductRoutes(app: Express) {
   // Pending Barcodes API Routes - for pre-printing barcode labels
@@ -98,11 +115,33 @@ export function registerBaleProductRoutes(app: Express) {
     }
   });
 
+  // Registered before PATCH /:id so "mark-printed" is never parsed as an id.
+  app.patch("/api/pending-barcodes/mark-printed", requireAuth, async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || !ids.every((id) => Number.isSafeInteger(id))) {
+        return res.status(400).json({ message: "ids must be an array" });
+      }
+      const count = await storage.markBarcodesAsPrinted(ids, companyId);
+      res.json({ success: true, count });
+    } catch (error: unknown) {
+      logger.error("Error marking barcodes as printed:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.patch("/api/pending-barcodes/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid barcode ID" });
-      const barcode = await storage.updatePendingBarcode(id, req.body);
+      // Only label fields are editable; id and companyId are never taken from the body.
+      const updates = pendingBarcodePatchSchema.parse(req.body ?? {});
+      const barcode = await storage.updatePendingBarcode(id, companyId, updates);
+      if (!barcode) return res.status(404).json({ message: "Barcode not found" });
       res.json(barcode);
     } catch (error: unknown) {
       logger.error("Error updating pending barcode:", { error: error });
@@ -110,25 +149,14 @@ export function registerBaleProductRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/pending-barcodes/mark-printed", requireAuth, async (req, res) => {
-    try {
-      const { ids } = req.body;
-      if (!Array.isArray(ids)) {
-        return res.status(400).json({ message: "ids must be an array" });
-      }
-      await storage.markBarcodesAsPrinted(ids);
-      res.json({ success: true });
-    } catch (error: unknown) {
-      logger.error("Error marking barcodes as printed:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
   app.delete("/api/pending-barcodes/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const _bid = parseInt(req.params.id, 10);
       if (isNaN(_bid)) return res.status(400).json({ message: "Invalid barcode ID" });
-      await storage.deletePendingBarcode(_bid);
+      const deleted = await storage.deletePendingBarcode(_bid, companyId);
+      if (!deleted) return res.status(404).json({ message: "Barcode not found" });
       res.status(204).send();
     } catch (error: unknown) {
       logger.error("Error deleting pending barcode:", { error: error });
@@ -163,11 +191,15 @@ export function registerBaleProductRoutes(app: Express) {
 
   app.patch("/api/bale-product-categories/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid category ID" });
-      const existing = await storage.getBaleProductCategoryById(id);
+      const existing = await storage.getBaleProductCategoryById(id, companyId);
       if (!existing) return res.status(404).json({ message: "Category not found" });
-      const updated = await storage.updateBaleProductCategory(id, req.body);
+      const updates = baleCategoryPatchSchema.parse(req.body ?? {});
+      const updated = await storage.updateBaleProductCategory(id, companyId, updates);
+      if (!updated) return res.status(404).json({ message: "Category not found" });
       res.json(updated);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -176,11 +208,12 @@ export function registerBaleProductRoutes(app: Express) {
 
   app.delete("/api/bale-product-categories/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid category ID" });
-      const existing = await storage.getBaleProductCategoryById(id);
-      if (!existing) return res.status(404).json({ message: "Category not found" });
-      await storage.deleteBaleProductCategory(id);
+      const deleted = await storage.deleteBaleProductCategory(id, companyId);
+      if (!deleted) return res.status(404).json({ message: "Category not found" });
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });

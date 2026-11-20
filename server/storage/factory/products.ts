@@ -11,8 +11,14 @@ export async function getAllBaleProductCategories(companyId: number): Promise<sc
     .orderBy(schema.baleProductCategories.name);
 }
 
-export async function getBaleProductCategoryById(id: number): Promise<schema.BaleProductCategory | undefined> {
-  const [cat] = await db.select().from(schema.baleProductCategories).where(eq(schema.baleProductCategories.id, id));
+export async function getBaleProductCategoryById(
+  id: number,
+  companyId: number
+): Promise<schema.BaleProductCategory | undefined> {
+  const [cat] = await db
+    .select()
+    .from(schema.baleProductCategories)
+    .where(and(eq(schema.baleProductCategories.id, id), eq(schema.baleProductCategories.companyId, companyId)));
   return cat;
 }
 
@@ -36,18 +42,23 @@ export async function createBaleProductCategory(
 
 export async function updateBaleProductCategory(
   id: number,
-  updates: Partial<schema.InsertBaleProductCategory>
-): Promise<schema.BaleProductCategory> {
+  companyId: number,
+  updates: Partial<Omit<schema.InsertBaleProductCategory, "companyId">>
+): Promise<schema.BaleProductCategory | undefined> {
   const [updated] = await db
     .update(schema.baleProductCategories)
     .set({ ...updates, updatedAt: sql`now()` })
-    .where(eq(schema.baleProductCategories.id, id))
+    .where(and(eq(schema.baleProductCategories.id, id), eq(schema.baleProductCategories.companyId, companyId)))
     .returning();
   return updated;
 }
 
-export async function deleteBaleProductCategory(id: number): Promise<void> {
-  await db.delete(schema.baleProductCategories).where(eq(schema.baleProductCategories.id, id));
+export async function deleteBaleProductCategory(id: number, companyId: number): Promise<boolean> {
+  const deleted = await db
+    .delete(schema.baleProductCategories)
+    .where(and(eq(schema.baleProductCategories.id, id), eq(schema.baleProductCategories.companyId, companyId)))
+    .returning({ id: schema.baleProductCategories.id });
+  return deleted.length > 0;
 }
 
 export async function getAllBaleProducts(companyId: number): Promise<schema.BaleProduct[]> {

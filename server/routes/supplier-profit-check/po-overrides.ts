@@ -9,6 +9,7 @@
 import type { Express, Request, Response, RequestHandler } from "express";
 import type { PoolClient } from "pg";
 import { pool } from "../../db";
+import { requireRole } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getProfitCheckSupplierScope } from "./supplier-scope";
 
@@ -115,7 +116,12 @@ async function upsertBulkRows(client: PoolClient, supplierId: number, rows: Bulk
   }
 }
 
+// Writing override prices changes every user's profit-check result, so only
+// managers and above may do it (Developer is always admitted by requireRole).
+const OVERRIDE_WRITER_ROLES = ["Admin", "Developer", "Owner", "Manager"];
+
 export function registerSupplierProfitPoOverrideRoutes(app: Express, requireAuth: RequestHandler) {
+  const writeGuard = [requireAuth, requireRole(...OVERRIDE_WRITER_ROLES)];
   app.get("/api/supplier-profit-check/po-overrides", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
@@ -149,7 +155,7 @@ export function registerSupplierProfitPoOverrideRoutes(app: Express, requireAuth
     }
   });
 
-  app.put("/api/supplier-profit-check/po-overrides/bulk", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/supplier-profit-check/po-overrides/bulk", writeGuard, async (req: Request, res: Response) => {
     const companyId = req.session.currentCompanyId;
     if (!companyId) return res.status(400).json({ message: "No company selected" });
 
@@ -229,7 +235,7 @@ export function registerSupplierProfitPoOverrideRoutes(app: Express, requireAuth
     }
   });
 
-  app.put("/api/supplier-profit-check/po-overrides", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/supplier-profit-check/po-overrides", writeGuard, async (req: Request, res: Response) => {
     const companyId = req.session.currentCompanyId;
     if (!companyId) return res.status(400).json({ message: "No company selected" });
 

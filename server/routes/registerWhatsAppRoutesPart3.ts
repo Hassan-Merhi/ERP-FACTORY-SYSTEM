@@ -1,7 +1,7 @@
 // Extracted from ./registerWhatsAppRoutesPart1.ts
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { pool } from "../db";
 import {
   fetchGreenApiChats,
@@ -11,6 +11,12 @@ import {
   getWaSettingsById,
   normaliseChatId,
 } from "../services/whatsappService";
+import { maskGreenApiToken, submittedGreenApiToken } from "../services/whatsappSettingsStore";
+
+// The settings rows hold the Green API credentials and the schedules that
+// decide what is sent to which group: Admin and Developer only, for reads too
+// (requireRole always admits Developer; it is listed for the route manifest).
+const settingsAdmins = requireRole("Admin", "Developer");
 
 export function registerWhatsAppRoutesPart3(app: Express) {
   app.get("/api/whatsapp/recipients", requireAuth, async (req, res) => {
@@ -117,15 +123,16 @@ export function registerWhatsAppRoutesPart3(app: Express) {
 
   // ── POS WhatsApp instance (id=2) settings & chats ──────────────────────────
 
-  app.get("/api/whatsapp/settings/pos", requireAuth, async (_req, res) => {
+  app.get("/api/whatsapp/settings/pos", requireAuth, settingsAdmins, async (_req, res) => {
     try {
       const s = await getWaSettingsById(2);
       if (!s) {
-        return res.json({ instanceId: "", apiToken: "", enabled: true, hasCredentials: false });
+        return res.json({ instanceId: "", apiToken: "", apiTokenSet: false, enabled: true, hasCredentials: false });
       }
       res.json({
         instanceId: s.instanceId,
-        apiToken: s.apiToken ? "••••••" : "",
+        apiToken: maskGreenApiToken(s.apiToken),
+        apiTokenSet: !!s.apiToken,
         enabled: s.enabled,
         hasCredentials: !!(s.instanceId && s.apiToken),
       });
@@ -134,13 +141,14 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/settings/pos", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/settings/pos", requireAuth, settingsAdmins, async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
       const existing = await getWaSettingsById(2);
 
       const instanceId = body.instanceId ?? existing?.instanceId ?? "";
-      const apiToken = body.apiToken ?? existing?.apiToken ?? "";
+      // "" keeps the stored token (omitted, blank or the masked value a GET returned).
+      const apiToken = submittedGreenApiToken(body.apiToken);
       const enabled = body.enabled !== undefined ? body.enabled : (existing?.enabled ?? true);
 
       await pool.query(
@@ -149,7 +157,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
         VALUES (2, $1, $2, $3)
         ON CONFLICT (id) DO UPDATE SET
           instance_id = EXCLUDED.instance_id,
-          api_token   = CASE WHEN $2 = '' OR $2 = '••••••' THEN whatsapp_settings.api_token ELSE EXCLUDED.api_token END,
+          api_token   = CASE WHEN $2 = '' THEN whatsapp_settings.api_token ELSE EXCLUDED.api_token END,
           enabled     = EXCLUDED.enabled
       `,
         [instanceId, apiToken, enabled]

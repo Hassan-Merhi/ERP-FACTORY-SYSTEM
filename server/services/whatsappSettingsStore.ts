@@ -27,6 +27,31 @@ export function normaliseChatId(raw: string): string {
   return `${digits}@c.us`;
 }
 
+// ─── API token masking ────────────────────────────────────────────────────────
+
+const API_TOKEN_MASK = "••••••";
+
+/**
+ * The only form of a stored Green API token that may leave the server: a mask
+ * plus, for a token long enough not to give itself away, its last 4 characters.
+ */
+export function maskGreenApiToken(token: string | null | undefined): string {
+  const clean = String(token ?? "").trim();
+  if (!clean) return "";
+  return clean.length > 8 ? `${API_TOKEN_MASK}${clean.slice(-4)}` : API_TOKEN_MASK;
+}
+
+/**
+ * The token a settings PUT should store, or "" to keep the stored one: an
+ * omitted, blank, non-string or masked value (one echoed back from a GET,
+ * which always starts with "•") never overwrites the real token.
+ */
+export function submittedGreenApiToken(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return trimmed.startsWith("•") ? "" : trimmed;
+}
+
 // ─── DB reads ─────────────────────────────────────────────────────────────────
 
 export async function getWaSettings(): Promise<WaSettings | null> {

@@ -5,6 +5,11 @@
  * settings rows never leak. GREEN API, the e-mail transport, the scheduler
  * entry point and the Net Position workbook renderer are mocked at their
  * module boundaries.
+ *
+ * The settings rows (Green API credentials, POS credentials, stock and Net
+ * Position schedules) are Admin/Developer only, for reads too, and the stored
+ * API token never leaves the server: GETs return a mask, and a PUT that echoes
+ * the mask (or omits the token) keeps the stored one.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +44,7 @@ vi.mock("../server/services/scheduler", async (importOriginal) => ({
   triggerDailyWhatsAppSendNow: m.trigger,
 }));
 
-import { withFactoryWorld } from "./helpers/rolledBackFactoryApp";
+import { withFactoryWorld, type FactoryWorld } from "./helpers/rolledBackFactoryApp";
 
 beforeEach(() => {
   m.settings.mockReset().mockResolvedValue({ enabled: true, instanceId: "1101", apiToken: "tok" });
@@ -52,33 +57,158 @@ beforeEach(() => {
   m.trigger.mockReset().mockResolvedValue({ message: "done" });
 });
 
+const SETTINGS_ROUTES = [
+  "/api/whatsapp/settings",
+  "/api/whatsapp/settings/pos",
+  "/api/whatsapp/stock-settings",
+  "/api/whatsapp/np-settings",
+];
+const MAIN_TOKEN = "main-green-api-token-0001";
+const POS_TOKEN = "pos-green-api-token-0002";
+
+async function seedSettings(w: FactoryWorld) {
+  await w.q(
+    `INSERT INTO whatsapp_settings (id, instance_id, api_token, enabled) VALUES (1, '1101', $1, true), (2, '2202', $2, true)
+       ON CONFLICT (id) DO UPDATE SET instance_id = EXCLUDED.instance_id, api_token = EXCLUDED.api_token,
+                                      enabled = EXCLUDED.enabled`,
+    [MAIN_TOKEN, POS_TOKEN]
+  );
+  await w.q(
+    `INSERT INTO whatsapp_stock_settings (id, company_id, enabled, frequency, send_hour) VALUES (1, $1, true, 'daily', 18)
+       ON CONFLICT (id) DO UPDATE SET company_id = EXCLUDED.company_id, enabled = true, frequency = 'daily', send_hour = 18`,
+    [w.companyId]
+  );
+  await w.q(
+    `INSERT INTO net_position_export_settings (id, enabled, frequency, send_hour) VALUES (1, true, 'daily', 18)
+       ON CONFLICT (id) DO UPDATE SET enabled = true, frequency = 'daily', send_hour = 18`
+  );
+}
+
+const settingsState = async (w: FactoryWorld) => ({
+  wa: await w.q(`SELECT id, instance_id, api_token, enabled FROM whatsapp_settings WHERE id IN (1, 2) ORDER BY id`),
+  stock: await w.q(`SELECT * FROM whatsapp_stock_settings ORDER BY id`),
+  np: await w.q(`SELECT * FROM net_position_export_settings ORDER BY id`),
+});
+
+describe("WhatsApp settings access", () => {
+  it("refuses Staff, Manager and POS reads and writes of every settings row and changes nothing", async () => {
+    await withFactoryWorld(async (w) => {
+      await seedSettings(w);
+      const before = await settingsState(w);
+      const hijack = { instanceId: "9999", apiToken: "attacker", enabled: false, frequency: "weekly", sendHour: 3 };
+      for (const role of ["Staff", "Manager", "POS"]) {
+        const agent = await w.agentFor(role);
+        for (const route of SETTINGS_ROUTES) {
+          const read = await agent.get(route);
+          expect(read.status, `${role} GET ${route}`).toBe(403);
+          expect(JSON.stringify(read.body)).not.toContain("green-api-token");
+          expect((await agent.put(route).send(hijack)).status, `${role} PUT ${route}`).toBe(403);
+        }
+      }
+      expect(await settingsState(w)).toEqual(before);
+    });
+  });
+
+  it("lets Admin and Developer read and write every settings row", async () => {
+    await withFactoryWorld(async (w) => {
+      await seedSettings(w);
+      const developer = await w.agentFor("Developer");
+      for (const agent of [w.agent, developer]) {
+        for (const route of SETTINGS_ROUTES) {
+          const read = await agent.get(route);
+          expect(read.status, `GET ${route}`).toBe(200);
+          expect(JSON.stringify(read.body)).not.toContain("green-api-token");
+        }
+      }
+      expect((await developer.put("/api/whatsapp/settings/pos").send({ enabled: false })).status).toBe(200);
+      expect((await developer.put("/api/whatsapp/stock-settings").send({ sendHour: 7 })).status).toBe(200);
+      expect((await w.agent.put("/api/whatsapp/np-settings").send({ frequency: "weekly" })).status).toBe(200);
+      const after = await settingsState(w);
+      expect(after.wa).toEqual([
+        { id: 1, instance_id: "1101", api_token: MAIN_TOKEN, enabled: true },
+        { id: 2, instance_id: "2202", api_token: POS_TOKEN, enabled: false },
+      ]);
+      expect(after.stock[0]).toMatchObject({ send_hour: 7 });
+      expect(after.np[0]).toMatchObject({ frequency: "weekly" });
+    });
+  });
+});
+
 describe("WhatsApp main settings", () => {
-  it("returns defaults without a row, masks the token and preserves it on save", async () => {
+  it("returns defaults without a row, never returns the token and keeps it on a masked save", async () => {
     await withFactoryWorld(async (w) => {
       await w.q(`DELETE FROM whatsapp_settings WHERE id = 1`);
       expect((await w.agent.get("/api/whatsapp/settings")).body).toEqual({
         instanceId: "",
         apiToken: "",
+        apiTokenSet: false,
         enabled: false,
         monthlyAutoSend: false,
       });
       m.settings.mockResolvedValueOnce(null);
-      const created = await w.agent.put("/api/whatsapp/settings").send({ instanceId: "1101", apiToken: "secret" });
+      const created = await w.agent.put("/api/whatsapp/settings").send({ instanceId: "1101", apiToken: MAIN_TOKEN });
       expect(created.status).toBe(200);
       const read = await w.agent.get("/api/whatsapp/settings");
-      expect(read.body).toMatchObject({ instanceId: "1101", apiToken: "••••••", enabled: false, hasCredentials: true });
-
-      m.settings.mockResolvedValueOnce({
+      expect(read.body).toMatchObject({
         instanceId: "1101",
-        apiToken: "secret",
+        apiToken: "••••••0001",
+        apiTokenSet: true,
         enabled: false,
+        hasCredentials: true,
+      });
+      expect(JSON.stringify(read.body)).not.toContain(MAIN_TOKEN);
+
+      m.settings.mockResolvedValue({
+        instanceId: "1101",
+        apiToken: MAIN_TOKEN,
+        enabled: true,
         monthlyAutoSend: true,
         dailyAutoSend: false,
         dailyRecipientId: null,
       });
-      await w.agent.put("/api/whatsapp/settings").send({ apiToken: "••••••", enabled: true });
-      const [row] = await w.q(`SELECT api_token, enabled, monthly_auto_send FROM whatsapp_settings WHERE id = 1`);
-      expect(row).toEqual({ api_token: "secret", enabled: true, monthly_auto_send: true });
+      const token = async () => (await w.q(`SELECT api_token FROM whatsapp_settings WHERE id = 1`))[0].api_token;
+      // The mask sent back as-is, the legacy mask, an omitted or blank token never overwrite it.
+      await w.agent.put("/api/whatsapp/settings").send({ apiToken: read.body.apiToken, enabled: true });
+      expect(await token()).toBe(MAIN_TOKEN);
+      for (const body of [{ apiToken: "••••••" }, {}, { apiToken: "" }, { apiToken: null }, { apiToken: 42 }]) {
+        expect((await w.agent.put("/api/whatsapp/settings").send(body)).status).toBe(200);
+        expect(await token(), JSON.stringify(body)).toBe(MAIN_TOKEN);
+      }
+      const [row] = await w.q(`SELECT enabled, monthly_auto_send FROM whatsapp_settings WHERE id = 1`);
+      expect(row).toEqual({ enabled: true, monthly_auto_send: true });
+
+      await w.agent.put("/api/whatsapp/settings").send({ apiToken: "  short  " });
+      expect(await token()).toBe("short");
+      // A short token is masked completely.
+      expect((await w.agent.get("/api/whatsapp/settings")).body.apiToken).toBe("••••••");
+    });
+  });
+
+  it("masks the POS token and keeps it when the form posts the mask back", async () => {
+    await withFactoryWorld(async (w) => {
+      await w.q(`DELETE FROM whatsapp_settings WHERE id = 2`);
+      expect((await w.agent.get("/api/whatsapp/settings/pos")).body).toEqual({
+        instanceId: "",
+        apiToken: "",
+        apiTokenSet: false,
+        enabled: true,
+        hasCredentials: false,
+      });
+      await w.agent.put("/api/whatsapp/settings/pos").send({ instanceId: "2202", apiToken: POS_TOKEN });
+      const read = await w.agent.get("/api/whatsapp/settings/pos");
+      expect(read.body).toEqual({
+        instanceId: "2202",
+        apiToken: "••••••0002",
+        apiTokenSet: true,
+        enabled: true,
+        hasCredentials: true,
+      });
+      // The POS form re-posts exactly what it read.
+      await w.agent.put("/api/whatsapp/settings/pos").send({ ...read.body, instanceId: "2203" });
+      const [row] = await w.q(`SELECT instance_id, api_token FROM whatsapp_settings WHERE id = 2`);
+      expect(row).toEqual({ instance_id: "2203", api_token: POS_TOKEN });
+      await w.agent.put("/api/whatsapp/settings/pos").send({ apiToken: "new-pos-token-9999" });
+      expect((await w.agent.get("/api/whatsapp/settings/pos")).body.apiToken).toBe("••••••9999");
     });
   });
 

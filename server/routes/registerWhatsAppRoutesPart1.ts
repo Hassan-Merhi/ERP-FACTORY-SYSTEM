@@ -1,7 +1,7 @@
 // Extracted from ./whatsappRoutes.ts to keep that module under the source-size cap.
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { storage } from "../storage";
@@ -13,12 +13,18 @@ import {
 } from "../services/whatsappService";
 import { generateMonthEnds, generateNetPositionExcel } from "../helpers/generateNetPositionExcel";
 import { getClientDate } from "../lib/dateUtils";
+import { maskGreenApiToken, submittedGreenApiToken } from "../services/whatsappSettingsStore";
 import { registerWhatsAppRoutesPart3 } from "./registerWhatsAppRoutesPart3";
+
+// The settings rows hold the Green API credentials and the schedules that
+// decide what is sent to which group: Admin and Developer only, for reads too
+// (requireRole always admits Developer; it is listed for the route manifest).
+const settingsAdmins = requireRole("Admin", "Developer");
 
 export function registerWhatsAppRoutesPart1(app: Express) {
   // ── Settings (singleton row id=1) ──────────────────────────────────────────
 
-  app.get("/api/whatsapp/settings", requireAuth, async (_req, res) => {
+  app.get("/api/whatsapp/settings", requireAuth, settingsAdmins, async (_req, res) => {
     try {
       const r = await pool.query(`
         SELECT ws.instance_id, ws.api_token, ws.enabled, ws.monthly_auto_send,
@@ -29,12 +35,13 @@ export function registerWhatsAppRoutesPart1(app: Express) {
          WHERE ws.id = 1
       `);
       if (!r.rows.length) {
-        return res.json({ instanceId: "", apiToken: "", enabled: false, monthlyAutoSend: false });
+        return res.json({ instanceId: "", apiToken: "", apiTokenSet: false, enabled: false, monthlyAutoSend: false });
       }
       const s = r.rows[0];
       res.json({
         instanceId: s.instance_id,
-        apiToken: s.api_token ? "••••••" : "",
+        apiToken: maskGreenApiToken(s.api_token),
+        apiTokenSet: !!s.api_token,
         enabled: s.enabled,
         monthlyAutoSend: s.monthly_auto_send,
         dailyAutoSend: s.daily_auto_send,
@@ -47,7 +54,7 @@ export function registerWhatsAppRoutesPart1(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/settings", requireAuth, settingsAdmins, async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
 
@@ -55,7 +62,8 @@ export function registerWhatsAppRoutesPart1(app: Express) {
       const existing = await getWaSettings();
 
       const instanceId = body.instanceId ?? existing?.instanceId ?? "";
-      const apiToken = body.apiToken ?? existing?.apiToken ?? "";
+      // "" keeps the stored token (omitted, blank or the masked value a GET returned).
+      const apiToken = submittedGreenApiToken(body.apiToken);
       const enabled = body.enabled !== undefined ? body.enabled : (existing?.enabled ?? false);
       const monthlyAutoSend =
         body.monthlyAutoSend !== undefined ? body.monthlyAutoSend : (existing?.monthlyAutoSend ?? false);
@@ -69,7 +77,7 @@ export function registerWhatsAppRoutesPart1(app: Express) {
         VALUES (1, $1, $2, $3, $4, $5, $6)
         ON CONFLICT (id) DO UPDATE SET
           instance_id        = EXCLUDED.instance_id,
-          api_token          = CASE WHEN $2 = '' OR $2 = '••••••' THEN whatsapp_settings.api_token ELSE EXCLUDED.api_token END,
+          api_token          = CASE WHEN $2 = '' THEN whatsapp_settings.api_token ELSE EXCLUDED.api_token END,
           enabled            = EXCLUDED.enabled,
           monthly_auto_send  = EXCLUDED.monthly_auto_send,
           daily_auto_send    = EXCLUDED.daily_auto_send,

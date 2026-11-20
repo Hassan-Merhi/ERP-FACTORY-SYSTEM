@@ -7,9 +7,9 @@
  * deletes are company-scoped; the Excel import creates, updates, skips and
  * creates categories; malformed uploads are refused.
  *
- * Known defects pinned below (not fixed here): the pending-barcode PATCH and
- * DELETE and the category GET-by-id-backed PATCH/DELETE look rows up by id only,
- * so a user of one company can change another company's rows.
+ * Pending-barcode and category edits/deletes are scoped to the active company
+ * (another company's row is 404 and stays unchanged), their PATCH bodies are
+ * whitelisted, and the bulk mark-printed route is reachable and company-scoped.
  */
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
@@ -114,18 +114,48 @@ describe("bale product categories", () => {
     });
   });
 
-  it("pins the unscoped category edit of another company's row", async () => {
+  it("answers 404 for another company's category and leaves it unchanged", async () => {
     await withFactoryWorld(async (w) => {
       const other = await otherCompany(w);
       const foreign = await w.one(
         `INSERT INTO bale_product_categories (company_id, name) VALUES ($1, 'Theirs') RETURNING id`,
         [other]
       );
-      const res = await w.agent.patch(`/api/bale-product-categories/${foreign}`).send({ name: "Changed" });
-      const [row] = await w.q(`SELECT name FROM bale_product_categories WHERE id = $1`, [foreign]);
-      // Current behaviour: no company check, the foreign row is renamed.
+      const state = () =>
+        w.q(`SELECT company_id, name, is_active FROM bale_product_categories WHERE id = $1`, [foreign]);
+      const before = await state();
+      const patch = await w.agent.patch(`/api/bale-product-categories/${foreign}`).send({ name: "Changed" });
+      expect(patch.status).toBe(404);
+      expect((await w.agent.delete(`/api/bale-product-categories/${foreign}`)).status).toBe(404);
+      expect(await state()).toEqual(before);
+      expect(before).toEqual([{ company_id: other, name: "Theirs", is_active: true }]);
+    });
+  });
+
+  it("only applies the name and active flag from a PATCH body", async () => {
+    await withFactoryWorld(async (w) => {
+      const other = await otherCompany(w);
+      const own = await w.one(
+        `INSERT INTO bale_product_categories (company_id, name) VALUES ($1, 'Mine') RETURNING id`,
+        [w.companyId]
+      );
+      // A foreign companyId in the body is refused by the company-scope boundary.
+      const moved = await w.agent
+        .patch(`/api/bale-product-categories/${own}`)
+        .send({ isActive: false, companyId: other });
+      expect(moved.status).toBe(403);
+      const res = await w.agent
+        .patch(`/api/bale-product-categories/${own}`)
+        .send({ isActive: false, companyId: w.companyId, id: own + 1000, createdAt: "2000-01-01" });
       expect(res.status).toBe(200);
-      expect(row.name).toBe("Changed");
+      const [row] = await w.q(
+        `SELECT id, company_id, name, is_active, created_at > '2001-01-01' AS recent FROM bale_product_categories
+          WHERE id = $1`,
+        [own]
+      );
+      expect(row).toEqual({ id: own, company_id: w.companyId, name: "Mine", is_active: false, recent: true });
+      expect((await w.agent.patch(`/api/bale-product-categories/${own}`).send({ name: "" })).status).toBe(400);
+      expect((await w.agent.patch(`/api/bale-product-categories/${own}`).send({ isActive: "no" })).status).toBe(400);
     });
   });
 });
@@ -151,21 +181,75 @@ describe("pending barcodes", () => {
       expect((await w.agent.get(`/api/pending-barcodes/${w.tag}-none`)).status).toBe(404);
       expect((await w.agent.get("/api/pending-barcodes")).body).toHaveLength(4);
 
-      // Pinned defect: PATCH /:id is registered before /mark-printed, so
-      // "mark-printed" is parsed as an id and the bulk route is unreachable.
+      // The bulk route is registered before PATCH /:id, so it is reachable.
       const ids = imported.body.barcodes.map((b: { id: number }) => b.id);
-      const shadowed = await w.agent.patch("/api/pending-barcodes/mark-printed").send({ ids });
-      expect(shadowed.status).toBe(400);
-      expect(shadowed.body.message).toBe("Invalid barcode ID");
+      const marked = await w.agent.patch("/api/pending-barcodes/mark-printed").send({ ids });
+      expect(marked.status).toBe(200);
+      expect(marked.body).toEqual({ success: true, count: 3 });
       const printed = await w.q(`SELECT COUNT(*)::int AS n FROM pending_barcodes WHERE id = ANY($1) AND printed`, [
         ids,
       ]);
-      expect(printed[0].n).toBe(0);
+      expect(printed[0].n).toBe(3);
+      for (const bad of [{}, { ids: "x" }, { ids: ["1"] }, { ids: [1.5] }]) {
+        expect((await w.agent.patch("/api/pending-barcodes/mark-printed").send(bad)).status).toBe(400);
+      }
 
       expect((await w.agent.patch("/api/pending-barcodes/abc").send({})).status).toBe(400);
       expect((await w.agent.patch(`/api/pending-barcodes/${one.body.id}`).send({ grade: "Z" })).body.grade).toBe("Z");
+      expect((await w.agent.patch("/api/pending-barcodes/2000000000").send({ grade: "Z" })).status).toBe(404);
       expect((await w.agent.delete("/api/pending-barcodes/abc")).status).toBe(400);
+      expect((await w.agent.delete("/api/pending-barcodes/2000000000")).status).toBe(404);
       expect((await w.agent.delete(`/api/pending-barcodes/${one.body.id}`)).status).toBe(204);
+    });
+  });
+
+  it("scopes edits, deletes and mark-printed to the active company", async () => {
+    await withFactoryWorld(async (w) => {
+      const other = await otherCompany(w);
+      const foreign = await w.one(
+        `INSERT INTO pending_barcodes (company_id, barcode, grade) VALUES ($1, $2, 'A') RETURNING id`,
+        [other, `${w.tag}-F`]
+      );
+      const own = await w.one(
+        `INSERT INTO pending_barcodes (company_id, barcode, grade) VALUES ($1, $2, 'A') RETURNING id`,
+        [w.companyId, `${w.tag}-O`]
+      );
+      const state = () =>
+        w.q(`SELECT company_id, barcode, grade, printed, used FROM pending_barcodes WHERE id = $1`, [foreign]);
+      const before = await state();
+      expect((await w.agent.patch(`/api/pending-barcodes/${foreign}`).send({ grade: "Z" })).status).toBe(404);
+      expect((await w.agent.delete(`/api/pending-barcodes/${foreign}`)).status).toBe(404);
+      const marked = await w.agent.patch("/api/pending-barcodes/mark-printed").send({ ids: [foreign, own] });
+      expect(marked.body).toEqual({ success: true, count: 1 });
+      expect(await state()).toEqual(before);
+      expect(before[0]).toMatchObject({ company_id: other, grade: "A", printed: false });
+      const [ownRow] = await w.q(`SELECT printed FROM pending_barcodes WHERE id = $1`, [own]);
+      expect(ownRow.printed).toBe(true);
+    });
+  });
+
+  it("ignores non-label fields in a PATCH body and validates the label fields", async () => {
+    await withFactoryWorld(async (w) => {
+      const other = await otherCompany(w);
+      const own = await w.one(`INSERT INTO pending_barcodes (company_id, barcode) VALUES ($1, $2) RETURNING id`, [
+        w.companyId,
+        `${w.tag}-P`,
+      ]);
+      // A foreign companyId in the body is refused by the company-scope boundary.
+      expect((await w.agent.patch(`/api/pending-barcodes/${own}`).send({ companyId: other, used: true })).status).toBe(
+        403
+      );
+      const res = await w.agent
+        .patch(`/api/pending-barcodes/${own}`)
+        .send({ companyId: w.companyId, id: own + 1000, createdAt: "2000-01-01", used: true, origin: "UK" });
+      expect(res.status).toBe(200);
+      const [row] = await w.q(
+        `SELECT id, company_id, used, origin, created_at > '2001-01-01' AS recent FROM pending_barcodes WHERE id = $1`,
+        [own]
+      );
+      expect(row).toEqual({ id: own, company_id: w.companyId, used: true, origin: "UK", recent: true });
+      expect((await w.agent.patch(`/api/pending-barcodes/${own}`).send({ printed: "yes" })).status).toBe(400);
+      expect((await w.agent.patch(`/api/pending-barcodes/${own}`).send({ barcode: "" })).status).toBe(400);
     });
   });
 });
