@@ -29,6 +29,7 @@ import { postErpEntriesTx } from "./erpVoucherPosting";
 import { getMonetaryFxValuation, type MonetaryFxValuationRow } from "./monetaryFxValuationService";
 import type { MonetaryFxCategory, MonetaryFxRate } from "./monetaryFxValuationCore";
 import { ensureSystemAccounts } from "./systemAccounts";
+import { findLegacyManualFxConflicts, legacyManualFxConflictReason } from "./legacyManualFxGuard";
 
 export const FX_REVALUATION_SOURCE_TYPE = "fx-unrealized-revaluation";
 /** The only line kind the database accepts with a base amount and no native amount (migration 0011). */
@@ -136,6 +137,13 @@ export async function postFxRevaluation(input: {
     if (valuation.baseCurrency !== "USD") {
       return { ...base, status: "skipped", reason: "The company's accounting base currency is not USD." };
     }
+    // Old manual revaluations posted ordinary USD movements into foreign-currency
+    // cash. Revaluing again would double-count the same loss. Fail closed until
+    // that original journal is reversed and corrected with native-zero entries.
+    const legacyConflicts = await findLegacyManualFxConflicts(db, companyId, businessDate);
+    if (legacyConflicts.length) {
+      return { ...base, status: "skipped", reason: legacyManualFxConflictReason(legacyConflicts) };
+    }
     if (!lines.length) return { ...base, status: "nothing_to_post" };
 
     const outcome = await db.transaction(async (tx) => {
@@ -157,7 +165,14 @@ export async function postFxRevaluation(input: {
     const posted = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`fx-unrealized-revaluation:${companyId}`}))`);
       if ((await revaluationCount(tx, companyId)) !== sequence) return null;
+      // Recheck under the posting lock; a manual journal could have appeared
+      // after the preflight valuation. Never post another FX adjustment over it.
+      const conflicts = await findLegacyManualFxConflicts(tx, companyId, businessDate);
+      if (conflicts.length) return { conflictReason: legacyManualFxConflictReason(conflicts) } as const;
       const status = (await ensureSystemAccounts(tx, companyId, ["FX-REVALUATION"]))[0];
+      if (status?.state === "type_differs") {
+        throw new Error(`FX Revaluation Gain/Loss account is typed "${status.actualType}" but must be "${status.expectedType}". Review the account before revaluation.`);
+      }
       if (!status || !("accountId" in status) || !["ok", "created", "reused_by_name"].includes(status.state)) {
         throw new Error("The FX Revaluation Gain/Loss account is unavailable");
       }
@@ -235,10 +250,18 @@ export async function postFxRevaluation(input: {
         },
         tx
       );
-      return voucher.voucher;
+      return { voucher: voucher.voucher } as const;
     });
     if (!posted) continue;
-    return { ...base, status: "posted", voucherId: Number(posted.id), voucherNumber: String(posted.voucherNumber) };
+    if ("conflictReason" in posted) {
+      return { ...base, status: "skipped", reason: posted.conflictReason };
+    }
+    return {
+      ...base,
+      status: "posted",
+      voucherId: Number(posted.voucher.id),
+      voucherNumber: String(posted.voucher.voucherNumber),
+    };
   }
   throw new Error("FX revaluation is being posted by another request. Try again.");
 }
