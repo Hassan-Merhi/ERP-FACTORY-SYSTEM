@@ -73,7 +73,11 @@
       "P6D-d19e83dc39d7",
       "P6D-032a9625476b",
       "P6D-c2bbeb5dc1b6",
-      "P6D-fced65b2818d"
+      "P6D-fced65b2818d",
+      "P6D-b68143061a7a",
+      "P6D-aab3c01c4da3",
+      "P6D-4fccd3f5f680",
+      "P6D-18b436687b2f"
     ],
     "false-positive": [
       "P6D-94dd2f11ecdd",
@@ -124,6 +128,22 @@
     "P6D-e8d4bb609a1c": {
       "rationale": "The flagged loop in server/startup/warmupDb.ts is a three-attempt startup retry around one SELECT 1 connectivity probe; it returns on the first success and never iterates over records.",
       "falsePositiveReason": "At most three sequential SELECT 1 calls, separated by a 3 second back-off, run once at boot to open the pool; there is no per-row query and no collection to batch."
+    },
+    "P6D-b68143061a7a": {
+      "rationale": "The flagged statements in server/services/accounting/fxRevaluationPosting.ts are the advisory lock and the revaluation-sequence recheck that open the preflight and posting transactions of the unrealized FX revaluation. The enclosing loop is a three-attempt optimistic retry for one company, not an iteration over records.",
+      "orderingDependency": "The company advisory lock must be taken first and the sequence re-read under it inside each transaction so a concurrent revaluation is detected before posting; hoisting or batching these reads out of the transaction would let two revaluations post over the same balances."
+    },
+    "P6D-aab3c01c4da3": {
+      "rationale": "The flagged statements in server/services/accounting/fxRevaluationPosting.ts are the advisory lock and the revaluation-sequence recheck that open the preflight and posting transactions of the unrealized FX revaluation. The enclosing loop is a three-attempt optimistic retry for one company, not an iteration over records.",
+      "orderingDependency": "The company advisory lock must be taken first and the sequence re-read under it inside each transaction so a concurrent revaluation is detected before posting; hoisting or batching these reads out of the transaction would let two revaluations post over the same balances."
+    },
+    "P6D-4fccd3f5f680": {
+      "rationale": "The flagged statements in server/services/accounting/fxRevaluationPosting.ts are the advisory lock and the revaluation-sequence recheck that open the preflight and posting transactions of the unrealized FX revaluation. The enclosing loop is a three-attempt optimistic retry for one company, not an iteration over records.",
+      "orderingDependency": "The company advisory lock must be taken first and the sequence re-read under it inside each transaction so a concurrent revaluation is detected before posting; hoisting or batching these reads out of the transaction would let two revaluations post over the same balances."
+    },
+    "P6D-18b436687b2f": {
+      "rationale": "The flagged statements in server/services/accounting/fxRevaluationPosting.ts are the advisory lock and the revaluation-sequence recheck that open the preflight and posting transactions of the unrealized FX revaluation. The enclosing loop is a three-attempt optimistic retry for one company, not an iteration over records.",
+      "orderingDependency": "The company advisory lock must be taken first and the sequence re-read under it inside each transaction so a concurrent revaluation is detected before posting; hoisting or batching these reads out of the transaction would let two revaluations post over the same balances."
     }
   }
 }

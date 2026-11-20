@@ -76,16 +76,17 @@ for (const token of [
 ]) {
   if (!serviceWorker.includes(token)) failures.push(`One-time device refresh contract missing: ${token}`);
 }
-// A replacement worker announces itself instead of reloading the page, so
-// returning to a tab never discards unsaved forms; the update banner offers
-// a deliberate Refresh. A first-time install claiming the page is not an update.
-for (const token of ['if (!hadControllerAtStartup)', 'window.dispatchEvent(new Event("erp:service-worker-updated"))']) {
+// A replacement worker announces itself and the update banner offers the
+// refresh; it must never reload a tab that may hold unsaved work.
+for (const token of ['window.dispatchEvent(new Event("erp:service-worker-updated"))', 'if (!hadControllerAtStartup)']) {
   if (!serviceWorkerRegistration.includes(token)) {
-    failures.push(`Service worker update notice contract missing: ${token}`);
+    failures.push(`Controller update notification contract missing: ${token}`);
   }
 }
-if (serviceWorkerRegistration.includes("window.location.replace(")) {
-  failures.push("A service worker update must not reload the page automatically (window.location.replace)");
+for (const token of ['window.location.replace(', 'window.location.reload(']) {
+  if (serviceWorkerRegistration.includes(token)) {
+    failures.push(`Service worker registration must not reload the tab: ${token}`);
+  }
 }
 
 for (const token of [

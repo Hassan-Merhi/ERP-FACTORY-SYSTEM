@@ -85,6 +85,14 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/accounting/monetary-fx/manual-revaluation/preflight": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/monetary-fx/manual-revaluation/verify": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/accounting/monetary-fx/rate": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -94,6 +102,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/accounting/monetary-fx/realized": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/monetary-fx/sales-net-position/reconciliation": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -180,6 +192,10 @@
     "/api/accounts/multi-currency/cash-bank-revaluation": {
       "status": 200,
       "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,currentZmwPerUsd:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,currentZmwPerUsd:scalar,unresolvedAccountCount:scalar}"
+    },
+    "/api/accounts/multi-currency/fx-activity": {
+      "status": 200,
+      "shape": "{companyId:scalar,entries:[],mode:scalar,notes:[scalar],truncated:scalar}"
     },
     "/api/accounts/multi-currency/monetary-valuation": {
       "status": 200,
@@ -319,7 +335,7 @@
     },
     "/api/chat/users": {
       "status": 200,
-      "shape": "[{active:scalar,hasMessages:scalar,id:scalar,isOnline:scalar,lastSeen:scalar,unreadCount:scalar,username:scalar}]"
+      "shape": "[]"
     },
     "/api/chatbot/alerts": {
       "status": 200,
@@ -505,6 +521,10 @@
       "status": 200,
       "shape": "[{accountType:scalar,active:scalar,code:scalar,companyId:scalar,createdAt:scalar,deletedAt:scalar,id:scalar,isHidden:scalar,name:scalar,openingBalance:scalar,openingBalanceBaseAmount:scalar,openingBalanceCurrency:scalar,openingBalanceHistoricalRate:scalar,openingBalanceNativeAmount:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar}]"
     },
+    "/api/erp/rental/linked-rent-control": {
+      "status": 404,
+      "shape": "{message:scalar}"
+    },
     "/api/erp/rental/payments": {
       "status": 200,
       "shape": "[]"
@@ -520,6 +540,14 @@
     "/api/erp/rental/units": {
       "status": 200,
       "shape": "[]"
+    },
+    "/api/erp/supplier-returns/history": {
+      "status": 200,
+      "shape": "{rows:[]}"
+    },
+    "/api/erp/supplier-returns/suppliers": {
+      "status": 200,
+      "shape": "{rows:[]}"
     },
     "/api/exchange-rates": {
       "status": 200,
@@ -901,6 +929,18 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/finalized-sale-returns/customers": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/finalized-sale-returns/history": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/finalized-sale-returns/orders": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/financial-snapshot": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -945,6 +985,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/mhd-view": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/mix-batches": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -957,6 +1001,18 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/monthly-production-matrix": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/monthly-production-matrix/bales": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/monthly-production-matrix/workers": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/monthly-salary-summary": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -966,6 +1022,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/net-position": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/net-position/fx-activity": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -1489,6 +1549,30 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/intercompany-container-trading/daybook-linked-vouchers": {
+      "status": 422,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/intercompany-container-trading/lifecycle": {
+      "status": 200,
+      "shape": "{inventoryAccounts:[],locations:[{id:scalar,name:scalar}],trades:[]}"
+    },
+    "/api/intercompany-container-trading/linked-trades": {
+      "status": 200,
+      "shape": "{trades:[]}"
+    },
+    "/api/intercompany-container-trading/payments/relationships": {
+      "status": 200,
+      "shape": "{relationships:[]}"
+    },
+    "/api/intercompany-container-trading/setup": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/intercompany-container-trading/trades": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/intercompany-links": {
       "status": 200,
       "shape": "[]"
@@ -1595,7 +1679,7 @@
     },
     "/api/notification-rules": {
       "status": 200,
-      "shape": "[{createdAt:scalar,eventType:scalar,id:scalar,isEnabled:scalar,recipientUserId:scalar,updatedAt:scalar}]"
+      "shape": "[]"
     },
     "/api/notification-users": {
       "status": 200,
@@ -1608,6 +1692,18 @@
     "/api/notifications/unread-count": {
       "status": 200,
       "shape": "{count:scalar}"
+    },
+    "/api/offline/pc-sync/changes": {
+      "status": 404,
+      "shape": "{code:scalar}"
+    },
+    "/api/offline/pc-sync/snapshot": {
+      "status": 404,
+      "shape": "{code:scalar}"
+    },
+    "/api/offline/pc-sync/snapshot/start": {
+      "status": 404,
+      "shape": "{code:scalar}"
     },
     "/api/offload-item-search": {
       "status": 200,
@@ -1653,6 +1749,38 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/permissions-v2/activation": {
+      "status": 200,
+      "shape": "{activationAuthorized:scalar,available:scalar,companyId:scalar,enforced:scalar,enforcementEnabled:scalar,mode:scalar,revision:scalar}"
+    },
+    "/api/permissions-v2/audit": {
+      "status": 200,
+      "shape": "{companyId:scalar,records:[]}"
+    },
+    "/api/permissions-v2/catalog": {
+      "status": 200,
+      "shape": "{actions:[scalar],companyId:scalar,createOnlyAssignable:scalar,editableRoles:[scalar],enforced:scalar,mode:scalar,resources:[scalar]}"
+    },
+    "/api/permissions-v2/me": {
+      "status": 200,
+      "shape": "{companyId:scalar,decisions:{erp.accounts:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.analytics:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.containers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.customers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.inventory:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.payroll:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.purchase_orders:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.sales:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.stock_items:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.stock_transfers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.suppliers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},erp.vouchers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.accounting:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.analytics:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.bales:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.containers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.customer_orders:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.employees:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.mix_batches:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.payroll:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.production:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},factory.raw_stock:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},properties.analytics:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},properties.contracts:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},properties.payments:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},properties.units:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},retail.pos:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},retail.stock_imports:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},retail.stock_items:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},retail.transfers:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},system.maintenance:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},system.settings:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}},system.users:{approve:{…},create:{…},delete:{…},edit:{…},export:{…},finalize:{…},import:{…},manage_settings:{…},manage_users:{…},repair:{…},reverse:{…},view:{…},void:{…}}},enforced:scalar,legacyBasis:scalar,mode:scalar,revision:scalar,role:scalar,summary:{allowed:scalar,denied:scalar,divergent:scalar},userId:scalar,v2Available:scalar}"
+    },
+    "/api/permissions-v2/monitoring": {
+      "status": 200,
+      "shape": "{companyId:scalar,configuration:{alertDestinationConfigured:scalar,escalatedKinds:[scalar],repeatedForbiddenMutation:{attempts:scalar,windowMinutes:scalar}},counts:{business_integrity_discrepancy:scalar,cross_company_attempt:scalar,permission_denied:scalar,permission_service_error:scalar,policy_change:scalar,policy_revision_conflict:scalar,repeated_forbidden_mutation:scalar,role_assignment_failed:scalar,unexpected_forbidden:scalar,v2_enforcement_denied:scalar},operationalIntegrityEvents:scalar,policy:{available:scalar,mode:scalar,revision:scalar},since:scalar}"
+    },
+    "/api/permissions-v2/preview": {
+      "status": 400,
+      "shape": "{code:scalar,issues:[{code:scalar,message:scalar,path:[…],values:[…]}],message:scalar}"
+    },
+    "/api/permissions-v2/roles": {
+      "status": 200,
+      "shape": "{companyId:scalar,editableRoles:[scalar],enforced:scalar,impactCounts:{Admin:scalar},mode:scalar,revision:scalar,rules:[],templates:[]}"
+    },
+    "/api/permissions-v2/users": {
+      "status": 200,
+      "shape": "{companyId:scalar,enforced:scalar,mode:scalar,users:[{role:scalar,userId:scalar}]}"
+    },
     "/api/pos-transfer-approval/queue": {
       "status": 403,
       "shape": "{message:scalar}"
@@ -1668,6 +1796,10 @@
     "/api/pos/customers": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/pos/daybook-edit-status": {
+      "status": 200,
+      "shape": "{businessDate:scalar,daybookEditDays:scalar,posViewOnly:scalar,role:scalar}"
     },
     "/api/pos/drafts": {
       "status": 200,
@@ -2033,6 +2165,14 @@
       "status": 200,
       "shape": "{fast:scalar,tabId:scalar,watched:scalar}"
     },
+    "/api/seasonal/christmas-mode": {
+      "status": 200,
+      "shape": "{available:scalar,enabled:scalar,preferenceEnabled:scalar,visuals:scalar}"
+    },
+    "/api/seasonal/christmas-mode/config": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/sessions": {
       "status": 200,
       "shape": "[]"
@@ -2269,6 +2409,26 @@
       "status": 200,
       "shape": "[{active:scalar,code:scalar,currentQty:scalar,currentValue:scalar,id:scalar,name:scalar,openingQty:scalar,openingRate:scalar,openingValue:scalar,sellingPrice:scalar,stockGroupCode:scalar,stockGroupId:scalar,stockGroupName:scalar,uom:scalar}]"
     },
+    "/api/stock-transfer-order/wa-approval/eligible": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
+    "/api/stock-transfer-order/wa-approval/legacy": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
+    "/api/stock-transfer-order/wa-approval/recent": {
+      "status": 200,
+      "shape": "{batches:[]}"
+    },
+    "/api/stock-transfer-order/wa-approval/settings": {
+      "status": 200,
+      "shape": "{canConfigure:scalar,connected:scalar,deliveryEnabled:scalar,destinations:[{chatId:scalar,enabled:scalar,id:scalar,name:scalar}],executionEnabled:scalar,groups:[],settings:{approvalGroupChatId:scalar,authorizedPhoneE164:scalar,enabled:scalar},webhookConfigured:scalar}"
+    },
+    "/api/stock-transfer-order/wa-approval/webhook-readiness": {
+      "status": 200,
+      "shape": "{mainConfigured:scalar,message:scalar,providerChecked:scalar,ready:scalar}"
+    },
     "/api/stock-transfer-order/whatsapp-groups": {
       "status": 200,
       "shape": "{connected:scalar,groups:[]}"
@@ -2317,9 +2477,37 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/tickets": {
+      "status": 200,
+      "shape": "{hasMore:scalar,page:scalar,tickets:[]}"
+    },
+    "/api/tickets/dashboard": {
+      "status": 200,
+      "shape": "{byCategory:[],byCreatedDay:[],byEmployee:[],byStatus:[],filters:{},generatedAt:scalar,overdueCases:[],summary:{avg_resolution_hours:scalar,finalized:scalar,open:scalar,overdue:scalar,reopened:scalar,resolved_within_24_hours:scalar,seen:scalar,total:scalar,urgent:scalar,working:scalar}}"
+    },
+    "/api/tickets/dashboard-access": {
+      "status": 200,
+      "shape": "{canExport:scalar,canViewDashboard:scalar}"
+    },
+    "/api/tickets/notification-settings": {
+      "status": 200,
+      "shape": "{email:scalar,emailEnabled:scalar,whatsappEnabled:scalar,whatsappNumber:scalar}"
+    },
+    "/api/tickets/users": {
+      "status": 200,
+      "shape": "{users:[{id:scalar,username:scalar}]}"
+    },
+    "/api/tickets/voucher-search": {
+      "status": 200,
+      "shape": "{records:[]}"
+    },
     "/api/tracking-defaults/suppliers": {
       "status": 200,
       "shape": "{agentOptions:[],locations:[{code:scalar,id:scalar,name:scalar}],suppliers:[]}"
+    },
+    "/api/training/media": {
+      "status": 200,
+      "shape": "{provider:scalar,topics:{}}"
     },
     "/api/transporter-statement/transporters": {
       "status": 200,

@@ -2,10 +2,9 @@ import { bigserial, check, index, integer, pgTable, timestamp, uniqueIndex, varc
 import { sql } from "drizzle-orm";
 
 /**
- * Reusable loading agents a Factory company picks from on Factory Invoices.
- * Created by migrations/0012_factory_loading_agents.sql; the order keeps the
- * chosen name in customer_orders.agent_name. Names are unique per company,
- * ignoring case.
+ * Reusable loading agents of a company, offered on Factory Invoices; the name
+ * chosen for an order is stored on customer_orders.agent_name. Created by
+ * migration 0012_factory_loading_agents.sql.
  */
 export const factoryLoadingAgents = pgTable(
   "factory_loading_agents",
@@ -15,11 +14,12 @@ export const factoryLoadingAgents = pgTable(
     name: varchar("name", { length: 200 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex("factory_loading_agents_company_name_ci_uniq").on(table.companyId, sql`lower(${table.name})`),
-    index("factory_loading_agents_company_idx").on(table.companyId),
-    check("factory_loading_agents_name_not_blank", sql`length(btrim(${table.name})) > 0`),
-  ]
+  (t) => ({
+    nameNotBlank: check("factory_loading_agents_name_not_blank", sql`length(btrim(${t.name})) > 0`),
+    companyNameUnique: uniqueIndex("factory_loading_agents_company_name_ci_uniq").on(
+      t.companyId,
+      sql`lower(${t.name})`
+    ),
+    companyIdx: index("factory_loading_agents_company_idx").on(t.companyId),
+  })
 );
-
-export type FactoryLoadingAgent = typeof factoryLoadingAgents.$inferSelect;

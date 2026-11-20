@@ -147,7 +147,28 @@ export function shouldBypass(
   );
 }
 
+/**
+ * The few small reads that decide which workspace a tab mounts. A background
+ * tab that follows another tab's company switch needs them to leave its
+ * loading screen; holding them until the tab is opened left it stuck there.
+ * Page data stays deferred.
+ */
+const WORKSPACE_BOOTSTRAP_PATHS = [
+  /^\/api\/factory\/my-access$/,
+  /^\/api\/factory\/settings$/,
+  /^\/api\/company-settings$/,
+  /^\/api\/my-permissions$/,
+  /^\/api\/my-erp-pages$/,
+  /^\/api\/user-preferences$/,
+  /^\/api\/companies\/\d+$/,
+];
+
+export function isWorkspaceBootstrapRead(pathname: string): boolean {
+  return WORKSPACE_BOOTSTRAP_PATHS.some((pattern) => pattern.test(pathname));
+}
+
 export function shouldDeferUntilVisible(pathname: string, ttlMs: number): boolean {
+  if (isWorkspaceBootstrapRead(pathname)) return false;
   return ttlMs > 0 || HEAVY_HIDDEN_TAB_PATHS.some((pattern) => pattern.test(pathname));
 }
 

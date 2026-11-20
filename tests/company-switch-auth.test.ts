@@ -67,7 +67,7 @@ describe("company switching authorization", () => {
 
     const sessionCompany = await agent.get("/api/auth/session-company");
     expect(sessionCompany.status).toBe(200);
-    // The session also reports its write revision, which a switch renews.
+    // The revision lets a tab prove its writes belong to this company session.
     expect(sessionCompany.body).toEqual({ companyId: secondCompanyId, companyRevision: expect.any(String) });
   });
 

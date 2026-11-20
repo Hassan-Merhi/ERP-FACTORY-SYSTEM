@@ -117,17 +117,6 @@ async function countRows(table: "vouchers" | "voucher_entries" | "accounting_pos
   return r.rows[0].n;
 }
 
-async function linkManualPosting(): Promise<void> {
-  if (!manualVoucherId) return;
-  await pool.query(
-    `INSERT INTO accounting_posting_requests
-     (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
-     VALUES ($1, $2, 'manual-journal', $3, $4, $5)
-     ON CONFLICT (company_id, idempotency_key) DO NOTHING`,
-    [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
-  );
-}
-
 databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", () => {
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
@@ -164,12 +153,23 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       { ledgerId: lusaka, debit: "0", credit: "34.03" },
       { ledgerId: fxAccount, debit: "45.63", credit: "0" },
     ]);
-    await linkManualPosting();
   }, 120_000);
 
-  // The shared test setup deletes every posting request after each test
-  // (tests/voucherRequestIdentityTestBridge.mjs); re-link the manual journal's.
-  beforeEach(linkManualPosting);
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; the manual journal's identity is what every
+  // case here reads, so it is restored before each one.
+  beforeEach(async () => {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
+      companyId,
+      `${unique}:manual-fx`,
+    ]);
+    await pool.query(
+      `INSERT INTO accounting_posting_requests
+       (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
+       VALUES ($1, $2, 'manual-journal', $3, $4, $5)`,
+      [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
+    );
+  });
 
   afterAll(async () => {
     if (!companyId) return;

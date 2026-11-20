@@ -91,24 +91,13 @@ async function receipt(code: string, cash: number, native: string, rate: string)
   ]);
 }
 
-// The shared test setup deletes every posting request after each test
-// (tests/voucherRequestIdentityTestBridge.mjs), so the posting identities this
-// suite links are re-linked before each later test.
-const linkedPostings: Array<{ voucherId: number; source: string; suffix: string }> = [];
-
-async function insertPosting(voucherId: number, source: string, suffix: string): Promise<void> {
+async function linkPosting(voucherId: number, source: string, suffix: string): Promise<void> {
   await pool.query(
     `INSERT INTO accounting_posting_requests
      (company_id,idempotency_key,source_type,source_id,request_fingerprint,voucher_id)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (company_id, idempotency_key) DO NOTHING`,
+     VALUES ($1,$2,$3,$4,$5,$6)`,
     [companyId, `${prefix}:${suffix}`, source, `${prefix}:${suffix}`, "b".repeat(64), voucherId]
   );
-}
-
-async function linkPosting(voucherId: number, source: string, suffix: string): Promise<void> {
-  linkedPostings.push({ voucherId, source, suffix });
-  await insertPosting(voucherId, source, suffix);
 }
 
 async function verify() {
@@ -116,14 +105,10 @@ async function verify() {
 }
 
 databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
-  beforeEach(async () => {
-    for (const posting of linkedPostings) await insertPosting(posting.voucherId, posting.source, posting.suffix);
-  });
-
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
       `INSERT INTO companies (code, name, company_type, base_currency, display_currency)
-       VALUES ($1, $2, 'erp', 'USD', 'ZMW') RETURNING id`,
+       VALUES ($1,$2,'erp','USD','ZMW') RETURNING id`,
       [prefix, prefix]
     );
     companyId = company.rows[0].id;
@@ -155,8 +140,17 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
       null,
       "Manual FX revaluation 20.8 to 20.9"
     );
-    await linkPosting(originalId, "manual-journal", "manual");
   }, 120_000);
+
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; restore the original journal's before each.
+  beforeEach(async () => {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
+      companyId,
+      `${prefix}:manual`,
+    ]);
+    await linkPosting(originalId, "manual-journal", "manual");
+  });
 
   afterAll(async () => {
     if (!companyId) return;

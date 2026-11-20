@@ -29,12 +29,14 @@ import {
   type VoucherAuditState,
 } from "../../routes/helpers/voucherAuditTrail";
 import { writeAuditEvent, type AuditChanges } from "../audit";
-import { assertTransactionCompanyScope, isCompanyInRequestScope } from "../security/transactionCompanyScope";
+import { getDatabaseScopeRuntimeContext } from "../security/databaseScopeRuntimeContext";
+import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
-import type { PostedVoucher, PostedVoucherEntry, VoucherEntryInsertFields } from "./accountingTypes";
+import type { PostedVoucher, PostedVoucherEntry } from "./accountingTypes";
 import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingActor } from "./centralPostingEngine";
 import { companyBusinessDate } from "./companyBusinessDate";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
+import { ledgerExactMirrorLine } from "./voucherCorrectionLedgerMirror";
 import { assertExactReversalAllowedTx, buildExactVoucherReversal } from "./voucherReversal";
 import {
   isFxAgentSettlementVoucherTx,
@@ -206,11 +208,19 @@ export async function assertVoucherEditableTx(
   if (voucher.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, { voucherId });
   }
-  // System FX revaluation journals are base-only; the generic editor would rebuild them as
-  // USD/IDENTITY, so refuse to edit or delete them (repairs use the audited FX path). Scope the
-  // transaction first, except for an intercompany counterpart rescaled in the other company's
-  // request: that switch is refused, and FX revaluation journals are never counterparts.
-  if (isCompanyInRequestScope(voucher.companyId)) await assertTransactionCompanyScope(tx, voucher.companyId);
+  // System FX revaluation lines are base-only: the generic Journal editor
+  // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
+  // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
+  // use a dedicated audited path that preserves the original currency evidence.
+  // The guard reads under tenant RLS. A counterpart in another company is
+  // already readable when its editor scoped the transaction to both companies
+  // (updateActiveJournal); re-pointing the transaction there would be refused.
+  const scope = getDatabaseScopeRuntimeContext();
+  const counterpartInScope =
+    scope?.kind === "tenant" &&
+    scope.companyId !== voucher.companyId &&
+    scope.authorizedCompanyIds.includes(voucher.companyId);
+  if (!counterpartInScope) await assertTransactionCompanyScope(tx, voucher.companyId);
   if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
     throw new VoucherCorrectionError(
       409,
@@ -270,38 +280,6 @@ export async function recordVoucherEditAuditTx(
     reason: input.reason ?? null,
   });
   return after;
-}
-
-function present(value: unknown): boolean {
-  return value != null && String(value).trim() !== "";
-}
-
-function ledgerExactMirrorLine(entry: VoucherEntryInsertFields): VoucherEntryInsertFields {
-  const normalized =
-    present(entry.transactionCurrency) &&
-    present(entry.transactionDebitAmount) &&
-    present(entry.transactionCreditAmount) &&
-    present(entry.baseDebitAmount) &&
-    present(entry.baseCreditAmount) &&
-    present(entry.historicalExchangeRate) &&
-    present(entry.rateConvention);
-  if (normalized) {
-    return { ...entry, debitAmount: String(entry.baseDebitAmount), creditAmount: String(entry.baseCreditAmount) };
-  }
-  const debit = new Decimal(entry.debitAmount ?? "0");
-  const credit = new Decimal(entry.creditAmount ?? "0");
-  return {
-    ...entry,
-    debitAmount: debit.toFixed(2),
-    creditAmount: credit.toFixed(2),
-    transactionCurrency: "USD",
-    transactionDebitAmount: debit.toFixed(6),
-    transactionCreditAmount: credit.toFixed(6),
-    baseDebitAmount: debit.toFixed(6),
-    baseCreditAmount: credit.toFixed(6),
-    historicalExchangeRate: "1.0000000000",
-    rateConvention: "IDENTITY",
-  };
 }
 
 export interface ReverseVoucherInput {

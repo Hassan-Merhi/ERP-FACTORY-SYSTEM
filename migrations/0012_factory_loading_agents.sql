@@ -1,16 +1,14 @@
 -- 0012_factory_loading_agents.sql
 --
--- Reusable loading agents on Factory Invoices (#3360). That change shipped its
--- schema only as docs/sql/factory-loading-agents-tableplus.sql, so databases
--- built from migrations (CI, fresh installs, db:deploy) had neither the agent
--- list nor customer_orders.agent_name, and every customer-order query failed.
--- Owner decision 2026-11-20: add it as a migration.
+-- Factory Invoices: reusable loading agents (per company) and the agent chosen
+-- on a customer order. The application has read customer_orders.agent_name and
+-- factory_loading_agents since that feature shipped, but the objects were only
+-- ever created by hand (docs/sql/factory-loading-agents-tableplus.sql). A
+-- database built from these migrations therefore lacked them, and every read
+-- of customer_orders failed.
 --
--- The statements match the TablePlus file exactly and are idempotent, so this
--- is a no-op on a database where that file was already run.
---
--- Additive only: one new table, its indexes, and one nullable column. No
--- existing row is changed.
+-- Additive and idempotent: a database where the manual script was already run
+-- is left exactly as it is. No existing row is read or changed.
 
 CREATE TABLE IF NOT EXISTS factory_loading_agents (
   id BIGSERIAL PRIMARY KEY,
