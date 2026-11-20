@@ -7,7 +7,7 @@
  * module boundaries.
  *
  * The settings rows (Green API credentials, POS credentials, stock and Net
- * Position schedules) are Admin/Developer only, for reads too, and the stored
+ * Position schedules) are Admin/Developer/Owner only, for reads too, and the stored
  * API token never leaves the server: GETs return a mask, and a PUT that echoes
  * the mask (or omits the token) keeps the stored one.
  */
@@ -109,11 +109,12 @@ describe("WhatsApp settings access", () => {
     });
   });
 
-  it("lets Admin and Developer read and write every settings row", async () => {
+  it("lets Admin, Developer and Owner read and write every settings row", async () => {
     await withFactoryWorld(async (w) => {
       await seedSettings(w);
       const developer = await w.agentFor("Developer");
-      for (const agent of [w.agent, developer]) {
+      const owner = await w.agentFor("Owner");
+      for (const agent of [w.agent, developer, owner]) {
         for (const route of SETTINGS_ROUTES) {
           const read = await agent.get(route);
           expect(read.status, `GET ${route}`).toBe(200);
@@ -123,6 +124,7 @@ describe("WhatsApp settings access", () => {
       expect((await developer.put("/api/whatsapp/settings/pos").send({ enabled: false })).status).toBe(200);
       expect((await developer.put("/api/whatsapp/stock-settings").send({ sendHour: 7 })).status).toBe(200);
       expect((await w.agent.put("/api/whatsapp/np-settings").send({ frequency: "weekly" })).status).toBe(200);
+      expect((await owner.put("/api/whatsapp/settings").send({ monthlyAutoSend: true })).status).toBe(200);
       const after = await settingsState(w);
       expect(after.wa).toEqual([
         { id: 1, instance_id: "1101", api_token: MAIN_TOKEN, enabled: true },
@@ -130,6 +132,8 @@ describe("WhatsApp settings access", () => {
       ]);
       expect(after.stock[0]).toMatchObject({ send_hour: 7 });
       expect(after.np[0]).toMatchObject({ frequency: "weekly" });
+      const [main] = await w.q(`SELECT monthly_auto_send FROM whatsapp_settings WHERE id = 1`);
+      expect(main.monthly_auto_send).toBe(true);
     });
   });
 });

@@ -14,9 +14,10 @@ import { ZipArchive } from "archiver";
 import { getClientDate } from "../lib/dateUtils";
 
 // The settings rows hold the Green API credentials and the schedules that
-// decide what is sent to which group: Admin and Developer only, for reads too
-// (requireRole always admits Developer; it is listed for the route manifest).
-const settingsAdmins = requireRole("Admin", "Developer");
+// decide what is sent to which group: Admin, Developer and Owner only, for
+// reads too, like the rest of the export center (requireRole always admits
+// Developer; it is listed for the route manifest).
+const settingsAdmins = requireRole("Admin", "Developer", "Owner");
 
 export function registerWhatsAppRoutesPart2(app: Express) {
   // ── Stock + Net Position Report Settings ────────────────────────────────────

@@ -17,9 +17,10 @@ import { maskGreenApiToken, submittedGreenApiToken } from "../services/whatsappS
 import { registerWhatsAppRoutesPart3 } from "./registerWhatsAppRoutesPart3";
 
 // The settings rows hold the Green API credentials and the schedules that
-// decide what is sent to which group: Admin and Developer only, for reads too
-// (requireRole always admits Developer; it is listed for the route manifest).
-const settingsAdmins = requireRole("Admin", "Developer");
+// decide what is sent to which group: Admin, Developer and Owner only, for
+// reads too, like the rest of the export center (requireRole always admits
+// Developer; it is listed for the route manifest).
+const settingsAdmins = requireRole("Admin", "Developer", "Owner");
 
 export function registerWhatsAppRoutesPart1(app: Express) {
   // ── Settings (singleton row id=1) ──────────────────────────────────────────
