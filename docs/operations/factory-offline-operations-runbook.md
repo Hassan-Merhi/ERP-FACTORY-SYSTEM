@@ -464,9 +464,11 @@ naming a customer the cloud has not created yet waits
 (`202 PHASE9_PC_RECORD_NOT_YET_SYNCED`). A customer with the same name
 (ignoring case and spaces) or the same phone (last 9 digits) as an existing one
 is held as `PHASE9_CUSTOMER_POSSIBLE_DUPLICATE`; approving it creates a new
-customer. Merging it into the existing customer instead is the next slice.
-Until then, rejecting it leaves the entries that name it waiting, so reject
-those too. Customers created by Create Only users are held as
+customer. Discarding it on the PC also refuses the outstanding entries that
+name it or its ledger (`PC_SYNC_NAMES_DISCARDED_CUSTOMER`), so they don't hold up
+later entries; they must be entered again against an existing customer.
+Merging it into the existing customer instead is the next slice. A POS credit
+or cash sale paying into the PC's ledger is translated the same way. Customers created by Create Only users are held as
 `PHASE9_ACTOR_ROLE_NOT_PERMITTED`, because the replay cannot repeat that
 role's verified-create check. Covered by `tests/pc-sync-offline-customers.test.ts`.
 
