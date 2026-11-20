@@ -21,6 +21,7 @@ on:
       - "tests/ui/realtime-wave6-hardening.test.ts"
       - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
       - "scripts/run-wave6-realtime-browser-e2e.mjs"
+      - "tests/e2e/company-cross-tab-phase6.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/realtime-verification.yml"
@@ -146,6 +147,8 @@ jobs:
           done
 
           node scripts/run-wave6-realtime-browser-e2e.mjs
+          # Real Chrome tabs in one session; uses the same disposable fixture.
+          node tests/e2e/company-cross-tab-phase6.mjs
 
       - name: Show server log on failure
         if: failure()
@@ -159,6 +162,7 @@ jobs:
           path: |
             artifacts/wave6-realtime-e2e
             artifacts/wave6-realtime-startup
+            artifacts/phase6-company-tabs
             artifacts/phase7-browser-e2e/fixture.json
           if-no-files-found: warn
           retention-days: 14
