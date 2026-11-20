@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { closedPeriodErrorResponse } from "./closedPeriodError";
 import { HttpError } from "./httpError";
+import { PostingValidationError } from "../services/accounting/postingValidationError";
 
 // Intersect with the globally-augmented `Request["user"]` shape (see the
 // Express namespace augmentation in server/index.ts) so this stays a valid
@@ -42,6 +43,7 @@ export function getErrorMessage(error: unknown): string {
  */
 export function errorStatus(error: unknown, fallback = 500): number {
   if (error instanceof HttpError) return error.statusCode;
+  if (error instanceof PostingValidationError) return 400;
   return closedPeriodErrorResponse(error) ? 409 : fallback;
 }
 
