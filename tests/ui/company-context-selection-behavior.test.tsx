@@ -280,6 +280,30 @@ describe("selectCompany", () => {
     expect(switchCalls()).toHaveLength(0);
   });
 
+  it("hides the previous workspace while an explicit company switch is pending", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveServerSwitch!: (value: { ok: boolean }) => void;
+    harness.apiRequest.mockImplementation(
+      () => new Promise<{ ok: boolean }>((resolve) => { resolveServerSwitch = resolve; })
+    );
+
+    let selection!: Promise<boolean>;
+    await act(async () => {
+      selection = result.current.selectCompany(result.current.companies[1]);
+    });
+
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveServerSwitch({ ok: true });
+      expect(await selection).toBe(true);
+    });
+
+    expect(result.current.selectedCompany?.id).toBe(2);
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it("applies rapid switches in order, ending on the last one", async () => {
     const { result } = await renderOnCompanyOne();
     const order: number[] = [];
