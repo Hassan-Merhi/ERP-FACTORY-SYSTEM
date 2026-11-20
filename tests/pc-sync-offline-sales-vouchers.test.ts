@@ -7,8 +7,9 @@
  * is posted once (replay answers replayed); an unbalanced one, or one naming a
  * customer the cloud does not have, is held and never posted; a browser cannot
  * send it (PC only); and the PC records only what the cloud can replay (Sales,
- * USD, active), refusing other voucher types and optional vouchers before the
- * route runs.
+ * USD, active, within the envelope's limits), refusing other voucher types,
+ * optional vouchers and over-long text before the route runs, and never queues
+ * a retried save twice.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -144,9 +145,12 @@ describe("PC offline Sales vouchers: on the PC", () => {
       next();
     });
     app.use(makePcLocalReadOnlyGuard({ OFFLINE_PC_LOCAL_MODE: "entry" }, connect));
+    const seen = new Set<string>();
     app.post("/api/vouchers/with-entries", (req, res) => {
       handled.push(String(req.body.voucher?.voucherType));
-      res.json({ voucher: { id: 1_000_000_501 } });
+      const replayed = seen.has(req.body.clientRequestId);
+      seen.add(req.body.clientRequestId);
+      res.json({ voucher: { id: 1_000_000_501 }, replayed });
     });
     const body = (voucherType: string, extra: Record<string, unknown> = {}) => ({
       clientRequestId: randomUUID(),
@@ -157,7 +161,13 @@ describe("PC offline Sales vouchers: on the PC", () => {
       ],
     });
 
-    expect((await request(app).post("/api/vouchers/with-entries").send(body("Sales"))).status).toBe(200);
+    const first = body("Sales");
+    expect((await request(app).post("/api/vouchers/with-entries").send(first)).status).toBe(200);
+    // A retry of the same save (the response was lost) is answered as a replay
+    // and must not queue a second delivery.
+    expect((await request(app).post("/api/vouchers/with-entries").send(first)).body).toMatchObject({
+      replayed: true,
+    });
     const purchase = await request(app).post("/api/vouchers/with-entries").send(body("Purchase"));
     expect(purchase.status).toBe(423);
     expect(purchase.body).toEqual({ code: "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED" });
@@ -168,13 +178,23 @@ describe("PC offline Sales vouchers: on the PC", () => {
           .send(body("Sales", { optional: true }))
       ).status
     ).toBe(423);
-    expect(handled).toEqual(["Sales"]);
+    // What the cloud would refuse is refused here too: the envelope's limits.
+    expect(
+      (
+        await request(app)
+          .post("/api/vouchers/with-entries")
+          .send(body("Sales", { description: "x".repeat(2001) }))
+      ).status
+    ).toBe(423);
+    expect(handled).toEqual(["Sales", "Sales"]);
 
-    let row: { kind: string; status: string } | undefined;
-    for (let i = 0; i < 20 && row?.status !== "pending"; i += 1) {
+    let rows: Array<{ kind: string; status: string }> = [];
+    for (let i = 0; i < 20 && (rows.length !== 1 || rows[0].status !== "pending"); i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50));
-      row = (await local.query("SELECT kind, status FROM pc_local.outbox WHERE kind = $1", [KIND])).rows[0];
+      rows = (await local.query("SELECT kind, status FROM pc_local.outbox WHERE kind = $1", [KIND])).rows;
     }
-    expect(row).toEqual({ kind: KIND, status: "pending" });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    rows = (await local.query("SELECT kind, status FROM pc_local.outbox WHERE kind = $1", [KIND])).rows;
+    expect(rows).toEqual([{ kind: KIND, status: "pending" }]);
   });
 });

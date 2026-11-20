@@ -221,9 +221,12 @@ async function captureEntry(req: Request, res: Response, next: () => void, kind:
       settled = true;
       // A request cut off before its answer leaves the entry "capturing"; the
       // sync process turns it into "unconfirmed" for a person to decide.
+      // A repeat of a save the PC already made (the route answers "replayed")
+      // is delivered by the first save's entry, never a second time.
+      const replayed = (responseBody as { replayed?: unknown } | null)?.replayed === true;
       const update = !finished
         ? Promise.resolve()
-        : res.statusCode >= 200 && res.statusCode < 300
+        : res.statusCode >= 200 && res.statusCode < 300 && !replayed
           ? withRetries(() => {
               // New stock items, payments and transfers keep their own local id
               // as the reference, so later entries naming them resolve in the cloud.

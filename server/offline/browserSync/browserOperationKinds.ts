@@ -114,6 +114,55 @@ export function browserInvoiceNumber(deviceId: string, localRef: number): string
   return `LAN-${device}-${String(localRef - BROWSER_LOCAL_REF_BASE).padStart(6, "0")}`;
 }
 
+type SalesVoucherContext = {
+  actor: { companyId: number; userId: string; username: string };
+  operationId: string;
+  localRef: number;
+};
+
+/** A sample context: whether a body could be sent, before the route runs. */
+const PC_ACCEPTS_PROBE: SalesVoucherContext = Object.freeze({
+  actor: { companyId: 1, userId: "pc", username: "pc" },
+  operationId: "00000000-0000-4000-8000-000000000000",
+  localRef: 1,
+});
+
+function salesVoucherEnvelope(raw: unknown, { actor, operationId, localRef }: SalesVoucherContext) {
+  const input = body(raw);
+  const voucher = body(input.voucher);
+  if (voucher.voucherType !== "Sales" || !supportsCentralGenericVoucher(input) || !Array.isArray(input.entries)) {
+    throw new BrowserOperationRefusal("OFFLINE_PC_VOUCHER_NOT_SUPPORTED");
+  }
+  const link = (value: unknown) => (value == null || value === "" ? null : Number(value));
+  const amount = (value: unknown) => toMoney(String(value == null || value === "" ? "0" : value)).toFixed(2);
+  return phase9SalesVoucherEnvelope({
+    companyId: actor.companyId,
+    localVoucherId: localRef,
+    actorUserId: actor.userId,
+    actorUsername: actor.username,
+    requestId: operationId,
+    voucher: {
+      voucherType: "Sales",
+      voucherDate: day(voucher.voucherDate, ""),
+      description: textOrNull(voucher.description),
+      locationId: link(voucher.locationId),
+      exchangeRate: voucher.exchangeRate == null || voucher.exchangeRate === "" ? null : String(voucher.exchangeRate),
+    },
+    entries: (input.entries as Array<Record<string, unknown>>).map((entry) => ({
+      ledgerAccountId: link(entry.ledgerAccountId),
+      bankAccountId: link(entry.bankAccountId),
+      fixedAssetId: link(entry.fixedAssetId),
+      supplierId: link(entry.supplierId),
+      employeeId: link(entry.employeeId),
+      customerId: link(entry.customerId),
+      factorySupplierId: link(entry.factorySupplierId),
+      debitAmount: amount(entry.debitAmount),
+      creditAmount: amount(entry.creditAmount),
+      narration: textOrNull(entry.narration),
+    })),
+  });
+}
+
 export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKind>> = Object.freeze({
   // POST /api/vouchers/payment-receipt
   [PHASE9_PAYMENT_KIND]: {
@@ -185,46 +234,17 @@ export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKi
     stream: "payments",
     route: { method: "POST", path: "/api/vouchers/with-entries" },
     pcOnly: true,
+    // Only what the cloud can replay: the envelope's own limits (description,
+    // narration, amounts, number of lines) are checked before the route runs.
     pcAccepts: (raw) => {
-      const input = raw as { voucher?: { voucherType?: unknown } } | null;
-      return input?.voucher?.voucherType === "Sales" && supportsCentralGenericVoucher(raw);
-    },
-    build(raw, { actor, operationId, localRef }) {
-      const input = body(raw);
-      const voucher = body(input.voucher);
-      if (voucher.voucherType !== "Sales" || !supportsCentralGenericVoucher(input) || !Array.isArray(input.entries)) {
-        throw new BrowserOperationRefusal("OFFLINE_PC_VOUCHER_NOT_SUPPORTED");
+      try {
+        salesVoucherEnvelope(raw, PC_ACCEPTS_PROBE);
+        return true;
+      } catch {
+        return false;
       }
-      const link = (value: unknown) => (value == null || value === "" ? null : Number(value));
-      const amount = (value: unknown) => toMoney(String(value == null || value === "" ? "0" : value)).toFixed(2);
-      return phase9SalesVoucherEnvelope({
-        companyId: actor.companyId,
-        localVoucherId: localRef,
-        actorUserId: actor.userId,
-        actorUsername: actor.username,
-        requestId: operationId,
-        voucher: {
-          voucherType: "Sales",
-          voucherDate: day(voucher.voucherDate, ""),
-          description: textOrNull(voucher.description),
-          locationId: link(voucher.locationId),
-          exchangeRate:
-            voucher.exchangeRate == null || voucher.exchangeRate === "" ? null : String(voucher.exchangeRate),
-        },
-        entries: (input.entries as Array<Record<string, unknown>>).map((entry) => ({
-          ledgerAccountId: link(entry.ledgerAccountId),
-          bankAccountId: link(entry.bankAccountId),
-          fixedAssetId: link(entry.fixedAssetId),
-          supplierId: link(entry.supplierId),
-          employeeId: link(entry.employeeId),
-          customerId: link(entry.customerId),
-          factorySupplierId: link(entry.factorySupplierId),
-          debitAmount: amount(entry.debitAmount),
-          creditAmount: amount(entry.creditAmount),
-          narration: textOrNull(entry.narration),
-        })),
-      });
     },
+    build: (raw, context) => salesVoucherEnvelope(raw, context),
   },
   // POST /api/inventory/quick-adjust
   [PHASE9_STOCK_ADJUST_KIND]: {
