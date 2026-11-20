@@ -24,6 +24,7 @@ import {
 import { parseId } from "../../lib/parseId";
 import { postErpVoucherTx, sessionPostingActor } from "../../services/accounting/erpVoucherPosting";
 import { toMoney } from "../../lib/money";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 import { registerRentalAccrualConfigRoutesStep1 } from "./correctedLedgerRowNarrations";
 import { registerRentalAccrualConfigRoutesStep2 } from "./registerRentalAccrualConfigRoutesStep2";
 
@@ -226,7 +227,8 @@ function registerRentalAccrualConfigRoutesStep3(
             and(
               eq(ledgerAccounts.id, data.destLedgerAccountId),
               eq(ledgerAccounts.companyId, data.destCompanyId),
-              isNull(ledgerAccounts.deletedAt)
+              isNull(ledgerAccounts.deletedAt),
+              ledgerPostingLeafCondition(data.destCompanyId)
             )
           );
         return Boolean(account);
@@ -243,7 +245,8 @@ function registerRentalAccrualConfigRoutesStep3(
             and(
               inArray(ledgerAccounts.id, sourceIds),
               eq(ledgerAccounts.companyId, companyId),
-              isNull(ledgerAccounts.deletedAt)
+              isNull(ledgerAccounts.deletedAt),
+              ledgerPostingLeafCondition(companyId)
             )
           );
         if (owned.length !== sourceIds.length) {
