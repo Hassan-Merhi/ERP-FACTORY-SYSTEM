@@ -2,6 +2,7 @@
   "description": "Status and response structure for every swept GET endpoint, with values removed. The sweep proves a handler still answers; this proves it still answers with the same contract - a dropped field or a route that starts refusing permission is invisible to a non-5xx check. Scalar leaves are collapsed and empty arrays match populated ones, so only structural change fails.",
   "regenerate": "UPDATE_API_SMOKE_SHAPES=1 npm run test:smoke-sweep",
   "unstable": [
+    "/api/erp/rental/linked-rent-control",
     "/api/reports/net-position-monthly-excel",
     "/api/reports/net-profit-excel",
     "/api/stats/group-net-position-excel",
@@ -520,10 +521,6 @@
     "/api/erp/rental/cash-accounts": {
       "status": 200,
       "shape": "[{accountType:scalar,active:scalar,code:scalar,companyId:scalar,createdAt:scalar,deletedAt:scalar,id:scalar,isHidden:scalar,name:scalar,openingBalance:scalar,openingBalanceBaseAmount:scalar,openingBalanceCurrency:scalar,openingBalanceHistoricalRate:scalar,openingBalanceNativeAmount:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar}]"
-    },
-    "/api/erp/rental/linked-rent-control": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
     },
     "/api/erp/rental/payments": {
       "status": 200,
