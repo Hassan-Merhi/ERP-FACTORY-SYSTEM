@@ -313,7 +313,7 @@ export default function IntercompanyRequests() {
                   onChange={setSelectedAccountId}
                   placeholder={"Select account…"}
                   testId={"select-dest-account"}
-                  id={"dest-account-select"}
+                  id="dest-account-select"
                   />
               </div>
               <div className="space-y-2">
