@@ -58,7 +58,7 @@ describe("capacitorCors", () => {
       .set("Access-Control-Request-Method", "GET");
 
     expect(res.headers["access-control-allow-headers"]).toBe(
-      "Content-Type,Authorization,X-CSRF-Token,X-Client-Date,X-Requested-With"
+      "Content-Type,Authorization,X-CSRF-Token,X-Client-Date,X-Requested-With,X-Expected-Company-Id,X-Expected-Company-Revision"
     );
   });
 

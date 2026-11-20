@@ -2,12 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
-import {
-  cleanupTestData,
-  closeTestServer,
-  seedTestData,
-  type TestContext,
-} from "./setup";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "companyswitch";
 
@@ -55,18 +50,14 @@ afterAll(async () => {
     if (!String(error).includes("login_history_company_id_fkey")) throw error;
 
     await new Promise((resolve) => setTimeout(resolve, 25));
-    await pool.query("DELETE FROM login_history WHERE company_id = ANY($1::int[])", [
-      [ctx.companyId, secondCompanyId],
-    ]);
+    await pool.query("DELETE FROM login_history WHERE company_id = ANY($1::int[])", [[ctx.companyId, secondCompanyId]]);
     await cleanupTestData(TEST_PREFIX);
   }
 }, 30000);
 
 describe("company switching authorization", () => {
   it("allows an authenticated user to switch to another assigned company", async () => {
-    const switched = await agent
-      .post("/api/auth/set-company")
-      .send({ companyId: secondCompanyId });
+    const switched = await agent.post("/api/auth/set-company").send({ companyId: secondCompanyId });
 
     expect(switched.status).toBe(200);
     expect(switched.body).toMatchObject({
@@ -76,13 +67,12 @@ describe("company switching authorization", () => {
 
     const sessionCompany = await agent.get("/api/auth/session-company");
     expect(sessionCompany.status).toBe(200);
-    expect(sessionCompany.body).toEqual({ companyId: secondCompanyId });
+    // The session also reports the revision each committed switch rotates (#3359).
+    expect(sessionCompany.body).toEqual({ companyId: secondCompanyId, companyRevision: expect.any(String) });
   });
 
   it("still rejects switching to an unassigned company", async () => {
-    const denied = await agent
-      .post("/api/auth/set-company")
-      .send({ companyId: 999999999 });
+    const denied = await agent.post("/api/auth/set-company").send({ companyId: 999999999 });
 
     expect(denied.status).toBe(403);
     expect(denied.body.message).toBe("You don't have access to this company");
