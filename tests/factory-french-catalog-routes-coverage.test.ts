@@ -127,7 +127,7 @@ describe("french catalogue import", () => {
       expect(missing.body.message).toMatch(/Required columns/);
     }));
 
-  it("previews a workbook without code rows; any coded row fails on the article-code lookup (pinned bug)", () =>
+  it("previews a workbook without code rows", () =>
     withFactoryWorld(async (w) => {
       await catalog(w);
       const empty = await w.agent
@@ -137,32 +137,69 @@ describe("french catalogue import", () => {
       expect(empty.body).toEqual({ rows: [], totalRows: 0, readyRows: 0, blocked: false });
     }));
 
-  // BUG (factoryFrenchTranslationRoutes.ts:183): drizzle expands the JS array
-  // `codes` into a row constructor, so `= ANY(($2, $3))` (or `ANY(($2))` for
-  // one code) is not an array and every preview with a coded row returns 500.
-  // Pinned until the lookup binds a real text[]. The failed statement aborts
-  // the rolled-back transaction, so each world sends exactly one such request.
-  for (const rows of [
-    [["SH-1", "Chaussure"]],
-    [
-      [" sh-1 ", "Chaussure", "Chaussures", ""],
-      ["NOPE", "x", "", ""],
-    ],
-  ]) {
-    it(`fails a preview of ${rows.length} coded row(s) on the article-code lookup (pinned bug)`, () =>
-      withFactoryWorld(async (w) => {
-        await catalog(w);
-        const headers =
-          rows[0].length > 2
-            ? ["Article Code / Barcode", "French Product Name", "French Category", "French Description"]
-            : ["Article Code", "French Product Name"];
-        const res = await w.agent
-          .post(`${BASE}/import/preview`)
-          .attach("file", await workbook(headers, rows), "t.xlsx");
-        expect(res.status).toBe(500);
-        expect(res.body.message).toMatch(/Failed query/);
-      }));
-  }
+  it("previews one coded row matched to this company's product, not another company's", () =>
+    withFactoryWorld(async (w) => {
+      const { shoe, category } = await catalog(w);
+      const res = await w.agent
+        .post(`${BASE}/import/preview`)
+        .attach("file", await workbook(["Article Code", "French Product Name"], [["SH-1", "Chaussure"]]), "t.xlsx");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        rows: [
+          {
+            rowNumber: 2,
+            articleCode: "SH-1",
+            nameFr: "Chaussure",
+            categoryNameFr: null,
+            descriptionFr: null,
+            productId: shoe,
+            categoryId: category,
+            status: "ready",
+          },
+        ],
+        totalRows: 1,
+        readyRows: 1,
+        blocked: false,
+      });
+    }));
+
+  it("previews normalised and unknown codes and blocks the import on an unknown code", () =>
+    withFactoryWorld(async (w) => {
+      const { shoe, category } = await catalog(w);
+      const res = await w.agent.post(`${BASE}/import/preview`).attach(
+        "file",
+        await workbook(
+          ["Article Code / Barcode", "French Product Name", "French Category", "French Description"],
+          [
+            [" sh-1 ", "Chaussure", "Chaussures", ""],
+            ["NOPE", "x", "", ""],
+          ]
+        ),
+        "t.xlsx"
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totalRows).toBe(2);
+      expect(res.body.readyRows).toBe(1);
+      expect(res.body.blocked).toBe(true);
+      expect(res.body.rows).toEqual([
+        expect.objectContaining({
+          rowNumber: 2,
+          articleCode: "SH-1",
+          nameFr: "Chaussure",
+          categoryNameFr: "Chaussures",
+          productId: shoe,
+          categoryId: category,
+          status: "ready",
+        }),
+        expect.objectContaining({
+          rowNumber: 3,
+          articleCode: "NOPE",
+          productId: null,
+          categoryId: null,
+          status: "unknown",
+        }),
+      ]);
+    }));
 
   it("applies product and category translations, skipping blank and unknown codes", () =>
     withFactoryWorld(async (w) => {

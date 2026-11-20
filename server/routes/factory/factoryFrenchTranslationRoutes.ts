@@ -6,6 +6,7 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { contentDisposition } from "../../lib/contentDisposition";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { sqlArray } from "../../lib/sqlArray";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const upload = spreadsheetUpload;
@@ -180,7 +181,7 @@ export function registerFactoryFrenchTranslationRoutes(app: Express) {
                    c.name_fr AS "currentCategoryNameFr"
             FROM factory_bale_products p
             LEFT JOIN factory_categories c ON c.id = p.category_id AND c.company_id = p.company_id
-            WHERE p.company_id = ${companyId} AND UPPER(BTRIM(p.article_code)) = ANY(${codes})
+            WHERE p.company_id = ${companyId} AND UPPER(BTRIM(p.article_code)) = ANY(${sqlArray(codes)})
           `)
         : { rows: [] };
       const byCode = new Map(catalog.rows.map((row: Record<string, unknown>) => [row.articleCode, row]));
