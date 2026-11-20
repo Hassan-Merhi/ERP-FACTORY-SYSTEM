@@ -1,8 +1,15 @@
-import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
+import { clearAllToasts, useToast } from "@/hooks/use-toast";
+import { COMPANY_WORKSPACE_TRANSITION_EVENT } from "@/lib/companyWorkspaceEvents";
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 
 export function Toaster() {
   const { toasts } = useToast();
+
+  useEffect(() => {
+    window.addEventListener(COMPANY_WORKSPACE_TRANSITION_EVENT, clearAllToasts);
+    return () => window.removeEventListener(COMPANY_WORKSPACE_TRANSITION_EVENT, clearAllToasts);
+  }, []);
 
   return (
     <ToastProvider>

@@ -58,6 +58,8 @@ export const applicationArabicTranslations = {
   "mobileFilters.search": "بحث",
   "mobileFilters.clearSearch": "مسح البحث",
   "company.loadingSelector": "جارٍ تحميل محدد الشركة",
+  "company.verifyingSession": "جارٍ التحقق من الشركة",
+  "company.switching": "جارٍ تبديل الشركة",
   "company.current": "الشركة الحالية",
   "company.openSwitcher": "فتح مبدّل الشركة",
   "user.menu": "قائمة الحساب",

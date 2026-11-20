@@ -8,6 +8,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { db, pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { LEGACY_COMPANY_REVISION } from "../../security/companyMutationScope";
 import {
   CompanyAccessError,
   getAccessibleCompanyIds,
@@ -293,6 +294,6 @@ export function registerCompanyAccessRoutesPart1(app: Express) {
 
   app.get("/api/auth/session-company", requireAuth, (req, res) => {
     disableSessionResponseCaching(res);
-    res.json({ companyId: req.session.currentCompanyId ?? null });
+    res.json({ companyId: req.session.currentCompanyId ?? null, companyRevision: req.session.companyRevision ?? LEGACY_COMPANY_REVISION });
   });
 }

@@ -1,3 +1,5 @@
+import { companyReadCacheIdentity } from "./companyCacheScope";
+
 /**
  * Canonical mechanics for browser fetch interceptors.
  *
@@ -44,5 +46,5 @@ export function fetchQueryCacheKey(url: URL, omittedParams: readonly string[], c
   for (const key of omittedParams) params.delete(key);
   params.sort();
   const key = `${url.pathname}?${params.toString()}`;
-  return companyScope === undefined ? key : `${companyScope}|${key}`;
+  return `${companyReadCacheIdentity()}|${companyScope === undefined ? key : `${companyScope}|${key}`}`;
 }

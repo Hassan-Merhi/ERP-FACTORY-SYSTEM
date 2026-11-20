@@ -181,4 +181,9 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+/** Immediately remove notices that might contain a previous company's details. */
+function clearAllToasts() {
+  dispatch({ type: "REMOVE_TOAST" });
+}
+
+export { useToast, toast, clearAllToasts };

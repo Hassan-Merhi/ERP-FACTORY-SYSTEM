@@ -1,5 +1,11 @@
 import { isAbortError } from "./abortError";
 import {
+  assertCompanyReadSnapshot,
+  captureCompanyReadSnapshot,
+  companyReadCacheIdentity,
+  isCompanyOwnedApiRead,
+} from "./companyCacheScope";
+import {
   BANDWIDTH_INVALIDATION_CHANNEL,
   getBandwidthInvalidationScope,
   registerBandwidthCacheInvalidator,
@@ -69,6 +75,7 @@ function refreshRevalidatedEntry(cached: CachedApiResponse, rule: CacheRule): Re
 }
 
 function cacheResponse(key: string, response: Response, rule: CacheRule, generationAtStart: number): void {
+  if (!key.startsWith(`${companyReadCacheIdentity()}|`)) return;
   if (rule.ttlMs <= 0 || !response.ok || generationAtStart !== generationForScope(rule.scope)) return;
 
   const rawLength = response.headers.get("content-length");
@@ -268,6 +275,8 @@ export function installRequestStormGuard(): void {
       }
     }
 
+    const readSnapshot = isCompanyOwnedApiRead(url.pathname) ? captureCompanyReadSnapshot() : null;
+    if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
     const headers = requestHeaders(input, init);
     if (shouldBypass(url.pathname, headers, input, init)) return originalFetch(input, init);
 
@@ -280,13 +289,18 @@ export function installRequestStormGuard(): void {
     // An internal abort belongs to whoever cancelled, never to this caller. If a
     // shared request dies for any reason other than this caller's own signal,
     // issue a fresh request rather than reporting a failure nobody asked for.
-    const runUnshared = () => originalFetch(input, init);
+    const runUnshared = () => {
+      if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
+      return originalFetch(input, init);
+    };
     const shareOrRetry = async (
       promise: Promise<Response>,
       lifetime: SharedRequestLifetime | undefined
     ): Promise<Response> => {
       try {
-        return await waitForSharedResponse(promise, signal, lifetime);
+        const response = await waitForSharedResponse(promise, signal, lifetime);
+        if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
+        return response;
       } catch (error) {
         if (signal?.aborted || !isAbortError(error)) throw error;
         return runUnshared();
@@ -312,9 +326,11 @@ export function installRequestStormGuard(): void {
     const generationAtStart = rule ? generationForScope(rule.scope) : 0;
     const requestPromise = (async () => {
       if (shouldDeferUntilVisible(url.pathname, ttlMs)) await waitUntilVisible(lifetime.controller.signal);
+      if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
       const release = await acquireGetSlot(lifetime.controller.signal);
       let requestTimeout: number | undefined;
       try {
+        if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
         // Race the request itself: some browser/proxy fetch wrappers do not
         // settle immediately on abort. The queue slot must still be released.
         const response = await Promise.race([
@@ -326,6 +342,7 @@ export function installRequestStormGuard(): void {
             }, API_GET_TIMEOUT_MS);
           }),
         ]);
+        if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
         // The response exists; its body is still unread. Any later abort would
         // tear that stream down under the caller, so disarm before handing over.
         lifetime.disarm();
