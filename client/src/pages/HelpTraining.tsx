@@ -33,10 +33,9 @@ export default function HelpTraining({ mode, topics }: Props) {
   const filtered = useMemo(() => {
     const term = search.trim();
     return visible.filter((topic) => {
-      return (
-        (category === "All topics" || category === topic.category) &&
-        searchAny(term, topic.title, topic.description, topic.category, ...(topic.keywords ?? []), ...(topic.tabs ?? []))
-      );
+      const text = [topic.title, topic.description, topic.category, ...(topic.keywords ?? []), ...(topic.tabs ?? [])]
+        .join(" ");
+      return (category === "All topics" || category === topic.category) && searchAny(term, text);
     });
   }, [visible, search, category]);
   const [selectedId, setSelectedId] = useState("welcome");
