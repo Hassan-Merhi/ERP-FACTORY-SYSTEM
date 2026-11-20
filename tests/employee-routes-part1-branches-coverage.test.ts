@@ -55,23 +55,29 @@ describe("employee bale rates", () => {
     });
   });
 
-  it("never writes rates for another company's employee under that company", async () => {
+  it("refuses another company's employee and missing ids before the handler, writing nothing", async () => {
     await withFactoryWorld(async (w) => {
       const foreign = await employee(w, "F1", await otherCompany(w));
-      await w.agent
-        .put(`/api/employees/${foreign}/bale-rates`)
-        .send({ rates: [{ locationId: w.locationId, rate: "9" }] });
-      await w.agent
-        .put(`/api/employees/${foreign}/bale-pct-rates`)
-        .send({ rates: [{ locationId: w.locationId, pct: "9" }] });
-      // Rows are always keyed by the session company, so the other company's
-      // payroll never sees them.
-      const leaked = await w.q(
-        `SELECT company_id FROM employee_bale_rates WHERE employee_id = $1 AND company_id <> $2
-         UNION ALL SELECT company_id FROM employee_bale_pct_rates WHERE employee_id = $1 AND company_id <> $2`,
-        [foreign, w.companyId]
+      // The company-resource access policy owns this check: the employee must
+      // belong to the session company or the request never reaches the handler.
+      for (const target of [foreign, 999999999]) {
+        const rate = await w.agent
+          .put(`/api/employees/${target}/bale-rates`)
+          .send({ rates: [{ locationId: w.locationId, rate: "9" }] });
+        expect(rate.status).toBe(404);
+        expect(rate.body.message).toBe("Record not found");
+        const pct = await w.agent
+          .put(`/api/employees/${target}/bale-pct-rates`)
+          .send({ rates: [{ locationId: w.locationId, pct: "9" }] });
+        expect(pct.status).toBe(404);
+        expect(pct.body.message).toBe("Record not found");
+      }
+      const written = await w.q(
+        `SELECT company_id FROM employee_bale_rates WHERE employee_id = ANY($1::int[])
+         UNION ALL SELECT company_id FROM employee_bale_pct_rates WHERE employee_id = ANY($1::int[])`,
+        [[foreign, 999999999]]
       );
-      expect(leaked).toEqual([]);
+      expect(written).toEqual([]);
     });
   });
 });

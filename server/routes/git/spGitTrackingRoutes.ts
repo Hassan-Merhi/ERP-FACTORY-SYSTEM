@@ -2,7 +2,7 @@
 import type { Express } from "express";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { firstRow } from "../../lib/queryResult";
 import { resolveGitCompanyScope } from "../../lib/gitHelpers";
@@ -39,6 +39,44 @@ const textFields = new Set<string>([
 ]);
 const dateFields = new Set<string>(["eta", "borderDate", "docsSentDate"]);
 const moneyFields = new Set<string>(["transportFee", "dutyFee"]);
+
+type TrackingPatch = Partial<Record<(typeof SP_GIT_FIELDS)[number], unknown>>;
+type NormalizedTracking = { assignments: SQL[] } | { error: string; code: string };
+
+/** Validates and normalizes every supplied logistics field before anything is written. */
+function normalizeTrackingPatch(patch: TrackingPatch): NormalizedTracking {
+  const assignments: SQL[] = [];
+  for (const field of SP_GIT_FIELDS) {
+    const value = patch[field];
+    if (value === undefined) continue;
+    let normalized: string | boolean | null = value === null || value === "" ? null : String(value);
+    if (field === "docReceived") normalized = value === null ? null : Boolean(value);
+    if (dateFields.has(field) && typeof normalized === "string" && !isIsoDate(normalized)) {
+      return { error: `${field} must be a valid date (YYYY-MM-DD)`, code: "INVALID_TRACKING_DATE" };
+    }
+    if (moneyFields.has(field) && normalized !== null) {
+      const amount = Number(normalized);
+      if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000) {
+        return {
+          error: `${field} must be a number between 0 and 1,000,000,000`,
+          code: "INVALID_LOGISTICS_CHARGE",
+        };
+      }
+      normalized = amount.toFixed(4);
+    }
+    if (textFields.has(field) && normalized !== null && String(normalized).length > 2000) {
+      return { error: `${field} must be at most 2000 characters`, code: "TRACKING_VALUE_TOO_LONG" };
+    }
+    assignments.push(sql`${sql.identifier(names[field])} = ${normalized}`);
+  }
+  return { assignments };
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 
 export function registerSpGitTrackingRoutes(app: Express): void {
   app.patch("/api/git/sp-containers/:id/tracking", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
@@ -81,31 +119,10 @@ export function registerSpGitTrackingRoutes(app: Express): void {
       );
       if ("error" in scope) return res.status(scope.status).json({ message: scope.error, code: scope.code });
 
-      const patch = parsed.data;
-      const assignments = SP_GIT_FIELDS.flatMap((field) => {
-        const value = patch[field];
-        if (value === undefined) return [];
-        let normalized: string | boolean | null = value === null || value === "" ? null : String(value);
-        if (field === "docReceived") normalized = value === null ? null : Boolean(value);
-        if (
-          dateFields.has(field) &&
-          normalized !== null &&
-          typeof normalized === "string" &&
-          !/^\d{4}-\d{2}-\d{2}$/.test(normalized)
-        ) {
-          throw new Error("Invalid date");
-        }
-        if (moneyFields.has(field) && normalized !== null) {
-          const amount = Number(normalized);
-          if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000)
-            throw new Error("Invalid logistics charge");
-          normalized = amount.toFixed(4);
-        }
-        if (textFields.has(field) && normalized !== null && String(normalized).length > 2000) {
-          throw new Error("Logistics value is too long");
-        }
-        return [sql`${sql.identifier(names[field])} = ${normalized}`];
-      });
+      const normalizedPatch = normalizeTrackingPatch(parsed.data);
+      if ("error" in normalizedPatch)
+        return res.status(400).json({ message: normalizedPatch.error, code: normalizedPatch.code });
+      const assignments = normalizedPatch.assignments;
       if (status !== undefined) assignments.push(sql`status = ${status}`);
       if (assignments.length === 0) return res.json({ ok: true });
       await db.transaction(async (tx) => {

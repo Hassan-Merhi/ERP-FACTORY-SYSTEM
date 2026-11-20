@@ -66,18 +66,21 @@ describe("SP GIT tracking refusals", () => {
     });
   });
 
-  it("pins current behaviour: invalid dates, charges and over-long text answer 500, not 400", async () => {
+  it("refuses invalid dates, charges and over-long text with 400 and writes nothing", async () => {
     await withFactoryWorld(async (w) => {
       const id = await spContainer(w);
-      for (const body of [
-        { eta: "10/01/2026" },
-        { transportFee: "-5" },
-        { dutyFee: "abc" },
-        { trackingDescription: "x".repeat(2001) },
-      ]) {
+      for (const [body, code] of [
+        [{ eta: "10/01/2026" }, "INVALID_TRACKING_DATE"],
+        [{ borderDate: "2026-02-30" }, "INVALID_TRACKING_DATE"],
+        [{ transportFee: "-5" }, "INVALID_LOGISTICS_CHARGE"],
+        [{ dutyFee: "abc" }, "INVALID_LOGISTICS_CHARGE"],
+        [{ trackingDescription: "x".repeat(2001) }, "TRACKING_VALUE_TOO_LONG"],
+        [{ shopName: "valid", transportFee: "-1" }, "INVALID_LOGISTICS_CHARGE"],
+      ] as const) {
         const res = await patch(w, id, body);
-        expect(res.status).toBe(500);
-        expect(res.body.message).toBe("Unable to update Supplier Partner tracking");
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(code);
+        expect(res.body.message).toMatch(new RegExp(Object.keys(body).at(-1)!));
       }
       expect(await tracking(w, id)).toEqual([]);
     });

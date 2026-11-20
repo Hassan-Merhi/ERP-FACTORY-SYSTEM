@@ -142,8 +142,11 @@ describe("PATCH /api/factory/customer-orders/:id/hidden", () => {
       const res = await w.agent
         .patch(`/api/factory/customer-orders/${foreign.orderId}/hidden`)
         .send({ isHidden: true });
-      // Pinned: a foreign id is a silent no-op that still answers success.
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe("Order not found");
+      expect(
+        (await w.agent.patch(`/api/factory/customer-orders/999999999/hidden`).send({ isHidden: true })).status
+      ).toBe(404);
       const [row] = await w.q<{ is_hidden: boolean }>(`SELECT is_hidden FROM customer_orders WHERE id = $1`, [
         foreign.orderId,
       ]);

@@ -199,10 +199,12 @@ export function registerOrderCrudRoutesPart2(app: Express) {
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const { isHidden } = req.body;
       if (typeof isHidden !== "boolean") return res.status(400).json({ message: "isHidden must be boolean" });
-      await db
+      const updated = await db
         .update(customerOrders)
         .set({ isHidden })
-        .where(and(eq(customerOrders.id, id), eq(customerOrders.companyId, companyId)));
+        .where(and(eq(customerOrders.id, id), eq(customerOrders.companyId, companyId)))
+        .returning({ id: customerOrders.id });
+      if (updated.length === 0) return res.status(404).json({ message: "Order not found" });
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
