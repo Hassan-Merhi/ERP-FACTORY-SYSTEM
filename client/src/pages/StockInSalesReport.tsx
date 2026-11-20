@@ -12,7 +12,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter } from "@/erp-core";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -115,11 +115,10 @@ function StockInSalesReportSummary() {
           />
         }
         quick={
-          <Input
+          <SearchField
             placeholder="Search items..."
             value={m.searchTerm}
-            onChange={(event) => m.setSearchTerm(event.target.value)}
-            className="w-full"
+            onValueChange={m.setSearchTerm}
           />
         }
         activeCount={m.stockInSalesActiveFilterCount}
@@ -170,11 +169,12 @@ function StockInSalesReportSummary() {
                 onChange={m.setSelectedStockGroups}
                 testId="button-stock-in-sales-group-filter"
               />
-              <Input
+              <SearchField
                 placeholder="Search items..."
                 value={m.searchTerm}
-                onChange={(event) => m.setSearchTerm(event.target.value)}
-                className="h-9 w-48"
+                onValueChange={m.setSearchTerm}
+                wrapperClassName="w-48"
+                className="h-9"
               />
               <Button variant="ghost" size="sm" onClick={m.clearFilters}>
                 Clear
