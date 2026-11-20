@@ -44,7 +44,7 @@ export function useSidebarSync({
           return false;
         }
         if (acc.type === "employee" && !hasSearch) return false;
-        return searchAny(sidebarSearchValue, acc.name, acc.code);
+        return searchAny(sidebarSearchValue, acc.name);
       })
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
