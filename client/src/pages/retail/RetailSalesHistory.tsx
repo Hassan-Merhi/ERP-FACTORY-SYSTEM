@@ -169,7 +169,7 @@ export default function RetailSalesHistory() {
                 id="retail-history-item"
                 value={filters.search}
                 onValueChange={(value) => setFilters((current) => ({ ...current, search: value }))}
-                placeholder="Search item name or SKU"
+                placeholder="Search items..."
               />
             </div>
             <div>
