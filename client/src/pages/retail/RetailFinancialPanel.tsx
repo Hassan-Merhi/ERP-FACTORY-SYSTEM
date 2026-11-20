@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -167,49 +168,43 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                 {LABELS.map(([key, label]) => (
                   <div key={key}>
                     <Label className="text-xs">{label}</Label>
-                    <Select
+                    <UnifiedAccountPicker
+                      options={accounts.ledgers.map((account) => ({
+                        value: String(account.id),
+                        name: account.name,
+                      }))}
                       value={String(draft[key] ?? "")}
                       disabled={!recordChanges.allowed}
-                      onValueChange={(v) =>
+                      onChange={(v) =>
                         setDraft((current) => (current ? { ...current, [key]: Number(v) } : current))
                       }
-                    >
-                      <SelectTrigger className="mt-1 h-9 w-full px-2 text-sm" aria-label={label}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.ledgers.map((account) => (
-                          <SelectItem key={account.id} value={String(account.id)}>
-                            {account.code} · {account.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      ariaLabel={label}
+                      placeholder="Select account"
+                      className="mt-1 h-9"
+                    />           </Select>
                   </div>
                 ))}
                 <div>
                   <Label className="text-xs">Bank account (optional)</Label>
-                  <Select
+                  <UnifiedAccountPicker
+                    options={[
+                      { value: "__none__", name: "Use bank clearing ledger" },
+                      ...accounts.banks.map((account) => ({
+                        value: String(account.id),
+                        name: account.name,
+                      })),
+                    ]}
                     value={draft.bankAccountId != null ? String(draft.bankAccountId) : "__none__"}
                     disabled={!recordChanges.allowed}
-                    onValueChange={(v) =>
+                    onChange={(v) =>
                       setDraft((current) =>
                         current ? { ...current, bankAccountId: v !== "__none__" ? Number(v) : null } : current
                       )
                     }
-                  >
-                    <SelectTrigger className="mt-1 h-9 w-full px-2 text-sm" aria-label="Bank account (optional)">
-                      <SelectValue placeholder="Use bank clearing ledger" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Use bank clearing ledger</SelectItem>
-                      {accounts.banks.map((account) => (
-                        <SelectItem key={account.id} value={String(account.id)}>
-                          {account.code} · {account.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    ariaLabel="Bank account (optional)"
+                    placeholder="Use bank clearing ledger"
+                    className="mt-1 h-9"
+                  />         </Select>
                 </div>
               </div>
             ) : (
