@@ -220,6 +220,7 @@ export async function assertVoucherEditableTx(
   // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
   // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
   // use a dedicated audited path that preserves the original currency evidence.
+  await assertTransactionCompanyScope(tx, voucher.companyId);
   if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
     throw new VoucherCorrectionError(
       409,
