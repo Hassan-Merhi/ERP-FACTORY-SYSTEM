@@ -59,11 +59,8 @@ async function main() {
   const output = await db.transaction(async (tx) => {
     if (!apply) await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await assertTransactionCompanyScope(tx, COMPANY);
-    // Serialize the dry run/application against voucher edits and line updates.
-    // The dry run uses a read-only shared lock; apply takes an exclusive lock.
-    await tx.execute(apply
-      ? sql`SELECT id FROM vouchers WHERE company_id = ${COMPANY} AND id = ${VOUCHER} FOR UPDATE`
-      : sql`SELECT id FROM vouchers WHERE company_id = ${COMPANY} AND id = ${VOUCHER} FOR SHARE`);
+    // Serialize writes on apply; dry-run is a genuine read-only transaction.
+    if (apply) await tx.execute(sql`SELECT id FROM vouchers WHERE company_id = ${COMPANY} AND id = ${VOUCHER} FOR UPDATE`);
     const [voucher] = await tx.select().from(vouchers)
       .where(and(eq(vouchers.id, VOUCHER), eq(vouchers.companyId, COMPANY)));
     check(voucher && voucher.voucherNumber === "JV-19-2026-000003", "voucher identity changed");
@@ -89,9 +86,7 @@ async function main() {
     const replaced = change?.entryRows?.new as EvidenceLine[] | undefined;
     check(previous?.length === 3 && replaced?.length === 3,
       "audit must contain exactly three before/after entry images");
-    await tx.execute(apply
-      ? sql`SELECT id FROM voucher_entries WHERE company_id = ${COMPANY} AND voucher_id = ${VOUCHER} ORDER BY id FOR UPDATE`
-      : sql`SELECT id FROM voucher_entries WHERE company_id = ${COMPANY} AND voucher_id = ${VOUCHER} ORDER BY id FOR SHARE`);
+    if (apply) await tx.execute(sql`SELECT id FROM voucher_entries WHERE company_id = ${COMPANY} AND voucher_id = ${VOUCHER} ORDER BY id FOR UPDATE`);
     const entries = await tx.select().from(voucherEntries)
       .where(and(eq(voucherEntries.voucherId, VOUCHER), eq(voucherEntries.companyId, COMPANY)));
     check(entries.length === 3, "voucher entry count changed");
