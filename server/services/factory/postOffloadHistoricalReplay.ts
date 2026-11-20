@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { pool } from "../../db";
+import { currentAuditActor } from "../audit/auditActorContext";
 import {
   REPLAY_ALGORITHM_VERSION,
   applyHistoricalCostReplay,
@@ -79,7 +80,14 @@ function errorCode(error: unknown): string | undefined {
 export async function replayPostOffloadHistoricalCosts(
   params: PostOffloadHistoricalReplayParams
 ): Promise<PostOffloadHistoricalReplayResult> {
-  const { companyId, supplierId, containerId, chargeId, mutationAction, userId, username = null } = params;
+  const { companyId, supplierId, containerId, chargeId, mutationAction } = params;
+  // audit_log.user_id and username are NOT NULL. A caller without a user id is
+  // the request's / job's actor, else "system" (as writeAuditEvent does); a
+  // user without a session username is shown by id.
+  const givenUserId = String(params.userId ?? "").trim();
+  const actor = givenUserId
+    ? { userId: givenUserId, username: String(params.username ?? "").trim() || givenUserId }
+    : currentAuditActor({ userId: "system", username: "system" });
 
   if (!supplierId || supplierId <= 0) {
     return {
@@ -211,7 +219,7 @@ export async function replayPostOffloadHistoricalCosts(
       expectedFingerprint: fingerprint,
       expectedScope: normalizedScope,
       algorithmVersion: REPLAY_ALGORITHM_VERSION,
-      issuedByUserId: userId || "system",
+      issuedByUserId: actor.userId,
       tokenHash,
       onCommit: async (client, applyResult, snapshots) => {
         const undoEnvelope: ExactReplayUndoEnvelope = {
@@ -235,8 +243,8 @@ export async function replayPostOffloadHistoricalCosts(
                    'HISTORICAL_REPLAY_EXACT', $8, $9)`,
           [
             companyId,
-            userId || null,
-            username,
+            actor.userId,
+            actor.username,
             `Post-offload ${mutationAction.toLowerCase()} historical replay — ${supplierName}`,
             normalizedScope.containerIdsToUpdate.length,
             [],
@@ -254,8 +262,8 @@ export async function replayPostOffloadHistoricalCosts(
            VALUES ($1, $2, $3, 'post_offload_historical_replay_applied',
                    'factory_offload_additional_charges', $4, $5, $6::jsonb, NOW())`,
           [
-            userId || null,
-            username,
+            actor.userId,
+            actor.username,
             companyId,
             chargeId ?? containerId,
             `post-offload ${mutationAction.toLowerCase()} — container ${containerId}, supplier ${supplierId}`,

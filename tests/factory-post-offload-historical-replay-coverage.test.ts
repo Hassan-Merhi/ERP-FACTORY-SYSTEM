@@ -3,13 +3,15 @@
  * a rolled-back factory company: no supplier, no replay inputs, a supplier
  * blocked by an unclassified valued adjustment, a supplier whose costs are
  * already current, a stale supplier that is replayed with its undo log and
- * audit row, and a database failure reported as "failed" with its code.
+ * audit row (including the actor written for a caller without a username or
+ * user id), and a database failure reported as "failed" with its code.
  */
 import { describe, expect, it } from "vitest";
 
 import { withFactoryWorld } from "./helpers/rolledBackFactoryApp";
 import { REPLAYED_COSTS, readStaleReplayCosts, seedStaleReplaySupplier } from "./helpers/historicalReplayFixture";
 import { replayPostOffloadHistoricalCosts } from "../server/services/factory/postOffloadHistoricalReplay";
+import { runAsSystemAuditActor } from "../server/services/audit/auditActorContext";
 
 const params = (companyId: number, supplierId: number | null | undefined, extra: Record<string, unknown> = {}) => ({
   companyId,
@@ -69,19 +71,39 @@ describe("replayPostOffloadHistoricalCosts", () => {
       expect(await readStaleReplayCosts(world.client, seeded)).toEqual(before);
     }));
 
-  // BUG (pinned): the audit_log insert passes `userId || null` and the
-  // `username = null` default into NOT NULL columns, so a caller without a
-  // session username (or user id) gets a rolled-back replay reported as failed.
-  it("fails and leaves costs untouched when the caller has no username or user id", () =>
+  // audit_log.user_id and username are NOT NULL: a caller without a username
+  // is shown by id, and one without a user id is the context's actor, else "system".
+  it("applies and audits a system or id-only actor when the caller has no username or user id", () =>
     withFactoryWorld(async (world) => {
       const seeded = await seedStaleReplaySupplier(world.client, world.companyId);
-      const before = await readStaleReplayCosts(world.client, seeded);
-      for (const who of [{ username: undefined }, { userId: "" }]) {
-        const result = await replayPostOffloadHistoricalCosts(params(world.companyId, seeded.supplierId, who));
-        expect(result).toMatchObject({ status: "failed", code: "23502" });
-        expect(result.reason).toMatch(/audit_log/);
-      }
-      expect(await readStaleReplayCosts(world.client, seeded)).toEqual(before);
+      const noUsername = await replayPostOffloadHistoricalCosts(
+        params(world.companyId, seeded.supplierId, { username: undefined })
+      );
+      expect(noUsername.status).toBe("applied");
+      expect(await readStaleReplayCosts(world.client, seeded)).toEqual(REPLAYED_COSTS);
+      const noUser = await replayPostOffloadHistoricalCosts(params(world.companyId, seeded.supplierId, { userId: "" }));
+      expect(noUser.status).toBe("applied");
+      const job = await runAsSystemAuditActor("post-offload-test", () =>
+        replayPostOffloadHistoricalCosts(params(world.companyId, seeded.supplierId, { userId: " ", username: null }))
+      );
+      expect(job.status).toBe("applied");
+
+      const expected = [
+        { user_id: "u-1", username: "u-1" },
+        { user_id: "system", username: "system" },
+        { user_id: "system:post-offload-test", username: "system:post-offload-test" },
+      ];
+      const audit = await world.q(
+        `SELECT user_id, username FROM audit_log
+          WHERE company_id = $1 AND action = 'post_offload_historical_replay_applied' ORDER BY id`,
+        [world.companyId]
+      );
+      expect(audit).toEqual(expected);
+      const undo = await world.q(
+        `SELECT user_id, username FROM factory_recalc_undo_log WHERE company_id = $1 ORDER BY id`,
+        [world.companyId]
+      );
+      expect(undo).toEqual(expected);
     }));
 
   it("replays a stale supplier, writes the exact undo envelope and audits the mutation", () =>
