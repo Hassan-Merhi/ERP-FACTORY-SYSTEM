@@ -209,7 +209,7 @@ export function ContainerFormPricing({
           ERP Commission Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
         </Label>
         <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.filter((account) => account.isPostingLeaf !== false).map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={formData.commissionAccountId || ""}
  onChange={(val) => setFormData((f) => ({ ...f, commissionAccountId: val }))}
  placeholder={"None (leave empty)"}
