@@ -2,11 +2,9 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { Check, ChevronsUpDown, Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
+import { Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -22,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminOverride } from "@/hooks/use-admin-override";
-import { cn } from "@/lib/utils";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 
 export function parseAccountValue(val: string): { type: "ledger" | "supplier"; id: number } | null {
   if (!val) return null;
@@ -50,82 +48,24 @@ export function AccountCombobox({
   disabled = false,
   testId,
 }: AccountComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const parsed = parseAccountValue(value);
-  const selectedAccount = parsed?.type === "ledger" ? accounts.find((a) => a.id === parsed.id) : null;
-  const selectedSupplier = parsed?.type === "supplier" ? (suppliers || []).find((s) => s.id === parsed.id) : null;
-  const displayLabel = selectedSupplier ? selectedSupplier.name : selectedAccount ? selectedAccount.name : placeholder;
+  const options = [
+    ...accounts.map((account) => ({ value: String(account.id), name: account.name })),
+    ...(suppliers ?? []).map((supplier) => ({ value: `SUP:${supplier.id}`, name: supplier.name })),
+  ];
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-          disabled={disabled}
-          data-testid={testId}
-        >
-          <span className="truncate">{displayLabel}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-(--radix-popover-trigger-width) min-w-[20rem] max-w-[calc(100vw-2rem)] p-0"
-        align="start"
-      >
-        <Command>
-          <CommandInput placeholder="Search account, code, type, or supplier..." />
-          <CommandList className="max-h-[360px]">
-            <CommandEmpty>No account found.</CommandEmpty>
-            <CommandGroup heading="All Ledger Accounts">
-              {accounts.map((account) => (
-                <CommandItem
-                  key={`acc-${account.id}`}
-                  value={[account.code, account.name, account.accountType, account.subType].filter(Boolean).join(" ")}
-                  onSelect={() => {
-                    onValueChange(account.id.toString());
-                    setOpen(false);
-                  }}
-                  data-testid={`option-ledger-account-${account.id}`}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === account.id.toString() ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{account.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-                    {[account.accountType, account.code].filter(Boolean).join(" · ")}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            {suppliers && suppliers.length > 0 && (
-              <CommandGroup heading="Brokers & Suppliers">
-                {suppliers.map((s) => (
-                  <CommandItem
-                    key={`sup-${s.id}`}
-                    value={`supplier broker ${s.name}`}
-                    onSelect={() => {
-                      onValueChange(`SUP:${s.id}`);
-                      setOpen(false);
-                    }}
-                    data-testid={`option-factory-supplier-${s.id}`}
-                  >
-                    <Check
-                      className={cn("mr-2 h-4 w-4 shrink-0", value === `SUP:${s.id}` ? "opacity-100" : "opacity-0")}
-                    />
-                    <span className="truncate">{s.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <UnifiedAccountPicker
+      options={options}
+      value={value}
+      onChange={onValueChange}
+      placeholder={placeholder}
+      searchPlaceholder="Search account or supplier name..."
+      disabled={disabled}
+      testId={testId}
+      optionTestId={(key) =>
+        key.startsWith("SUP:") ? `option-factory-supplier-${key.slice(4)}` : `option-ledger-account-${key}`
+      }
+    />
   );
 }
 
