@@ -9,7 +9,6 @@ import {
   runPhase6SupplierProformas,
   runPhase6CustomerProformas,
   runPhase6FactoryMixBatches,
-  runPhase6StockItemDetail,
   runPhase6SupplierList,
   runPhase6CustomerList,
 } from "./phase6ReportCases";
@@ -17,6 +16,9 @@ import {
 /** One debit/credit leg aggregated into a journal_entries row by json_agg. */
 export type JournalEntryLine = { account: string; dr: number; cr: number };
 
+// stock_item_detail stays listed so the public query registry keeps it, but
+// reportImplementationRegistry routes it to the schema-compatibility shard
+// (which only overrides types a phase shard registers).
 export const phase6QueryTypes = [
   "customer_list",
   "supplier_list",
@@ -40,10 +42,6 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
 
     case "supplier_list": {
       return await runPhase6SupplierList({ params, companyId, rowLimit, fmt });
-    }
-
-    case "stock_item_detail": {
-      return await runPhase6StockItemDetail({ params, companyId, fmtDec, fmt });
     }
 
     case "factory_mix_batches": {

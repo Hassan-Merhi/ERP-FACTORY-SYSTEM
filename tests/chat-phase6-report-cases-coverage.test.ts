@@ -1,9 +1,8 @@
 /**
  * Chat report phase 6 cases (supplier / customer proformas, mix batches,
  * supplier and customer lists) run against PostgreSQL in one rolled-back
- * transaction per test. The phase 6 stock item detail handler is not
- * exercised: the report registry routes "stock_item_detail" to the
- * schema-compatibility shard, so it is never called in production.
+ * transaction per test. "stock_item_detail" is served by the
+ * schema-compatibility shard, not by phase 6.
  *
  * Pinned: company scoping, name / status / date filters, totals and labels.
  */
