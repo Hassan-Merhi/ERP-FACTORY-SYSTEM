@@ -86,22 +86,30 @@ describe("ensureSystemAccounts", () => {
   });
 
   it("refuses a legacy FX asset account with the canonical FX name instead of posting into it", async () => {
-    await asMaintenance(() => pool.query(
-      `INSERT INTO ledger_accounts (company_id, code, name, account_type)
+    await asMaintenance(() =>
+      pool.query(
+        `INSERT INTO ledger_accounts (company_id, code, name, account_type)
        VALUES ($1, 'FXREVGAI', 'FX Revaluation Gain/Loss', 'Asset')`,
-      [legacy]
-    ));
-    const statuses = await asMaintenance(() => db.transaction((tx) => ensureSystemAccounts(tx, legacy, ["FX-REVALUATION"])));
+        [legacy]
+      )
+    );
+    const statuses = await asMaintenance(() =>
+      db.transaction((tx) => ensureSystemAccounts(tx, legacy, ["FX-REVALUATION"]))
+    );
     expect(statuses).toEqual([
       expect.objectContaining({
-        code: "FX-REVALUATION", state: "type_differs",
-        expectedType: "Indirect Expense", actualType: "Asset",
+        code: "FX-REVALUATION",
+        state: "type_differs",
+        expectedType: "Indirect Expense",
+        actualType: "Asset",
       }),
     ]);
-    const rows = await asMaintenance(() => pool.query(
-      `SELECT code, account_type FROM ledger_accounts WHERE company_id = $1 AND name = 'FX Revaluation Gain/Loss'`,
-      [legacy]
-    ));
+    const rows = await asMaintenance(() =>
+      pool.query(
+        `SELECT code, account_type FROM ledger_accounts WHERE company_id = $1 AND name = 'FX Revaluation Gain/Loss'`,
+        [legacy]
+      )
+    );
     expect(rows.rows).toEqual([{ code: "FXREVGAI", account_type: "Asset" }]);
   });
 });
