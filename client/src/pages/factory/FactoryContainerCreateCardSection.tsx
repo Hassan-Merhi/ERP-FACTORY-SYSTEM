@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryContainerCreate.tsx to keep that module under the source-size cap.
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,23 +71,14 @@ export function FactoryContainerCreateCardSection({
           <Label>
             Freight Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
           </Label>
-          <Select
-            value={formData.freightAccountId || "__none__"}
-            onValueChange={(val) => setFormData({ ...formData, freightAccountId: val === "__none__" ? "" : val })}
-          >
-            <SelectTrigger data-testid="select-freight-account">
-              <SelectValue placeholder="Auto (Freight)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">Auto (Freight)</SelectItem>
-              {ledgerAccounts.map((acc) => (
-                <SelectItem key={acc.id} value={String(acc.id)}>
-                  {acc.name}
-                  {acc.code ? ` (${acc.code})` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={formData.freightAccountId || ""}
+ onChange={(val) => setFormData({ ...formData, freightAccountId: val })}
+ placeholder={"Auto (Freight)"}
+ testId={"select-freight-account"}
+ allowClear
+ />
         </div>
 
         <div className="space-y-2">
@@ -155,30 +147,16 @@ export function FactoryContainerCreateCardSection({
                       <SelectItem value="GBP">GBP</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select
-                    key={`acc-${idx}`}
-                    value={line.ledgerAccountId || "__none__"}
-                    onValueChange={(val) =>
-                      updateOtherChargeLine(idx, "ledgerAccountId", val === "__none__" ? "" : val)
-                    }
-                  >
-                    <SelectTrigger
-                      className="order-last col-span-3 sm:order-0 sm:col-span-1"
-                      aria-label="Other charge account"
-                      data-testid={`select-other-charge-account-${idx}`}
-                    >
-                      <SelectValue placeholder="No account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No account</SelectItem>
-                      {ledgerAccounts.map((acc) => (
-                        <SelectItem key={acc.id} value={String(acc.id)}>
-                          {acc.name}
-                          {acc.code ? ` (${acc.code})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <UnifiedAccountPicker
+ key={`acc-${idx}`}
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={line.ledgerAccountId || ""}
+ onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
+ placeholder={"No account"}
+ testId={`select-other-charge-account-${idx}`}
+ className={"order-last col-span-3 sm:order-0 sm:col-span-1"}
+ allowClear
+ />
                   <Button
                     key={`del-${idx}`}
                     type="button"
