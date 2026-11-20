@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryInvoiceDetail.tsx
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -115,29 +116,15 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                     </div>
                     {isEditingLedger ? (
                       <div className="flex items-center gap-2 print:hidden">
-                        <Select
-                          value={String(charge.ledgerAccountId ?? "")}
-                          onValueChange={(val) =>
-                            m.updateChargeLedgerMutation.mutate({
-                              chargeId: charge.id,
-                              ledgerAccountId: val ? parseInt(val) : null,
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            className="h-8 text-xs flex-1"
-                            data-testid={`select-charge-ledger-${charge.id}`}
-                          >
-                            <SelectValue placeholder="Select ledger account..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {m.ledgerAccounts.map((acc) => (
-                              <SelectItem key={acc.id} value={String(acc.id)}>
-                                {acc.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={String(charge.ledgerAccountId ?? "")}
+ onChange={(val) => m.updateChargeLedgerMutation.mutate({ chargeId: charge.id, ledgerAccountId: val ? parseInt(val) : null })}
+ placeholder={"Select ledger account..."}
+ testId={`select-charge-ledger-${charge.id}`}
+ className={"h-8 text-xs flex-1"}
+ allowClear
+ />
                         <Button
                           size="sm"
                           variant="ghost"
@@ -209,18 +196,15 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                           <SelectItem value="OTHER">Other</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Select value={m.newChargeLedgerId} onValueChange={m.setNewChargeLedgerId}>
-                        <SelectTrigger className="text-sm" data-testid="select-new-charge-ledger">
-                          <SelectValue placeholder="Ledger account..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {m.ledgerAccounts.map((acc) => (
-                            <SelectItem key={acc.id} value={String(acc.id)}>
-                              {acc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={m.newChargeLedgerId}
+ onChange={m.setNewChargeLedgerId}
+ placeholder={"Ledger account..."}
+ testId={"select-new-charge-ledger"}
+ className={"text-sm"}
+ allowClear
+ />
                     </div>
                     <p className="text-xs text-muted-foreground">Saving will immediately post an accounting voucher.</p>
                     <div className="flex items-center gap-2">
