@@ -14,7 +14,8 @@ type CompanyGuardDecision =
   | { allowed: false; code: "COMPANY_SCOPE_INVALID" | "COMPANY_SESSION_CHANGED" };
 
 const SESSION_LIFECYCLE_PATH = /^\/api\/(?:auth(?:\/|$)|csrf-token\/?$)/;
-const GLOBAL_ACCOUNT_PATH = /^\/api\/(?:user-preferences(?:\/|$)|language-preference(?:\/|$)|user-presence(?:\/|$)|build-info(?:\/|$)|health(?:\/|$))/;
+const GLOBAL_ACCOUNT_PATH =
+  /^\/api\/(?:user-preferences(?:\/|$)|language-preference(?:\/|$)|user-presence(?:\/|$)|build-info(?:\/|$)|health(?:\/|$))/;
 
 /** Exempt session/bootstrap and account preferences, never business writes. */
 export function isCompanyScopedMutation(method: string, path: string): boolean {
@@ -31,7 +32,9 @@ export function isCompanyScopedMutation(method: string, path: string): boolean {
  *
  * This is a stale-tab guard, not an alternative to route-level authorization.
  */
-export function verifyExpectedCompanyMutation(req: Pick<Request, "method" | "path" | "headers" | "session">): CompanyGuardDecision {
+export function verifyExpectedCompanyMutation(
+  req: Pick<Request, "method" | "path" | "headers" | "session">
+): CompanyGuardDecision {
   if (!isCompanyScopedMutation(req.method, req.path)) return { allowed: true };
   const companyHeader = req.headers[EXPECTED_COMPANY_ID_HEADER];
   const revisionHeader = req.headers[EXPECTED_COMPANY_REVISION_HEADER];
