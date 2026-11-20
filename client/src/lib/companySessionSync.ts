@@ -82,8 +82,40 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
     }
   };
 
-  const onResume = () => {
-    if (typeof document === "undefined" || document.visibilityState === "visible") onChange("resume");
+  // Focus, pageshow, and visibilitychange can fire without the tab ever
+  // leaving the foreground (including when a verification overlay takes focus).
+  // Probing on every such event repeatedly fences in-flight company reads and
+  // blocks operators behind "Verifying company". Only verify after a genuine
+  // blur/hidden -> active transition or a BFCache restore. Cross-tab switch
+  // notifications below still trigger verification immediately.
+  let wasBlurred = false;
+  let wasHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+
+  const onWindowBlur = () => {
+    wasBlurred = true;
+  };
+  const onWindowFocus = () => {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (!wasBlurred && !wasHidden) return;
+    wasBlurred = false;
+    wasHidden = false;
+    onChange("resume");
+  };
+  const onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") {
+      wasHidden = true;
+      return;
+    }
+    if (!wasHidden) return;
+    wasHidden = false;
+    wasBlurred = false;
+    onChange("resume");
+  };
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted) return;
+    wasHidden = false;
+    wasBlurred = false;
+    onChange("resume");
   };
 
   let channel: BroadcastChannel | null = null;
@@ -99,15 +131,17 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
   }
 
   window.addEventListener("storage", onStorage);
-  window.addEventListener("focus", onResume);
-  window.addEventListener("pageshow", onResume);
-  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onResume);
+  window.addEventListener("blur", onWindowBlur);
+  window.addEventListener("focus", onWindowFocus);
+  window.addEventListener("pageshow", onPageShow);
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibilityChange);
 
   return () => {
     channel?.close();
     window.removeEventListener("storage", onStorage);
-    window.removeEventListener("focus", onResume);
-    window.removeEventListener("pageshow", onResume);
-    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onResume);
+    window.removeEventListener("blur", onWindowBlur);
+    window.removeEventListener("focus", onWindowFocus);
+    window.removeEventListener("pageshow", onPageShow);
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibilityChange);
   };
 }
