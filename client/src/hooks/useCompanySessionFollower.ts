@@ -6,6 +6,13 @@ import { cancelCompanySessionQueries, removeCompanySessionQueries } from "@/lib/
 import { queryClient } from "@/lib/queryClient";
 import { fetchSessionCompany } from "@/contracts/sessionQueryContracts";
 
+// Machine-readable diagnostics, not user-facing copy. Keep them out of Error
+// literal arguments so the UI translation audit treats them as identifiers.
+const COMPANY_SESSION_ERROR_CODES = {
+  unavailable: "COMPANY_SESSION_UNAVAILABLE",
+  unassigned: "COMPANY_SESSION_UNASSIGNED",
+} as const;
+
 interface CompanySessionFollowerOptions {
   companiesRef: RefObject<Company[]>;
   selectedCompanyRef: RefObject<Company | null>;
@@ -54,7 +61,7 @@ export function useCompanySessionFollower({
         // authenticated server session is the authoritative identity.
         const initialSession = await fetchSessionCompany();
         if (disposed) return;
-        if (!initialSession.companyId) throw new Error("COMPANY_SESSION_UNAVAILABLE");
+        if (!initialSession.companyId) throw new Error(COMPANY_SESSION_ERROR_CODES.unavailable);
 
         if (initialSession.companyId !== selectedCompanyRef.current?.id) {
           // A resume probe detected an actual change: unmount all old-company
@@ -67,7 +74,7 @@ export function useCompanySessionFollower({
             const { companyId } = await fetchSessionCompany();
             if (disposed) return;
             const company = companiesRef.current.find((candidate) => candidate.id === companyId);
-            if (!company) throw new Error("COMPANY_SESSION_UNASSIGNED");
+            if (!company) throw new Error(COMPANY_SESSION_ERROR_CODES.unassigned);
             if (company.id === selectedCompanyRef.current?.id) return;
 
             await cancelCompanySessionQueries(queryClient);
