@@ -213,14 +213,31 @@ if (
 
     const applyReferenceMutation = async (response: Response) => {
       if (!referenceMutationQueryClient || !pathname) return;
-      await applyReferenceMutationResponse({
-        client: referenceMutationQueryClient,
-        method,
-        pathname,
-        response,
-      });
+      if (writeScope) {
+        try {
+          assertCompanyMutationSnapshot(writeScope);
+        } catch {
+          // The server may already have committed an original-company write.
+          // Do not update the *new* company's cache, but preserve its real
+          // response so the operator does not mistakenly submit it twice.
+          return;
+        }
+      }
+      try {
+        await applyReferenceMutationResponse({
+          client: referenceMutationQueryClient,
+          method,
+          pathname,
+          response,
+        });
+      } catch (error) {
+        // Cache invalidation must not turn a successful server write into a
+        // client failure or trigger a duplicate POST.
+        console.warn("[Company] Failed to refresh mutation cache.", error);
+      }
     };
 
+    let attemptedMutationWrite = false;
     try {
       const isStateChanging = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
       const isApi = !!pathname && pathname.startsWith("/api/") && pathname !== "/api/csrf-token";
@@ -236,8 +253,8 @@ if (
             const newInit: RequestInit = { ...effectiveInit, headers: existingHeaders };
             if (newInit.credentials === undefined) newInit.credentials = "include";
             assertCompanyMutationSnapshot(writeScope);
+            attemptedMutationWrite = true;
             const res = await originalFetch(input, newInit);
-            assertCompanyMutationSnapshot(writeScope);
             await applyReferenceMutation(res);
 
             // If the server rejected our token (stale after restart/session regen),
@@ -260,8 +277,10 @@ if (
           }
         }
       }
-    } catch {
-      // Never block a legitimate request because of interceptor errors
+    } catch (error) {
+      // A network exception after sending a voucher/payment has an unknown
+      // commit outcome. Never resend it through the fallback path.
+      if (attemptedMutationWrite) throw error;
     }
     // GET requests may fall back to a verified per-user/company snapshot only
     // after a real transport failure or the known offline service worker 503.
@@ -283,7 +302,6 @@ if (
     let fallbackRes: Response;
     try {
       fallbackRes = await originalFetch(input, effectiveInit);
-      assertCompanyMutationSnapshot(writeScope);
       if (readScope) assertCompanyReadSnapshot(readScope);
     } catch (error) {
       const networkFailure =
