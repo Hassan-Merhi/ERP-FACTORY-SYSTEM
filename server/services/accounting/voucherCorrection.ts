@@ -21,7 +21,7 @@ import type { DbTransaction } from "../../db";
 import { HttpError } from "../../lib/httpError";
 import { isIntercompanyPairedVoucher, INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE } from "../../lib/migratedVoucherGuard";
 import { resultRows } from "../../lib/queryResult";
-import { isAutomaticFxRevaluationVoucherTx } from "./automaticFxVoucherGuard";
+import { isAutomaticFxRevaluationVoucherInOwnScopeTx } from "./automaticFxVoucherGuard";
 import {
   readVoucherAuditState,
   writeVoucherAuditTx,
@@ -210,8 +210,7 @@ export async function assertVoucherEditableTx(
   // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
   // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
   // use a dedicated audited path that preserves the original currency evidence.
-  await assertTransactionCompanyScope(tx, voucher.companyId);
-  if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
+  if (await isAutomaticFxRevaluationVoucherInOwnScopeTx(tx, voucher.companyId, voucherId)) {
     throw new VoucherCorrectionError(
       409,
       "FX_REVALUATION_VOUCHER_IMMUTABLE",
