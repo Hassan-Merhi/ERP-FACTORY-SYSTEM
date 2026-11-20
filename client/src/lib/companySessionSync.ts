@@ -82,25 +82,13 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
     }
   };
 
-  // Focus, pageshow, and visibilitychange can fire without the tab ever
-  // leaving the foreground (including when a verification overlay takes focus).
-  // Probing on every such event repeatedly fences in-flight company reads and
-  // blocks operators behind "Verifying company". Only verify after a genuine
-  // blur/hidden -> active transition or a BFCache restore. Cross-tab switch
-  // notifications below still trigger verification immediately.
-  let wasBlurred = false;
+  // Window blur/focus also happens while navigating menus, dialogs and
+  // desktop apps. It is not proof the browser tab was suspended, and used to
+  // interrupt ERP work with repeated verification. A real browser-tab return
+  // has a hidden -> visible visibility transition. Cross-tab commit messages
+  // are still handled immediately via storage/BroadcastChannel below.
   let wasHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
 
-  const onWindowBlur = () => {
-    wasBlurred = true;
-  };
-  const onWindowFocus = () => {
-    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    if (!wasBlurred && !wasHidden) return;
-    wasBlurred = false;
-    wasHidden = false;
-    onChange("resume");
-  };
   const onVisibilityChange = () => {
     if (document.visibilityState !== "visible") {
       wasHidden = true;
@@ -108,13 +96,11 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
     }
     if (!wasHidden) return;
     wasHidden = false;
-    wasBlurred = false;
     onChange("resume");
   };
   const onPageShow = (event: PageTransitionEvent) => {
     if (!event.persisted) return;
     wasHidden = false;
-    wasBlurred = false;
     onChange("resume");
   };
 
@@ -131,16 +117,12 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
   }
 
   window.addEventListener("storage", onStorage);
-  window.addEventListener("blur", onWindowBlur);
-  window.addEventListener("focus", onWindowFocus);
   window.addEventListener("pageshow", onPageShow);
   if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibilityChange);
 
   return () => {
     channel?.close();
     window.removeEventListener("storage", onStorage);
-    window.removeEventListener("blur", onWindowBlur);
-    window.removeEventListener("focus", onWindowFocus);
     window.removeEventListener("pageshow", onPageShow);
     if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibilityChange);
   };
