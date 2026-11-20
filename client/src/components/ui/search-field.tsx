@@ -20,6 +20,8 @@ export interface SearchFieldProps extends Omit<
   clearOnEscape?: boolean;
   /** Show a spinner and prevent edits while results are being loaded. */
   loading?: boolean;
+  /** Let a surrounding menu handle Escape rather than suppressing it. */
+  propagateEscape?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
       clearTestId = "button-clear-search",
       clearOnEscape = false,
       loading = false,
+      propagateEscape = false,
       className,
       onKeyDown,
       placeholder = "Search...",
@@ -86,9 +89,8 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
             if (clearOnEscape && value) {
               event.preventDefault();
               clear();
-            } else {
-              // WebKit/Chrome clear type="search" inputs natively on Escape; keep
-              // the owner's opt-in the only path and let overlays handle the key.
+            } else if (!propagateEscape) {
+              // Prevent silent native clears unless a surrounding overlay owns Escape.
               event.preventDefault();
             }
           }}
