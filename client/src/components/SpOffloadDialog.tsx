@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -210,53 +211,32 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                         </SelectContent>
                       </Select>
                     ) : charge.chargeType === "paid_now" ? (
-                      <Select
+                      <UnifiedAccountPicker
                         value={charge.creditBankAccountId}
-                        onValueChange={(v) => costs.updateCharge(idx, "creditBankAccountId", v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs" data-testid={`select-sp-charge-bank-${idx}`}>
-                          <SelectValue placeholder="Select bank" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(sp.statusData?.bankAccounts || []).map((b) => (
-                            <SelectItem key={b.id} value={String(b.id)}>
-                              {b.bankName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => costs.updateCharge(idx, "creditBankAccountId", v)}
+                        options={(sp.statusData?.bankAccounts || []).map((a) => ({ value: String(a.id), name: a.bankName }))}
+                        placeholder={"Select bank"}
+                        testId={`select-sp-charge-bank-${idx}`}
+                        className="h-8 text-xs"
+                      />
                     ) : charge.chargeType === "unpaid_payable" || charge.chargeType === "other" ? (
-                      <Select
+                      <UnifiedAccountPicker
                         value={charge.creditLedgerAccountId}
-                        onValueChange={(v) => costs.updateCharge(idx, "creditLedgerAccountId", v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs" data-testid={`select-sp-charge-ledger-${idx}`}>
-                          <SelectValue placeholder="Select account" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sp.ledgerAccounts.map((a) => (
-                            <SelectItem key={a.id} value={String(a.id)}>
-                              {a.code} — {a.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => costs.updateCharge(idx, "creditLedgerAccountId", v)}
+                        options={sp.ledgerAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                        placeholder={"Select account"}
+                        testId={`select-sp-charge-ledger-${idx}`}
+                        className="h-8 text-xs"
+                      />
                     ) : charge.chargeType === "parent_agent" ? (
-                      <Select
+                      <UnifiedAccountPicker
                         value={charge.parentAgentAccountId}
-                        onValueChange={(v) => costs.updateCharge(idx, "parentAgentAccountId", v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs" data-testid={`select-sp-charge-agent-${idx}`}>
-                          <SelectValue placeholder="Select agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sp.parentAgents.map((a) => (
-                            <SelectItem key={a.ledger_account_id} value={String(a.ledger_account_id)}>
-                              {a.account_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => costs.updateCharge(idx, "parentAgentAccountId", v)}
+                        options={sp.parentAgents.map((a) => ({ value: String(a.ledger_account_id), name: a.account_name }))}
+                        placeholder={"Select agent"}
+                        testId={`select-sp-charge-agent-${idx}`}
+                        className="h-8 text-xs"
+                      />
                     ) : (
                       <div className="h-8 flex items-center px-1">
                         <Badge variant="secondary" className="text-xs">
