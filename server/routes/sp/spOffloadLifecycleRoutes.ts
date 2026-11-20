@@ -379,7 +379,22 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
             LEFT JOIN voucher_entries ve ON ve.voucher_id = v.id
             WHERE v.source_module = 'SP'
               AND v.deleted_at IS NULL
-              AND (v.company_id = ${companyId} OR v.voucher_number LIKE 'SP-AGENT-%')
+              -- This company's vouchers, plus the parent-agent vouchers posted in
+              -- the parent company for this company's containers and their
+              -- reversals. Other companies' SP-AGENT vouchers never count.
+              AND (
+                v.company_id = ${companyId}
+                OR EXISTS (
+                  SELECT 1 FROM sp_containers c
+                  WHERE c.company_id = ${companyId}
+                    AND v.voucher_number LIKE 'SP-AGENT-' || c.id || '-%'
+                )
+                OR v.id IN (
+                  SELECT jsonb_array_elements_text(r.voucher_ids_reversal)::integer
+                  FROM sp_offload_reversals r
+                  WHERE r.company_id = ${companyId}
+                )
+              )
             GROUP BY v.id
           ),
           active_offloads AS (

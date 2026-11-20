@@ -10,7 +10,10 @@
  * an unavailable or empty original voucher, and a lot whose location is not
  * mapped. The success path mirrors the original voucher, restores prepaid
  * usage, removes the stock and reopens the container; the reconciliation
- * report passes on a clean company and counts each mismatch kind.
+ * report passes on a clean company and counts each mismatch kind. Both
+ * reconciliation reports (offloads and charges) check this company's vouchers
+ * plus the parent-agent SP-AGENT vouchers for its own containers and their
+ * reversals, never another company's SP-AGENT vouchers.
  */
 import { describe, expect, it } from "vitest";
 
@@ -328,5 +331,74 @@ describe("offload reconciliation", () => {
   it("refuses a company that is not a supplier partner", () =>
     withFactoryWorld(async (w) => {
       expect((await w.agent.get("/api/sp/reconciliation/offloads")).status).toBe(403);
+    }));
+});
+
+describe("reconciliation voucher scope", () => {
+  // An SP voucher with a single debit line, so it is always unbalanced.
+  async function unbalanced(w: FactoryWorld, companyId: number, voucherNumber: string) {
+    const account = await w.one(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2::varchar, $2::text, 'Expense') RETURNING id`,
+      [companyId, `${w.tag}UB${nextSeq()}`]
+    );
+    const id = await w.one(
+      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, source_module)
+       VALUES ($1, $2, 'Journal', '2026-09-15', 7, 'SP') RETURNING id`,
+      [companyId, voucherNumber]
+    );
+    await w.q(
+      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, 7, 0)`,
+      [id, account]
+    );
+    return id;
+  }
+
+  const spContainer = (w: FactoryWorld, companyId: number) =>
+    w.one(
+      `INSERT INTO sp_containers (company_id, invoice_date, invoice_number, supplier_name, status)
+       VALUES ($1, '2026-09-10', $2, 'S', 'open') RETURNING id`,
+      [companyId, `${w.tag}SC${nextSeq()}`]
+    );
+
+  const unbalancedCounts = async (w: FactoryWorld) => {
+    const offloads = await w.agent.get("/api/sp/reconciliation/offloads");
+    const charges = await w.agent.get("/api/sp/reconciliation/charges");
+    expect(offloads.status, offloads.text).toBe(200);
+    expect(charges.status, charges.text).toBe(200);
+    return [offloads.body.checks.unbalancedVouchers, charges.body.checks.balancedVouchers];
+  };
+
+  it("counts parent-agent vouchers for this company's containers and their reversals, never another company's", () =>
+    withFactoryWorld(async (w) => {
+      await w.q(`UPDATE companies SET company_type = 'supplier_partner' WHERE id = $1`, [w.companyId]);
+      // The parent company posts SP-AGENT vouchers for every supplier partner.
+      const parent = await otherCompany(w);
+      const foreignSp = await otherCompany(w);
+      const own = await spContainer(w, w.companyId);
+      const foreign = await spContainer(w, foreignSp);
+
+      // (a) Another company's SP-AGENT voucher, in its own company or the parent, is excluded.
+      await unbalanced(w, foreignSp, `SP-AGENT-${foreign}-1`);
+      await unbalanced(w, parent, `SP-AGENT-${foreign}-2`);
+      expect(await unbalancedCounts(w)).toEqual([0, 0]);
+
+      // (b) The parent-agent voucher for this company's container counts...
+      const agentVoucher = await unbalanced(w, parent, `SP-AGENT-${own}-1`);
+      expect(await unbalancedCounts(w)).toEqual([1, 1]);
+
+      // ...and so does its SP-AGENT-REV reversal, once this company's reversal lists it.
+      const rev = await unbalanced(w, parent, `SP-AGENT-REV-${agentVoucher}-1`);
+      expect(await unbalancedCounts(w)).toEqual([1, 1]);
+      const offload = await w.one(
+        `INSERT INTO sp_offloads (company_id, container_id, offload_date) VALUES ($1, $2, '2026-09-15') RETURNING id`,
+        [w.companyId, own]
+      );
+      await w.q(
+        `INSERT INTO sp_offload_reversals (company_id, container_id, offload_id, reversal_date, reason,
+           voucher_ids_original, voucher_ids_reversal)
+         VALUES ($1, $2, $3, '2026-10-01', 'test', $4::jsonb, $5::jsonb)`,
+        [w.companyId, own, offload, JSON.stringify([agentVoucher]), JSON.stringify([rev])]
+      );
+      expect(await unbalancedCounts(w)).toEqual([2, 2]);
     }));
 });
