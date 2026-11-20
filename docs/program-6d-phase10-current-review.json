@@ -93,7 +93,11 @@
       "P6D-0a4ba0bf5ae4",
       "P6D-d60ad46e2768",
       "P6D-49058141465d",
-      "P6D-e8d4bb609a1c"
+      "P6D-e8d4bb609a1c",
+      "P6D-b68143061a7a",
+      "P6D-aab3c01c4da3",
+      "P6D-935af38d4ce3",
+      "P6D-3e983e94dc87"
     ]
   },
   "reviewEvidence": {
@@ -124,6 +128,22 @@
     "P6D-e8d4bb609a1c": {
       "rationale": "The flagged loop in server/startup/warmupDb.ts is a three-attempt startup retry around one SELECT 1 connectivity probe; it returns on the first success and never iterates over records.",
       "falsePositiveReason": "At most three sequential SELECT 1 calls, separated by a 3 second back-off, run once at boot to open the pool; there is no per-row query and no collection to batch."
+    },
+    "P6D-b68143061a7a": {
+      "rationale": "postFxRevaluation in server/services/accounting/fxRevaluationPosting.ts runs inside `for (let attempt = 0; attempt < 3; attempt++)`, an optimistic-concurrency retry that only repeats when another revaluation was posted between reading the balances and taking the lock; it never iterates over accounts, entries or any other record collection. The flagged statement is the per-company pg_advisory_xact_lock that opens the period-check transaction.",
+      "falsePositiveReason": "One advisory lock per attempt, at most three per call, keyed by company. It is a lock acquisition, not a data read, and there is no per-row query to batch."
+    },
+    "P6D-aab3c01c4da3": {
+      "rationale": "postFxRevaluation in server/services/accounting/fxRevaluationPosting.ts runs inside `for (let attempt = 0; attempt < 3; attempt++)`, an optimistic-concurrency retry that only repeats when another revaluation was posted between reading the balances and taking the lock; it never iterates over accounts, entries or any other record collection. The flagged statement re-reads the company's revaluation count under that lock to detect a concurrent posting before the period check.",
+      "falsePositiveReason": "One COUNT(*) scoped to (company_id, source_type) per attempt, at most three per call. It must run after the lock to observe a competing posting, so it cannot be prefetched or batched."
+    },
+    "P6D-935af38d4ce3": {
+      "rationale": "postFxRevaluation in server/services/accounting/fxRevaluationPosting.ts runs inside `for (let attempt = 0; attempt < 3; attempt++)`, an optimistic-concurrency retry that only repeats when another revaluation was posted between reading the balances and taking the lock; it never iterates over accounts, entries or any other record collection. The flagged statement is the per-company pg_advisory_xact_lock that opens the posting transaction.",
+      "falsePositiveReason": "One advisory lock per attempt, at most three per call, keyed by company. It serializes the posting itself; there is no repeated application-data load."
+    },
+    "P6D-3e983e94dc87": {
+      "rationale": "postFxRevaluation in server/services/accounting/fxRevaluationPosting.ts runs inside `for (let attempt = 0; attempt < 3; attempt++)`, an optimistic-concurrency retry that only repeats when another revaluation was posted between reading the balances and taking the lock; it never iterates over accounts, entries or any other record collection. The flagged statement re-reads the company's revaluation count under the posting lock so two simultaneous calls cannot both post the same difference.",
+      "falsePositiveReason": "One COUNT(*) scoped to (company_id, source_type) per attempt, at most three per call. The check is only valid inside the locked posting transaction and is not a per-record lookup."
     }
   }
 }
