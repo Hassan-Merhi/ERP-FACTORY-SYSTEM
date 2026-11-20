@@ -54,7 +54,7 @@ export type FxRepairAuditResult = {
 
 function money(v: string): Decimal {
   const value = new Decimal(v);
-  if (!value.isFinite()) throw new Error("FX_REPAIR_NONFINITE_AMOUNT");
+  if (!value.isFinite()) throw new RangeError();
   return value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 }
 function signed(line: FxRepairAuditLine): Decimal {
