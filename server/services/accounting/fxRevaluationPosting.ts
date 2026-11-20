@@ -178,9 +178,9 @@ export async function postFxRevaluation(input: {
       if (conflicts.length) return { conflictReason: legacyManualFxConflictReason(conflicts) } as const;
       const status = (await ensureSystemAccounts(tx, companyId, ["FX-REVALUATION"]))[0];
       if (status?.state === "type_differs") {
-        throw new Error(
-          `FX Revaluation Gain/Loss account is typed "${status.actualType}" but must be "${status.expectedType}". Review the account before revaluation.`
-        );
+        return {
+          conflictReason: `FX Revaluation Gain/Loss account is typed "${status.actualType}" but must be "${status.expectedType}". Review the account before revaluation.`,
+        } as const;
       }
       if (!status || !("accountId" in status) || !["ok", "created", "reused_by_name"].includes(status.state)) {
         throw new Error("The FX Revaluation Gain/Loss account is unavailable");
