@@ -328,7 +328,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
           // The switch was refused, so the session still points where it did
           // and the requests already in flight were made against it.
           await switchQueueRef.current!.enqueue(async () => {
-            adoptServerCompany(serverCompany);
+            adoptServerCompany(serverCompany, companyRevision);
           });
           return;
         }
