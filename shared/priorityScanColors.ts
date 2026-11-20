@@ -38,7 +38,7 @@ export const PRIORITY_SCAN_COLOR_LETTERS = {
   "#B22222": "R",
   "#6A5ACD": "S",
   "#000000": "T",
-  "#B0E0E6": "U",
+  "#B0E0E6": "L",
   "#DB7093": "V",
   "#A7FC00": "C",
 } as const satisfies Record<PriorityScanColor, string>;
