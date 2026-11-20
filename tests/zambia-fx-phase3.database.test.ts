@@ -105,7 +105,10 @@ async function countRows(table: "vouchers" | "voucher_entries" | "accounting_pos
     return r.rows[0].n;
   }
   if (table === "vouchers") {
-    const r = await pool.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM vouchers WHERE company_id=$1", [companyId]);
+    const r = await pool.query<{ n: number }>(
+      "SELECT COUNT(*)::int AS n FROM vouchers WHERE company_id=$1",
+      [companyId]
+    );
     return r.rows[0].n;
   }
   const r = await pool.query<{ n: number }>(
