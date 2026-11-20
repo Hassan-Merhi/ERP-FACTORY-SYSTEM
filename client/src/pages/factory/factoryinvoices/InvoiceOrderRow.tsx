@@ -50,7 +50,7 @@ import type { CustomerOrder } from "./types";
 import { EditableShippingCell } from "./EditableShippingCell";
 import { LoadingAgentCell } from "./LoadingAgentCell";
 
-export type EditableShippingField = "containerNumber" | "bookingInfo" | "destination" | "containerNotes";
+export type EditableShippingField = "containerNumber" | "bookingInfo" | "agentName" | "destination" | "containerNotes";
 
 export type InvoiceColumnKey =
   | "loading"
