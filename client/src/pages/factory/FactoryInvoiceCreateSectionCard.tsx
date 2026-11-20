@@ -160,7 +160,6 @@ export function FactoryInvoiceCreateSectionCard({
  onChange={setChargeLedgerAccountId}
  placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
  testId={"select-charge-ledger-account"}
- allowClear
  />
         {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
