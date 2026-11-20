@@ -150,6 +150,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
 | [fx-monetary-valuation/zambia-fx-phase1-audit-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase1-audit-2026-11-20.md) | Zambia FX: read-only accounting and voucher audit, source-of-truth balances and duplicate display diagnosis |
 | [fx-monetary-valuation/zambia-fx-phase2-implementation-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase2-implementation-2026-11-20.md) | Zambia FX: posting guards, posted-cent calculation, regression tests and approved correction runbook |
+| [fx-monetary-valuation/zambia-fx-phase3-preflight-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase3-preflight-2026-11-20.md) | Zambia FX: administrator-only read-only correction preview and disposable database regression |
 
 ## Operating it
 
