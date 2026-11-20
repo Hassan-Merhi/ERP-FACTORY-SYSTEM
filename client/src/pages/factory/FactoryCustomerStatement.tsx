@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, X } from "lucide-react";
 import { CustomerStatementExports } from "./factorycustomerstatement/CustomerStatementExports";
@@ -194,11 +194,11 @@ export default function FactoryCustomerStatement() {
               <div className="flex flex-wrap items-end gap-3 mb-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground font-medium">Destination</label>
-                  <Input
+                  <SearchField
                     value={filterDestination}
-                    onChange={(e) => setFilterDestination(e.target.value)}
+                    onValueChange={setFilterDestination}
                     placeholder="Filter by destination…"
-                    className="w-48"
+                    wrapperClassName="w-full sm:w-48"
                     data-testid="input-filter-destination"
                   />
                 </div>
