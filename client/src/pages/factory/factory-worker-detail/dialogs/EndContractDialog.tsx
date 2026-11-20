@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * EndContractDialog — extracted from FactoryWorkerDetail.tsx during the Phase 4 split.
  *
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtNum } from "../../factoryworkerdetail/utils";
 
 export function EndContractDialog({
@@ -167,18 +167,13 @@ export function EndContractDialog({
             {payrollBalance > 0 && (
               <div className="space-y-1">
                 <Label className="text-xs">Cash Account (Pay Now)</Label>
-                <Select value={endCashAccountId} onValueChange={setEndCashAccountId}>
-                  <SelectTrigger data-testid="select-cash-account">
-                    <SelectValue placeholder="Select account..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cashAccounts?.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name} ({a.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+                  options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
+                  value={endCashAccountId}
+                  onChange={setEndCashAccountId}
+                  placeholder={"Select account..."}
+                  testId={"select-cash-account"}
+                  />
               </div>
             )}
             <div className="flex gap-2 flex-wrap">
