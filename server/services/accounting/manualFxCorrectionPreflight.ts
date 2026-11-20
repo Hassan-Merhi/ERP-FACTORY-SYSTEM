@@ -47,6 +47,8 @@ export interface ManualFxCorrectionCandidate {
   bookClosingUsd: string;
   /** Book after excluding the legacy native-USD FX movement. */
   bookBeforeManualUsd: string;
+  /** Current-rate USD after hypothetically reversing the manual native-USD movement. */
+  translatedAfterManualReversalUsd: string;
   currentTranslatedUsd: string;
   nativeBalancesByCurrency: Record<string, string>;
   expectedBaseOnlyAdjustmentUsd: string;
@@ -210,17 +212,22 @@ export async function getManualFxCorrectionPreflight(
     }
     // The live book already contains the manual journal. The proposed base-only
     // replacement must use the book after subtracting that manual movement.
-    const beforeManual = new Decimal(row.bookClosingUsd).minus(
-      snapshot.header?.reversed ? new Decimal(0) : manualMovement
-    );
+    const pendingManual = snapshot.header?.reversed ? new Decimal(0) : manualMovement;
+    const beforeManual = new Decimal(row.bookClosingUsd).minus(pendingManual);
+    // Native USD cash was also reduced by the erroneous IDENTITY journal.
+    // Reversing it raises both the native current translation AND the book.
+    const translatedAfterReversal = new Decimal(row.currentTranslatedUsd).minus(pendingManual);
     candidates.push({
       accountKey: row.accountKey,
       accountName: row.name,
       bookClosingUsd: row.bookClosingUsd,
       bookBeforeManualUsd: beforeManual.toFixed(2),
       currentTranslatedUsd: row.currentTranslatedUsd,
+      translatedAfterManualReversalUsd: translatedAfterReversal.toFixed(6),
       nativeBalancesByCurrency: row.nativeBalancesByCurrency,
-      expectedBaseOnlyAdjustmentUsd: postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, beforeManual.toFixed(2)),
+      expectedBaseOnlyAdjustmentUsd: postedFxRevaluationAdjustmentUsd(
+        translatedAfterReversal.toFixed(6), beforeManual.toFixed(2)
+      ),
     });
   }
   // A balanced voucher totals zero across all accounts. Its FX counter-line
