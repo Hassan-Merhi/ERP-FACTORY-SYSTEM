@@ -44,6 +44,17 @@ export function registerFactoryStockQueryRoutes(app: Express) {
               AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds', '[]'::jsonb)
                 @> jsonb_build_array(${factoryBales.productId})
           )`,
+          // Container Planner leaves the bale status IN_STOCK after physical
+          // assignment. Once the container starts loading, it is no longer
+          // a loose bale to look for in Ground Scan.
+          sql`NOT EXISTS (
+            SELECT 1 FROM factory_container_plan_bales cpb
+            JOIN factory_container_plan_containers cpc ON cpc.id = cpb.plan_container_id
+            WHERE cpb.bale_id = ${factoryBales.id}
+              AND cpb.company_id = ${companyId}
+              AND cpc.company_id = ${companyId}
+              AND cpc.lifecycle_status IN ('LOADING', 'LOADED', 'SHIPPED', 'ARRIVED', 'DELIVERED')
+          )`,
         );
       }
 
@@ -104,6 +115,14 @@ export function registerFactoryStockQueryRoutes(app: Express) {
           WHERE fs.company_id = ${companyId}
             AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds', '[]'::jsonb)
               @> jsonb_build_array(fb.product_id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_container_plan_bales cpb
+          JOIN factory_container_plan_containers cpc ON cpc.id = cpb.plan_container_id
+          WHERE cpb.bale_id = fb.id
+            AND cpb.company_id = ${companyId}
+            AND cpc.company_id = ${companyId}
+            AND cpc.lifecycle_status IN ('LOADING', 'LOADED', 'SHIPPED', 'ARRIVED', 'DELIVERED')
         )` : sql``;
 
       const rows = await db.execute(
