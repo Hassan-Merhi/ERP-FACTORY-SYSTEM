@@ -134,14 +134,19 @@ describe("initial company selection", () => {
     expect(switchCalls()).toHaveLength(1);
   });
 
-  it("adopts the session's own company when the switch to the saved one is refused", async () => {
+  it("adopts the session's own company and write revision when the saved switch is refused", async () => {
     localStorage.setItem("selectedCompanyId", "3");
     sessionCompanyId = 2;
+    harness.fetchSessionCompany.mockResolvedValue({
+      companyId: 2,
+      companyRevision: "verified-company-two",
+    });
     harness.apiRequest.mockResolvedValue({ ok: false });
     const { result } = renderHook(() => useCompany(), { wrapper });
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(switchCalls()).toHaveLength(1);
+    expect(captureCompanyMutationSnapshot("POST", "/api/vouchers")?.serverRevision).toBe("verified-company-two");
   });
 
   it("retries after two seconds when the switch is refused and the session company is not the user's", async () => {
