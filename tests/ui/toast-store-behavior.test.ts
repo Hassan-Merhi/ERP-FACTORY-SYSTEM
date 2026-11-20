@@ -4,7 +4,7 @@
  * sees the same state.
  */
 import { act, renderHook } from "@testing-library/react";
-import { reducer, toast, useToast } from "@/hooks/use-toast";
+import { clearAllToasts, reducer, toast, useToast } from "@/hooks/use-toast";
 
 type State = Parameters<typeof reducer>[0];
 const t = (id: string, extra: Record<string, unknown> = {}) => ({ id, title: `Toast ${id}`, ...extra });
@@ -91,6 +91,28 @@ describe("toast() and useToast()", () => {
     act(() => result.current.toasts[0].onOpenChange?.(false));
 
     expect(result.current.toasts[0].open).toBe(false);
+  });
+
+  it("keeps the toast open when it reports it is still open", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Still open" });
+    });
+
+    act(() => result.current.toasts[0].onOpenChange?.(true));
+
+    expect(result.current.toasts[0].open).toBe(true);
+  });
+
+  it("removes every notice at once on a company switch, with no closing delay", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Previous company's balance" });
+    });
+
+    act(() => clearAllToasts());
+
+    expect(result.current.toasts).toEqual([]);
   });
 
   it("dismisses everything through the hook", () => {
