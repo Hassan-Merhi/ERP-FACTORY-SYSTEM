@@ -88,17 +88,35 @@ export async function getZambiaSalesNetPositionReconciliation(companyId: number)
     )[0];
     const stock = await companyStockValuation(tx, companyId);
     const supportedCodes = new Set([
-      "SALES", "PURCHASES", "DUTIES", "TRANSPORT",
-      "HADCRD", "ZAMDUT", "ZAMTRA", "FXREVGAI", "FX-REVALUATION",
-      "KITCAS", "LUSCAS", "INVENTORY", "GOODS_IN_TRANSIT",
-      "COGS", "IMPORT_CHARGES", "ROUNDING", "OPENING_BALANCE_EQUITY", "RETAINED_EARNINGS",
+      "SALES",
+      "PURCHASES",
+      "DUTIES",
+      "TRANSPORT",
+      "HADCRD",
+      "ZAMDUT",
+      "ZAMTRA",
+      "FXREVGAI",
+      "FX-REVALUATION",
+      "KITCAS",
+      "LUSCAS",
+      "INVENTORY",
+      "GOODS_IN_TRANSIT",
+      "COGS",
+      "IMPORT_CHARGES",
+      "ROUNDING",
+      "OPENING_BALANCE_EQUITY",
+      "RETAINED_EARNINGS",
     ]);
-    const sumCodes = (codes: readonly string[]) => ledger.reduce(
-      (sum, row) => codes.includes(row.code) ? sum.plus(amount(row.signed_book)) : sum, ZERO
-    );
-    const sumTypes = (types: readonly string[]) => ledger.reduce(
-      (sum, row) => types.includes(row.account_type.toLowerCase()) ? sum.plus(amount(row.signed_book)) : sum, ZERO
-    );
+    const sumCodes = (codes: readonly string[]) =>
+      ledger.reduce(
+        (sum, row) => (codes.includes(row.code) ? sum.plus(amount(row.signed_book)) : sum),
+        ZERO
+      );
+    const sumTypes = (types: readonly string[]) =>
+      ledger.reduce(
+        (sum, row) => (types.includes(row.account_type.toLowerCase()) ? sum.plus(amount(row.signed_book)) : sum),
+        ZERO
+      );
     const aggregate = sales.reduce(
       (out, row) => ({
         sales: out.sales.plus(amount(row.recorded_sales)),
@@ -153,7 +171,8 @@ export async function getZambiaSalesNetPositionReconciliation(companyId: number)
         recordedCostUsd: fixed(amount(row.recorded_cost)),
         actualValueRelievedUsd: Number(row.missing_moved) ? null : fixed(amount(row.moved_cost)),
         costDifferenceUsd: Number(row.missing_moved)
-          ? null : fixed(amount(row.recorded_cost).minus(amount(row.moved_cost))),
+          ? null
+          : fixed(amount(row.recorded_cost).minus(amount(row.moved_cost))),
       })),
       ...bridge,
       findings: {
