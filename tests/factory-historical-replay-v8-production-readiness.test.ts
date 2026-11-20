@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import {
   HISTORICAL_REPLAY_APPLY_MODE_ENV,
   HISTORICAL_REPLAY_APPLY_MODE_VALUE,
@@ -13,7 +13,8 @@ import {
   rememberHistoricalReplayPreparation,
 } from "../client/src/lib/historicalReplayPreparedRequest";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Historical Replay V8 production readiness", () => {
   it("keeps production apply disabled unless both exact controls are configured", () => {
@@ -47,9 +48,7 @@ describe("Historical Replay V8 production readiness", () => {
   });
 
   it("binds apply authorization to release, company, user, algorithm, and exact token hash", () => {
-    const route = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts"
-    );
+    const route = read("server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts");
     expect(route).toContain("HISTORICAL_REPLAY_V8_APPLY_AUTHORIZATION");
     expect(route).toContain("confirmationTokenHash");
     expect(route).toContain("verified.companyId !== companyId");
@@ -62,24 +61,27 @@ describe("Historical Replay V8 production readiness", () => {
 
   it("freezes the second signed token with the server-prepared request", () => {
     clearHistoricalReplayPreparations();
-    expect(rememberHistoricalReplayPreparation({
-      confirmationToken: "prepared-token",
-      safeSupplierIds: [8, 3],
-      frozenOptions: {
-        includeCompletedBatches: true,
-        includeFinalizedBales: false,
-      },
-      algorithmVersion: "HISTORICAL_COST_REPLAY_V7_INVENTORY_OWNERSHIP_FINAL",
-      fingerprint: "scope-fingerprint",
-      applyAuthorizationToken: "v8-authorization",
-      productionReleaseId: "2026-07-26-replay-01",
-    })).toBe(true);
+    expect(
+      rememberHistoricalReplayPreparation({
+        confirmationToken: "prepared-token",
+        safeSupplierIds: [8, 3],
+        frozenOptions: {
+          includeCompletedBatches: true,
+          includeFinalizedBales: false,
+        },
+        algorithmVersion: "HISTORICAL_COST_REPLAY_V7_INVENTORY_OWNERSHIP_FINAL",
+        fingerprint: "scope-fingerprint",
+        applyAuthorizationToken: "v8-authorization",
+        productionReleaseId: "2026-07-26-replay-01",
+      })
+    ).toBe(true);
 
-    expect(freezeHistoricalReplayApplyRequest(
-      "POST",
-      "/api/factory/raw-stock/recalc/historical-replay/apply",
-      { confirmationToken: "prepared-token", supplierIds: [999] }
-    )).toEqual({
+    expect(
+      freezeHistoricalReplayApplyRequest("POST", "/api/factory/raw-stock/recalc/historical-replay/apply", {
+        confirmationToken: "prepared-token",
+        supplierIds: [999],
+      })
+    ).toEqual({
       dryRun: false,
       confirmationToken: "prepared-token",
       supplierIds: [3, 8],
@@ -93,12 +95,8 @@ describe("Historical Replay V8 production readiness", () => {
   });
 
   it("does not add migration, replay, startup, or autonomous execution", () => {
-    const route = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts"
-    );
-    const service = read(
-      "server/services/factory/historical-replay/productionReadinessV8.ts"
-    );
+    const route = read("server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts");
+    const service = read("server/services/factory/historical-replay/productionReadinessV8.ts");
     expect(route).not.toMatch(/ALTER\s+TABLE|CREATE\s+TABLE|DROP\s+TABLE/i);
     expect(service).not.toMatch(/ALTER\s+TABLE|CREATE\s+TABLE|DROP\s+TABLE/i);
     expect(route).not.toContain("applyHistoricalCostReplay(");

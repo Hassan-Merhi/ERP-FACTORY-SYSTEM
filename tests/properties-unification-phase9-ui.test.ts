@@ -1,15 +1,20 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import {
   mayOfferRentalPaymentDelete,
   rentalPaymentDateLabel,
   rentalPaymentDeletionImpact,
 } from "../client/src/properties/config/rentalPaymentPresentation";
-import { receiptTotals, cashCents, nonCashCents } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
+import {
+  receiptTotals,
+  cashCents,
+  nonCashCents,
+} from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 import { getRentalModulePolicy } from "../client/src/properties/config/rentalModulePolicy";
 
-const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (path: string) => readModuleFamily(fileURLToPath(new URL(path, import.meta.url)));
 
 describe("Phase 9 rental payment UI parity", () => {
   it("shows accurate deletion impact by rental module without implying a Properties auto-transfer", () => {
@@ -45,13 +50,37 @@ describe("Phase 9 rental payment UI parity", () => {
   });
 
   it("preserves classification and cents from posted cash, billed and scheduled rows", () => {
-    const cash = { id: 1, paymentDate: "2026-11-01", amount: "25.50", voucherId: 10, cashAccountId: 20, postingStatus: "POSTED" };
-    const billing = { id: 2, paymentDate: "2026-11-01", amount: "10.00", voucherId: null, cashAccountId: null, postingStatus: "POSTED" };
-    const scheduled = { id: 3, paymentDate: "2026-12-01", amount: "20.00", voucherId: null, cashAccountId: null, postingStatus: "SCHEDULED" };
+    const cash = {
+      id: 1,
+      paymentDate: "2026-11-01",
+      amount: "25.50",
+      voucherId: 10,
+      cashAccountId: 20,
+      postingStatus: "POSTED",
+    };
+    const billing = {
+      id: 2,
+      paymentDate: "2026-11-01",
+      amount: "10.00",
+      voucherId: null,
+      cashAccountId: null,
+      postingStatus: "POSTED",
+    };
+    const scheduled = {
+      id: 3,
+      paymentDate: "2026-12-01",
+      amount: "20.00",
+      voucherId: null,
+      cashAccountId: null,
+      postingStatus: "SCHEDULED",
+    };
     expect(cashCents(cash)).toBe(2550);
     expect(nonCashCents(billing)).toBe(1000);
     expect(receiptTotals([cash, billing, scheduled])).toEqual({
-      cash: 2550, nonCash: 1000, scheduled: 2000, recorded: 5550,
+      cash: 2550,
+      nonCash: 1000,
+      scheduled: 2000,
+      recorded: 5550,
     });
   });
 
@@ -70,8 +99,8 @@ describe("Phase 9 rental payment UI parity", () => {
     expect(page).toContain("const isFullHistory = isHassanProperties && noFilters");
     expect(page).toContain("const copyIsFull = isFullHistory;");
     expect(page).toContain("fullHistory={copyIsFull}");
-    expect(page).toContain('onCopy={() => {');
-    expect(page).toContain('void (isFullHistory ? copyFullHistory() : copyHistory());');
+    expect(page).toContain("onCopy={() => {");
+    expect(page).toContain("void (isFullHistory ? copyFullHistory() : copyHistory());");
   });
 
   it("preserves the premium Properties table and existing readonly record protection", () => {

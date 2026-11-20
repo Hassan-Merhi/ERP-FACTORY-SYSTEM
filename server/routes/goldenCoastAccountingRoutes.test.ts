@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./goldenCoastAccountingRoutes.ts", import.meta.url), "utf8");
+// A split module is read together with the siblings extracted from it.
+const routeSource = readModuleFamily(new URL("./goldenCoastAccountingRoutes.ts", import.meta.url));
 const accessManifest = readFileSync(new URL("../../config/route-access-manifest.json", import.meta.url), "utf8");
 
 describe("Golden Coast Phase 1 route surface", () => {
