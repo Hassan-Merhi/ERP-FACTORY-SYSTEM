@@ -263,7 +263,7 @@ function CompanyWorkspaceBoundary({
 }) {
   const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();
 
-  if (companyLoading || !selectedCompany) {
+  if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) {
     return <AppLoadingState message="Switching company" />;
   }
 
