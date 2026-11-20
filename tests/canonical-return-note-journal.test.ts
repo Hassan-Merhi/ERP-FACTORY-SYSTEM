@@ -94,13 +94,15 @@ describe("canonical journal for return notes", () => {
       cashAccountType: "ledger",
       cashAccountId: ctx.cashAccountId,
       description: "one-cent credit-note create regression",
-      items: [{
-        stockItemId: ctx.stockItemIds[0],
-        locationId: ctx.locationId,
-        quantity: "1",
-        refundRate: "100.00",
-        inventoryCost: "99.99",
-      }],
+      items: [
+        {
+          stockItemId: ctx.stockItemIds[0],
+          locationId: ctx.locationId,
+          quantity: "1",
+          refundRate: "100.00",
+          inventoryCost: "99.99",
+        },
+      ],
     });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     const { rows } = await pool.query(
