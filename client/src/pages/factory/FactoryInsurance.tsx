@@ -1,8 +1,9 @@
-import { Plus, Trash2, DollarSign, Loader2, Receipt, Search, FileSpreadsheet } from "lucide-react";
+import { Plus, Trash2, DollarSign, Loader2, Receipt, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { MONTHS, YEARS } from "./factoryinsurance/utils";
@@ -147,19 +148,14 @@ export default function FactoryInsurance() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_56%_12%)]/85">
-        <div className="relative min-w-[220px] flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-            aria-hidden="true"
-          />
-          <Input
-            placeholder="Search by name, nationality, position..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 dark:border-slate-600 dark:bg-slate-900/80"
-            data-testid="input-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search by name, nationality, position..."
+          value={search}
+          onValueChange={setSearch}
+          wrapperClassName="min-w-[220px] flex-1"
+          className="h-11 rounded-xl border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/80"
+          data-testid="input-search"
+        />
         <div className="flex items-center gap-2 rounded-xl px-2 py-1">
           <Switch
             id="show-inactive"
