@@ -1,4 +1,29 @@
 export const factoryDispatchTranslations = [
+  // Factory loading agents and invoice lookup (also compatible with backend messages).
+  {
+    en: "Search customer, booking info, agent, container...",
+    ar: "ابحث عن العميل أو معلومات الحجز أو الوكيل أو الحاوية...",
+    fr: "Rechercher un client, une réservation, un agent ou un conteneur...",
+  },
+  { en: "New agent name", ar: "اسم الوكيل الجديد", fr: "Nom du nouvel agent" },
+  { en: "No agent", ar: "لا يوجد وكيل", fr: "Aucun agent" },
+  {
+    en: "Agent created but not assigned",
+    ar: "تم إنشاء الوكيل لكن لم يتم تعيينه",
+    fr: "Agent créé mais non attribué",
+  },
+  { en: "Could not create agent", ar: "تعذّر إنشاء الوكيل", fr: "Impossible de créer l’agent" },
+  { en: "Could not assign agent", ar: "تعذّر تعيين الوكيل", fr: "Impossible d’attribuer l’agent" },
+  {
+    en: "Agent name must be 1-200 characters",
+    ar: "يجب أن يتكوّن اسم الوكيل من 1 إلى 200 حرف",
+    fr: "Le nom de l’agent doit contenir entre 1 et 200 caractères",
+  },
+  {
+    en: "Only Admin, Owner or Developer can edit agent",
+    ar: "يمكن للمسؤول أو المالك أو المطوّر فقط تعديل الوكيل",
+    fr: "Seuls les administrateurs, propriétaires ou développeurs peuvent modifier l’agent",
+  },
   // Shared posting-account picker strings used by Factory and Retail payment flows.
   { en: "Original payment accounts", ar: "حسابات الدفع الأصلية", fr: "Comptes de paiement d’origine" },
   { en: "Unable to load posting accounts", ar: "تعذّر تحميل حسابات الترحيل", fr: "Impossible de charger les comptes de comptabilisation" },
