@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./ContainerFormBody.tsx
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,23 +69,14 @@ export function ContainerFormCharges({
           <Label className="whitespace-nowrap">
             Freight Expense Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
           </Label>
-          <Select
-            value={formData.freightAccountId || "__none__"}
-            onValueChange={(val) => setFormData((f) => ({ ...f, freightAccountId: val === "__none__" ? "" : val }))}
-          >
-            <SelectTrigger data-testid="select-freight-account">
-              <SelectValue placeholder="None" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">None</SelectItem>
-              {ledgerAccounts.map((acc) => (
-                <SelectItem key={acc.id} value={String(acc.id)}>
-                  {acc.name}
-                  {acc.code ? ` (${acc.code})` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={formData.freightAccountId || ""}
+ onChange={(val) => setFormData((f) => ({ ...f, freightAccountId: val }))}
+ placeholder={"None"}
+ testId={"select-freight-account"}
+ allowClear
+ />
         </div>
       </div>
       {parseFloat(formData.freight || "0") > 0 && (
@@ -147,25 +139,14 @@ export function ContainerFormCharges({
                 Credit Account{" "}
                 <span className="text-xs text-muted-foreground font-normal">(account that paid the freight)</span>
               </Label>
-              <Select
-                value={formData.freightOwnAccountId || "__none__"}
-                onValueChange={(val) =>
-                  setFormData((f) => ({ ...f, freightOwnAccountId: val === "__none__" ? "" : val }))
-                }
-              >
-                <SelectTrigger data-testid="select-freight-own-account">
-                  <SelectValue placeholder="Select account..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Select account...</SelectItem>
-                  {ledgerAccounts.map((acc) => (
-                    <SelectItem key={acc.id} value={String(acc.id)}>
-                      {acc.name}
-                      {acc.code ? ` (${acc.code})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={formData.freightOwnAccountId || ""}
+ onChange={(val) => setFormData((f) => ({ ...f, freightOwnAccountId: val }))}
+ placeholder={"Select account..."}
+ testId={"select-freight-own-account"}
+ allowClear
+ />
             </div>
           )}
           {formData.freightPaidBy === "supplier" && (
@@ -230,24 +211,15 @@ export function ContainerFormCharges({
                     ))}
                   </SelectContent>
                 </Select>
-                <Select
-                  key={`acc-${idx}`}
-                  value={line.ledgerAccountId || "__none__"}
-                  onValueChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val === "__none__" ? "" : val)}
-                >
-                  <SelectTrigger data-testid={`select-other-charge-account-${idx}`}>
-                    <SelectValue placeholder="No account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No account</SelectItem>
-                    {ledgerAccounts.map((acc) => (
-                      <SelectItem key={acc.id} value={String(acc.id)}>
-                        {acc.name}
-                        {acc.code ? ` (${acc.code})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+ key={`acc-${idx}`}
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={line.ledgerAccountId || ""}
+ onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
+ placeholder={"No account"}
+ testId={`select-other-charge-account-${idx}`}
+ allowClear
+ />
                 <Input
                   key={`nar-${idx}`}
                   value={line.narration}
