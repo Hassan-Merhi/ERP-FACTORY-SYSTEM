@@ -65,15 +65,15 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const multiple = props.mode === "multiple";
-  const values = multiple ? props.selectedValues : [props.value];
-  const selected = multiple ? null : props.options.find((option) => option.value === props.value);
+  const values = props.mode === "multiple" ? props.selectedValues : [props.value];
+  const selected = props.mode === "multiple" ? null : props.options.find((option) => option.value === props.value);
   const filtered = useMemo(
     () => filterAccountPickerChoices(props.options, query, props.maxResults ?? 250),
     [props.options, query, props.maxResults]
   );
   const selectedSet = new Set(values);
   const placeholder = props.placeholder ?? "Select account...";
-  const label = multiple
+  const label = props.mode === "multiple"
     ? values.length
       ? `${values.length} account${values.length === 1 ? "" : "s"} selected`
       : placeholder
@@ -167,7 +167,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
               </p>
             ) : null}
           </CommandList>
-          {(multiple ? values.length > 0 : props.allowClear && Boolean(props.value)) && (
+          {(props.mode === "multiple" ? values.length > 0 : props.allowClear && Boolean(props.value)) && (
             <div className="border-t p-2 text-right">
               <Button type="button" size="sm" variant="ghost" onClick={handleClear}>
                 {props.clearLabel ?? (multiple ? "Clear all" : "Clear account")}
