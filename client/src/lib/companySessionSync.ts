@@ -82,8 +82,26 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
     }
   };
 
-  const onResume = () => {
-    if (typeof document === "undefined" || document.visibilityState === "visible") onChange("resume");
+  // Window blur/focus also happens while navigating menus, dialogs and
+  // desktop apps. It is not proof the browser tab was suspended, and used to
+  // interrupt ERP work with repeated verification. A real browser-tab return
+  // has a hidden -> visible visibility transition. Cross-tab commit messages
+  // are still handled immediately via storage/BroadcastChannel below.
+  let wasHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") {
+      wasHidden = true;
+      return;
+    }
+    if (!wasHidden) return;
+    wasHidden = false;
+    onChange("resume");
+  };
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted) return;
+    wasHidden = false;
+    onChange("resume");
   };
 
   let channel: BroadcastChannel | null = null;
@@ -99,15 +117,13 @@ export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessi
   }
 
   window.addEventListener("storage", onStorage);
-  window.addEventListener("focus", onResume);
-  window.addEventListener("pageshow", onResume);
-  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onResume);
+  window.addEventListener("pageshow", onPageShow);
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibilityChange);
 
   return () => {
     channel?.close();
     window.removeEventListener("storage", onStorage);
-    window.removeEventListener("focus", onResume);
-    window.removeEventListener("pageshow", onResume);
-    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onResume);
+    window.removeEventListener("pageshow", onPageShow);
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibilityChange);
   };
 }
