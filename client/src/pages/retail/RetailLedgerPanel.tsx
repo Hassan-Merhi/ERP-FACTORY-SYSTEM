@@ -168,7 +168,7 @@ export function RetailLedgerPanel({
                 placeholder="No account (movements refused)"
                 ariaLabel={`${reason.label ?? reason.reasonCode} account`}
                 className="mt-1 h-9"
-              />     </Select>
+              />
             </div>
           ))}
           {recordChanges.allowed && (
