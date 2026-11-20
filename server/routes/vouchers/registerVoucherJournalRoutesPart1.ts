@@ -1,27 +1,23 @@
 // Extracted from ./voucherJournalRoutes.ts to keep that module under the source-size cap.
-import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express } from "express";
-import { errorBody, errorStatus } from "../../lib/httpHandlers";
-import { db } from "../../db";
-import { requireAuth, requireNonPOS } from "../../auth";
 import { z } from "zod";
 import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { journalBodyFields } from "./voucherWriteInputSchemas";
-import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
+import { errorBody, errorStatus } from "../../lib/httpHandlers";
+import { db } from "../../db";
+import { requireAuth, requireNonPOS } from "../../auth";
+import { erpRequestSourceId, sessionPostingActor } from "../../services/accounting/erpVoucherPosting";
 import {
-  erpRequestSourceId,
-  postManualVoucherTx,
-  sessionPostingActor,
-} from "../../services/accounting/erpVoucherPosting";
+  checkJournalVoucherInput,
+  JournalVoucherInputError,
+  postJournalVoucherTx,
+} from "../../services/accounting/journalVoucherPosting";
 import { logger } from "../../lib/logger";
 import { eq } from "drizzle-orm";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { factoryDaybookEntries as fde, factorySettings as fSettings } from "@shared/schema";
-import { erpRateToDaybookFxRateToUsd, normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
-import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
+import { erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { MoneyDecimal, toMoney } from "../../lib/money";
-import { journalBaseTotal, journalRate, journalTotals, syncJournalToOrderCharge } from "./syncJournalToOrderCharge";
 
 /** The journal form body. Active journals are posted by centralJournalCreateRoute.ts first. */
 const createJournalInput = {
@@ -66,115 +62,38 @@ export function registerVoucherJournalRoutesPart1(app: Express) {
           mainAccountType, // optional: account type for the main account (default: "ledger")
         } = req.body;
 
-        // Validate required fields
-        if (!voucherDate || !entries || !Array.isArray(entries) || entries.length === 0) {
-          return res.status(400).json({ message: "Missing required fields" });
+        // The journal itself (validation, rate, entries, posting, order charges,
+        // employee balances, audit) is the shared service, on one transaction.
+        // Required fields and balance are checked before any transaction opens.
+        try {
+          checkJournalVoucherInput({ voucherDate, entries, optional: optional === true });
+        } catch (error) {
+          if (error instanceof JournalVoucherInputError) return res.status(400).json({ message: error.message });
+          throw error;
         }
-
-        // Determine voucher currency and rate (CFA per USD convention for non-USD).
-        // totalDebits/totalCredits below are in the voucher's transaction currency (e.g. CFA).
-        const vCurrency = (currency as string | undefined) || "USD";
-        const vRateRaw = await assertApprovedZmwVoucherRate(
-          req.session.currentCompanyId!,
-          voucherDate,
-          vCurrency,
-          exchangeRate
-        );
-        const cfaPerUsd = journalRate(vCurrency, vRateRaw);
-
-        // Calculate total debits and credits in transaction currency
-        const totals = journalTotals(entries);
-
-        // Validate debits equal credits (for non-optional vouchers)
-        if (!optional && totals.debits.minus(totals.credits).abs().greaterThanOrEqualTo(0.01)) {
-          return res.status(400).json({ message: "Total debits must equal total credits" });
+        let result: { voucher: Awaited<ReturnType<typeof postJournalVoucherTx>>["voucher"]; entries: unknown[] };
+        try {
+          const posted = await db.transaction((tx) =>
+            postJournalVoucherTx(tx, {
+              companyId: req.session.currentCompanyId!,
+              voucherDate,
+              entries,
+              notes: notes || null,
+              optional: optional === true,
+              currency: (currency as string | undefined) || "USD",
+              exchangeRate,
+              effectiveDate: effectiveDate || null,
+              sourceType: "manual-journal-legacy",
+              sourceId: `${req.session.currentCompanyId}:${erpRequestSourceId(req)}`,
+              postingActor: sessionPostingActor(req, "Journal creation"),
+              auditActor: { userId: req.session.userId, username: req.session.username },
+            })
+          );
+          result = { voucher: posted.voucher, entries: posted.entries };
+        } catch (error) {
+          if (error instanceof JournalVoucherInputError) return res.status(400).json({ message: error.message });
+          throw error;
         }
-
-        // vouchers.totalAmount stores the historical base (USD) amount.
-        // For CFA: baseTotalMax = max(totalDebits, totalCredits) / cfaPerUsd
-        const baseTotalMax = journalBaseTotal(vCurrency, totals, cfaPerUsd);
-
-        // Use database transaction for atomic operation
-        const result = await db.transaction(async (tx) => {
-          const voucherEntriesToCreate = [];
-
-          // Create entries.
-          // Each entry.amount is the original transaction-currency (CFA) value.
-          // normalizeVoucherEntryAmounts() produces the historical base (USD) amounts
-          // for debitAmount / creditAmount (backward compat) and fills all new fields.
-          for (const entry of entries) {
-            const amount: string = entry.amount;
-            const narration = entry.narration || null;
-
-            // Determine account field
-            const accountField = isVoucherAccountType(entry.accountType)
-              ? voucherEntryAccountLink(entry.accountType, entry.accountId)
-              : {};
-
-            const norm = normalizeVoucherEntryAmounts({
-              transactionCurrency: vCurrency,
-              baseCurrency: "USD",
-              transactionDebitAmount: entry.type === "DR" ? amount : "0",
-              transactionCreditAmount: entry.type === "CR" ? amount : "0",
-              historicalRate: vRateRaw,
-            });
-
-            voucherEntriesToCreate.push({
-              ...accountField,
-              debitAmount: norm.debitAmount,
-              creditAmount: norm.creditAmount,
-              transactionCurrency: norm.transactionCurrency,
-              transactionDebitAmount: norm.transactionDebitAmount,
-              transactionCreditAmount: norm.transactionCreditAmount,
-              baseDebitAmount: norm.baseDebitAmount,
-              baseCreditAmount: norm.baseCreditAmount,
-              historicalExchangeRate: norm.historicalExchangeRate,
-              rateConvention: norm.rateConvention,
-              narration,
-            });
-          }
-
-          // Phase 22 (B): an active journal posts through the central engine (number
-          // allocated there); an optional one keeps a direct insert with an
-          // allocated number (it is off the ledger and may be unbalanced).
-          const posted = await postManualVoucherTx(tx, {
-            companyId: req.session.currentCompanyId!,
-            voucherType: "Journal",
-            voucherDate,
-            description: notes || null,
-            currency: vCurrency,
-            exchangeRate: vRateRaw ? String(vRateRaw) : null,
-            effectiveDate: effectiveDate || null,
-            optional: optional === true,
-            optionalTotalAmount: baseTotalMax.toFixed(6),
-            entries: voucherEntriesToCreate,
-            source: { type: "manual-journal-legacy", id: `${req.session.currentCompanyId}:${erpRequestSourceId(req)}` },
-            actor: sessionPostingActor(req, "Journal creation"),
-          });
-          if (posted.replayed) return { voucher: posted.voucher, entries: posted.entries };
-          const createdVoucher = posted.voucher;
-          const createdEntries = posted.entries;
-          // Sync order charges automatically, in this transaction.
-          await syncJournalToOrderCharge(tx, req.session.currentCompanyId!, createdEntries, createdVoucher.id);
-
-          // Wave 12: employee balances and the audit row are written in this transaction.
-          if (!createdVoucher.optional) {
-            await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
-          }
-          await writeVoucherAuditTx(tx, {
-            actor: {
-              userId: req.session.userId,
-              username: req.session.username,
-              companyId: req.session.currentCompanyId,
-            },
-            action: "create",
-            voucherId: createdVoucher.id,
-            before: null,
-            after: { voucher: createdVoucher, entries: createdEntries },
-          });
-
-          return { voucher: createdVoucher, entries: createdEntries };
-        });
 
         // Write to factory daybook if this company has factory settings
         try {
@@ -227,9 +146,9 @@ export function registerVoucherJournalRoutesPart1(app: Express) {
           let waAccountId = mainAccountId ? Number(mainAccountId) : null;
           let waAccountType = mainAccountType ? String(mainAccountType) : "ledger";
           if (!waAccountId) {
-            const firstLedgerDr = entries.find(
-              (e) => e.accountType === "ledger" && e.type === "DR" && Number(e.accountId) > 0
-            );
+            const firstLedgerDr = (
+              entries as Array<{ accountType?: unknown; type?: unknown; accountId?: unknown }>
+            ).find((e) => e.accountType === "ledger" && e.type === "DR" && Number(e.accountId) > 0);
             if (firstLedgerDr) {
               waAccountId = Number(firstLedgerDr.accountId);
               waAccountType = "ledger";
