@@ -9,11 +9,57 @@ import { invalidateBandwidthReadCaches } from "./bandwidthInvalidationPolicy";
 let companyId: number | null = null;
 let revision = 0;
 let transitioning = false;
+let serverCompanyRevision: string | null = null;
 
 export interface CompanyReadSnapshot {
   readonly companyId: number | null;
   readonly revision: number;
   readonly transitioning: boolean;
+}
+
+export interface CompanyMutationSnapshot extends CompanyReadSnapshot {
+  readonly serverRevision: string;
+}
+
+const COMPANY_WRITE_EXEMPT_PATHS = [
+  /^\/api\/auth(?:\/|$)/,
+  /^\/api\/csrf-token\/?$/,
+  /^\/api\/(?:user-preferences|language-preference|user-presence|build-info|health)(?:\/|$)/,
+];
+
+export function isCompanyOwnedApiMutation(method: string, pathname: string): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) &&
+    pathname.startsWith("/api/") &&
+    !COMPANY_WRITE_EXEMPT_PATHS.some((pattern) => pattern.test(pathname));
+}
+
+/** Only server-verified revisions may authorize a company-owned browser write. */
+export function rememberVerifiedServerCompanyRevision(company: number, revision?: string | null): void {
+  if (company !== companyId || transitioning) return;
+  serverCompanyRevision =
+    typeof revision === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(revision) ? revision : "legacy";
+}
+
+export function captureCompanyMutationSnapshot(method: string, pathname: string): CompanyMutationSnapshot | null {
+  if (!isCompanyOwnedApiMutation(method, pathname) || companyId === null) return null;
+  const snapshot = captureCompanyReadSnapshot();
+  assertCompanyReadSnapshot(snapshot);
+  if (!serverCompanyRevision) throw companyReadAbortError();
+  return { ...snapshot, serverRevision: serverCompanyRevision };
+}
+
+export function assertCompanyMutationSnapshot(snapshot: CompanyMutationSnapshot | null): void {
+  if (!snapshot) return;
+  assertCompanyReadSnapshot(snapshot);
+  if (snapshot.serverRevision !== serverCompanyRevision) throw companyReadAbortError();
+}
+
+export function addCompanyMutationHeaders(headers: Headers, snapshot: CompanyMutationSnapshot | null): void {
+  if (!snapshot?.companyId) return;
+  // Do not rewrite headers from an earlier queued operation; the server must
+  // reject those old headers if the session has since changed.
+  if (!headers.has("X-Expected-Company-Id")) headers.set("X-Expected-Company-Id", String(snapshot.companyId));
+  if (!headers.has("X-Expected-Company-Revision")) headers.set("X-Expected-Company-Revision", snapshot.serverRevision);
 }
 
 const GLOBAL_READ_ENDPOINTS = [
@@ -72,6 +118,7 @@ export function activateCompanyCacheScope(nextCompanyId: number): void {
   const changed = companyId !== nextCompanyId;
   const wasTransitioning = transitioning;
   companyId = nextCompanyId;
+  if (changed) serverCompanyRevision = null;
   transitioning = false;
   // Initial adoption of an already-active server session should not abort
   // its startup fetches. A different company or a verification must fence.
@@ -94,4 +141,5 @@ export function _testOnly_resetCompanyCacheScope(): void {
   companyId = null;
   revision = 0;
   transitioning = false;
+  serverCompanyRevision = null;
 }
