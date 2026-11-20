@@ -138,9 +138,8 @@ describe("equity sales-cash settlement refusals", () => {
       expect([denied.status, denied.body.code]).toEqual([403, "SP_PERMISSION_DENIED"]);
       await closeBooks(w, "2026-12-31");
       const closed = await settle(w);
-      // BUG pinned: unlike Phase 9, this route does not map the closed-period
-      // guard to 409 ACCOUNTING_PERIOD_CLOSED; it falls through to a 500.
-      expect([closed.status, closed.body.code]).toEqual([500, undefined]);
+      // Mapped like the Phase 9 route: 409 ACCOUNTING_PERIOD_CLOSED, not a 500.
+      expect([closed.status, closed.body.code]).toEqual([409, "ACCOUNTING_PERIOD_CLOSED"]);
       expect(closed.body.message).toMatch(/closed through 2026-12-31, so an entry dated 2026-10-15/);
       expect(await vouchers(w)).toBe(1);
     });

@@ -116,11 +116,14 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
 
         // Remove the old capacity contribution first. If the new article is not
         // allowed, throwing below rolls this deletion and the status change back.
+        // The order row goes before the status: while the bale is still on this
+        // completed order, factory_bale_completed_order_stock_guard refuses to
+        // put it back IN_STOCK (BALE_ON_COMPLETED_ORDER).
+        await tx.delete(customerOrderBales).where(eq(customerOrderBales.id, orderBaleId));
         await tx
           .update(factoryBales)
           .set({ status: "IN_STOCK", updatedAt: new Date() })
           .where(eq(factoryBales.id, oldOrderBale.baleId));
-        await tx.delete(customerOrderBales).where(eq(customerOrderBales.id, orderBaleId));
 
         if (order.proformaIdUsed) {
           const capacity = await getProformaCapacitySnapshot(tx, {

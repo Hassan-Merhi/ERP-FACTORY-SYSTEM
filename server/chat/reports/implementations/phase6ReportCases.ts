@@ -377,12 +377,15 @@ export async function runPhase6CustomerList({
         SELECT c.code, c.legal_name, c.phone, c.payment_terms_days, c.active,
           COALESCE(
             CAST(c.opening_balance AS numeric) * CASE WHEN c.opening_balance_side = 'Dr' THEN 1 ELSE -1 END
-            + COALESCE(SUM(CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric)), 0),
+            + COALESCE(SUM(CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric))
+                FILTER (WHERE v.id IS NOT NULL), 0),
             CAST(c.opening_balance AS numeric) * CASE WHEN c.opening_balance_side = 'Dr' THEN 1 ELSE -1 END
           ) AS net_balance
         FROM customers c
         LEFT JOIN ledger_accounts la ON la.id = c.ledger_account_id AND la.deleted_at IS NULL
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
+        -- Entries of deleted or optional vouchers find no v row and are left
+        -- out of the SUM by its FILTER; the customer itself is still listed.
         LEFT JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL AND v.optional = false
         WHERE c.company_id = ${companyId}
           AND c.deleted_at IS NULL

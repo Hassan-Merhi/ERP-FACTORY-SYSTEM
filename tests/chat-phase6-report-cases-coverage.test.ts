@@ -235,8 +235,7 @@ describe("phase 6 supplier and customer lists", () => {
       const filtered = await runPhase6CustomerList({ ...base, params: { queryType: "x", entityName: "zara" } });
       expect([filtered.title, filtered.table.rows.length]).toEqual(["Customers: zara", 1]);
 
-      // BUG pinned: the vouchers join is a LEFT JOIN with the deleted/optional
-      // filters in its ON clause, so entries of a deleted voucher still count.
+      // Entries of a deleted or an optional voucher do not count toward the balance.
       const removed = await w.one(
         `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
          VALUES ($1, $2, 'Journal', '2026-06-02', 1000) RETURNING id`,
@@ -247,7 +246,30 @@ describe("phase 6 supplier and customer lists", () => {
         [removed, ledger]
       );
       await w.q(`UPDATE vouchers SET deleted_at = now() WHERE id = $1`, [removed]);
-      const afterDelete = await runPhase6CustomerList({ ...base, params: { queryType: "x", entityName: "amina" } });
-      expect(afterDelete.table.rows[0][4]).toBe("1125.00 Dr");
+      const optional = await w.one(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, optional)
+         VALUES ($1, $2, 'Journal', '2026-06-03', 500, TRUE) RETURNING id`,
+        [w.companyId, `${w.tag}V3`]
+      );
+      await w.q(
+        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, 0, 500)`,
+        [optional, ledger]
+      );
+      const after = await runPhase6CustomerList({ ...base, params: { queryType: "x", entityName: "amina" } });
+      expect(after.table.rows[0][4]).toBe("125.00 Dr");
+      expect(after.stats[1]).toMatchObject({ value: "125.00" });
+
+      // A customer whose ledger holds only such entries keeps its opening balance.
+      const zaraLedger = await w.one(
+        `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, 'AR Zara', 'Asset') RETURNING id`,
+        [w.companyId, `${w.tag}AZ`]
+      );
+      await w.q(
+        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, 500, 0)`,
+        [optional, zaraLedger]
+      );
+      await w.q(`UPDATE customers SET ledger_account_id = $2 WHERE id = $1`, [zara, zaraLedger]);
+      const onlyExcluded = await runPhase6CustomerList({ ...base, params: { queryType: "x", entityName: "zara" } });
+      expect(onlyExcluded.table.rows[0][4]).toBe("40.00 Cr");
     }));
 });

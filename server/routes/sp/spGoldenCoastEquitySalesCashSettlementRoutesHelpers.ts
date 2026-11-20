@@ -2,6 +2,7 @@
 import type { Request, Response } from "express";
 import Decimal from "decimal.js";
 import { db } from "../../db";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -36,6 +37,11 @@ export function respondKnownError(res: Response, error: unknown): boolean {
   }
   if (error instanceof PostingValidationError) {
     res.status(400).json({ code: error.code, message: releaseDebtEnglish(error.message) });
+    return true;
+  }
+  const closed = closedPeriodErrorResponse(error);
+  if (closed) {
+    res.status(closed.status).json(closed.body);
     return true;
   }
   return false;

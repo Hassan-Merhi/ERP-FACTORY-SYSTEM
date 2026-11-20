@@ -31,11 +31,7 @@ async function stockBale(
   return { id, reference };
 }
 
-/**
- * A completed loading whose loaded bales are still IN_STOCK (as V5 loadings
- * keep them). Only then can the exchange restore the old bale: see the pinned
- * BALE_ON_COMPLETED_ORDER bug below.
- */
+/** A completed loading whose loaded bales are still IN_STOCK (as V5 loadings keep them). */
 async function completedLoading(w: FactoryWorld, prices: string[], status = "FINALIZED") {
   const loading = await loadingWithBales(w, prices, "LOADING");
   await w.q(`UPDATE factory_bales SET status = 'IN_STOCK' WHERE id = ANY($1::int[])`, [
@@ -176,23 +172,54 @@ describe("exchange a bale on a finalized order", () => {
     }));
 });
 
-describe("exchange on a sold bale (pinned bug)", () => {
-  // BUG: exchange.ts restores the old bale to IN_STOCK (line ~119) before it
-  // deletes the customer_order_bales row, so factory_bale_completed_order_stock_guard
-  // sees the bale still on a FINALIZED/VERIFIED order and rejects the swap. Any
-  // order whose bales were marked SOLD can never be exchanged.
-  it("is rejected by the completed-order stock guard and changes nothing", () =>
+describe("exchange on a sold bale", () => {
+  // The order row is deleted before the old bale goes back IN_STOCK, so
+  // factory_bale_completed_order_stock_guard no longer sees it on the
+  // completed order (it used to refuse with BALE_ON_COMPLETED_ORDER).
+  it("swaps a SOLD bale on a finalized order and restores the old bale to stock", () =>
     withFactoryWorld(async (w) => {
       const { orderId, bales } = await loadingWithBales(w, ["10.00"], "FINALIZED");
       await w.q(`UPDATE factory_bales SET status = 'SOLD' WHERE id = $1`, [bales[0].baleId]);
       const replacement = await stockBale(w, "ART-A");
-      const before = await snapshot(w, orderId);
       const res = await exchange(w, orderId, {
         orderBaleId: bales[0].orderBaleId,
         newBaleReference: replacement.reference,
       });
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/update "factory_bales"/);
+      expect(res.status).toBe(200);
+      expect(res.body.bales.map((b: { baleId: number }) => b.baleId)).toEqual([replacement.id]);
+      expect(Number(res.body.bales[0].priceUsed)).toBe(10);
+      const statuses = await w.q<{ status: string }>(
+        `SELECT status FROM factory_bales WHERE id = ANY($1::int[]) ORDER BY id`,
+        [[bales[0].baleId, replacement.id]]
+      );
+      expect(statuses.map((s) => s.status)).toEqual(["IN_STOCK", "SOLD"]);
+    }));
+
+  it("still rolls back the removal and the status change when the swap is refused", () =>
+    withFactoryWorld(async (w) => {
+      const { orderId, bales, customerId } = await loadingWithBales(w, ["10.00"], "FINALIZED");
+      await w.q(`UPDATE factory_bales SET status = 'SOLD' WHERE id = $1`, [bales[0].baleId]);
+      const proformaId = await w.one(
+        `INSERT INTO customer_proformas (company_id, customer_id, name, destination, is_active)
+         VALUES ($1, $2, 'Sold PF', 'MALI', TRUE) RETURNING id`,
+        [w.companyId, customerId]
+      );
+      await w.q(
+        `INSERT INTO customer_proforma_lines (proforma_id, article_code, product_name, quantity, price_per_bale)
+         VALUES ($1, 'ART-A', 'ART-A', 1, '10.00')`,
+        [proformaId]
+      );
+      await w.q(`UPDATE customer_orders SET proforma_id_used = $1 WHERE id = $2`, [proformaId, orderId]);
+      const offList = await stockBale(w, "ART-Z");
+      const before = await snapshot(w, orderId);
+      const res = await exchange(w, orderId, {
+        orderBaleId: bales[0].orderBaleId,
+        newBaleReference: offList.reference,
+      });
+      expect([res.status, res.body.message]).toEqual([
+        500,
+        "Replacement article ART-Z is not requested on the linked proforma",
+      ]);
       expect(await snapshot(w, orderId)).toEqual(before);
     }));
 });
