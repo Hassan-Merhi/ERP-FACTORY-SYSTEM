@@ -12,7 +12,7 @@ import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
 import { makeKey, money, readJson, type RetailSale } from "./retailPosTypes";
 import {
   paymentFromAccount,
-  RetailPaymentAccountOptions,
+  RetailPaymentAccountPicker,
   type RetailPaymentAccounts,
 } from "./RetailPaymentAccountSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -383,15 +383,14 @@ export function RetailReturnDialog({
                 </SelectContent>
               </Select>
               {destination === "account" && (
-                <select
-                  aria-label="Refund cash or bank account"
-                  className="mt-2 h-9 w-full rounded-md border bg-background px-3 text-sm"
+                <RetailPaymentAccountPicker
+                  accounts={accounts}
                   value={refundAccount}
-                  onChange={(event) => setRefundAccount(event.target.value)}
-                  data-testid="retail-refund-account"
-                >
-                  <RetailPaymentAccountOptions accounts={accounts} />
-                </select>
+                  onValueChange={setRefundAccount}
+                  ariaLabel="Refund cash or bank account"
+                  className="mt-2 h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  testId="retail-refund-account"
+                />       </select>
               )}
               {sale.customerId && (
                 <p className="text-xs text-muted-foreground">
