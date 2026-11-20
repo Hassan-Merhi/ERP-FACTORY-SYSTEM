@@ -19,7 +19,7 @@ interface CompanySessionFollowerOptions {
   switchQueueRef: RefObject<CompanySwitchQueue | null>;
   externalChangeObservedRef: RefObject<boolean>;
   /** Hide the current workspace before any session probe can resolve. */
-  onTransitionStart: (signal: CompanySessionSignal) => void;
+  onTransitionStart: (signal: CompanySessionSignal | "hint") => void;
   /** Reveal the workspace only after the server scope was verified. */
   onTransitionVerified: () => void;
   onVerifiedScope: (companyId: number, revision?: string | null) => void;
@@ -128,14 +128,16 @@ export function useCompanySessionFollower({
       // During first activation the entire app is already hidden. Its startup
       // path reconciles the server, so do not introduce a permanent second gate.
       if (!selectedCompanyRef.current) return;
-      // A notification is only a hint, even when it names a new company.
-      // Cover the view first; only a confirmed server mismatch may discard
-      // drafts, dialogs, and local state.
-      onTransitionStart("resume");
+      // A cross-tab commit hint needs immediate privacy protection. Ordinary
+      // tab resumes keep reads/writes fenced but delay the visible cover; only
+      // a confirmed mismatch discards drafts and changes the workspace.
+      onTransitionStart(signal === "selection" ? "hint" : "resume");
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
       if (inProgress) {
-        rerunRequested = true;
+        // A second focus/visibility event during the same in-flight resume
+        // is not a new session change; avoid a self-sustaining check loop.
+        if (signal === "selection") rerunRequested = true;
         return;
       }
       if (debounceTimer !== null) return;
