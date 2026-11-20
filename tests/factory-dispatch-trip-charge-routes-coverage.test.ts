@@ -279,12 +279,10 @@ describe("trip charge edit and removal", () => {
         .send({ ...(await fingerprints(w, orderId, dispatchId)), expectedChargeFingerprint: "x", charge });
       expect([stale.status, stale.body.code]).toEqual([409, "FINANCIAL_PREVIEW_CHANGED"]);
 
-      const edited = await w.agent
-        .patch(`${url}/financial-charges/${chargeId}`)
-        .send({
-          ...(await fingerprints(w, orderId, dispatchId)),
-          charge: { ...charge, amount: "12.50", notes: "updated" },
-        });
+      const edited = await w.agent.patch(`${url}/financial-charges/${chargeId}`).send({
+        ...(await fingerprints(w, orderId, dispatchId)),
+        charge: { ...charge, amount: "12.50", notes: "updated" },
+      });
       expect(edited.status).toBe(200);
       expect(edited.body).toEqual({ updated: true });
       const [row] = await w.q(`SELECT amount::text AS amount, notes FROM factory_dispatch_trip_charges WHERE id = $1`, [
