@@ -120,6 +120,34 @@ describe("Phase 5 searchable account picker regression coverage", () => {
     expect(screen.getAllByRole("option", { name: "Café - Rent" })).toHaveLength(2);
   });
 
+  it("selects the highlighted account with keyboard arrows and Enter", () => {
+    render(<SelectionHarness />);
+    fireEvent.click(screen.getByTestId("phase5-account"));
+    const search = screen.getByPlaceholderText("Search account name...");
+    fireEvent.change(search, { target: { value: "Gross" } });
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByTestId("phase5-selected").textContent).toBe("ledger:5");
+  });
+
+  it("renders a historical group label without offering it as a new posting choice", () => {
+    const onChange = vi.fn();
+    render(
+      <UnifiedAccountPicker
+        options={[{ value: "ledger:3", name: "Operating Cash" }]}
+        value="ledger:99"
+        selectedFallbackName="Old Group Heading"
+        onChange={onChange}
+        testId="historical-account"
+      />
+    );
+    expect(screen.getByTestId("historical-account").textContent).toContain("Old Group Heading");
+    fireEvent.click(screen.getByTestId("historical-account"));
+    expect(screen.queryByRole("option", { name: "Old Group Heading" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "Operating Cash" }));
+    expect(onChange).toHaveBeenCalledWith("ledger:3");
+  });
+
   it("preserves independent multi-account selections and clear-all behavior", () => {
     function Multiple() {
       const [values, setValues] = useState<string[]>([]);
