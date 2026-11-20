@@ -204,7 +204,7 @@ export function registerVoucherUpdateRoutes(app: Express) {
           await assertPostingLedgerLeavesTx(
             tx,
             existingVoucher.companyId,
-            targets.flatMap((target) => target.ledgerAccountId == null ? [] : [target.ledgerAccountId])
+            targets.flatMap((target) => (target.ledgerAccountId == null ? [] : [target.ledgerAccountId]))
           );
           await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
           for (const [index, entry] of (req.body.entries as ReplacementEntryInput[]).entries()) {

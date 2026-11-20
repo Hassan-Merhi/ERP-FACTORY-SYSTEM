@@ -68,12 +68,12 @@ export function PostAccountingPreviewDialog({
               Cash Account to Credit <span className="text-destructive">*</span>
             </Label>
             <UnifiedAccountPicker
-                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={postCashAccountId}
-                onChange={setPostCashAccountId}
-                placeholder={"Select cash account"}
-                testId={"select-post-cash-account"}
-              />
+              options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+              value={postCashAccountId}
+              onChange={setPostCashAccountId}
+              placeholder={"Select cash account"}
+              testId={"select-post-cash-account"}
+            />
           </div>
 
           {unvoucheredLoading ? (

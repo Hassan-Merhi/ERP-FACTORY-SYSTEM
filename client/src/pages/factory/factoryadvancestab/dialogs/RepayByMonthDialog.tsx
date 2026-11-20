@@ -86,12 +86,12 @@ export function RepayByMonthDialog({
               Cash Account <span className="text-destructive">*</span>
             </Label>
             <UnifiedAccountPicker
-                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={repayByMonthForm.cashAccountId}
-                onChange={(v) => setRepayByMonthForm((p) => ({ ...p, cashAccountId: v }))}
-                placeholder={"Select cash account"}
-                testId={"select-rbm-cash-account"}
-              />
+              options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+              value={repayByMonthForm.cashAccountId}
+              onChange={(v) => setRepayByMonthForm((p) => ({ ...p, cashAccountId: v }))}
+              placeholder={"Select cash account"}
+              testId={"select-rbm-cash-account"}
+            />
           </div>
         </div>
 

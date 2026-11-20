@@ -241,7 +241,10 @@ export function ErpPOImportCardSection({
                   <div className="space-y-1">
                     <Label>Parent Freight Account *</Label>
                     <UnifiedAccountPicker
-                      options={parentFreightAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                      options={parentFreightAccounts.map((account) => ({
+                        value: String(account.id),
+                        name: account.name,
+                      }))}
                       value={freightParentAccountId}
                       onChange={setFreightParentAccountId}
                       placeholder="Select account..."

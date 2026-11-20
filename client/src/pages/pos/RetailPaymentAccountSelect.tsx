@@ -14,7 +14,9 @@ export function paymentAccountValue(payment: RetailPaymentDraft): string {
 }
 
 export function paymentFromAccount(
-  selection: string, amount: number, accounts: RetailPaymentAccounts
+  selection: string,
+  amount: number,
+  accounts: RetailPaymentAccounts
 ): RetailPaymentDraft {
   if (selection === "credit") return { method: "credit", amount, tenderedAmount: null };
   const [kind, rawId] = selection.split(":");

@@ -114,13 +114,7 @@ function StockInSalesReportSummary() {
             data-testid="period-filter-stock-in-sales-report"
           />
         }
-        quick={
-          <SearchField
-            placeholder="Search items..."
-            value={m.searchTerm}
-            onValueChange={m.setSearchTerm}
-          />
-        }
+        quick={<SearchField placeholder="Search items..." value={m.searchTerm} onValueChange={m.setSearchTerm} />}
         activeCount={m.stockInSalesActiveFilterCount}
         onClear={m.clearFilters}
         canClear={m.stockInSalesActiveFilterCount > 0 || !!m.searchTerm || m.periodFilter.preset !== "this_year"}

@@ -34,7 +34,7 @@ export function registerPosSalesReadRoutes(app: Express) {
             isNull(ledgerAccounts.deletedAt),
             eq(ledgerAccounts.active, true),
             inArray(ledgerAccounts.accountType, ["Cash", "Expense", "Direct Expense", "Indirect Expense"]),
-             ledgerPostingLeafCondition(companyId)
+            ledgerPostingLeafCondition(companyId)
           )
         )
         .orderBy(asc(ledgerAccounts.name));

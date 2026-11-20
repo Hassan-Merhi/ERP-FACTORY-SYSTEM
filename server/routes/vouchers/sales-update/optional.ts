@@ -111,7 +111,7 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
           await assertPostingLedgerLeavesTx(
             tx,
             lockedVoucher.companyId,
-            activationTargets.flatMap((entry) => entry.ledgerAccountId == null ? [] : [entry.ledgerAccountId])
+            activationTargets.flatMap((entry) => (entry.ledgerAccountId == null ? [] : [entry.ledgerAccountId]))
           );
         }
 

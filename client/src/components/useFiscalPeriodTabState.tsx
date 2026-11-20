@@ -252,13 +252,13 @@ export function FiscalPeriodTabCardSection({
               <FormItem>
                 <FormLabel>Retained Earnings Account *</FormLabel>
                 <UnifiedAccountPicker
-                    value={field.value}
-                    onChange={field.onChange}
-                    options={equityAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                    placeholder={isLoadingAccounts ? "Loading accounts..." : "Select equity account"}
-                    disabled={!isAuthorized || closePeriodMutation.isPending || isLoadingAccounts}
-                    testId="select-retained-earnings"
-                  />
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={equityAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                  placeholder={isLoadingAccounts ? "Loading accounts..." : "Select equity account"}
+                  disabled={!isAuthorized || closePeriodMutation.isPending || isLoadingAccounts}
+                  testId="select-retained-earnings"
+                />
                 <FormDescription>Net income will be transferred to this account</FormDescription>
                 <FormMessage />
               </FormItem>

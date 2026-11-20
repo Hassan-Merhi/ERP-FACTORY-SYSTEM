@@ -277,12 +277,19 @@ export function PostOffloadDialog(props: PostOffloadDialogProps) {
                     <div className="col-span-2 space-y-1">
                       <label className="text-sm font-medium">Account (optional)</label>
                       <UnifiedAccountPicker
-                    options={[{ value: "__none__", name: "None" }, ...ledgerAccounts.filter((a) => a.isPostingLeaf !== false).map((a) => ({ value: String(a.id), name: String(a.name ?? "") }))]}
-                    value={editLedgerId || "__none__"}
-                    selectedFallbackName={ledgerAccounts.find((a) => String(a.id) === editLedgerId)?.name?.toString()}
-                    onChange={(v) => setEditLedgerId(v === "__none__" ? "" : v)}
-                    placeholder={"Select account (optional)"}
-                    />
+                        options={[
+                          { value: "__none__", name: "None" },
+                          ...ledgerAccounts
+                            .filter((a) => a.isPostingLeaf !== false)
+                            .map((a) => ({ value: String(a.id), name: String(a.name ?? "") })),
+                        ]}
+                        value={editLedgerId || "__none__"}
+                        selectedFallbackName={ledgerAccounts
+                          .find((a) => String(a.id) === editLedgerId)
+                          ?.name?.toString()}
+                        onChange={(v) => setEditLedgerId(v === "__none__" ? "" : v)}
+                        placeholder={"Select account (optional)"}
+                      />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <label className="text-sm font-medium">Date</label>

@@ -38,7 +38,9 @@ export function ParentCreditAccountSelect({ company }: { company: Pick<Company, 
     queryKey: ["/api/ledger-accounts?profile=picker", company.id],
     queryFn: async () => {
       try {
-        const res = await fetch(`/api/ledger-accounts?profile=picker&companyId=${company.id}`, { credentials: "include" });
+        const res = await fetch(`/api/ledger-accounts?profile=picker&companyId=${company.id}`, {
+          credentials: "include",
+        });
         if (!res.ok) return [];
         return res.json();
       } catch {

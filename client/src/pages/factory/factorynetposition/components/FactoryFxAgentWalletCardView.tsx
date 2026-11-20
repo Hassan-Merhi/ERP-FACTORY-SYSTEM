@@ -110,16 +110,16 @@ export function FactoryFxAgentWalletCard(props: { asOf: string; readOnly: boolea
                 {scopeAccountId == null && <h4 className="text-sm font-semibold">Choose agent</h4>}
                 {scopeAccountId == null && (
                   <UnifiedAccountPicker
-                      value={String(active?.wallet.id || "")}
-                      onChange={setWalletId}
-                      options={visibleWallets.map((item) => ({
-                        value: String(item.wallet.id),
-                        name: item.wallet.accountName,
-                      }))}
-                      placeholder="Choose agent"
-                      ariaLabel="Choose agent"
-                      className="h-10"
-                    />
+                    value={String(active?.wallet.id || "")}
+                    onChange={setWalletId}
+                    options={visibleWallets.map((item) => ({
+                      value: String(item.wallet.id),
+                      name: item.wallet.accountName,
+                    }))}
+                    placeholder="Choose agent"
+                    ariaLabel="Choose agent"
+                    className="h-10"
+                  />
                 )}
                 {!!active && (
                   <p className="text-xs text-muted-foreground">

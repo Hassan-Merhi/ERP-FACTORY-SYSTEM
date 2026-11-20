@@ -14,7 +14,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-
 import { FactoryWorkerFormFields } from "./FactoryWorkerFormFields";
 import { PersonFormDialog } from "../people/PersonFormDialog";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";

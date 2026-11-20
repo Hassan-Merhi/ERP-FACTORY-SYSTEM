@@ -227,7 +227,7 @@ export async function postErpEntriesTx(tx: DbTransaction, input: ErpEntriesPosti
     throw new PostingValidationError(
       "HADI_LINKED_RENT_DUPLICATE_EXPENSE_BLOCKED",
       "HADI rent credited to the Properties owner/settlement account must not debit Rent Expense again. " +
-      "Reconcile the original rent accrual first and settle the valid Accrued Rent Payable entry instead."
+        "Reconcile the original rent accrual first and settle the valid Accrued Rent Payable entry instead."
     );
   }
   const total = input.entries.reduce((sum, entry) => sum.plus(toMoney(entry.debitAmount)), new MoneyDecimal(0));
@@ -355,7 +355,7 @@ export async function postManualVoucherTx(
   await assertPostingLedgerLeavesTx(
     tx,
     input.companyId,
-    input.entries.flatMap((entry) => entry.ledgerAccountId == null ? [] : [Number(entry.ledgerAccountId)])
+    input.entries.flatMap((entry) => (entry.ledgerAccountId == null ? [] : [Number(entry.ledgerAccountId)]))
   );
   const [voucher] = await tx
     .insert(vouchers)

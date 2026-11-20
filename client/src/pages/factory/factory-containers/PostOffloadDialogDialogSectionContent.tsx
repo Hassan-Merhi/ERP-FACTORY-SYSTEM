@@ -134,13 +134,19 @@ export function PostOffloadDialogDialogSectionContent({
                     </SelectContent>
                   </Select>
                   <UnifiedAccountPicker
-                    options={ledgerAccounts.filter((a) => a.isPostingLeaf !== false).map((a) => ({ value: String(a.id), name: String(a.name ?? "") }))}
+                    options={ledgerAccounts
+                      .filter((a) => a.isPostingLeaf !== false)
+                      .map((a) => ({ value: String(a.id), name: String(a.name ?? "") }))}
                     value={charge.ledgerAccountId || ""}
-                    onChange={(v) => setNewCharges((prev) => prev.map((c) => (c.id === charge.id ? { ...c, ledgerAccountId: v, supplierId: "" } : c)))}
+                    onChange={(v) =>
+                      setNewCharges((prev) =>
+                        prev.map((c) => (c.id === charge.id ? { ...c, ledgerAccountId: v, supplierId: "" } : c))
+                      )
+                    }
                     placeholder={"Select account (optional)"}
                     testId={`select-poc-account-${idx}`}
                     allowClear
-                    />
+                  />
                   <Button
                     variant="ghost"
                     size="icon"

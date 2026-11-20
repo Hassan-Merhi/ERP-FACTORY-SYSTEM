@@ -350,7 +350,7 @@ export function CostCenterAutomationRules({ baseUrl, centers }: { baseUrl: strin
                     onChange={(v) => setForm((p) => ({ ...p, ledgerAccountId: v }))}
                     placeholder={"Choose an expense account"}
                     disabled={editing || accountsLoading}
-                    />
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Source Module</Label>

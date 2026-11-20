@@ -175,9 +175,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                       }))}
                       value={String(draft[key] ?? "")}
                       disabled={!recordChanges.allowed}
-                      onChange={(v) =>
-                        setDraft((current) => (current ? { ...current, [key]: Number(v) } : current))
-                      }
+                      onChange={(v) => setDraft((current) => (current ? { ...current, [key]: Number(v) } : current))}
                       ariaLabel={label}
                       placeholder="Select account"
                       className="mt-1 h-9"

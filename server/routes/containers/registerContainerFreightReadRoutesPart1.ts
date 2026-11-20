@@ -64,7 +64,14 @@ export function registerContainerFreightReadRoutesPart1(app: Express) {
           accountType: ledgerAccounts.accountType,
         })
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, parentCompanyId), eq(ledgerAccounts.active, true), isNull(ledgerAccounts.deletedAt), ledgerPostingLeafCondition(parentCompanyId)))
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, parentCompanyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(parentCompanyId)
+          )
+        )
         .orderBy(asc(ledgerAccounts.name));
       res.json(accounts);
     } catch (error: unknown) {

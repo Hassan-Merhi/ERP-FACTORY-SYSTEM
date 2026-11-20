@@ -138,12 +138,12 @@ export function ProductionTargetWeeklyBonusPaymentsPanel(props: { initialDate: s
           <label className="min-w-[220px] flex-1 space-y-1 text-xs text-muted-foreground">
             Pay from Cash / Bank (USD)
             <UnifiedAccountPicker
-                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={accountId}
-                onChange={setAccountId}
-                placeholder="Select Cash / Bank account"
-                ariaLabel="Weekly bonus paying account"
-              />
+              options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Select Cash / Bank account"
+              ariaLabel="Weekly bonus paying account"
+            />
           </label>
         </div>
         {!valid && (
@@ -273,12 +273,12 @@ export function ProductionTargetWeeklyBonusPaymentsPanel(props: { initialDate: s
           <label className="space-y-1 text-sm">
             Pay from Cash / Bank (USD)
             <UnifiedAccountPicker
-                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={accountId}
-                onChange={setAccountId}
-                placeholder={"Choose paying account"}
-                ariaLabel={"Confirm weekly bonus paying account"}
-              />
+              options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder={"Choose paying account"}
+              ariaLabel={"Confirm weekly bonus paying account"}
+            />
           </label>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={payment.isPending}>Cancel</AlertDialogCancel>

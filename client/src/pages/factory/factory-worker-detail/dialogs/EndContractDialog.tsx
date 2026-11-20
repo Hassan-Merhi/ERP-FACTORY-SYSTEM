@@ -173,7 +173,7 @@ export function EndContractDialog({
                   onChange={setEndCashAccountId}
                   placeholder={"Select account..."}
                   testId={"select-cash-account"}
-                  />
+                />
               </div>
             )}
             <div className="flex gap-2 flex-wrap">

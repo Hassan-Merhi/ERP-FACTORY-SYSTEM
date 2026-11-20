@@ -129,16 +129,10 @@ export async function applyPaymentReceiptEditTx(
 
   // A manual edit is a new posting decision. Never permit a stale client
   // to replace a payment/receipt with a chart-of-accounts group header.
-  await assertPostingLedgerLeavesTx(
-    tx,
-    existingVoucher.companyId,
-    [
-      ...(paymentAccountType === "ledger" ? [Number(paymentAccountId)] : []),
-      ...entries
-        .filter((entry) => entry.accountType === "ledger")
-        .map((entry) => Number(entry.accountId)),
-    ]
-  );
+  await assertPostingLedgerLeavesTx(tx, existingVoucher.companyId, [
+    ...(paymentAccountType === "ledger" ? [Number(paymentAccountId)] : []),
+    ...entries.filter((entry) => entry.accountType === "ledger").map((entry) => Number(entry.accountId)),
+  ]);
 
   // Update voucher — store historical base (USD) total
   const [updatedVoucher] = await tx

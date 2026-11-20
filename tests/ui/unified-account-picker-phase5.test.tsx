@@ -77,13 +77,7 @@ describe("Phase 5 searchable account picker regression coverage", () => {
   it("keeps restricted options disabled and read-only pickers immutable", () => {
     const onChange = vi.fn();
     const { unmount } = render(
-      <UnifiedAccountPicker
-        options={options}
-        value="ledger:5"
-        onChange={onChange}
-        disabled
-        testId="readonly-account"
-      />
+      <UnifiedAccountPicker options={options} value="ledger:5" onChange={onChange} disabled testId="readonly-account" />
     );
     expect(screen.getByTestId("readonly-account")).toBeDisabled();
     fireEvent.click(screen.getByTestId("readonly-account"));

@@ -16,7 +16,9 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
     queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker", selectedCompany?.id],
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
-      const response = await fetch("/api/ledger-accounts?includeHidden=true&profile=picker", { credentials: "include" });
+      const response = await fetch("/api/ledger-accounts?includeHidden=true&profile=picker", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Unable to load posting accounts");
       return response.json();
     },
@@ -129,14 +131,24 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                     {isEditingLedger ? (
                       <div className="flex items-center gap-2 print:hidden">
                         <UnifiedAccountPicker
- options={postingAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
- value={String(charge.ledgerAccountId ?? "")}
-  selectedFallbackName={m.ledgerAccounts.find((account) => account.id === charge.ledgerAccountId)?.name}
- onChange={(val) => m.updateChargeLedgerMutation.mutate({ chargeId: charge.id, ledgerAccountId: val ? parseInt(val) : null })}
- placeholder={"Select ledger account..."}
- testId={`select-charge-ledger-${charge.id}`}
- className={"h-8 text-xs flex-1"}
- />
+                          options={postingAccounts.map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
+                          value={String(charge.ledgerAccountId ?? "")}
+                          selectedFallbackName={
+                            m.ledgerAccounts.find((account) => account.id === charge.ledgerAccountId)?.name
+                          }
+                          onChange={(val) =>
+                            m.updateChargeLedgerMutation.mutate({
+                              chargeId: charge.id,
+                              ledgerAccountId: val ? parseInt(val) : null,
+                            })
+                          }
+                          placeholder={"Select ledger account..."}
+                          testId={`select-charge-ledger-${charge.id}`}
+                          className={"h-8 text-xs flex-1"}
+                        />
                         <Button
                           size="sm"
                           variant="ghost"
@@ -209,13 +221,13 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                         </SelectContent>
                       </Select>
                       <UnifiedAccountPicker
- options={postingAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
- value={m.newChargeLedgerId}
- onChange={m.setNewChargeLedgerId}
- placeholder={"Ledger account..."}
- testId={"select-new-charge-ledger"}
- className="text-sm"
- />
+                        options={postingAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                        value={m.newChargeLedgerId}
+                        onChange={m.setNewChargeLedgerId}
+                        placeholder={"Ledger account..."}
+                        testId={"select-new-charge-ledger"}
+                        className="text-sm"
+                      />
                     </div>
                     <p className="text-xs text-muted-foreground">Saving will immediately post an accounting voucher.</p>
                     <div className="flex items-center gap-2">

@@ -187,7 +187,8 @@ export function ZambiaCashCurrencyTransfer() {
             />
             {source && (
               <p className="text-xs text-muted-foreground" data-testid="zambia-transfer-source-balance">
-                Available {fromCurrency}: {accounts.find((a) => keyForAccount(a) === source)?.nativeBalancesByCurrency[fromCurrency] ?? "0"}
+                Available {fromCurrency}:{" "}
+                {accounts.find((a) => keyForAccount(a) === source)?.nativeBalancesByCurrency[fromCurrency] ?? "0"}
               </p>
             )}
           </div>

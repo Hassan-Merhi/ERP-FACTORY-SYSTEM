@@ -138,13 +138,15 @@ export function PosImportForm({ model }: { model: PosImportModel }) {
             <div className="space-y-2">
               <Label htmlFor="cashAccount">Cash Account</Label>
               <UnifiedAccountPicker
-                    options={model.ledgerAccounts.filter((account) => account.accountType === "Cash").map((account) => ({ value: String(account.id), name: account.name }))}
-                    value={model.selectedCashAccount}
-                    onChange={model.setSelectedCashAccount}
-                    placeholder={"Select cash account"}
-                    id="cashAccount"
-                    testId={"select-cash-account"}
-                    />
+                options={model.ledgerAccounts
+                  .filter((account) => account.accountType === "Cash")
+                  .map((account) => ({ value: String(account.id), name: account.name }))}
+                value={model.selectedCashAccount}
+                onChange={model.setSelectedCashAccount}
+                placeholder={"Select cash account"}
+                id="cashAccount"
+                testId={"select-cash-account"}
+              />
             </div>
           )}
         </div>

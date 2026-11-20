@@ -155,12 +155,12 @@ export function FactoryInvoiceCreateSectionCard({
         )}
 
         <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
- value={chargeLedgerAccountId}
- onChange={setChargeLedgerAccountId}
- placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
- testId={"select-charge-ledger-account"}
- />
+          options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+          value={chargeLedgerAccountId}
+          onChange={setChargeLedgerAccountId}
+          placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
+          testId={"select-charge-ledger-account"}
+        />
         {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             A ledger account is required so the charge posts to accounting.

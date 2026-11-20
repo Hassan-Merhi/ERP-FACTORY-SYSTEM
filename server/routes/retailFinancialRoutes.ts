@@ -218,11 +218,13 @@ export function registerRetailFinancialRoutes(app: Express): void {
         const [assigned] = await db
           .select({ locationId: userLocations.locationId })
           .from(userLocations)
-          .where(and(
-            eq(userLocations.companyId, companyId),
-            eq(userLocations.userId, req.user.id),
-            eq(userLocations.locationId, locationId)
-          ))
+          .where(
+            and(
+              eq(userLocations.companyId, companyId),
+              eq(userLocations.userId, req.user.id),
+              eq(userLocations.locationId, locationId)
+            )
+          )
           .limit(1);
         if (!assigned) return res.status(403).json({ message: "This location is not assigned to you" });
       }

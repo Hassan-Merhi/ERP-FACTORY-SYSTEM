@@ -178,13 +178,13 @@ export function AdvancesPanel(props: { model: ReturnType<typeof useAdvancesModel
           {canChangeExistingRecords && (
             <div className="flex items-center gap-2 ml-auto flex-wrap">
               <UnifiedAccountPicker
-                  options={(cashAccounts || []).map((a) => ({ value: String(a.id), name: a.name }))}
-                  value={bulkCashAccountId}
-                  onChange={setBulkCashAccountId}
-                  placeholder={"Select cash account…"}
-                  testId={"select-bulk-cash-account"}
-                  className="w-52"
-                  />
+                options={(cashAccounts || []).map((a) => ({ value: String(a.id), name: a.name }))}
+                value={bulkCashAccountId}
+                onChange={setBulkCashAccountId}
+                placeholder={"Select cash account…"}
+                testId={"select-bulk-cash-account"}
+                className="w-52"
+              />
               <Button
                 onClick={() => bulkUpdateCashAccountMutation.mutate()}
                 disabled={!bulkCashAccountId || bulkUpdateCashAccountMutation.isPending}

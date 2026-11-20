@@ -328,13 +328,12 @@ export function BulkDialogs({
               <div className="space-y-2">
                 <Label>Payment Account</Label>
                 <UnifiedAccountPicker
-                  options={(bulkWithdrawalAccountType === "cash"
-                    ? cashAccounts ?? []
-                    : bankAccounts ?? []
-                  ).map((account) => ({
-                    value: String(account.id),
-                    name: String(account.accountName ?? account.name ?? account.bankName ?? "Unnamed account"),
-                  }))}
+                  options={(bulkWithdrawalAccountType === "cash" ? (cashAccounts ?? []) : (bankAccounts ?? [])).map(
+                    (account) => ({
+                      value: String(account.id),
+                      name: String(account.accountName ?? account.name ?? account.bankName ?? "Unnamed account"),
+                    })
+                  )}
                   value={bulkWithdrawalAccountId}
                   onChange={setBulkWithdrawalAccountId}
                   placeholder="Select account"

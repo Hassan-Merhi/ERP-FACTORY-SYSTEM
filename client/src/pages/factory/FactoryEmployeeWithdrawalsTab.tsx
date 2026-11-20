@@ -413,12 +413,12 @@ export default function FactoryEmployeeWithdrawalsTab() {
               <div>
                 <Label>Cash Account</Label>
                 <UnifiedAccountPicker
-                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={bulkForm.cashAccountId}
-                onChange={(v) => setBulkForm((f) => ({ ...f, cashAccountId: v }))}
-                placeholder="Select account"
-                testId="select-bulk-cash-account"
-              />
+                  options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                  value={bulkForm.cashAccountId}
+                  onChange={(v) => setBulkForm((f) => ({ ...f, cashAccountId: v }))}
+                  placeholder="Select account"
+                  testId="select-bulk-cash-account"
+                />
               </div>
             </div>
             <div>

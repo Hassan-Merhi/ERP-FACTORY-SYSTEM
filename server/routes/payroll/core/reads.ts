@@ -35,7 +35,13 @@ export function registerPayrollCoreReadRoutes(app: Express) {
       const accounts = await db
         .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, code: ledgerAccounts.code })
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt), ledgerPostingLeafCondition(companyId)))
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(companyId)
+          )
+        )
         .orderBy(ledgerAccounts.name);
       res.json(accounts);
     } catch (error: unknown) {

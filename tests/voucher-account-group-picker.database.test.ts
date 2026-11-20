@@ -67,9 +67,18 @@ async function callFiltered(
     statusCode: 200,
     body: undefined as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { response.statusCode = code; return response; },
-    json(body: unknown) { response.body = body; return response; },
-    setHeader(key: string, value: string) { response.headers[key] = value; return response; },
+    status(code: number) {
+      response.statusCode = code;
+      return response;
+    },
+    json(body: unknown) {
+      response.body = body;
+      return response;
+    },
+    setHeader(key: string, value: string) {
+      response.headers[key] = value;
+      return response;
+    },
   };
   await handler({ session: { currentCompanyId: companyId }, query }, response);
   if (response.statusCode !== 200) {
@@ -77,7 +86,6 @@ async function callFiltered(
   }
   return response.body as { items: Array<{ id: number; code?: string }>; total: number };
 }
-
 
 async function call(path: string, companyId: number, query: Record<string, string> = {}) {
   const res = {
@@ -240,5 +248,4 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     expect(eligible.get(ids.staleParent)).toBe(true);
     expect(rows.find((account) => account.id === ids.groupTag)?.name).toContain("GROUP-TAG");
   });
-
 });

@@ -180,13 +180,16 @@ export function CompanyTransferSectionCardContent({
                   <div className="space-y-1.5">
                     <Label className="text-xs">Destination Account</Label>
                     <UnifiedAccountPicker
-                options={accountOptions(ruleDestAccounts).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={ruleDestAccountId}
-                onChange={setRuleDestAccountId}
-                placeholder={ruleDestCompanyId ? "Select account" : "Select company first"}
-                disabled={!ruleDestCompanyId}
-                testId={`select-rule-dest-account-${module}`}
-              />
+                      options={accountOptions(ruleDestAccounts).map((account) => ({
+                        value: String(account.id),
+                        name: account.name,
+                      }))}
+                      value={ruleDestAccountId}
+                      onChange={setRuleDestAccountId}
+                      placeholder={ruleDestCompanyId ? "Select account" : "Select company first"}
+                      disabled={!ruleDestCompanyId}
+                      testId={`select-rule-dest-account-${module}`}
+                    />
                   </div>
                 </div>
 

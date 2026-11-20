@@ -376,12 +376,12 @@ export default function FactoryEmployeeDetail() {
             <div className="space-y-1">
               <Label>Cash Account *</Label>
               <UnifiedAccountPicker
-                    value={withdrawCashAccountId}
-                    onChange={setWithdrawCashAccountId}
-                    options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                    placeholder="Select cash account"
-                    testId="select-cash-account"
-                  />
+                value={withdrawCashAccountId}
+                onChange={setWithdrawCashAccountId}
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                placeholder="Select cash account"
+                testId="select-cash-account"
+              />
             </div>
             <div className="space-y-1">
               <Label>Notes</Label>

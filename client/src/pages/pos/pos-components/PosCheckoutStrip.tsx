@@ -136,51 +136,58 @@ export function PosCheckoutStrip({
 
       {lockedPosEdit ? (
         <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
-          <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-xs" data-testid="pos-edit-payment-locked">
+          <div
+            className="rounded-md border border-input bg-muted/30 px-3 py-2 text-xs"
+            data-testid="pos-edit-payment-locked"
+          >
             {isCreditSale ? "Credit" : "Original payment"} — unchanged
           </div>
         </PosCheckoutField>
-      ) : !isCreditSale && (
-        <>
-          <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
-            <Select
-              value={paymentAccountType}
-              onValueChange={
-                posUser
-                  ? undefined
-                  : (v) => {
-                      if (v === "bank" || v === "cash") setPaymentAccountType(v);
-                    }
-              }
-              disabled={!!posUser}
-            >
-              <SelectTrigger className="w-24" data-testid="select-account-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="bank">Bank</SelectItem>
-              </SelectContent>
-            </Select>
-          </PosCheckoutField>
+      ) : (
+        !isCreditSale && (
+          <>
+            <PosCheckoutField field="method" icon={CreditCard} label={t("pos.modern.paymentMethod")}>
+              <Select
+                value={paymentAccountType}
+                onValueChange={
+                  posUser
+                    ? undefined
+                    : (v) => {
+                        if (v === "bank" || v === "cash") setPaymentAccountType(v);
+                      }
+                }
+                disabled={!!posUser}
+              >
+                <SelectTrigger className="w-24" data-testid="select-account-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank">Bank</SelectItem>
+                </SelectContent>
+              </Select>
+            </PosCheckoutField>
 
-          <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")}>
-            <UnifiedAccountPicker
-              options={(paymentAccountType === "bank"
-                ? Array.isArray(bankAccounts) ? bankAccounts : []
-                : cashLedgerAccounts
-              ).flatMap((account) =>
-                account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
-              )}
-              value={paymentAccountId || ""}
-              onChange={setPaymentAccountId}
-              disabled={!!posUser}
-              placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"}
-              testId="select-payment-account"
-              className="w-[180px]"
-            />
-          </PosCheckoutField>
-        </>
+            <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")}>
+              <UnifiedAccountPicker
+                options={(paymentAccountType === "bank"
+                  ? Array.isArray(bankAccounts)
+                    ? bankAccounts
+                    : []
+                  : cashLedgerAccounts
+                ).flatMap((account) =>
+                  account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
+                )}
+                value={paymentAccountId || ""}
+                onChange={setPaymentAccountId}
+                disabled={!!posUser}
+                placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"}
+                testId="select-payment-account"
+                className="w-[180px]"
+              />
+            </PosCheckoutField>
+          </>
+        )
       )}
 
       {!isSpCompany && (

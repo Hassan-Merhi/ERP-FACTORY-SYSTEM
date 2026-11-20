@@ -59,12 +59,12 @@ export function CashAccountAdjustmentDialog({
               Cash Account <span className="text-destructive">*</span>
             </Label>
             <UnifiedAccountPicker
-                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={cashAdjForm.cashAccountId}
-                onChange={(v) => setCashAdjForm((p) => ({ ...p, cashAccountId: v }))}
-                placeholder={"Select cash account"}
-                testId={"select-cadj-account"}
-              />
+              options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+              value={cashAdjForm.cashAccountId}
+              onChange={(v) => setCashAdjForm((p) => ({ ...p, cashAccountId: v }))}
+              placeholder={"Select cash account"}
+              testId={"select-cadj-account"}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

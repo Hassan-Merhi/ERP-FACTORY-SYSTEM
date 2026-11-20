@@ -101,15 +101,17 @@ export function BulkPaymentDialog({
                   <UnifiedAccountPicker
                     options={(form.watch("paymentAccountType") === "cash"
                       ? cashAccounts
-                      : bankAccounts ?? []
+                      : (bankAccounts ?? [])
                     ).flatMap((account) =>
                       account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
                     )}
                     value={field.value}
                     onChange={field.onChange}
-                    placeholder={bankAccountsLoading && form.watch("paymentAccountType") !== "cash"
-                      ? "Loading bank accounts..."
-                      : "Select account"}
+                    placeholder={
+                      bankAccountsLoading && form.watch("paymentAccountType") !== "cash"
+                        ? "Loading bank accounts..."
+                        : "Select account"
+                    }
                     disabled={bankAccountsLoading && form.watch("paymentAccountType") !== "cash"}
                     testId="select-bulk-account"
                   />

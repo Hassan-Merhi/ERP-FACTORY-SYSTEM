@@ -44,7 +44,9 @@ export function useIntercompanyLinksState() {
     queryKey: ["/api/ledger-accounts?profile=picker", "company", form.sourceCompanyId],
     queryFn: async () => {
       if (!form.sourceCompanyId) return [];
-      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${form.sourceCompanyId}`, { credentials: "include" });
+      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${form.sourceCompanyId}`, {
+        credentials: "include",
+      });
       if (!r.ok) return [];
       return r.json();
     },
@@ -55,7 +57,9 @@ export function useIntercompanyLinksState() {
     queryKey: ["/api/ledger-accounts?profile=picker", "company", form.destCompanyId],
     queryFn: async () => {
       if (!form.destCompanyId) return [];
-      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${form.destCompanyId}`, { credentials: "include" });
+      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${form.destCompanyId}`, {
+        credentials: "include",
+      });
       if (!r.ok) return [];
       return r.json();
     },

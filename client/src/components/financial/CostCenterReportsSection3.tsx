@@ -256,12 +256,15 @@ export function CostCenterReportsSection4({
       <div className="space-y-1">
         <Label>Expense Account</Label>
         <UnifiedAccountPicker
-                  options={[{ value: "all", name: "All Accounts" }, ...(accounts?.accounts || []).map((a) => ({ value: String(a.id), name: a.name }))]}
-                  value={accountFilter}
-                  onChange={(v) => changeFilter(setAccountFilter, v)}
-                  placeholder={"All Accounts"}
-                  disabled={consolidated}
-                  />
+          options={[
+            { value: "all", name: "All Accounts" },
+            ...(accounts?.accounts || []).map((a) => ({ value: String(a.id), name: a.name })),
+          ]}
+          value={accountFilter}
+          onChange={(v) => changeFilter(setAccountFilter, v)}
+          placeholder={"All Accounts"}
+          disabled={consolidated}
+        />
       </div>
       {isEditor && (
         <div className="space-y-1">

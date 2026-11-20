@@ -170,12 +170,15 @@ export function SpReportsTabsSection({
               <div className="min-w-48">
                 <label className="text-xs text-muted-foreground">Opening Cash Account</label>
                 <UnifiedAccountPicker
-                  options={[{ value: "none", name: "No account (manual entry)" }, ...accounts.map((a) => ({ value: String(a.id), name: a.name }))]}
+                  options={[
+                    { value: "none", name: "No account (manual entry)" },
+                    ...accounts.map((a) => ({ value: String(a.id), name: a.name })),
+                  ]}
                   value={exportCashAccountId}
                   onChange={setExportCashAccountId}
                   placeholder={"GC Sales Cash"}
                   testId={"select-sp-export-cash-account"}
-                  />
+                />
               </div>
             </div>
 

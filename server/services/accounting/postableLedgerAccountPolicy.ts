@@ -34,10 +34,7 @@ export async function assertPostingLedgerLeavesTx(
   accountIds: readonly number[]
 ): Promise<void> {
   if (accountIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
-    throw new PostingValidationError(
-      "POSTING_TARGET_ID_INVALID",
-      "Ledger account IDs must be positive integers"
-    );
+    throw new PostingValidationError("POSTING_TARGET_ID_INVALID", "Ledger account IDs must be positive integers");
   }
   const ids = [...new Set(accountIds)];
   if (!ids.length) return;

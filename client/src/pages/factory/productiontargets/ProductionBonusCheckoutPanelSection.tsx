@@ -55,13 +55,13 @@ export function ProductionBonusCheckoutPanelSection({
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           {t("payFrom")}
           <UnifiedAccountPicker
-                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={accountId}
-                onChange={setAccountId}
-                placeholder={t("chooseAccount")}
-                ariaLabel={t("payFrom")}
-                className="h-10 w-[230px]"
-              />
+            options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+            value={accountId}
+            onChange={setAccountId}
+            placeholder={t("chooseAccount")}
+            ariaLabel={t("payFrom")}
+            className="h-10 w-[230px]"
+          />
         </label>
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           {t("paymentDate")}

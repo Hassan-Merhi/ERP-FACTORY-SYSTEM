@@ -59,12 +59,12 @@ export function MarkPayrollPaidDialog({
           <div className="space-y-1">
             <Label className="text-xs">Cash Account</Label>
             <UnifiedAccountPicker
-                options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
-                value={payCashAccountId}
-                onChange={setPayCashAccountId}
-                placeholder="Select account"
-                testId="select-pay-cash"
-              />
+              options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
+              value={payCashAccountId}
+              onChange={setPayCashAccountId}
+              placeholder="Select account"
+              testId="select-pay-cash"
+            />
           </div>
         </div>
         <DialogFooter>

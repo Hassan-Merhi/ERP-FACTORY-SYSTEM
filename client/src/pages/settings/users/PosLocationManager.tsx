@@ -105,7 +105,9 @@ export function PosLocationManager({
                     <UnifiedAccountPicker
                       options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                       value={locationCashAccounts[loc.id]?.toString() || ""}
-                      onChange={(v) => setLocationCashAccounts((prev) => ({ ...prev, [loc.id]: v ? Number(v) : undefined }))}
+                      onChange={(v) =>
+                        setLocationCashAccounts((prev) => ({ ...prev, [loc.id]: v ? Number(v) : undefined }))
+                      }
                       placeholder="Select cash account *"
                       testId={`select-cash-account-loc-${loc.id}`}
                       className="h-8 text-xs"

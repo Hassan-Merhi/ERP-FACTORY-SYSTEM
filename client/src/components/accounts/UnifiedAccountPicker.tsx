@@ -74,11 +74,12 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
   );
   const selectedSet = new Set(values);
   const placeholder = props.placeholder ?? "Select account...";
-  const label = props.mode === "multiple"
-    ? values.length
-      ? `${values.length} account${values.length === 1 ? "" : "s"} selected`
-      : placeholder
-    : selected?.name || props.selectedFallbackName || placeholder;
+  const label =
+    props.mode === "multiple"
+      ? values.length
+        ? `${values.length} account${values.length === 1 ? "" : "s"} selected`
+        : placeholder
+      : selected?.name || props.selectedFallbackName || placeholder;
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
@@ -123,10 +124,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className={cn("w-[min(420px,calc(100vw-2rem))] p-0", props.contentClassName)}
-      >
+      <PopoverContent align="start" className={cn("w-[min(420px,calc(100vw-2rem))] p-0", props.contentClassName)}>
         <Command shouldFilter={false}>
           <CommandInput
             value={query}
@@ -151,10 +149,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
                     data-testid={props.optionTestId?.(option.value)}
                   >
                     <Check
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        selectedSet.has(option.value) ? "opacity-100" : "opacity-0"
-                      )}
+                      className={cn("h-4 w-4 shrink-0", selectedSet.has(option.value) ? "opacity-100" : "opacity-0")}
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1 truncate">{option.name}</span>

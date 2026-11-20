@@ -67,12 +67,12 @@ export function GenerateMissingAccountingEntryDialog({
           <div className="space-y-1">
             <Label className="text-xs">Cash Account</Label>
             <UnifiedAccountPicker
-                    value={fixAcctCashId}
-                    onChange={setFixAcctCashId}
-                    options={(cashAccounts ?? []).map((account) => ({ value: String(account.id), name: account.name }))}
-                    placeholder="Select cash account"
-                    testId="select-fix-acct-cash"
-                  />
+              value={fixAcctCashId}
+              onChange={setFixAcctCashId}
+              options={(cashAccounts ?? []).map((account) => ({ value: String(account.id), name: account.name }))}
+              placeholder="Select cash account"
+              testId="select-fix-acct-cash"
+            />
           </div>
         </div>
         <DialogFooter>

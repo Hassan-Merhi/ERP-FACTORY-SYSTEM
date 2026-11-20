@@ -209,13 +209,15 @@ export function ContainerFormPricing({
           ERP Commission Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
         </Label>
         <UnifiedAccountPicker
- options={ledgerAccounts.filter((account) => account.isPostingLeaf !== false).map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
- value={formData.commissionAccountId || ""}
- onChange={(val) => setFormData((f) => ({ ...f, commissionAccountId: val }))}
- placeholder={"None (leave empty)"}
- testId={"select-commission-account"}
- allowClear
- />
+          options={ledgerAccounts
+            .filter((account) => account.isPostingLeaf !== false)
+            .map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
+          value={formData.commissionAccountId || ""}
+          onChange={(val) => setFormData((f) => ({ ...f, commissionAccountId: val }))}
+          placeholder={"None (leave empty)"}
+          testId={"select-commission-account"}
+          allowClear
+        />
         <p className="text-xs text-muted-foreground mt-1">
           Commission flows into the broker's balance automatically via the "Broker / Commission To" field above.
         </p>

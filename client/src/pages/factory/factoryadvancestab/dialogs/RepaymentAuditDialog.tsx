@@ -132,12 +132,15 @@ export function RepaymentAuditDialog({
                           Default Cash Account <span className="text-destructive">*</span>
                         </Label>
                         <UnifiedAccountPicker
-                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={repayAuditForm.cashAccountId}
-                onChange={(v) => setRepayAuditForm((p) => ({ ...p, cashAccountId: v }))}
-                placeholder={"Select cash account"}
-                testId={"select-audit-cash-account"}
-              />
+                          options={(cashAccounts || []).map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
+                          value={repayAuditForm.cashAccountId}
+                          onChange={(v) => setRepayAuditForm((p) => ({ ...p, cashAccountId: v }))}
+                          placeholder={"Select cash account"}
+                          testId={"select-audit-cash-account"}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>

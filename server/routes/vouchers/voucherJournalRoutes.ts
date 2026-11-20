@@ -151,7 +151,8 @@ function registerVoucherJournalRoutesPart2(app: Express) {
         await assertPostingLedgerLeavesTx(
           tx,
           existingVoucher.companyId,
-          entries.filter((entry: { accountType: string }) => entry.accountType === "ledger")
+          entries
+            .filter((entry: { accountType: string }) => entry.accountType === "ledger")
             .map((entry: { accountId: number | string }) => Number(entry.accountId))
         );
 
@@ -295,7 +296,9 @@ function registerVoucherJournalRoutesPart2(app: Express) {
       });
       logger.error("Error updating journal voucher:", { error: error });
       if (sendVoucherCorrectionRefusal(res, error)) return;
-      res.status(error instanceof PostingValidationError ? 400 : errorStatus(error)).json({ message: getErrorMessage(error) });
+      res
+        .status(error instanceof PostingValidationError ? 400 : errorStatus(error))
+        .json({ message: getErrorMessage(error) });
     }
   });
 }

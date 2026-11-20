@@ -75,12 +75,12 @@ export function FactoryEmployeeAdvancesTabDialog({
           <div>
             <Label>Cash Account (optional)</Label>
             <UnifiedAccountPicker
-                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={addForm.cashAccountId}
-                onChange={(v) => setAddForm((f) => ({ ...f, cashAccountId: v }))}
-                placeholder="Select account"
-                testId="select-cash-account"
-              />
+              options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+              value={addForm.cashAccountId}
+              onChange={(v) => setAddForm((f) => ({ ...f, cashAccountId: v }))}
+              placeholder="Select account"
+              testId="select-cash-account"
+            />
           </div>
           <div>
             <Label>Notes</Label>

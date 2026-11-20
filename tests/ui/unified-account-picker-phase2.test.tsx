@@ -49,10 +49,7 @@ function MultiHarness() {
 
 describe("Phase 2 unified account picker", () => {
   it("filters account names without matching internal code, type or key", () => {
-    expect(filterAccountPickerChoices(choices, "cafe rent").map((a) => a.value)).toEqual([
-      "ledger:1",
-      "bank:1",
-    ]);
+    expect(filterAccountPickerChoices(choices, "cafe rent").map((a) => a.value)).toEqual(["ledger:1", "bank:1"]);
     expect(filterAccountPickerChoices(choices, "ledger")).toEqual([]);
     expect(filterAccountPickerChoices(choices, "bank:1")).toEqual([]);
     expect(filterAccountPickerChoices(choices, "revenue").map((a) => a.value)).toEqual(["ledger:2"]);

@@ -217,11 +217,11 @@ export function PosMobileCustomerSection({
             </Select>
             <UnifiedAccountPicker
               options={(paymentAccountType === "bank"
-                ? (Array.isArray(bankAccounts) ? bankAccounts : [])
+                ? Array.isArray(bankAccounts)
+                  ? bankAccounts
+                  : []
                 : cashLedgerAccounts
-              ).flatMap((account) =>
-                account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
-              )}
+              ).flatMap((account) => (account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []))}
               value={paymentAccountId || ""}
               onChange={setPaymentAccountId}
               disabled={Boolean(posUser)}

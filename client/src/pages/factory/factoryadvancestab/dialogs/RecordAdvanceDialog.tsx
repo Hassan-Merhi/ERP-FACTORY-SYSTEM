@@ -88,12 +88,12 @@ export function RecordAdvanceDialog({
           <div className="space-y-2">
             <Label>Cash Account</Label>
             <UnifiedAccountPicker
-                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                value={form.cashAccountId}
-                onChange={(v) => setForm({ ...form, cashAccountId: v })}
-                placeholder={"Select cash account (optional)"}
-                testId={"select-advance-cash-account"}
-              />
+              options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+              value={form.cashAccountId}
+              onChange={(v) => setForm({ ...form, cashAccountId: v })}
+              placeholder={"Select cash account (optional)"}
+              testId={"select-advance-cash-account"}
+            />
           </div>
           <div className="space-y-2">
             <Label>Repayment Type</Label>

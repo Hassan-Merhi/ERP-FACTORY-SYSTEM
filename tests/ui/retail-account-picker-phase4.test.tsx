@@ -1,10 +1,7 @@
 import React, { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import {
-  RetailPaymentAccountPicker,
-  type RetailPaymentAccounts,
-} from "@/pages/pos/RetailPaymentAccountSelect";
+import { RetailPaymentAccountPicker, type RetailPaymentAccounts } from "@/pages/pos/RetailPaymentAccountSelect";
 
 const accounts: RetailPaymentAccounts = {
   ledgers: [{ id: 7, code: "1000", name: "Café Account", accountType: "Cash" }],

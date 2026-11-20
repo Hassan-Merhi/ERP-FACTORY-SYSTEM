@@ -87,8 +87,7 @@ export default function CostCenters() {
   });
   const centers = useMemo(() => data?.costCenters ?? [], [data]);
   const rows = useMemo(
-    () =>
-      sortCenters(centers).filter(({ center }) => searchAny(filter, center.name, center.code, center.description)),
+    () => sortCenters(centers).filter(({ center }) => searchAny(filter, center.name, center.code, center.description)),
     [centers, filter]
   );
   const selected = centers.find((c) => c.id === selectedId) || null;

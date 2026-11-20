@@ -126,16 +126,16 @@ export function IntercompanyPosTab() {
                   <p className="text-xs text-muted-foreground italic">Select a destination company first.</p>
                 ) : (
                   <div data-testid="select-dest-account">
-                  <UnifiedAccountPicker
-                    value={destIntercoAccountId}
-                    onChange={setDestIntercoAccountId}
-                    options={destAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
-                    placeholder="Select account…"
-                    disabled={destAccountsLoading}
-                    testId="select-dest-account-trigger"
-                    optionTestId={(id) => `option-dest-account-${id}`}
-                  />
-                </div>
+                    <UnifiedAccountPicker
+                      value={destIntercoAccountId}
+                      onChange={setDestIntercoAccountId}
+                      options={destAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                      placeholder="Select account…"
+                      disabled={destAccountsLoading}
+                      testId="select-dest-account-trigger"
+                      optionTestId={(id) => `option-dest-account-${id}`}
+                    />
+                  </div>
                 )}
                 <p className="text-xs text-muted-foreground">
                   Credited in the destination company journal (intercompany payable / due-to account).

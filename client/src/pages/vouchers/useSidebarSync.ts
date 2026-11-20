@@ -10,7 +10,12 @@ interface UseSidebarSyncProps {
   paymentAccountType: string;
   sidebarHighlightedIndex: number;
   setSidebarHighlightedIndex: (i: number) => void;
-  entries: { accountType: "customer" | "supplier" | "employee" | "bank" | "ledger" | "fixedAsset" | "factorySupplier"; accountId: number; accountName: string; amount: string; }[];
+  entries: {
+    accountType: "customer" | "supplier" | "employee" | "bank" | "ledger" | "fixedAsset" | "factorySupplier";
+    accountId: number;
+    accountName: string;
+    amount: string;
+  }[];
   activeRowIndex: number | null;
   allAccounts: CombinedAccount[];
 }
@@ -81,7 +86,14 @@ export function useSidebarSync({
       }
     }
     setSidebarHighlightedIndex(0);
-  }, [sidebarSearchValue, activeRowIndex, activeRowAccountId, activeRowAccountType, filteredSidebarAccounts, setSidebarHighlightedIndex]);
+  }, [
+    sidebarSearchValue,
+    activeRowIndex,
+    activeRowAccountId,
+    activeRowAccountType,
+    filteredSidebarAccounts,
+    setSidebarHighlightedIndex,
+  ]);
 
   useEffect(() => {
     if (filteredSidebarAccounts.length === 0) return;

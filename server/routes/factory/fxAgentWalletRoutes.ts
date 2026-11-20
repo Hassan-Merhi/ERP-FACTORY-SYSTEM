@@ -10,7 +10,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logAudit } from "../helpers/auditWriteAdapter";
 import { toMoney } from "../../lib/money";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
-import { ledgerPostingLeafCondition, assertPostingLedgerLeavesTx } from "../../services/accounting/postableLedgerAccountPolicy";
+import {
+  ledgerPostingLeafCondition,
+  assertPostingLedgerLeavesTx,
+} from "../../services/accounting/postableLedgerAccountPolicy";
 import {
   fxAgentTablesExist,
   getFxAgentWalletSnapshot,

@@ -194,7 +194,14 @@ export function registerFactoryTransporterRoutes(app: Express) {
       const accounts = await db
         .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.active, true), isNull(ledgerAccounts.deletedAt), ledgerPostingLeafCondition(companyId)))
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(companyId)
+          )
+        )
         .orderBy(asc(ledgerAccounts.name));
 
       res.json(accounts);

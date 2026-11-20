@@ -72,13 +72,13 @@ export function FactoryContainerCreateCardSection({
             Freight Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
           </Label>
           <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
- value={formData.freightAccountId || ""}
- onChange={(val) => setFormData({ ...formData, freightAccountId: val })}
- placeholder={"Auto (Freight)"}
- testId={"select-freight-account"}
- allowClear
- />
+            options={ledgerAccounts.map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
+            value={formData.freightAccountId || ""}
+            onChange={(val) => setFormData({ ...formData, freightAccountId: val })}
+            placeholder={"Auto (Freight)"}
+            testId={"select-freight-account"}
+            allowClear
+          />
         </div>
 
         <div className="space-y-2">
@@ -148,15 +148,18 @@ export function FactoryContainerCreateCardSection({
                     </SelectContent>
                   </Select>
                   <UnifiedAccountPicker
- key={`acc-${idx}`}
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
- value={line.ledgerAccountId || ""}
- onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
- placeholder={"No account"}
- testId={`select-other-charge-account-${idx}`}
- className={"order-last col-span-3 sm:order-0 sm:col-span-1"}
- allowClear
- />
+                    key={`acc-${idx}`}
+                    options={ledgerAccounts.map((account) => ({
+                      value: String(account.id),
+                      name: String(account.name ?? ""),
+                    }))}
+                    value={line.ledgerAccountId || ""}
+                    onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
+                    placeholder={"No account"}
+                    testId={`select-other-charge-account-${idx}`}
+                    className={"order-last col-span-3 sm:order-0 sm:col-span-1"}
+                    allowClear
+                  />
                   <Button
                     key={`del-${idx}`}
                     type="button"

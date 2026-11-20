@@ -73,13 +73,13 @@ export function ProductionBonusManualPaymentPanel({ rosterDate, workers, selecte
           <label className="space-y-1 text-xs font-medium text-muted-foreground">
             Pay from USD Cash / Bank
             <UnifiedAccountPicker
-                options={accounts.map((account) => ({ value: String(account.id), name: account.name }))}
-                value={accountId}
-                onChange={setAccountId}
-                placeholder="Select paying account"
-                ariaLabel="Manual bonus paying account"
-                className="w-[245px]"
-              />
+              options={accounts.map((account) => ({ value: String(account.id), name: account.name }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Select paying account"
+              ariaLabel="Manual bonus paying account"
+              className="w-[245px]"
+            />
           </label>
           <label className="space-y-1 text-xs font-medium text-muted-foreground">
             Payment date

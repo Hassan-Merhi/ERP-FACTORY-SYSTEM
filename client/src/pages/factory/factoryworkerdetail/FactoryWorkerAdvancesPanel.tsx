@@ -214,12 +214,15 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       <div className="space-y-2">
                         <Label>Cash Account (receives repayment)</Label>
                         <UnifiedAccountPicker
-                    value={repayCashAccountId}
-                    onChange={setRepayCashAccountId}
-                    options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                    placeholder="Select cash account"
-                    testId="select-repay-cash-account"
-                  />
+                          value={repayCashAccountId}
+                          onChange={setRepayCashAccountId}
+                          options={(cashAccounts || []).map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
+                          placeholder="Select cash account"
+                          testId="select-repay-cash-account"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Notes</Label>
@@ -327,12 +330,15 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       <div className="space-y-2">
                         <Label>Cash Account (receives repayment)</Label>
                         <UnifiedAccountPicker
-                    value={bulkRepayCashAccountId}
-                    onChange={setBulkRepayCashAccountId}
-                    options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
-                    placeholder="Select cash account"
-                    testId="select-bulk-repay-cash"
-                  />
+                          value={bulkRepayCashAccountId}
+                          onChange={setBulkRepayCashAccountId}
+                          options={(cashAccounts || []).map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
+                          placeholder="Select cash account"
+                          testId="select-bulk-repay-cash"
+                        />
                       </div>
                     </div>
                     <DialogFooter>

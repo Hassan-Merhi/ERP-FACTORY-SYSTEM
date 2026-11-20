@@ -88,31 +88,30 @@ export function registerLedgerAccountPaginationRoutes(app: Express): void {
 
       const { page, limit, offset } = parsePagination(req);
       const where = and(...conditions);
-      const dataQuery =
-        postingPicker
-          ? db
-              .select({
-                id: ledgerAccounts.id,
-                code: ledgerAccounts.code,
-                name: ledgerAccounts.name,
-                accountType: ledgerAccounts.accountType,
-                subType: ledgerAccounts.subType,
-                parentId: ledgerAccounts.parentId,
-                active: ledgerAccounts.active,
-                isHidden: ledgerAccounts.isHidden,
-              })
-              .from(ledgerAccounts)
-              .where(where)
-              .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
-              .limit(limit)
-              .offset(offset)
-          : db
-              .select()
-              .from(ledgerAccounts)
-              .where(where)
-              .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
-              .limit(limit)
-              .offset(offset);
+      const dataQuery = postingPicker
+        ? db
+            .select({
+              id: ledgerAccounts.id,
+              code: ledgerAccounts.code,
+              name: ledgerAccounts.name,
+              accountType: ledgerAccounts.accountType,
+              subType: ledgerAccounts.subType,
+              parentId: ledgerAccounts.parentId,
+              active: ledgerAccounts.active,
+              isHidden: ledgerAccounts.isHidden,
+            })
+            .from(ledgerAccounts)
+            .where(where)
+            .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
+            .limit(limit)
+            .offset(offset)
+        : db
+            .select()
+            .from(ledgerAccounts)
+            .where(where)
+            .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
+            .limit(limit)
+            .offset(offset);
 
       const [countRows, data] = await Promise.all([
         db

@@ -214,7 +214,10 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                       <UnifiedAccountPicker
                         value={charge.creditBankAccountId}
                         onChange={(v) => costs.updateCharge(idx, "creditBankAccountId", v)}
-                        options={(sp.statusData?.bankAccounts || []).map((a) => ({ value: String(a.id), name: a.bankName }))}
+                        options={(sp.statusData?.bankAccounts || []).map((a) => ({
+                          value: String(a.id),
+                          name: a.bankName,
+                        }))}
                         placeholder={"Select bank"}
                         testId={`select-sp-charge-bank-${idx}`}
                         className="h-8 text-xs"
@@ -232,7 +235,10 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                       <UnifiedAccountPicker
                         value={charge.parentAgentAccountId}
                         onChange={(v) => costs.updateCharge(idx, "parentAgentAccountId", v)}
-                        options={sp.parentAgents.map((a) => ({ value: String(a.ledger_account_id), name: a.account_name }))}
+                        options={sp.parentAgents.map((a) => ({
+                          value: String(a.ledger_account_id),
+                          name: a.account_name,
+                        }))}
                         placeholder={"Select agent"}
                         testId={`select-sp-charge-agent-${idx}`}
                         className="h-8 text-xs"

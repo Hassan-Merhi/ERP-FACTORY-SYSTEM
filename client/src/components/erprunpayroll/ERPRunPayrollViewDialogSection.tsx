@@ -70,12 +70,12 @@ export function ERPRunPayrollViewDialogSection({
             <div className="space-y-2">
               <Label>Payment Account (Cash)</Label>
               <UnifiedAccountPicker
-                  options={cashAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
-                  value={payAccountId}
-                  onChange={setPayAccountId}
-                  placeholder={"Select cash account"}
-                  testId={"select-pay-account"}
-                  />
+                options={cashAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                value={payAccountId}
+                onChange={setPayAccountId}
+                placeholder={"Select cash account"}
+                testId={"select-pay-account"}
+              />
             </div>
 
             {/* Worker breakdown */}
