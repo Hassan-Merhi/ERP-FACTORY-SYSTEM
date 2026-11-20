@@ -89,14 +89,16 @@ async function clickVisibleCompanySelector(page) {
     }),
     { timeout: timeoutMs, polling: 100 }
   );
-  const handles = await page.$('[data-testid="button-company-selector"]');
-  for (const handle of handles) {
-    const rect = await handle.boundingBox();
-    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-    await handle.click();
-    return;
-  }
-  throw new Error("No visible company selector is available.");
+  const position = await page.evaluate(() => {
+    const button = [...document.querySelectorAll('[data-testid="button-company-selector"]')].find(
+      (element) => element.getClientRects().length > 0
+    );
+    if (!button) return null;
+    const bounds = button.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+  });
+  if (!position) throw new Error("No visible company selector is available.");
+  await page.mouse.click(position.x, position.y);
 }
 
 async function waitForCompany(page, id) {
