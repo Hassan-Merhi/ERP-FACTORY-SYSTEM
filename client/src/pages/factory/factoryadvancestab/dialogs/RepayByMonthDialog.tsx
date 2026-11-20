@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * RepayByMonthDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -20,7 +21,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AdvanceRecord } from "../types";
 import { fmt } from "../utils";
 
@@ -85,21 +85,13 @@ export function RepayByMonthDialog({
             <Label>
               Cash Account <span className="text-destructive">*</span>
             </Label>
-            <Select
-              value={repayByMonthForm.cashAccountId}
-              onValueChange={(v) => setRepayByMonthForm((p) => ({ ...p, cashAccountId: v }))}
-            >
-              <SelectTrigger data-testid="select-rbm-cash-account">
-                <SelectValue placeholder="Select cash account" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cashAccounts || []).map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name} ({a.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+                value={repayByMonthForm.cashAccountId}
+                onChange={(v) => setRepayByMonthForm((p) => ({ ...p, cashAccountId: v }))}
+                placeholder={"Select cash account"}
+                testId={"select-rbm-cash-account"}
+              />
           </div>
         </div>
 
