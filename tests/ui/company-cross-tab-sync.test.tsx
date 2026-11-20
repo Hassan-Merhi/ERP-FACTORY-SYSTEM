@@ -221,6 +221,58 @@ describe("company selection across browser tabs", () => {
     sender.close();
   });
 
+  it("immediately gates the old company when another tab commits a switch", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+    );
+
+    await act(async () => {
+      otherTabSwitchedTo(2);
+    });
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isCheckingCompanySession).toBe(false);
+
+    await act(async () => { resolveSession({ companyId: 2 }); });
+    await waitFor(() => {
+      expect(result.current.selectedCompany?.id).toBe(2);
+      expect(result.current.isLoading).toBe(false);
+    });
+  });
+
+  it("covers a resumed tab while verifying without unmounting unchanged-company forms", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isCheckingCompanySession).toBe(true);
+    expect(result.current.isLoading).toBe(false);
+
+    await act(async () => { resolveSession({ companyId: 1 }); });
+    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not reveal an unassigned session company", async () => {
+    const { result } = await renderOnCompanyOne();
+
+    await act(async () => {
+      otherTabSwitchedTo(99);
+    });
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(2));
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isLoading).toBe(true);
+  });
+
   it("publishes a committed local selection to other tabs", async () => {
     const { result } = await renderOnCompanyOne();
     const listener = new BroadcastChannel(COMPANY_SESSION_CHANNEL);
