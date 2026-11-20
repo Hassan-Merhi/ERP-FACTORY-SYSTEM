@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./ContainerDetailErpView.tsx
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -85,20 +86,17 @@ export function ContainerErpSellDialog({ m, v }: { m: ContainerDetailErpViewMode
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Commission Account (Optional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-commission-account">
-                        <SelectValue placeholder="Default commission account" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {m.incomeAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id.toString()}>
-                          {account.name} ({account.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <UnifiedAccountPicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={m.incomeAccounts.map((account) => ({
+                      value: String(account.id),
+                      name: account.name,
+                    }))}
+                    placeholder="Default commission account"
+                    testId="select-commission-account"
+                    allowClear
+                  />
                   <p className="text-xs text-muted-foreground">Leave empty to use default commission revenue account</p>
                   <FormMessage />
                 </FormItem>
