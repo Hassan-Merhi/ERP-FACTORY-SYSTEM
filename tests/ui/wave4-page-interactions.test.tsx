@@ -297,10 +297,14 @@ describe("wave 4 page interaction sweep", () => {
       for (const id of buttonIds) {
         const button = document.querySelector<HTMLButtonElement | HTMLAnchorElement>(`[data-testid="${id}"]`);
         if (!button || (button instanceof HTMLButtonElement && button.disabled)) continue;
-        await act(async () => {
-          fireEvent.click(button);
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        });
+        try {
+          await act(async () => {
+            fireEvent.click(button);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          });
+        } catch (error) {
+          throw new Error(`${name}: clicking ${id} failed: ${String(error)}`);
+        }
         pressed += 1;
         fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
       }
