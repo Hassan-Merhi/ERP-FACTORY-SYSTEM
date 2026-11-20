@@ -4,6 +4,7 @@ import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, retailPosPayments } from "@shared/schema";
 import { db, pool } from "../../db";
 import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
+import { ledgerPostingLeafCondition } from "../accounting/postableLedgerAccountPolicy";
 
 /** Read-only Retail payment, shift and reconciliation queries. */
 
@@ -142,7 +143,7 @@ export async function listRetailFinancialAccounts(companyId: number) {
         accountType: ledgerAccounts.accountType,
       })
       .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)))
+      .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt), ledgerPostingLeafCondition(companyId)))
       .orderBy(ledgerAccounts.name),
     db
       .select({ id: bankAccounts.id, code: bankAccounts.code, name: bankAccounts.name })
