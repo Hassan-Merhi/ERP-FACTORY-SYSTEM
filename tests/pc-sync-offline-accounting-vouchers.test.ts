@@ -1,13 +1,14 @@
 /**
- * Full offline mode: accounting Sales vouchers entered on a PC while offline
- * (POST /api/vouchers/with-entries, the protected central path).
+ * Full offline mode: accounting Sales and Purchase vouchers entered on a PC
+ * while offline (POST /api/vouchers/with-entries, the protected central path).
  *
  * The cloud posts each through the same service as the live route, once,
- * with a client request id derived from the operation. Proves: a Sales voucher
- * is posted once (replay answers replayed); an unbalanced one, or one naming a
- * customer the cloud does not have, is held and never posted; a browser cannot
- * send it (PC only); and the PC records only what the cloud can replay (Sales,
- * USD, active, within the envelope's limits), refusing other voucher types,
+ * with a client request id derived from the operation. Proves: a Sales or
+ * Purchase voucher is posted once, as its own kind (replay answers replayed);
+ * an unbalanced one, or one naming a customer the cloud does not have, is held
+ * and never posted; a browser cannot send it (PC only); and the PC records only
+ * what the cloud can replay (Sales or Purchase, USD, active, within the
+ * envelope's limits), refusing other voucher types,
  * optional vouchers and over-long text before the route runs, and never queues
  * a retried save twice.
  */
@@ -26,6 +27,7 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 const PREFIX = `pcsale_${Date.now()}`;
 const DEVICE = randomUUID();
 const KIND = "voucher.sales.v1";
+const PURCHASE_KIND = "voucher.purchase.v1";
 let ctx: TestContext;
 let agent: ReturnType<typeof request.agent>;
 let localRef = 1_000_000_000;
@@ -41,16 +43,16 @@ function sale(description: string, debit: string, credit: string, extra: Record<
   };
 }
 
-function op(input: unknown, operationId = randomUUID()) {
+function op(input: unknown, operationId = randomUUID(), kind = KIND) {
   localRef += 1;
-  return { deviceId: DEVICE, operationId, kind: KIND, localRef, capturedAt: new Date().toISOString(), input };
+  return { deviceId: DEVICE, operationId, kind, localRef, capturedAt: new Date().toISOString(), input };
 }
 
-async function salesNamed(description: string): Promise<Array<{ id: number; total: number }>> {
+async function salesNamed(description: string, voucherType = "Sales"): Promise<Array<{ id: number; total: number }>> {
   const { rows } = await pool.query(
     `SELECT id, total_amount::numeric AS total FROM vouchers
-      WHERE company_id = $1 AND voucher_type = 'Sales' AND description = $2 AND deleted_at IS NULL`,
-    [ctx.companyId, description]
+      WHERE company_id = $1 AND voucher_type = $3 AND description = $2 AND deleted_at IS NULL`,
+    [ctx.companyId, description, voucherType]
   );
   return rows.map((r) => ({ id: Number(r.id), total: Number(r.total) }));
 }
@@ -74,7 +76,7 @@ afterAll(async () => {
   closeTestServer();
 }, 60_000);
 
-describe("PC offline Sales vouchers: in the cloud", () => {
+describe("PC offline Sales and Purchase vouchers: in the cloud", () => {
   it("posts a Sales voucher once, and answers a replay as replayed", async () => {
     const sent = op(sale("Offline sale A", "40.00", "40.00"));
     const first = await agent.post("/api/offline/pc-sync/operations").send(sent);
@@ -100,6 +102,33 @@ describe("PC offline Sales vouchers: in the cloud", () => {
     expect(await salesNamed("Offline sale unknown customer")).toEqual([]);
   });
 
+  it("posts a Purchase voucher once as its own kind, and holds an unbalanced one", async () => {
+    const input = sale("Offline purchase A", "25.00", "25.00");
+    input.voucher.voucherType = "Purchase";
+    const sent = op(input, randomUUID(), PURCHASE_KIND);
+    const first = await agent.post("/api/offline/pc-sync/operations").send(sent);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect((await agent.post("/api/offline/pc-sync/operations").send(sent)).body).toMatchObject({ replayed: true });
+    expect(await salesNamed("Offline purchase A", "Purchase")).toEqual([
+      { id: Number(first.body.cloudRef), total: 25 },
+    ]);
+
+    const unbalanced = sale("Offline purchase unbalanced", "25.00", "24.00");
+    unbalanced.voucher.voucherType = "Purchase";
+    const held = await agent.post("/api/offline/pc-sync/operations").send(op(unbalanced, randomUUID(), PURCHASE_KIND));
+    expect(held.status).toBe(409);
+    expect(held.body).toMatchObject({ code: "PHASE9_PURCHASE_VOUCHER_REFUSED", overridable: false });
+    expect(await salesNamed("Offline purchase unbalanced", "Purchase")).toEqual([]);
+
+    // A Purchase body sent as a Sales voucher is never posted.
+    const mislabelled = sale("Offline purchase sent as a sale", "5.00", "5.00");
+    mislabelled.voucher.voucherType = "Purchase";
+    const refused = await agent.post("/api/offline/pc-sync/operations").send(op(mislabelled));
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(await salesNamed("Offline purchase sent as a sale", "Purchase")).toEqual([]);
+    expect(await salesNamed("Offline purchase sent as a sale")).toEqual([]);
+  });
+
   it("refuses Sales vouchers on the browser route (PC only)", async () => {
     const res = await agent
       .post("/api/offline/browser-sync/operations")
@@ -109,7 +138,7 @@ describe("PC offline Sales vouchers: in the cloud", () => {
   });
 });
 
-describe("PC offline Sales vouchers: on the PC", () => {
+describe("PC offline Sales and Purchase vouchers: on the PC", () => {
   let admin: Client;
   let local: Client;
 
@@ -131,7 +160,7 @@ describe("PC offline Sales vouchers: on the PC", () => {
     await admin?.end().catch(() => undefined);
   });
 
-  it("records a Sales voucher, and refuses other types and optional vouchers before the route runs", async () => {
+  it("records Sales and Purchase vouchers as their own kinds, and refuses other types and optional vouchers before the route runs", async () => {
     await local.query("UPDATE pc_local.state SET copy_complete = true, last_sync_at = now()");
     const connect = async () => ({
       query: (text: string, values?: unknown[]) => local.query(text, values as unknown[]),
@@ -168,9 +197,10 @@ describe("PC offline Sales vouchers: on the PC", () => {
     expect((await request(app).post("/api/vouchers/with-entries").send(first)).body).toMatchObject({
       replayed: true,
     });
-    const purchase = await request(app).post("/api/vouchers/with-entries").send(body("Purchase"));
-    expect(purchase.status).toBe(423);
-    expect(purchase.body).toEqual({ code: "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED" });
+    expect((await request(app).post("/api/vouchers/with-entries").send(body("Purchase"))).status).toBe(200);
+    const contra = await request(app).post("/api/vouchers/with-entries").send(body("Contra"));
+    expect(contra.status).toBe(423);
+    expect(contra.body).toEqual({ code: "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED" });
     expect(
       (
         await request(app)
@@ -186,15 +216,22 @@ describe("PC offline Sales vouchers: on the PC", () => {
           .send(body("Sales", { description: "x".repeat(2001) }))
       ).status
     ).toBe(423);
-    expect(handled).toEqual(["Sales", "Sales"]);
+    expect(handled).toEqual(["Sales", "Sales", "Purchase"]);
 
-    let rows: Array<{ kind: string; status: string }> = [];
-    for (let i = 0; i < 20 && (rows.length !== 1 || rows[0].status !== "pending"); i += 1) {
+    const outbox = async () =>
+      (await local.query("SELECT kind, status FROM pc_local.outbox ORDER BY kind")).rows as Array<{
+        kind: string;
+        status: string;
+      }>;
+    let rows = await outbox();
+    for (let i = 0; i < 20 && (rows.length !== 2 || rows.some((r) => r.status !== "pending")); i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50));
-      rows = (await local.query("SELECT kind, status FROM pc_local.outbox WHERE kind = $1", [KIND])).rows;
+      rows = await outbox();
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
-    rows = (await local.query("SELECT kind, status FROM pc_local.outbox WHERE kind = $1", [KIND])).rows;
-    expect(rows).toEqual([{ kind: KIND, status: "pending" }]);
+    expect(await outbox()).toEqual([
+      { kind: PURCHASE_KIND, status: "pending" },
+      { kind: KIND, status: "pending" },
+    ]);
   });
 });

@@ -61,6 +61,8 @@ export const applicationFrenchTranslations = {
   "mobileFilters.search": "Rechercher",
   "mobileFilters.clearSearch": "Effacer la recherche",
   "company.loadingSelector": "Chargement du sélecteur de société",
+  "company.verifyingSession": "Vérification de la société",
+  "company.switching": "Changement de société",
   "company.current": "Société actuelle",
   "company.openSwitcher": "Ouvrir le sélecteur de société",
   "user.menu": "Menu du compte",

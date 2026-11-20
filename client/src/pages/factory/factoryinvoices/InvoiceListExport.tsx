@@ -26,6 +26,7 @@ const OPTIONAL_COLUMNS: Record<InvoiceColumnKey, ColumnsFor> = {
   proforma: () => [{ header: "Proforma", value: (order) => order.proformaName }],
   container: () => [{ header: "Container", value: (order) => order.containerNumber }],
   bookingInfo: () => [{ header: "Booking Info", value: (order) => order.bookingInfo }],
+  agent: () => [{ header: "Agent", value: (order) => order.agentName }],
   destination: () => [{ header: "Destination", value: (order) => order.destination }],
   notes: () => [{ header: "Notes", value: (order) => order.containerNotes }],
   date: (formatDate) => [
@@ -64,6 +65,7 @@ const COLUMN_ORDER: InvoiceColumnKey[] = [
   "proforma",
   "container",
   "bookingInfo",
+  "agent",
   "destination",
   "notes",
   "date",

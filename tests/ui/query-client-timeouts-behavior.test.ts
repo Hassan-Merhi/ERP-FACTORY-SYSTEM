@@ -68,6 +68,52 @@ describe("CSRF token unavailable", () => {
   });
 });
 
+describe("company-revision mutation transport", () => {
+  it("never resends a voucher after an ambiguous network failure", async () => {
+    const network: Network = vi.fn(async (input) => {
+      if (String(input) === "/api/csrf-token") return json({ csrfToken: "csrf" });
+      throw new TypeError("Connection dropped after send");
+    });
+    await loadWith(network);
+    const scope = await import("@/lib/companyCacheScope");
+    scope._testOnly_resetCompanyCacheScope();
+    scope.activateCompanyCacheScope(12);
+    scope.rememberVerifiedServerCompanyRevision(12, "revision-A");
+
+    await expect(window.fetch("/api/vouchers", { method: "POST", body: "{}" })).rejects.toThrow(
+      "Connection dropped after send"
+    );
+    const attempts = network.mock.calls.filter(([input]) => String(input) === "/api/vouchers");
+    expect(attempts).toHaveLength(1);
+    expect(new Headers(attempts[0][1]?.headers).get("X-Expected-Company-Revision")).toBe("revision-A");
+  });
+
+  it("preserves a completed server write's real response when the UI changes company before it returns", async () => {
+    let finishWrite!: (response: Response) => void;
+    const pendingWrite = new Promise<Response>((resolve) => { finishWrite = resolve; });
+    const network: Network = vi.fn(async (input) => {
+      if (String(input) === "/api/csrf-token") return json({ csrfToken: "csrf" });
+      return pendingWrite;
+    });
+    await loadWith(network);
+    const scope = await import("@/lib/companyCacheScope");
+    scope._testOnly_resetCompanyCacheScope();
+    scope.activateCompanyCacheScope(12);
+    scope.rememberVerifiedServerCompanyRevision(12, "revision-A");
+
+    const request = window.fetch("/api/vouchers", { method: "POST", body: "{}" });
+    await vi.waitFor(() => expect(network.mock.calls.filter(([input]) => String(input) === "/api/vouchers")).toHaveLength(1));
+
+    scope.beginCompanyCacheTransition();
+    scope.activateCompanyCacheScope(13);
+    scope.rememberVerifiedServerCompanyRevision(13, "revision-B");
+    finishWrite(json({ id: 10, acceptedCompanyId: 12 }));
+
+    expect(await (await request).json()).toEqual({ id: 10, acceptedCompanyId: 12 });
+    expect(network.mock.calls.filter(([input]) => String(input) === "/api/vouchers")).toHaveLength(1);
+  });
+});
+
 describe("timeouts and cancellation", () => {
   const network = (): Network =>
     vi.fn(async (input, init) => (String(input) === "/api/csrf-token" ? json({ csrfToken: "t" }) : hanging(init)));

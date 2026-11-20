@@ -126,6 +126,8 @@ export function useFactoryInvoicesStatePart2({
         String(order.id),
         order.proformaName,
         order.containerNumber,
+        order.bookingInfo,
+        order.agentName,
         order.destination,
       ].some((value) => (value || "").toLowerCase().includes(needle))
     )
