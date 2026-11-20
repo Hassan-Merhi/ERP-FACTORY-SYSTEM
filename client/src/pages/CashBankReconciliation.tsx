@@ -8,7 +8,6 @@ import { RowsExportMenu, type RowsExportSheet } from "@/components/export/RowsEx
 import { exact, fmt, type BookEntry } from "./CashBankReconciliationTypes";
 import { CashBankReconciliationSection, useCashBankReconciliationState } from "./useCashBankReconciliationState";
 import { CashBankReconciliationCardSection } from "./CashBankReconciliationCardSection";
-import { SelectContent, SelectTrigger, SelectValue, Select, SelectItem } from "@/components/ui/select";
 
 export default function CashBankReconciliation() {
   const {
