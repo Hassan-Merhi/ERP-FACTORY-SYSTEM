@@ -1,5 +1,13 @@
 import { installPermissionRevalidationListener } from "./permissionRevalidation";
-import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, isCompanyOwnedApiRead } from "./companyCacheScope";
+import {
+  addCompanyMutationHeaders,
+  assertCompanyMutationSnapshot,
+  assertCompanyReadSnapshot,
+  captureCompanyMutationSnapshot,
+  captureCompanyReadSnapshot,
+  isCompanyOwnedApiRead,
+  type CompanyMutationSnapshot,
+} from "./companyCacheScope";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient } from "@tanstack/react-query";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
@@ -86,7 +94,12 @@ if (
   (window as unknown as (Window & typeof globalThis) & { __csrfFetchPatched: true }).__csrfFetchPatched = true;
   const originalFetch = window.fetch.bind(window);
 
-  async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit, isRetry = false): Promise<Response> {
+  async function fetchWithCsrf(
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    isRetry = false,
+    originalWriteScope?: CompanyMutationSnapshot | null
+  ): Promise<Response> {
     // Capacitor: prefix relative /api/* paths with the remote server base URL.
     // No-op when VITE_API_BASE_URL is unset (all web builds — zero behavior change).
     if (_CAPACITOR_API_BASE && typeof input === "string" && input.startsWith("/")) {
@@ -109,6 +122,13 @@ if (
     }
 
     const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    // Capture at the original user action, before any asynchronous CSRF work.
+    // A retry must carry the same scope, not silently adopt the next company.
+    const writeScope =
+      originalWriteScope === undefined
+        ? captureCompanyMutationSnapshot(method, pathname ?? "")
+        : originalWriteScope;
+    assertCompanyMutationSnapshot(writeScope);
     // The authenticated server session, not the URL, owns company-specific
     // responses. Reject GETs started before or during a company transition.
     // Session/auth/health probes remain available to complete the switch.
@@ -143,6 +163,11 @@ if (
     // including raw fetch() calls, so the server can enforce the Factory page/tab
     // that owns the shared endpoint instead of trusting React visibility.
     let effectiveInit = init;
+    if (writeScope) {
+      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      addCompanyMutationHeaders(headers, writeScope);
+      effectiveInit = { ...init, headers, credentials: init?.credentials ?? "include" };
+    }
     // The browser HTTP cache is also URL-keyed and must not reuse an API
     // representation from an earlier authenticated company session.
     if (readScope) effectiveInit = { ...effectiveInit, cache: "no-store" };
@@ -210,7 +235,9 @@ if (
             existingHeaders.set("X-CSRF-Token", token);
             const newInit: RequestInit = { ...effectiveInit, headers: existingHeaders };
             if (newInit.credentials === undefined) newInit.credentials = "include";
+            assertCompanyMutationSnapshot(writeScope);
             const res = await originalFetch(input, newInit);
+            assertCompanyMutationSnapshot(writeScope);
             await applyReferenceMutation(res);
 
             // If the server rejected our token (stale after restart/session regen),
@@ -221,7 +248,7 @@ if (
                 const body = await clone.json();
                 if (body?.code === "CSRF_TOKEN_MISMATCH") {
                   resetCsrfToken();
-                  return fetchWithCsrf(input, init, true);
+                  return fetchWithCsrf(input, init, true, writeScope);
                 }
               } catch {
                 /* not JSON — not a CSRF error */
@@ -239,6 +266,9 @@ if (
     // GET requests may fall back to a verified per-user/company snapshot only
     // after a real transport failure or the known offline service worker 503.
     // Never replace 401/403/ordinary server failures with cached business data.
+    // The try/catch above intentionally tolerates CSRF interceptor failures.
+    // A company scope change must never fall through to an unscoped retry.
+    assertCompanyMutationSnapshot(writeScope);
     const exactReadUrl = method === "GET" && typeof input === "string" && input.startsWith("/api/") ? input : null;
     const fromOfflineRead = async (): Promise<Response | null> => {
       if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
@@ -253,6 +283,7 @@ if (
     let fallbackRes: Response;
     try {
       fallbackRes = await originalFetch(input, effectiveInit);
+      assertCompanyMutationSnapshot(writeScope);
       if (readScope) assertCompanyReadSnapshot(readScope);
     } catch (error) {
       const networkFailure =
