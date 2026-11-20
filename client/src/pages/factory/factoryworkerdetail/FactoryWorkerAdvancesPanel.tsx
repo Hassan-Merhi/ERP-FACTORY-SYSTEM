@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { fmt } from "./utils";
 import {
@@ -213,18 +213,13 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       </div>
                       <div className="space-y-2">
                         <Label>Cash Account (receives repayment)</Label>
-                        <Select value={repayCashAccountId} onValueChange={setRepayCashAccountId}>
-                          <SelectTrigger data-testid="select-repay-cash-account">
-                            <SelectValue placeholder="Select cash account (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(cashAccounts || []).map((a) => (
-                              <SelectItem key={a.id} value={String(a.id)}>
-                                {a.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <UnifiedAccountPicker
+                    value={repayCashAccountId}
+                    onChange={setRepayCashAccountId}
+                    options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+                    placeholder="Select cash account"
+                    testId="select-repay-cash-account"
+                  />
                       </div>
                       <div className="space-y-2">
                         <Label>Notes</Label>
@@ -331,18 +326,13 @@ export function FactoryWorkerAdvancesPanel(props: FactoryWorkerDetailModelProps)
                       </div>
                       <div className="space-y-2">
                         <Label>Cash Account (receives repayment)</Label>
-                        <Select value={bulkRepayCashAccountId} onValueChange={setBulkRepayCashAccountId}>
-                          <SelectTrigger data-testid="select-bulk-repay-cash">
-                            <SelectValue placeholder="Select cash account (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(cashAccounts || []).map((a) => (
-                              <SelectItem key={a.id} value={String(a.id)}>
-                                {a.name} ({a.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <UnifiedAccountPicker
+                    value={bulkRepayCashAccountId}
+                    onChange={setBulkRepayCashAccountId}
+                    options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+                    placeholder="Select cash account"
+                    testId="select-bulk-repay-cash"
+                  />
                       </div>
                     </div>
                     <DialogFooter>
