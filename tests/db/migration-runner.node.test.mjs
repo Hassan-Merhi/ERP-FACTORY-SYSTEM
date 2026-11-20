@@ -166,6 +166,11 @@ describe("migration registry", () => {
     assert.equal(find("table", "public.vouchers").def.forceRls, true);
     assert.ok(find("policy", "public.voucher_entries.voucher_entries_company_scope_policy"));
     assert.ok(find("function", "public.erp_current_company_id()"));
+    // Loading-agent schema must be present on a fresh migrated database, not
+    // available only after the old manual TablePlus script has been run.
+    assert.ok(find("column", "public.customer_orders.agent_name"));
+    assert.ok(find("table", "public.factory_loading_agents"));
+    assert.ok(find("index", "public.factory_loading_agents_company_name_ci_uniq"));
     assert.ok(
       full.some(
         (e) => e.kind === "trigger" && e.identity.startsWith("public.vouchers.") && /closed_period/.test(e.identity)
