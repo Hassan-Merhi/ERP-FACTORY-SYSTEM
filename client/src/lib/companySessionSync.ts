@@ -24,10 +24,12 @@ function validCompanyId(value: unknown): value is number {
 function isCompanySessionMessage(value: unknown): value is CompanySessionMessage {
   if (!value || typeof value !== "object") return false;
   const event = value as Partial<CompanySessionMessage>;
-  return event.type === "company-committed" &&
+  return (
+    event.type === "company-committed" &&
     validCompanyId(event.companyId) &&
     typeof event.sourceId === "string" &&
-    typeof event.nonce === "string";
+    typeof event.nonce === "string"
+  );
 }
 
 /** Notify other tabs only after the server has accepted the switch. */

@@ -347,10 +347,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       });
   }, [adoptServerCompany, companies, initialSyncAttempt, scheduleInitialSyncRetry, selectCompany, selectedCompany]);
 
-  const adoptOtherTabCompany = useCallback((company: Company, revision?: string | null) => {
-    commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
-    refreshRealtimeSessionScope();
-  }, [commitCompanySelection]);
+  const adoptOtherTabCompany = useCallback(
+    (company: Company, revision?: string | null) => {
+      commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
+      refreshRealtimeSessionScope();
+    },
+    [commitCompanySelection]
+  );
 
   const clearResumeVerificationCoverTimer = useCallback(() => {
     if (resumeVerificationCoverTimer.current !== null) {
@@ -361,33 +364,36 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => clearResumeVerificationCoverTimer(), [clearResumeVerificationCoverTimer]);
 
-  const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal | "hint") => {
-    // The cache fence is immediate even when the cover is delayed: a response
-    // or submitted voucher must never cross an unverified company session.
-    beginCompanyCacheTransition();
-    if (signal === "selection") {
-      // This is an authoritative mismatch, not merely another tab's hint.
-      clearResumeVerificationCoverTimer();
-      setShowResumeVerificationCover(false);
-      announceCompanyWorkspaceTransition();
-      setExternalSessionState("switching");
-      return;
-    }
-    if (signal === "hint") {
-      // A confirmed cross-tab commit notification might mean a new company.
-      // Hide old records now, but retain drafts until the server confirms it.
-      clearResumeVerificationCoverTimer();
-      setShowResumeVerificationCover(true);
-    } else if (resumeVerificationCoverTimer.current === null) {
-      // Foreground-only tab returns usually verify in milliseconds. Avoid the
-      // repeated full-screen flash; still fail closed on slow or failed probes.
-      resumeVerificationCoverTimer.current = window.setTimeout(() => {
-        resumeVerificationCoverTimer.current = null;
+  const beginExternalSessionVerification = useCallback(
+    (signal: CompanySessionSignal | "hint") => {
+      // The cache fence is immediate even when the cover is delayed: a response
+      // or submitted voucher must never cross an unverified company session.
+      beginCompanyCacheTransition();
+      if (signal === "selection") {
+        // This is an authoritative mismatch, not merely another tab's hint.
+        clearResumeVerificationCoverTimer();
+        setShowResumeVerificationCover(false);
+        announceCompanyWorkspaceTransition();
+        setExternalSessionState("switching");
+        return;
+      }
+      if (signal === "hint") {
+        // A confirmed cross-tab commit notification might mean a new company.
+        // Hide old records now, but retain drafts until the server confirms it.
+        clearResumeVerificationCoverTimer();
         setShowResumeVerificationCover(true);
-      }, 350);
-    }
-    setExternalSessionState((current) => current === "switching" ? current : "checking");
-  }, [clearResumeVerificationCoverTimer]);
+      } else if (resumeVerificationCoverTimer.current === null) {
+        // Foreground-only tab returns usually verify in milliseconds. Avoid the
+        // repeated full-screen flash; still fail closed on slow or failed probes.
+        resumeVerificationCoverTimer.current = window.setTimeout(() => {
+          resumeVerificationCoverTimer.current = null;
+          setShowResumeVerificationCover(true);
+        }, 350);
+      }
+      setExternalSessionState((current) => (current === "switching" ? current : "checking"));
+    },
+    [clearResumeVerificationCoverTimer]
+  );
   const finishExternalSessionVerification = useCallback(() => {
     clearResumeVerificationCoverTimer();
     setShowResumeVerificationCover(false);
@@ -415,7 +421,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         selectedCompany,
         companies,
         isLoading:
-          isLoading || isSyncingCompany || externalSessionState === "switching" || (companies.length > 0 && !selectedCompany),
+          isLoading ||
+          isSyncingCompany ||
+          externalSessionState === "switching" ||
+          (companies.length > 0 && !selectedCompany),
         // Pending local changes stay covered rather than unmounting forms.
         // A confirmed external company mismatch still hard-gates the workspace.
         isCheckingCompanySession:
