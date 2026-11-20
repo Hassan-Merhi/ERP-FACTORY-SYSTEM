@@ -50,6 +50,22 @@ function positiveCompanyId(value: unknown): number {
 }
 
 /**
+ * Whether assertTransactionCompanyScope may scope the transaction to this
+ * company: always outside an HTTP request, and inside one only for the
+ * request's own company or a secondary company the request boundary
+ * membership-checked. Changes nothing; callers that may legitimately touch
+ * another company's row (an intercompany counterpart) check it first.
+ */
+export function isCompanyInRequestScope(companyId: number): boolean {
+  const requestContext = getCompanyRequestRuntimeContext();
+  return (
+    !requestContext ||
+    requestContext.companyId === companyId ||
+    Boolean(requestContext.authorizedCompanyIds?.includes(companyId))
+  );
+}
+
+/**
  * Assert the authoritative company on the current PostgreSQL transaction.
  *
  * The RLS policies consult app.current_company_id. Central accounting/inventory
@@ -72,13 +88,7 @@ function positiveCompanyId(value: unknown): number {
  */
 export async function assertTransactionCompanyScope(tx: CompanyScopedTransaction, value: unknown): Promise<number> {
   const companyId = positiveCompanyId(value);
-  const requestContext = getCompanyRequestRuntimeContext();
-
-  if (
-    requestContext &&
-    requestContext.companyId !== companyId &&
-    !requestContext.authorizedCompanyIds?.includes(companyId)
-  ) {
+  if (!isCompanyInRequestScope(companyId)) {
     throw new TransactionCompanyScopeError("transaction company scope is not authorized for the active request");
   }
 

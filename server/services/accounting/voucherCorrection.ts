@@ -29,7 +29,7 @@ import {
   type VoucherAuditState,
 } from "../../routes/helpers/voucherAuditTrail";
 import { writeAuditEvent, type AuditChanges } from "../audit";
-import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
+import { assertTransactionCompanyScope, isCompanyInRequestScope } from "../security/transactionCompanyScope";
 import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
 import type { PostedVoucher, PostedVoucherEntry, VoucherEntryInsertFields } from "./accountingTypes";
 import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingActor } from "./centralPostingEngine";
@@ -206,11 +206,11 @@ export async function assertVoucherEditableTx(
   if (voucher.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, { voucherId });
   }
-  // System FX revaluation lines are base-only: the generic Journal editor
-  // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
-  // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
-  // use a dedicated audited path that preserves the original currency evidence.
-  await assertTransactionCompanyScope(tx, voucher.companyId);
+  // System FX revaluation journals are base-only; the generic editor would rebuild them as
+  // USD/IDENTITY, so refuse to edit or delete them (repairs use the audited FX path). Scope the
+  // transaction first, except for an intercompany counterpart rescaled in the other company's
+  // request: that switch is refused, and FX revaluation journals are never counterparts.
+  if (isCompanyInRequestScope(voucher.companyId)) await assertTransactionCompanyScope(tx, voucher.companyId);
   if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
     throw new VoucherCorrectionError(
       409,

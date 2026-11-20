@@ -2,7 +2,10 @@ import type { SQL } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 import { runWithCompanyRequestRuntimeContext } from "../server/services/security/companyRequestRuntimeContext";
-import { assertTransactionCompanyScope } from "../server/services/security/transactionCompanyScope";
+import {
+  assertTransactionCompanyScope,
+  isCompanyInRequestScope,
+} from "../server/services/security/transactionCompanyScope";
 
 const surfaces = [
   { name: "ERP", role: "Admin", path: "/api/vouchers" },
@@ -39,4 +42,40 @@ describe("Phase 4 tenant scope across application surfaces", () => {
       expect(execute).not.toHaveBeenCalled();
     });
   }
+});
+
+describe("isCompanyInRequestScope", () => {
+  const context = {
+    userId: "phase-4-scope-check",
+    companyId: 71,
+    authorizedCompanyIds: [73],
+    role: "Admin",
+    developerBypass: false,
+    method: "PUT",
+    path: "/api/vouchers/1",
+  };
+
+  it("allows the request's company and its membership-checked secondary companies only", () => {
+    runWithCompanyRequestRuntimeContext(context, () => {
+      expect(isCompanyInRequestScope(71)).toBe(true);
+      expect(isCompanyInRequestScope(73)).toBe(true);
+      expect(isCompanyInRequestScope(72)).toBe(false);
+    });
+  });
+
+  it("allows any company outside an HTTP request, as background work asserts its own", () => {
+    expect(isCompanyInRequestScope(72)).toBe(true);
+  });
+
+  it("agrees with assertTransactionCompanyScope and never touches the transaction itself", async () => {
+    const execute = vi.fn(async (_query: SQL) => undefined);
+    await runWithCompanyRequestRuntimeContext(context, async () => {
+      expect(isCompanyInRequestScope(72)).toBe(false);
+      await expect(assertTransactionCompanyScope({ execute }, 72)).rejects.toMatchObject({
+        code: "TRANSACTION_COMPANY_SCOPE_INVALID",
+      });
+      await expect(assertTransactionCompanyScope({ execute }, 73)).resolves.toBe(73);
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
 });
