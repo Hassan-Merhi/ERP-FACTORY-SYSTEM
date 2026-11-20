@@ -123,7 +123,6 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
  placeholder={"Select ledger account..."}
  testId={`select-charge-ledger-${charge.id}`}
  className={"h-8 text-xs flex-1"}
- allowClear
  />
                         <Button
                           size="sm"
@@ -203,7 +202,6 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
  placeholder={"Ledger account..."}
  testId={"select-new-charge-ledger"}
  className={"text-sm"}
- allowClear
  />
                     </div>
                     <p className="text-xs text-muted-foreground">Saving will immediately post an accounting voucher.</p>
