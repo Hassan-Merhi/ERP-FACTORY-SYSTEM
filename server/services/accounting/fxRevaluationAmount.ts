@@ -14,7 +14,8 @@ export function postedFxRevaluationAdjustmentUsd(currentTranslatedUsd: string, p
   const current = new Decimal(currentTranslatedUsd);
   const booked = new Decimal(postedBookClosingUsd);
   if (!current.isFinite() || !booked.isFinite()) {
-    throw new Error("FX revaluation requires finite current and posted USD amounts.");
+    // Invalid numeric inputs indicate a caller contract violation, not a UI message.
+    throw new RangeError("FX_REVALUATION_AMOUNT_INVALID");
   }
   return current
     .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
