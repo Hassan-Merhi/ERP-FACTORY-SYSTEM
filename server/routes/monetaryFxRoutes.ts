@@ -10,6 +10,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import { datedMonetaryRateTx, fxDay, MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
+import { getManualFxCorrectionPreflight } from "../services/accounting/manualFxCorrectionPreflight";
 import { previewRealizedFxTx, listRealizedFxTx, recognizeRealizedFxTx } from "../services/accounting/realizedFxService";
 import {
   UNIFIED_FINANCIAL_POSTING_LOCKED,
@@ -79,6 +80,19 @@ export function registerMonetaryFxRoutes(app: Express): void {
       return fail(res, e);
     }
   });
+  // Phase 3 recovery: inspect an old manual FX journal without writing, reclassifying
+  // accounts, deleting vouchers or creating an automatic FX journal.
+  app.get("/api/accounting/monetary-fx/manual-revaluation/preflight", ...gate, async (req, res) => {
+    try {
+      const c = company(req);
+      const { voucherId } = z.object({ voucherId: positive }).parse(req.query);
+      const preview = await getManualFxCorrectionPreflight(c, voucherId);
+      return res.status(preview.status === "not_found" ? 404 : 200).json(preview);
+    } catch (e) {
+      return fail(res, e);
+    }
+  });
+
   app.get("/api/accounting/monetary-fx/cash-bank", ...gate, async (req, res) => {
     try {
       const input = cashBank.parse(req.query),
