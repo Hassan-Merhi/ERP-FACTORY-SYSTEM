@@ -23,6 +23,7 @@ import {
   phase9StockItemEditEnvelope,
 } from "./phase9StockItemEditEnvelope.mjs";
 import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
+import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "./phase9JournalEnvelope.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
@@ -233,19 +234,6 @@ function attachmentPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
-function paymentPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_PAYMENT_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9PaymentEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
-
 /**
  * `overridable` lists the conflict codes an Admin/Developer may resolve with
  * an "approve-override" decision (apply anyway). Every other conflict can
@@ -369,7 +357,7 @@ const STREAMS = Object.freeze({
   payments: Object.freeze({
     kinds: Object.freeze({
       [PHASE9_PAYMENT_KIND]: Object.freeze({
-        parse: paymentPayload,
+        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_KIND, phase9PaymentEnvelope),
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([]),
       }),
@@ -378,6 +366,12 @@ const STREAMS = Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_EDIT_KIND, phase9PaymentEditEnvelope),
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
+      }),
+      // Full offline mode: a Journal entered on a PC, on the voucher stream.
+      [PHASE9_JOURNAL_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_JOURNAL_KIND, phase9JournalEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
       }),
       [PHASE9_PAYMENT_DELETE_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_DELETE_KIND, phase9PaymentDeleteEnvelope),

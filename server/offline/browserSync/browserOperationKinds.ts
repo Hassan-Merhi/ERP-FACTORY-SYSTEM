@@ -14,6 +14,7 @@ import { inventoryMoney, inventoryQuantity } from "../../lib/inventoryMath";
 import { toMoney } from "../../lib/money";
 import { paymentReceiptEvidence } from "../../edge/phase9PaymentOutbox";
 import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "../../edge/phase9PaymentEnvelope.mjs";
+import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "../../edge/phase9JournalEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
   PHASE9_STOCK_TRANSFER_KIND,
@@ -61,6 +62,8 @@ export interface BrowserOperationKind {
   /** The live route whose body this operation carries. */
   route: { method: "POST"; path: string };
   build(input: Body, context: BuildContext): object;
+  /** Only a PC may deliver it (POST /api/offline/pc-sync/operations), never a browser. */
+  pcOnly?: boolean;
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -130,6 +133,42 @@ export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKi
           exchangeRate: input.exchangeRate == null || input.exchangeRate === "" ? null : String(input.exchangeRate),
           effectiveDate: input.effectiveDate ? String(input.effectiveDate) : null,
         }),
+      });
+    },
+  },
+  // POST /api/vouchers/journal (PC only: a journal needs the PC's full local copy)
+  [PHASE9_JOURNAL_KIND]: {
+    stream: "payments",
+    route: { method: "POST", path: "/api/vouchers/journal" },
+    pcOnly: true,
+    build(raw, { actor, operationId, localRef }) {
+      const input = body(raw);
+      if (!Array.isArray(input.entries)) throw new BrowserOperationRefusal("OFFLINE_BROWSER_INPUT_INVALID");
+      const currency = String(input.currency || "USD").toUpperCase();
+      return phase9JournalEnvelope({
+        companyId: actor.companyId,
+        localVoucherId: localRef,
+        actorUserId: actor.userId,
+        actorUsername: actor.username,
+        requestId: operationId,
+        journal: {
+          voucherDate: day(input.voucherDate, ""),
+          entries: (input.entries as Array<Record<string, unknown>>).map((entry) => ({
+            type: entry.type === "CR" ? "CR" : entry.type === "DR" ? "DR" : (String(entry.type) as "DR"),
+            accountType: String(entry.accountType) as "ledger",
+            accountId: positiveId(entry.accountId, "OFFLINE_BROWSER_ACCOUNT_INVALID"),
+            amount: decimalOrNull(entry.amount) ?? "",
+            narration: textOrNull(entry.narration),
+          })),
+          notes: textOrNull(input.notes),
+          optional: input.optional === true,
+          currency,
+          exchangeRate:
+            currency === "USD" || input.exchangeRate == null || input.exchangeRate === ""
+              ? null
+              : String(input.exchangeRate),
+          effectiveDate: input.effectiveDate ? day(input.effectiveDate, "") : null,
+        },
       });
     },
   },
