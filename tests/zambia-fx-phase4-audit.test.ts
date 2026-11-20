@@ -161,6 +161,13 @@ describe("Phase 4 exact FX correction verification", () => {
     );
   });
 
+  it("refuses a replacement journal that predates the original reversal", () => {
+    const priorFx = { ...replacement(), id: 9 };
+    const result = evaluate({ automaticFxVouchers: [priorFx] });
+    expect(result.status).toBe("blocked");
+    expect(result.blockers).toContain("EXISTING_UNRECONCILED_FX_JOURNAL");
+  });
+
   it("does not accept revaluation lines that alter native currency", () => {
     const bad = replacement();
     bad.lines[0].nativeCredit = "11.60";
