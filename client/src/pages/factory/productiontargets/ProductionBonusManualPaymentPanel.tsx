@@ -76,8 +76,8 @@ export function ProductionBonusManualPaymentPanel({ rosterDate, workers, selecte
                 options={accounts.map((account) => ({ value: String(account.id), name: account.name }))}
                 value={accountId}
                 onChange={setAccountId}
-                placeholder={"Select paying account"}
-                ariaLabel={"Manual bonus paying account"}
+                placeholder="Select paying account"
+                ariaLabel="Manual bonus paying account"
                 className="w-[245px]"
               />
           </label>
