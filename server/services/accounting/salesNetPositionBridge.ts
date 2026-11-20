@@ -111,7 +111,7 @@ export function bridgeSalesToNetPosition(input: SalesNetPositionBridgeInput): Sa
     fx: {
       bookedDebitUsd: fixed(fxDebit),
       accountType: input.fxCounterAccountType,
-      misclassified: input.fxCounterAccountType !== null && input.fxCounterAccountType !== "Indirect Expense",
+      misclassified: input.fxCounterAccountType !== "Indirect Expense",
     },
     profitBridge: {
       salesReportProfitAfterFxUsd: fixed(storedProfit.minus(fxDebit)),
