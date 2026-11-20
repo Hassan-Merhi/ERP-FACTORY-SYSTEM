@@ -88,6 +88,7 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 vi.mock("wouter", () => ({ useLocation: () => ["/transaction-journal", harness.setLocation] }));
+// A cross-company drilldown requires an active assignment and an acknowledged session switch.
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({
     selectCompany: harness.selectCompany,
