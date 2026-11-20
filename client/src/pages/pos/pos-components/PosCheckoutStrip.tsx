@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { MapPin, User, ChevronDown, Check, CalendarDays, CreditCard, Wallet } from "lucide-react";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -164,28 +165,18 @@ export function PosCheckoutStrip({
           </PosCheckoutField>
 
           <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")}>
-            <Select
+            <UnifiedAccountPicker
+              options={(paymentAccountType === "bank"
+                ? Array.isArray(bankAccounts) ? bankAccounts : []
+                : cashLedgerAccounts
+              ).map((account) => ({ value: String(account.id), name: account.name }))}
               value={paymentAccountId || ""}
-              onValueChange={posUser ? undefined : setPaymentAccountId}
+              onChange={setPaymentAccountId}
               disabled={!!posUser}
-            >
-              <SelectTrigger className="w-[180px]" data-testid="select-payment-account">
-                <SelectValue placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"} />
-              </SelectTrigger>
-              <SelectContent>
-                {paymentAccountType === "bank"
-                  ? (Array.isArray(bankAccounts) ? bankAccounts : []).map((acc) => (
-                      <SelectItem key={acc.id} value={String(acc.id)}>
-                        {acc.name} ({acc.code})
-                      </SelectItem>
-                    ))
-                  : cashLedgerAccounts.map((acc) => (
-                      <SelectItem key={acc.id} value={String(acc.id)}>
-                        {acc.name}
-                      </SelectItem>
-                    ))}
-              </SelectContent>
-            </Select>
+              placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"}
+              testId="select-payment-account"
+              className="w-[180px]"
+            />
           </PosCheckoutField>
         </>
       )}
