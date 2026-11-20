@@ -733,10 +733,6 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
-    "/api/factory/container-import-credit-preview": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
     "/api/factory/containers": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"

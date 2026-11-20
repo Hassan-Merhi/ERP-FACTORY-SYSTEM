@@ -58,8 +58,6 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
   "GET /api/debug/import-cycle": "Import-cycle debug read with its own guard chain; not an import.",
   "GET /api/factory/bale-import-batches": "History of past bale imports; a read, not an import.",
   "GET /api/factory/bale-import-batches/:id/bales": "Bales of a past import batch; a read, not an import.",
-  "GET /api/factory/container-import-credit-preview":
-    "Factory-admin, read-only preview of containers missing their import credit voucher (#2228); it posts nothing.",
   "GET /api/factory/bale-products/arabic-import/capabilities/import":
     "Capability probe that answers whether the user may import; the route checks act_import_data itself.",
   "POST /api/factory/raw-stock/recalc/mix-batches-preview": "Admin-only preview; it writes nothing.",

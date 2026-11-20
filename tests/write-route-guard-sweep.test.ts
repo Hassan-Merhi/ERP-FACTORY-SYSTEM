@@ -257,7 +257,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/containers",
   "POST /api/factory/containers/:id/other-charges/sync",
   "POST /api/factory/containers/:id/reverse-offload",
-  "POST /api/factory/containers/backfill-import-credits",
   "POST /api/factory/containers/bulk-delete",
   "POST /api/factory/customer-orders",
   "POST /api/factory/customer-orders-loading",

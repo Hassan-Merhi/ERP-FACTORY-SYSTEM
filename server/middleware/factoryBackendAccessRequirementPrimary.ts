@@ -82,11 +82,7 @@ export function resolvePrimaryRequirement(req: Request, path: string): FactoryAp
   if (hasPrefix(path, "/bale-import-batches")) {
     return requirement("factory/import", ["hide_tab_import_bales"]);
   }
-  if (
-    path === "/containers/import-excel" ||
-    path === "/containers/backfill-import-credits" ||
-    path === "/container-import-credit-preview"
-  ) {
+  if (path === "/containers/import-excel") {
     return requirement("factory/containers-hub");
   }
   if (path === "/sheets/import") {

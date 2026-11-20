@@ -21,7 +21,6 @@ import {
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
 import { removeContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
-import { registerFactoryContainerDeleteRoutesPart1 } from "./registerFactoryContainerDeleteRoutesPart1";
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
@@ -190,6 +189,4 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
-
-  registerFactoryContainerDeleteRoutesPart1(app);
 }
