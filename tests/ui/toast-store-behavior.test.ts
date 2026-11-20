@@ -4,7 +4,7 @@
  * sees the same state.
  */
 import { act, renderHook } from "@testing-library/react";
-import { reducer, toast, useToast } from "@/hooks/use-toast";
+import { clearAllToasts, reducer, toast, useToast } from "@/hooks/use-toast";
 
 type State = Parameters<typeof reducer>[0];
 const t = (id: string, extra: Record<string, unknown> = {}) => ({ id, title: `Toast ${id}`, ...extra });
@@ -102,6 +102,19 @@ describe("toast() and useToast()", () => {
     act(() => result.current.dismiss());
 
     expect(result.current.toasts.every((x) => x.open === false)).toBe(true);
+  });
+
+  it("removes every notice at once when the company changes", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Customer A owes 120" });
+    });
+    expect(result.current.toasts.length).toBeGreaterThan(0);
+
+    // A notice may name the previous company's records: gone, not just closed.
+    act(() => clearAllToasts());
+
+    expect(result.current.toasts).toEqual([]);
   });
 
   it("stops updating a hook after it unmounts", () => {
