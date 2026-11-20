@@ -30,7 +30,7 @@ const approved = [
   "#DB7093",
   "#A7FC00",
 ];
-const letters = ["D", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "C"] as const;
+const letters = ["D", "N", "O", "P", "Q", "R", "S", "T", "L", "V", "C"] as const;
 const clients: QueryClient[] = [];
 const configsUrl = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 function mount(

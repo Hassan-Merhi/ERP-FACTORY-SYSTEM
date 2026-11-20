@@ -7,6 +7,8 @@ import {
 } from "./sessionSecurityPolicy";
 
 const DEFAULT_ABSOLUTE_LIFETIME_MS = 12 * 60 * 60 * 1000;
+/** Small against the idle timeout, so idle expiry is at most this much early. */
+export const LAST_SEEN_WRITE_INTERVAL_MS = 60_000;
 
 export interface EnforceSessionOptions {
   requireCompanyContext: boolean;
@@ -21,10 +23,11 @@ export interface EnforcedSessionResult {
   destroySession: boolean;
 }
 
-type RuntimeSession = Session & Partial<SessionSecurityState> & {
-  loginAt?: string | null;
-  activeCredentialVersion?: number | null;
-};
+type RuntimeSession = Session &
+  Partial<SessionSecurityState> & {
+    loginAt?: string | null;
+    activeCredentialVersion?: number | null;
+  };
 
 function initialCreatedAt(session: RuntimeSession, now: number): number {
   if (typeof session.createdAt === "number" && Number.isFinite(session.createdAt)) {
@@ -44,10 +47,7 @@ function initialCreatedAt(session: RuntimeSession, now: number): number {
  * same fields at login. Credential version zero is the legacy baseline until a
  * persisted per-user credential-version store is introduced.
  */
-export function enforceRuntimeSession(
-  session: RuntimeSession,
-  options: EnforceSessionOptions
-): EnforcedSessionResult {
+export function enforceRuntimeSession(session: RuntimeSession, options: EnforceSessionOptions): EnforcedSessionResult {
   const now = options.now ?? Date.now();
 
   if (session.userId) {
@@ -73,7 +73,10 @@ export function enforceRuntimeSession(
   });
 
   if (decision.valid) {
-    session.lastSeenAt = now;
+    // Stamp at most once a minute. Stamping every request rewrote the whole
+    // session each time, so any request in flight during a company switch
+    // wrote the previous company back.
+    if (now - Number(session.lastSeenAt) >= LAST_SEEN_WRITE_INTERVAL_MS) session.lastSeenAt = now;
     return { valid: true, code: decision.code, status: 401, destroySession: false };
   }
 
@@ -90,8 +93,10 @@ export function enforceRuntimeSession(
     valid: false,
     code: decision.code,
     status: unauthorizedCodes.has(decision.code) ? 401 : 403,
-    destroySession: !["SESSION_REQUIRED", "SESSION_COMPANY_REQUIRED", "SESSION_PASSWORD_CONFIRMATION_REQUIRED"].includes(
-      decision.code
-    ),
+    destroySession: ![
+      "SESSION_REQUIRED",
+      "SESSION_COMPANY_REQUIRED",
+      "SESSION_PASSWORD_CONFIRMATION_REQUIRED",
+    ].includes(decision.code),
   };
 }

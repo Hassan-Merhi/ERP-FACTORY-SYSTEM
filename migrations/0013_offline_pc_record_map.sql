@@ -1,4 +1,4 @@
--- 0012_offline_pc_record_map.sql
+-- 0013_offline_pc_record_map.sql
 --
 -- Full offline mode (Phase C1). A PC gives the customers it creates offline,
 -- and the ledger accounts it opens for them, local ids (at or above

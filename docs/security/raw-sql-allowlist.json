@@ -9859,6 +9859,38 @@
         }
       ],
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
+    },
+    {
+      "id": "6c77b6cf2b4d38a21a90",
+      "path": "tests/factory-dispatch-trip-posting-db.test.ts",
+      "kind": "indirect-query-text",
+      "context": "all",
+      "classification": "trusted-sql-fragment",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "tests/factory-dispatch-trip-posting-db.test.ts:51 `all(tx, query)` helper; every caller in the file passes a drizzle sql`...` tagged template written in the test itself",
+          "validation": "Typed ReturnType<typeof sql>: a drizzle SQL object whose interpolated values are bound parameters, never spliced text"
+        }
+      ],
+      "reason": "The helper forwards a drizzle sql tagged-template object to tx.execute; all values inside are bound parameters written in this test file. Test-only code run inside a transaction that is always rolled back against the disposable test database; no request, file or external data reaches it."
+    },
+    {
+      "id": "90f370b7f01b8ffff8ee",
+      "path": "tests/intercompany-payment-allocation-db.test.ts",
+      "kind": "indirect-query-text",
+      "context": "all",
+      "classification": "trusted-sql-fragment",
+      "userControlled": "no",
+      "dynamicInputs": [
+        {
+          "expression": "query",
+          "source": "tests/intercompany-payment-allocation-db.test.ts:48 `all(tx, query)` helper; every caller in the file passes a drizzle sql`...` tagged template written in the test itself",
+          "validation": "Typed ReturnType<typeof sql>: a drizzle SQL object whose interpolated values are bound parameters, never spliced text"
+        }
+      ],
+      "reason": "The helper forwards a drizzle sql tagged-template object to tx.execute; all values inside are bound parameters written in this test file. Test-only code run inside a transaction that is always rolled back against the disposable test database; no request, file or external data reaches it."
     }
   ]
 }

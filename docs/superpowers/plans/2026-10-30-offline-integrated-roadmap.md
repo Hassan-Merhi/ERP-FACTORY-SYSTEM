@@ -252,7 +252,7 @@ plan are in the plan document and the
   decide.
 - Phase C1: customers created on a PC (`customer.create.v1`), created once in
   the cloud through the live service, with the PC's customer and ledger ids
-  mapped (`factory_edge_pc_record_map`, migration 0012) and translated in later
+  mapped (`factory_edge_pc_record_map`, migration 0013) and translated in later
   entries; look-alikes held, approve creates new.
 - Next: merge a held customer into an existing one (C1b), master edits with
   clash holds, suppliers and accounts; then Phases D and E.

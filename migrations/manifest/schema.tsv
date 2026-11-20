@@ -987,6 +987,7 @@ column	public.customer_order_priority_scan_configs.priority	{"type":"integer","n
 column	public.customer_order_priority_scan_configs.updated_at	{"type":"timestamp without time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.customer_order_priority_scan_configs.updated_by	{"type":"character varying(100)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.customer_order_priority_scan_configs.updated_by_name	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.customer_orders.agent_name	{"type":"character varying(200)","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.customer_orders.booking_info	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.customer_orders.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.customer_orders.container_notes	{"type":"text","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -2339,6 +2340,10 @@ column	public.factory_legacy_bale_cost_repairs.reference_number	{"type":"text","
 column	public.factory_legacy_bale_cost_repairs.repair_run_id	{"type":"integer","notNull":false,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_legacy_bale_cost_repairs.repaired_at	{"type":"timestamp with time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_legacy_bale_cost_repairs.weight_kg	{"type":"numeric(20,7)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_loading_agents.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_loading_agents.created_at	{"type":"timestamp with time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_loading_agents.id	{"type":"bigint","notNull":true,"default":"nextval('factory_loading_agents_id_seq'::regclass)","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_loading_agents.name	{"type":"character varying(200)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_loading_dispatch_closure_history.approved_with_discrepancies	{"type":"boolean","notNull":true,"default":"false","identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_loading_dispatch_closure_history.close_fingerprint	{"type":"character varying(64)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_loading_dispatch_closure_history.closed_at	{"type":"timestamp with time zone","notNull":true,"default":"now()","identity":null,"generated":null,"collation":null,"comment":null}
@@ -6525,6 +6530,8 @@ constraint	public.factory_invoice_loading_sessions.factory_invoice_loading_sessi
 constraint	public.factory_invoice_loading_sessions.factory_invoice_loading_sessions_location_id_fkey	{"type":"f","def":"FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT","validated":true}
 constraint	public.factory_invoice_loading_sessions.factory_invoice_loading_sessions_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
 constraint	public.factory_legacy_bale_cost_repairs.factory_legacy_bale_cost_repairs_pkey	{"type":"p","def":"PRIMARY KEY (bale_id)","validated":true}
+constraint	public.factory_loading_agents.factory_loading_agents_name_not_blank	{"type":"c","def":"CHECK (length(btrim(name::text)) > 0)","validated":true}
+constraint	public.factory_loading_agents.factory_loading_agents_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
 constraint	public.factory_loading_dispatch_closure_history.factory_loading_dispatch_closure_history_pkey	{"type":"p","def":"PRIMARY KEY (id)","validated":true}
 constraint	public.factory_loading_dispatch_closure_history.factory_loading_dispatch_closure_history_revision_check	{"type":"c","def":"CHECK (revision > 0)","validated":true}
 constraint	public.factory_loading_dispatch_closure_history.factory_loading_dispatch_closure_parent_fk	{"type":"f","def":"FOREIGN KEY (dispatch_id, company_id, order_id) REFERENCES factory_loading_dispatches(id, company_id, order_id) ON DELETE RESTRICT","validated":true}
@@ -8447,6 +8454,9 @@ index	public.factory_invoice_loading_sessions_pkey	{"table":"public.factory_invo
 index	public.factory_invoice_loading_sessions_status_idx	{"table":"public.factory_invoice_loading_sessions","def":"CREATE INDEX factory_invoice_loading_sessions_status_idx ON public.factory_invoice_loading_sessions USING btree (status)","valid":true,"constraint":false}
 index	public.factory_kpi_company_date_unique	{"table":"public.factory_daily_kpi_snapshots","def":"CREATE UNIQUE INDEX factory_kpi_company_date_unique ON public.factory_daily_kpi_snapshots USING btree (company_id, date)","valid":true,"constraint":false}
 index	public.factory_legacy_bale_cost_repairs_pkey	{"table":"public.factory_legacy_bale_cost_repairs","def":"CREATE UNIQUE INDEX factory_legacy_bale_cost_repairs_pkey ON public.factory_legacy_bale_cost_repairs USING btree (bale_id)","valid":true,"constraint":true}
+index	public.factory_loading_agents_company_idx	{"table":"public.factory_loading_agents","def":"CREATE INDEX factory_loading_agents_company_idx ON public.factory_loading_agents USING btree (company_id)","valid":true,"constraint":false}
+index	public.factory_loading_agents_company_name_ci_uniq	{"table":"public.factory_loading_agents","def":"CREATE UNIQUE INDEX factory_loading_agents_company_name_ci_uniq ON public.factory_loading_agents USING btree (company_id, lower((name)::text))","valid":true,"constraint":false}
+index	public.factory_loading_agents_pkey	{"table":"public.factory_loading_agents","def":"CREATE UNIQUE INDEX factory_loading_agents_pkey ON public.factory_loading_agents USING btree (id)","valid":true,"constraint":true}
 index	public.factory_loading_dispatch_closure_financial_scope_uq	{"table":"public.factory_loading_dispatch_closure_history","def":"CREATE UNIQUE INDEX factory_loading_dispatch_closure_financial_scope_uq ON public.factory_loading_dispatch_closure_history USING btree (id, company_id, order_id, dispatch_id)","valid":true,"constraint":false}
 index	public.factory_loading_dispatch_closure_history_pkey	{"table":"public.factory_loading_dispatch_closure_history","def":"CREATE UNIQUE INDEX factory_loading_dispatch_closure_history_pkey ON public.factory_loading_dispatch_closure_history USING btree (id)","valid":true,"constraint":true}
 index	public.factory_loading_dispatch_closure_order_idx	{"table":"public.factory_loading_dispatch_closure_history","def":"CREATE INDEX factory_loading_dispatch_closure_order_idx ON public.factory_loading_dispatch_closure_history USING btree (company_id, order_id, dispatch_id, closed_at DESC)","valid":true,"constraint":false}
@@ -9563,6 +9573,7 @@ sequence	public.factory_fx_rates_id_seq	{"type":"integer","start":"1","increment
 sequence	public.factory_ground_scan_items_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.factory_ground_scan_items.id"}
 sequence	public.factory_invoice_loading_bales_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.factory_invoice_loading_bales.id"}
 sequence	public.factory_invoice_loading_sessions_id_seq	{"type":"integer","start":"1","increment":"1","min":"1","max":"2147483647","cache":"1","cycle":false,"ownedBy":"public.factory_invoice_loading_sessions.id"}
+sequence	public.factory_loading_agents_id_seq	{"type":"bigint","start":"1","increment":"1","min":"1","max":"9223372036854775807","cache":"1","cycle":false,"ownedBy":"public.factory_loading_agents.id"}
 sequence	public.factory_loading_dispatch_closure_history_id_seq	{"type":"bigint","start":"1","increment":"1","min":"1","max":"9223372036854775807","cache":"1","cycle":false,"ownedBy":"public.factory_loading_dispatch_closure_history.id"}
 sequence	public.factory_loading_dispatch_events_id_seq	{"type":"bigint","start":"1","increment":"1","min":"1","max":"9223372036854775807","cache":"1","cycle":false,"ownedBy":"public.factory_loading_dispatch_events.id"}
 sequence	public.factory_loading_dispatch_expected_articles_id_seq	{"type":"bigint","start":"1","increment":"1","min":"1","max":"9223372036854775807","cache":"1","cycle":false,"ownedBy":"public.factory_loading_dispatch_expected_articles.id"}
@@ -10054,6 +10065,7 @@ table	public.factory_invoice_document_snapshots	{"kind":"r","unlogged":false,"rl
 table	public.factory_invoice_loading_bales	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_invoice_loading_sessions	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_legacy_bale_cost_repairs	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
+table	public.factory_loading_agents	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_loading_dispatch_closure_history	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_loading_dispatch_events	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_loading_dispatch_expected_articles	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}

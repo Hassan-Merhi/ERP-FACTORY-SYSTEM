@@ -3,7 +3,7 @@ import { check, integer, pgTable, primaryKey, text, timestamp, uuid } from "driz
 import { companies } from "./common";
 
 /**
- * Full offline mode (Phase C1), migration 0012_offline_pc_record_map: which
+ * Full offline mode (Phase C1), migration 0013_offline_pc_record_map: which
  * cloud customer or ledger account each record a PC created offline became, per
  * PC (server/edge/phase9PcRecordMap.mjs). Rows are never changed or removed.
  */

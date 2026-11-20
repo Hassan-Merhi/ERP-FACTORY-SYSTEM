@@ -457,7 +457,7 @@ cloud could not replay (for example a negative opening) is refused on the PC
 (`423 OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED`). The cloud creates its own
 customer and ledger through the same service as the live route, with its own
 customer code, and records which cloud row each PC id became
-(`factory_edge_pc_record_map`, migration 0012). Later entries from that PC that
+(`factory_edge_pc_record_map`, migration 0013). Later entries from that PC that
 name its customer or ledger (`customerId`, `ledgerAccountId`, or a `customer` /
 `ledger` account) are translated to the cloud's ids before they are applied; one
 naming a customer the cloud has not created yet waits
