@@ -6,7 +6,7 @@ import { parseId, parseOptionalId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import { factoryWorkers, factoryPayrolls, ledgerAccounts } from "@shared/schema";
 import { getFactoryCompanyId } from "./_helpers";
 import {
@@ -15,6 +15,7 @@ import {
   syncProductionBonusProposalsForPeriod,
 } from "../../../services/payroll/productionBonusPayrollService";
 import { registerPayrollCoreReadRoutesPart1 } from "./registerPayrollCoreReadRoutesPart1";
+import { ledgerPostingLeafCondition } from "../../../services/accounting/postableLedgerAccountPolicy";
 
 const emptyBonusTotals = () => ({
   approved: 0,
@@ -34,7 +35,7 @@ export function registerPayrollCoreReadRoutes(app: Express) {
       const accounts = await db
         .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, code: ledgerAccounts.code })
         .from(ledgerAccounts)
-        .where(eq(ledgerAccounts.companyId, companyId))
+        .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt), ledgerPostingLeafCondition(companyId)))
         .orderBy(ledgerAccounts.name);
       res.json(accounts);
     } catch (error: unknown) {
