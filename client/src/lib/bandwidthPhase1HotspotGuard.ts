@@ -1,4 +1,5 @@
 import { isAbortError } from "./abortError";
+import { companyReadCacheIdentity } from "./companyCacheScope";
 import { factoryCatalogLanguageCacheVariant } from "./factoryCatalogCacheVariant";
 import {
   BANDWIDTH_INVALIDATION_CHANNEL,
@@ -170,7 +171,7 @@ function buildCacheKey(url: URL, headers: Headers): string {
   ]
     .map((name) => `${name}=${headers.get(name) || ""}`)
     .join("|");
-  return `${url.toString()}|${varyHeaders}|${factoryCatalogLanguageCacheVariant(url, headers)}`;
+  return `${companyReadCacheIdentity()}|${url.toString()}|${varyHeaders}|${factoryCatalogLanguageCacheVariant(url, headers)}`;
 }
 
 function clearCache(scope: BandwidthInvalidationScope = "all"): void {
