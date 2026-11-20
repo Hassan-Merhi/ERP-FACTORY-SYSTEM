@@ -76,9 +76,16 @@ for (const token of [
 ]) {
   if (!serviceWorker.includes(token)) failures.push(`One-time device refresh contract missing: ${token}`);
 }
-for (const token of ['controllerReloadStarted = true', 'window.location.replace(', 'if (!hadControllerAtStartup)']) {
+// A replacement worker announces itself and the update banner offers the
+// refresh; it must never reload a tab that may hold unsaved work.
+for (const token of ['window.dispatchEvent(new Event("erp:service-worker-updated"))', 'if (!hadControllerAtStartup)']) {
   if (!serviceWorkerRegistration.includes(token)) {
-    failures.push(`One-time controller refresh contract missing: ${token}`);
+    failures.push(`Controller update notification contract missing: ${token}`);
+  }
+}
+for (const token of ['window.location.replace(', 'window.location.reload(']) {
+  if (serviceWorkerRegistration.includes(token)) {
+    failures.push(`Service worker registration must not reload the tab: ${token}`);
   }
 }
 
