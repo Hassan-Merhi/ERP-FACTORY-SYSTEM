@@ -15,6 +15,8 @@ import { toMoney } from "../../lib/money";
 import { paymentReceiptEvidence } from "../../edge/phase9PaymentOutbox";
 import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "../../edge/phase9PaymentEnvelope.mjs";
 import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "../../edge/phase9JournalEnvelope.mjs";
+import { PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope } from "../../edge/phase9SalesVoucherEnvelope.mjs";
+import { supportsCentralGenericVoucher } from "../../services/accounting/genericVoucherPosting";
 import {
   PHASE9_STOCK_ADJUST_KIND,
   PHASE9_STOCK_TRANSFER_KIND,
@@ -64,6 +66,11 @@ export interface BrowserOperationKind {
   build(input: Body, context: BuildContext): object;
   /** Only a PC may deliver it (POST /api/offline/pc-sync/operations), never a browser. */
   pcOnly?: boolean;
+  /**
+   * When the route also serves requests the cloud cannot replay, which ones a
+   * PC may record; the PC refuses the others before the route runs.
+   */
+  pcAccepts?(input: unknown): boolean;
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,6 +112,55 @@ function textOrNull(value: unknown): string | null {
 export function browserInvoiceNumber(deviceId: string, localRef: number): string {
   const device = deviceId.replace(/-/g, "").slice(0, 4).toUpperCase();
   return `LAN-${device}-${String(localRef - BROWSER_LOCAL_REF_BASE).padStart(6, "0")}`;
+}
+
+type SalesVoucherContext = {
+  actor: { companyId: number; userId: string; username: string };
+  operationId: string;
+  localRef: number;
+};
+
+/** A sample context: whether a body could be sent, before the route runs. */
+const PC_ACCEPTS_PROBE: SalesVoucherContext = Object.freeze({
+  actor: { companyId: 1, userId: "pc", username: "pc" },
+  operationId: "00000000-0000-4000-8000-000000000000",
+  localRef: 1,
+});
+
+function salesVoucherEnvelope(raw: unknown, { actor, operationId, localRef }: SalesVoucherContext) {
+  const input = body(raw);
+  const voucher = body(input.voucher);
+  if (voucher.voucherType !== "Sales" || !supportsCentralGenericVoucher(input) || !Array.isArray(input.entries)) {
+    throw new BrowserOperationRefusal("OFFLINE_PC_VOUCHER_NOT_SUPPORTED");
+  }
+  const link = (value: unknown) => (value == null || value === "" ? null : Number(value));
+  const amount = (value: unknown) => toMoney(String(value == null || value === "" ? "0" : value)).toFixed(2);
+  return phase9SalesVoucherEnvelope({
+    companyId: actor.companyId,
+    localVoucherId: localRef,
+    actorUserId: actor.userId,
+    actorUsername: actor.username,
+    requestId: operationId,
+    voucher: {
+      voucherType: "Sales",
+      voucherDate: day(voucher.voucherDate, ""),
+      description: textOrNull(voucher.description),
+      locationId: link(voucher.locationId),
+      exchangeRate: voucher.exchangeRate == null || voucher.exchangeRate === "" ? null : String(voucher.exchangeRate),
+    },
+    entries: (input.entries as Array<Record<string, unknown>>).map((entry) => ({
+      ledgerAccountId: link(entry.ledgerAccountId),
+      bankAccountId: link(entry.bankAccountId),
+      fixedAssetId: link(entry.fixedAssetId),
+      supplierId: link(entry.supplierId),
+      employeeId: link(entry.employeeId),
+      customerId: link(entry.customerId),
+      factorySupplierId: link(entry.factorySupplierId),
+      debitAmount: amount(entry.debitAmount),
+      creditAmount: amount(entry.creditAmount),
+      narration: textOrNull(entry.narration),
+    })),
+  });
 }
 
 export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKind>> = Object.freeze({
@@ -171,6 +227,24 @@ export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKi
         },
       });
     },
+  },
+  // POST /api/vouchers/with-entries (PC only): an accounting Sales voucher on
+  // the protected central path (USD, active, client request id).
+  [PHASE9_SALES_VOUCHER_KIND]: {
+    stream: "payments",
+    route: { method: "POST", path: "/api/vouchers/with-entries" },
+    pcOnly: true,
+    // Only what the cloud can replay: the envelope's own limits (description,
+    // narration, amounts, number of lines) are checked before the route runs.
+    pcAccepts: (raw) => {
+      try {
+        salesVoucherEnvelope(raw, PC_ACCEPTS_PROBE);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    build: (raw, context) => salesVoucherEnvelope(raw, context),
   },
   // POST /api/inventory/quick-adjust
   [PHASE9_STOCK_ADJUST_KIND]: {

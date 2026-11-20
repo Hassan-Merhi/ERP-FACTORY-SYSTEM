@@ -24,6 +24,7 @@ import {
 } from "./phase9StockItemEditEnvelope.mjs";
 import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "./phase9JournalEnvelope.mjs";
+import { PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope } from "./phase9SalesVoucherEnvelope.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
@@ -370,6 +371,11 @@ const STREAMS = Object.freeze({
       // Full offline mode: a Journal entered on a PC, on the voucher stream.
       [PHASE9_JOURNAL_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_JOURNAL_KIND, phase9JournalEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
+      }),
+      [PHASE9_SALES_VOUCHER_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope),
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([]),
       }),
