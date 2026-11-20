@@ -216,7 +216,7 @@ describe("PATCH /api/user-company-roles/:id", () => {
     });
   });
 
-  it("pins a guard gap: PATCH can hand a role row to a Developer user that POST refuses", async () => {
+  it("refuses moving a role row to another user, including a Developer that POST refuses", async () => {
     await withFactoryWorld(async (w) => {
       const other = await otherCompany(w);
       const developer = await addUser(w, "dev", other, "Developer");
@@ -229,15 +229,17 @@ describe("PATCH /api/user-company-roles/:id", () => {
       const res = await w.agent
         .patch(`/api/user-company-roles/${colleague.roleId}`)
         .send({ userId: developer.id, role: "Admin" });
-      // Current behaviour (bug): the body's userId is accepted, so the row now
-      // gives the Developer account an Admin role in this company.
-      expect(res.status).toBe(200);
-      const expected = [
-        { company_id: w.companyId, role: "Admin" },
-        { company_id: other, role: "Developer" },
-      ].sort((a, b) => a.company_id - b.company_id);
-      expect(await rolesOf(w, developer.id)).toEqual(expected);
-      expect(await rolesOf(w, colleague.id)).toEqual([]);
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("ROLE_ASSIGNMENT_USER_IMMUTABLE");
+      expect(await rolesOf(w, developer.id)).toEqual([{ company_id: other, role: "Developer" }]);
+      expect(await rolesOf(w, colleague.id)).toEqual([{ company_id: w.companyId, role: "Manager" }]);
+
+      // The settings screen echoes the row's own userId on every edit; that still works.
+      const echoed = await w.agent
+        .patch(`/api/user-company-roles/${colleague.roleId}`)
+        .send({ userId: colleague.id, role: "View Only" });
+      expect(echoed.status).toBe(200);
+      expect(await rolesOf(w, colleague.id)).toEqual([{ company_id: w.companyId, role: "View Only" }]);
     });
   });
 });

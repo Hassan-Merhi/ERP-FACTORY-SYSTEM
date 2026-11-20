@@ -272,6 +272,15 @@ export function registerUserAdministrationRoutes(app: Express) {
       }
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
       if (!oldRecord) return res.status(404).json({ message: "Role assignment not found" });
+      // A role row belongs to one user for life. Reassigning it would bypass
+      // every target-user check POST applies (e.g. handing a tenant role to a
+      // Developer account), so only the row's own userId may be echoed back.
+      if (parsed.userId !== undefined && parsed.userId !== oldRecord.userId) {
+        return res.status(400).json({
+          code: "ROLE_ASSIGNMENT_USER_IMMUTABLE",
+          message: "A role assignment cannot be moved to another user",
+        });
+      }
       const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({
         requestedRole: parsed.role,
         previousRole: oldRecord.role,
