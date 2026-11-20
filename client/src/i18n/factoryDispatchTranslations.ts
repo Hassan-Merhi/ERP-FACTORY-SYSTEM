@@ -1,4 +1,7 @@
 export const factoryDispatchTranslations = [
+  // Shared posting-account picker strings used by Factory and Retail payment flows.
+  { en: "Original payment accounts", ar: "حسابات الدفع الأصلية", fr: "Comptes de paiement d’origine" },
+  { en: "Unable to load posting accounts", ar: "تعذّر تحميل حسابات الترحيل", fr: "Impossible de charger les comptes de comptabilisation" },
   {
     en: "Overall loading scan progress",
     ar: "تقدم مسح الحمولة بالكامل",
