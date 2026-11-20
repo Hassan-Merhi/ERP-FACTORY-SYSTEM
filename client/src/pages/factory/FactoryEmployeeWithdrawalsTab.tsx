@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo } from "react";
@@ -349,21 +350,13 @@ export default function FactoryEmployeeWithdrawalsTab() {
             </div>
             <div>
               <Label>Cash Account</Label>
-              <Select
+              <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                 value={singleForm.cashAccountId}
-                onValueChange={(v) => setSingleForm((f) => ({ ...f, cashAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-cash-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setSingleForm((f) => ({ ...f, cashAccountId: v }))}
+                placeholder="Select account"
+                testId="select-cash-account"
+              />
             </div>
             <div>
               <Label>Notes (optional)</Label>
@@ -419,21 +412,13 @@ export default function FactoryEmployeeWithdrawalsTab() {
               </div>
               <div>
                 <Label>Cash Account</Label>
-                <Select
-                  value={bulkForm.cashAccountId}
-                  onValueChange={(v) => setBulkForm((f) => ({ ...f, cashAccountId: v }))}
-                >
-                  <SelectTrigger data-testid="select-bulk-cash-account">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cashAccounts.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                value={bulkForm.cashAccountId}
+                onChange={(v) => setBulkForm((f) => ({ ...f, cashAccountId: v }))}
+                placeholder="Select account"
+                testId="select-bulk-cash-account"
+              />
               </div>
             </div>
             <div>
