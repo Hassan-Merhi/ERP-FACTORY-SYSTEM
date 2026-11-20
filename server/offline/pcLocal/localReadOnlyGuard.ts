@@ -70,10 +70,16 @@ export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^POST \/api\/stock-items\/(update-names-by-code|bulk-assign-category|bulk-update-prices|import-opening-balances|bulk-update-uom|bulk-rename|import-barcodes|update-categories)$/,
 ]);
 
-/** "METHOD /path" -> offline operation kind the cloud applies exactly once. */
-export const PC_LOCAL_ENTRY_ROUTES: ReadonlyMap<string, string> = new Map(
-  Object.entries(BROWSER_OPERATION_KINDS).map(([kind, def]) => [`${def.route.method} ${def.route.path}`, kind])
-);
+/**
+ * "METHOD /path" -> the offline operation kinds the cloud applies exactly once
+ * (several when the route serves several, e.g. Sales and Purchase vouchers).
+ */
+export const PC_LOCAL_ENTRY_ROUTES: ReadonlyMap<string, readonly string[]> = Object.entries(
+  BROWSER_OPERATION_KINDS
+).reduce((routes, [kind, def]) => {
+  const key = `${def.route.method} ${def.route.path}`;
+  return routes.set(key, [...(routes.get(key) ?? []), kind]);
+}, new Map<string, string[]>());
 
 export { pcLocalMode } from "./pcLocalMode";
 
@@ -269,16 +275,20 @@ export function makePcLocalReadOnlyGuard(
     const path = req.originalUrl.split("?")[0];
     const route = `${method} ${path}`;
     if (!path.startsWith("/api/") || PC_LOCAL_ALLOWED_WRITES.has(route)) return next();
-    const kind =
-      mode !== "entry"
-        ? undefined
-        : (PC_LOCAL_ENTRY_ROUTES.get(route) ??
-          (PC_LOCAL_EVIDENCE_ROUTES.some((pattern) => pattern.test(route)) ? null : undefined));
-    if (kind === undefined) return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
-    // A route that also serves requests the cloud cannot replay (e.g. only Sales
-    // vouchers of /api/vouchers/with-entries): refuse the others here.
-    if (kind && BROWSER_OPERATION_KINDS[kind]?.pcAccepts?.(req.body) === false) {
-      return refuse(res, "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED");
+    if (mode !== "entry") return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
+    const kinds = PC_LOCAL_ENTRY_ROUTES.get(route);
+    let kind: string | null;
+    if (kinds) {
+      // A route may serve several kinds, and requests the cloud cannot replay
+      // (/api/vouchers/with-entries: Sales or Purchase vouchers, nothing else):
+      // the kind that accepts this body, else refused here.
+      const accepted = kinds.find((k) => BROWSER_OPERATION_KINDS[k]?.pcAccepts?.(req.body) !== false);
+      if (!accepted) return refuse(res, "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED");
+      kind = accepted;
+    } else if (PC_LOCAL_EVIDENCE_ROUTES.some((pattern) => pattern.test(route))) {
+      kind = null;
+    } else {
+      return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
     }
     captureEntry(req, res, next, kind, connect).catch((error: unknown) => {
       logger.error("[pc-local] could not record an offline entry", { error: String(error) });
