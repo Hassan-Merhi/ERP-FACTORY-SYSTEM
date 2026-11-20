@@ -129,7 +129,14 @@ export async function getZambiaSalesNetPositionReconciliation(companyId: number)
       fxCounterBookDebitUsd: fixed(sumCodes(["FXREVGAI", "FX-REVALUATION"])),
       fxCounterAccountType: fxAccounts.length === 1 ? fxAccounts[0].account_type : null,
       missingCostEvidenceCount: aggregate.missing,
-      unsupportedAccountCount: mismatchAccounts.length + (company.code !== "ZM" || company.base_currency !== "USD" ? 1 : 0),
+      // One net FX counter and a normal valued stock subledger are required
+      // before treating a matching bridge as complete. The underlying
+      // account-classification/posting workflow is reviewed separately.
+      unsupportedAccountCount:
+        mismatchAccounts.length +
+        (company.code !== "ZM" || company.base_currency !== "USD" ? 1 : 0) +
+        (fxAccounts.length > 1 ? 1 : 0) +
+        (stock.excluded.anomalousRows > 0 || new Decimal(stock.excluded.shortageValue).abs().gt(0) ? 1 : 0),
       balanceOpeningCount: openingAccounts.length,
     });
     return {
