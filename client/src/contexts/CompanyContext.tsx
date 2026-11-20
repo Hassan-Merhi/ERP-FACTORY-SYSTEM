@@ -8,6 +8,7 @@ import {
 } from "@/lib/companyQueryScope";
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
 import { publishCompanySessionCommit, type CompanySessionSignal } from "@/lib/companySessionSync";
+import { announceCompanyWorkspaceTransition } from "@/lib/companyWorkspaceEvents";
 import { useCompanySessionFollower } from "@/hooks/useCompanySessionFollower";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
@@ -128,7 +129,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const switchQueueRef = useRef<CompanySwitchQueue | null>(null);
 
   if (!switchQueueRef.current) {
-    switchQueueRef.current = createCompanySwitchQueue(setIsSyncingCompany);
+    switchQueueRef.current = createCompanySwitchQueue((busy) => {
+      if (busy) announceCompanyWorkspaceTransition();
+      setIsSyncingCompany(busy);
+    });
   }
 
   const {
@@ -312,6 +316,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   }, [commitCompanySelection]);
 
   const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal) => {
+    if (signal === "selection") announceCompanyWorkspaceTransition();
     setExternalSessionState((current) =>
       signal === "selection" || current === "switching" ? "switching" : "checking"
     );
