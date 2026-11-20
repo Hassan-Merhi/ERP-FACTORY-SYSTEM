@@ -22,7 +22,6 @@ describe("POS location database-pool crash protection", () => {
     expect(middleware).not.toContain("assignedLocations.map");
   });
 
-
   it("binds assigned POS locations before the cashier screen renders", () => {
     const pos = source("client/src/pages/pos/POS.tsx");
     const queries = source("client/src/pages/pos/hooks/usePosQueries.ts");
@@ -61,8 +60,8 @@ describe("POS location database-pool crash protection", () => {
     expect(context).toContain('if (role === "POS") return;');
     expect(context).toContain("role: assignment.role");
     expect(context).toContain("prefetchReferenceData(company.id, company.role)");
-    expect(context).toContain("adoptServerCompany(target)");
-    expect(context).toContain("commitCompanySelection(company, { prefetch: true, serverSynced: true })");
+    expect(context).toContain("adoptServerCompany(target, companyRevision)");
+    expect(context).toContain("commitCompanySelection(company, { prefetch: true, serverSynced: true, revision })");
   });
 
   it("does not mount the hidden ERP command palette for ordinary POS users", () => {
