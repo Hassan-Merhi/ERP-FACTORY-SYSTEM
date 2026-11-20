@@ -52,8 +52,13 @@ async function createVoucher(
       `INSERT INTO vouchers
        (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, reversal_of_voucher_id, description)
        VALUES ($1, $2, 'Journal', $3, 0, 'USD', $4, $5) RETURNING id`,
-      [companyId, `${unique}-${number}`, at, reversalOf,
-        number === "MANUAL-FX" ? "FX Revaluation — Rate 20.8 → 20.9 ZMW (FX loss)" : number]
+      [
+        companyId,
+        `${unique}-${number}`,
+        at,
+        reversalOf,
+        number === "MANUAL-FX" ? "FX Revaluation — Rate 20.8 → 20.9 ZMW (FX loss)" : number,
+      ]
     );
     const id = header.rows[0].id;
     for (const line of lines) {
@@ -168,7 +173,9 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
 
   it("recognizes the exact manual voucher and previews without changing anything", async () => {
     const before = await Promise.all([
-      countRows("vouchers"), countRows("voucher_entries"), countRows("accounting_posting_requests"),
+      countRows("vouchers"),
+      countRows("voucher_entries"),
+      countRows("accounting_posting_requests"),
     ]);
     const result = await runInCompanyPostingScope(companyId, () =>
       getManualFxCorrectionPreflight(companyId, manualVoucherId)
@@ -183,19 +190,22 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     });
     expect(result.blockers).toContain("FX_ACCOUNT_RECLASSIFICATION_REQUIRED");
     expect(result.candidates).toHaveLength(2);
-    expect(result.candidates.map((x) => x.accountKey).sort()).toEqual(
-      [`ledger:${kitwe}`, `ledger:${lusaka}`].sort()
-    );
+    expect(result.candidates.map((x) => x.accountKey).sort()).toEqual([`ledger:${kitwe}`, `ledger:${lusaka}`].sort());
     const sum = result.candidates.reduce((acc, row) => acc.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0));
     expect(sum.toFixed(2)).toBe(result.candidateNetAdjustmentUsd);
-    expect(await Promise.all([
-      countRows("vouchers"), countRows("voucher_entries"), countRows("accounting_posting_requests"),
-    ])).toEqual(before);
+    expect(
+      await Promise.all([
+        countRows("vouchers"),
+        countRows("voucher_entries"),
+        countRows("accounting_posting_requests"),
+      ])
+    ).toEqual(before);
   });
 
   it("corrects only the fixture account type, then identifies readiness without auto-posting", async () => {
     await pool.query("UPDATE ledger_accounts SET account_type='Indirect Expense' WHERE company_id=$1 AND id=$2", [
-      companyId, fxAccount,
+      companyId,
+      fxAccount,
     ]);
     const preview = await runInCompanyPostingScope(companyId, () =>
       getManualFxCorrectionPreflight(companyId, manualVoucherId)
@@ -209,11 +219,15 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
   });
 
   it("after a fixture reversal, posts ONE base-only voucher and never changes native ZMW", async () => {
-    await createVoucher("MANUAL-REVERSAL", [
-      { ledgerId: kitwe, debit: "11.60", credit: "0" },
-      { ledgerId: lusaka, debit: "34.03", credit: "0" },
-      { ledgerId: fxAccount, debit: "0", credit: "45.63" },
-    ], manualVoucherId);
+    await createVoucher(
+      "MANUAL-REVERSAL",
+      [
+        { ledgerId: kitwe, debit: "11.60", credit: "0" },
+        { ledgerId: lusaka, debit: "34.03", credit: "0" },
+        { ledgerId: fxAccount, debit: "0", credit: "45.63" },
+      ],
+      manualVoucherId
+    );
     const preview = await runInCompanyPostingScope(companyId, () =>
       getManualFxCorrectionPreflight(companyId, manualVoucherId)
     );
@@ -226,16 +240,14 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       })
     );
     expect(posted.status).toBe("posted");
-    const [vouchers] = await Promise.all([
-      pool.query(
-        `SELECT p.voucher_id, e.ledger_account_id, e.rate_convention,
-                e.transaction_currency, e.transaction_debit_amount,
-                e.transaction_credit_amount, e.debit_amount, e.credit_amount
-           FROM accounting_posting_requests p JOIN voucher_entries e ON e.voucher_id=p.voucher_id
-          WHERE p.company_id=$1 AND p.source_type='fx-unrealized-revaluation' ORDER BY e.id`,
-        [companyId]
-      ),
-    ]);
+    const vouchers = await pool.query(
+      `SELECT p.voucher_id, e.ledger_account_id, e.rate_convention,
+              e.transaction_currency, e.transaction_debit_amount,
+              e.transaction_credit_amount, e.debit_amount, e.credit_amount
+         FROM accounting_posting_requests p JOIN voucher_entries e ON e.voucher_id=p.voucher_id
+        WHERE p.company_id=$1 AND p.source_type='fx-unrealized-revaluation' ORDER BY e.id`,
+      [companyId]
+    );
     const baseOnly = vouchers.rows.filter((r) => r.rate_convention === "BASE_ONLY_REVALUATION");
     expect(baseOnly).toHaveLength(2);
     expect(baseOnly.map((r) => r.ledger_account_id).sort()).toEqual([kitwe, lusaka].sort());
@@ -252,11 +264,15 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       })
     );
     expect(second.status).toBe("nothing_to_post");
-    expect((await pool.query(
-      `SELECT count(*)::int AS n FROM accounting_posting_requests
-       WHERE company_id=$1 AND source_type='fx-unrealized-revaluation'`,
-      [companyId]
-    )).rows[0].n).toBe(1);
+    expect(
+      (
+        await pool.query(
+          `SELECT count(*)::int AS n FROM accounting_posting_requests
+           WHERE company_id=$1 AND source_type='fx-unrealized-revaluation'`,
+          [companyId]
+        )
+      ).rows[0].n
+    ).toBe(1);
     const native = await pool.query(
       `SELECT e.ledger_account_id, SUM(e.transaction_debit_amount-e.transaction_credit_amount)::numeric AS n
        FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
