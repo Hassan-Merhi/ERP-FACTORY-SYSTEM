@@ -33,6 +33,7 @@ import {
 import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
 import { createDatabasePostingDependencies } from "./databasePostingDependencies";
 import { isHadiDuplicateLinkedRentExpenseJournal } from "../rental/hadiRentLedgerPolicy";
+import { assertPostingLedgerLeavesTx } from "./postableLedgerAccountPolicy";
 import { allocateVoucherNumberTx } from "./voucherNumbering";
 import {
   getCompanyRequestRuntimeContext,
@@ -349,6 +350,13 @@ export async function postManualVoucherTx(
       })),
     });
   }
+  // Optional vouchers are off-ledger, but must not save a newly selected group
+  // account that a later editor could try to activate.
+  await assertPostingLedgerLeavesTx(
+    tx,
+    input.companyId,
+    input.entries.flatMap((entry) => entry.ledgerAccountId == null ? [] : [Number(entry.ledgerAccountId)])
+  );
   const [voucher] = await tx
     .insert(vouchers)
     .values({
