@@ -6,7 +6,7 @@ import { registerExcelAppearanceRoutes } from "./excelAppearanceRoutes";
 import { registerAccountMigrationRoundTripRoutes } from "./admin/accountMigrationRoundTripRoutes";
 import { registerAccountMigrationSafeRoutes } from "./admin/accountMigrationSafeRoutes";
 import { registerImportExportRoutes } from "./admin/import-export";
-import { registerAdminPoFixRoutes } from "./admin/adminPoFixRoutes";
+import { registerPoSupplierReconciliationRoutes } from "./admin/poSupplierReconciliationRoutes";
 import { registerAdminRepairRoutes } from "./admin/repair";
 import { registerDependentDeletedItemPermanentRoutes } from "./admin/dependentDeletedItemPermanentRoutes";
 import { registerDeletedItemsRoutes } from "./admin/deleted-items";
@@ -50,7 +50,7 @@ export function registerAdminRoutes(app: Express) {
   registerAccountMigrationRoundTripRoutes(app);
   registerAccountMigrationSafeRoutes(app);
   registerImportExportRoutes(app);
-  registerAdminPoFixRoutes(app);
+  registerPoSupplierReconciliationRoutes(app);
   registerAdminRepairRoutes(app);
   registerDependentDeletedItemPermanentRoutes(app);
   registerDeletedItemsRoutes(app);

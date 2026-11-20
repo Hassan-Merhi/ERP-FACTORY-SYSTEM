@@ -110,7 +110,6 @@
       "verdict": "phase 6 completed with deterministic durable source identity",
       "reason": "These special-purpose routes are not given browser-generated request IDs. The server derives a stable migration/import/repair source key from the operation kind, target company and canonical source payload (or an explicit sourceRunId/importBatchId), persists that key before execution, replays completed reruns, rejects changed data under a reused key, releases definite validation failures, and fails closed on uncertain server outcomes.",
       "files": [
-        "server/routes/admin/adminPoFixRoutes.ts",
         "server/routes/creditSalesImportRoutes.ts",
         "server/routes/exchangeRateRoutes.ts",
         "server/routes/posImportRoutes.ts",

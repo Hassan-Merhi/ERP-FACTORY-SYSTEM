@@ -47,7 +47,6 @@ const PRIORITY_ROUTE_FILES = new Set([
   "../server/routes/factory/customer-orders/bale-scanning/bulk-import.ts",
   "../server/routes/location/locationWhatsappScheduleRoutes.ts",
   "../server/routes/factory/bales/balesImportRoutes.ts",
-  "../server/routes/admin/adminPoFixRoutes.ts",
   "../server/routes/factory/invoice-loading/invoice-reports.ts",
   "../server/routes/offloadRoutes.ts",
   "../server/routes/sp/spMigrationPhase2Containers.ts",

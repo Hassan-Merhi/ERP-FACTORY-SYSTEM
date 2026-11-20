@@ -8,8 +8,7 @@ export interface GlobalMaintenanceRouteMatch {
     | "deployment-diagnostics"
     | "runtime-schema-migration"
     | "schema-diagnostic"
-    | "schema-fix"
-    | "historical-po-intercompany-repair";
+    | "schema-fix";
 }
 
 const EXACT_ROUTES: Array<{
@@ -61,11 +60,6 @@ const EXACT_ROUTES: Array<{
     method: "POST",
     path: "/api/admin/schema-fix",
     operation: "schema-fix",
-  },
-  {
-    method: "POST",
-    path: "/api/fix-old-po-credits",
-    operation: "historical-po-intercompany-repair",
   },
 ];
 

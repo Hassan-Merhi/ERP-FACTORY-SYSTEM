@@ -68,7 +68,6 @@ export function isPhase5OperationalVoucherRequest(method: string, pathname: stri
 // left 600) or refuse it for another user. The audited save is a no-op for an
 // unchanged rate and serialises same-day saves itself.
 export const PHASE6_DETERMINISTIC_SPECIAL_PATHS = {
-  "/api/fix-old-po-credits": "repair:old-po-credits",
   "/api/credit-sales-import/import": "import:credit-sales",
   "/api/pos-import/import": "import:pos-sales",
   "/api/stock-transfer-import/import": "import:stock-transfer",

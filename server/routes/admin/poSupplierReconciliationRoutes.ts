@@ -20,12 +20,11 @@ import {
 import { registerPoSupplierReconciliationRoutesPart1 } from "./registerPoSupplierReconciliationRoutesPart1";
 
 /**
- * PO supplier-payable reconciliation and its rollback, split out of
- * adminPoFixRoutes.ts (god-file cap). registerAdminPoFixRoutes calls this
- * first, so the registration order pinned by config/route-manifest.json is
- * unchanged. These routes write through the accounting services and create no
- * voucher rows directly; the legacy PO credit repairs that do stay in
- * adminPoFixRoutes.ts under its existing write-evidence review.
+ * PO supplier-payable reconciliation and its rollback. Registered directly by
+ * adminRoutes.ts. These routes write through the accounting services and
+ * create no voucher rows directly. The legacy PO credit repair endpoints that
+ * used to live beside them (adminPoFixRoutes.ts) were removed as finished
+ * historical repairs.
  */
 export function registerPoSupplierReconciliationRoutes(app: Express) {
   registerPoSupplierReconciliationRoutesPart1(app);

@@ -49,7 +49,6 @@ const PHASE5_WRITERS = [
 ] as const;
 
 const PHASE6_DETERMINISTIC_WRITERS = [
-  "server/routes/admin/adminPoFixRoutes.ts",
   "server/routes/creditSalesImportRoutes.ts",
   "server/routes/exchangeRateRoutes.ts",
   "server/routes/posImportRoutes.ts",
