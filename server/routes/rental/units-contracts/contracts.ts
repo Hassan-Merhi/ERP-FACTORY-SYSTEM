@@ -17,6 +17,22 @@ import { propertyUnits, propertyContracts, insertPropertyContractSchema } from "
 import { parseId } from "../../../lib/parseId";
 import { logAudit } from "../../_helpers";
 import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
+import {
+  assertCompanyAccess,
+  CompanyAccessError,
+  sendCompanyAccessError,
+} from "../../../security/companyAccessBoundary";
+
+/**
+ * A linked company may later settle the contract's rent, so a contract may
+ * only be linked to a company the caller can access: the same companies the
+ * contract form offers (GET /api/companies). Linking to none, or to the
+ * contract's own company, needs no further check.
+ */
+async function assertLinkableCompany(req: Request, companyId: number, linkedCompanyId: number | null | undefined) {
+  if (linkedCompanyId === null || linkedCompanyId === undefined || linkedCompanyId === companyId) return;
+  await assertCompanyAccess(String(req.session.userId ?? ""), linkedCompanyId);
+}
 
 export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, tag } = ctx;
@@ -30,6 +46,7 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         const data = insertPropertyContractSchema.parse({ ...req.body, companyId });
+        await assertLinkableCompany(req, companyId, data.linkedCompanyId);
 
         const [unit] = await db
           .select()
@@ -87,6 +104,7 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
       } catch (e: unknown) {
         if (e instanceof z.ZodError)
           return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
+        if (e instanceof CompanyAccessError) return sendCompanyAccessError(res, e);
         logger.error(`${tag} contracts:`, { error: e });
         res.status(500).json({ message: getErrorMessage(e) });
       }
@@ -195,6 +213,8 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
           )
         );
       if (!contract) return res.status(404).json({ message: "Contract not found" });
+      // Re-sending the link already on the contract changes nothing to check.
+      if (linkedCompanyId !== contract.linkedCompanyId) await assertLinkableCompany(req, companyId, linkedCompanyId);
       const contractUpdates: Partial<typeof propertyContracts.$inferInsert> = { tenantName, startDate };
       if (guaranteeAmount !== undefined) contractUpdates.guaranteeAmount = guaranteeAmount;
       if (guaranteePeriod !== undefined) contractUpdates.guaranteePeriod = guaranteePeriod;
@@ -269,6 +289,7 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
     } catch (e: unknown) {
       if (e instanceof z.ZodError)
         return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
+      if (e instanceof CompanyAccessError) return sendCompanyAccessError(res, e);
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });

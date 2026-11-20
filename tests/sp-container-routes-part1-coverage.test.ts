@@ -165,24 +165,29 @@ describe("SP containers list and create", () => {
     });
   });
 
-  // FINDING pinned: the manual path never checks supplierId against the
-  // company. With a positive total the voucher-entry guard rejects the
-  // foreign party (500, rolled back); with a zero total no voucher is posted
-  // and the container is stored pointing at another company's supplier.
-  it("only the voucher guard stops another company's supplierId on a manual container", async () => {
+  it("refuses another company's supplierId on a manual container and saves nothing", async () => {
     await spWorld(async (w) => {
       const other = await otherCompany(w);
       const foreignSupplier = await w.one(
         `INSERT INTO suppliers (company_id, code, legal_name, email) VALUES ($1, $2, 'Foreign', '') RETURNING id`,
         [other, `${w.tag}-FS`]
       );
-      const posted = await w.agent.post(BASE).send({ ...manual, supplierId: foreignSupplier, invoiceTotalUsd: "10" });
-      expect(posted.status).toBe(500);
+      for (const invoiceTotalUsd of ["10", undefined]) {
+        const res = await w.agent.post(BASE).send({ ...manual, supplierId: foreignSupplier, invoiceTotalUsd });
+        expect([res.status, res.body.message]).toEqual([404, "Supplier not found"]);
+      }
+      const bad = await w.agent.post(BASE).send({ ...manual, supplierId: "abc" });
+      expect(bad.status).toBe(404);
       expect(await vouchers(w)).toBe(0);
-      const zero = await w.agent.post(BASE).send({ ...manual, supplierId: foreignSupplier });
-      expect(zero.status).toBe(200);
-      const stored = await w.q(`SELECT company_id FROM sp_containers WHERE supplier_id = $1`, [foreignSupplier]);
-      expect(stored).toEqual([{ company_id: w.companyId }]);
+      expect(await w.q(`SELECT 1 FROM sp_containers WHERE company_id = $1`, [w.companyId])).toHaveLength(0);
+
+      const ownSupplier = await w.one(
+        `INSERT INTO suppliers (company_id, code, legal_name, email) VALUES ($1, $2, 'Own', '') RETURNING id`,
+        [w.companyId, `${w.tag}-OS`]
+      );
+      const ok = await w.agent.post(BASE).send({ ...manual, supplierId: String(ownSupplier) });
+      expect(ok.status).toBe(200);
+      expect(ok.body.supplierId).toBe(ownSupplier);
     });
   });
 

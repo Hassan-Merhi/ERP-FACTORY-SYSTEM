@@ -130,6 +130,16 @@ export function registerSpContainerRoutesPart1(app: Express) {
 
       const totalUsd = (parseMoneyInput(invoiceTotalUsd) ?? toMoney(0)).toDecimalPlaces(2);
       const supplierIdNum = freshStartOtw ? null : supplierId ? parseInt(String(supplierId)) : null;
+      // The supplier must be one of this company's own (the Excel path checks the
+      // same through validateSpExcelImport); another company's id is refused.
+      if (
+        supplierIdNum !== null &&
+        (!Number.isSafeInteger(supplierIdNum) ||
+          supplierIdNum <= 0 ||
+          !(await storage.getSupplierById(supplierIdNum, companyId)))
+      ) {
+        return res.status(404).json({ message: "Supplier not found" });
+      }
 
       const result = await db.transaction(async (tx) => {
         if (importSource === "excel") {

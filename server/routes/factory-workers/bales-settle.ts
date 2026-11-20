@@ -10,7 +10,7 @@ import { parseId, parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
-import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import {
@@ -19,6 +19,7 @@ import {
   factoryPayrolls,
   factoryWorkerAdvances,
   factoryAttendance,
+  ledgerAccounts,
 } from "@shared/schema";
 
 import {
@@ -254,6 +255,26 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
         });
       }
 
+      // The settlement's cash account must be one of this company's ledger accounts.
+      let settlementCashAccountId: number | null = null;
+      if (cashAccountId) {
+        const parsedCashAccountId = parseOptionalId(cashAccountId);
+        const [cashAccount] = parsedCashAccountId
+          ? await db
+              .select({ id: ledgerAccounts.id })
+              .from(ledgerAccounts)
+              .where(
+                and(
+                  eq(ledgerAccounts.id, parsedCashAccountId),
+                  eq(ledgerAccounts.companyId, companyId),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              )
+          : [];
+        if (!cashAccount) return res.status(404).json({ message: "Cash account not found" });
+        settlementCashAccountId = cashAccount.id;
+      }
+
       const settlementStatus = payNow ? "PAID" : "APPROVED";
       const settlementPaidAt = payNow ? new Date() : null;
 
@@ -278,7 +299,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
           overtimeHours: "0",
           status: settlementStatus,
           notes: "Settlement - contract ended",
-          cashAccountId: cashAccountId ? parseInt(cashAccountId) : null,
+          cashAccountId: settlementCashAccountId,
           paidAt: settlementPaidAt,
         })
         .returning();

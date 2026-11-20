@@ -181,9 +181,7 @@ describe("settle and end a worker contract", () => {
       expect(row.status).toBe("APPROVED");
     }));
 
-  // FINDING pinned: cashAccountId is stored on the settlement payroll without
-  // any company check, so another company's ledger id is accepted.
-  it("stores another company's cashAccountId on the settlement payroll", () =>
+  it("refuses another company's cashAccountId and writes nothing; accepts its own", () =>
     withFactoryWorld(async (w) => {
       const other = await w.one(
         `INSERT INTO companies (code, name, company_type) VALUES ($1::varchar, $1::text, 'factory') RETURNING id`,
@@ -194,11 +192,23 @@ describe("settle and end a worker contract", () => {
         [other, `${w.tag}-QC`]
       );
       const id = await worker(w, { freq: "Weekly", weekly: "70" });
-      const res = await settle(w, id, { ...window, cashAccountId: String(foreignCash) });
+      for (const cashAccountId of [String(foreignCash), "abc"]) {
+        const res = await settle(w, id, { ...window, cashAccountId });
+        expect([res.status, res.body.message]).toEqual([404, "Cash account not found"]);
+      }
+      expect(await w.q(`SELECT 1 FROM factory_payrolls WHERE worker_id = $1`, [id])).toHaveLength(0);
+      const [still] = await w.q(`SELECT active FROM factory_workers WHERE id = $1`, [id]);
+      expect(still.active).toBe(true);
+
+      const ownCash = await w.one(
+        `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, 'Till', 'Cash') RETURNING id`,
+        [w.companyId, `${w.tag}-OC`]
+      );
+      const res = await settle(w, id, { ...window, cashAccountId: String(ownCash) });
       expect(res.status).toBe(200);
       const [row] = await w.q(`SELECT cash_account_id FROM factory_payrolls WHERE id = $1`, [
         res.body.settlementPayrollId,
       ]);
-      expect(row.cash_account_id).toBe(foreignCash);
+      expect(row.cash_account_id).toBe(ownCash);
     }));
 });

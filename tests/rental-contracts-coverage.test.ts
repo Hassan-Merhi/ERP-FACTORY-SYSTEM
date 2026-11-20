@@ -82,11 +82,10 @@ describe("start a rental contract", () => {
       expect(rows).toHaveLength(0);
     }));
 
-  // FINDING pinned: linkedCompanyId is taken from the body with no check that
-  // the user belongs to that company. A linked company may later settle the
-  // contract's rent (rentalDueScheduledPaymentService.ts:124), so an Admin of
-  // one company can tie a contract to any other company id.
-  it("accepts a linkedCompanyId of a company the user has no role in", () =>
+  // A linked company may later settle the contract's rent
+  // (rentalDueScheduledPaymentService.ts:124), so only a company the user can
+  // access may be linked; any other company id is refused and nothing changes.
+  it("refuses a linkedCompanyId of a company the user has no role in, on create and on edit", () =>
     withFactoryWorld(async (w) => {
       const own = await unit(w);
       const stranger = await otherCompany(w);
@@ -97,15 +96,52 @@ describe("start a rental contract", () => {
         rentalAmount: "50",
         linkedCompanyId: stranger,
       });
+      expect([res.status, res.body.code]).toEqual([403, "COMPANY_ACCESS_DENIED"]);
+      expect(await w.q(`SELECT 1 FROM property_contracts WHERE unit_id = $1`, [own])).toHaveLength(0);
+
+      const id = await contract(w, own);
+      const edit = await w.agent
+        .patch(`${BASE}/contracts/${id}/info`)
+        .send({ tenantName: "Renamed", startDate: monthStart, linkedCompanyId: stranger });
+      expect([edit.status, edit.body.code]).toEqual([403, "COMPANY_ACCESS_DENIED"]);
+      const [row] = await w.q(`SELECT tenant_name, linked_company_id FROM property_contracts WHERE id = $1`, [id]);
+      expect(row).toEqual({ tenant_name: "Tenant", linked_company_id: null });
+    }));
+
+  it("links a company the user belongs to, and keeps an existing link the user cannot access", () =>
+    withFactoryWorld(async (w) => {
+      const own = await unit(w);
+      const sister = await otherCompany(w);
+      await w.q(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`, [
+        w.userId,
+        sister,
+      ]);
+      const res = await start(w, {
+        unitId: own,
+        tenantName: "Linked",
+        startDate: monthStart,
+        rentalAmount: "50",
+        linkedCompanyId: sister,
+      });
       expect(res.status).toBe(200);
-      expect(res.body.linkedCompanyId).toBe(stranger);
-      const other = await otherCompany(w);
+      expect(res.body.linkedCompanyId).toBe(sister);
+
+      // A link set earlier to a company outside the user's access may be re-sent
+      // unchanged with an edit; only a new link is checked.
+      const stranger = await otherCompany(w);
+      await w.q(`UPDATE property_contracts SET linked_company_id = $2 WHERE id = $1`, [res.body.id, stranger]);
       const edit = await w.agent
         .patch(`${BASE}/contracts/${res.body.id}/info`)
-        .send({ tenantName: "Linked", startDate: monthStart, linkedCompanyId: other });
+        .send({ tenantName: "Renamed", startDate: monthStart, linkedCompanyId: stranger });
       expect(edit.status).toBe(200);
-      const [row] = await w.q(`SELECT linked_company_id FROM property_contracts WHERE id = $1`, [res.body.id]);
-      expect(row.linked_company_id).toBe(other);
+      const back = await w.agent
+        .patch(`${BASE}/contracts/${res.body.id}/info`)
+        .send({ tenantName: "Renamed", startDate: monthStart, linkedCompanyId: sister });
+      expect(back.status).toBe(200);
+      const [row] = await w.q(`SELECT tenant_name, linked_company_id FROM property_contracts WHERE id = $1`, [
+        res.body.id,
+      ]);
+      expect(row).toEqual({ tenant_name: "Renamed", linked_company_id: sister });
     }));
 
   it("creates the contract with its audit and ledger rows, refuses a second active one, allows one after it ended", () =>
