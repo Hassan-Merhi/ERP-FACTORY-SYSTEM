@@ -95,7 +95,9 @@ export function WithdrawalDialog({
                     options={(form.watch("paymentAccountType") === "cash"
                       ? cashAccounts
                       : bankAccounts ?? []
-                    ).map((account) => ({ value: String(account.id), name: account.name }))}
+                    ).flatMap((account) =>
+                      account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
+                    )}
                     value={field.value}
                     onChange={field.onChange}
                     placeholder={bankAccountsLoading && form.watch("paymentAccountType") !== "cash"
