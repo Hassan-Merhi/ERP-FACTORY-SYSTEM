@@ -1,5 +1,5 @@
 // Extracted from ./POSContainerTracking.tsx
-import { Columns3, FilterX, Search } from "lucide-react";
+import { Columns3, FilterX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { COLUMN_DEFS } from "./usePOSContainerTrackingState";
 import { usePOSContainerTrackingState2 } from "./usePOSContainerTrackingState2";
@@ -61,19 +61,14 @@ export function POSContainerTrackingContent({
   return (
     <div className="pos-container-filters shrink-0">
       <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search container, supplier, truck, location, agent, transporter..."
-            className="h-9 pl-9"
-            data-testid="input-pos-container-search"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search container, supplier, truck, location, agent, transporter..."
+          wrapperClassName="min-w-0 flex-1"
+          className="h-9"
+          data-testid="input-pos-container-search"
+        />
 
         {hasActiveFilters ? (
           <Button variant="ghost" size="sm" className="h-9 shrink-0 gap-2" onClick={clearFilters}>
