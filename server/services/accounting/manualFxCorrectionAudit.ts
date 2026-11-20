@@ -203,7 +203,9 @@ export function assessManualFxCorrection(input: {
   const candidates = automaticFxVouchers.filter((v) => !v.deleted && !v.optional);
   const matching: FxRepairAuditVoucher[] = [];
   for (const voucher of candidates) {
-    if (voucher.sourceType !== "fx-unrealized-revaluation") continue;
+    // Only a journal posted after the exact reversal can certify recovery.
+    // An earlier FX journal is historical exposure, not this correction.
+    if (voucher.id <= reversal.id || voucher.sourceType !== "fx-unrealized-revaluation") continue;
     const baseLines = voucher.lines.filter((line) => line.rateConvention === "BASE_ONLY_REVALUATION");
     if (baseLines.length !== originalByTarget.size) continue;
     if (baseLines.some(
