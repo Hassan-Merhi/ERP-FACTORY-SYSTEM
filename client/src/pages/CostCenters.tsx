@@ -7,6 +7,8 @@ import { queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import { Label } from "@/components/ui/label";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,9 +88,7 @@ export default function CostCenters() {
   const centers = useMemo(() => data?.costCenters ?? [], [data]);
   const rows = useMemo(
     () =>
-      sortCenters(centers).filter(({ center }) =>
-        [center.name, center.code, center.description || ""].some((s) => s.toLowerCase().includes(filter.toLowerCase()))
-      ),
+      sortCenters(centers).filter(({ center }) => searchAny(filter, center.name, center.code, center.description)),
     [centers, filter]
   );
   const selected = centers.find((c) => c.id === selectedId) || null;
@@ -169,12 +169,12 @@ export default function CostCenters() {
       />
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex flex-wrap gap-2 items-center">
-          <Input
+          <SearchField
             aria-label="Search cost centers"
             placeholder="Search by name or code"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-full sm:w-64"
+            onValueChange={setFilter}
+            wrapperClassName="w-full sm:w-64"
           />
           <Button variant="outline" size="sm" onClick={() => setIncludeArchived((v) => !v)}>
             {includeArchived ? "Hide archived" : "Show archived"}
