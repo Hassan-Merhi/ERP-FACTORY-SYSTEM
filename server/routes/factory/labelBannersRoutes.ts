@@ -20,7 +20,12 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { labelDesignColors } from "../../../shared/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireNonPOS } from "../../auth";
+import { requireRole } from "../../auth";
+
+// label_design_colors has no company column: banner colours are shared by every
+// company, so only Admin and Developer may create, edit or delete them or
+// replace their images. Reads stay open to every signed-in user.
+const requireBannerEditor = () => requireRole("Admin", "Developer");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -119,7 +124,7 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   });
 
   // ── POST /api/factory/label-design-colors — create new color (+ image) ─────
-  app.post("/api/factory/label-design-colors", requireAuth, requireNonPOS, (req: Request, res: Response) => {
+  app.post("/api/factory/label-design-colors", requireAuth, requireBannerEditor(), (req: Request, res: Response) => {
     upload.single("image")(req, res, async (err) => {
       if (err) return res.status(400).json({ message: err.message });
 
@@ -178,7 +183,7 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   app.patch(
     "/api/factory/label-design-colors/:slug",
     requireAuth,
-    requireNonPOS,
+    requireBannerEditor(),
     async (req: Request, res: Response) => {
       const { slug } = req.params;
       const { label, colorHex } = req.body;
@@ -206,7 +211,7 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   app.delete(
     "/api/factory/label-design-colors/:slug",
     requireAuth,
-    requireNonPOS,
+    requireBannerEditor(),
     async (req: Request, res: Response) => {
       const { slug } = req.params;
       try {
@@ -223,7 +228,7 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   );
 
   // ── POST /api/factory/label-banners/:slug — upload/replace banner image ────
-  app.post("/api/factory/label-banners/:slug", requireAuth, requireNonPOS, (req: Request, res: Response) => {
+  app.post("/api/factory/label-banners/:slug", requireAuth, requireBannerEditor(), (req: Request, res: Response) => {
     const { slug } = req.params;
     if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ message: "Invalid slug" });
 
@@ -252,17 +257,22 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   });
 
   // ── DELETE /api/factory/label-banners/:slug — revert to default image ──────
-  app.delete("/api/factory/label-banners/:slug", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
-    const { slug } = req.params;
-    try {
-      await db
-        .update(labelDesignColors)
-        .set({ imageData: null, imageUpdatedAt: null })
-        .where(eq(labelDesignColors.slug, slug));
-      logger.info(`[LabelBanners] "${slug}" reverted to default`);
-      res.json({ slot: slug, hasCustom: false, lastModified: null });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+  app.delete(
+    "/api/factory/label-banners/:slug",
+    requireAuth,
+    requireBannerEditor(),
+    async (req: Request, res: Response) => {
+      const { slug } = req.params;
+      try {
+        await db
+          .update(labelDesignColors)
+          .set({ imageData: null, imageUpdatedAt: null })
+          .where(eq(labelDesignColors.slug, slug));
+        logger.info(`[LabelBanners] "${slug}" reverted to default`);
+        res.json({ slot: slug, hasCustom: false, lastModified: null });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

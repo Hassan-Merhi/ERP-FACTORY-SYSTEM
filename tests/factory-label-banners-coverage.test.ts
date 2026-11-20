@@ -6,11 +6,12 @@
  * Pinned: create (slug derivation, override, validation, duplicate, upload
  * type filter, sort order), patch, delete (built-ins refused), image upload /
  * revert, the public image route (content type, cache headers, fall-through
- * for unknown, non-data-URL and malformed slugs) and the POS role refusal.
+ * for unknown, non-data-URL and malformed slugs) and the role rule.
  *
- * Observed: the table has no company column, so these colours and images are
- * shared by every company; any signed-in non-POS user of any company can
- * change or delete them.
+ * The table has no company column, so these colours and images are shared by
+ * every company (owner decision: they stay shared). Only Admin and Developer
+ * may create, edit or delete them or replace their images; every other role
+ * gets 403 and nothing changes. Reads are open to every signed-in user.
  */
 import { describe, expect, it } from "vitest";
 
@@ -134,12 +135,58 @@ describe("label design colours", () => {
     });
   });
 
-  it("refuses POS users", async () => {
+  it("refuses every write from POS, Manager, Owner and Staff and changes nothing", async () => {
     await withFactoryWorld(async (w) => {
-      const pos = await w.agentFor("POS");
-      const res = await pos.post(COLORS).field("label", "Nope").field("colorHex", "#fff");
-      expect(res.status).toBe(403);
-      expect((await pos.delete(`${BANNERS}/anything`)).status).toBe(403);
+      const slug = slugOf(w, "locked");
+      await create(w, { label: "Locked", colorHex: "#111", slug }, { buffer: PNG, type: "image/png" });
+      const before = await w.q(
+        `SELECT slug, label, color_hex, image_data, image_updated_at FROM label_design_colors ORDER BY slug`
+      );
+      for (const role of ["POS", "Manager", "Owner", "Staff"]) {
+        const other = await w.agentFor(role);
+        const created = await other
+          .post(COLORS)
+          .field("label", `Nope ${role}`)
+          .field("colorHex", "#fff")
+          .field("slug", slugOf(w, `nope-${role.toLowerCase()}`));
+        expect(created.status, `${role} create`).toBe(403);
+        expect((await other.patch(`${COLORS}/${slug}`).send({ label: "Changed" })).status, `${role} patch`).toBe(403);
+        expect((await other.delete(`${COLORS}/${slug}`)).status, `${role} delete`).toBe(403);
+        const upload = await other
+          .post(`${BANNERS}/${slug}`)
+          .attach("image", PNG, { filename: "a.png", contentType: "image/png" });
+        expect(upload.status, `${role} upload`).toBe(403);
+        expect((await other.delete(`${BANNERS}/${slug}`)).status, `${role} revert`).toBe(403);
+        if (role !== "POS") {
+          const colours = await other.get(COLORS);
+          expect(colours.status, `${role} read`).toBe(200);
+          expect(colours.body).toContainEqual(expect.objectContaining({ slug, label: "Locked", hasCustom: true }));
+          const banners = await other.get(BANNERS);
+          expect(banners.status, `${role} legacy read`).toBe(200);
+          expect(banners.body).toContainEqual(expect.objectContaining({ slot: slug, hasCustom: true }));
+        }
+      }
+      expect(
+        await w.q(`SELECT slug, label, color_hex, image_data, image_updated_at FROM label_design_colors ORDER BY slug`)
+      ).toEqual(before);
+    });
+  });
+
+  it("lets Developer create, edit, replace the image of, revert and delete a colour", async () => {
+    await withFactoryWorld(async (w) => {
+      const developer = await w.agentFor("Developer");
+      const slug = slugOf(w, "dev");
+      const created = await developer.post(COLORS).field("label", "Dev").field("colorHex", "#111").field("slug", slug);
+      expect(created.status).toBe(200);
+      const patched = await developer.patch(`${COLORS}/${slug}`).send({ colorHex: "#222" });
+      expect(patched.body).toMatchObject({ slug, colorHex: "#222" });
+      const uploaded = await developer
+        .post(`${BANNERS}/${slug}`)
+        .attach("image", PNG, { filename: "a.png", contentType: "image/png" });
+      expect(uploaded.body).toMatchObject({ slot: slug, hasCustom: true });
+      expect((await developer.delete(`${BANNERS}/${slug}`)).body).toMatchObject({ slot: slug, hasCustom: false });
+      expect((await developer.delete(`${COLORS}/${slug}`)).body).toEqual({ ok: true });
+      expect(await w.q(`SELECT 1 FROM label_design_colors WHERE slug = $1`, [slug])).toHaveLength(0);
     });
   });
 });
