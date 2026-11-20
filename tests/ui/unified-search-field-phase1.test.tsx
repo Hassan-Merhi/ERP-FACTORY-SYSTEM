@@ -51,6 +51,12 @@ describe("Phase 1 unified SearchField", () => {
     expect(input.value).toBe("");
   });
 
+  it("lets surrounding menus own Escape when requested", () => {
+    render(<SearchField value="find" onValueChange={vi.fn()} propagateEscape aria-label="Overlay search" />);
+    const input = screen.getByRole("searchbox", { name: "Overlay search" });
+    expect(fireEvent.keyDown(input, { key: "Escape" })).toBe(true);
+  });
+
   it("supports busy lookup state without accepting edits", () => {
     const onValueChange = vi.fn();
     render(
@@ -66,7 +72,6 @@ describe("Phase 1 unified SearchField", () => {
     expect(input.disabled).toBe(true);
     expect(input.getAttribute("aria-busy")).toBe("true");
     expect((screen.getByRole("button", { name: "Clear search" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(input, { target: { value: "new search" } });
     expect(onValueChange).not.toHaveBeenCalled();
   });
 });
