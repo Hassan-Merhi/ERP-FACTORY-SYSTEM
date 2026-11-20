@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
+import { resultRows } from "../lib/queryResult";
 import {
   assertNotIntercompanyTransferLeg,
   sendIntercompanyTransferLegRefusal,
@@ -47,6 +48,22 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         .limit(1);
 
       if (!row) return res.status(404).json({ message: "Voucher entry not found" });
+      // A base-only FX revaluation is system-owned even when its voucher
+      // header currency is USD. Neither amount nor narration edits may
+      // accidentally re-normalize the currency or erase its audit evidence.
+      const fxSource = resultRows<{ id: number }>(await db.execute(sql`
+        SELECT id FROM accounting_posting_requests
+         WHERE company_id = ${row.voucher.companyId}
+           AND voucher_id = ${row.voucher.id}
+           AND source_type = 'fx-unrealized-revaluation'
+         LIMIT 1
+      `))[0];
+      if (fxSource) {
+        return res.status(409).json({
+          code: "FX_REVALUATION_VOUCHER_IMMUTABLE",
+          message: "Automatic FX revaluation entries require the audited FX correction workflow.",
+        });
+      }
       const blockedVoucherReason = voucherMutationBlockReason(row.voucher);
       if (blockedVoucherReason) {
         return res.status(403).json({ message: blockedVoucherReason });
