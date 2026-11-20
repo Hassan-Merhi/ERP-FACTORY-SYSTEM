@@ -1,3 +1,4 @@
+import { assertPostingLedgerLeavesTx } from "../../../services/accounting/postableLedgerAccountPolicy";
 /**
  * voucherSalesUpdateRoutes: VoucherUpdate endpoints.
  *
@@ -200,6 +201,11 @@ export function registerVoucherUpdateRoutes(app: Express) {
 
         if (replacesEntries) {
           const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
+          await assertPostingLedgerLeavesTx(
+            tx,
+            existingVoucher.companyId,
+            targets.flatMap((target) => target.ledgerAccountId == null ? [] : [target.ledgerAccountId])
+          );
           await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
           for (const [index, entry] of (req.body.entries as ReplacementEntryInput[]).entries()) {
             await tx.insert(voucherEntries).values({
