@@ -25,6 +25,7 @@ import { assertCustomerLinkedLedgerPairs } from "./customerLinkedLedgerValidatio
 import type { CompanyScopedTable } from "../../types/companyScopedTable";
 import { currentAuditActor } from "../audit/auditActorContext";
 import { isRetiredVoucherNumber } from "./voucherRetirement";
+import { assertPostingLedgerLeavesTx } from "./postableLedgerAccountPolicy";
 
 const LEGACY_IDEMPOTENCY_TABLE = "accounting_posting_idempotency";
 const POSTING_AUDIT_TABLE = "accounting_postings";
@@ -269,6 +270,7 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
           }),
         ]);
 
+        await assertPostingLedgerLeavesTx(tx, companyId, targets.ledgerAccountId);
         await assertCustomerLinkedLedgerPairs({ tx, companyId, entries });
       },
     },
